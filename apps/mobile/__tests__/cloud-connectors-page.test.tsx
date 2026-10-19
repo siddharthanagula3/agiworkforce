@@ -40,6 +40,7 @@ jest.mock('lucide-react-native', () => {
     CheckCircle: icon,
     ArrowLeft: icon,
     ChevronRight: icon,
+    CircleHelp: icon,
   };
 });
 

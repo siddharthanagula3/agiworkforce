@@ -641,25 +641,112 @@ async fn run_spec_observing(
         idle_timeout: STREAM_IDLE_TIMEOUT,
     };
     let mut resolved_model = None;
-    let mut on_event = stream_event_handler(on_chunk, pause, &mut resolved_model);
+    let mut thinking =
+        (spec.id == super::provider_name(&Provider::ManagedCloud)).then(InlineThinking::default);
+    let mut on_event =
+        stream_event_handler(on_chunk, pause, &mut resolved_model, thinking.as_mut());
     let outcome = stream_chat(client, spec, &req, &mut on_event).await;
     drop(on_event);
+    if let Some(rest) = thinking.as_mut().map(InlineThinking::finish) {
+        if !rest.is_empty() {
+            on_chunk(&rest);
+        }
+    }
     match outcome {
         Ok(outcome) => Ok(CompletionResult {
             resolved_model,
-            ..completion_result_from(outcome)
+            ..managed_visible(completion_result_from(outcome), thinking.is_some())
         }),
         Err(err) => Err(map_llm_error(err)),
     }
+}
+
+/// The managed gateway inlines the reasoning summary between these tags in the
+/// answer text, where it would be printed, kept and synced as the answer.
+#[derive(Debug, Default)]
+struct InlineThinking {
+    held: String,
+    inside: bool,
+}
+
+const THINKING_OPEN: &str = "<thinking>";
+const THINKING_CLOSE: &str = "</thinking>";
+
+/// A tag can arrive split across two chunks.
+fn partial_tag_len(text: &str, tag: &str) -> usize {
+    (1..tag.len().min(text.len() + 1))
+        .rev()
+        .find(|length| {
+            text.is_char_boundary(text.len() - length) && text.ends_with(&tag[..*length])
+        })
+        .unwrap_or(0)
+}
+
+impl InlineThinking {
+    fn push(&mut self, chunk: &str) -> String {
+        self.held.push_str(chunk);
+        let mut visible = String::new();
+        loop {
+            let tag = if self.inside {
+                THINKING_CLOSE
+            } else {
+                THINKING_OPEN
+            };
+            if let Some(at) = self.held.find(tag) {
+                if !self.inside {
+                    visible.push_str(&self.held[..at]);
+                }
+                self.held.drain(..at + tag.len());
+                self.inside = !self.inside;
+                continue;
+            }
+            let keep = partial_tag_len(&self.held, tag);
+            let cut = self.held.len() - keep;
+            if !self.inside {
+                visible.push_str(&self.held[..cut]);
+            }
+            self.held.drain(..cut);
+            return visible;
+        }
+    }
+
+    fn finish(&mut self) -> String {
+        let rest = if self.inside {
+            String::new()
+        } else {
+            std::mem::take(&mut self.held)
+        };
+        self.held.clear();
+        rest
+    }
+}
+
+fn managed_visible(mut result: CompletionResult, managed: bool) -> CompletionResult {
+    if managed {
+        let mut thinking = InlineThinking::default();
+        let mut text = thinking.push(&result.text);
+        text.push_str(&thinking.finish());
+        result.text = text;
+    }
+    result
 }
 
 fn stream_event_handler<'a>(
     on_chunk: &'a mut StreamCallback,
     mut pause: Option<&'a mut ManagedApprovalPause>,
     resolved_model: &'a mut Option<String>,
+    mut thinking: Option<&'a mut InlineThinking>,
 ) -> impl FnMut(StreamEvent) + Send + 'a {
     move |event| match event {
-        StreamEvent::TextDelta { text } => on_chunk(&text),
+        StreamEvent::TextDelta { text } => match thinking.as_deref_mut() {
+            Some(thinking) => {
+                let visible = thinking.push(&text);
+                if !visible.is_empty() {
+                    on_chunk(&visible);
+                }
+            }
+            None => on_chunk(&text),
+        },
         StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
             notify_quota_warning(&data)
         }
@@ -785,7 +872,13 @@ async fn run_managed_cloud(
         let decisions = managed_approvals::decide(&calls).await;
         let body = serde_json::json!({ "run_id": run_id, "tool_approvals": decisions });
         let mut resolved_model = None;
-        let mut on_event = stream_event_handler(on_chunk, Some(&mut pause), &mut resolved_model);
+        let mut thinking = InlineThinking::default();
+        let mut on_event = stream_event_handler(
+            on_chunk,
+            Some(&mut pause),
+            &mut resolved_model,
+            Some(&mut thinking),
+        );
         let next = agiworkforce_llm::post_openai_compat_stream(
             client,
             &managed_approval_resume_spec(jwt)?,
@@ -796,12 +889,16 @@ async fn run_managed_cloud(
         )
         .await;
         drop(on_event);
+        let rest = thinking.finish();
+        if !rest.is_empty() {
+            on_chunk(&rest);
+        }
         let next = next.map_err(map_llm_error)?;
         absorb_continuation(
             &mut completed,
             CompletionResult {
                 resolved_model,
-                ..completion_result_from(next)
+                ..managed_visible(completion_result_from(next), true)
             },
         );
     }
@@ -1044,6 +1141,43 @@ pub async fn stream_completion(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reasoning_the_gateway_inlines_never_reaches_the_answer() {
+        let mut thinking = InlineThinking::default();
+        let mut shown = String::new();
+        for chunk in [
+            "<thin",
+            "king>**Evaluating** warm ",
+            "colours</th",
+            "inking>Re",
+            "d.",
+        ] {
+            shown.push_str(&thinking.push(chunk));
+        }
+        shown.push_str(&thinking.finish());
+        assert_eq!(shown, "Red.");
+
+        let result = managed_visible(
+            completion_result_from(agiworkforce_llm::ChatOutcome {
+                text: "<thinking>plan</thinking>Answer <b>bold</b> <thin".to_string(),
+                ..Default::default()
+            }),
+            true,
+        );
+        assert_eq!(result.text, "Answer <b>bold</b> <thin");
+        let untouched = managed_visible(
+            completion_result_from(agiworkforce_llm::ChatOutcome {
+                text: "<thinking>kept for direct providers</thinking>".to_string(),
+                ..Default::default()
+            }),
+            false,
+        );
+        assert_eq!(
+            untouched.text,
+            "<thinking>kept for direct providers</thinking>"
+        );
+    }
     use axum::{
         http::header,
         response::IntoResponse,

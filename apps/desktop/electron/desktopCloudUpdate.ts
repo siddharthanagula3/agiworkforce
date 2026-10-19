@@ -228,7 +228,10 @@ export function desktopUpdatePrompt(
       type: 'info',
       title: 'AGI Cloud is up to date',
       message: 'You have the latest AGI Cloud version.',
-      detail: `Installed: ${outcome.currentVersion}\nLatest published: ${outcome.version}`,
+      detail:
+        outcome.version === outcome.currentVersion
+          ? `Installed: ${outcome.currentVersion}\nNo newer version is available.`
+          : `Installed: ${outcome.currentVersion}\nLatest published: ${outcome.version}`,
       buttons: ['OK'],
       downloadButton: null,
       restartButton: null,

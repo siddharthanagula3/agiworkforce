@@ -3849,8 +3849,11 @@ fn start_remote_control(app: &mut TuiApp) -> String {
                 use crate::remote_control::RemoteControlStatus;
                 match &update {
                     RemoteControlStatus::Waiting { folder, pairing_line } => {
+                        let scan = crate::remote_control::render_qr(pairing_line, false)
+                            .map(|qr| format!("On your phone, open AGI Workforce, go to Remote, tap Scan and point it at this code:\n{qr}\nOr enter the code on the phone and paste:\n"))
+                            .unwrap_or_else(|| "On your phone, open AGI Workforce, go to Remote, tap Scan, choose to enter the code, and paste:\n".to_string());
                         crate::tui::push_tui_notice(format!(
-                            "Remote Control is on for {folder}. Open AGI Workforce on your phone to continue this session there.\n{pairing_line}"
+                            "Remote Control is on for {folder}.\n{scan}{pairing_line}"
                         ))
                     }
                     RemoteControlStatus::Connected { phone } => crate::tui::push_tui_notice(
@@ -4470,6 +4473,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
         "/tasks" | "/task" => SlashResult::RunTasks(arg.to_string()),
         "/team" | "/teams" => SlashResult::RunTeam(arg.to_string()),
         "/upgrade" => SlashResult::SystemMessage(crate::claude_parity::open_upgrade_page()),
+        "/desktop" | "/app" => SlashResult::SystemMessage(crate::cloud::open_in_desktop(&app.session)),
         "/find" => SlashResult::SystemMessage(find_in_transcript(&app.chat_messages, arg)),
         "/personalize" => SlashResult::RunPersonalize(arg.to_string()),
 
@@ -8913,6 +8917,9 @@ mod tests {
                 .copied(),
         );
         names.extend([
+            "upgrade",
+            "desktop",
+            "app",
             "exit",
             "quit",
             "q",

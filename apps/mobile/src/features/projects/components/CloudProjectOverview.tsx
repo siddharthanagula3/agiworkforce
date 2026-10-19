@@ -6,7 +6,7 @@ import { Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
-import { updateCloudProjectAppearance } from '@/src/features/projects/service';
+import { updateCloudProjectDetails } from '@/src/features/projects/service';
 import {
   PROJECT_ACCENTS,
   PROJECT_ICONS,
@@ -58,7 +58,7 @@ export function CloudProjectOverview({
 
   const applyAppearance = useCallback(
     (patch: { iconEmoji?: string; accentColor?: ProjectAccentId }) => {
-      void updateCloudProjectAppearance(projectId, patch).catch(() => {
+      void updateCloudProjectDetails(projectId, patch).catch(() => {
         Alert.alert(
           'Could not update the project appearance',
           'The change has been undone. Check your connection and try again.',

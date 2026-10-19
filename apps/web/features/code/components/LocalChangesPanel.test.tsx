@@ -22,6 +22,7 @@ vi.mock('./LocalPullRequest', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   LocalPullRequest: () => null,
 }));
+vi.mock('./LocalRunningCommands', () => ({ LocalRunningCommands: () => null }));
 vi.mock('./LocalTerminal', async (importOriginal) => ({
   ...(await importOriginal<ScanModule2>()),
   LocalTerminal: ({ onCommandFinished }: { onCommandFinished: () => void }) => (

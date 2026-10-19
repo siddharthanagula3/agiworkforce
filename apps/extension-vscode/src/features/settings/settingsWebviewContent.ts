@@ -1273,7 +1273,7 @@ export function getSettingsWebviewContent(
               <div>
                 <label class="setting-name" for="setting-follow-up-behavior">Active-turn send</label>
                 <span class="setting-description">
-                  Queue starts a new turn after the current response. Steer adds the message to the current turn. Cmd/Ctrl+Enter uses the other behavior once.
+                  Queue starts a new turn after the current response. Steer adds the message to the current turn. Cmd/Ctrl+Enter uses the other behavior once, or Cmd/Ctrl+Shift+Enter when Cmd/Ctrl+Enter sends.
                 </span>
               </div>
               <select
@@ -1284,6 +1284,24 @@ export function getSettingsWebviewContent(
               >
                 <option value="queue">Queue next turn</option>
                 <option value="steer">Steer current turn</option>
+              </select>
+            </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-enter-behavior">Send key</label>
+                <span class="setting-description">
+                  Which key sends a prompt. The other keys add a line.
+                </span>
+              </div>
+              <select
+                class="select-input"
+                id="setting-enter-behavior"
+                data-setting="composer.enterBehavior"
+                data-kind="string"
+              >
+                <option value="enter">Enter</option>
+                <option value="modifierIfMultiline">Enter, or Cmd/Ctrl+Enter with several lines</option>
+                <option value="modifier">Cmd/Ctrl+Enter</option>
               </select>
             </div>
             <div class="setting-row">
@@ -1995,6 +2013,7 @@ ${capabilityAvailabilityRows}
           model: 'Model',
           cliPath: 'CLI path',
           'composer.followUpBehavior': 'Active-turn send',
+          'composer.enterBehavior': 'Send key',
           contextLines: 'Context lines',
           'editorContext.autoAttach': 'Editor context',
           respectGitIgnore: 'Respect .gitignore',

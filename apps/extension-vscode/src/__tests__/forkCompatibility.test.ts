@@ -152,6 +152,52 @@ describe('Code-OSS fork compatibility', () => {
     });
   });
 
+  it('tells keybindings when the chat has focus, so Cmd/Ctrl+N starts a chat only there', async () => {
+    const extensionContext = context();
+    const provider = new SidebarProvider(
+      extensionContext.extensionUri,
+      extensionContext.secrets,
+      extensionContext,
+    );
+    let receiveMessage: ((message: unknown) => Promise<void>) | undefined;
+    const view = {
+      webview: {
+        options: {},
+        html: '',
+        cspSource: 'vscode-webview://mock',
+        asWebviewUri: (uri: vscode.Uri) => uri,
+        onDidReceiveMessage: vi.fn((listener: (message: unknown) => Promise<void>) => {
+          receiveMessage = listener;
+          return new vscode.Disposable(() => undefined);
+        }),
+        postMessage: vi.fn().mockResolvedValue(true),
+      },
+      onDidDispose: vi.fn(() => new vscode.Disposable(() => undefined)),
+    } as unknown as vscode.WebviewView;
+    provider.resolveWebviewView(view, {} as vscode.WebviewViewResolveContext, {} as never);
+    const focusContext = () =>
+      vi
+        .mocked(vscode.commands.executeCommand)
+        .mock.calls.filter(
+          ([command, key]) => command === 'setContext' && key === 'agi-workforce.chatFocused',
+        )
+        .map(([, , value]) => value);
+
+    await receiveMessage?.({ type: 'viewBlurred', origin: 'agi-workforce-sidebar', epoch: 0 });
+    expect(focusContext().at(-1)).toBe(false);
+    await receiveMessage?.({ type: 'viewFocused', origin: 'agi-workforce-sidebar', epoch: 0 });
+    expect(focusContext().at(-1)).toBe(true);
+
+    const manifest = JSON.parse(
+      readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'),
+    ) as { contributes: { keybindings: { command: string; mac?: string; when?: string }[] } };
+    expect(
+      manifest.contributes.keybindings.find(
+        (binding) => binding.command === 'agi-workforce.newConversation' && binding.mac === 'cmd+n',
+      )?.when,
+    ).toBe('agi-workforce.chatFocused');
+  });
+
   it('opens on a view that has neither visibility events nor a badge', () => {
     // The attention badge asks the host for two members a narrower fork need
     // not implement. Losing the badge there is acceptable; failing to open the

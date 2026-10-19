@@ -83,6 +83,7 @@ vi.mock('@/app/settings/_lib/preferences-client', () => ({
 
 type FakeHost = Record<string, never> | null;
 let host: FakeHost = null;
+let hostAfterHydration: FakeHost = null;
 const localSession: LocalDeveloperSession = {
   id: 'thread-1',
   rootId: 'root-recent',
@@ -159,6 +160,7 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
     </a>
   ),
   useDesktopHost: () => host,
+  isDesktopHost: () => host !== null || hostAfterHydration !== null,
   archiveDeveloperThread: (...args: unknown[]) => archiveDeveloperThread(...args),
   allowDeveloperSessions: (...args: unknown[]) => allowDeveloperSessions(...args),
   onWorkspaceChanged: () => () => undefined,
@@ -188,6 +190,7 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
 
 beforeEach(() => {
   host = null;
+  hostAfterHydration = null;
   for (const rootId of ['root-recent', 'root-older', WORKTREE_ROOT_ID]) {
     for (const threadId of ['thread-1', 'thread-2']) forgetLocalSession(rootId, threadId);
   }
@@ -372,7 +375,7 @@ function createApi(overrides: Partial<CloudCodeApi> = {}): CloudCodeApi {
 }
 
 async function openSession(user: ReturnType<typeof userEvent.setup>, title: string) {
-  const rail = await screen.findByRole('navigation', { name: 'Recents' });
+  const rail = await screen.findByRole('navigation', { name: 'Cloud sessions' });
   await user.click(within(rail).getByRole('button', { name: title }));
 }
 
@@ -492,8 +495,8 @@ describe('CloudCodePage', () => {
   it('says there are no sessions yet rather than showing an empty list', async () => {
     render(<CloudCodePage api={createApi()} />);
 
-    const rail = await screen.findByRole('navigation', { name: 'Recents' });
-    expect(within(rail).getByText('No sessions yet.')).toBeInTheDocument();
+    const rail = await screen.findByRole('navigation', { name: 'Cloud sessions' });
+    expect(within(rail).getByText('No cloud sessions yet.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Show closed sessions' })).not.toBeInTheDocument();
   });
 
@@ -514,7 +517,7 @@ describe('CloudCodePage', () => {
     });
     render(<CloudCodePage api={api} />);
 
-    const rail = await screen.findByRole('navigation', { name: 'Recents' });
+    const rail = await screen.findByRole('navigation', { name: 'Cloud sessions' });
     expect(await within(rail).findByText('No open sessions.')).toBeInTheDocument();
 
     await user.click(await within(rail).findByRole('button', { name: 'Show closed sessions' }));
@@ -895,7 +898,7 @@ describe('CloudCodePage', () => {
     });
     render(<CloudCodePage api={api} />);
 
-    const rail = await screen.findByRole('navigation', { name: 'Recents' });
+    const rail = await screen.findByRole('navigation', { name: 'Cloud sessions' });
     await user.click(await within(rail).findByRole('button', { name: 'Show closed sessions' }));
     await user.click(await within(rail).findByRole('button', { name: closed.title }));
 
@@ -1269,7 +1272,7 @@ describe('CloudCodePage', () => {
     });
     render(<CloudCodePage api={api} />);
 
-    const rail = await screen.findByRole('navigation', { name: 'Recents' });
+    const rail = await screen.findByRole('navigation', { name: 'Cloud sessions' });
     expect(within(rail).getAllByRole('button')).toHaveLength(2);
 
     await user.click(screen.getByRole('button', { name: 'Filter sessions' }));
@@ -1297,7 +1300,7 @@ describe('CloudCodePage', () => {
     });
     render(<CloudCodePage api={api} />);
 
-    const rail = await screen.findByRole('navigation', { name: 'Recents' });
+    const rail = await screen.findByRole('navigation', { name: 'Cloud sessions' });
     expect(within(rail).getAllByRole('button')[0]).toHaveTextContent(session.title);
 
     await user.click(screen.getByRole('button', { name: 'Filter sessions' }));
@@ -1322,11 +1325,11 @@ describe('CloudCodePage', () => {
 
     await user.click(await screen.findByRole('button', { name: 'Collapse the session list' }));
 
-    expect(screen.queryByRole('navigation', { name: 'Recents' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Cloud sessions' })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Expand the session list' }));
 
-    expect(await screen.findByRole('navigation', { name: 'Recents' })).toBeInTheDocument();
+    expect(await screen.findByRole('navigation', { name: 'Cloud sessions' })).toBeInTheDocument();
   });
 
   it('names the environment and the repository in one header chip', async () => {
@@ -2457,6 +2460,29 @@ describe('the environment the composer starts a session in', () => {
       expect(
         await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
       ).toBeInTheDocument();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('waits for the session list before calling a linked local session gone', async () => {
+    replace.mockClear();
+    hostAfterHydration = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      const { rerender } = render(<CloudCodePage api={createApi()} />);
+      await act(async () => {});
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+
+      host = hostAfterHydration;
+      rerender(<CloudCodePage api={createApi()} />);
+
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
       expect(replace).not.toHaveBeenCalledWith('/code');
     } finally {
       window.history.replaceState({}, '', '/');

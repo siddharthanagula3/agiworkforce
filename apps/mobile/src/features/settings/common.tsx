@@ -9,15 +9,18 @@ import { Switch } from '@/components/ui/switch';
 import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { HelpArticleLink, type MobileHelpArticleId } from '@/src/features/support/HelpArticleLink';
 
 export function SettingsScreenShell({
   title,
   children,
   backHref = '/(app)/(tabs)/settings',
+  help,
 }: {
   title: string;
   children: React.ReactNode;
   backHref?: string;
+  help?: { docId: MobileHelpArticleId; label: string };
 }) {
   const { colors, statusBarStyle } = useTheme();
   const goBack = useGoBack(backHref);
@@ -56,6 +59,7 @@ export function SettingsScreenShell({
         showsVerticalScrollIndicator={false}
       >
         {children}
+        {help ? <HelpArticleLink docId={help.docId} label={help.label} /> : null}
       </ScrollView>
     </SafeAreaView>
   );

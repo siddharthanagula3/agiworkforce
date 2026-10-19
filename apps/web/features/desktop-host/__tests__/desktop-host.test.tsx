@@ -89,13 +89,25 @@ describe('notifyJobComplete', () => {
     await expect(notifyJobComplete({ title: 'Done' })).resolves.toBeUndefined();
   });
 
-  it('stays silent while the page is visible', async () => {
+  it('stays silent while the page is visible in a host that reports visibility', async () => {
     const notify = vi.fn(async () => undefined);
-    installHost({ notify });
+    installHost({ notify, shell: 'tauri' });
     vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
 
     await notifyJobComplete({ title: 'Done', conversationId: 'abc' });
     expect(notify).not.toHaveBeenCalled();
+  });
+
+  it('leaves the decision to the Electron shell, whose page always reads as visible', async () => {
+    const notify = vi.fn(async () => undefined);
+    installHost({ notify, shell: 'electron' });
+    vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
+
+    await notifyJobComplete({ title: 'Your reply is ready', conversationId: 'abc' });
+    expect(notify).toHaveBeenCalledWith({
+      title: 'Your reply is ready',
+      deepLink: 'agiworkforce-cloud://chat/abc',
+    });
   });
 
   it('notifies with a click target when the page is hidden', async () => {

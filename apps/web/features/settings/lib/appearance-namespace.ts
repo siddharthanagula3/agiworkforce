@@ -1,3 +1,4 @@
+import { CLOUD_WORK_MODES, type CloudWorkMode } from '@agiworkforce/types';
 import type {
   AccentColor,
   ChatFont,
@@ -20,6 +21,8 @@ export interface AppearanceSettings {
   motion: MotionPreference;
   highContrast: boolean;
   codeBlockWrap: boolean;
+  sendWithEnter: boolean;
+  defaultWorkMode: CloudWorkMode;
   followUpSuggestionsEnabled: boolean;
   followUpBehavior: FollowUpBehavior;
   dictationEnabled: boolean;
@@ -35,6 +38,8 @@ export interface AppearanceNamespace {
   motion?: MotionPreference;
   highContrast?: boolean;
   codeBlockWrap?: boolean;
+  sendWithEnter?: boolean;
+  defaultWorkMode?: CloudWorkMode;
   followUpSuggestions?: boolean;
   followUpBehavior?: FollowUpBehavior;
   dictationEnabled?: boolean;
@@ -107,6 +112,8 @@ export function toAppearanceNamespace(settings: AppearanceSettings): Required<Ap
     motion: settings.motion,
     highContrast: settings.highContrast,
     codeBlockWrap: settings.codeBlockWrap,
+    sendWithEnter: settings.sendWithEnter,
+    defaultWorkMode: settings.defaultWorkMode,
     followUpSuggestions: settings.followUpSuggestionsEnabled,
     followUpBehavior: settings.followUpBehavior,
     dictationEnabled: settings.dictationEnabled,
@@ -140,6 +147,12 @@ export function fromAppearanceNamespace(stored: unknown): Partial<AppearanceSett
 
   const codeBlockWrap = boolean(source['codeBlockWrap']);
   if (codeBlockWrap !== undefined) patch.codeBlockWrap = codeBlockWrap;
+
+  const sendWithEnter = boolean(source['sendWithEnter']);
+  if (sendWithEnter !== undefined) patch.sendWithEnter = sendWithEnter;
+
+  const defaultWorkMode = oneOf(CLOUD_WORK_MODES, source['defaultWorkMode']);
+  if (defaultWorkMode) patch.defaultWorkMode = defaultWorkMode;
 
   const followUpSuggestions = boolean(source['followUpSuggestions']);
   if (followUpSuggestions !== undefined) patch.followUpSuggestionsEnabled = followUpSuggestions;

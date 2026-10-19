@@ -11,6 +11,7 @@ import {
   desktopCapturer,
   ipcMain,
   nativeTheme,
+  powerSaveBlocker,
   screen,
   session,
   shell,
@@ -21,7 +22,7 @@ import {
   LOCAL_CODE_SESSION_ACTIVITY_PATH,
   type LocalCodeSessionActivity,
 } from '@agiworkforce/cloud-contracts';
-import { REMOTE_CODE_LIMITS } from '@agiworkforce/types';
+import { CLOUD_CODE_PAGE_ROUTE, REMOTE_CODE_LIMITS } from '@agiworkforce/types';
 import {
   checkDesktopCloudUpdate,
   desktopCloudInstallerDownloadUrl,
@@ -46,7 +47,7 @@ import {
   DESKTOP_RUNTIME_CHANNEL,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
   type BrowserPairRequestPrompt,
-  type HostAgentNotificationKind,
+  effectiveAgentNotifications,
   type HostAgentNotificationPreferences,
   localSessionPath,
   type BrowserPairingState,
@@ -84,7 +85,7 @@ import {
   remoteControlState,
   stopRemoteControl,
 } from './remote/remoteControlService';
-import { getRoot } from './runtime/workspaceStore';
+import { getRoot, listRoots } from './runtime/workspaceStore';
 import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
@@ -96,7 +97,7 @@ import {
   postAsShellAccount,
   readShellIdentity,
 } from './shellIdentity';
-import { createCodeSessionActivity } from './runtime/codeSessionActivity';
+import { createCodeSessionActivity } from '@agiworkforce/utils/remote-control';
 import {
   noteDeveloperSessionEvent as noteBackgroundSessionEvent,
   spawnTrackedDeveloperRuntime,
@@ -132,8 +133,9 @@ import {
   type GuardPrompt,
   type LiveWork,
 } from './quitGuard';
-import { installAppMenu } from './appMenu';
+import { installAppMenu, installDockMenu } from './appMenu';
 import { readBrowserSignInLink } from './browserSignIn';
+import { approvedRootFor, readLocalThreadLink, type LocalThreadLink } from './localThreadLink';
 import { configureDevicePrompts } from './runtime/devicePrompts';
 import { desktopDiagnostics, recordDesktopEvent } from './runtime/desktopTelemetryService';
 import {
@@ -172,11 +174,13 @@ import {
 } from './garnishCore';
 import {
   configureQuickAskBridge,
+  configureQuickAskHandoff,
   destroyQuickAsk,
   toggleQuickAsk,
   warmUpQuickAsk,
 } from './quickAsk';
 import { deliverBrowserHandoff } from './browserHandoff';
+import { focusComposerWhenReady } from './composerFocus';
 import { captureToChat, captureWindowToChat } from './screenshot';
 import { frontWindowIdOutside } from './runtime/computerUseService';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
@@ -195,6 +199,7 @@ import {
   accountFingerprint,
   adoptAccount,
   frameWorthRemembering,
+  isRestorableRoute,
   rememberFrame,
   rememberRoute,
   resolveWindowRestore,
@@ -213,6 +218,7 @@ import {
   type OpenWindow,
 } from './windowRegistry';
 import { handleWorkspaceDrop } from './workspaceDrop';
+import { createWorkKeeper } from './workKeeper';
 import {
   isTrustedCloudRendererOrigin,
   isTrustedPageUrl,
@@ -415,11 +421,17 @@ function registerIpcHandlers(): void {
     }
   });
 
+  // The page cannot tell whether its window is in front: Chromium keeps a
+  // hidden or minimized shell window "visible" to it, so the page asks and the
+  // shell, which knows the window's real state, stays quiet while the user is
+  // looking at the window that asked.
   ipcMain.handle(ELECTRON_IPC_CHANNELS.notify, async (event, request) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     const req = (request ?? {}) as ElectronNotifyRequest;
     if (typeof req.title !== 'string' || req.title === '') return;
     if (!Notification.isSupported()) return;
+    const asking = BrowserWindow.fromWebContents(event.sender);
+    if (asking && !asking.isDestroyed() && asking.isVisible() && asking.isFocused()) return;
     const notification = createNativeNotification({
       title: req.title,
       ...(typeof req.body === 'string' ? { body: req.body } : {}),
@@ -513,6 +525,12 @@ function deliverDeepLink(url: string): void {
     return;
   }
 
+  const localThread = readLocalThreadLink(url);
+  if (localThread.kind !== 'not-local') {
+    if (localThread.kind === 'open') openLocalThreadFromLink(localThread);
+    return;
+  }
+
   deepLinkQueue = enqueueDeepLink(deepLinkQueue, url, Date.now());
   if (rendererReady()) {
     focusMainWindow();
@@ -521,6 +539,25 @@ function deliverDeepLink(url: string): void {
   }
   saveDeepLinkQueue(deepLinkQueuePath(), deepLinkQueue);
   if (appReady) showMainWindow();
+}
+
+const FOLDER_SHOWN = { head: 200, tail: 120 };
+
+function openLocalThreadFromLink(link: Extract<LocalThreadLink, { kind: 'open' }>): void {
+  const rootId = approvedRootFor(link.folder, listRoots());
+  if (rootId !== null) {
+    openLocalSession(rootId, link.threadId);
+    return;
+  }
+  openRoute(CLOUD_CODE_PAGE_ROUTE);
+  void showNativeMessage(mainWindow, {
+    type: 'info',
+    buttons: ['OK'],
+    title: 'Folder not added',
+    message: 'Add this folder in AGI Code first, then open the session again.',
+    detail: `The session runs in ${shownValue(link.folder, FOLDER_SHOWN)}, which this app has not been allowed to open. Choose Add a folder in AGI Code.`,
+    noLink: true,
+  }).catch(() => undefined);
 }
 
 function deepLinkQueuePath(): string {
@@ -859,8 +896,11 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     if (!win.isDestroyed()) win.show();
   });
 
+  // Not `did-finish-load`: the app's page still reports loading then, while its
+  // sign-in frames finish, so a link held for the first load waited for a load
+  // that never came and the app opened on its home page instead.
   if (options.primary) {
-    win.webContents.on('did-finish-load', flushDeepLinks);
+    win.webContents.on('did-stop-loading', flushDeepLinks);
   }
 
   // Chromium's zoom is per origin and per session, so it survives a navigation
@@ -987,6 +1027,31 @@ function openNewChat(): void {
   void mainWindow?.loadURL(windowUrlFor(null));
 }
 
+const NEW_CHAT_COMPOSER_WAIT_MS = 5000;
+
+/**
+ * The global New Chat Window shortcut: the main window, in front, on a new
+ * chat with the cursor in the composer. A window already on an untouched new
+ * chat is only raised, so a draft typed there survives a second press.
+ */
+async function newChatFromShortcut(): Promise<void> {
+  showMainWindow();
+  const win = mainWindow;
+  if (!win || win.isDestroyed()) return;
+  const entry = shellWindows.get(win.id);
+  const onNewChat =
+    entry?.route === NEW_CHAT_ROUTE &&
+    showsTrustedPage(win.webContents) &&
+    !win.webContents.isLoading();
+  if (!onNewChat) {
+    if (entry) entry.route = NEW_CHAT_ROUTE;
+    await win.loadURL(windowUrlFor(null)).catch(() => undefined);
+  }
+  if (win.isDestroyed()) return;
+  win.webContents.focus();
+  await focusComposerWhenReady(win, NEW_CHAT_COMPOSER_WAIT_MS);
+}
+
 function openNewWindow(): void {
   createShellWindow({ primary: false, route: null });
 }
@@ -1041,7 +1106,19 @@ function copyDiagnostics(): void {
  * survives the click.
  */
 function openLocalSession(rootId: string, threadId: string): void {
-  const route = localSessionPath(rootId, threadId);
+  openRoute(localSessionPath(rootId, threadId));
+}
+
+/**
+ * A sign-in or other one-shot flow the panel was sent to is not replayed in the
+ * main window, which already shows its own sign-in when the account is gone.
+ */
+function openRouteFromQuickAsk(route: string): void {
+  if (isRestorableRoute(route)) openRoute(route);
+  else showMainWindow();
+}
+
+function openRoute(route: string): void {
   const showing = liveWindows().find((entry) => entry.route === route);
   if (showing) {
     focusWindow(showing.win.id);
@@ -1069,27 +1146,24 @@ function nativeNotification(options: NotificationOptionsLike): NotificationLike 
   };
 }
 
-/**
- * One notification is raised per agent event. The Settings choices for
- * finished sessions and approvals narrow the agent notification settings:
- * off mutes those kinds, and Always shows them while a window is in front.
- */
 function agentNotificationPreferences(): HostAgentNotificationPreferences {
-  const { agentNotifications, sessionCompletionAlerts, sessionApprovalAlerts } = getPreferences();
-  const muted = new Set<HostAgentNotificationKind>(agentNotifications.muted);
-  if (sessionCompletionAlerts === 'never') {
-    muted.add('turn-complete');
-    muted.add('turn-failed');
-  }
-  if (!sessionApprovalAlerts) muted.add('approval');
-  return {
-    ...agentNotifications,
-    when:
-      sessionCompletionAlerts === 'always' && agentNotifications.when === 'unfocused'
-        ? 'always'
-        : agentNotifications.when,
-    muted: [...muted],
-  };
+  return effectiveAgentNotifications(getPreferences());
+}
+
+const workKeeper = createWorkKeeper({
+  hold: () => {
+    const id = powerSaveBlocker.start('prevent-app-suspension');
+    return () => {
+      if (powerSaveBlocker.isStarted(id)) powerSaveBlocker.stop(id);
+    };
+  },
+});
+
+function syncWorkKeeper(): void {
+  workKeeper.update(
+    agentNotifier.activity().runningTurns.length > 0 ||
+      remoteControlState().status === 'connected',
+  );
 }
 
 const agentNotifier = createAgentNotifier({
@@ -1105,6 +1179,7 @@ const agentNotifier = createAgentNotifier({
   onActivityChanged: (activity: AgentActivity) => {
     app.setBadgeCount(activity.pendingApprovals.length);
     syncTray();
+    syncWorkKeeper();
   },
   onAnswerFailed: (error) => {
     console.warn('[agent-notifications] the approval answer did not reach the agent:', error);
@@ -1257,6 +1332,7 @@ function takeOverScreen(): void {
 const garnishHandlers = {
   onOpen: showMainWindow,
   onNewChat: openNewChat,
+  onNewChatWindow: () => void newChatFromShortcut(),
   onQuickAsk: () => toggleQuickAsk(),
   onScreenshot: () => void captureToChat(mainWindow),
   onWindowShot: () => void captureWindowToChat(mainWindow, () => frontWindowIdOutside(process.pid)),
@@ -1274,6 +1350,7 @@ function applyGarnishShortcuts(): void {
   unregisterGarnishShortcuts();
   registerGarnishShortcuts({
     onQuickAsk: garnishHandlers.onQuickAsk,
+    onNewChat: garnishHandlers.onNewChatWindow,
     onScreenshot: garnishHandlers.onScreenshot,
     onWindowShot: garnishHandlers.onWindowShot,
     onVoice: garnishHandlers.onVoice,
@@ -1301,6 +1378,7 @@ function hostPreferencesState(): HostPreferencesState {
       sessionCompletionAlerts: preferences.sessionCompletionAlerts,
       sessionApprovalAlerts: preferences.sessionApprovalAlerts,
       quickAskShortcut: shortcuts.quickAskShortcut,
+      newChatShortcut: shortcuts.newChatShortcut,
       screenshotShortcut: shortcuts.screenshotShortcut,
       windowShotShortcut: shortcuts.windowShotShortcut,
       voiceShortcut: shortcuts.voiceShortcut,
@@ -1724,6 +1802,11 @@ if (!hasSingleInstanceLock) {
     trayComputerUseState = computerUseTrayState();
     syncTray();
     installMenu();
+    installDockMenu({
+      newChat: garnishHandlers.onNewChat,
+      newWindow: openNewWindow,
+      toggleQuickAsk: garnishHandlers.onQuickAsk,
+    });
     // The Window menu says whether the front window is on a conversation, so it
     // is rebuilt when the front window changes rather than once at launch.
     app.on('browser-window-focus', installMenu);
@@ -1732,7 +1815,10 @@ if (!hasSingleInstanceLock) {
     applyGarnishShortcuts();
 
     configureRemoteControl(
-      (state) => sendRuntimeEvent({ kind: 'remote-control-changed', state }),
+      (state) => {
+        sendRuntimeEvent({ kind: 'remote-control-changed', state });
+        syncWorkKeeper();
+      },
       () => {
         showMainWindow();
         return mainWindow;
@@ -1794,6 +1880,7 @@ if (!hasSingleInstanceLock) {
         `--agi-app-origin=${CLOUD_APP_ORIGIN}`,
       ],
     });
+    configureQuickAskHandoff(openRouteFromQuickAsk);
     setTimeout(warmUpQuickAsk, QUICK_ASK_WARMUP_MS).unref?.();
     if (autoUpdateSupported()) startAutoUpdate(installedMacArchitecture(), announceUpdateReady);
     void startPairingBridge();
@@ -1828,6 +1915,7 @@ if (!hasSingleInstanceLock) {
   });
 
   app.on('will-quit', () => {
+    workKeeper.release();
     stopLocalRoutines();
     unregisterGarnishShortcuts();
     cancelAllShellRuns();

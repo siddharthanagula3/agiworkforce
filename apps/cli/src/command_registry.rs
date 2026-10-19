@@ -288,7 +288,7 @@ mod tests {
     fn cli_uses_shared_builtin_registry() {
         let commands = builtin_slash_registry_commands();
 
-        assert_eq!(commands.len(), 106);
+        assert_eq!(commands.len(), 101);
         assert_eq!(commands[0].name, "model");
         assert_eq!(
             commands
@@ -501,13 +501,10 @@ mod tests {
             "keybindings",
             "remote-env",
             "add-dir",
-            "color",
             "desktop",
             "effort",
             "files",
-            "heapdump",
             "install-github-app",
-            "install-slack-app",
             "mobile",
             "passes",
             "pr-comments",
@@ -519,10 +516,8 @@ mod tests {
             "security-review",
             "stats",
             "statusline",
-            "stickers",
             "tag",
             "think-back",
-            "thinkback-play",
             "ultrareview",
             "upgrade",
             "vim",
