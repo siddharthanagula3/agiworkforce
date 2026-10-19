@@ -399,6 +399,41 @@ describe('developer session runtime', () => {
     }
   });
 
+  it('signs the CLI in to this account before starting a thread, so it takes the account route', async () => {
+    let release!: () => void;
+    const approval = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const approveDeviceCode = vi.fn(() => approval);
+    let signedIn = false;
+    const asked: string[] = [];
+    const { service } = await loadService(
+      (method) => {
+        asked.push(method);
+        if (method === 'account/status')
+          return { signedIn, email: signedIn ? 'qa@agiworkforce.com' : null };
+        if (method === 'account/login') return { loginId: 'login-1', userCode: 'QRST-9876' };
+        if (method === 'account/login/wait') {
+          signedIn = true;
+          return { outcome: 'completed', account: { signedIn: true } };
+        }
+        return defaultResponder(method);
+      },
+      {
+        readShellIdentity: async () => ({ signedIn: true, email: 'qa@agiworkforce.com' }),
+        approveDeviceCode,
+      },
+    );
+    const starting = service.startDeveloperSession(root.id);
+    await vi.waitFor(() => expect(approveDeviceCode).toHaveBeenCalledOnce());
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    expect(asked).not.toContain('thread/start');
+
+    release();
+    await starting;
+    expect(asked.indexOf('account/login/wait')).toBeLessThan(asked.indexOf('thread/start'));
+  });
+
   it.each([false, true])(
     'waits for account reconciliation and rechecks command consent before the first turn (revoked: %s)',
     async (revoke) => {

@@ -2043,9 +2043,12 @@ export async function startDeveloperSession(
   const title = placement.title;
   if (input.environment === 'ssh' && !hasSshEnvironment(rootId))
     throw new Error('Choose an allowed SSH environment before starting an SSH session.');
+  // A thread takes its model route at thread/start, so one started before the
+  // CLI is signed in to this account is pinned to the user's own provider keys.
   if (input.environment !== 'worktree') {
     const root = await resolveRoot(rootId);
     const server = await readyServer(root);
+    await queueAccountSync(server);
     const result = await request(server, 'thread/start', {
       cwd: root.path,
       ...(model ? { model } : {}),
@@ -2056,6 +2059,7 @@ export async function startDeveloperSession(
 
   const parent = requireRoot(rootId);
   const parentServer = await readyServer(parent);
+  await queueAccountSync(parentServer);
   requireAdvertised(parentServer, 'worktrees');
   const start =
     input.worktreeStart === 'working_tree'
