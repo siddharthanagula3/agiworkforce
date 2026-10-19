@@ -202,7 +202,7 @@ pub struct DbStats {
     pub total_tokens: i64,
 }
 
-fn open_db_in(base_dir: impl AsRef<Path>) -> Result<Connection> {
+pub(crate) fn open_db_in(base_dir: impl AsRef<Path>) -> Result<Connection> {
     let base_dir = base_dir.as_ref().to_path_buf();
     fs::create_dir_all(base_dir.join(MANAGED_SESSION_DIR_NAME)).with_context(|| {
         format!(
@@ -619,14 +619,7 @@ pub fn import_hosted_session(
     session.model = model.map(str::to_string);
     session.title = Some(title.to_string());
     session.created_by = Some("cli".to_string());
-    session.routing_authority = Some(
-        crate::platform::runtime::session::ManagedSessionRoutingAuthority {
-            privacy_mode: crate::platform::runtime::session::PrivacyMode::Managed,
-            provider: crate::models::provider_persistence_name(
-                &crate::models::Provider::ManagedCloud,
-            ),
-        },
-    );
+    session.routing_authority = Some(managed_cloud_authority());
     session.version = crate::platform::runtime::session::MANAGED_SESSION_VERSION;
     session.touch();
     save_session_to_default_path(&conn.base_dir, &session)?;
@@ -639,6 +632,106 @@ pub fn import_hosted_session(
         metadata.model = Some(model.to_string());
     }
     write_metadata(&conn.base_dir, session_id, &metadata)
+}
+
+fn managed_cloud_authority() -> crate::platform::runtime::session::ManagedSessionRoutingAuthority {
+    crate::platform::runtime::session::ManagedSessionRoutingAuthority {
+        privacy_mode: crate::platform::runtime::session::PrivacyMode::Managed,
+        provider: crate::models::provider_persistence_name(&crate::models::Provider::ManagedCloud),
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum HostedAdoption {
+    Created,
+    Updated,
+    /// Local turns the account has not seen are never replaced.
+    Kept,
+}
+
+fn synced_turns(messages: &[Message]) -> Vec<(&str, String)> {
+    messages
+        .iter()
+        .filter(|message| matches!(message.role.as_str(), "user" | "assistant"))
+        .map(|message| (message.role.as_str(), message.text_content()))
+        .filter(|(_, text)| !text.trim().is_empty())
+        .collect()
+}
+
+pub struct HostedCopy {
+    /// The account's own model is often a web-only routing mode.
+    pub model: String,
+    pub auto_routing: Option<crate::runtime::session::ManagedSessionAutoRouting>,
+    /// The account's history carries no system prompt.
+    pub preamble: Vec<Message>,
+    pub workspace_root: Option<PathBuf>,
+}
+
+/// The copy keeps the conversation's id, or turns taken here would sync into a
+/// new conversation. Local turns the account has not seen are never replaced.
+pub fn adopt_hosted_conversation(
+    conn: &Connection,
+    conversation: &crate::cloud::chat::HostedConversation,
+    copy: HostedCopy,
+) -> Result<HostedAdoption> {
+    let hosted: Vec<Message> = conversation
+        .messages
+        .iter()
+        .map(|message| Message::text(&message.role, &message.content))
+        .collect();
+    let hosted_ids: Vec<String> = conversation
+        .messages
+        .iter()
+        .map(|message| message.id.clone())
+        .collect();
+
+    let existing = find_session_path(&conn.base_dir, &conversation.id)
+        .map(|path| load_managed_session_from_path(&path))
+        .transpose()?;
+    let (mut session, adoption) = match existing {
+        Some(mut session) => {
+            let local = synced_turns(&session.messages);
+            let account = synced_turns(&hosted);
+            let managed = session.routing_authority.as_ref().is_some_and(|authority| {
+                authority.privacy_mode == crate::platform::runtime::session::PrivacyMode::Managed
+            });
+            if !managed || account.len() <= local.len() || !account.starts_with(&local) {
+                return Ok(HostedAdoption::Kept);
+            }
+            session
+                .messages
+                .extend(hosted.into_iter().skip(local.len()));
+            (session, HostedAdoption::Updated)
+        }
+        None => {
+            let mut session = ManagedSession::new(conversation.id.clone(), Utc::now());
+            session.messages = copy.preamble;
+            session.messages.extend(hosted);
+            session.model = Some(copy.model);
+            session.auto_routing = copy.auto_routing;
+            session.title = Some(conversation.title.clone());
+            session.created_by = Some("cli".to_string());
+            session.routing_authority = Some(managed_cloud_authority());
+            (session, HostedAdoption::Created)
+        }
+    };
+    if session.workspace_root.is_none() {
+        session.workspace_root = copy.workspace_root;
+    }
+    session.hosted_message_ids = hosted_ids;
+    session.version = crate::platform::runtime::session::MANAGED_SESSION_VERSION;
+    session.touch();
+    save_session_to_default_path(&conn.base_dir, &session)?;
+
+    let mut metadata = read_metadata(&conn.base_dir, &conversation.id)?.unwrap_or_default();
+    if adoption == HostedAdoption::Created {
+        metadata.title = Some(conversation.title.clone());
+        metadata.custom_title = true;
+        metadata.imported_from = Some("your AGI Workforce account".to_string());
+        metadata.model = session.model.clone();
+    }
+    write_metadata(&conn.base_dir, &conversation.id, &metadata)?;
+    Ok(adoption)
 }
 
 /// List sessions ordered by most-recently-updated, up to `limit` rows.
@@ -919,6 +1012,132 @@ mod tests {
         let tempdir = tempdir().unwrap();
         let conn = open_db_in(tempdir.path()).unwrap();
         (tempdir, conn)
+    }
+
+    fn account_conversation(turns: &[(&str, &str)]) -> crate::cloud::chat::HostedConversation {
+        crate::cloud::chat::HostedConversation {
+            id: "797344c5-5eb4-4e1c-a268-4a01d656c16d".to_string(),
+            title: "Started on the web".to_string(),
+            model: Some("auto".to_string()),
+            project_id: None,
+            updated_at: "2026-10-18T00:00:00Z".to_string(),
+            archived: false,
+            server_version: "9".to_string(),
+            messages: turns
+                .iter()
+                .enumerate()
+                .map(
+                    |(index, (role, content))| crate::cloud::chat::HostedMessage {
+                        id: format!("hosted-{index}"),
+                        role: role.to_string(),
+                        content: content.to_string(),
+                        server_version: (10 + index).to_string(),
+                    },
+                )
+                .collect(),
+        }
+    }
+
+    fn first_copy(workspace: &Path) -> HostedCopy {
+        HostedCopy {
+            model: "some-model".to_string(),
+            auto_routing: None,
+            preamble: vec![Message::text("system", "prompt")],
+            workspace_root: Some(workspace.to_path_buf()),
+        }
+    }
+
+    #[test]
+    fn a_web_conversation_becomes_a_thread_of_the_folder_that_opened_it() {
+        let (_tempdir, conn) = temp_connection();
+        let workspace = tempdir().unwrap();
+        let conversation = account_conversation(&[("user", "q"), ("assistant", "a")]);
+
+        let adoption =
+            adopt_hosted_conversation(&conn, &conversation, first_copy(workspace.path())).unwrap();
+
+        assert_eq!(adoption, HostedAdoption::Created);
+        let session = load_managed_session_from_path(
+            &find_session_path(&conn.base_dir, &conversation.id).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(session.session_id, conversation.id);
+        assert_eq!(session.workspace_root.as_deref(), Some(workspace.path()));
+        assert_eq!(session.model.as_deref(), Some("some-model"));
+        assert_eq!(
+            session
+                .messages
+                .iter()
+                .map(|m| m.role.as_str())
+                .collect::<Vec<_>>(),
+            ["system", "user", "assistant"]
+        );
+        assert_eq!(session.hosted_message_ids, ["hosted-0", "hosted-1"]);
+        assert_eq!(
+            session.require_routing_authority().unwrap().privacy_mode,
+            crate::platform::runtime::session::PrivacyMode::Managed
+        );
+        assert_eq!(
+            imported_from(&conn, &conversation.id).as_deref(),
+            Some("your AGI Workforce account")
+        );
+    }
+
+    #[test]
+    fn turns_added_on_the_web_extend_the_local_copy_and_keep_its_own_messages() {
+        let (_tempdir, conn) = temp_connection();
+        let workspace = tempdir().unwrap();
+        let first = account_conversation(&[("user", "q"), ("assistant", "a")]);
+        adopt_hosted_conversation(&conn, &first, first_copy(workspace.path())).unwrap();
+        let later = account_conversation(&[
+            ("user", "q"),
+            ("assistant", "a"),
+            ("user", "asked on the web"),
+            ("assistant", "answered on the web"),
+        ]);
+
+        let elsewhere = tempdir().unwrap();
+        let adoption =
+            adopt_hosted_conversation(&conn, &later, first_copy(elsewhere.path())).unwrap();
+
+        assert_eq!(adoption, HostedAdoption::Updated);
+        let session =
+            load_managed_session_from_path(&find_session_path(&conn.base_dir, &later.id).unwrap())
+                .unwrap();
+        assert_eq!(session.messages.len(), 5);
+        assert_eq!(session.messages[0].role, "system");
+        assert_eq!(session.messages[4].text_content(), "answered on the web");
+        assert_eq!(session.hosted_message_ids.len(), 4);
+        assert_eq!(session.workspace_root.as_deref(), Some(workspace.path()));
+    }
+
+    #[test]
+    fn local_turns_the_account_has_not_seen_are_never_replaced() {
+        let (_tempdir, conn) = temp_connection();
+        let workspace = tempdir().unwrap();
+        let conversation = account_conversation(&[("user", "q"), ("assistant", "a")]);
+        adopt_hosted_conversation(&conn, &conversation, first_copy(workspace.path())).unwrap();
+        let path = find_session_path(&conn.base_dir, &conversation.id).unwrap();
+        let mut session = load_managed_session_from_path(&path).unwrap();
+        session
+            .messages
+            .push(Message::text("user", "asked here, not synced yet"));
+        session.save_to_path(&path).unwrap();
+        let diverged = account_conversation(&[
+            ("user", "q"),
+            ("assistant", "a"),
+            ("user", "asked on the web"),
+        ]);
+
+        let adoption =
+            adopt_hosted_conversation(&conn, &diverged, first_copy(workspace.path())).unwrap();
+
+        assert_eq!(adoption, HostedAdoption::Kept);
+        let kept = load_managed_session_from_path(&path).unwrap();
+        assert_eq!(
+            kept.messages.last().unwrap().text_content(),
+            "asked here, not synced yet"
+        );
     }
 
     #[test]
