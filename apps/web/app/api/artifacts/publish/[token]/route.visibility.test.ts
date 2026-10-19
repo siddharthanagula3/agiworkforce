@@ -47,7 +47,7 @@ function call(body: unknown, token = TOKEN) {
   );
 }
 
-function artifactRow(visibility: 'public' | 'organization') {
+function artifactRow(visibility: 'public' | 'organization' | 'invited') {
   return {
     id: ARTIFACT,
     token: TOKEN,
@@ -70,7 +70,7 @@ function artifactRow(visibility: 'public' | 'organization') {
  * visibility update. Answering by statement shape keeps the test honest about
  * which query it is standing in for.
  */
-function respond(visibility: 'public' | 'organization') {
+function respond(visibility: 'public' | 'organization' | 'invited') {
   return (sql: string) => {
     const text = String(sql);
     if (text.includes('organization_members')) {
@@ -169,6 +169,34 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
     expect(
       statements.some((sql) => sql.includes('insert into public.organization_shared_artifacts')),
     ).toBe(false);
+  });
+
+  it('limits the page to invited people and drops any workspace grant', async () => {
+    mocks.query.mockImplementation(async (sql: string) => respond('invited')(sql));
+
+    const response = await call({ visibility: 'invited' });
+
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({ visibility: 'invited', organizationId: null });
+    const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
+    expect(
+      statements.some((sql) => sql.includes('delete from public.organization_shared_artifacts')),
+    ).toBe(true);
+  });
+
+  it('lets someone outside any workspace share with invited people', async () => {
+    mocks.query.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes('organization_members') || text.includes('user_settings')) return [];
+      if (text.includes('update public.published_artifacts')) return [artifactRow('invited')];
+      return [];
+    });
+
+    const response = await call({ visibility: 'invited' });
+
+    expect(response.status).toBe(200);
+    const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
+    expect(statements.some((sql) => sql.includes('organization_shared_artifacts'))).toBe(false);
   });
 
   it('rejects an audience the schema does not model', async () => {

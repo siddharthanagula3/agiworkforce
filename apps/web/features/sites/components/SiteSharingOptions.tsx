@@ -7,6 +7,7 @@ import type { SiteVisibility } from '../services/sites-service';
 const OPTION_LABELS: Record<SiteVisibility, string> = {
   public: 'Anyone with the link',
   organization: 'Your workspace',
+  invited: 'Only people you invite',
 };
 
 export function SiteSharingOptions({
@@ -22,11 +23,13 @@ export function SiteSharingOptions({
   disabled?: boolean;
   onChange: (next: SiteVisibility) => void;
 }) {
-  const options: SiteVisibility[] = ['public', 'organization'];
+  const options: SiteVisibility[] = ['public', 'organization', 'invited'];
   return (
     <RadioGroup
       value={value}
-      onValueChange={(next) => onChange(next === 'organization' ? 'organization' : 'public')}
+      onValueChange={(next) =>
+        onChange(next === 'organization' || next === 'invited' ? next : 'public')
+      }
       disabled={disabled}
       aria-label="Who can open this site"
       className="grid gap-2"

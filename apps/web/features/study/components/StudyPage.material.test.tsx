@@ -48,6 +48,8 @@ describe('study course material and plans', () => {
     expect(text).toContain('~~~quiz');
     expect(text).toContain('~~~flashcards');
     expect(text).toContain('numbered outline');
+    expect(text).toContain('explain an idea back in their own words, typed or spoken');
+    expect(text).toContain('When the subject is a language');
   });
 
   it('starts the session inside the chosen project and drafts a study plan request', async () => {

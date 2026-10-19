@@ -430,6 +430,12 @@ function resolveArtifactImageSource(raw: string): string | null {
 const pendingVersionIndexByArtifactId = new Map<string, number>();
 
 const REQUEST_EDITS_LABEL = 'Request edits';
+const GOOGLE_DOCS_CONNECTION_COPY: Readonly<Record<string, string>> = {
+  google_drive_not_connected: 'Connect Google Drive to save documents to it.',
+  google_drive_reconnect_required: 'Reconnect Google Drive to save documents to it.',
+  google_drive_write_not_granted:
+    'Google Drive is connected for reading only. Reconnect it and allow it to create files.',
+};
 const NARROW_ONLY_ITEM_CLASS = '@[26rem]:hidden';
 
 export function ArtifactPreview({
@@ -1125,6 +1131,50 @@ export function ArtifactPreview({
   );
 
   const isTextDocument = artifact.type === 'document' && !isPdf && !isDocx;
+
+  const [savingToGoogleDocs, setSavingToGoogleDocs] = useState(false);
+  const handleSaveToGoogleDocs = async () => {
+    if (savingToGoogleDocs) return;
+    setSavingToGoogleDocs(true);
+    try {
+      const response = await fetch('/api/artifacts/export/google-docs', {
+        method: 'POST',
+        credentials: 'include',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ title: artifact.title || 'Document', content: activeContent }),
+      });
+      const body = (await response.json().catch(() => ({}))) as {
+        url?: string;
+        error?: { code?: string; message?: string };
+      };
+      if (!response.ok || !body.url) {
+        const code = body.error?.code ?? '';
+        const needsConnection = code in GOOGLE_DOCS_CONNECTION_COPY;
+        toast.error(
+          GOOGLE_DOCS_CONNECTION_COPY[code] ?? 'The document was not saved to Google Docs.',
+          {
+            ...(needsConnection
+              ? {
+                  action: {
+                    label: 'Open connectors',
+                    onClick: () => window.open('/connectors', '_self'),
+                  },
+                }
+              : {}),
+          },
+        );
+        return;
+      }
+      const url = body.url;
+      toast.success('Saved to Google Docs', {
+        action: { label: 'Open', onClick: () => window.open(url, '_blank', 'noopener,noreferrer') },
+      });
+    } catch (error) {
+      toast.error(toUserMessage(error, 'The document was not saved to Google Docs.'));
+    } finally {
+      setSavingToGoogleDocs(false);
+    }
+  };
 
   const handleExportDeckPdf = async () => {
     const title = artifact.title || 'Presentation';
@@ -1855,6 +1905,17 @@ export function ArtifactPreview({
         group: 'Keep',
         testId: 'artifact-save-template',
         onSelect: () => setTemplateDialogOpen(true),
+      });
+    }
+    if (isTextDocument && isMarkdownDoc && variant === 'panel') {
+      moreMenuItems.push({
+        id: 'save-google-docs',
+        label: savingToGoogleDocs ? 'Saving to Google Docs…' : 'Save to Google Docs',
+        icon: FileText,
+        group: 'Keep',
+        disabled: savingToGoogleDocs,
+        testId: 'artifact-save-google-docs',
+        onSelect: () => void handleSaveToGoogleDocs(),
       });
     }
     if (isTextDocument && onRequestEdits && isLatestVersion) {
