@@ -17,6 +17,7 @@ import {
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
+const CHECKS_POLL_MS = 30_000;
 
 export interface LocalPullRequestProps {
   rootId: string;
@@ -78,6 +79,20 @@ export function LocalPullRequest({ rootId, title, refreshKey }: LocalPullRequest
   };
 
   const pullRequest = opened ?? lookup?.pullRequest ?? null;
+  const checksRunning =
+    pullRequest !== null &&
+    pullRequest.checks === 'pending' &&
+    (pullRequest.state === 'open' || pullRequest.state === 'draft');
+
+  useEffect(() => {
+    if (!checksRunning) return undefined;
+    const timer = window.setTimeout(() => {
+      setOpened(null);
+      void load();
+    }, CHECKS_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [checksRunning, load, lookup]);
+
   const onBase = Boolean(branches?.current) && branches?.current === branches?.baseBranch;
 
   if (branches === null || !branches.remoteUrl || !branches.current) {
