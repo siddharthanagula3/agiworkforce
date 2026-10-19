@@ -14,6 +14,7 @@ export * from './artifact-runtime';
 export * from './finance';
 export * from './health-space';
 export * from './library';
+export * from './memory-summary';
 export * from './managed-media';
 export * from './me';
 export * from './client-handshake';
