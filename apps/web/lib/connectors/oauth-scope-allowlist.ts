@@ -242,6 +242,13 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
 };
 
 /**
+ * The Google scope that lets the artifact export create a document in the
+ * person's Drive, in the canonical form canonicalConnectorScope() returns. It
+ * is the one write scope the google-drive ceiling admits.
+ */
+export const GOOGLE_DRIVE_FILE_CREATE_SCOPE = 'drive.file';
+
+/**
  * Scopes no enforced ceiling may ever admit, regardless of provider. One
  * place for what "broader than declared" means, read by both the ceiling
  * table test and `scripts/check-connector-scopes.mjs`.

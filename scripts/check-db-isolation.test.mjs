@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -567,6 +567,35 @@ test('adding the organization_id predicate satisfies the workspace rule', () => 
     ].join('\n'),
   });
   assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
+});
+
+test('the workspace memory predicate helper satisfies the workspace rule through its interpolation', () => {
+  const result = runOnSandbox({
+    [`${NEON}/0001_conversations.sql`]: CONVERSATIONS_MIGRATION,
+    'apps/web/lib/chats.ts': [
+      "import type { DatabaseAdapter } from '@agiworkforce/data-layer';",
+      "import { workspaceMemoryPredicate } from './memory';",
+      'export async function listChats(db: DatabaseAdapter, userId: string, organizationId: string | null) {',
+      '  return db.query(',
+      '    `select id from web_conversations where user_id = $1 and ${workspaceMemoryPredicate(2)}`,',
+      '    [userId, organizationId],',
+      '  );',
+      '}',
+    ].join('\n'),
+  });
+  assert.equal(result.status, 0, `expected pass, got:\n${result.stderr}`);
+});
+
+test('workspaceMemoryPredicate still renders the organization predicate the guard credits it with', () => {
+  const source = readFileSync(
+    join(REPO_ROOT, 'apps/web/lib/services/managed-memory-context-service.ts'),
+    'utf8',
+  );
+  const body = /export function workspaceMemoryPredicate\([^)]*\)[^{]*\{([\s\S]*?)\n\}/.exec(
+    source,
+  );
+  assert.ok(body, 'workspaceMemoryPredicate is gone; drop WORKSPACE_PREDICATE_HELPER_RE with it');
+  assert.match(body[1], /organization_id is not distinct from \$\$\{paramIndex\}::uuid/);
 });
 
 test('a cron sweep is exempt from the workspace rule, a settings route is not', () => {

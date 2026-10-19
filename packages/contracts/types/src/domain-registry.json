@@ -347,7 +347,11 @@
         "cloud_agent_events",
         "cloud_agent_execution_operations",
         "cloud_agent_run_budgets",
-        "cloud_agent_runs"
+        "cloud_agent_runs",
+        "user_agent_access",
+        "user_agent_files",
+        "user_agent_versions",
+        "user_agents"
       ]
     },
     {
@@ -440,10 +444,13 @@
       "capabilities": [],
       "concepts": ["artifact"],
       "tables": [
+        "artifact_comments",
         "organization_shared_artifacts",
         "published_artifact_storage",
         "published_artifact_versions",
+        "published_artifact_viewers",
         "published_artifacts",
+        "studio_library_items",
         "web_artifact_index",
         "web_artifact_versions",
         "web_artifacts"
@@ -494,6 +501,7 @@
         "messaging_connections",
         "slack_account_links",
         "slack_assistant_runs",
+        "slack_channel_policies",
         "slack_installations",
         "slack_link_requests"
       ]
@@ -790,9 +798,14 @@
       "concepts": [],
       "tables": [
         "api_keys",
+        "developer_eval_cases",
+        "developer_eval_results",
+        "developer_eval_runs",
         "developer_projects",
-        "developer_webhook_endpoints",
-        "developer_webhook_deliveries"
+        "developer_prompt_versions",
+        "developer_prompts",
+        "developer_webhook_deliveries",
+        "developer_webhook_endpoints"
       ]
     },
     {

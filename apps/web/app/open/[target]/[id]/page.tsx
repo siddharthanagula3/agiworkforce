@@ -35,7 +35,12 @@ export default async function ProductLinkRoute({ params }: Props) {
     redirect(`/login?redirectTo=${encodeURIComponent(productLinkPath(target, id))}`);
   }
 
-  const resolution = await resolveProductLink(scoped.db, scoped.userId, { target, id });
+  // getCurrentUserRlsDb binds no organization, so the database shows this read Personal only.
+  const resolution = await resolveProductLink(
+    scoped.db,
+    { userId: scoped.userId, organizationId: null },
+    { target, id },
+  );
   if (resolution.status === 'ready') redirect(resolution.href);
 
   return (

@@ -1,19 +1,10 @@
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
+import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { managedCloudChat } from '@/services/managedCloudChat';
 import { confirmShareConversation } from '@/src/features/shared-links/shareConversation';
 
-type AgentTaskState = CloudAgentRun['state'];
-
-const SETTLED_STATES: ReadonlySet<AgentTaskState> = new Set([
-  'completed',
-  'ready_for_review',
-  'partial',
-  'failed',
-  'cancelled',
-]);
-
 export function isCloudRunSettled(run: Pick<CloudAgentRun, 'state'>): boolean {
-  return SETTLED_STATES.has(run.state);
+  return TERMINAL_AGENT_TASK_STATES.has(run.state);
 }
 
 export function rerunGoalFromRun(run: CloudAgentRun): string | null {

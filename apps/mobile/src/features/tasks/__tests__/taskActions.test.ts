@@ -28,6 +28,12 @@ describe('task actions on mobile', () => {
     expect(isCloudRunSettled({ state: 'awaiting_input' })).toBe(false);
   });
 
+  it('counts every ending the run contract names as settled, a timed-out run included', () => {
+    expect(rerunGoalFromRun({ ...RUN, state: 'timed_out' })).toBe('Draft the launch email');
+    expect(isCloudRunSettled({ state: 'archived' })).toBe(true);
+    expect(isCloudRunSettled({ state: 'paused' })).toBe(false);
+  });
+
   it('shares the task through a confirmed chat link built from its messages', async () => {
     mockGetConversation.mockResolvedValue({
       messages: [
