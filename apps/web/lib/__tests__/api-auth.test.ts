@@ -241,6 +241,8 @@ import { STEP_UP_TOKEN_HEADER } from '@/lib/server/step-up-auth';
 import { createStepUpGrant } from '@/lib/server/step-up/grant-token';
 import { DELETE as revokeApiKeyRoute } from '@/app/api/settings/api-keys/[keyId]/route';
 import { assertAccountActive, getClerkAuthUser, getOptionalAuthUser } from '@/lib/api-auth';
+import { SURFACE_TOKEN_HEADER } from '@agiworkforce/types';
+import { isPasskeyRequiredError } from '@/lib/server/account-security/gate';
 import {
   createUpstashKeyValueStore,
   type KeyValueStore,
@@ -526,7 +528,6 @@ describe('getClerkAuthUser · API-key issue/verify unification', () => {
     it.each([
       ['the web origin', { azp: 'https://agiworkforce.com' }, 'web'],
       ['the extension origin', { azp: 'chrome-extension://abcdefghijklmnop' }, 'chrome'],
-      ['the mobile template claim', { surface: 'mobile' }, 'mobile'],
     ])('binds a Clerk bearer token to the surface %s proves', async (_label, claims, bound) => {
       makeFakeDb();
       mockAuth.mockResolvedValueOnce(authSession(null));
@@ -1474,5 +1475,173 @@ describe('getClerkAuthUser: a session may not outlive the absolute lifetime', ()
     } finally {
       delete process.env['SESSION_ABSOLUTE_LIFETIME_HOURS'];
     }
+  });
+});
+
+describe('getClerkAuthUser: a native session token with a surface proof', () => {
+  const SESSION_TOKEN = 'eyJhbGciOiJSUzI1NiJ9.session.sig';
+  const SURFACE_TOKEN = 'eyJhbGciOiJSUzI1NiJ9.surface.sig';
+  const SESSION_ID = 'sess_mobile_native';
+
+  function nativeRequest(proof?: string): NextRequest {
+    return new NextRequest('http://localhost/api/chat/conversations', {
+      headers: {
+        authorization: `Bearer ${SESSION_TOKEN}`,
+        ...(proof === undefined ? {} : { [SURFACE_TOKEN_HEADER]: proof }),
+      },
+    });
+  }
+
+  function tokens(byToken: Record<string, Record<string, unknown> | Error>) {
+    mockVerifyToken.mockImplementation(async (token: string) => {
+      const claims = byToken[token];
+      if (!claims) throw new Error('unknown token');
+      if (claims instanceof Error) throw claims;
+      return claims;
+    });
+  }
+
+  function authFailureReasons(): string[] {
+    return mockNeonExecute.mock.calls
+      .filter(([sql]) => String(sql).includes('INSERT INTO security_audit_logs'))
+      .map(([, params]) => String((params as unknown[]).find((p) => String(p).includes('reason'))));
+  }
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    resetSessionStartCache();
+    process.env['CLERK_SECRET_KEY'] = 'test-clerk-secret-key';
+    mockAuth.mockResolvedValue(authSession(null));
+    mockClerkGetSession.mockResolvedValue({
+      id: SESSION_ID,
+      userId: 'phone-user',
+      status: 'active',
+      createdAt: Date.now() - 60_000,
+      lastActiveAt: Date.now(),
+    });
+  });
+
+  it('takes the session from the bearer and the surface from the verified proof', async () => {
+    makeFakeDb();
+    tokens({
+      [SESSION_TOKEN]: { sub: 'phone-user', sid: SESSION_ID },
+      [SURFACE_TOKEN]: { sub: 'phone-user', surface: 'mobile' },
+    });
+
+    await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).resolves.toEqual({
+      userId: 'phone-user',
+      boundSurface: 'mobile',
+    });
+    expect(mockVerifyToken).toHaveBeenCalledTimes(2);
+    const calls = mockVerifyToken.mock.calls as Array<
+      [string, { authorizedParties: readonly string[] }]
+    >;
+    expect(calls.map(([token]) => token)).toEqual([SESSION_TOKEN, SURFACE_TOKEN]);
+    expect(calls[1]?.[1].authorizedParties).toEqual(calls[0]?.[1].authorizedParties);
+    expect(mockClerkGetSession).toHaveBeenCalledWith(SESSION_ID);
+  });
+
+  it('refuses a proof minted for a different user', async () => {
+    makeFakeDb();
+    tokens({
+      [SESSION_TOKEN]: { sub: 'phone-user', sid: SESSION_ID },
+      [SURFACE_TOKEN]: { sub: 'someone-else', surface: 'mobile' },
+    });
+
+    await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).rejects.toMatchObject({
+      statusCode: 401,
+    });
+    expect(authFailureReasons().join()).toContain('invalid_surface_token');
+  });
+
+  it.each([
+    ['forged', new Error('signature verification failed')],
+    ['expired', new Error('JWT is expired')],
+  ])('refuses a %s proof instead of treating it as absent', async (_label, failure) => {
+    makeFakeDb();
+    tokens({
+      [SESSION_TOKEN]: { sub: 'phone-user', sid: SESSION_ID },
+      [SURFACE_TOKEN]: failure,
+    });
+
+    await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).rejects.toMatchObject({
+      statusCode: 401,
+    });
+  });
+
+  it('refuses a proof that carries no surface claim, such as a second session token', async () => {
+    makeFakeDb();
+    tokens({
+      [SESSION_TOKEN]: { sub: 'phone-user', sid: SESSION_ID },
+      [SURFACE_TOKEN]: { sub: 'phone-user', sid: SESSION_ID },
+    });
+
+    await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).rejects.toMatchObject({
+      statusCode: 401,
+    });
+  });
+
+  it('refuses an empty proof header rather than ignoring it', async () => {
+    makeFakeDb();
+    tokens({ [SESSION_TOKEN]: { sub: 'phone-user', sid: SESSION_ID } });
+
+    await expect(getClerkAuthUser(nativeRequest(''))).rejects.toMatchObject({ statusCode: 401 });
+  });
+
+  it('never gives a surface template token sent as the bearer a session principal', async () => {
+    makeFakeDb();
+    tokens({ [SESSION_TOKEN]: { sub: 'phone-user', surface: 'mobile' } });
+
+    await expect(getClerkAuthUser(nativeRequest())).rejects.toMatchObject({ statusCode: 401 });
+    expect(authFailureReasons().join()).toContain('surface_token_as_bearer');
+    expect(mockClerkGetSession).not.toHaveBeenCalled();
+  });
+
+  it('keeps the bearer-only path unchanged when no proof header is sent', async () => {
+    makeFakeDb();
+    tokens({
+      [SESSION_TOKEN]: { sub: 'phone-user', sid: SESSION_ID, azp: 'https://agiworkforce.com' },
+    });
+
+    await expect(getClerkAuthUser(nativeRequest())).resolves.toEqual({
+      userId: 'phone-user',
+      boundSurface: 'web',
+    });
+    expect(mockVerifyToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a passkey-enrolled account through from the phone once its session is verified', async () => {
+    makeFakeDb();
+    const delegate = mockNeonQuery.getMockImplementation() as (
+      sql: string,
+      params?: unknown[],
+    ) => Promise<Record<string, unknown>[]>;
+    const verifiedSessions = new Set<string>();
+    mockNeonQuery.mockImplementation(async (sql: string, params: unknown[] = []) => {
+      const s = sql.toLowerCase();
+      if (s.includes('from public.account_security_enrollments')) {
+        return [{ enrolled_at: new Date(Date.now() - 86_400_000).toISOString() }];
+      }
+      if (s.includes('from public.account_security_sessions')) {
+        return verifiedSessions.has(params[0] as string)
+          ? [{ expires_at: new Date(Date.now() + 3_600_000).toISOString() }]
+          : [];
+      }
+      return delegate(sql, params);
+    });
+    tokens({
+      [SESSION_TOKEN]: { sub: 'phone-user', sid: SESSION_ID },
+      [SURFACE_TOKEN]: { sub: 'phone-user', surface: 'mobile' },
+    });
+
+    await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).rejects.toSatisfy(
+      isPasskeyRequiredError,
+    );
+
+    verifiedSessions.add(SESSION_ID);
+    await expect(getClerkAuthUser(nativeRequest(SURFACE_TOKEN))).resolves.toEqual({
+      userId: 'phone-user',
+      boundSurface: 'mobile',
+    });
   });
 });
