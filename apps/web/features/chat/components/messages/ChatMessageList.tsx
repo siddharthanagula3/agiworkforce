@@ -759,7 +759,8 @@ const MessageRow = memo(function MessageRow({
   // other conversation, which is the whole defect. Per-turn refusals, the ones
   // a different request can answer, keep their card on the turn that caused
   // them.
-  if (paywall && !isAccountWideUsageBlock(paywall)) {
+  if (paywall && isAccountWideUsageBlock(paywall)) return null;
+  if (paywall) {
     // The card takes the turn's place in the transcript, so it takes the
     // transcript's column too. Rendered bare it spanned the full surface.
     // 206px past the message and composer edges on either side.
