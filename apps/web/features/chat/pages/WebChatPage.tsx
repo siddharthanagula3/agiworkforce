@@ -17,6 +17,7 @@ import {
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
 import { completionNotificationTitle } from '../lib/completion-notification';
+import { scheduleFromPromptHref } from '@/features/schedules/components/schedule-from-turn';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
 import {
   freeModelAttachmentKind,
@@ -2106,6 +2107,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       document.removeEventListener('visibilitychange', refresh);
     };
   }, [activeConversationId, authLoaded, refreshOpenConversation]);
+
+  const handleScheduleTurn = useCallback(
+    (prompt: string) => router.push(scheduleFromPromptHref(prompt)),
+    [router],
+  );
 
   // On mount: if URL has a conversation ID, load it. Otherwise keep /chat as
   // the empty new-chat surface and create persistence only when the user sends.
@@ -6924,6 +6930,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                                 isLoading={isLoading && !isStreaming}
                                 isUserTyping={isUserTyping}
                                 onRegenerate={handleRegenerateMessage}
+                                onScheduleTurn={handleScheduleTurn}
                                 onRetryResearch={handleRetryResearch}
                                 onResearchPlanDecision={handleResearchPlanDecision}
                                 onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
