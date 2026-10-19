@@ -146,7 +146,7 @@ export function ArtifactSelectionToolbar({
 }: {
   containerRef: RefObject<HTMLElement | null>;
   onRequest: (selectedText: string, instruction: string, origin: Node) => boolean;
-  onComment?: (selectedText: string) => void;
+  onComment?: (selectedText: string, origin: Node) => void;
 }) {
   const [anchor, setAnchor] = useState<Anchor | null>(null);
   const [asking, setAsking] = useState(false);
@@ -311,9 +311,9 @@ export function ArtifactSelectionToolbar({
               type="button"
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => {
-                const text = anchor.text;
+                const { text, origin } = anchor;
                 dismiss();
-                onComment(text);
+                onComment(text, origin);
               }}
               className="inline-flex min-h-11 items-center gap-1.5 rounded-lg px-2.5 text-sm text-foreground transition-colors hover:bg-[var(--chat-surface-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:min-h-8"
               data-testid="selection-comment"

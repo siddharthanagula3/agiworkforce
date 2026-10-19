@@ -1,4 +1,4 @@
-import { normalizeEditInstruction } from '../artifact-edit-request';
+import { artifactReplyFormat, normalizeEditInstruction } from '../artifact-edit-request';
 import { MAX_INLINE_DOCUMENT_CHARS } from '../artifact-selection-request';
 
 export const REWRITE_SLIDE_INSTRUCTION =
@@ -33,7 +33,7 @@ export function buildSlideEditRequest(input: {
     '',
     `Requested change: ${normalizeEditInstruction(input.instruction)}`,
     '',
-    'Reply with the complete updated presentation in one fenced block with the artifact marker on its first line, slides separated by --- lines.',
+    artifactReplyFormat('presentation'),
   );
   return lines.join('\n');
 }

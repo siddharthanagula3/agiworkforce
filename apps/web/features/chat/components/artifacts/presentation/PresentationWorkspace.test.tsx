@@ -152,6 +152,7 @@ describe('PresentationWorkspace', () => {
     expect(prompt).toContain('Change only slide 3 of 3');
     expect(prompt).toContain('## Ask');
     expect(prompt).toContain('Requested change: Name the amount');
+    expect(prompt).toContain('keeping its <!-- deck --> line');
     expect(prompt).not.toContain('edited since you last wrote it');
   });
 
@@ -199,9 +200,23 @@ describe('PresentationWorkspace', () => {
     expect(latest().slides).toHaveLength(3);
   });
 
+  it('starts a comment on the slide being viewed', () => {
+    const onCommentSlide = vi.fn();
+    renderDeck({ onCommentSlide });
+    fireEvent.click(within(screen.getByTestId('deck-thumbnails')).getAllByRole('button')[1]!);
+    fireEvent.click(screen.getByTestId('deck-comment-slide'));
+    expect(onCommentSlide).toHaveBeenCalledWith(1);
+  });
+
   it('offers no editing controls on a read-only version', () => {
     renderDeck({ editable: false });
     expect(screen.queryByTestId('deck-edit-slide')).not.toBeInTheDocument();
     expect(screen.queryByTestId('deck-theme-menu')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId('deck-present'));
+    const stage = screen.getByTestId('deck-presenting');
+    fireEvent.keyDown(stage, { key: 'ArrowRight' });
+    expect(within(stage).getByRole('group', { name: 'Slide 2 of 3' })).toBeInTheDocument();
+    fireEvent.keyDown(stage, { key: 'Escape' });
+    expect(screen.queryByTestId('deck-presenting')).not.toBeInTheDocument();
   });
 });

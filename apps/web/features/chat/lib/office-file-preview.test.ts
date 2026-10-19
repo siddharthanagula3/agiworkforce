@@ -64,3 +64,29 @@ describe('pptxToSlidesMarkdown slide structure', () => {
     expect(markdown).toBe('# Intro\n- Point');
   });
 });
+
+describe('pptxToSlidesMarkdown tables and pictures', () => {
+  it('keeps tables and embedded pictures with their slide', async () => {
+    const zip = new JSZip();
+    const table =
+      '<p:graphicFrame><a:graphic><a:graphicData><a:tbl>' +
+      '<a:tr><a:tc><a:txBody><a:p><a:r><a:t>Region</a:t></a:r></a:p></a:txBody></a:tc><a:tc><a:txBody><a:p><a:r><a:t>Sales</a:t></a:r></a:p></a:txBody></a:tc></a:tr>' +
+      '<a:tr><a:tc><a:txBody><a:p><a:r><a:t>EU</a:t></a:r></a:p></a:txBody></a:tc><a:tc><a:txBody><a:p><a:r><a:t>12</a:t></a:r></a:p></a:txBody></a:tc></a:tr>' +
+      '</a:tbl></a:graphicData></a:graphic></p:graphicFrame>';
+    const picture =
+      '<p:pic><p:nvPicPr><p:cNvPr id="4" name="Picture" descr="Logo"/></p:nvPicPr><p:blipFill><a:blip r:embed="rId2"/></p:blipFill></p:pic>';
+    zip.file(
+      'ppt/slides/slide1.xml',
+      `<p:sld xmlns:p="p" xmlns:a="a" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><p:cSld><p:spTree>${shape('title', 'Numbers')}${table}${picture}</p:spTree></p:cSld></p:sld>`,
+    );
+    zip.file(
+      'ppt/slides/_rels/slide1.xml.rels',
+      '<Relationships><Relationship Id="rId2" Target="../media/image1.png"/></Relationships>',
+    );
+    zip.file('ppt/media/image1.png', 'iVBORw0KGgo=', { base64: true });
+    const markdown = await pptxToSlidesMarkdown(await zip.generateAsync({ type: 'arraybuffer' }));
+    expect(markdown).toContain('# Numbers');
+    expect(markdown).toContain('| Region | Sales |\n| --- | --- |\n| EU | 12 |');
+    expect(markdown).toContain('![Logo](data:image/png;base64,');
+  });
+});

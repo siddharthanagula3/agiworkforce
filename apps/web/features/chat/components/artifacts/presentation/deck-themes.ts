@@ -1,3 +1,5 @@
+import palette from './deck-themes.json';
+
 export type DeckFont = 'sans' | 'serif' | 'mono';
 
 export interface DeckTheme {
@@ -24,74 +26,7 @@ export const DECK_FONT_LABELS: Record<DeckFont, string> = {
   mono: 'Monospace',
 };
 
-export const DECK_THEMES: readonly DeckTheme[] = [
-  {
-    id: 'paper',
-    name: 'Paper',
-    background: '#ffffff',
-    surface: '#f4f4f5',
-    text: '#18181b',
-    muted: '#52525b',
-    accent: '#1d4ed8',
-    headingFont: 'sans',
-    bodyFont: 'sans',
-  },
-  {
-    id: 'graphite',
-    name: 'Graphite',
-    background: '#18181b',
-    surface: '#27272a',
-    text: '#fafafa',
-    muted: '#a1a1aa',
-    accent: '#7dd3fc',
-    headingFont: 'sans',
-    bodyFont: 'sans',
-  },
-  {
-    id: 'midnight',
-    name: 'Midnight',
-    background: '#0b1533',
-    surface: '#15224a',
-    text: '#f1f5ff',
-    muted: '#a9b6d8',
-    accent: '#fbbf24',
-    headingFont: 'sans',
-    bodyFont: 'sans',
-  },
-  {
-    id: 'editorial',
-    name: 'Editorial',
-    background: '#faf7f0',
-    surface: '#efe9dc',
-    text: '#22201c',
-    muted: '#5b554a',
-    accent: '#9a3412',
-    headingFont: 'serif',
-    bodyFont: 'serif',
-  },
-  {
-    id: 'forest',
-    name: 'Forest',
-    background: '#0f2a22',
-    surface: '#173b30',
-    text: '#ecf7f2',
-    muted: '#a7c7ba',
-    accent: '#86efac',
-    headingFont: 'serif',
-    bodyFont: 'sans',
-  },
-  {
-    id: 'terminal',
-    name: 'Terminal',
-    background: '#000000',
-    surface: '#111111',
-    text: '#e5e5e5',
-    muted: '#a3a3a3',
-    accent: '#4ade80',
-    headingFont: 'mono',
-    bodyFont: 'mono',
-  },
-];
+export const DECK_THEMES: readonly DeckTheme[] = palette.themes as DeckTheme[];
 
 export const DEFAULT_DECK_THEME = DECK_THEMES[0]!;
 export const CUSTOM_THEME_ID = 'custom';
@@ -125,9 +60,9 @@ export function contrastRatio(a: string, b: string): number {
 }
 
 export function readableOn(background: string): string {
-  return contrastRatio(background, '#ffffff') >= contrastRatio(background, '#000000')
-    ? '#ffffff'
-    : '#000000';
+  return contrastRatio(background, palette.white) >= contrastRatio(background, palette.black)
+    ? palette.white
+    : palette.black;
 }
 
 function mix(hexA: string, hexB: string, weight: number): string {
@@ -189,4 +124,8 @@ export function brandThemeMeta(brand: DeckBrand): Record<string, string> {
 export function themeMeta(meta: Record<string, string>, themeId: string): Record<string, string> {
   const { bg: _bg, text: _text, accent: _accent, heading: _h, body: _b, name: _n, ...rest } = meta;
   return { ...rest, theme: themeId };
+}
+
+export function isDarkBackground(background: string): boolean {
+  return readableOn(background) === palette.white;
 }
