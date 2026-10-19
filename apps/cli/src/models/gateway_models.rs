@@ -269,6 +269,20 @@ pub fn store_live_catalog(catalog: GatewayCatalog) {
     }
 }
 
+/// Read the account's managed models once per process, so a managed session
+/// can switch to one the plan runs. The terminal reads them when it starts;
+/// an app-server had never read them, and refused every managed model a
+/// client picked as unavailable on the plan.
+pub async fn ensure_live_catalog() {
+    if LIVE_CATALOG.lock().is_ok_and(|slot| slot.is_some()) {
+        return;
+    }
+    match discover_gateway_models().await {
+        Ok(catalog) => store_live_catalog(catalog),
+        Err(error) => tracing::debug!("managed model list not read: {error}"),
+    }
+}
+
 pub fn cached_picker_models() -> Vec<Model> {
     LIVE_CATALOG
         .lock()

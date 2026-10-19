@@ -2140,12 +2140,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "This worktree already belongs to session {owner}. Continue that session, or start a new worktree."
             )));
         }
+        let requested_provider = params.provider.map(LocalModelProvider::as_str);
+        crate::tier_cache::ensure_plan_models_cached().await;
+        let account = models::AccountRoute::load();
         let requested_model = params
             .model
             .clone()
-            .unwrap_or_else(|| self.config.default.model.clone());
-        let requested_provider = params.provider.map(LocalModelProvider::as_str);
-        crate::tier_cache::ensure_plan_models_cached().await;
+            .unwrap_or_else(|| default_thread_model(&self.config, &account));
         let resolved_model = self.resolve_thread_model(&requested_model).await?;
         let model = resolved_model.provider_model_id.clone();
         let title = clean_title(params.title);
@@ -2162,6 +2163,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 .ok()
                 .map(|provider| models::provider_name(&provider).to_string()),
         };
+        let plan_first = models::plan_first_provider_override(
+            &account,
+            &model,
+            &self.config.default.model,
+            &self.config.default.provider,
+            requested_provider,
+        );
         let provider_override = match auto_trust {
             // Auto resolves to an upstream provider model ID, but Managed
             // sessions must retain the AGI gateway as their provider/trust
@@ -2169,12 +2177,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             // turn Managed Auto into a direct BYOK route.
             Some(agiworkforce_model_registry::TrustMode::ManagedCloud) => Some("managed_cloud"),
             Some(_) => auto_vendor.as_deref(),
-            None => models::selection_provider_override(
-                &model,
-                &self.config.default.model,
-                &self.config.default.provider,
-                requested_provider,
-            ),
+            None => plan_first.as_deref(),
         };
         refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
@@ -3248,6 +3251,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             "free"
         };
 
+        if params
+            .model
+            .as_deref()
+            .is_some_and(|model| !agiworkforce_model_registry::is_auto_routing_selection(model))
+        {
+            crate::models::gateway_models::ensure_live_catalog().await;
+        }
         let mut refused_turn: Option<anyhow::Error> = None;
         {
             let mut agent = session.lock().await;
@@ -5504,6 +5514,20 @@ fn writer_summary(identity: &WriterIdentity, lease: WriterLease) -> DeveloperSes
     }
 }
 
+/// The model a thread starts on when the client names none. Signed in to the
+/// account, with the model still the catalog's default rather than one the user
+/// chose, that is Auto on the account, as on the web; the catalog default is a
+/// provider's model and would ask for that provider's key. Otherwise it is the
+/// configured model, whose route is decided as for any named model.
+fn default_thread_model(config: &CliConfig, account: &models::AccountRoute) -> String {
+    let untouched = config.default.model == crate::model_catalog::default_model();
+    if account.signed_in() && untouched {
+        crate::routing::profile::auto_selection(DeveloperRoutingProfile::Auto).to_string()
+    } else {
+        config.default.model.clone()
+    }
+}
+
 fn resolve_auto_with_trust(
     requested: &str,
     task_type: DeveloperRoutingTaskType,
@@ -6818,6 +6842,30 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_signed_in_account_starts_threads_on_its_own_route_not_a_provider_key() {
+        let mut config = CliConfig::default();
+        assert_eq!(config.default.model, crate::model_catalog::default_model());
+        let signed_in = models::AccountRoute::with(true, None);
+        let signed_out = models::AccountRoute::with(false, None);
+
+        let account_default = default_thread_model(&config, &signed_in);
+        assert!(
+            agiworkforce_model_registry::is_auto_routing_selection(&account_default),
+            "{account_default}"
+        );
+        assert_eq!(
+            default_thread_model(&config, &signed_out),
+            config.default.model
+        );
+
+        config.default.model = "a-model-the-user-chose".to_string();
+        assert_eq!(
+            default_thread_model(&config, &signed_in),
+            "a-model-the-user-chose"
+        );
+    }
     use crate::runtime::session::{ManagedSessionRoutingAuthority, PrivacyMode};
     use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
     use agiworkforce_protocol::agent_events::AgentEventToolCategory;
