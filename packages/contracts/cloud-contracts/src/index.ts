@@ -80,3 +80,4 @@ export * from './localized-pricing';
 
 export * from './workspaces';
 export * from './agents';
+export * from './developer-console';

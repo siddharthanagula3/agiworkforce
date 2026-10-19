@@ -8,6 +8,7 @@ import { ApiKeysManager } from '@features/settings/components/Settings/ApiKeys';
 import type { DeveloperRateLimit } from '../types';
 import { ProjectsPanel } from './ProjectsPanel';
 import { RateLimitsPanel } from './RateLimitsPanel';
+import { RequestLogsPanel } from './RequestLogsPanel';
 import { RequestPlayground } from './RequestPlayground';
 import { WebhooksPanel } from './WebhooksPanel';
 
@@ -66,6 +67,7 @@ export function DeveloperConsolePage({
         <ApiKeysManager />
         <ProjectsPanel />
         <RequestPlayground />
+        <RequestLogsPanel />
         <WebhooksPanel />
         <RateLimitsPanel rateLimits={rateLimits} />
         <Card className="border-border bg-card">
