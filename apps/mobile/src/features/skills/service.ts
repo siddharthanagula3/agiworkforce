@@ -1,5 +1,6 @@
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { ApiHttpError, api } from '@/services/api';
+import { ApiHttpError, api, apiFetch } from '@/services/api';
+import { ApiHttpError as HttpError } from '@/services/apiErrors';
 import {
   ManagedSkillsResponseSchema,
   type ManagedSkillSource,
@@ -120,4 +121,46 @@ export async function createPersonalSkill(draft: SkillDraftInput): Promise<void>
     description: draft.description.trim(),
     body: draft.body.trim(),
   });
+}
+
+export interface SkillUploadFile {
+  uri: string;
+  name: string;
+  mimeType: string | null;
+}
+
+const SKILL_UPLOAD_FIELD = 'file';
+
+const SKILL_UPLOAD_FAILED = 'This skill could not be added. Check the file and try again.';
+
+function uploadError(status: number, body: unknown): HttpError {
+  const error = (body as { error?: unknown } | null)?.error;
+  const record =
+    typeof error === 'object' && error !== null ? (error as Record<string, unknown>) : {};
+  const message =
+    typeof error === 'string' && error.trim()
+      ? error
+      : typeof record['message'] === 'string' && record['message'].trim()
+        ? record['message']
+        : SKILL_UPLOAD_FAILED;
+  const code = typeof record['code'] === 'string' ? record['code'] : 'skill_upload_failed';
+  return new HttpError(message, status, code);
+}
+
+export async function uploadPersonalSkill(file: SkillUploadFile): Promise<void> {
+  assertSkillsAvailable();
+  const form = new FormData();
+  form.append(SKILL_UPLOAD_FIELD, {
+    uri: file.uri,
+    name: file.name,
+    type: file.mimeType ?? 'application/octet-stream',
+  } as unknown as Blob);
+  const response = await apiFetch(SKILLS_PATH, {
+    method: 'POST',
+    headers: { 'Content-Type': 'multipart/form-data' },
+    body: form,
+  });
+  if (response.ok) return;
+  const body = await response.json().catch(() => null);
+  throw uploadError(response.status, body);
 }

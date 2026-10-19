@@ -1,5 +1,13 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { FlatList, RefreshControl, TextInput, View, type ListRenderItemInfo } from 'react-native';
+import {
+  Alert,
+  FlatList,
+  RefreshControl,
+  TextInput,
+  View,
+  type ListRenderItemInfo,
+} from 'react-native';
+import * as DocumentPicker from 'expo-document-picker';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -30,11 +38,21 @@ import {
   isSkillInstalled,
   skillActionFailureMessage,
   uninstallSkill,
+  uploadPersonalSkill,
   type ManagedSkillSource,
   type ManagedSkillSummary,
 } from './service';
 import { useMobileSkillSelectionStore } from './selectionStore';
 import { NewSkillSheet } from './NewSkillSheet';
+import { showToast } from '@/src/shared/components/Toast';
+import { toUserMessage } from '@/services/userMessage';
+
+const SKILL_UPLOAD_TYPES = [
+  'text/markdown',
+  'text/plain',
+  'application/zip',
+  'application/octet-stream',
+];
 
 const SOURCE_LABELS: Record<ManagedSkillSource, string> = {
   bundled: 'Built in',
@@ -600,6 +618,7 @@ export function SkillsScreen() {
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [canAuthor, setCanAuthor] = useState(false);
@@ -697,6 +716,33 @@ export function SkillsScreen() {
     [clerkUserId],
   );
 
+  const uploadSkill = useCallback(async () => {
+    const picked = await DocumentPicker.getDocumentAsync({
+      type: SKILL_UPLOAD_TYPES,
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+    const asset = picked.canceled ? undefined : picked.assets[0];
+    if (!asset) return;
+    setUploading(true);
+    try {
+      await uploadPersonalSkill({
+        uri: asset.uri,
+        name: asset.name,
+        mimeType: asset.mimeType ?? null,
+      });
+      showToast(`Added ${asset.name}`);
+      void load('refresh');
+    } catch (cause) {
+      Alert.alert(
+        'Could not add this skill',
+        toUserMessage(cause, 'This skill could not be added. Check the file and try again.'),
+      );
+    } finally {
+      setUploading(false);
+    }
+  }, [load]);
+
   useEffect(() => {
     if (!canLoad) {
       setSkills([]);
@@ -779,7 +825,20 @@ export function SkillsScreen() {
             <View style={{ gap: 10 }}>
               <CatalogIntro count={installedSkillCount} />
               {canAuthor ? (
-                <Button title="New skill" variant="outline" onPress={() => setNewSkillOpen(true)} />
+                <View style={{ gap: 8 }}>
+                  <Button
+                    title="New skill"
+                    variant="outline"
+                    onPress={() => setNewSkillOpen(true)}
+                  />
+                  <Button
+                    title={uploading ? 'Adding skill…' : 'Upload a skill'}
+                    variant="outline"
+                    accessibilityLabel="Upload a skill file (SKILL.md or a .zip of the skill folder)"
+                    disabled={uploading}
+                    onPress={() => void uploadSkill()}
+                  />
+                </View>
               ) : null}
               {error ? (
                 <CatalogRefreshError message={error} onRetry={() => void load('refresh')} />

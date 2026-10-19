@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -127,8 +128,14 @@ jest.mock('@/services/api', () => {
       this.status = status;
     }
   }
-  return { api: {}, ApiHttpError };
+  return { api: {}, apiFetch: (...args: unknown[]) => mockApiFetch(...args), ApiHttpError };
 });
+
+const mockApiFetch = jest.fn();
+const mockGetDocumentAsync = jest.fn();
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: (...args: unknown[]) => mockGetDocumentAsync(...args),
+}));
 
 jest.mock('@/src/features/skills/service', () => ({
   ...jest.requireActual('@/src/features/skills/service'),
@@ -136,7 +143,10 @@ jest.mock('@/src/features/skills/service', () => ({
   fetchInstalledSkillNames: (...args: unknown[]) => mockFetchInstalledSkillNames(...args),
   installSkill: (...args: unknown[]) => mockInstallSkill(...args),
   uninstallSkill: (...args: unknown[]) => mockUninstallSkill(...args),
+  fetchCanAuthorSkills: () => mockFetchCanAuthorSkills(),
 }));
+
+const mockFetchCanAuthorSkills = jest.fn().mockResolvedValue(false);
 
 import { ApiHttpError } from '@/services/api';
 import { SkillsScreen } from '@/src/features/skills/SkillsScreen';
@@ -373,5 +383,63 @@ describe('Mobile Skills screen', () => {
 
     await waitFor(() => expect(mockFetchManagedSkills).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('No managed Skills yet')).toBeTruthy();
+  });
+
+  it('uploads a skill file and refreshes the list', async () => {
+    mockFetchCanAuthorSkills.mockResolvedValue(true);
+    mockGetDocumentAsync.mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///cache/report-writer.zip',
+          name: 'report-writer.zip',
+          mimeType: 'application/zip',
+        },
+      ],
+    });
+    mockApiFetch.mockResolvedValueOnce(new Response(JSON.stringify({ ok: true }), { status: 201 }));
+    const screen = render(<SkillsScreen />);
+
+    fireEvent.press(
+      await screen.findByLabelText('Upload a skill file (SKILL.md or a .zip of the skill folder)'),
+    );
+
+    await waitFor(() => expect(mockApiFetch).toHaveBeenCalled());
+    const [path, init] = mockApiFetch.mock.calls[0] as [string, RequestInit];
+    expect(path).toBe('/api/skills');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeInstanceOf(FormData);
+    await waitFor(() => expect(mockFetchManagedSkills.mock.calls.length).toBeGreaterThan(1));
+    mockFetchCanAuthorSkills.mockResolvedValue(false);
+  });
+
+  it('shows why the server refused an uploaded skill', async () => {
+    mockFetchCanAuthorSkills.mockResolvedValue(true);
+    mockGetDocumentAsync.mockResolvedValueOnce({
+      canceled: false,
+      assets: [{ uri: 'file:///cache/bad.zip', name: 'bad.zip', mimeType: 'application/zip' }],
+    });
+    mockApiFetch.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          error: { code: 'validation_error', message: 'SKILL.md is at the top of the zip.' },
+        }),
+        { status: 400 },
+      ),
+    );
+    const alert = jest.spyOn(Alert, 'alert');
+    const screen = render(<SkillsScreen />);
+
+    fireEvent.press(
+      await screen.findByLabelText('Upload a skill file (SKILL.md or a .zip of the skill folder)'),
+    );
+
+    await waitFor(() =>
+      expect(alert).toHaveBeenCalledWith(
+        'Could not add this skill',
+        'SKILL.md is at the top of the zip.',
+      ),
+    );
+    mockFetchCanAuthorSkills.mockResolvedValue(false);
   });
 });
