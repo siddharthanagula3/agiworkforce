@@ -1,11 +1,4 @@
 .slide {
-  --deck-background: #ffffff;
-  --deck-surface: #f4f4f5;
-  --deck-text: #18181b;
-  --deck-muted: #52525b;
-  --deck-accent: #1d4ed8;
-  --deck-heading-font: ui-sans-serif, system-ui, sans-serif;
-  --deck-body-font: ui-sans-serif, system-ui, sans-serif;
   container-type: inline-size;
   position: relative;
   aspect-ratio: 16 / 9;

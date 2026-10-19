@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useId, useLayoutEffect, useRef, useState, type FormEvent } from 'react';
-import { Check, X } from 'lucide-react';
+import { Check, MessageSquarePlus, X } from 'lucide-react';
 import type { ArtifactPickerSelection } from '@/lib/artifact-sandbox';
 import { cn } from '@shared/lib/utils';
 import { normalizeEditInstruction } from './artifact-edit-request';
@@ -10,6 +10,7 @@ export const SELECT_CONTENT_PROMPT = 'Select content and ask for changes';
 export const CANCEL_EDIT_REQUEST = 'Cancel';
 export const DESCRIBE_CHANGE_PLACEHOLDER = 'Describe the change...';
 export const SEND_EDIT_REQUEST_LABEL = 'Send the change request';
+export const COMMENT_ON_ELEMENT_LABEL = 'Comment on this element';
 const INPUT_WIDTH_PX = 320;
 const EDGE_GAP_PX = 8;
 const INPUT_HEIGHT_ESTIMATE_PX = 52;
@@ -41,10 +42,12 @@ export function ArtifactEditRequestLayer({
   selection,
   onSubmit,
   onCancel,
+  onComment,
 }: {
   selection: ArtifactPickerSelection | null;
   onSubmit: (instruction: string) => void;
   onCancel: () => void;
+  onComment?: (point: { selection: ArtifactPickerSelection; x: number; y: number }) => void;
 }) {
   const layerRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -124,6 +127,30 @@ export function ArtifactEditRequestLayer({
           >
             <Check className="h-4 w-4" aria-hidden="true" />
           </button>
+          {onComment ? (
+            <button
+              type="button"
+              onClick={() =>
+                onComment({
+                  selection,
+                  x:
+                    container.width > 0
+                      ? Math.min(100, Math.max(0, (selection.rect.x / container.width) * 100))
+                      : 0,
+                  y:
+                    container.height > 0
+                      ? Math.min(100, Math.max(0, (selection.rect.y / container.height) * 100))
+                      : 0,
+                })
+              }
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-muted-foreground transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring sm:h-8 sm:w-8"
+              aria-label={COMMENT_ON_ELEMENT_LABEL}
+              title={COMMENT_ON_ELEMENT_LABEL}
+              data-testid="artifact-edit-request-comment"
+            >
+              <MessageSquarePlus className="h-4 w-4" aria-hidden="true" />
+            </button>
+          ) : null}
         </form>
       ) : null}
       <div

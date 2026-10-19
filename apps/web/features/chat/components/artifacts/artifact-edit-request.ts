@@ -35,3 +35,15 @@ export function buildArtifactEditRequest(input: {
   );
   return lines.join('\n');
 }
+
+export const MARKDOWN_ARTIFACT_MARKER = '<!-- @artifact -->';
+
+export function artifactReplyFormat(type: string | undefined): string {
+  if (type === 'document') {
+    return `Reply with the complete updated document in one \`\`\`markdown fenced block whose first line is ${MARKDOWN_ARTIFACT_MARKER}.`;
+  }
+  if (type === 'presentation') {
+    return `Reply with the complete updated presentation in one \`\`\`markdown fenced block whose first line is ${MARKDOWN_ARTIFACT_MARKER}, keeping its <!-- deck --> line, with slides separated by --- lines.`;
+  }
+  return 'Reply with the complete updated artifact in one fenced block with the artifact marker on its first line.';
+}

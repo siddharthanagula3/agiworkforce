@@ -84,6 +84,7 @@ describe('ArtifactPreview · selection edits', () => {
     expect(prompt).toContain('ship the beta in March');
     expect(prompt).toContain('Make it noticeably shorter');
     expect(prompt).not.toContain('edited since you last wrote it');
+    expect(prompt).toContain('```markdown fenced block whose first line is <!-- @artifact -->');
     expect(screen.queryByTestId('artifact-selection-toolbar')).not.toBeInTheDocument();
   });
 

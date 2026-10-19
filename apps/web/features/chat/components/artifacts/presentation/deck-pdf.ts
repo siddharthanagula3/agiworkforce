@@ -23,7 +23,7 @@ type Visual =
   | { kind: 'chart'; spec: ChartSpec }
   | { kind: 'raster'; data: string; width: number; height: number };
 
-function rgb(hex: string): PdfRgb {
+function hexChannels(hex: string): PdfRgb {
   const n = Number.parseInt(hex.slice(1), 16);
   return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
@@ -137,7 +137,7 @@ function fit(width: number, height: number, box: PdfArea): PdfArea {
 }
 
 function drawLabel(pdf: jsPDF, label: string, box: PdfArea, theme: DeckTheme): void {
-  const [r, g, b] = rgb(theme.muted);
+  const [r, g, b] = hexChannels(theme.muted);
   pdf.setDrawColor(r, g, b);
   pdf.setLineDashPattern([3, 2], 0);
   pdf.rect(box.x, box.y, box.width, box.height, 'S');
@@ -153,8 +153,8 @@ function drawLabel(pdf: jsPDF, label: string, box: PdfArea, theme: DeckTheme): v
 }
 
 function seriesColor(theme: DeckTheme, index: number): PdfRgb {
-  const [ar, ag, ab] = rgb(theme.accent);
-  const [tr, tg, tb] = rgb(theme.text);
+  const [ar, ag, ab] = hexChannels(theme.accent);
+  const [tr, tg, tb] = hexChannels(theme.text);
   const mixRatio = Math.min(0.6, index * 0.25);
   return [
     Math.round(ar * (1 - mixRatio) + tr * mixRatio),
@@ -164,8 +164,8 @@ function seriesColor(theme: DeckTheme, index: number): PdfRgb {
 }
 
 function drawChart(pdf: jsPDF, spec: ChartSpec, box: PdfArea, theme: DeckTheme): void {
-  const [tr, tg, tb] = rgb(theme.text);
-  const [mr, mg, mb] = rgb(theme.muted);
+  const [tr, tg, tb] = hexChannels(theme.text);
+  const [mr, mg, mb] = hexChannels(theme.muted);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(LABEL_SIZE);
   let top = box.y;
@@ -271,9 +271,9 @@ function drawShapes(
   page: PdfArea,
   theme: DeckTheme,
 ): void {
-  const [sr, sg, sb] = rgb(theme.surface);
-  const [ar, ag, ab] = rgb(theme.accent);
-  const [tr, tg, tb] = rgb(theme.text);
+  const [sr, sg, sb] = hexChannels(theme.surface);
+  const [ar, ag, ab] = hexChannels(theme.accent);
+  const [tr, tg, tb] = hexChannels(theme.text);
   pdf.setLineWidth(1.5);
   for (const shape of shapes) {
     const x = (shape.x / 100) * page.width;
@@ -380,7 +380,11 @@ export async function buildDeckPdf(title: string, content: string): Promise<jsPD
   }
   return renderPdfSlides(slides, {
     title,
-    palette: { background: rgb(theme.background), text: rgb(theme.text), muted: rgb(theme.muted) },
+    palette: {
+      background: hexChannels(theme.background),
+      text: hexChannels(theme.text),
+      muted: hexChannels(theme.muted),
+    },
   });
 }
 

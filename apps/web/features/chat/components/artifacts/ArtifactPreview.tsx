@@ -38,6 +38,7 @@ import {
   GitFork,
   History,
   MousePointerClick,
+  MessageSquare,
   Sparkles,
   TextCursorInput,
 } from 'lucide-react';
@@ -70,6 +71,16 @@ import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
+import { StudyDocument } from './study/StudyDocument';
+import { hasStudyBlocks } from './study/study-set';
+import { ArtifactCommentsPanel, COMMENTS_LABEL } from './comments/ArtifactCommentsPanel';
+import {
+  canCommentOn,
+  useArtifactComments,
+  type ArtifactCommentAnchor,
+} from './comments/artifact-comments-client';
+import { scrollToAnchor, useCommentHighlights } from './comments/use-comment-highlights';
+import commentStyles from './comments/Comments.module.css';
 import { buildArtifactEditRequest } from './artifact-edit-request';
 import { ArtifactSelectionToolbar } from './ArtifactSelectionToolbar';
 import {
@@ -433,6 +444,9 @@ export function ArtifactPreview({
   const forkArtifact = useArtifactsStore((s) => s.forkArtifact);
   const renameArtifact = useArtifactsStore((s) => s.renameArtifact);
   const [renaming, setRenaming] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentDraft, setCommentDraft] = useState<ArtifactCommentAnchor | null>(null);
+  const { comments: artifactComments } = useArtifactComments(artifact.id);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
   const isStoredArtifact = useArtifactsStore((s) => s.artifacts.some((a) => a.id === artifact.id));
   const editRequested = useArtifactsStore((s) => s.editRequestedArtifactId === artifact.id);
@@ -667,6 +681,7 @@ export function ArtifactPreview({
     setEditRequestMode(false);
     setPickerSelection(null);
     setRenaming(false);
+    setCommentDraft(null);
     setRenderError(null);
     setPdfError(false);
     setImageError(false);
@@ -821,7 +836,7 @@ export function ArtifactPreview({
     endSourceEdit();
   }, [artifact.id, endSourceEdit, sourceDraft, upsertArtifact]);
 
-  const savePresentation = useCallback(
+  const saveArtifactContent = useCallback(
     (next: string) => {
       const stored = useArtifactsStore.getState().artifacts.find((a) => a.id === artifact.id);
       if (!stored || next === stored.content) return;
@@ -1294,14 +1309,23 @@ export function ArtifactPreview({
     </div>
   );
 
-  const renderMarkdownPreview = (containerClassName: string) => (
-    <MarkdownDocumentPreview
-      content={sourceDraft ?? activeContent}
-      className={containerClassName}
-      {...(canEditSource ? { onTaskToggle: handleTaskToggle } : {})}
-      pendingChecklistSave={draftOrigin === 'checklist' && sourceDraft !== null}
-    />
-  );
+  const renderMarkdownPreview = (containerClassName: string) =>
+    hasStudyBlocks(activeContent) && sourceDraft === null ? (
+      <StudyDocument
+        content={activeContent}
+        className={containerClassName}
+        editable={canEditSource}
+        onSave={saveArtifactContent}
+        {...(onRequestEdits && variant === 'panel' ? { onAsk: onRequestEdits } : {})}
+      />
+    ) : (
+      <MarkdownDocumentPreview
+        content={sourceDraft ?? activeContent}
+        className={containerClassName}
+        {...(canEditSource ? { onTaskToggle: handleTaskToggle } : {})}
+        pendingChecklistSave={draftOrigin === 'checklist' && sourceDraft !== null}
+      />
+    );
 
   const renderSharedPreview = (containerClassName: string) => (
     <div className={cn('overflow-auto bg-background p-0', containerClassName)}>
@@ -1316,8 +1340,16 @@ export function ArtifactPreview({
           content={activeContent}
           editable={canEditSource && sourceDraft === null}
           handEdited={versionCount > 1}
-          onSave={savePresentation}
+          onSave={saveArtifactContent}
           {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+          {...(canComment
+            ? {
+                onCommentSlide: (slide: number) => {
+                  setCommentDraft({ kind: 'slide', slide });
+                  setCommentsOpen(true);
+                },
+              }
+            : {})}
         />
       ) : isPresentation ? (
         <PresentationArtifact artifact={sharedArtifactView} className="h-full rounded-none" />
@@ -1513,6 +1545,7 @@ export function ArtifactPreview({
             : {}),
           ...(handEdited ? { currentContent: current } : {}),
           ...(artifact.language ? { language: artifact.language } : {}),
+          type: artifact.type,
         }),
       );
       if (!sent) toast.error('The change request was not sent. Try again.');
@@ -1526,7 +1559,36 @@ export function ArtifactPreview({
       saveSourceEdit,
       artifact.title,
       artifact.language,
+      artifact.type,
     ],
+  );
+
+  const canComment = variant === 'panel' && isStoredArtifact && canCommentOn(artifact.id);
+  const openCommentAnchors = useMemo(
+    () =>
+      artifactComments
+        .filter((comment) => !comment.parentId && comment.resolvedAt === null)
+        .map((comment) => comment.anchor),
+    [artifactComments],
+  );
+  const highlightRevision = `${activeContent.length}:${activeTab}:${sourceDraft === null}:${commentsOpen}`;
+  useCommentHighlights(contentAreaRef, canComment ? openCommentAnchors : [], highlightRevision);
+
+  const startComment = useCallback(
+    (selectedText: string, origin: Node) => {
+      const element = origin instanceof Element ? origin : origin.parentElement;
+      const slide = element?.closest('[data-slide-index]')?.getAttribute('data-slide-index');
+      const context = captureSelectionContext(activeContent, selectedText);
+      setCommentDraft({
+        kind: 'text',
+        quote: context.text,
+        prefix: context.before.slice(-200),
+        suffix: context.after.slice(0, 200),
+        ...(slide !== null && slide !== undefined ? { slide: Number(slide) } : {}),
+      });
+      setCommentsOpen(true);
+    },
+    [activeContent],
   );
 
   const editRequestPicker = useMemo(
@@ -1944,6 +2006,28 @@ export function ArtifactPreview({
               </Button>
             )}
 
+            {canComment && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setCommentsOpen((open) => !open)}
+                className={cn('h-7 px-2', commentsOpen && 'bg-muted text-foreground')}
+                aria-pressed={commentsOpen}
+                aria-label={
+                  openCommentAnchors.length > 0
+                    ? `${COMMENTS_LABEL}, ${openCommentAnchors.length} open`
+                    : COMMENTS_LABEL
+                }
+                title={COMMENTS_LABEL}
+                data-testid="artifact-comments-toggle"
+              >
+                <MessageSquare className="h-3.5 w-3.5" aria-hidden="true" />
+                {openCommentAnchors.length > 0 ? (
+                  <span className="ms-1 text-xs tabular-nums">{openCommentAnchors.length}</span>
+                ) : null}
+              </Button>
+            )}
+
             {canRequestEdits && (
               <Button
                 variant="ghost"
@@ -2161,11 +2245,37 @@ export function ArtifactPreview({
 
         {/* Content area, fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
-        <div ref={contentAreaRef} className="relative flex flex-1 min-h-0 flex-col overflow-hidden">
+        <div
+          ref={contentAreaRef}
+          className={cn(
+            'relative flex flex-1 min-h-0 flex-col overflow-hidden',
+            commentStyles['highlightScope'],
+          )}
+        >
+          {canComment && commentsOpen && (
+            <ArtifactCommentsPanel
+              artifactId={artifact.id}
+              title={artifact.title || 'Artifact'}
+              artifactType={artifact.type}
+              draftAnchor={commentDraft}
+              onDraftDone={() => setCommentDraft(null)}
+              onClose={() => {
+                setCommentsOpen(false);
+                setCommentDraft(null);
+              }}
+              {...(onRequestEdits && isLatestVersion ? { onRequestEdits } : {})}
+              onLocate={(anchor) => {
+                if (!scrollToAnchor(contentAreaRef.current, anchor)) {
+                  toast.message('That passage is not on screen in this view.');
+                }
+              }}
+            />
+          )}
           {canRequestSelectionEdits && (
             <ArtifactSelectionToolbar
               containerRef={contentAreaRef}
               onRequest={requestSelectionEdit}
+              {...(canComment ? { onComment: startComment } : {})}
             />
           )}
           {editRequestMode && (
@@ -2173,6 +2283,29 @@ export function ArtifactPreview({
               selection={pickerSelection}
               onSubmit={submitEditRequest}
               onCancel={cancelEditRequest}
+              {...(canComment
+                ? {
+                    onComment: ({
+                      selection,
+                      x,
+                      y,
+                    }: {
+                      selection: ArtifactPickerSelection;
+                      x: number;
+                      y: number;
+                    }) => {
+                      setCommentDraft({
+                        kind: 'element',
+                        selector: selection.selector.slice(0, 1_000),
+                        text: (selection.text ?? '').slice(0, 2_000),
+                        x,
+                        y,
+                      });
+                      cancelEditRequest();
+                      setCommentsOpen(true);
+                    },
+                  }
+                : {})}
             />
           )}
           {showChanges && previousVersionContent !== undefined && (
