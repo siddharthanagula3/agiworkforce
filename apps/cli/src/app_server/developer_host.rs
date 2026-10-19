@@ -4216,9 +4216,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     }
 
     async fn account_login(&self) -> Result<AccountLoginResponse, DeveloperSessionHostError> {
+        self.account_login_for_client(None).await
+    }
+
+    async fn account_login_for_client(
+        &self,
+        client: Option<&AppServerClientInfo>,
+    ) -> Result<AccountLoginResponse, DeveloperSessionHostError> {
         let _guard = self.admit_request().await?;
         let api_base = account::device_auth_base();
-        let device = crate::oauth::start_device_code_login(&api_base)
+        let device = crate::oauth::start_device_code_login(&api_base, device_surface(client))
             .await
             .map_err(|error| DeveloperSessionHostError::unavailable(error.to_string()))?;
 
@@ -6775,6 +6782,16 @@ fn source_from_stored(source: Option<&str>) -> DeveloperSessionSource {
     }
 }
 
+/// The surface the device approval page names: the client that opened this
+/// connection, so a VS Code sign-in says "AGI for VS Code", not "AGI CLI".
+fn device_surface(client: Option<&AppServerClientInfo>) -> &'static str {
+    match client.map(source_from_client) {
+        Some(DeveloperSessionSource::Vscode) => "vscode",
+        Some(DeveloperSessionSource::Desktop) => "desktop",
+        _ => "cli",
+    }
+}
+
 fn source_to_stored(source: DeveloperSessionSource) -> &'static str {
     match source {
         DeveloperSessionSource::Cli => "cli",
@@ -6842,6 +6859,19 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_approval_page_names_the_app_that_asked_to_sign_in() {
+        let client = |name: &str| AppServerClientInfo {
+            name: name.to_string(),
+            title: String::new(),
+            version: String::new(),
+        };
+        assert_eq!(device_surface(Some(&client("agi_vscode"))), "vscode");
+        assert_eq!(device_surface(Some(&client("agi-desktop"))), "desktop");
+        assert_eq!(device_surface(Some(&client("agi_cli"))), "cli");
+        assert_eq!(device_surface(None), "cli");
+    }
 
     #[test]
     fn a_signed_in_account_starts_threads_on_its_own_route_not_a_provider_key() {

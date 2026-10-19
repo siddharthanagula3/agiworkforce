@@ -62,7 +62,9 @@ pub enum DeviceCodePoll {
 
 /// Request a device code. The caller decides how to present the user code and
 /// verification URL; nothing is printed here.
-pub async fn start_device_code_login(api_base: &str) -> Result<DeviceCodeStart> {
+/// `surface` is the app the approval page names: `cli`, `vscode` or
+/// `desktop`, as the device-code endpoint accepts them.
+pub async fn start_device_code_login(api_base: &str, surface: &str) -> Result<DeviceCodeStart> {
     let client = reqwest::Client::new();
     let resp = client
         .post(format!("{api_base}/auth/device/code"))
@@ -71,7 +73,7 @@ pub async fn start_device_code_login(api_base: &str) -> Result<DeviceCodeStart> 
             "User-Agent",
             format!("agiworkforce-cli/{}", env!("CARGO_PKG_VERSION")),
         )
-        .json(&serde_json::json!({ "client_id": "cli" }))
+        .json(&serde_json::json!({ "surface": surface }))
         .send()
         .await
         .context("Failed to request device code from AGI")?;
@@ -330,7 +332,7 @@ pub async fn revoke_device_session(api_base: &str, access: &str, refresh: &str) 
 /// 3. Poll for token until approved or timeout
 pub async fn device_code_login(api_base: &str) -> Result<crate::auth::AuthEntry> {
     eprintln!("\n  {} Connecting to AGI...\n", ts::prompt("→"),);
-    let device = start_device_code_login(api_base).await?;
+    let device = start_device_code_login(api_base, "cli").await?;
 
     eprintln!("  {}", ts::muted("━".repeat(50)));
     eprintln!();
