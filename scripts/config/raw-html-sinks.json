@@ -11,8 +11,8 @@
     {
       "file": "apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts",
       "kind": "inner-html-assignment",
-      "count": 4,
-      "reason": "Three assistant sinks take renderAssistant(), which returns window.agiRender (markdown-it then DOMPurify, apps/extension-vscode/src/webview/render.ts) or an entity-escaped fallback; the composer hint joins fixed kbd markup with a label chosen from constants. The webview script is a string, so its imports cannot be resolved."
+      "count": 1,
+      "reason": "The one sink is renderAssistantInto(), which every assistant, history and side-question render goes through; it assigns renderAssistant(), which returns window.agiRender (markdown-it then DOMPurify, apps/extension-vscode/src/webview/render.ts) or an entity-escaped fallback. The webview script is a string, so its imports cannot be resolved."
     },
     {
       "file": "apps/mobile/src/features/chat/components/MathBlock.tsx",

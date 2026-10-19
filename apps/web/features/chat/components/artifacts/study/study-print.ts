@@ -55,6 +55,7 @@ export function flashcardsPrintHtml(set: FlashcardSet): string {
 
 export function printHtml(html: string): void {
   const frame = document.createElement('iframe');
+  frame.setAttribute('sandbox', 'allow-same-origin allow-modals');
   frame.setAttribute('aria-hidden', 'true');
   frame.style.position = 'fixed';
   frame.style.width = '0';
