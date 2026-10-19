@@ -38,6 +38,7 @@ import {
   GitFork,
   History,
   MousePointerClick,
+  ListChecks,
   MessageSquare,
   PenTool,
   Sparkles,
@@ -74,6 +75,7 @@ import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField'
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
 import { StudyDocument } from './study/StudyDocument';
 import { replaceImageInHtml } from './design/design-edits';
+import { ArtifactChangesReview } from './review/ArtifactChangesReview';
 import { DesignBriefDialog } from './design/DesignBriefDialog';
 import { buildBriefRevisionRequest, readDesignBrief } from './design/design-brief';
 import {
@@ -455,6 +457,7 @@ export function ArtifactPreview({
   const [renaming, setRenaming] = useState(false);
   const [commentsOpen, setCommentsOpen] = useState(false);
   const [briefOpen, setBriefOpen] = useState(false);
+  const [reviewingKey, setReviewingKey] = useState<string | null>(null);
   const [commentDraft, setCommentDraft] = useState<ArtifactCommentAnchor | null>(null);
   const { comments: artifactComments } = useArtifactComments(artifact.id);
   const upsertArtifact = useArtifactsStore((s) => s.upsertArtifact);
@@ -1689,6 +1692,15 @@ export function ArtifactPreview({
         testId: 'artifact-edit-source',
       });
     }
+    if (canShowChanges && isTextDocument && isLatestVersion && canEditSource) {
+      moreMenuItems.push({
+        id: 'review-changes',
+        label: 'Review changes',
+        icon: ListChecks,
+        onSelect: () => setReviewingKey(changesKey),
+        testId: 'artifact-review-changes',
+      });
+    }
     if (canShowChanges) {
       moreMenuItems.push({
         id: 'show-changes',
@@ -2315,6 +2327,22 @@ export function ArtifactPreview({
               if (file && imageReplaceTarget) void replaceImage(imageReplaceTarget, file);
             }}
           />
+          {reviewingKey === changesKey && previousVersionContent !== undefined && (
+            <div className="absolute inset-0 z-[var(--z-content-raised)] bg-background">
+              <ArtifactChangesReview
+                previous={previousVersionContent}
+                next={activeContent}
+                fromVersion={shownVersionIndex}
+                toVersion={shownVersionIndex + 1}
+                onClose={() => setReviewingKey(null)}
+                onApply={(text) => {
+                  saveArtifactContent(text);
+                  setReviewingKey(null);
+                  toast.success('Saved your choices as a new version');
+                }}
+              />
+            </div>
+          )}
           {canComment && commentsOpen && (
             <ArtifactCommentsPanel
               artifactId={artifact.id}
