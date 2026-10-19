@@ -16,6 +16,7 @@ import {
 } from '@/features/chat/lib/chat-slash-commands';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
+import { completionNotificationTitle } from '../lib/completion-notification';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
 import {
   freeModelAttachmentKind,
@@ -411,8 +412,6 @@ import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-
 // memoization below, which is what the exhaustive-deps warning was pointing at.
 const EMPTY_NAV_IDS: string[] = [];
 
-const AGI_WORK_DONE_TITLE = 'AGI Work finished';
-const RESEARCH_DONE_TITLE = 'Your research report is ready';
 const IMAGE_DONE_TITLE = 'Your image is ready';
 const VIDEO_DONE_TITLE = 'Your video is ready';
 
@@ -2428,12 +2427,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           });
 
         const announceDesktopCompletion = () => {
-          const heading =
-            options.meta?.workMode === 'agiwork'
-              ? AGI_WORK_DONE_TITLE
-              : options.meta?.researchEnabled
-                ? RESEARCH_DONE_TITLE
-                : null;
+          const state = useChatStore.getState();
+          const heading = completionNotificationTitle({
+            workMode: options.meta?.workMode,
+            research: options.meta?.researchEnabled,
+            reply: (state.messagesByConversation[convId] ?? []).at(-1),
+            conversationTitle: state.conversations.find((c) => c.id === convId)?.title,
+            untitled: NEW_CHAT_TITLE,
+          });
           if (!heading) return;
           void notifyJobComplete({ title: heading, body: content, conversationId: convId });
         };
