@@ -20,6 +20,7 @@ import {
   Check,
   Sparkles,
   BookOpen,
+  Globe,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -45,7 +46,8 @@ import { supportedVideoDurationSecs } from '@/src/features/video/services/videog
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
-import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
+import { useChatConnectorOptions } from '@/src/features/chat/hooks/useChatConnectorOptions';
 import {
   enterMediaMode,
   exitMediaMode,
@@ -157,7 +159,17 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     selectedModelMetadata?.capabilities?.research === true &&
     selectedModelMetadata?.capabilities?.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
-  const showToolSection = showResearchToggle;
+  const showWebSearchToggle =
+    FEATURES.webSearch && appMode === 'cloud' && grantedCapabilities.includes('canUseWebSearch');
+  const showToolSection = showResearchToggle || showWebSearchToggle;
+  const sourcesKey = useChatViewStore((s) => s.styleConversationId) ?? NEW_CHAT_STYLE_KEY;
+  const disabledConnectorIds = useChatViewStore(
+    (s) => s.disabledConnectorIdsByConversation[sourcesKey],
+  );
+  const toggleChatConnector = useChatViewStore((s) => s.toggleChatConnector);
+  const chatConnectors = useChatConnectorOptions(
+    appMode === 'cloud' && FEATURES.connectors && grantedCapabilities.includes('canUseConnectors'),
+  );
   const imageModelId = resolveMediaModelId('image', selectedMediaModel);
   const videoModelId = resolveMediaModelId('video', selectedMediaModel);
   const imageModelSupportsReference = supportsManagedMediaImageEdit(
@@ -1044,6 +1056,29 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
         {showToolSection ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
+            {showWebSearchToggle ? (
+              <CapabilityRow
+                icon={<Globe size={18} color={themeColors.teal} />}
+                label="Web search"
+                description="Let answers look things up on the web"
+                enabled={features.webSearch}
+                onToggle={(value) => setFeature('webSearch', value)}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : null}
+            {chatConnectors.map((connector) => (
+              <CapabilityRow
+                key={connector.connectorId}
+                icon={<Link size={18} color={themeColors.teal} />}
+                label={connector.label}
+                description="Connected app this chat can use"
+                enabled={!(disabledConnectorIds ?? []).includes(connector.connectorId)}
+                onToggle={() => toggleChatConnector(sourcesKey, connector.connectorId)}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ))}
             {showResearchToggle ? (
               <CapabilityRow
                 icon={<Telescope size={18} color={themeColors.teal} />}

@@ -298,6 +298,7 @@ interface InitialStreamRequest {
   tool_choice?: 'auto' | 'none' | 'required';
   memory_enabled?: boolean;
   connector_tools_enabled?: boolean;
+  disabled_connector_ids?: string[];
   x_interactive_cards?: { supported: string[]; canRespond: boolean };
 }
 

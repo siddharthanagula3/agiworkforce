@@ -78,6 +78,7 @@ import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatMessageStore } from '../stores/chat/chatMessageStore';
+import { useChatViewStore } from '../stores/chat/chatViewStore';
 import { requireFreeMobileCloudModel } from '../test-utils/modelFixtures';
 import { AGENT_EVENT_SCHEMA_VERSION, getProviderOfferings } from '@agiworkforce/types';
 import { useFreeQuotaCatalogueStore } from '../src/features/model-picker/freeQuotaCatalogue';
@@ -891,5 +892,22 @@ describe('cloud send: memories the answer used', () => {
     await useChatExecutionStore.getState().sendMessage(CONV_ID, 'How far is it?', CLOUD_MODEL);
 
     expect(lastAssistantMessage()?.metadata?.memoryCitations).toEqual(citations);
+  });
+});
+
+describe('cloud send: sources switched off for this chat', () => {
+  it('tells the gateway which connected apps this chat must not use', async () => {
+    useChatViewStore.setState({ disabledConnectorIdsByConversation: { [CONV_ID]: ['gmail'] } });
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ content: 'ok' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'Summarise my inbox', CLOUD_MODEL);
+
+    expect(mockStreamChat.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({ disabled_connector_ids: ['gmail'] }),
+    );
+    useChatViewStore.setState({ disabledConnectorIdsByConversation: {} });
   });
 });

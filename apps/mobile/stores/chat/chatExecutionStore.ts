@@ -2287,6 +2287,8 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
           modelSupportsTools: executionModelMetadata?.capabilities.tools,
           genericBackendConfigured: entitlementState.genericWebSearchAvailable,
         });
+      const disabledConnectorIds =
+        useChatViewStore.getState().disabledConnectorIdsByConversation[conversationId] ?? [];
       const researchEnabled =
         FEATURES.research &&
         (options?.research === true || useChatViewStore.getState().features.research) &&
@@ -2409,6 +2411,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ...(officeCreationEnabled ? { office_creation: true } : {}),
               ...(officeCreationEnabled && officeFormat ? { office_format: officeFormat } : {}),
               x_interactive_cards: MOBILE_INTERACTIVE_CARD_CAPABILITY,
+              ...(disabledConnectorIds.length > 0
+                ? { disabled_connector_ids: disabledConnectorIds }
+                : {}),
               ...(workMode === 'agiwork' ? { work_mode: workMode } : {}),
               ...(workMode === 'agiwork' && agiWorkGoal ? { agi_work_goal: agiWorkGoal } : {}),
               ...(suppliedAgiWorkPlan?.length

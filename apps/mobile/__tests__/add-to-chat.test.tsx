@@ -3,6 +3,11 @@
 import React from 'react';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
+const mockFetchConnectorDirectory = jest.fn();
+jest.mock('@/services/connectors', () => ({
+  fetchConnectorDirectory: () => mockFetchConnectorDirectory(),
+}));
+
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
   const { View } = require('react-native');
@@ -303,6 +308,40 @@ describe('AddToChatSheet', () => {
       const { getByText } = renderSheet();
 
       expect(getByText('Study and learn')).toBeTruthy();
+    });
+
+    it('lets this chat turn web search and each connected app on or off', async () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ grantedCapabilities: ['canUseWebSearch', 'canUseConnectors'] });
+      mockFetchConnectorDirectory.mockResolvedValue({
+        connectors: [
+          {
+            id: 'conn-1',
+            connectorId: 'gmail',
+            toolConnectorId: 'gmail',
+            authType: 'oauth',
+            connectedAt: '2026-10-01T00:00:00.000Z',
+            updatedAt: '2026-10-01T00:00:00.000Z',
+            source: 'oauth',
+          },
+        ],
+        available: [],
+        entries: [],
+        policy: null,
+      });
+      useChatViewStore.setState({
+        styleConversationId: 'chat-42',
+        disabledConnectorIdsByConversation: {},
+      });
+
+      const { getByLabelText, findByLabelText } = renderSheet();
+
+      fireEvent(getByLabelText('Web search on'), 'valueChange', false);
+      expect(useChatViewStore.getState().features.webSearch).toBe(false);
+      fireEvent(await findByLabelText('Gmail on'), 'valueChange', false);
+      expect(useChatViewStore.getState().disabledConnectorIdsByConversation).toEqual({
+        'chat-42': ['gmail'],
+      });
     });
 
     it('no longer offers AGI Work at a paid tier, the drawer owns it now', () => {
