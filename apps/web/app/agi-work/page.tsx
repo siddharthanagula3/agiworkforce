@@ -65,7 +65,7 @@ export default function AgiWorkPage() {
               <p className="agi-lp-eyebrow">AGI Work</p>
               <h1 className="sr-only" id={IDS.hero}>
                 <span className="agi-lp-line">AGI Work plans the steps,</span>{' '}
-                <em className="agi-lp-accent">then asks before any action you have not cleared.</em>
+                <em className="agi-lp-accent">then asks before destructive or unknown actions.</em>
               </h1>
               <ButtonRow>
                 <Button href={AGI_WORK_ENTRY_HREF}>Open AGI Work</Button>

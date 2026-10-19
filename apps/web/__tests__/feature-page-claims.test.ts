@@ -189,6 +189,17 @@ describe('/agi-work, the plan', () => {
     expect(source).toContain('the rest settle when it ends');
   });
 
+  /**
+   * app/acceptable-use/page.tsx and app/agent-permissions/page.tsx: the website
+   * default is Skip approvals for eligible actions; destructive or unknown
+   * actions still ask. The headline may not promise a question before every action.
+   */
+  it('names which actions ask instead of promising to ask before acting', () => {
+    const source = collapsed(AGI_WORK);
+    expect(source).not.toMatch(/asks before it acts|asks before any action/iu);
+    expect(source).toContain('then asks before destructive or unknown actions');
+  });
+
   it('does not promise a plan on every run', () => {
     const source = collapsed(AGI_WORK);
     expect(source).not.toMatch(/three to six step plan before the first tool call/iu);
