@@ -285,7 +285,21 @@ export function PluginsScreen() {
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-      <ScreenHeader title="Plugins" onBack={goBack} />
+      <ScreenHeader
+        title="Plugins"
+        onBack={goBack}
+        trailing={
+          <Button
+            title="Sources"
+            size="sm"
+            variant="outline"
+            accessibilityLabel="Workspace plugins, marketplaces and submissions"
+            onPress={() =>
+              router.push('/(app)/plugins/sources' as Parameters<typeof router.push>[0])
+            }
+          />
+        }
+      />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 10 }}
