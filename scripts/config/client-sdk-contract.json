@@ -31,7 +31,7 @@
           "consumes": "apps/desktop/src/lib/platformHeaders.ts"
         },
         "mobile": {
-          "consumes": "apps/mobile/lib/platformHeaders.ts"
+          "consumes": "apps/mobile/src/platform/platformHeaders.ts"
         },
         "vscode": {
           "consumes": "apps/extension-vscode/src/platform/platformHeaders.ts"

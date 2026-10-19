@@ -95,6 +95,9 @@ const cloudModules = [
   'project-studio',
   'artifact-library',
   'connector-trust-copy',
+  'artifact-comments',
+  'studio-library',
+  'google-docs-export',
 ];
 
 const cloudMovedFiles = [
