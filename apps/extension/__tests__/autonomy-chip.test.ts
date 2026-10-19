@@ -2,6 +2,11 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import {
+  browserPermissionModeToStored,
+  DEFAULT_BROWSER_PERMISSION_MODE,
+  readBrowserPermissionMode,
+} from '../src/features/computer-use/askBeforeActing';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(resolve(here, '..', rel), 'utf8');
@@ -20,14 +25,23 @@ describe('autonomy chip', () => {
     expect(background).toContain('ASK_BEFORE_ACTING_KEY');
   });
 
-  it('defaults to the safe state, matching background.ts', () => {
-    expect(panel).toContain('renderAutonomyChip(true)');
-    expect(panel).toMatch(/items\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
-    expect(background).toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
+  it('defaults to Auto, read the same way by the panel and the background', () => {
+    expect(DEFAULT_BROWSER_PERMISSION_MODE).toBe('auto');
+    expect(readBrowserPermissionMode(undefined)).toBe('auto');
+    expect(readBrowserPermissionMode('auto')).toBe('auto');
+    expect(readBrowserPermissionMode(true)).toBe('ask');
+    expect(readBrowserPermissionMode(false)).toBe('full');
+    for (const mode of ['ask', 'auto', 'full'] as const) {
+      expect(readBrowserPermissionMode(browserPermissionModeToStored(mode))).toBe(mode);
+    }
+    expect(panel).toContain('renderAutonomyChip(DEFAULT_BROWSER_PERMISSION_MODE)');
+    expect(panel).toContain('readBrowserPermissionMode(items[ASK_BEFORE_ACTING_KEY])');
+    expect(background).toContain('readBrowserPermissionMode(askPref[ASK_BEFORE_ACTING_KEY])');
   });
 
-  it('labels both states and tints the permissive one as a warning', () => {
+  it('labels all three modes and tints the permissive one as a warning', () => {
     expect(panel).toContain("t('spAutonomyAskFirst')");
+    expect(panel).toContain("t('spAutonomyAuto')");
     expect(panel).toContain("t('spAutonomyFullAccess')");
     expect(panel).toContain(".sp-autonomy-chip[data-mode='full']");
     expect(panel).toMatch(
@@ -40,7 +54,7 @@ describe('autonomy chip', () => {
     const computerUsePanel = read('src/features/side-panel/computerUsePanel.ts');
     expect(computerUsePanel).toContain('ASK_BEFORE_ACTING_KEY in changes');
     expect(computerUsePanel).toMatch(
-      /askCheckbox\.checked = changes\[ASK_BEFORE_ACTING_KEY\]\?\.newValue !== false/,
+      /readBrowserPermissionMode\(changes\[ASK_BEFORE_ACTING_KEY\]\?\.newValue\) === 'ask'/,
     );
   });
 
@@ -57,15 +71,15 @@ describe('autonomy chip', () => {
 
   it('requires an explicit menu choice before enabling full access', () => {
     const chipHandlerStart = panel.indexOf("autonomyChip.addEventListener('click'");
-    const fullAccessHandlerStart = panel.indexOf("fullAccessOption.addEventListener('click'");
-    const fullAccessHandlerEnd = panel.indexOf(
-      "autonomyPopover.addEventListener('keydown'",
-      fullAccessHandlerStart,
+    const chipHandlerEnd = panel.indexOf('const fullAccessNotice = el(', chipHandlerStart);
+    const chipHandler = panel.slice(chipHandlerStart, chipHandlerEnd);
+    expect(chipHandlerStart).toBeGreaterThan(-1);
+    expect(chipHandler).not.toContain('chrome.storage.local.set');
+    expect(panel).toMatch(
+      /entry\.option\.addEventListener\('click', \(\) => chooseAutonomyMode\(entry\.mode\)\)/,
     );
-    const chipHandler = panel.slice(chipHandlerStart, fullAccessHandlerStart);
-    const fullAccessHandler = panel.slice(fullAccessHandlerStart, fullAccessHandlerEnd);
-
-    expect(chipHandler).not.toContain('[ASK_BEFORE_ACTING_KEY]: false');
-    expect(fullAccessHandler).toContain('[ASK_BEFORE_ACTING_KEY]: false');
+    expect(panel).toMatch(
+      /function chooseAutonomyMode[\s\S]{0,400}\[ASK_BEFORE_ACTING_KEY\]: browserPermissionModeToStored\(mode\)/,
+    );
   });
 });

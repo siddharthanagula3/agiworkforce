@@ -19,7 +19,8 @@ export type AlwaysAskReason =
   | 'window_resize'
   | 'site_tool'
   | 'permission_change'
-  | 'purchase';
+  | 'purchase'
+  | 'terms';
 
 export interface ActionApprovalRequirement {
   readonly alwaysAsk: boolean;
@@ -173,6 +174,8 @@ const SENSITIVE_FIELD_LABEL =
 const AUTHENTICATION_CONTROL =
   /\b(sign[-_ ]?in|log[-_ ]?in|authenticate|enter password|verify identity)\b/i;
 const AUTHORIZATION_CONTROL = /\b(authorize|grant access|allow access|connect account)\b/i;
+const TERMS_CONTROL =
+  /\b(i agree|i accept|agree (to|and continue)|accept (the |all )?(terms|conditions|agreement|policy|policies))\b/i;
 const PAYMENT_CONTROL =
   /\b(pay|payment|purchase|buy|checkout|place order|confirm order|transfer|withdraw|send money)\b/i;
 const PUBLISH_CONTROL = /\b(publish|post|send|submit|delete|remove permanently)\b/i;
@@ -281,6 +284,7 @@ function controlApprovalReason(target: SignatureParts): AlwaysAskReason | null {
   const label = targetLabel(target);
   if (AUTHENTICATION_CONTROL.test(label)) return 'authentication';
   if (AUTHORIZATION_CONTROL.test(label)) return 'authorization';
+  if (TERMS_CONTROL.test(label)) return 'terms';
   if (PAYMENT_CONTROL.test(label)) return 'payment';
   if (PERMISSION_CONTROL.test(label)) return 'permission_change';
   if (PUBLISH_CONTROL.test(label)) return 'publish';
@@ -438,6 +442,8 @@ export function describeApprovalReason(requirement: ActionApprovalRequirement): 
       return 'This page changes account permissions or access.';
     case 'purchase':
       return 'This completes a purchase or payment, which you finish yourself.';
+    case 'terms':
+      return 'This accepts terms or an agreement on your behalf.';
     default:
       return 'This step always needs your approval.';
   }

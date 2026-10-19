@@ -8,21 +8,18 @@ import { buildBrowserApprovalCard } from '../src/features/side-panel/computerUse
 const here = dirname(fileURLToPath(import.meta.url));
 const read = (rel: string): string => readFileSync(resolve(here, '..', rel), 'utf8');
 
-describe('computer-use default = ask-before-acting (trust-boundary P0)', () => {
+describe('computer-use default = Auto, crucial actions still ask', () => {
   const background = read('src/background.ts');
   const panel = read('src/features/side-panel/computerUsePanel.ts');
 
-  it('background treats an UNSET ask pref as ask-before-acting (default-deny)', () => {
-    expect(background).toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/);
-  });
-
-  it('background does NOT default to allow-all (the old `=== true` defect)', () => {
+  it('background reads the stored mode through the one reader, so unset means Auto', () => {
+    expect(background).toContain('readBrowserPermissionMode(askPref[ASK_BEFORE_ACTING_KEY])');
     expect(background).not.toMatch(/askPref\[ASK_BEFORE_ACTING_KEY\]\s*===\s*true/);
+    expect(background).toMatch(/crucial: isCrucialAction\(requirement\)/);
   });
 
-  it('side-panel ask checkbox defaults to ON (ask)', () => {
-    expect(panel).toMatch(/askCheckbox\.checked\s*=\s*true/);
-    expect(panel).not.toMatch(/askCheckbox\.checked\s*=\s*false/);
+  it('the Ask before acting checkbox is off by default, which is Auto', () => {
+    expect(panel).toMatch(/askCheckbox\.checked\s*=\s*false;/);
   });
 });
 
@@ -32,22 +29,20 @@ describe('computer-use ask gate persists and rehydrates', () => {
   it('rehydrates the stored gate instead of always rendering the default', () => {
     expect(panel).toMatch(/storage\?\.local\?\.get\(ASK_BEFORE_ACTING_KEY/);
     expect(panel).toMatch(
-      /askCheckbox\.checked\s*=\s*items\?\.\[ASK_BEFORE_ACTING_KEY\]\s*!==\s*false/,
+      /askCheckbox\.checked\s*=\s*readBrowserPermissionMode\(items\?\.\[ASK_BEFORE_ACTING_KEY\]\) === 'ask'/,
     );
   });
 
-  it('writes the gate on toggle, not only when Run Autofill escalates', () => {
+  it('writes the gate on toggle: on is Ask first, off is Auto, never Full access', () => {
     expect(panel).toMatch(/askCheckbox\.addEventListener\('change'/);
-    expect(panel).toMatch(/set\(\{\s*\[ASK_BEFORE_ACTING_KEY\]:\s*next\s*\}\)/);
+    expect(panel).toContain(
+      "[ASK_BEFORE_ACTING_KEY]: browserPermissionModeToStored(next ? 'ask' : 'auto')",
+    );
   });
 
   it('rolls the control back when the authoritative storage write fails', () => {
     expect(panel).toContain('askCheckbox.checked = !next');
     expect(panel).toContain('The previous setting is still active.');
-  });
-
-  it('rehydration still uses the default-deny rule, never a bare false assignment', () => {
-    expect(panel).not.toMatch(/askCheckbox\.checked\s*=\s*false/);
   });
 });
 

@@ -206,13 +206,16 @@ const fullAccessNotice = (): HTMLElement => byId('sp-full-access-notice');
 describe('the approval-mode menu beside +', () => {
   it('names its question and keeps the menu keyboard contract', async () => {
     await import('../src/side_panel');
-    await vi.waitFor(() => expect(chip().getAttribute('data-mode')).toBe('ask'));
+    await vi.waitFor(() => expect(chip().getAttribute('data-mode')).toBe('auto'));
+    expect(chip().getAttribute('aria-label')).toBe(
+      'Permission mode: auto, asks before crucial actions',
+    );
 
     chip().click();
     expect(popover().classList.contains('open')).toBe(true);
     const labelledBy = popover().getAttribute('aria-labelledby');
     expect(labelledBy && byId(labelledBy).textContent).toBe('How should AGI act in your browser?');
-    expect(document.activeElement).toBe(option('Ask first'));
+    expect(document.activeElement).toBe(option('Auto'));
 
     press(document.activeElement!, 'ArrowDown');
     expect(document.activeElement).toBe(option('Full access'));
@@ -223,6 +226,9 @@ describe('the approval-mode menu beside +', () => {
     expect(learnMore.href).toContain('/help/tool-approvals');
     press(learnMore, 'ArrowDown');
     expect(document.activeElement).toBe(option('Ask first'));
+    press(document.activeElement!, 'ArrowDown');
+    expect(document.activeElement).toBe(option('Auto'));
+    press(document.activeElement!, 'ArrowUp');
     press(document.activeElement!, 'ArrowUp');
     expect(document.activeElement).toBe(learnMore);
 

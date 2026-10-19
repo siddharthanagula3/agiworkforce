@@ -7,7 +7,8 @@ import { originApprovedForBrowserControl } from '../src/features/computer-use/br
 
 const fullAccess = {
   alwaysAsk: false,
-  askBeforeActing: false,
+  crucial: false,
+  mode: 'full' as const,
   allowedForTask: false,
   readsOnly: false,
 };
@@ -50,12 +51,12 @@ describe('Full access acts without asking on approved sites only', () => {
   it('keeps Ask first, Allow for this task, read-only tools and always-ask actions as before', async () => {
     const approved = vi.fn(async () => true);
     await expect(
-      actionNeedsApproval({ ...fullAccess, askBeforeActing: true, siteApproved: approved }),
+      actionNeedsApproval({ ...fullAccess, mode: 'ask', siteApproved: approved }),
     ).resolves.toBe(true);
     await expect(
       actionNeedsApproval({
         ...fullAccess,
-        askBeforeActing: true,
+        mode: 'ask',
         allowedForTask: true,
         siteApproved: approved,
       }),
@@ -63,7 +64,7 @@ describe('Full access acts without asking on approved sites only', () => {
     await expect(
       actionNeedsApproval({
         ...fullAccess,
-        askBeforeActing: true,
+        mode: 'ask',
         readsOnly: true,
         siteApproved: approved,
       }),

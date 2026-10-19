@@ -56,6 +56,7 @@ export async function fetchAccountSummary(
   const optedOut = nameOptedOut(token, signal);
   const response = await fetch(`${FREE_TRIAL_GATEWAY}${CAPABILITY_DOCUMENT_PATH}`, {
     method: 'GET',
+    cache: 'no-store',
     headers: {
       Authorization: `Bearer ${token}`,
       'X-Requested-With': 'XMLHttpRequest',
