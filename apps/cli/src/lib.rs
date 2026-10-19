@@ -1900,6 +1900,25 @@ pub fn resolve_destructive_decision(force: bool, interactive: bool) -> Destructi
     }
 }
 
+/// Names of the plugins installed for this folder and account, by directory
+/// and manifest name.
+pub(crate) fn installed_plugin_names() -> Vec<String> {
+    let mut manager = plugins::PluginsManager::new();
+    if manager
+        .load_all(std::env::current_dir().ok().as_deref())
+        .is_err()
+    {
+        return Vec::new();
+    }
+    manager
+        .plugins()
+        .iter()
+        .flat_map(|plugin| {
+            std::iter::once(plugin.config_name.clone()).chain(plugin.manifest_name.clone())
+        })
+        .collect()
+}
+
 #[derive(Subcommand, Debug)]
 enum PluginSubcommand {
     /// List installed plugins.
@@ -1930,6 +1949,17 @@ enum PluginSubcommand {
     Info { name: String },
     /// Sign in to the remote connections an installed plugin bundles.
     Login { name: String },
+    /// Show or change an installed plugin's settings. With no KEY=VALUE pairs
+    /// at a terminal, asks for each setting in turn.
+    Configure {
+        name: String,
+        /// Settings to save, as KEY=VALUE.
+        #[arg(value_name = "KEY=VALUE")]
+        values: Vec<String>,
+        /// Settings to clear back to the plugin's default.
+        #[arg(long, value_name = "KEY")]
+        unset: Vec<String>,
+    },
     /// Remove a plugin you installed.
     Remove { name: String },
     /// Turn an installed plugin back on.
@@ -2230,6 +2260,10 @@ enum MarketplaceSubcommand {
     /// Show one marketplace plugin before installing it: what it adds, the
     /// connections it needs and the permissions it asks for.
     Show { reference: String },
+    /// Suggest plugins from your account's marketplaces that fit the project in
+    /// this folder: its language, tools and the packages it depends on.
+    #[command(alias = "suggest")]
+    Recommend,
     /// Search the plugins on the marketplaces added to your account.
     Search {
         /// Search query.
@@ -6497,6 +6531,25 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                     .and_then(|name| name.to_str())
                                     .unwrap_or_default()
                                     .to_string();
+                                let settings = plugins::load_manifest_for(&path)
+                                    .map(|(manifest, _)| manifest.user_config)
+                                    .unwrap_or_default();
+                                if !settings.is_empty() {
+                                    use std::io::IsTerminal;
+                                    if std::io::stdin().is_terminal()
+                                        && std::io::stdout().is_terminal()
+                                    {
+                                        features::plugins::settings::prompt_all(&root, &settings)?;
+                                    }
+                                    println!(
+                                        "{}",
+                                        terminal_text::sanitize_terminal_text(
+                                            &installs::describe_plugin_settings(
+                                                &root, &settings, false
+                                            )
+                                        )
+                                    );
+                                }
                                 for notice in
                                     installs::install_dependencies(&root).await.notices(&root)
                                 {
@@ -6575,6 +6628,39 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         }
                         println!(
                             "Every connection in plugin '{shown}' is signed in. The tokens are stored in the OS credential store."
+                        );
+                        Ok(())
+                    }
+                    PluginSubcommand::Configure {
+                        name,
+                        values,
+                        unset,
+                    } => {
+                        use std::io::IsTerminal;
+                        let interactive = values.is_empty()
+                            && unset.is_empty()
+                            && std::io::stdin().is_terminal()
+                            && std::io::stdout().is_terminal();
+                        if interactive {
+                            let (plugin, settings) = installs::plugin_settings(name)?;
+                            if !settings.is_empty() {
+                                features::plugins::settings::prompt_all(&plugin, &settings)?;
+                                println!(
+                                    "{}",
+                                    terminal_text::sanitize_terminal_text(
+                                        &installs::describe_plugin_settings(
+                                            &plugin, &settings, true
+                                        )
+                                    )
+                                );
+                                return Ok(());
+                            }
+                        }
+                        println!(
+                            "{}",
+                            terminal_text::sanitize_terminal_text(&installs::configure_plugin(
+                                name, values, unset
+                            )?)
                         );
                         Ok(())
                     }
@@ -7080,6 +7166,29 @@ async fn run_cli(cli: Cli) -> Result<()> {
                             .await
                             .map_err(|error| anyhow::anyhow!("{error}"))?;
                         println!("Removed that marketplace from your account.");
+                        Ok(())
+                    }
+                    MarketplaceSubcommand::Recommend => {
+                        if let Some(refusal) = tier_cache::capability_refusal(
+                            tier_cache::MARKETPLACE_CAPABILITY,
+                            "The plugin marketplace",
+                        ) {
+                            anyhow::bail!(refusal);
+                        }
+                        let client = cloud::CloudClient::connect(account_privacy_mode())
+                            .map_err(|error| anyhow::anyhow!("{error}"))?;
+                        println!(
+                            "{}",
+                            cloud::marketplaces::recommend_catalogue(
+                                &client,
+                                &context::project_signals(
+                                    &std::env::current_dir()?.to_string_lossy()
+                                ),
+                                &installed_plugin_names(),
+                            )
+                            .await
+                            .map_err(|error| anyhow::anyhow!("{error}"))?
+                        );
                         Ok(())
                     }
                     MarketplaceSubcommand::Browse { source } => {

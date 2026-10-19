@@ -1474,8 +1474,9 @@ pub fn expand_prompt_command(text: &str) -> Result<Option<String>, DeveloperSess
     }
 }
 
-const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 10] = [
+const BUILTIN_PROMPTS: [(&str, fn(&str) -> String); 11] = [
     ("init", crate::claude_parity::init_prompt),
+    ("create-skill", crate::claude_parity::create_skill_prompt),
     ("review", crate::claude_parity::review_prompt),
     (
         "security-review",

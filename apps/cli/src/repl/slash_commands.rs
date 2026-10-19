@@ -118,7 +118,7 @@ pub(super) async fn handle_slash_command(
                      interactive model picker (search + provider sections + effort selector).",
                 );
             } else {
-                match session.switch_model(arg) {
+                match session.switch_model_by_name(arg) {
                     Ok(()) => {
                         let provider = crate::models::provider_name(&session.provider);
                         output::print_info(&format!("Switched to {} ({})", arg, provider));
@@ -599,7 +599,7 @@ pub(super) async fn handle_slash_command(
         "/plugin" | "/plugins" if crate::installs::is_plugin_action(arg) => {
             match crate::installs::plugin_command(arg) {
                 Some(message) => output::print_info(&message),
-                None => output::print_warn("Usage: /plugins enable|disable|update|remove <name>"),
+                None => output::print_warn("Usage: /plugins enable|disable|update|remove <name>, or /plugins configure <name> [KEY=VALUE ...]"),
             }
         }
         "/marketplace" | "/market" | "/plugin" | "/plugins" => {
