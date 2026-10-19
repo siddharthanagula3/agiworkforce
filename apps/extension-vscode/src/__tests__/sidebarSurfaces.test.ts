@@ -13,6 +13,7 @@ import {
   composeSurfaceSections,
   mergeSessionRows,
   normalizeCapabilityEntries,
+  slashMenuEntries,
   surfaceSectionItem,
 } from '../features/surfaces';
 import { resolveAccountPresence, signIn } from '../features/surfaces/accountAccess';
@@ -236,6 +237,55 @@ describe('the CLI capability adapter', () => {
         files: [{ path: 'AGENTS.md', kind: 'agents', bytes: 12, root: '/repo' }],
       }),
     ).toEqual([{ label: 'AGENTS.md', description: 'agents', detail: 'AGENTS.md' }]);
+  });
+
+  it('maps every slash command the extension serves to a declared command', () => {
+    const declared = new Set(manifestCommands());
+    for (const item of BUILT_IN_SLASH_COMMANDS) {
+      expect(declared.has(item.command)).toBe(true);
+    }
+  });
+
+  it('keeps a listed command only when VS Code can run it, and serves aliases once', () => {
+    const entries = slashMenuEntries([
+      {
+        name: 'init',
+        description: 'Create AGENTS.md',
+        source: 'builtin',
+        aliases: [],
+        runnable: false,
+      },
+      {
+        name: 'perms',
+        description: 'Permissions',
+        source: 'builtin',
+        aliases: [],
+        runnable: false,
+      },
+      {
+        name: 'permissions',
+        description: 'Manage tool permissions',
+        source: 'builtin',
+        aliases: ['perms', 'approvals'],
+        runnable: false,
+      },
+      { name: 'deploy', description: 'Ship it', source: 'skill', aliases: [], runnable: false },
+      { name: 'doctor-x', description: 'Runs here', source: 'plugin', aliases: [], runnable: true },
+    ]);
+    const byName = new Map(entries.map((entry) => [entry.name, entry.action]));
+
+    expect(byName.has('/init')).toBe(false);
+    expect(byName.has('/perms')).toBe(false);
+    expect(byName.get('/permissions')).toEqual({
+      kind: 'command',
+      command: 'agi-workforce.showSavedApprovals',
+    });
+    expect(byName.get('/deploy')).toEqual({ kind: 'skill' });
+    expect(byName.get('/doctor-x')).toEqual({ kind: 'cli' });
+    expect(byName.get('/compact')).toEqual({
+      kind: 'command',
+      command: 'agi-workforce.compactConversation',
+    });
   });
 
   it('falls back to the built-in slash list when commands/list is unavailable', async () => {

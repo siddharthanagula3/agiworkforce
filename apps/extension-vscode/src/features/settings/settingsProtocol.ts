@@ -66,6 +66,7 @@ const settingValueSchemas = {
   model: z.string().trim().min(1).max(200),
   cliPath: z.string().trim().min(1).max(4096),
   'composer.followUpBehavior': z.enum(['queue', 'steer']),
+  'composer.enterBehavior': z.enum(['enter', 'modifierIfMultiline', 'modifier']),
   contextLines: z.number().int().min(0).max(500),
   'editorContext.autoAttach': z.boolean(),
   respectGitIgnore: z.boolean(),

@@ -125,6 +125,29 @@ describe('Tasks, AGI Work goal + plan', () => {
     });
   });
 
+  it('offers Save as routine and hands the reconstructed goal to the host', async () => {
+    const saveAsRoutine = vi.fn();
+    render(
+      <TasksPage
+        transport={{
+          client: client(),
+          openConversation: vi.fn(),
+          notifyError: vi.fn(),
+          saveAsRoutine,
+        }}
+      />,
+    );
+    await openDetails();
+
+    expect(screen.queryByRole('button', { name: /Re-run this task/ })).toBeNull();
+    fireEvent.click(await screen.findByRole('button', { name: /Save as routine/ }));
+    expect(saveAsRoutine).toHaveBeenCalledWith({
+      goal: 'Build a competitor pricing table',
+      constraints: 'public sources only',
+      deliverable: 'a CSV',
+    });
+  });
+
   it('hides Re-run when the host cannot start a run', async () => {
     render(
       <TasksPage

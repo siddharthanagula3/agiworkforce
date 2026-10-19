@@ -17,11 +17,18 @@ import {
 
 export type ExtensionAgentEffort = 'low' | 'medium' | 'high' | 'max';
 export type ComposerFollowUpBehavior = 'queue' | 'steer';
+export type ComposerEnterBehavior = 'enter' | 'modifierIfMultiline' | 'modifier';
+const COMPOSER_ENTER_BEHAVIORS: readonly ComposerEnterBehavior[] = [
+  'enter',
+  'modifierIfMultiline',
+  'modifier',
+];
 export interface MutableConfigValues {
   apiEndpoint: string;
   model: string;
   cliPath: string;
   'composer.followUpBehavior': ComposerFollowUpBehavior;
+  'composer.enterBehavior': ComposerEnterBehavior;
   contextLines: number;
   'editorContext.autoAttach': boolean;
   respectGitIgnore: boolean;
@@ -66,6 +73,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'agent.effort',
   'agent.thinking',
   'composer.followUpBehavior',
+  'composer.enterBehavior',
   'editorContext.autoAttach',
   'respectGitIgnore',
   'activateOnStartup',
@@ -92,6 +100,7 @@ const DEFAULTS = {
   inlineCompletionsMaxLength: 500,
   model: 'auto',
   composerFollowUpBehavior: 'queue',
+  composerEnterBehavior: 'enter',
   contextLines: 50,
   editorContextAutoAttach: true,
   respectGitIgnore: true,
@@ -174,6 +183,10 @@ export const Config = {
     const raw = get<string>('composer.followUpBehavior', DEFAULTS.composerFollowUpBehavior);
     return raw === 'steer' ? 'steer' : 'queue';
   },
+  composerEnterBehavior(): ComposerEnterBehavior {
+    const raw = get<string>('composer.enterBehavior', DEFAULTS.composerEnterBehavior);
+    return COMPOSER_ENTER_BEHAVIORS.find((behavior) => behavior === raw) ?? 'enter';
+  },
   contextLines(): number {
     return get<number>('contextLines', DEFAULTS.contextLines);
   },
@@ -213,6 +226,7 @@ export const Config = {
         model: this.model(),
         cliPath: this.cliPath(),
         'composer.followUpBehavior': this.composerFollowUpBehavior(),
+        'composer.enterBehavior': this.composerEnterBehavior(),
         contextLines: this.contextLines(),
         'editorContext.autoAttach': this.editorContextAutoAttach(),
         respectGitIgnore: this.respectGitIgnore(),

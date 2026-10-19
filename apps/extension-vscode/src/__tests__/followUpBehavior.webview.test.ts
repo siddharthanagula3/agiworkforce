@@ -178,4 +178,63 @@ describe('VS Code active-turn Queue and Steer composer', () => {
       document.querySelector(`[data-client-message-id="${send.payload.clientMessageId}"]`),
     ).not.toBeNull();
   });
+
+  it('sends with Cmd/Ctrl+Enter and keeps Enter for new lines when the send key requires it', () => {
+    const postMessage = boot('queue');
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'followUpBehavior',
+          payload: { behavior: 'queue', enterBehavior: 'modifier' },
+        },
+      }),
+    );
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    const sends = () =>
+      postMessage.mock.calls.filter(([message]) => message.type === 'sendMessage');
+
+    const plain = new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true });
+    input.value = 'First line';
+    input.dispatchEvent(plain);
+    expect(plain.defaultPrevented).toBe(false);
+    expect(sends()).toHaveLength(0);
+    expect(document.getElementById('sendBtn')?.getAttribute('title')).toMatch(
+      /^Send \((Cmd|Ctrl)\+Enter\)$/,
+    );
+
+    sendWithEnter(input, 'Send this', true);
+    expect(sends()).toHaveLength(1);
+    expect(sends()[0]?.[0].payload.text).toBe('Send this');
+  });
+
+  it('sends a one-line prompt with Enter but needs Cmd/Ctrl+Enter once it has several lines', () => {
+    const postMessage = boot('queue');
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: {
+          type: 'followUpBehavior',
+          payload: { behavior: 'queue', enterBehavior: 'modifierIfMultiline' },
+        },
+      }),
+    );
+    const input = document.getElementById('userInput') as HTMLTextAreaElement;
+    const sends = () =>
+      postMessage.mock.calls.filter(([message]) => message.type === 'sendMessage');
+
+    const multiline = new KeyboardEvent('keydown', {
+      key: 'Enter',
+      bubbles: true,
+      cancelable: true,
+    });
+    input.value = 'Line one\nLine two';
+    input.dispatchEvent(multiline);
+    expect(multiline.defaultPrevented).toBe(false);
+    expect(sends()).toHaveLength(0);
+
+    sendWithEnter(input, 'Line one\nLine two', true);
+    expect(sends()).toHaveLength(1);
+
+    sendWithEnter(input, 'One line');
+    expect(sends()).toHaveLength(2);
+  });
 });

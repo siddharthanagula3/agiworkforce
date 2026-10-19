@@ -92,20 +92,12 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "keys",
         "effort",
         "statusline",
-        "desktop",
-        "app",
         "mobile",
         "ios",
         "android",
         "install-github-app",
-        "install-slack-app",
         "tag",
-        "upgrade",
         "vim",
-        "color",
-        "heapdump",
-        "stickers",
-        "thinkback-play",
         "recap",
         "save-skill",
         "save-routine",
@@ -278,14 +270,9 @@ pub fn handle_shared_command(
             ParityCommandResult::SystemMessage(render_release_notes())
         }
         "/keybindings" | "/keys" => ParityCommandResult::SystemMessage(render_keybindings()),
-        "/effort" => ParityCommandResult::SystemMessage(render_effort(arg)),
+        "/effort" => ParityCommandResult::SystemMessage(set_effort(session, arg)),
         "/statusline" => ParityCommandResult::SystemMessage(render_statusline()),
-        "/desktop" | "/app" => {
-            ParityCommandResult::SystemMessage(render_companion("Desktop"))
-        }
-        "/mobile" | "/ios" | "/android" => {
-            ParityCommandResult::SystemMessage(render_companion("Mobile"))
-        }
+        "/mobile" | "/ios" | "/android" => ParityCommandResult::SystemMessage(render_mobile()),
         "/connectors" => ParityCommandResult::SystemMessage(
             match crate::tier_cache::capability_refusal(
                 crate::tier_cache::CONNECTORS_CAPABILITY,
@@ -302,22 +289,8 @@ pub fn handle_shared_command(
         "/install-github-app" => {
             ParityCommandResult::SystemMessage(render_install_app("GitHub"))
         }
-        "/install-slack-app" => ParityCommandResult::SystemMessage(render_install_app("Slack")),
         "/tag" => ParityCommandResult::SystemMessage(handle_tag(session, arg)),
-        "/upgrade" => ParityCommandResult::SystemMessage(render_upgrade()),
         "/vim" => ParityCommandResult::SystemMessage(render_vim(arg)),
-        "/color" => ParityCommandResult::SystemMessage(
-            "Color command recognized. Theme color is controlled by /theme; prompt accent persistence is coming through shared settings.".into(),
-        ),
-        "/heapdump" => ParityCommandResult::SystemMessage(
-            "Heap diagnostics are not enabled in this build. Use /stats for session counters and AGIWORKFORCE_DEBUG=1 for logs.".into(),
-        ),
-        "/stickers" => ParityCommandResult::SystemMessage(
-            "Stickers are a Claude UI affordance. AGI keeps this command for migration compatibility; no local sticker pack is installed.".into(),
-        ),
-        "/thinkback-play" => ParityCommandResult::SystemMessage(
-            "Think Back playback is not installed. Use /think-back to generate a recap prompt for this session.".into(),
-        ),
         "/recap" => ParityCommandResult::Prompt(recap_prompt(arg)),
         "/security-review" => ParityCommandResult::Prompt(security_review_prompt(arg)),
         "/pr-comments" | "/autofix-pr" => {
@@ -768,9 +741,6 @@ pub fn render_install_app(app_name: &str) -> String {
             Some("github"),
             Some("https://github.com/apps/agiworkforce/installations/new"),
         ),
-        "Slack" | "slack" | "install-slack-app" => {
-            (Some("slack"), Some("https://api.slack.com/apps?new_app=1"))
-        }
         _ => (None, None),
     };
 
@@ -794,12 +764,6 @@ pub fn render_install_app(app_name: &str) -> String {
             "{app_name} app integration\n  Use the connector/app plugin flow when available.\n  Authenticate in the target service, then run /plugin or agi plugin list."
         )
     }
-}
-
-pub fn render_companion(surface: &str) -> String {
-    format!(
-        "{surface} companion\n  AGI CLI is the source of truth for tools, sessions, MCP, skills, and permissions.\n  Companion surfaces should reuse the CLI engine contracts exposed by this crate."
-    )
 }
 
 fn pricing_url() -> String {
@@ -829,10 +793,6 @@ pub fn open_upgrade_page() -> String {
         },
         &url,
     )
-}
-
-pub fn render_upgrade() -> String {
-    "Upgrade options\n  Local/BYOK: use your own provider keys.\n  Managed cloud: authenticate with /login.\n  Extra usage: /extra-usage".to_string()
 }
 
 pub fn render_vim(arg: &str) -> String {
@@ -1647,14 +1607,30 @@ pub fn render_remote_env() -> String {
     lines.join("\n")
 }
 
-pub fn render_effort(arg: &str) -> String {
+pub fn set_effort(session: &mut AgentSession, arg: &str) -> String {
+    let current = session.effort.unwrap_or_default();
     if arg.trim().is_empty() {
-        return "Effort: use /effort low | medium | high | max in TUI mode, or pass the model-specific reasoning option through config when available.".to_string();
+        return format!(
+            "Effort is {}. Change it with /effort low | medium | high | max.",
+            current.label()
+        );
     }
-    format!(
-        "Effort level `{}` recognized. The REPL will use the configured model defaults; TUI mode applies effort interactively.",
-        arg.trim()
-    )
+    let Some(effort) = crate::design_system::Effort::from_config_value(arg) else {
+        return format!(
+            "Unknown effort level '{}'. Use: low | medium | high | max",
+            arg.trim()
+        );
+    };
+    session.effort = Some(effort);
+    let note = if matches!(
+        crate::model_catalog::effort_support(&session.model),
+        crate::model_catalog::EffortSupport::Unsupported
+    ) {
+        ". This model has no effort control, so it applies once you switch to one that does"
+    } else {
+        ""
+    };
+    format!("Effort set to {}{note}", effort.label())
 }
 
 pub fn render_statusline() -> String {
@@ -1734,13 +1710,31 @@ pub(crate) fn render_chrome_state(state: &crate::browser_bridge::BrowserState) -
 }
 
 pub fn render_ide() -> String {
-    [
-        "IDE integration",
-        "  Use the VS Code extension for editor context, selections, diagnostics, and chat.",
-        "  CLI engine compatibility: slash commands, tools, permissions, and session state should stay shared.",
-        "  Start from the extension package in apps/extension-vscode.",
-    ]
-    .join("\n")
+    format!(
+        "AGI Workforce for VS Code runs on this CLI: it signs in with the same account, and the sessions you start in a folder here are listed in its history for that folder.\nGet it at {}",
+        product_page(VSCODE_PAGE)
+    )
+}
+
+const VSCODE_PAGE: &str = "/vscode-extension";
+const MOBILE_PAGE: &str = "/mobile";
+
+fn product_page(path: &str) -> String {
+    format!(
+        "{}{path}",
+        crate::tier_cache::default_api_base().trim_end_matches('/')
+    )
+}
+
+/// Drawn without colour: the full-screen view shows text, not terminal colours.
+pub fn render_mobile() -> String {
+    let url = product_page(MOBILE_PAGE);
+    let scan = crate::remote_control::render_qr(&url, false)
+        .map(|qr| format!("Scan this with your phone's camera, or open {url}\n{qr}"))
+        .unwrap_or_else(|| format!("Open {url} on your phone."));
+    format!(
+        "AGI Workforce for iPhone and Android.\n{scan}\nOnce it is installed and signed in, run `agi remote-control` in this folder to let it follow, steer and approve the sessions here."
+    )
 }
 
 pub fn render_doctor(session: &AgentSession) -> String {
@@ -2761,6 +2755,57 @@ mod tests {
     }
 
     #[test]
+    fn effort_in_the_repl_changes_the_next_turn() {
+        let mut session = test_session();
+        session.effort = None;
+
+        let reply = set_effort(&mut session, "high");
+
+        assert_eq!(session.effort, Some(crate::design_system::Effort::High));
+        assert!(reply.starts_with("Effort set to High"), "{reply}");
+        assert!(set_effort(&mut session, "").contains("Effort is High"));
+        assert!(set_effort(&mut session, "extreme").starts_with("Unknown effort level"));
+        assert_eq!(session.effort, Some(crate::design_system::Effort::High));
+    }
+
+    #[test]
+    fn companion_commands_speak_to_users_not_developers() {
+        let ide = render_ide();
+        assert!(ide.contains("/vscode-extension"), "{ide}");
+        let mobile = render_mobile();
+        assert!(mobile.contains("/mobile"), "{mobile}");
+        assert!(mobile.contains('\u{2588}'), "{mobile}");
+        for text in [ide, mobile] {
+            assert!(!text.contains("apps/"), "{text}");
+            assert!(!text.contains("contracts"), "{text}");
+        }
+        let mut session = test_session();
+        assert_eq!(
+            handle_shared_command("/upgrade", "", &mut session),
+            ParityCommandResult::NotHandled
+        );
+    }
+
+    #[test]
+    fn desktop_handoff_keeps_a_local_conversation_on_this_device() {
+        let _guard = crate::oauth::external_open_spy::lock();
+        crate::oauth::external_open_spy::enable_and_reset();
+        let mut session = test_session();
+        session.privacy_mode = PrivacyMode::Local;
+
+        let reply = crate::cloud::open_in_desktop(&session);
+        let opens = crate::oauth::external_open_spy::open_count();
+        crate::oauth::external_open_spy::disable();
+
+        assert!(reply.contains("stays on this device"), "{reply}");
+        assert_eq!(opens, 0);
+        assert_eq!(
+            handle_shared_command("/desktop", "", &mut session),
+            ParityCommandResult::NotHandled
+        );
+    }
+
+    #[test]
     fn shared_runtime_command_names_are_handled() {
         for command in shared_runtime_command_names() {
             let mut session = test_session();
@@ -2784,8 +2829,8 @@ mod tests {
     }
 
     /// Regression guard for the auto-opening browser-tab bug: dispatching ANY
-    /// shared slash command (including `/install-github-app` and
-    /// `/install-slack-app`) must NOT launch an external browser on its own.
+    /// shared slash command (including `/install-github-app`) must NOT launch
+    /// an external browser on its own.
     /// All external opens route through `crate::oauth::open_external_url`, whose
     /// test spy records every launch that passes the user-action gate. A plain
     /// command dispatch is not a user-initiated open, so the count must stay 0.
@@ -2794,17 +2839,15 @@ mod tests {
         let _guard = crate::oauth::external_open_spy::lock();
         crate::oauth::external_open_spy::enable_and_reset();
 
-        // Cover every shared runtime command, plus the two install commands and
-        // their leading-slash forms explicitly (the exact tabs from the bug).
+        // Cover every shared runtime command, plus the install command and its
+        // leading-slash form explicitly (the exact tab from the bug).
         let mut commands: Vec<String> = shared_runtime_command_names()
             .iter()
             .map(|c| (*c).to_string())
             .collect();
         commands.extend([
             "/install-github-app".to_string(),
-            "/install-slack-app".to_string(),
             "install-github-app".to_string(),
-            "install-slack-app".to_string(),
         ]);
 
         for command in &commands {
@@ -2813,7 +2856,7 @@ mod tests {
         }
 
         // Also call the install renderer directly, it must not open either.
-        for app in ["GitHub", "Slack", "github", "slack"] {
+        for app in ["GitHub", "github"] {
             let _ = render_install_app(app);
         }
 
@@ -2834,7 +2877,7 @@ mod tests {
         for (command, expected) in [
             ("/agents", "Agents"),
             ("/chrome", "Chrome integration"),
-            ("/ide", "IDE integration"),
+            ("/ide", "AGI Workforce for VS Code"),
             ("/diagnose", "Diagnostics"),
             ("/changelog", "Release notes"),
             ("/keys", "Keybindings"),
@@ -3456,17 +3499,17 @@ mod connector_contract_tests {
     #[test]
     fn a_blocked_connector_stops_the_cli_install_flow() {
         clear_cached_policy();
-        assert!(render_install_app("Slack").contains("https://api.slack.com"));
+        assert!(render_install_app("GitHub").contains("https://github.com/apps"));
 
-        set_cached_policy(Some(policy()));
-        let rendered = render_install_app("Slack");
+        let mut blocked = policy();
+        blocked.blocked_connectors = vec!["GitHub".to_string()];
+        set_cached_policy(Some(blocked));
+        let rendered = render_install_app("GitHub");
         assert!(
-            !rendered.contains("https://api.slack.com"),
+            !rendered.contains("https://github.com/apps"),
             "the CLI still offered an install URL the workspace blocked: {rendered}"
         );
-        assert!(rendered.contains("has blocked the \"slack\" connector"));
-
-        assert!(render_install_app("GitHub").contains("https://github.com/apps"));
+        assert!(rendered.contains("has blocked the \"github\" connector"));
         clear_cached_policy();
     }
 }
