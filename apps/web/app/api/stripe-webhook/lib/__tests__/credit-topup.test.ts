@@ -35,29 +35,69 @@ function topUpSession(overrides: Record<string, unknown> = {}): Stripe.Checkout.
   } as unknown as Stripe.Checkout.Session;
 }
 
-function database() {
+interface LedgerPeriod {
+  id: string;
+  subscription_id: string;
+  period_start: string;
+  period_end: string;
+}
+
+const MONTHLY_PLAN = {
+  subscription: {
+    id: 'sub_db_123',
+    current_period_start: '2026-08-01',
+    current_period_end: '2026-09-01',
+  },
+  open: {
+    id: 'credits_123',
+    subscription_id: 'sub_db_123',
+    period_start: '2026-08-01',
+    period_end: '2026-09-01',
+  },
+};
+
+const YEARLY_PLAN = {
+  subscription: {
+    id: 'sub_db_yearly',
+    current_period_start: '2026-01-15',
+    current_period_end: '2027-01-15',
+  },
+  open: {
+    id: 'credits_october',
+    subscription_id: 'sub_db_yearly',
+    period_start: '2026-09-15',
+    period_end: '2026-10-15',
+  },
+};
+
+function database(
+  plan: {
+    subscription: { id: string; current_period_start: string; current_period_end: string };
+    open: LedgerPeriod;
+  } = MONTHLY_PLAN,
+) {
   let balanceReads = 0;
   return {
-    query: vi.fn(async (sql: string): Promise<Array<Record<string, unknown>>> => {
-      if (sql.includes('from credit_transactions')) return [];
-      if (sql.includes('from subscriptions')) {
-        return [
-          {
-            id: 'sub_db_123',
-            current_period_start: '2026-08-01',
-            current_period_end: '2026-09-01',
-          },
-        ];
-      }
-      if (sql.includes('from token_credits') && sql.includes('subscription_id')) {
-        return [{ id: 'credits_123' }];
-      }
-      if (sql.includes('remaining_microusd')) {
-        balanceReads += 1;
-        return [{ remaining_microusd: balanceReads === 1 ? 2_000_000 : 7_000_000 }];
-      }
-      return [];
-    }),
+    query: vi.fn(
+      async (sql: string, params: unknown[] = []): Promise<Array<Record<string, unknown>>> => {
+        if (sql.includes('from credit_transactions')) return [];
+        if (sql.includes('from subscriptions')) return [plan.subscription];
+        if (sql.includes('from token_credits') && sql.includes('period_end > now()')) {
+          return [{ id: plan.open.id, subscription_id: plan.open.subscription_id }];
+        }
+        if (sql.includes('from token_credits') && sql.includes('period_start = $3')) {
+          const [, , start, end] = params;
+          return start === plan.open.period_start && end === plan.open.period_end
+            ? [{ id: plan.open.id }]
+            : [];
+        }
+        if (sql.includes('remaining_microusd')) {
+          balanceReads += 1;
+          return [{ remaining_microusd: balanceReads === 1 ? 2_000_000 : 7_000_000 }];
+        }
+        return [];
+      },
+    ),
     execute: vi.fn(async () => 1),
   };
 }
@@ -90,10 +130,6 @@ describe('credit top-up settlement', () => {
     );
 
     expect(provider.paymentIntents.retrieve).toHaveBeenCalledWith('pi_123');
-    expect(db.query).toHaveBeenCalledWith(
-      expect.stringContaining('and period_start = $3 and period_end = $4'),
-      ['user_123', 'sub_db_123', '2026-08-01', '2026-09-01'],
-    );
     expect(db.execute).toHaveBeenCalledWith('select add_credits_microusd($1, $2, $3, $4, $5, $6)', [
       'user_123',
       'credits_123',
@@ -102,6 +138,21 @@ describe('credit top-up settlement', () => {
       'purchase',
       JSON.stringify({ charged_cents: 2_000, charged_currency: 'usd' }),
     ]);
+  });
+
+  it('credits a yearly plan pack into its open monthly period', async () => {
+    const db = database(YEARLY_PLAN);
+
+    await handleCreditTopUp(
+      db as unknown as DatabaseAdapter,
+      stripe() as unknown as Stripe,
+      topUpSession(),
+    );
+
+    const grant = (db.execute.mock.calls as unknown as Array<[string, unknown[]]>).find(([sql]) =>
+      sql.includes('add_credits_microusd'),
+    );
+    expect(grant?.[1].slice(0, 3)).toEqual(['user_123', 'credits_october', 5_000_000]);
   });
 
   it('records where a pack was bought so local law can set when it expires', async () => {

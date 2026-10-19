@@ -369,34 +369,23 @@ export async function grantCreditTopUp(
   const transactionDescription = creditTopUpDescription(grant.receiptId);
 
   try {
-    const subscriptions = await db.query<{
-      id: string;
-      current_period_start: string;
-      current_period_end: string;
-    }>(
-      'select id, current_period_start, current_period_end from subscriptions where user_id = $1 limit 1',
-      [userId],
-    );
-    const subscription = subscriptions[0];
-
-    if (!subscription) {
-      logger.error({ userId }, 'No subscription found for credit top-up user');
-      throw new Error('No subscription found for user');
-    }
-
-    const creditAccounts = await db.query<{ id: string }>(
-      `select id from token_credits
-       where user_id = $1 and subscription_id = $2
-         and period_start = $3 and period_end = $4
+    // The open period is the one the balance and every gate read. A yearly plan
+    // is ledgered in monthly periods, so matching the subscription's own period
+    // bounds never found it, and the paid pack was never credited.
+    const creditAccounts = await db.query<{ id: string; subscription_id: string | null }>(
+      `select id, subscription_id from token_credits
+       where user_id = $1 and period_end > now()
+       order by period_end desc
        limit 1`,
-      [userId, subscription.id, subscription.current_period_start, subscription.current_period_end],
+      [userId],
     );
     const creditAccount = creditAccounts[0];
 
     if (!creditAccount) {
-      logger.error({ userId, subscriptionId: subscription.id }, 'No credit account found for user');
-      throw new Error('No credit account found for user');
+      logger.error({ userId }, 'No open credit period found for credit top-up user');
+      throw new Error('No open credit period found for user');
     }
+    const subscription = { id: creditAccount.subscription_id };
 
     // token_credits has no remaining-balance column, so it is the difference of
     // the two that exist, read in the unit the ledger settles in.
