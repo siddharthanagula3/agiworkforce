@@ -5,7 +5,7 @@ import { z } from 'zod';
 import type { SlackAppCredentials } from './slack-config';
 
 const SLACK_API_ORIGIN = 'https://slack.com';
-const SLACK_REQUEST_TIMEOUT_MS = 10_000;
+export const SLACK_REQUEST_TIMEOUT_MS = 10_000;
 const SLACK_METHOD_RE = /^[a-z]+(?:\.[a-zA-Z]+)+$/;
 const MAX_RATE_LIMIT_WAIT_SECONDS = 10;
 

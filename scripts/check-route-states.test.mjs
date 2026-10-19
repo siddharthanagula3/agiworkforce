@@ -69,6 +69,63 @@ test('the sign-in progress block counts as a loading state and an unknown compon
   assert.ok(missingStates("<AuthFrame label='x' />;").includes('loading'));
 });
 
+test('a list mapped from an imported constant owes no empty state', () => {
+  const form = `'use client';
+import { APPLICATION_KINDS } from './kinds';
+export function ApplyForm() {
+  const submit = () => fetch('/api/apply', { method: 'POST' });
+  return <select>{APPLICATION_KINDS.map((kind) => <option key={kind}>{kind}</option>)}</select>;
+}
+`;
+  assert.ok(!missingStates(form).includes('empty'));
+});
+
+test('rows from the response still owe an empty state beside an imported constant list', () => {
+  const route = `'use client';
+import { APPLICATION_KINDS } from './kinds';
+export function Applications() {
+  const [rows, setRows] = useState([]);
+  useEffect(() => { fetch('/api/applications').then((r) => r.json()).then(setRows); }, []);
+  return <>
+    {APPLICATION_KINDS.map((kind) => <h2 key={kind}>{kind}</h2>)}
+    {rows.map((row) => <p key={row.id}>{row.name}</p>)}
+  </>;
+}
+`;
+  assert.ok(missingStates(route).includes('empty'));
+});
+
+test('a constant-named list the file builds itself still owes an empty state', () => {
+  const route = `'use client';
+export function Applications({ data }) {
+  const ROWS = data.items;
+  return <ul>{ROWS.map((row) => <li key={row.id}>{row.name}</li>)}</ul>;
+}
+`;
+  assert.ok(missingStates(route).includes('empty'));
+});
+
+test('a failed status on the state object counts as an error state', () => {
+  assert.ok(
+    !missingStates("if (state.status === 'failed') return <p>{state.reason}</p>;").includes(
+      'error',
+    ),
+  );
+  assert.ok(!missingStates("if (state.status === 'error') return <Retry />;").includes('error'));
+});
+
+test('a status union that never renders its failure is still reported', () => {
+  const route = `'use client';
+export function Preview() {
+  const [state, setState] = useState({ status: 'loading' });
+  useEffect(() => { fetch('/x').then(() => setState({ status: 'ready' })); }, []);
+  if (state.status === 'loading') return <Spinner />;
+  return <div />;
+}
+`;
+  assert.ok(missingStates(route).includes('error'));
+});
+
 test('a server component is out of scope even when it fetches', () => {
   assert.equal(fetchesData(BARE_ROUTE.replace("'use client';\n", '')), false);
   assert.deepEqual(

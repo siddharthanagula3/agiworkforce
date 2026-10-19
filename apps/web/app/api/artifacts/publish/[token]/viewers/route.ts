@@ -1,7 +1,10 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  ManagedCloudPublishedArtifactViewerRequestSchema,
+  type ManagedCloudPublishedArtifactViewersResponse,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -9,7 +12,6 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { PUBLISHED_TOKEN_REGEX } from '@/lib/services/published-artifact-service';
 import {
-  ViewerEmailSchema,
   ViewerLimitError,
   addSiteViewer,
   listSiteViewers,
@@ -19,8 +21,6 @@ import {
 export const runtime = 'nodejs';
 
 type RouteContext = { params: Promise<{ token: string }> };
-
-const BodySchema = z.object({ email: ViewerEmailSchema });
 
 async function readToken(context: RouteContext): Promise<string> {
   const { token } = await context.params;
@@ -36,7 +36,7 @@ async function readEmail(request: NextRequest): Promise<string> {
   } catch {
     throw createError.validation('Request body must be JSON');
   }
-  const parsed = BodySchema.safeParse(rawBody);
+  const parsed = ManagedCloudPublishedArtifactViewerRequestSchema.safeParse(rawBody);
   if (!parsed.success) throw createError.validation('Enter a valid email address');
   return parsed.data.email;
 }
@@ -48,7 +48,7 @@ async function handleList(request: NextRequest, context: RouteContext): Promise<
   const { db, userId } = await getUserScopedDb(request);
   const viewers = await listSiteViewers(db, { userId, token });
   if (!viewers) throw createError.notFound('Published artifact not found');
-  return NextResponse.json({ viewers });
+  return NextResponse.json({ viewers } satisfies ManagedCloudPublishedArtifactViewersResponse);
 }
 
 async function handleAdd(request: NextRequest, context: RouteContext): Promise<Response> {
@@ -62,7 +62,7 @@ async function handleAdd(request: NextRequest, context: RouteContext): Promise<R
   try {
     const viewers = await addSiteViewer(db, { userId, token, email });
     if (!viewers) throw createError.notFound('Published artifact not found');
-    return NextResponse.json({ viewers });
+    return NextResponse.json({ viewers } satisfies ManagedCloudPublishedArtifactViewersResponse);
   } catch (error) {
     if (error instanceof ViewerLimitError) throw createError.conflict(error.message);
     throw error;
@@ -79,7 +79,7 @@ async function handleRemove(request: NextRequest, context: RouteContext): Promis
   const { db, userId } = await getUserScopedDb(request);
   const viewers = await removeSiteViewer(db, { userId, token, email });
   if (!viewers) throw createError.notFound('Published artifact not found');
-  return NextResponse.json({ viewers });
+  return NextResponse.json({ viewers } satisfies ManagedCloudPublishedArtifactViewersResponse);
 }
 
 export const GET = withErrorHandler(handleList);

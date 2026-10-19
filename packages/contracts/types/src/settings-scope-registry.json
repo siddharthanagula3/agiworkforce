@@ -45,6 +45,10 @@
     "organization_plugin_group_settings": {
       "scope": "workspace",
       "why": "a group's plugin install preference narrows the tenant's workspace-wide one for that group's members, most permissive group first"
+    },
+    "slack_channel_policies": {
+      "scope": "surface",
+      "why": "how the Slack app behaves in one channel (off, answer only, or start tasks), set by the person who installed it and read for every message in that channel"
     }
   },
   "unscopedTables": []

@@ -4338,7 +4338,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         if (!historyMessage) continue;
         if (historyMessage.role === 'assistant') {
           var assistantHistoryEl = addMessage('assistant', '');
-          assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
+          renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
         } else if (historyMessage.role === 'user') {
@@ -4636,6 +4636,10 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/\\n/g, '<br>');
+    }
+
+    function renderAssistantInto(el, text) {
+      el.innerHTML = renderAssistant(text);
     }
 
     // Path references inside rendered output are spans, not anchors, because
@@ -6420,7 +6424,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         // Render markdown incrementally so there is no raw-markdown → HTML
         // flash at stream completion. renderAssistant falls back to escaped
         // plain text if window.agiRender is not yet loaded.
-        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
         bindCodeBlockActions(currentAssistantEl);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
@@ -6431,7 +6435,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
-          currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          renderAssistantInto(currentAssistantEl, accumulatedContent);
           prependAuthor(
             currentAssistantEl,
             msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
@@ -6704,7 +6708,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       else if (msg.type === 'sideQuestionDelta') {
         if (msg.payload.requestId === sideQuestionRequestId && sideQuestionAnswerEl) {
           sideQuestionContent += msg.payload.delta;
-          sideQuestionAnswerEl.innerHTML = renderAssistant(sideQuestionContent);
+          renderAssistantInto(sideQuestionAnswerEl, sideQuestionContent);
         }
       }
 
@@ -6714,7 +6718,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             sideQuestionAnswerEl.classList.add('is-error');
             sideQuestionAnswerEl.textContent = msg.payload.error;
           } else {
-            sideQuestionAnswerEl.innerHTML = renderAssistant(msg.payload.answer || sideQuestionContent);
+            renderAssistantInto(sideQuestionAnswerEl, msg.payload.answer || sideQuestionContent);
           }
         }
       }
@@ -12189,7 +12193,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         if (!historyMessage) continue;
         if (historyMessage.role === 'assistant') {
           var assistantHistoryEl = addMessage('assistant', '');
-          assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
+          renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
         } else if (historyMessage.role === 'user') {
@@ -12487,6 +12491,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/\\n/g, '<br>');
+    }
+
+    function renderAssistantInto(el, text) {
+      el.innerHTML = renderAssistant(text);
     }
 
     // Path references inside rendered output are spans, not anchors, because
@@ -14271,7 +14279,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         // Render markdown incrementally so there is no raw-markdown → HTML
         // flash at stream completion. renderAssistant falls back to escaped
         // plain text if window.agiRender is not yet loaded.
-        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
         bindCodeBlockActions(currentAssistantEl);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
@@ -14282,7 +14290,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
-          currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          renderAssistantInto(currentAssistantEl, accumulatedContent);
           prependAuthor(
             currentAssistantEl,
             msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
@@ -14555,7 +14563,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       else if (msg.type === 'sideQuestionDelta') {
         if (msg.payload.requestId === sideQuestionRequestId && sideQuestionAnswerEl) {
           sideQuestionContent += msg.payload.delta;
-          sideQuestionAnswerEl.innerHTML = renderAssistant(sideQuestionContent);
+          renderAssistantInto(sideQuestionAnswerEl, sideQuestionContent);
         }
       }
 
@@ -14565,7 +14573,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             sideQuestionAnswerEl.classList.add('is-error');
             sideQuestionAnswerEl.textContent = msg.payload.error;
           } else {
-            sideQuestionAnswerEl.innerHTML = renderAssistant(msg.payload.answer || sideQuestionContent);
+            renderAssistantInto(sideQuestionAnswerEl, msg.payload.answer || sideQuestionContent);
           }
         }
       }
@@ -20040,7 +20048,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         if (!historyMessage) continue;
         if (historyMessage.role === 'assistant') {
           var assistantHistoryEl = addMessage('assistant', '');
-          assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
+          renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
         } else if (historyMessage.role === 'user') {
@@ -20338,6 +20346,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/\\n/g, '<br>');
+    }
+
+    function renderAssistantInto(el, text) {
+      el.innerHTML = renderAssistant(text);
     }
 
     // Path references inside rendered output are spans, not anchors, because
@@ -22122,7 +22134,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         // Render markdown incrementally so there is no raw-markdown → HTML
         // flash at stream completion. renderAssistant falls back to escaped
         // plain text if window.agiRender is not yet loaded.
-        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
         bindCodeBlockActions(currentAssistantEl);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
@@ -22133,7 +22145,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
-          currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          renderAssistantInto(currentAssistantEl, accumulatedContent);
           prependAuthor(
             currentAssistantEl,
             msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
@@ -22406,7 +22418,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       else if (msg.type === 'sideQuestionDelta') {
         if (msg.payload.requestId === sideQuestionRequestId && sideQuestionAnswerEl) {
           sideQuestionContent += msg.payload.delta;
-          sideQuestionAnswerEl.innerHTML = renderAssistant(sideQuestionContent);
+          renderAssistantInto(sideQuestionAnswerEl, sideQuestionContent);
         }
       }
 
@@ -22416,7 +22428,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             sideQuestionAnswerEl.classList.add('is-error');
             sideQuestionAnswerEl.textContent = msg.payload.error;
           } else {
-            sideQuestionAnswerEl.innerHTML = renderAssistant(msg.payload.answer || sideQuestionContent);
+            renderAssistantInto(sideQuestionAnswerEl, msg.payload.answer || sideQuestionContent);
           }
         }
       }

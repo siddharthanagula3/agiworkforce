@@ -9,7 +9,7 @@ import {
   studySegments,
   type ShortAnswerQuestion,
 } from './study-set';
-import { flashcardsPrintHtml, quizPrintHtml } from './study-print';
+import { flashcardsPrintHtml, printHtml, quizPrintHtml } from './study-print';
 
 const QUIZ = {
   title: 'Cells',
@@ -165,6 +165,16 @@ describe('study sets', () => {
     expect(quizHtml).toContain('B. Mitochondrion');
     const cardsHtml = flashcardsPrintHtml(parseFlashcards(JSON.stringify(CARDS))!);
     expect(cardsHtml).toContain('<td>Osmosis</td>');
+  });
+
+  it('prints from a frame that may open the print dialog but never run script', () => {
+    printHtml(quizPrintHtml(parseQuiz(JSON.stringify(QUIZ))!));
+    const frame = document.body.querySelector('iframe');
+    expect(frame).not.toBeNull();
+    const sandbox = frame!.getAttribute('sandbox')!.split(' ');
+    expect(sandbox).toEqual(expect.arrayContaining(['allow-same-origin', 'allow-modals']));
+    expect(sandbox).not.toContain('allow-scripts');
+    frame!.remove();
   });
 
   it('asks for encouragement onward when nothing was missed', () => {

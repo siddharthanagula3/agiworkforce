@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { Check, MessageSquare, RotateCcw, Send, Sparkles, Trash2, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { MAX_ARTIFACT_COMMENT_CHARS } from '@agiworkforce/cloud-contracts';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -15,7 +16,6 @@ import {
 import { buildCommentsEditRequest, describeAnchor } from './comment-request';
 
 export const COMMENTS_LABEL = 'Comments';
-const MAX_COMMENT_CHARS = 4_000;
 
 function AnchorQuote({
   anchor,
@@ -80,7 +80,7 @@ function CommentComposer({
     <form onSubmit={(event) => void submit(event)} className="flex flex-col gap-1.5">
       <textarea
         value={body}
-        onChange={(event) => setBody(event.target.value.slice(0, MAX_COMMENT_CHARS))}
+        onChange={(event) => setBody(event.target.value.slice(0, MAX_ARTIFACT_COMMENT_CHARS))}
         onKeyDown={(event) => {
           if (event.key === 'Enter' && (event.metaKey || event.ctrlKey)) void submit(event);
           if (event.key === 'Escape' && onCancel) {

@@ -295,14 +295,14 @@ the account rows and tokens they had stored.
 
 ### 1.4 Chrome extension, computer use
 
-| Fact                                                                                                      | Citation                                                                         |
-| --------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| Ask-before-acting defaults ON; autopilot is an explicit opt-out (only a stored `false` disables the gate) | `apps/extension/src/background.ts`, `askBeforeActing`                            |
-| Unanswered approval denies after 30 s (fail-closed)                                                       | `background.ts`, the approval timeout                                            |
-| Navigation destinations gated by the user's `agi_site_allowlist`                                          | `cdpDriver.ts`; `background.ts`                                                  |
-| Text egress (DOM summaries, field readbacks) is redacted by `cdpDriver`                                   | `agentLoop.ts`                                                                   |
-| **Screenshots are NOT and cannot be redacted** and reach the cloud gateway                                | `agentLoop.ts` attaches the captured PNG to the turn as an `image_url` unchanged |
-| Computer use requires Managed Cloud auth and posts from the extension to the cloud gateway                | `background.ts`; `cloudAgentClient.ts`                                           |
+| Fact                                                                                                                                                      | Citation                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Auto is the default: it acts on the sites a task was given and asks before crucial actions; a stored `true` is Ask first, a stored `false` is Full access | `apps/extension/src/features/computer-use/askBeforeActing.ts`, `readBrowserPermissionMode`; `background.ts` |
+| Unanswered approval denies after 30 s (fail-closed)                                                                                                       | `background.ts`, the approval timeout                                                                       |
+| Navigation destinations gated by the user's `agi_site_allowlist`                                                                                          | `cdpDriver.ts`; `background.ts`                                                                             |
+| Text egress (DOM summaries, field readbacks) is redacted by `cdpDriver`                                                                                   | `agentLoop.ts`                                                                                              |
+| **Screenshots are NOT and cannot be redacted** and reach the cloud gateway                                                                                | `agentLoop.ts` attaches the captured PNG to the turn as an `image_url` unchanged                            |
+| Computer use requires Managed Cloud auth and posts from the extension to the cloud gateway                                                                | `background.ts`; `cloudAgentClient.ts`                                                                      |
 
 ---
 

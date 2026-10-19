@@ -1,9 +1,12 @@
 {
   "_description": "Data-fetching routes that render no loading, empty or error state. Measured at a committed revision, never against a dirty tree. These counts only shrink: a new route must ship all three states, and closing an old gap lowers the ceiling for everyone after you.",
   "_measuredAt": "6b195380d0",
+  "_raised": {
+    "empty": "11 to 12 for apps/web/features/agents/components/AgentEditorPage.tsx, approved by the guard lead on 2026-10-19: it maps the fetched skills and connectors into choice lists, and the empty state for each list renders in the child picker in AgentConfigForm.tsx (list.options.length === 0, \"No connectors are connected.\", \"No skills are turned on.\"), which this per-file scan cannot see."
+  },
   "maxMissing": {
-    "loading": 22,
-    "empty": 11,
+    "loading": 21,
+    "empty": 12,
     "error": 4
   }
 }

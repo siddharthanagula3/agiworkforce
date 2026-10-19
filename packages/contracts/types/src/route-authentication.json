@@ -96,6 +96,7 @@
     "apps/web/app/api/webhooks/connectors/[triggerId]/route.ts": "the connector trigger signing secret is the principal; the workspace comes from the trigger row",
     "apps/web/app/api/webhooks/gmail/route.ts": "a Google Pub/Sub push identity token is the principal",
     "apps/web/app/api/webhooks/google-calendar/route.ts": "the calendar channel token is the principal; the workspace comes from the trigger row",
+    "apps/web/app/api/webhooks/slack-interactions/route.ts": "the Slack request signature is the principal; an approval only lands when the clicking Slack user is linked to the account that asked",
     "apps/web/app/api/webhooks/slack/route.ts": "the Slack request signature is the principal; the workspace comes from the trigger row"
   },
   "sessionLifecycle": {

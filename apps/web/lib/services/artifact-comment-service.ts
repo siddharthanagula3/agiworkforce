@@ -1,64 +1,13 @@
 import 'server-only';
 
-import { z } from 'zod';
+import {
+  ArtifactCommentAnchorSchema,
+  type ArtifactComment,
+  type ArtifactCommentAnchor,
+} from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-export const MAX_COMMENT_CHARS = 4_000;
 export const MAX_COMMENTS_PER_ARTIFACT = 500;
-const MAX_QUOTE_CHARS = 2_000;
-const MAX_CONTEXT_CHARS = 400;
-
-export const ArtifactCommentAnchorSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('text'),
-    quote: z.string().min(1).max(MAX_QUOTE_CHARS),
-    prefix: z.string().max(MAX_CONTEXT_CHARS).default(''),
-    suffix: z.string().max(MAX_CONTEXT_CHARS).default(''),
-    slide: z.number().int().min(0).max(999).optional(),
-  }),
-  z.object({
-    kind: z.literal('slide'),
-    slide: z.number().int().min(0).max(999),
-  }),
-  z.object({
-    kind: z.literal('element'),
-    selector: z.string().min(1).max(1_000),
-    text: z.string().max(MAX_QUOTE_CHARS).default(''),
-    x: z.number().min(0).max(100),
-    y: z.number().min(0).max(100),
-  }),
-  z.object({ kind: z.literal('artifact') }),
-]);
-
-export type ArtifactCommentAnchor = z.infer<typeof ArtifactCommentAnchorSchema>;
-
-export const CreateArtifactCommentSchema = z.object({
-  body: z.string().trim().min(1).max(MAX_COMMENT_CHARS),
-  anchor: ArtifactCommentAnchorSchema.default({ kind: 'artifact' }),
-  parentId: z.string().uuid().nullable().optional(),
-  author: z.enum(['user', 'assistant']).default('user'),
-});
-
-export const UpdateArtifactCommentSchema = z
-  .object({
-    body: z.string().trim().min(1).max(MAX_COMMENT_CHARS).optional(),
-    resolved: z.boolean().optional(),
-  })
-  .refine((value) => value.body !== undefined || value.resolved !== undefined, {
-    message: 'Nothing to change',
-  });
-
-export interface ArtifactComment {
-  id: string;
-  artifactId: string;
-  parentId: string | null;
-  anchor: ArtifactCommentAnchor;
-  body: string;
-  author: 'user' | 'assistant';
-  resolvedAt: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface CommentRow {
   id: string;

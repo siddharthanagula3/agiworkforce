@@ -8,7 +8,7 @@ const readAgentFileTexts = vi.fn();
 const readAgentMonthSpendMicrousd = vi.fn();
 
 vi.mock('@/lib/services/custom-agent-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/custom-agent-service')>()),
+  ...(await importOriginal<CustomAgentServiceModule>()),
   readAgentRow: (...args: unknown[]) => readAgentRow(...args),
   countAgentTurnsToday: (...args: unknown[]) => countAgentTurnsToday(...args),
   readAgentFileTexts: (...args: unknown[]) => readAgentFileTexts(...args),
@@ -27,6 +27,8 @@ import {
   loadAgentTurnConfig,
 } from '../agent-turn-config';
 import { AGENT_ID, OWNER, TEAMMATE, agentConfig, agentRow } from './agent-fixtures';
+
+type CustomAgentServiceModule = typeof import('@/lib/services/custom-agent-service');
 
 const db = {} as DatabaseAdapter;
 

@@ -10,6 +10,10 @@ async function loadTokenModule() {
   return import('./token');
 }
 
+async function loadSessionFetchModule() {
+  return import('./session-fetch');
+}
+
 describe('getIdentityToken', () => {
   beforeEach(() => {
     vi.resetModules();
@@ -103,7 +107,7 @@ describe('fetchRefreshingSession', () => {
       .mockResolvedValueOnce(new Response('{}', { status: 401 }))
       .mockResolvedValueOnce(new Response('{"ok":true}', { status: 200 }));
     vi.stubGlobal('fetch', fetchMock);
-    const { fetchRefreshingSession } = await loadTokenModule();
+    const { fetchRefreshingSession } = await loadSessionFetchModule();
 
     const response = await fetchRefreshingSession('/api/projects');
 
@@ -116,7 +120,7 @@ describe('fetchRefreshingSession', () => {
     setClient({ loaded: true, session: null });
     const fetchMock = vi.fn().mockResolvedValue(new Response('{}', { status: 401 }));
     vi.stubGlobal('fetch', fetchMock);
-    const { fetchRefreshingSession } = await loadTokenModule();
+    const { fetchRefreshingSession } = await loadSessionFetchModule();
 
     const response = await fetchRefreshingSession('/api/projects');
 

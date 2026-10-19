@@ -4299,7 +4299,7 @@ export function getWebviewContent(
         if (!historyMessage) continue;
         if (historyMessage.role === 'assistant') {
           var assistantHistoryEl = addMessage('assistant', '');
-          assistantHistoryEl.innerHTML = renderAssistant(historyMessage.text || '');
+          renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
         } else if (historyMessage.role === 'user') {
@@ -4597,6 +4597,10 @@ export function getWebviewContent(
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/\\n/g, '<br>');
+    }
+
+    function renderAssistantInto(el, text) {
+      el.innerHTML = renderAssistant(text);
     }
 
     // Path references inside rendered output are spans, not anchors, because
@@ -6381,7 +6385,7 @@ export function getWebviewContent(
         // Render markdown incrementally so there is no raw-markdown → HTML
         // flash at stream completion. renderAssistant falls back to escaped
         // plain text if window.agiRender is not yet loaded.
-        currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+        renderAssistantInto(currentAssistantEl, accumulatedContent);
         bindCodeBlockActions(currentAssistantEl);
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
@@ -6392,7 +6396,7 @@ export function getWebviewContent(
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
-          currentAssistantEl.innerHTML = renderAssistant(accumulatedContent);
+          renderAssistantInto(currentAssistantEl, accumulatedContent);
           prependAuthor(
             currentAssistantEl,
             msg.payload && msg.payload.modelLabel ? 'AGI (' + msg.payload.modelLabel + ') replied:' : 'AGI replied:'
@@ -6665,7 +6669,7 @@ export function getWebviewContent(
       else if (msg.type === 'sideQuestionDelta') {
         if (msg.payload.requestId === sideQuestionRequestId && sideQuestionAnswerEl) {
           sideQuestionContent += msg.payload.delta;
-          sideQuestionAnswerEl.innerHTML = renderAssistant(sideQuestionContent);
+          renderAssistantInto(sideQuestionAnswerEl, sideQuestionContent);
         }
       }
 
@@ -6675,7 +6679,7 @@ export function getWebviewContent(
             sideQuestionAnswerEl.classList.add('is-error');
             sideQuestionAnswerEl.textContent = msg.payload.error;
           } else {
-            sideQuestionAnswerEl.innerHTML = renderAssistant(msg.payload.answer || sideQuestionContent);
+            renderAssistantInto(sideQuestionAnswerEl, msg.payload.answer || sideQuestionContent);
           }
         }
       }

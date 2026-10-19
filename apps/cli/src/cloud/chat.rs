@@ -553,7 +553,7 @@ mod tests {
                 "id": "65df4496-5071-4d69-a0a9-c1bb380a4baf",
                 "organization_id": null,
                 "title": "Started on the web",
-                "model": "claude-haiku-5-5",
+                "model": "some-model",
                 "project_id": null,
                 "archived": false,
                 "created_at": "2026-10-19T08:05:22.133Z",

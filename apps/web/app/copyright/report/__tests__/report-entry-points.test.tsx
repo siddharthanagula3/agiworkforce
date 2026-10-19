@@ -43,6 +43,8 @@ vi.mock('@/lib/services/published-artifact-service', () => ({
     content: '# hello',
     updatedAt: '2026-02-02T00:00:00.000Z',
   }),
+  isInviteOnlyPublication: async () => false,
+  rowToPublishedArtifact: vi.fn(),
 }));
 
 import SharedSessionPage from '../../../share/[token]/page';

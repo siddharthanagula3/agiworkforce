@@ -1,49 +1,13 @@
 import 'server-only';
 
-import { z } from 'zod';
+import {
+  STUDIO_LIBRARY_KINDS,
+  type StudioLibraryItemCreateRequest,
+  type StudioLibraryKind,
+} from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
-export const STUDIO_LIBRARY_KINDS = ['document_template', 'deck_template', 'brand'] as const;
-export type StudioLibraryKind = (typeof STUDIO_LIBRARY_KINDS)[number];
-
 export const MAX_LIBRARY_ITEMS_PER_KIND = 100;
-const MAX_TEMPLATE_CHARS = 200_000;
-const HEX = /^#[0-9a-f]{6}$/i;
-const FONT = z.enum(['sans', 'serif', 'mono']);
-
-const TemplatePayloadSchema = z.object({
-  title: z.string().trim().min(1).max(200),
-  content: z.string().min(1).max(MAX_TEMPLATE_CHARS),
-});
-
-const BrandPayloadSchema = z.object({
-  background: z.string().regex(HEX),
-  text: z.string().regex(HEX),
-  accent: z.string().regex(HEX),
-  headingFont: FONT,
-  bodyFont: FONT,
-  voice: z.string().trim().max(2_000).default(''),
-});
-
-export const CreateStudioLibraryItemSchema = z.discriminatedUnion('kind', [
-  z.object({
-    kind: z.literal('document_template'),
-    name: z.string().trim().min(1).max(120),
-    payload: TemplatePayloadSchema,
-  }),
-  z.object({
-    kind: z.literal('deck_template'),
-    name: z.string().trim().min(1).max(120),
-    payload: TemplatePayloadSchema,
-  }),
-  z.object({
-    kind: z.literal('brand'),
-    name: z.string().trim().min(1).max(120),
-    payload: BrandPayloadSchema,
-  }),
-]);
-
-export type CreateStudioLibraryItem = z.infer<typeof CreateStudioLibraryItemSchema>;
 
 export interface StudioLibraryItem {
   id: string;
@@ -100,7 +64,7 @@ export async function listStudioLibraryItems(
 
 export async function createStudioLibraryItem(
   db: DatabaseAdapter,
-  input: { userId: string } & CreateStudioLibraryItem,
+  input: { userId: string } & StudioLibraryItemCreateRequest,
 ): Promise<StudioLibraryItem | null> {
   const [count] = await db.query<{ total: number | string }>(
     `select count(*) as total from public.studio_library_items where user_id = $1 and kind = $2`,

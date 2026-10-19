@@ -123,6 +123,33 @@ export function managedCloudPublishedArtifactPath(token: string): string {
   return `${MANAGED_CLOUD_PUBLISHED_ARTIFACTS_PATH}/${encodeURIComponent(token)}`;
 }
 
+export function managedCloudPublishedArtifactViewersPath(token: string): string {
+  return `${managedCloudPublishedArtifactPath(token)}/viewers`;
+}
+
+export const ManagedCloudPublishedArtifactViewerEmailSchema = z
+  .string()
+  .trim()
+  .toLowerCase()
+  .max(320)
+  .email();
+
+export const ManagedCloudPublishedArtifactViewerRequestSchema = z.object({
+  email: ManagedCloudPublishedArtifactViewerEmailSchema,
+});
+export type ManagedCloudPublishedArtifactViewerRequest = z.input<
+  typeof ManagedCloudPublishedArtifactViewerRequestSchema
+>;
+
+export interface ManagedCloudPublishedArtifactViewer {
+  email: string;
+  invitedAt: string;
+}
+
+export interface ManagedCloudPublishedArtifactViewersResponse {
+  viewers: ManagedCloudPublishedArtifactViewer[];
+}
+
 export function managedCloudPublishedArtifactVersionsPath(token: string): string {
   return `${managedCloudPublishedArtifactPath(token)}/versions`;
 }

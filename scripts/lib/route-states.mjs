@@ -47,7 +47,7 @@ const STATE_RULES = [
       /\berror\s*(?:&&|\?)/,
       /\berrorMessage\b/,
       /\bloadError\b/,
-      /\b(?:kind|state)\s*===\s*'(?:error|failed)'/,
+      /\b(?:kind|state)(?:\.status)?\s*===\s*'(?:error|failed)'/,
     ],
     advice:
       'render a recovery affordance when the request fails; a swallowed rejection leaves the route on its loading state forever',
@@ -77,11 +77,36 @@ export function fetchesData(source) {
 // Only a route that renders rows can come back with none of them; a form, a
 // single record or a one-shot action has no empty answer to give.
 const RENDERS_ROWS =
-  /\.map\(\s*(?:(?:\([^()]*\)|[\w$]+)(?:\s*:\s*[^=]+?)?\s*=>|render[A-Z][\w$]*\s*[,)])/;
+  /\.map\(\s*(?:(?:\([^()]*\)|[\w$]+)(?:\s*:\s*[^=]+?)?\s*=>|render[A-Z][\w$]*\s*[,)])/g;
+
+const CONSTANT_NAME = /^[A-Z][A-Z0-9_]*$/;
+const RECEIVER_BEFORE_MAP = /(?<![\w$.\])?])([A-Za-z_$][\w$]*)\s*$/;
+
+function importedNames(code) {
+  const names = new Set();
+  for (const match of code.matchAll(
+    /^\s*import\s+(?:type\s+)?([^;]*?)\s+from\s+['"][^'"]+['"]/gm,
+  )) {
+    for (const name of match[1].matchAll(/[A-Za-z_$][\w$]*/g)) names.add(name[0]);
+  }
+  return names;
+}
+
+// A list mapped from a constant another module exports is fixed at build time,
+// so it cannot come back empty; only rows the request returned owe an empty state.
+function rendersRows(code) {
+  const imported = importedNames(code);
+  for (const match of code.matchAll(RENDERS_ROWS)) {
+    const receiver = RECEIVER_BEFORE_MAP.exec(code.slice(0, match.index))?.[1];
+    if (receiver && CONSTANT_NAME.test(receiver) && imported.has(receiver)) continue;
+    return true;
+  }
+  return false;
+}
 
 export function missingStates(source) {
   const code = stripComments(source);
-  return STATE_RULES.filter((rule) => rule.id !== 'empty' || RENDERS_ROWS.test(code))
+  return STATE_RULES.filter((rule) => rule.id !== 'empty' || rendersRows(code))
     .filter((rule) => !rule.signals.some((signal) => signal.test(code)))
     .map((rule) => rule.id);
 }

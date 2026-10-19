@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { z } from 'zod';
+import type { ManagedCloudPublishedArtifactViewer } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   PUBLISHED_TOKEN_REGEX,
@@ -11,12 +11,7 @@ import {
 
 export const MAX_VIEWERS_PER_SITE = 100;
 
-export const ViewerEmailSchema = z.string().trim().toLowerCase().max(320).email();
-
-export interface PublishedSiteViewer {
-  email: string;
-  invitedAt: string;
-}
+export type PublishedSiteViewer = ManagedCloudPublishedArtifactViewer;
 
 export class ViewerLimitError extends Error {
   constructor() {

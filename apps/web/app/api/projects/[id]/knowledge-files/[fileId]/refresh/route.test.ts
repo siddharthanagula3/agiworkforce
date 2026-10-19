@@ -20,7 +20,9 @@ vi.mock('@/lib/connectors/connector-capability', () => ({
   assertConnectorsReleased: () => undefined,
 }));
 vi.mock('@/lib/connectors/google-drive-files', () => ({
+  GOOGLE_DRIVE_CONNECTOR_ID: 'google-drive',
   GoogleDriveFileError: mocks.GoogleDriveFileError,
+  downloadGoogleDriveFile: vi.fn(),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },

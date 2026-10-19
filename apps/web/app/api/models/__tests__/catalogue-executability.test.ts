@@ -2,6 +2,8 @@ import { NextRequest } from 'next/server';
 import { listCanonicalModels, listManagedRoutesForModel } from '@agiworkforce/types';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type ModelPickerModule = typeof import('@agiworkforce/unified-chat/model-picker');
+
 const mockConfiguredProviders = vi.fn();
 const mockAvailability = vi.fn();
 const mockClerkUser = vi.fn();
@@ -29,7 +31,7 @@ vi.mock('@/lib/server/free-pools', () => ({ freePoolDecisions: () => [] }));
 
 const mockAnnouncedModelIds = new Set<string>();
 vi.mock('@agiworkforce/unified-chat/model-picker', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/unified-chat/model-picker')>();
+  const actual = await importOriginal<ModelPickerModule>();
   return {
     ...actual,
     listPickerChatModels: (...args: Parameters<typeof actual.listPickerChatModels>) =>

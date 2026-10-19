@@ -1,16 +1,18 @@
+import {
+  managedCloudProjectKnowledgeOriginsPath,
+  managedCloudProjectKnowledgeRefreshPath,
+  type ManagedCloudProjectKnowledgeOriginsResponse,
+  type ManagedCloudProjectKnowledgeRefreshResponse,
+} from '@agiworkforce/cloud-contracts';
 import { addCsrfHeaders } from '@/lib/client/csrf';
-
-function sourcesPath(projectId: string): string {
-  return `/api/projects/${encodeURIComponent(projectId)}/knowledge-files`;
-}
 
 export async function listRefreshableSources(projectId: string): Promise<ReadonlySet<string>> {
   try {
-    const response = await fetch(`${sourcesPath(projectId)}/origins`, { credentials: 'include' });
+    const response = await fetch(managedCloudProjectKnowledgeOriginsPath(projectId), {
+      credentials: 'include',
+    });
     if (!response.ok) return new Set();
-    const body = (await response.json()) as {
-      origins?: Array<{ fileId: string; refreshable: boolean }>;
-    };
+    const body = (await response.json()) as Partial<ManagedCloudProjectKnowledgeOriginsResponse>;
     return new Set(
       (body.origins ?? []).filter((origin) => origin.refreshable).map((origin) => origin.fileId),
     );
@@ -22,8 +24,8 @@ export async function listRefreshableSources(projectId: string): Promise<Readonl
 export async function refreshProjectSource(
   projectId: string,
   fileId: string,
-): Promise<{ status: 'unchanged' | 'refreshed' }> {
-  const response = await fetch(`${sourcesPath(projectId)}/${encodeURIComponent(fileId)}/refresh`, {
+): Promise<{ status: ManagedCloudProjectKnowledgeRefreshResponse['status'] }> {
+  const response = await fetch(managedCloudProjectKnowledgeRefreshPath(projectId, fileId), {
     method: 'POST',
     credentials: 'include',
     headers: await addCsrfHeaders(),

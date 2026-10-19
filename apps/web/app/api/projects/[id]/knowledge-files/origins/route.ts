@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { ManagedCloudProjectKnowledgeOriginsResponse } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -30,7 +31,7 @@ async function handleList(request: NextRequest, context: RouteContext): Promise<
         and ref.user_id = $2`,
     [projectId, userId],
   );
-  return NextResponse.json({
+  const body: ManagedCloudProjectKnowledgeOriginsResponse = {
     origins: rows.map((row) => ({
       fileId: row.file_id,
       provider: row.provider,
@@ -41,7 +42,8 @@ async function handleList(request: NextRequest, context: RouteContext): Promise<
           ? row.last_seen_at.toISOString()
           : new Date(row.last_seen_at).toISOString(),
     })),
-  });
+  };
+  return NextResponse.json(body);
 }
 
 export const GET = withErrorHandler(handleList);

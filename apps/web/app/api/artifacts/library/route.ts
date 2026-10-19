@@ -1,15 +1,16 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import {
+  StudioLibraryItemCreateRequestSchema,
+  StudioLibraryKindSchema,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
-  CreateStudioLibraryItemSchema,
-  STUDIO_LIBRARY_KINDS,
   StudioLibraryLimitError,
   createStudioLibraryItem,
   listStudioLibraryItems,
@@ -17,12 +18,12 @@ import {
 
 export const runtime = 'nodejs';
 
-const KindSchema = z.enum(STUDIO_LIBRARY_KINDS).optional();
-
 async function handleList(request: NextRequest): Promise<Response> {
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
-  const kind = KindSchema.safeParse(new URL(request.url).searchParams.get('kind') ?? undefined);
+  const kind = StudioLibraryKindSchema.optional().safeParse(
+    new URL(request.url).searchParams.get('kind') ?? undefined,
+  );
   if (!kind.success) throw createError.validation('Unknown library kind');
   const { db, userId } = await getUserScopedDb(request);
   const items = await listStudioLibraryItems(db, {
@@ -43,7 +44,7 @@ async function handleCreate(request: NextRequest): Promise<Response> {
   } catch {
     throw createError.validation('Request body must be JSON');
   }
-  const parsed = CreateStudioLibraryItemSchema.safeParse(rawBody);
+  const parsed = StudioLibraryItemCreateRequestSchema.safeParse(rawBody);
   if (!parsed.success) throw createError.validation('Invalid library item', parsed.error.flatten());
   const { db, userId } = await getUserScopedDb(request);
   try {
