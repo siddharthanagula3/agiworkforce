@@ -146,7 +146,13 @@ export function projectsSharedWithMe(overview: ProjectSharingOverview): SharedWi
 }
 
 export interface SharedWithMeResources {
-  conversations: Array<{ id: string; title: string; ownerName: string; url: string }>;
+  conversations: Array<{
+    id: string;
+    token: string;
+    title: string;
+    ownerName: string;
+    url: string;
+  }>;
   artifacts: Array<{ id: string; title: string; kind: string; ownerName: string; url: string }>;
   connectors: Array<{ id: string; name: string; ownerName: string }>;
 }
@@ -164,6 +170,7 @@ export function sharedResourcesForMe(
   return {
     conversations: overview.sharedConversations.filter(notMine).map((entry) => ({
       id: entry.sharedSessionId,
+      token: entry.token,
       title: entry.title,
       ownerName: ownerName(entry.ownerUserId),
       url: `${base}/share/${encodeURIComponent(entry.token)}`,

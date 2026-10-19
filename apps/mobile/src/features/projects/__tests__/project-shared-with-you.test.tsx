@@ -16,12 +16,25 @@ jest.mock('@/lib/safeOpenURL', () => ({
   openUntrustedUrlInAppBrowser: jest.fn().mockResolvedValue(true),
 }));
 
+const mockCreateConversation = jest.fn();
+const mockLoadMessages = jest.fn().mockResolvedValue(undefined);
+const mockDeleteConversation = jest.fn().mockResolvedValue(undefined);
+jest.mock('@/stores/chatStore', () => ({
+  useChatStore: (selector: (state: Record<string, unknown>) => unknown) =>
+    selector({
+      createConversation: mockCreateConversation,
+      loadMessages: mockLoadMessages,
+      deleteConversation: mockDeleteConversation,
+    }),
+}));
+
 jest.mock('@/services/managedCloudProjects', () => ({
   managedCloudProjects: { getProject: jest.fn() },
 }));
 
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert } from 'react-native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 import { useRouter } from 'expo-router';
 import { api } from '@/services/api';
 import { managedCloudProjects } from '@/services/managedCloudProjects';
@@ -154,7 +167,13 @@ describe('projects shared with the member', () => {
     (api.get as jest.Mock).mockResolvedValue(overview());
     render(<SharedWithYouScreen />);
 
+    const alert = jest.spyOn(Alert, 'alert');
     fireEvent.press(await screen.findByLabelText('Launch retro, Shared by Dana'));
+    const buttons = (alert.mock.calls.at(-1)?.[2] ?? []) as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === 'Open')?.onPress?.();
     expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(
       expect.stringMatching(/\/share\/tok-chat$/),
     );
@@ -171,5 +190,64 @@ describe('projects shared with the member', () => {
     (api.get as jest.Mock).mockRejectedValue(new Error('offline'));
     render(<SharedWithYouScreen />);
     expect(await screen.findByTestId('shared-with-you-empty')).toBeTruthy();
+  });
+
+  it('continues a shared chat as a private copy in a new conversation', async () => {
+    (api.get as jest.Mock).mockImplementation(async (path: string) =>
+      path.startsWith('/api/share/')
+        ? {
+            title: 'Launch retro',
+            messages: [
+              { role: 'user', content: 'What went well?' },
+              { role: 'assistant', content: 'The beta.' },
+              { role: 'tool', content: 'ignored' },
+            ],
+          }
+        : overview(),
+    );
+    (api.post as jest.Mock).mockResolvedValue({ messages: [] });
+    mockCreateConversation.mockResolvedValue('copy-1');
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Launch retro, Shared by Dana'));
+    const buttons = (alert.mock.calls.at(-1)?.[2] ?? []) as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    buttons.find((button) => button.text === 'Continue in a new chat')?.onPress?.();
+
+    await waitFor(() =>
+      expect(useRouter().push).toHaveBeenCalledWith({
+        pathname: '/(app)/chat/[id]',
+        params: { id: 'copy-1' },
+      }),
+    );
+    expect(mockCreateConversation).toHaveBeenCalledWith('Launch retro');
+    expect(api.post).toHaveBeenCalledWith('/api/chat/conversations/copy-1/messages/bulk', {
+      messages: [
+        { role: 'user', content: 'What went well?' },
+        { role: 'assistant', content: 'The beta.' },
+      ],
+    });
+  });
+
+  it('keeps no partial copy when the messages cannot be copied', async () => {
+    (api.get as jest.Mock).mockImplementation(async (path: string) =>
+      path.startsWith('/api/share/')
+        ? { title: 'Launch retro', messages: [{ role: 'user', content: 'Hi' }] }
+        : overview(),
+    );
+    (api.post as jest.Mock).mockRejectedValue(new Error('HTTP 500'));
+    mockCreateConversation.mockResolvedValue('copy-2');
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Launch retro, Shared by Dana'));
+    (alert.mock.calls.at(-1)?.[2] as Array<{ text: string; onPress?: () => void }>)
+      .find((button) => button.text === 'Continue in a new chat')
+      ?.onPress?.();
+
+    await waitFor(() => expect(mockDeleteConversation).toHaveBeenCalledWith('copy-2'));
   });
 });

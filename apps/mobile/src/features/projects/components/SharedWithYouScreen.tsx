@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Alert, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FileCode2, MessageSquare, Plug, Users, type LucideIcon } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
@@ -15,6 +15,13 @@ import {
   type SharedWithMeProject,
   type SharedWithMeResources,
 } from '@/src/features/projects/projectSharing';
+import {
+  SharedChatUnavailableError,
+  copySharedChatInto,
+  fetchSharedChat,
+} from '@/src/features/shared-links/continueSharedChat';
+import { useChatStore } from '@/stores/chatStore';
+import { toUserMessage } from '@/services/userMessage';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
@@ -88,6 +95,9 @@ function Section({ label, children }: { label: string; children: ReactNode }) {
 export function SharedWithYouScreen() {
   const colors = useThemeColors();
   const router = useRouter();
+  const createConversation = useChatStore((s) => s.createConversation);
+  const loadMessages = useChatStore((s) => s.loadMessages);
+  const deleteConversation = useChatStore((s) => s.deleteConversation);
   const [loaded, setLoaded] = useState<Loaded | null | undefined>(undefined);
 
   useEffect(() => {
@@ -109,6 +119,38 @@ export function SharedWithYouScreen() {
       });
     return () => controller.abort();
   }, []);
+
+  const continueChat = async (token: string) => {
+    let createdId: string | null = null;
+    try {
+      const copy = await fetchSharedChat(token);
+      if (copy.messages.length === 0) {
+        Alert.alert('Nothing to continue', 'This shared conversation has no messages.');
+        return;
+      }
+      createdId = await createConversation(copy.title);
+      await copySharedChatInto(createdId, copy.messages);
+      await loadMessages(createdId);
+      router.push({ pathname: '/(app)/chat/[id]', params: { id: createdId } });
+    } catch (error) {
+      if (createdId) await deleteConversation(createdId).catch(() => undefined);
+      Alert.alert(
+        'Could not continue this chat',
+        error instanceof SharedChatUnavailableError
+          ? error.message
+          : createdId
+            ? 'The shared messages could not be copied, so no new conversation was kept.'
+            : toUserMessage(error, 'This shared conversation could not be opened.'),
+      );
+    }
+  };
+
+  const chooseChatAction = (entry: { token: string; title: string; url: string }) =>
+    Alert.alert(entry.title, 'Open the shared conversation, or copy it into a new chat of yours.', [
+      { text: 'Open', onPress: () => void openUntrustedUrlInAppBrowser(entry.url) },
+      { text: 'Continue in a new chat', onPress: () => void continueChat(entry.token) },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
 
   if (loaded === undefined) {
     return (
@@ -166,7 +208,7 @@ export function SharedWithYouScreen() {
               title={entry.title}
               subtitle={`Shared by ${entry.ownerName}`}
               isLast={index === list.length - 1}
-              onPress={() => void openUntrustedUrlInAppBrowser(entry.url)}
+              onPress={() => chooseChatAction(entry)}
             />
           ))}
         </Section>
