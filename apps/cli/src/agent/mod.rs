@@ -2331,6 +2331,11 @@ impl AgentSession {
                     content: message.text_content(),
                 })
                 .collect(),
+            hosted_message_ids: self
+                .managed_session
+                .as_ref()
+                .map(|session| session.hosted_message_ids.clone())
+                .unwrap_or_default(),
         })
     }
 

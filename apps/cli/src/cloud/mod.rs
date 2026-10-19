@@ -160,6 +160,18 @@ pub(crate) fn bound_conversation() -> Option<String> {
     BOUND_CONVERSATION.try_with(Clone::clone).ok()
 }
 
+/// Whether this device has seen the account hold `conversation_id`, from its
+/// own sync records and without asking the account.
+pub fn account_holds_conversation(privacy: PrivacyMode, conversation_id: &str) -> bool {
+    CloudSession::open(privacy).is_ok_and(|session| {
+        session
+            .state
+            .conversations
+            .versions
+            .contains_key(&chat::conversation_id_for(conversation_id))
+    })
+}
+
 pub async fn ensure_hosted_conversation(
     privacy: PrivacyMode,
     snapshot: &chat::SessionSnapshot,
@@ -291,16 +303,25 @@ pub async fn hosted_conversations(
 }
 
 /// One hosted conversation by id, or `None` when the account has no such
-/// conversation.
+/// conversation. A caller reads one to continue it on this device, so its
+/// versions are recorded: the next push then updates the account's rows
+/// instead of offering the same history as new ones.
 pub async fn hosted_conversation(
     privacy: PrivacyMode,
     conversation_id: &str,
 ) -> Result<Option<chat::HostedConversation>, CloudError> {
+    let mut session = CloudSession::open(privacy)?;
+    let sync = chat::ChatSync::new(&session.client);
+    let response = sync.pull_all(state::INITIAL_CURSOR).await?;
     let wanted = chat::conversation_id_for(conversation_id);
-    Ok(hosted_conversations(privacy)
-        .await?
+    let found = chat::assemble(&response)
         .into_iter()
-        .find(|conversation| conversation.id == wanted || conversation.id == conversation_id))
+        .find(|conversation| conversation.id == wanted || conversation.id == conversation_id);
+    if let Some(conversation) = &found {
+        chat::record_hosted(conversation, &mut session.state);
+        session.persist();
+    }
+    Ok(found)
 }
 
 /// Refresh the local project cache from the account and return it.

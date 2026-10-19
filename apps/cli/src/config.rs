@@ -366,6 +366,16 @@ impl Default for CliConfig {
 }
 
 impl CliConfig {
+    /// The boundary account reads and writes run under: the configured
+    /// privacy mode, Managed when none is set.
+    pub fn account_privacy_mode(&self) -> crate::platform::runtime::session::PrivacyMode {
+        self.ui
+            .privacy_mode
+            .as_deref()
+            .and_then(crate::platform::runtime::session::PrivacyMode::from_arg)
+            .unwrap_or(crate::platform::runtime::session::PrivacyMode::Managed)
+    }
+
     /// Returns the path to the config directory.
     ///
     /// `AGIWORKFORCE_HOME` may select an explicit config root. When unset, the

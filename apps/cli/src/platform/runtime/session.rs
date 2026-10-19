@@ -496,6 +496,11 @@ pub struct ManagedSession {
     /// reads both the same way.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub transcript: Option<ManagedSessionTranscript>,
+    /// The account's ids for this conversation's messages, in order, when the
+    /// conversation came from the account. Sync updates those rows rather than
+    /// sending the same history again under new ids.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub hosted_message_ids: Vec<String>,
 }
 
 /// Every message shown up to the latest compaction, in its original wording.
@@ -807,6 +812,8 @@ struct ManagedSessionJsonlHeader {
     /// `TranscriptMessage` records.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     transcript: Option<ManagedSessionTranscript>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    hosted_message_ids: Vec<String>,
 }
 
 /// A reader that predates `TranscriptMessage` skips it as unreadable and
@@ -854,6 +861,7 @@ impl ManagedSession {
             routing_authority: None,
             code: None,
             transcript: None,
+            hosted_message_ids: Vec::new(),
         }
     }
 
@@ -951,6 +959,7 @@ impl ManagedSession {
             routing_authority: source.routing_authority.clone(),
             code: None,
             transcript: None,
+            hosted_message_ids: Vec::new(),
         }
     }
 
@@ -1663,6 +1672,7 @@ impl ManagedSession {
                         routing_authority: record.routing_authority.map(|authority| *authority),
                         code: record.code,
                         transcript: record.transcript,
+                        hosted_message_ids: record.hosted_message_ids,
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -1893,6 +1903,7 @@ impl ManagedSession {
                 context: transcript.context.clone(),
                 earlier: transcript.earlier.clone(),
             }),
+            hosted_message_ids: self.hosted_message_ids.clone(),
         }));
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
@@ -2121,6 +2132,7 @@ mod tests {
             routing_authority: None,
             code: None,
             transcript: None,
+            hosted_message_ids: Vec::new(),
         };
 
         session.save_to_path(&path).unwrap();
@@ -2177,6 +2189,7 @@ mod tests {
             routing_authority: None,
             code: None,
             transcript: None,
+            hosted_message_ids: Vec::new(),
         };
 
         session.save_to_path(&path).unwrap();

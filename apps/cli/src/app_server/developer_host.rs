@@ -105,6 +105,9 @@ const APPROVAL_TIMEOUT_SECONDS: u64 = 600;
 // own timeout and discovery still resolves to `mcp/ready`. Equal values race
 // the two timers and make the emitted notification nondeterministic.
 const MCP_LOAD_TIMEOUT_SECONDS: u64 = 60;
+/// How long opening a thread waits for the account's copy before showing the
+/// one this device has.
+const ACCOUNT_CONVERSATION_READ_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(8);
 const MAX_CONTEXT_FILES_PER_TURN: usize = 64;
 const MAX_USER_INPUT_ITEMS_PER_TURN: usize = 128;
 const MAX_USER_INPUT_TEXT_CHARS: usize =
@@ -1711,42 +1714,146 @@ impl CliDeveloperSessionHost {
         } else {
             self.configured_auto_trust_mode()?
         };
-        let tier = auto_routing_tier(trust_mode, account_tier);
-        let routing_task_type = registry_task_type(task_type);
-        let selection = crate::model_catalog::resolve_auto_model_with_speed(
+        resolve_auto_with_trust(
             requested,
-            routing_task_type,
-            tier,
-            trust_mode,
-            previous.map(|state| state.model_key.as_str()),
-            previous.map(|state| registry_task_type(state.task_type)),
+            task_type,
+            previous,
+            account_tier,
             speed_first,
+            trust_mode,
         )
-        .map_err(DeveloperSessionHostError::invalid_request)?;
+    }
 
-        let fallback_model_ids = if trust_mode == agiworkforce_model_registry::TrustMode::Byok {
-            std::iter::once(selection.provider_model_id.clone())
-                .chain(selection.fallback_provider_model_ids.iter().cloned())
-                .collect()
-        } else {
-            // Managed provider failover belongs behind the AGI gateway. Feeding
-            // upstream IDs into the CLI's direct-provider fallback chain would
-            // silently cross the Managed trust boundary.
-            Vec::new()
+    /// The model and system prompt a first local copy of an account
+    /// conversation starts with. The account's own model is kept when this
+    /// CLI can run it; otherwise the copy runs on Managed Auto, because the
+    /// conversation already lives in the account and must stay there.
+    async fn account_conversation_copy(
+        &self,
+        hosted_model: Option<&str>,
+    ) -> Result<crate::sessions::HostedCopy, DeveloperSessionHostError> {
+        let concrete = hosted_model.filter(|model| crate::model_catalog::find(model).is_some());
+        let resolved = match concrete {
+            Some(model) => ResolvedThreadModel {
+                provider_model_id: model.to_string(),
+                auto_routing: None,
+                fallback_model_ids: Vec::new(),
+            },
+            None => {
+                let selection = hosted_model
+                    .filter(|model| agiworkforce_model_registry::is_auto_routing_selection(model))
+                    .unwrap_or_else(|| {
+                        crate::routing::profile::auto_selection(DeveloperRoutingProfile::Auto)
+                    });
+                let account_tier = crate::tier_cache::managed_auto_routing_tier().await;
+                resolve_auto_with_trust(
+                    selection,
+                    DeveloperRoutingTaskType::Coding,
+                    None,
+                    account_tier,
+                    false,
+                    agiworkforce_model_registry::TrustMode::ManagedCloud,
+                )?
+            }
         };
-
-        Ok(ResolvedThreadModel {
-            provider_model_id: selection.provider_model_id,
-            auto_routing: Some(ManagedSessionAutoRouting {
-                selection: requested.to_ascii_lowercase(),
-                model_key: selection.model_key,
-                task_type,
-                trust_mode,
-                speed_first,
-                policy_version: crate::runtime::session::current_routing_policy_version(),
-            }),
-            fallback_model_ids,
+        let system_context = context::gather_system_context_for(self.workspace_root.clone()).await;
+        let managed_cloud = models::provider_persistence_name(&Provider::ManagedCloud);
+        let agent = AgentSession::new_checked(
+            &resolved.provider_model_id,
+            &system_context,
+            None,
+            Some(managed_cloud.as_str()),
+        )
+        .map_err(invalid_request)?;
+        Ok(crate::sessions::HostedCopy {
+            model: resolved.provider_model_id,
+            auto_routing: resolved.auto_routing,
+            preamble: agent.messages.clone(),
+            workspace_root: Some(self.workspace_root.clone()),
         })
+    }
+
+    /// Open a conversation the account holds, by its id, as a thread of this
+    /// workspace: the web chat a user picks in the editor's history. The first
+    /// time, the account's copy becomes a thread here; after that, turns the
+    /// account gained on another surface are added. Only a UUID can name an
+    /// account conversation, and a local thread is looked up in the account
+    /// only when it came from there or was synced to it. Any failure, signed
+    /// out, Local mode or offline, leaves the thread as this device has it.
+    async fn adopt_account_conversation(&self, thread_id: &str) {
+        if Uuid::parse_str(thread_id).is_err() {
+            return;
+        }
+        let privacy = self.config.account_privacy_mode();
+        if privacy != crate::agent::PrivacyMode::Managed {
+            return;
+        }
+        let store = self.store.clone();
+        let id = thread_id.to_string();
+        let local = tokio::task::spawn_blocking(move || {
+            store.load(ManagedSessionReference::SessionId(id)).ok()
+        })
+        .await
+        .ok()
+        .flatten();
+        if let Some(local) = &local {
+            let linked = !local.hosted_message_ids.is_empty()
+                || crate::cloud::account_holds_conversation(privacy, thread_id);
+            if !linked {
+                return;
+            }
+        }
+        let conversation = match tokio::time::timeout(
+            ACCOUNT_CONVERSATION_READ_TIMEOUT,
+            crate::cloud::hosted_conversation(privacy, thread_id),
+        )
+        .await
+        {
+            Ok(Ok(Some(conversation))) => conversation,
+            Ok(Ok(None)) => return,
+            Ok(Err(error)) => {
+                tracing::debug!(
+                    "[app-server] account conversation {thread_id} was not read: {error}"
+                );
+                return;
+            }
+            Err(_) => {
+                tracing::debug!(
+                    "[app-server] account conversation {thread_id} took too long to read"
+                );
+                return;
+            }
+        };
+        let copy = match &local {
+            Some(_) => crate::sessions::HostedCopy {
+                model: String::new(),
+                auto_routing: None,
+                preamble: Vec::new(),
+                workspace_root: Some(self.workspace_root.clone()),
+            },
+            None => match self
+                .account_conversation_copy(conversation.model.as_deref())
+                .await
+            {
+                Ok(copy) => copy,
+                Err(error) => {
+                    tracing::debug!(
+                        "[app-server] account conversation {thread_id} has no model to run on: {}",
+                        error.message()
+                    );
+                    return;
+                }
+            },
+        };
+        let base_dir = self.store.base_dir().to_path_buf();
+        let adopted = tokio::task::spawn_blocking(move || {
+            let conn = crate::sessions::open_db_in(base_dir)?;
+            crate::sessions::adopt_hosted_conversation(&conn, &conversation, copy)
+        })
+        .await;
+        if let Ok(Err(error)) = adopted {
+            tracing::debug!("[app-server] account conversation {thread_id} was not saved: {error}");
+        }
     }
 
     fn configured_auto_trust_mode(
@@ -2184,6 +2291,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         if super::cloud_threads::cloud_session_id(&params.thread_id).is_some() {
             return Err(super::cloud_threads::turn_refusal());
         }
+        self.adopt_account_conversation(&params.thread_id).await;
         self.load_agent(&params.thread_id).await?;
         let store = self.store.clone();
         let thread_id = params.thread_id;
@@ -2204,6 +2312,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         if let Some(session_id) = super::cloud_threads::cloud_session_id(&params.thread_id) {
             return super::cloud_threads::read(session_id).await;
         }
+        self.adopt_account_conversation(&params.thread_id).await;
         let store = self.store.clone();
         let thread_id = params.thread_id;
         let (resolved, session) = tokio::task::spawn_blocking(move || {
@@ -5385,6 +5494,52 @@ fn writer_summary(identity: &WriterIdentity, lease: WriterLease) -> DeveloperSes
         holder_id: lease.holder_id,
         holder_label: lease.holder_label,
     }
+}
+
+fn resolve_auto_with_trust(
+    requested: &str,
+    task_type: DeveloperRoutingTaskType,
+    previous: Option<&ManagedSessionAutoRouting>,
+    account_tier: &str,
+    speed_first: bool,
+    trust_mode: agiworkforce_model_registry::TrustMode,
+) -> Result<ResolvedThreadModel, DeveloperSessionHostError> {
+    let tier = auto_routing_tier(trust_mode, account_tier);
+    let routing_task_type = registry_task_type(task_type);
+    let selection = crate::model_catalog::resolve_auto_model_with_speed(
+        requested,
+        routing_task_type,
+        tier,
+        trust_mode,
+        previous.map(|state| state.model_key.as_str()),
+        previous.map(|state| registry_task_type(state.task_type)),
+        speed_first,
+    )
+    .map_err(DeveloperSessionHostError::invalid_request)?;
+
+    let fallback_model_ids = if trust_mode == agiworkforce_model_registry::TrustMode::Byok {
+        std::iter::once(selection.provider_model_id.clone())
+            .chain(selection.fallback_provider_model_ids.iter().cloned())
+            .collect()
+    } else {
+        // Managed provider failover belongs behind the AGI gateway. Feeding
+        // upstream IDs into the CLI's direct-provider fallback chain would
+        // silently cross the Managed trust boundary.
+        Vec::new()
+    };
+
+    Ok(ResolvedThreadModel {
+        provider_model_id: selection.provider_model_id,
+        auto_routing: Some(ManagedSessionAutoRouting {
+            selection: requested.to_ascii_lowercase(),
+            model_key: selection.model_key,
+            task_type,
+            trust_mode,
+            speed_first,
+            policy_version: crate::runtime::session::current_routing_policy_version(),
+        }),
+        fallback_model_ids,
+    })
 }
 
 fn trust_mode_of(privacy_mode: crate::agent::PrivacyMode) -> DeveloperSessionTrustMode {
