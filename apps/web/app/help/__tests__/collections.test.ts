@@ -57,3 +57,19 @@ describe('the /help collection index is derived from the support corpus', () => 
     }
   });
 });
+
+describe('the /help page layout', () => {
+  it('puts search in the page heading instead of a separate section', () => {
+    expect(PAGE).toMatch(/<PageHero[\s\S]*<HelpSearch[^>]*\/>\s*<\/PageHero>/u);
+    expect(PAGE).not.toContain('agi-help-search-title');
+  });
+
+  it('lists each collection as links, not a run of middle dots', () => {
+    expect(PAGE).toContain('className="agi-ds-linkgrid"');
+    expect(PAGE).not.toContain("' · '");
+  });
+
+  it('does not lead with catalogue counts', () => {
+    expect(PAGE).not.toMatch(/CATALOG_SCOPES|catalogueEntries|FactLine/u);
+  });
+});

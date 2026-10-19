@@ -286,6 +286,15 @@
   gap: var(--agi-space-1) var(--agi-space-4);
 }
 
+[data-design='agi'] .agi-ds-linkgrid {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 16rem), 1fr));
+  gap: var(--agi-space-1) var(--agi-space-4);
+}
+
 [data-design='agi'] .agi-ds-btn-row {
   display: flex;
   flex-wrap: wrap;
