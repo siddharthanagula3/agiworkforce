@@ -6,9 +6,10 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { isProductLinkId, isProductLinkTarget } from '@agiworkforce/types';
 import {
-  nativeRouteForProductLink,
   productLinkWebFallbackUrl,
+  resolveNativeProductLinkRoute,
 } from '@/src/features/notifications/productLinks';
+import { accountChatHistory } from '@/src/features/notifications/productLinkHistory';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -26,13 +27,19 @@ export default function ProductLinkRoute() {
       return;
     }
     const link = { target, id };
-    const nativeRoute = nativeRouteForProductLink(link);
-    if (nativeRoute) {
-      router.replace(nativeRoute as Parameters<typeof router.replace>[0]);
-      return;
-    }
-    router.replace('/(app)' as Parameters<typeof router.replace>[0]);
-    void openUntrustedUrlInAppBrowser(productLinkWebFallbackUrl(link));
+    let cancelled = false;
+    void resolveNativeProductLinkRoute(link, accountChatHistory).then((nativeRoute) => {
+      if (cancelled) return;
+      if (nativeRoute) {
+        router.replace(nativeRoute as Parameters<typeof router.replace>[0]);
+        return;
+      }
+      router.replace('/(app)' as Parameters<typeof router.replace>[0]);
+      void openUntrustedUrlInAppBrowser(productLinkWebFallbackUrl(link));
+    });
+    return () => {
+      cancelled = true;
+    };
   }, [id, router, target]);
 
   return (
