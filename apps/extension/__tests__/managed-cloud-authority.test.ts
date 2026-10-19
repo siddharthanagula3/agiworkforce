@@ -171,7 +171,7 @@ describe('Managed Cloud account/session authority', () => {
     const execution = sourceBetween(
       backgroundSource,
       'async function executeScheduledTask(',
-      '// EXT-1, EXT-2',
+      'const SITE_NOT_APPROVED_MESSAGE =',
     );
     const boundCredential = execution.indexOf('if (task.managedCloudAccountId !== undefined) {');
     const promptResolution = execution.indexOf('await scheduledTaskManagedPrompt(task)');

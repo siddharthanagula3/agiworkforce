@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { isTrustedExtensionPageSender } from '../src/background/policy';
+import { APPROVAL_TIMEOUT_MS } from '../src/features/computer-use/agentLoop';
 import {
   browserFileChecksum,
   parseBrowserUploadBinding,
@@ -74,6 +75,7 @@ function harness() {
   const dependencies = {
     lease,
     chrome: chromeMock,
+    APPROVAL_TIMEOUT_MS,
     askBeforeActing: false,
     computerUseRuns: { isCurrent: () => state.current },
     assertComputerUseOwnership: async () => {
