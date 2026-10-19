@@ -18,7 +18,7 @@ pub fn keyring_disabled() -> bool {
 }
 
 pub fn uses_keychain() -> bool {
-    !cfg!(target_os = "linux") && !keyring_disabled()
+    !cfg!(test) && !cfg!(target_os = "linux") && !keyring_disabled()
 }
 
 /// Write `data` to `path` readable by the owner alone. The file is created
