@@ -208,6 +208,43 @@ describe('SchedulesPage', () => {
     expect(api.createSchedule).not.toHaveBeenCalled();
   });
 
+  it('opens a new schedule that runs as the agent named in the link', async () => {
+    const api = createApi();
+    const user = userEvent.setup();
+    render(
+      <SchedulesPage
+        api={api}
+        onOpenChat={() => undefined}
+        agents={[{ id: '0190a000-0000-7000-8000-0000000000a1', name: 'Release notes writer' }]}
+        draftAgentId="0190a000-0000-7000-8000-0000000000a1"
+      />,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Create Schedule' });
+    expect(within(dialog).getByLabelText('Run as agent')).toHaveValue(
+      '0190a000-0000-7000-8000-0000000000a1',
+    );
+    expect(within(dialog).getByLabelText('Schedule Name')).toHaveValue('Release notes writer');
+    await user.type(within(dialog).getByLabelText('Task Instructions'), 'Draft the weekly notes.');
+    fireEvent.change(within(dialog).getByLabelText('Run At'), {
+      target: { value: '2099-07-16T09:00' },
+    });
+    await user.click(within(dialog).getByRole('button', { name: 'Create Schedule' }));
+    await waitFor(() => expect(api.createSchedule).toHaveBeenCalled());
+    expect(vi.mocked(api.createSchedule).mock.calls[0]?.[0]).toMatchObject({
+      agentId: '0190a000-0000-7000-8000-0000000000a1',
+    });
+  });
+
+  it('hides the agent choice from an account with no agents', async () => {
+    const api = createApi();
+    const user = userEvent.setup();
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+    await screen.findByText('No schedules yet');
+    await user.click(screen.getByRole('button', { name: 'Create Your First Schedule' }));
+    const dialog = screen.getByRole('dialog', { name: 'Create Schedule' });
+    expect(within(dialog).queryByLabelText('Run as agent')).toBeNull();
+  });
+
   it('moves the Managed Cloud model constraint into the create dialog as helper text', async () => {
     const api = createApi();
     const user = userEvent.setup();

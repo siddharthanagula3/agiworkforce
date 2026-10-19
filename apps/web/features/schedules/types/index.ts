@@ -88,6 +88,7 @@ export interface ScheduleDraft {
   maxExecutions: string;
   creditCap: string;
   projectId: string | null;
+  agentId: string | null;
   recurrenceRule: string;
   daypartPreset: DaypartPreset;
   retryMaxAttempts: string;
@@ -117,6 +118,7 @@ export interface ScheduleMutation {
   maxExecutions: number | null;
   creditCap: number | null;
   projectId: string | null;
+  agentId?: string | null;
   recurrenceRule: string | null;
   dayparts: ManagedCloudScheduleDaypart[] | null;
   retryMaxAttempts: number;
