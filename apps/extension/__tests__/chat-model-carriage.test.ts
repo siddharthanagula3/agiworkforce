@@ -115,10 +115,15 @@ describe('Chrome routing adapter is managed-cloud-only and canonically classifie
     expect(codeOnly).toContain("from '@agiworkforce/routing'");
   });
 
-  it('pins the managed_cloud trust mode and the chrome/managed-chat runtime profile', () => {
+  it('pins the managed_cloud trust mode and the Chrome managed runtime profiles', () => {
     expect(codeOnly).toMatch(/trustMode:\s*'managed_cloud'/);
     expect(codeOnly).toMatch(/CHROME_MANAGED_RUNTIME_PROFILE = 'chrome\/managed-chat'/);
-    expect(codeOnly).toMatch(/runtimeProfileId:\s*CHROME_MANAGED_RUNTIME_PROFILE/);
+    expect(codeOnly).toMatch(
+      /CHROME_MANAGED_BROWSER_TASK_RUNTIME_PROFILE = 'chrome\/managed-browser-task'/,
+    );
+    expect(codeOnly).toMatch(
+      /runtimeProfileId:\s*classifier\.type === 'computer-use'\s*\?\s*CHROME_MANAGED_BROWSER_TASK_RUNTIME_PROFILE\s*:\s*CHROME_MANAGED_RUNTIME_PROFILE/,
+    );
     expect(codeOnly).not.toContain("'local'");
     expect(codeOnly).not.toContain("'byok'");
   });

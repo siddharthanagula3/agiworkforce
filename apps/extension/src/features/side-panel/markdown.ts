@@ -3,6 +3,11 @@ import markdownit from 'markdown-it';
 import type { StateBlock, StateInline } from 'markdown-it';
 import markdownItFootnote from 'markdown-it-footnote';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import {
+  highlightToLines,
+  resolveHighlightLanguage,
+  type HighlightedLine,
+} from '@agiworkforce/unified-chat/shiki-highlighter';
 import { Copy, ImageIcon, ImageOff, renderIcon } from '../../assets/icons';
 import { t } from '../../i18n';
 import { el } from './dom';
@@ -79,8 +84,9 @@ export function sanitizeHtml(dirty: string): string {
       'id',
       'data-math',
       'data-md-image',
+      'data-lang',
     ],
-    ADD_URI_SAFE_ATTR: ['colspan', 'rowspan', 'start', 'data-math', 'data-md-image'],
+    ADD_URI_SAFE_ATTR: ['colspan', 'rowspan', 'start', 'data-math', 'data-md-image', 'data-lang'],
     FORBID_TAGS: [
       'script',
       'style',
@@ -150,10 +156,18 @@ const escapeText = (text: string): string => md.utils.escapeHtml(text).replace(/
 
 md.renderer.rules['text'] = (tokens, index) => escapeText(tokens[index]?.content ?? '');
 
-const renderCode = (content: string): string =>
-  `<pre><code>${escapeText(content.replace(/\n$/, ''))}</code></pre>\n`;
+const CODE_LANGUAGE = /^[A-Za-z0-9+#._-]{1,32}$/;
 
-md.renderer.rules['fence'] = (tokens, index) => renderCode(tokens[index]?.content ?? '');
+function codeLanguage(info: string | undefined): string | null {
+  const candidate = (info ?? '').trim().split(/\s+/)[0]?.toLowerCase() ?? '';
+  return CODE_LANGUAGE.test(candidate) ? candidate : null;
+}
+
+const renderCode = (content: string, language: string | null = null): string =>
+  `<pre${language ? ` data-lang="${escapeText(language)}"` : ''}><code>${escapeText(content.replace(/\n$/, ''))}</code></pre>\n`;
+
+md.renderer.rules['fence'] = (tokens, index) =>
+  renderCode(tokens[index]?.content ?? '', codeLanguage(tokens[index]?.info));
 
 md.renderer.rules['code_block'] = (tokens, index) => renderCode(tokens[index]?.content ?? '');
 
@@ -392,7 +406,48 @@ function buildCodeCopyButton(pre: HTMLPreElement): HTMLElement {
       () => setState('failed'),
     );
   });
-  return el('div', { class: 'sp-code-block__bar' }, status, button);
+  const language = pre.dataset['lang'];
+  const label = el('span', { class: 'sp-code-block__lang' }, language ?? '');
+  return el('div', { class: 'sp-code-block__bar' }, label, status, button);
+}
+
+function paintHighlightedLines(code: HTMLElement, lines: readonly HighlightedLine[]): void {
+  const fragment = document.createDocumentFragment();
+  lines.forEach((line, index) => {
+    if (index > 0) fragment.appendChild(document.createTextNode('\n'));
+    for (const token of line) {
+      const span = document.createElement('span');
+      span.className = 'shiki-token';
+      span.textContent = token.content;
+      for (const [property, value] of Object.entries(token.style)) {
+        if (typeof value !== 'string') continue;
+        if (property.startsWith('--')) span.style.setProperty(property, value);
+        else
+          span.style.setProperty(
+            property.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`),
+            value,
+          );
+      }
+      fragment.appendChild(span);
+    }
+  });
+  code.replaceChildren(fragment);
+}
+
+function highlightCodeBlocks(root: HTMLElement): Promise<void> {
+  const blocks = [...root.querySelectorAll<HTMLPreElement>('pre[data-lang]')].filter((pre) =>
+    resolveHighlightLanguage(pre.dataset['lang'] ?? ''),
+  );
+  return Promise.all(
+    blocks.map(async (pre) => {
+      const code = pre.querySelector('code');
+      if (!code) return;
+      const source = code.textContent ?? '';
+      const lines = await highlightToLines(source, pre.dataset['lang'] ?? '').catch(() => null);
+      if (lines && pre.contains(code) && code.textContent === source)
+        paintHighlightedLines(code, lines);
+    }),
+  ).then(() => undefined);
 }
 
 function addCodeCopyButtons(root: HTMLElement): void {
@@ -549,5 +604,5 @@ export function renderMarkdownInto(target: HTMLElement, text: string): Promise<v
   target.innerHTML = sanitizeHtml(renderMarkdown(text));
   addCodeCopyButtons(target);
   addRemoteImages(target);
-  return renderMath(target);
+  return Promise.all([renderMath(target), highlightCodeBlocks(target)]).then(() => undefined);
 }

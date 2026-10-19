@@ -3,7 +3,11 @@
 import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import dynamic from 'next/dynamic';
 
-import { parseSettingsHash, replaceSettingsHash } from '@/features/directory/routing';
+import {
+  buildSettingsHash,
+  parseSettingsHash,
+  replaceSettingsHash,
+} from '@/features/directory/routing';
 
 const WebSettingsModal = dynamic(
   () => import('./WebSettingsModal').then((m) => ({ default: m.WebSettingsModal })),
@@ -29,6 +33,10 @@ export function SettingsModalProvider({ children }: { children: React.ReactNode 
   const openSettings = useCallback((section = 'general') => {
     setInitialSection(section);
     setIsOpen(true);
+    const hash = buildSettingsHash(section);
+    if (hash && parseSettingsHash(window.location.hash)?.section !== section) {
+      replaceSettingsHash(hash);
+    }
   }, []);
 
   const closeSettings = useCallback(() => {

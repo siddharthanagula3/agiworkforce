@@ -597,7 +597,7 @@ function memoryPolicyDecision(input: MemoryPolicyInput): MemoryEligibilityDecisi
     return {
       eligible: false,
       reason: 'user_memory_disabled',
-      message: 'Memory is turned off in your settings, so I did not save that.',
+      message: 'Memory is turned off in your settings.',
     };
   }
 

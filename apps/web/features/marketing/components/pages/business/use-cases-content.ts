@@ -103,7 +103,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
         label: 'Providers',
         value: `The CLI takes your key for the ${CATALOG_SCOPES.byokProviders.text}, plus any OpenAI-compatible endpoint you declare. ${CLI_KEYS_OUTSIDE_CATALOG_NOTE} ${CLI_AVAILABILITY_NOTE}`,
       },
-      { label: 'Privacy', value: POSITIONING.routeBoundary },
+      { label: 'Plans and access', value: POSITIONING.routeBoundary },
     ],
     closeTitle: 'Start free, route deliberately.',
     closeBody: `Local and BYOK run in the CLI at no platform cost, and AGI Web runs on managed cloud when you want hosted compute. ${CLI_AVAILABILITY_NOTE}`,
@@ -131,7 +131,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       caption: ['Web', 'No install'],
     },
     factsEyebrow: 'Where it shows up',
-    factsTitle: 'From first touch to signed.',
+    factsTitle: 'From account research to a proposal draft.',
     facts: [
       {
         meta: 'Research',
@@ -235,7 +235,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       },
       {
         label: 'BYOK posture',
-        value: `Every seat can use the CLI fully local or with its own provider keys, so that client work need not reach our infrastructure. ${BYOK_SURFACES.availability} Desktop is managed-cloud only. Requiring a route org-wide is not a shipped control, so it is scoped on an enterprise contract.`,
+        value: `Every seat can use the CLI fully local or with its own provider keys, so that client work need not reach our infrastructure. ${BYOK_SURFACES.availability} Desktop is managed-cloud only. A workspace admin can choose which routes seats may use, for example turning off AGI-managed compute so client work runs Local or on the seat's own keys.`,
       },
     ],
     closeTitle: 'Put the agent on the bench.',

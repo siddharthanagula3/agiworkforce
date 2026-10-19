@@ -165,6 +165,19 @@ const TEXTUAL_MIMES: ReadonlySet<string> = new Set([
 ]);
 const CREDENTIAL_SCAN_BYTES = 256_000;
 
+/**
+ * The agent's credential-path rule also matches names any document can carry,
+ * such as secret.txt or customer-credentials.csv. A name like that says nothing
+ * about the bytes, so for an upload the content scan decides: it still refuses
+ * one that holds a recognised key.
+ */
+const DESCRIPTIVE_SECRET_NAME =
+  /(^|\/)(secrets?|[^/]*credentials?)\.(json|ya?ml|toml|txt|ini|db|csv|xml)$/i;
+
+function isCredentialFileName(filename: string): boolean {
+  return isCredentialPath(filename) && !DESCRIPTIVE_SECRET_NAME.test(filename);
+}
+
 function essenceOf(declaredMime: string): string {
   return declaredMime.split(';', 1)[0]?.trim().toLowerCase() ?? '';
 }
@@ -195,7 +208,7 @@ export function scanUploadForCredentials(
     });
   }
 
-  if (filename && isCredentialPath(sanitizeFilename(filename))) {
+  if (filename && isCredentialFileName(sanitizeFilename(filename))) {
     findings.push({
       code: 'sensitive_filename',
       detail: `${sanitizeFilename(filename)} is the name of a credential file`,

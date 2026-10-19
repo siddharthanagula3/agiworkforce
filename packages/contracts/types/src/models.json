@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-13",
+  "lastUpdated": "2026-10-18",
   "verificationLog": [
     {
       "date": "2026-09-14",
@@ -523,6 +523,12 @@
       "verifiedBy": "owner-direction-2026-10-13",
       "status": "ROSTER",
       "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) leaves the catalog on the owner's instruction of 2026-10-13: the free router kept answering that it was overloaded, and it was the only model the Free plan could reach. Asked what should serve Free instead, the owner chose the fast OpenAI family. The row, its route, its synced record and its probe are removed and the id is recorded in catalog/retired-models.json so a conversation that names it still renders a label. The Free Auto slots free_workhorse and free_workhorse_fast move to family:openai/gpt-fast and the slot router_zero_cost is deleted, because no slot is zero cost any more. gpt-6-luna takes tierPolicy.minTier free, which with its existing place in tierAllowedModels.economy is what admits it to the Free plan; a Free turn on it is metered against the Free usage windows in packages/contracts/types/src/managed-usage-limits.ts. The two retired :free aliases that redirected to the router now redirect to the same family. No live provider call was made for this change."
+    },
+    {
+      "date": "2026-10-18",
+      "verifiedBy": "official-google-gemini-4-argon-ga-pages-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's request of 2026-10-18, gemini-4-argon goes from coming_soon to live. Google made it available to everyone on 2026-10-13: the Gemini API and AI Studio serve it as gemini-4-argon, labelled stable, and it is not on the free tier. Read on 2026-10-18 from https://ai.google.dev/gemini-api/docs/latest-model (last updated 2026-10-16), the model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon and https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud (2026-10-13). The row takes apiModelId, the shared 1,048,576-token window in place of contextWindowUnpublished, a 65,536 maxOutputTokens (the synchronous default; the long decode needs background execution), text, image, audio, video and PDF input, low/medium/high thinking levels defaulting to medium on thinkingConfig.thinkingLevel with no budget path, implicit caching from 4,096 tokens, and the introductory $2/$0.10/$10 with promo_expires_at 2026-12-01 and post_promo_prices $4/$0.20/$20. Capabilities follow the model page; computer use, listed as Preview, and deep research, not listed, are false. tierPolicy.minTier is pro, the tier of the row it replaces. The google/gemini-pro slot pattern now also matches -argon ids, and the slot moves from gemini-3.1-pro-preview to gemini-4-argon; the promotion was built with the family tool's own functions, since its promote command refuses without a probe and an eval gate run. Under the owner's order of 2026-10-07 to keep only the newest generation of every family, gemini-3.1-pro-preview then leaves through the retire tool into retired-models.json, naming gemini-4-argon, with its marketplace routes, probe and synced record; Google has announced no shutdown date for it. The slot keeps it as previous with an empty fallback chain. The tool built the retirement record from a registry that no longer had the synced record, so its context window, capabilities, release date and successor were restored from the registry before this change. gemini-3.5-flash-lite and gemini-3.8-flash now name gemini-4-argon as their variant partner, and gemini-4-argon names gemini-3.5-flash-lite. The capabilityCoverage gate fails and is recorded as failing: the slot's 2,000,000 minimum context predates the current rows, and neither model meets it. The slot is in pro_additions and serves the long_context_balanced and long_context_pro Auto slots and Google's complex_reasoning and long_context task routes, so those move to the new model; at the post-introductory price its input costs twice and its output 67% more than gemini-3.1-pro-preview did. The direct Google route carries the promotion and its end date. A marketplace route cannot carry the end date, so the one OpenRouter route is priced at the post-introductory $4/$20 with a $0.20 cache read now, which overstates the cost until 2026-12-01 and never understates it after; a registry test holds every route of a running promotion at or above the post-promotion price. Vercel AI Gateway and Experiential Labs also list the model and get no route. The row carries OpenRouter's slug google/gemini-4-argon, read from OpenRouter's model endpoints listing on 2026-10-18, because every direct-provider chat model needs one for OpenRouter failover. The OpenRouter adapter turns a prompt-cache request on a google/ slug into cache_control breakpoints, which OpenRouter uses for Gemini's explicit caching; providerCompatibility.explicitPromptCache false now makes it send none for this model. No probe was made and the eval gate was not run; the owner has not approved spend for this model."
     }
   ],
   "providers": {
@@ -605,10 +611,10 @@
       "taskRouting": {
         "fast_completion": "gemini-3.5-flash-lite",
         "code_generation": "gemini-3.8-flash",
-        "complex_reasoning": "gemini-3.1-pro-preview",
+        "complex_reasoning": "gemini-4-argon",
         "chat": "gemini-3.8-flash",
         "vision": "gemini-3.8-flash",
-        "long_context": "gemini-3.1-pro-preview"
+        "long_context": "gemini-4-argon"
       },
       "canonicalization": {}
     },
@@ -1485,19 +1491,20 @@
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.embedding_default"
       }
     },
-    "gemini-3.1-pro-preview": {
-      "id": "gemini-3.1-pro-preview",
-      "apiModelId": "gemini-3.1-pro-preview",
-      "openRouterSlug": "google/gemini-3.1-pro-preview",
-      "name": "Gemini 3.1 Pro",
+    "gemini-4-argon": {
+      "id": "gemini-4-argon",
+      "apiModelId": "gemini-4-argon",
+      "openRouterSlug": "google/gemini-4-argon",
+      "name": "Gemini 4 Argon",
       "provider": "google",
       "developer": "google",
       "modelType": "reasoning",
+      "inputModalities": ["text", "image", "audio", "video", "pdf"],
       "variantPartner": "gemini-3.5-flash-lite",
       "contextWindow": 1048576,
       "inputCost": 2,
-      "outputCost": 12,
-      "cached_input": 0.2,
+      "outputCost": 10,
+      "cached_input": 0.1,
       "capabilities": {
         "streaming": true,
         "tools": true,
@@ -1509,85 +1516,42 @@
         "imageGen": false,
         "videoGen": false,
         "search": true,
-        "research": true,
+        "research": false,
         "codeExecution": true,
         "caching": true
       },
-      "benchmarks": { "swebench": 74.2, "humaneval": 93.5, "mmlu": 89.5, "gpqa": 91.9, "aime": 95 },
       "speed": "medium",
       "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],
-      "released": "February 19, 2026",
+      "qualityTier": "best",
+      "bestFor": ["Coding", "Reasoning", "Multimodal", "Long Context"],
+      "released": "October 13, 2026",
       "deprecation_date": null,
-      "inputTokenPricingTiers": [
-        { "thresholdTokens": 200000, "inputCost": 4, "cached_input": 0.4, "outputCost": 18 }
-      ],
-      "pricingNote": "Base rate (≤200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
+      "promo_expires_at": "2026-12-01T00:00:00Z",
+      "post_promo_prices": { "input": 4, "output": 20, "cached_input": 0.2 },
+      "pricingNote": "Google lists Gemini 4 Argon at an introductory $2.00/1M input, $0.10/1M cached input and $10.00/1M output, thinking tokens included, through 2026-11-30. From 2026-12-01 the published rates are $4.00/$0.20/$20.00, carried in post_promo_prices. Input, thinking and output share one 1,048,576-token window. A synchronous request defaults to 65,536 output tokens, which is maxOutputTokens here; the long decode up to the full window needs background execution, which AGI does not use. Google publishes no separate input limit, so maxInputTokens is not set. Thinking levels are low, medium and high, default medium, sent as thinkingConfig.thinkingLevel; Google documents no thinking budget and no way to turn thinking off. Implicit caching is on by default for prompts of at least 4,096 tokens, with a 95% discount on hits; explicit caching (cachedContents) is not supported. temperature, top_p and top_k are ignored. Inputs are text, image, video, audio and PDF; output is text. The model page lists function calling, structured outputs, Search grounding, code execution and URL context as supported, computer use as Preview (not claimed here), and the Live API and image generation as unsupported. It is not on the Gemini API free tier. Google's samples use the Interactions API; the catalog serves the model through generateContent, which the latest-model page names for client-side continuation, and no live call has confirmed that path. Verified against https://ai.google.dev/gemini-api/docs/latest-model (last updated 2026-10-16), https://ai.google.dev/gemini-api/docs/models/gemini-4-argon and https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud (2026-10-13), retrieved 2026-10-18; no provider call was made.",
       "openWeight": false,
       "license": "proprietary",
+      "maxOutputTokens": 65536,
+      "promptCacheMinimumTokens": 4096,
+      "providerCompatibility": { "explicitPromptCache": false },
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
         "supportedEfforts": ["low", "medium", "high"],
         "defaultEffort": "medium",
-        "canDisableThinking": true,
+        "canDisableThinking": false,
         "request": {
           "api": "gen",
           "effortPath": "thinkingConfig.thinkingLevel",
           "togglePath": null,
-          "budgetPath": "thinkingConfig.thinkingBudget"
+          "budgetPath": null
         }
       },
       "tierPolicy": { "minTier": "pro" },
       "lifecycle": {
         "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.long_context_balanced"
-      }
-    },
-    "gemini-4-argon": {
-      "id": "gemini-4-argon",
-      "name": "Gemini 4 Argon",
-      "provider": "google",
-      "developer": "google",
-      "modelType": "reasoning",
-      "contextWindowUnpublished": {
-        "source": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/",
-        "verifiedOn": "2026-10-09"
-      },
-      "inputCost": 2,
-      "outputCost": 10,
-      "cached_input": 0.1,
-      "capabilities": {
-        "streaming": false,
-        "tools": false,
-        "vision": false,
-        "json": false,
-        "thinking": false,
-        "computerUse": false,
-        "agentic": false,
-        "imageGen": false,
-        "videoGen": false,
-        "search": false,
-        "research": false,
-        "codeExecution": false,
-        "caching": false
-      },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "best",
-      "bestFor": ["Coding", "Reasoning", "Multimodal"],
-      "deprecation_date": null,
-      "pricingNote": "Google lists an introductory price of $2.00/1M input and $10.00/1M output, with cached input discounted 95% from the input price ($0.10/1M). After the introductory period Google states $4.00/1M input and $20.00/1M output; it publishes no end date for the introductory period, so post_promo_prices is not set. Google states a 1M-token output limit, up from 64K, and publishes no separate context window, so maxOutputTokens is not set and contextWindowUnpublished records the page in place of a contextWindow. Google has published no Gemini API model code, so apiModelId is not set and the key follows the catalog's model-name pattern; set apiModelId to Google's code at GA. Verified against https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/, retrieved 2026-10-09; ai.google.dev/gemini-api/docs/models did not list the model on 2026-10-09.",
-      "openWeight": false,
-      "license": "proprietary",
-      "availability": "coming_soon",
-      "unavailableReason": "Google announced Gemini 4 Argon on September 30, 2026 with access limited to trusted cyber defenders in its Fairwind Program; paid API customers and Google AI Ultra subscribers come next, with no date published.",
-      "lifecycle": {
-        "stage": "registered",
-        "stagedOn": "2026-10-09",
-        "source": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/"
+        "stagedOn": "2026-10-18",
+        "source": "catalog/model-families.json#google/gemini-pro"
       }
     },
     "gemini-3.5-flash-lite": {
@@ -1599,7 +1563,7 @@
       "developer": "google",
       "modelType": "multimodal",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
-      "variantPartner": "gemini-3.1-pro-preview",
+      "variantPartner": "gemini-4-argon",
       "contextWindow": 1048576,
       "inputCost": 0.3,
       "outputCost": 2.5,
@@ -2467,7 +2431,7 @@
       "developer": "google",
       "modelType": "multimodal",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
-      "variantPartner": "gemini-3.1-pro-preview",
+      "variantPartner": "gemini-4-argon",
       "contextWindow": 1048576,
       "inputCost": 0.75,
       "outputCost": 3.75,
@@ -21536,7 +21500,7 @@
     "pro_additions": [
       "gpt-6.1-sol",
       "claude-sonnet-5-5",
-      "gemini-3.1-pro-preview",
+      "gemini-4-argon",
       "deepseek-flash",
       "deepseek-v4-pro",
       "qwen-3.7-plus",

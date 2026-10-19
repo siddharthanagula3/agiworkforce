@@ -9,9 +9,10 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { Project } from '@agiworkforce/unified-chat';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { fetchRefreshingSession } from '@/lib/identity/token';
 
 const client = createManagedCloudProjectsClient({
-  fetchImpl: (input, init) => fetch(input, init),
+  fetchImpl: (input, init) => fetchRefreshingSession(input, init),
   credentials: 'same-origin',
   getHeaders: ({ mutation }) => (mutation ? addCsrfHeaders() : {}),
 });

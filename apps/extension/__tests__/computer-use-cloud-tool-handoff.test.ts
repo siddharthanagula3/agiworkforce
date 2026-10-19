@@ -108,6 +108,37 @@ describe('canonical caller-owned browser tool handoff', () => {
     expect(result.message.tool_calls?.every((call) => call !== undefined)).toBe(true);
   });
 
+  it('reads a no-input tool streamed with empty arguments as an empty object', async () => {
+    const assembler = new OpenAIWireAssembler({
+      model: COMPUTER_USE_MODEL,
+      wireMode: 'legacy-web',
+    });
+    const result = await response(
+      [
+        ...assembler.sseChunks({
+          type: 'tool-use-start',
+          toolUseId: click.id,
+          name: click.function.name,
+          vendorIndex: 1,
+        }),
+        ...assembler.sseChunks({
+          type: 'tool-use-delta',
+          toolUseId: click.id,
+          deltaJson: '{"index":3}',
+        }),
+        ...assembler.sseChunks({
+          type: 'tool-use-start',
+          toolUseId: read.id,
+          name: read.function.name,
+          vendorIndex: 2,
+        }),
+        ...assembler.sseChunks({ type: 'stop', reason: 'tool_use' }),
+      ],
+      1,
+    );
+    expect(result.message.tool_calls).toEqual([click, read]);
+  });
+
   it('keeps parallel calls keyed by their actual noncontiguous producer indices', async () => {
     const assembler = new OpenAIWireAssembler({
       model: COMPUTER_USE_MODEL,

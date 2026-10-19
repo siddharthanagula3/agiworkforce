@@ -494,7 +494,7 @@ export function createChatHandler(
         finish();
       } else if (event.type === 'turn_interrupted') {
         finish();
-      } else {
+      } else if (event.type === 'turn_failed') {
         stream.markdown(`\n\n> **Error**: ${event.error ?? 'The local developer turn failed.'}`);
         finish();
       }

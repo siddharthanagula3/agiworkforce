@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
+import { classifyTaskLocally, runtimeProfileImplementsTask } from '@agiworkforce/routing';
+
 import {
   getModels,
   getRoutingSlotModel,
@@ -513,5 +515,42 @@ describe('managed web-search tool choice', () => {
     );
     expect(resolveRequiredSearchEnforcement({ ...base, tools: [] }).mode).toBe('none');
     expect(resolveRequiredSearchEnforcement({ ...base, stream: false }).mode).toBe('none');
+  });
+});
+
+describe('browser-control prompts on the web runtime', () => {
+  const browserTaskPrompt =
+    'On this page, scroll to the Climate section and tell me the record high temperature.';
+  const clientBrowserTool = {
+    type: 'function' as const,
+    function: { name: 'browser_scroll', parameters: { type: 'object', properties: {} } },
+  };
+
+  it('classifies the prompt as computer use, which the web runtime cannot serve', () => {
+    expect(classifyTaskLocally(browserTaskPrompt, []).type).toBe('computer-use');
+    expect(runtimeProfileImplementsTask('web/cloud-chat', 'computer-use')).toBe(false);
+  });
+
+  it('answers a plain browser-control prompt as ordinary chat instead of refusing the model', () => {
+    const taskType = resolveToolAwareTaskType()(
+      classifyTaskLocally(browserTaskPrompt, []).type,
+      request({ messages: [{ role: 'user', content: browserTaskPrompt }] }),
+    );
+
+    expect(taskType).toBe('general');
+    expect(runtimeProfileImplementsTask('web/cloud-chat', taskType)).toBe(true);
+  });
+
+  it('routes a browser-control prompt that carries client tools as agentic work', () => {
+    const taskType = resolveToolAwareTaskType()(
+      classifyTaskLocally(browserTaskPrompt, []).type,
+      request({
+        messages: [{ role: 'user', content: browserTaskPrompt }],
+        tools: [clientBrowserTool],
+      }),
+    );
+
+    expect(taskType).toBe('agentic');
+    expect(runtimeProfileImplementsTask('web/cloud-chat', taskType)).toBe(true);
   });
 });

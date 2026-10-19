@@ -1,11 +1,12 @@
 jest.mock('@/lib/v1FeatureFlags', () => ({
-  FEATURES: { cloudTasks: true, research: false, schedules: true },
+  FEATURES: { cloudTasks: true, research: false, schedules: true, cloudChat: true },
 }));
 
 import {
   nativeRouteForProductLink,
   productLinkWebFallbackUrl,
   readProductLink,
+  resolveNativeProductLinkRoute,
 } from '../src/features/notifications/productLinks';
 import { API_URL } from '../lib/constants';
 
@@ -31,5 +32,51 @@ describe('product links on mobile', () => {
     expect(productLinkWebFallbackUrl(link)).toBe(
       new URL('/open/research/report-1', API_URL).toString(),
     );
+  });
+
+  it('opens an account chat on its own conversation screen', () => {
+    expect(nativeRouteForProductLink({ target: 'chat', id: 'conv-1' })).toBe('/(app)/chat/conv-1');
+  });
+
+  it('opens a chat already on this device without waiting for a sync', async () => {
+    const sync = jest.fn(async () => undefined);
+    const route = await resolveNativeProductLinkRoute(
+      { target: 'chat', id: 'conv-1' },
+      { hasConversation: () => true, sync },
+    );
+    expect(route).toBe('/(app)/chat/conv-1');
+    expect(sync).not.toHaveBeenCalled();
+  });
+
+  it('pulls the account history once before opening a chat started elsewhere', async () => {
+    let synced = false;
+    const route = await resolveNativeProductLinkRoute(
+      { target: 'chat', id: 'conv-2' },
+      {
+        hasConversation: () => synced,
+        sync: async () => {
+          synced = true;
+        },
+      },
+    );
+    expect(route).toBe('/(app)/chat/conv-2');
+  });
+
+  it('hands a chat this account cannot load to the web resolver instead of an empty screen', async () => {
+    const route = await resolveNativeProductLinkRoute(
+      { target: 'chat', id: 'conv-3' },
+      { hasConversation: () => false, sync: async () => undefined },
+    );
+    expect(route).toBeNull();
+  });
+
+  it('resolves other targets without touching chat history', async () => {
+    const sync = jest.fn(async () => undefined);
+    const route = await resolveNativeProductLinkRoute(
+      { target: 'file', id: 'asset-1' },
+      { hasConversation: () => false, sync },
+    );
+    expect(route).toBe('/(app)/library');
+    expect(sync).not.toHaveBeenCalled();
   });
 });

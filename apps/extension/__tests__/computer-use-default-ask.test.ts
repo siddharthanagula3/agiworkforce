@@ -91,7 +91,9 @@ describe('computer-use approval accessibility', () => {
 
       const expired = approvalCard();
       expired.card.focus();
-      vi.advanceTimersByTime(APPROVAL_TIMEOUT_MS);
+      vi.advanceTimersByTime(60_000);
+      expect(expired.resolve).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(APPROVAL_TIMEOUT_MS - 60_000);
       expect(expired.card.element.getAttribute('role')).toBe('status');
       expect(document.activeElement).toBe(expired.card.element);
       expect(expired.resolve).toHaveBeenCalledWith('skip');

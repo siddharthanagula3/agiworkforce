@@ -273,39 +273,6 @@
       "residencyRegions": null,
       "evidenceRefs": []
     },
-    "gemini-3.1-pro-preview": {
-      "identity": {
-        "key": "gemini-3.1-pro-preview",
-        "displayName": "Gemini 3.1 Pro",
-        "provider": "google",
-        "developer": "google",
-        "providerModelId": "gemini-3.1-pro-preview",
-        "openRouterSlug": "google/gemini-3.1-pro-preview",
-        "kind": "reasoning",
-        "familyPartner": "gemini-3.5-flash-lite",
-        "openWeight": false,
-        "license": "proprietary",
-        "aliases": ["google/gemini-3.1-pro-preview"],
-        "family": "gemini-pro",
-        "version": "3.1"
-      },
-      "lifecycle": {
-        "status": "active",
-        "availability": "live",
-        "released": "February 19, 2026",
-        "deprecationDate": null,
-        "deprecated": false,
-        "releasedOn": "2026-02-19",
-        "deprecatedOn": null,
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "stageSource": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.long_context_balanced",
-        "replacedBy": null
-      },
-      "speed": "medium",
-      "residencyRegions": null,
-      "evidenceRefs": []
-    },
     "gemini-4-argon": {
       "identity": {
         "key": "gemini-4-argon",
@@ -313,24 +280,26 @@
         "provider": "google",
         "developer": "google",
         "providerModelId": "gemini-4-argon",
+        "openRouterSlug": "google/gemini-4-argon",
         "kind": "reasoning",
+        "familyPartner": "gemini-3.5-flash-lite",
         "openWeight": false,
         "license": "proprietary",
-        "aliases": [],
-        "family": null,
-        "version": null
+        "aliases": ["google/gemini-4-argon"],
+        "family": "gemini-pro",
+        "version": "4"
       },
       "lifecycle": {
         "status": "active",
-        "availability": "coming_soon",
-        "unavailableReason": "Google announced Gemini 4 Argon on September 30, 2026 with access limited to trusted cyber defenders in its Fairwind Program; paid API customers and Google AI Ultra subscribers come next, with no date published.",
+        "availability": "live",
+        "released": "October 13, 2026",
         "deprecationDate": null,
         "deprecated": false,
-        "releasedOn": null,
+        "releasedOn": "2026-10-13",
         "deprecatedOn": null,
-        "stage": "registered",
-        "stagedOn": "2026-10-09",
-        "stageSource": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/",
+        "stage": "promoted",
+        "stagedOn": "2026-10-18",
+        "stageSource": "catalog/model-families.json#google/gemini-pro",
         "replacedBy": null
       },
       "speed": "medium",
@@ -346,7 +315,7 @@
         "providerModelId": "gemini-3.5-flash-lite",
         "openRouterSlug": "google/gemini-3.5-flash-lite",
         "kind": "multimodal",
-        "familyPartner": "gemini-3.1-pro-preview",
+        "familyPartner": "gemini-4-argon",
         "openWeight": false,
         "license": "proprietary",
         "aliases": [
@@ -884,7 +853,7 @@
         "providerModelId": "gemini-3.8-flash",
         "openRouterSlug": "google/gemini-3.8-flash",
         "kind": "multimodal",
-        "familyPartner": "gemini-3.1-pro-preview",
+        "familyPartner": "gemini-4-argon",
         "openWeight": false,
         "license": "proprietary",
         "aliases": ["gemini-3.5-flash", "google/gemini-3.8-flash"],
@@ -12591,7 +12560,6 @@
     "anthropic": ["claude-fable-5-1", "claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5"],
     "google": [
       "gemini-embedding-2",
-      "gemini-3.1-pro-preview",
       "gemini-4-argon",
       "gemini-3.5-flash-lite",
       "gemini-nano-banana-2.1",
@@ -13336,10 +13304,10 @@
         "outputPerMillion": 0
       }
     },
-    "google/gemini-3.1-pro-preview": {
-      "modelKey": "gemini-3.1-pro-preview",
+    "google/gemini-4-argon": {
+      "modelKey": "gemini-4-argon",
       "provider": "google",
-      "providerModelId": "gemini-3.1-pro-preview",
+      "providerModelId": "gemini-4-argon",
       "harnessId": "google/generate-content",
       "trustModes": ["managed_cloud", "byok"],
       "availability": "live",
@@ -13352,22 +13320,16 @@
         "currency": "USD",
         "unit": "per_million_tokens",
         "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "inputTokenPricingTiers": [
-          {
-            "thresholdTokens": 200000,
-            "inputPerMillion": 4,
-            "outputPerMillion": 18,
-            "cacheReadPerMillion": 0.4
-          }
-        ]
+        "outputPerMillion": 10,
+        "cacheReadPerMillion": 0.1,
+        "promoExpiresAt": "2026-12-01T00:00:00Z",
+        "postPromoPrices": { "input": 4, "output": 20, "cached_input": 0.2 }
       }
     },
-    "open_router/gemini-3.1-pro-preview": {
-      "modelKey": "gemini-3.1-pro-preview",
+    "open_router/gemini-4-argon": {
+      "modelKey": "gemini-4-argon",
       "provider": "open_router",
-      "providerModelId": "google/gemini-3.1-pro-preview",
+      "providerModelId": "google/gemini-4-argon",
       "harnessId": "open-router/chat-completions",
       "trustModes": ["byok"],
       "availability": "live",
@@ -13379,107 +13341,10 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
+        "inputPerMillion": 4,
+        "outputPerMillion": 20,
         "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 0.375
-      }
-    },
-    "vercel_gateway/gemini-3.1-pro-preview": {
-      "modelKey": "gemini-3.1-pro-preview",
-      "provider": "vercel_gateway",
-      "providerModelId": "google/gemini-3.1-pro-preview",
-      "harnessId": "vercel_gateway/chat-completions",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 0.2,
-        "cacheWritePerMillion": 0
-      }
-    },
-    "cheaperinference/gemini-3.1-pro-preview": {
-      "modelKey": "gemini-3.1-pro-preview",
-      "provider": "cheaperinference",
-      "providerModelId": "gemini-3.1-pro-preview",
-      "harnessId": "cheaperinference/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 1.4,
-        "outputPerMillion": 8.4,
-        "cacheReadPerMillion": 0.14,
-        "cacheWritePerMillion": 1.4
-      },
-      "discount": {
-        "minPercent": 30,
-        "requestField": "min_discount_percent",
-        "listPricing": {
-          "currency": "USD",
-          "unit": "per_million_tokens",
-          "inputPerMillion": 2,
-          "outputPerMillion": 12,
-          "cacheReadPerMillion": 0.2,
-          "cacheWritePerMillion": 2
-        },
-        "source": "https://www.cheaperinference.com/docs",
-        "verifiedOn": "2026-09-06"
-      }
-    },
-    "experientiallabs/gemini-3.1-pro-preview": {
-      "modelKey": "gemini-3.1-pro-preview",
-      "provider": "experientiallabs",
-      "providerModelId": "gemini-3.1-pro-preview",
-      "harnessId": "experientiallabs/chat-completions",
-      "trustModes": ["managed_cloud"],
-      "availability": "live",
-      "selectable": true,
-      "isDefault": false,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "authorized_marketplace",
-      "dataRetention": "conditional",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 12,
-        "cacheReadPerMillion": 2,
-        "cacheWritePerMillion": 2
-      }
-    },
-    "google/gemini-4-argon": {
-      "modelKey": "gemini-4-argon",
-      "provider": "google",
-      "providerModelId": "gemini-4-argon",
-      "harnessId": "google/generate-content",
-      "trustModes": ["managed_cloud", "byok"],
-      "availability": "coming_soon",
-      "selectable": false,
-      "isDefault": true,
-      "cacheClass": "provider_implicit_prompt_cache",
-      "commercialStatus": "agi_direct",
-      "dataRetention": "provider_default",
-      "pricing": {
-        "currency": "USD",
-        "unit": "per_million_tokens",
-        "inputPerMillion": 2,
-        "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.1
+        "cacheWritePerMillion": 4
       }
     },
     "google/gemini-3.5-flash-lite": {
@@ -14287,10 +14152,10 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 0.75,
-        "outputPerMillion": 3.75,
-        "cacheReadPerMillion": 0.075,
-        "cacheWritePerMillion": 0.0417
+        "inputPerMillion": 1.5,
+        "outputPerMillion": 7.5,
+        "cacheReadPerMillion": 0.15,
+        "cacheWritePerMillion": 0.0834
       }
     },
     "vercel_gateway/gemini-3.8-flash": {
@@ -14308,9 +14173,9 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 0.75,
-        "outputPerMillion": 3.75,
-        "cacheReadPerMillion": 0.075,
+        "inputPerMillion": 1.5,
+        "outputPerMillion": 7.5,
+        "cacheReadPerMillion": 0.15,
         "cacheWritePerMillion": 0
       }
     },
@@ -14329,10 +14194,10 @@
       "pricing": {
         "currency": "USD",
         "unit": "per_million_tokens",
-        "inputPerMillion": 0.75,
-        "outputPerMillion": 3.75,
-        "cacheReadPerMillion": 0.075,
-        "cacheWritePerMillion": 0.75
+        "inputPerMillion": 1.5,
+        "outputPerMillion": 7.5,
+        "cacheReadPerMillion": 0.15,
+        "cacheWritePerMillion": 1.5
       }
     },
     "zhipu/glm-5.3": {
@@ -24008,11 +23873,11 @@
       "codeExecution": false,
       "promptCaching": false
     },
-    "gemini-3.1-pro-preview": {
+    "gemini-4-argon": {
       "textInput": true,
       "imageInput": true,
-      "audioInput": false,
-      "videoInput": false,
+      "audioInput": true,
+      "videoInput": true,
       "textOutput": true,
       "imageOutput": false,
       "audioOutput": false,
@@ -24028,33 +23893,9 @@
       "computerUse": false,
       "agentic": true,
       "webSearch": true,
-      "deepResearch": true,
+      "deepResearch": false,
       "codeExecution": true,
       "promptCaching": true
-    },
-    "gemini-4-argon": {
-      "textInput": true,
-      "imageInput": false,
-      "audioInput": false,
-      "videoInput": false,
-      "textOutput": true,
-      "imageOutput": false,
-      "audioOutput": false,
-      "videoOutput": false,
-      "streaming": false,
-      "structuredOutput": false,
-      "functionCalling": false,
-      "reasoning": false,
-      "imageEditing": null,
-      "realtime": null,
-      "reranking": null,
-      "toolSchemaSupport": null,
-      "computerUse": false,
-      "agentic": false,
-      "webSearch": false,
-      "deepResearch": false,
-      "codeExecution": false,
-      "promptCaching": false
     },
     "gemini-3.5-flash-lite": {
       "textInput": true,
@@ -33952,27 +33793,14 @@
       "inputPerMillion": 0.2,
       "outputPerMillion": 0
     },
-    "gemini-3.1-pro-preview": {
-      "currency": "USD",
-      "unit": "per_million_tokens",
-      "inputPerMillion": 2,
-      "outputPerMillion": 12,
-      "cacheReadPerMillion": 0.2,
-      "inputTokenPricingTiers": [
-        {
-          "thresholdTokens": 200000,
-          "inputPerMillion": 4,
-          "outputPerMillion": 18,
-          "cacheReadPerMillion": 0.4
-        }
-      ]
-    },
     "gemini-4-argon": {
       "currency": "USD",
       "unit": "per_million_tokens",
       "inputPerMillion": 2,
       "outputPerMillion": 10,
-      "cacheReadPerMillion": 0.1
+      "cacheReadPerMillion": 0.1,
+      "promoExpiresAt": "2026-12-01T00:00:00Z",
+      "postPromoPrices": { "input": 4, "output": 20, "cached_input": 0.2 }
     },
     "gemini-3.5-flash-lite": {
       "currency": "USD",
@@ -37006,13 +36834,7 @@
       "knowledgeCutoff": "2026-06"
     },
     "gemini-embedding-2": { "contextTokens": 8192, "maxInputTokens": 8192 },
-    "gemini-3.1-pro-preview": { "contextTokens": 1048576 },
-    "gemini-4-argon": {
-      "contextWindowUnpublished": {
-        "source": "https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/",
-        "verifiedOn": "2026-10-09"
-      }
-    },
+    "gemini-4-argon": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
     "gemini-3.5-flash-lite": { "contextTokens": 1048576, "maxOutputTokens": 65536 },
     "gemini-nano-banana-2.1": { "contextTokens": 131072 },
     "gemini-3-pro-image": { "contextTokens": 65536, "maxOutputTokens": 32768 },
@@ -37619,43 +37441,6 @@
     "claude-sonnet-5-5": {},
     "claude-haiku-5-5": {},
     "gemini-embedding-2": {},
-    "gemini-3.1-pro-preview": {
-      "swebench": {
-        "value": 74.2,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "humaneval": {
-        "value": 93.5,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "mmlu": {
-        "value": 89.5,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "gpqa": {
-        "value": 91.9,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      },
-      "aime": {
-        "value": 95,
-        "source": "models.dev",
-        "version": null,
-        "date": null,
-        "confidence": "aggregated"
-      }
-    },
     "gemini-4-argon": {},
     "gemini-3.5-flash-lite": {},
     "gemini-nano-banana-2.1": {},
@@ -38727,6 +38512,13 @@
       "verifiedBy": "owner-direction-2026-10-13",
       "status": "ROSTER",
       "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) leaves the catalog on the owner's instruction of 2026-10-13: the free router kept answering that it was overloaded, and it was the only model the Free plan could reach. Asked what should serve Free instead, the owner chose the fast OpenAI family. The row, its route, its synced record and its probe are removed and the id is recorded in catalog/retired-models.json so a conversation that names it still renders a label. The Free Auto slots free_workhorse and free_workhorse_fast move to family:openai/gpt-fast and the slot router_zero_cost is deleted, because no slot is zero cost any more. gpt-6-luna takes tierPolicy.minTier free, which with its existing place in tierAllowedModels.economy is what admits it to the Free plan; a Free turn on it is metered against the Free usage windows in packages/contracts/types/src/managed-usage-limits.ts. The two retired :free aliases that redirected to the router now redirect to the same family. No live provider call was made for this change."
+    },
+    {
+      "id": "verification/2026-10-18/88",
+      "date": "2026-10-18",
+      "verifiedBy": "official-google-gemini-4-argon-ga-pages-no-live-call",
+      "status": "ROSTER",
+      "notes": "On the owner's request of 2026-10-18, gemini-4-argon goes from coming_soon to live. Google made it available to everyone on 2026-10-13: the Gemini API and AI Studio serve it as gemini-4-argon, labelled stable, and it is not on the free tier. Read on 2026-10-18 from https://ai.google.dev/gemini-api/docs/latest-model (last updated 2026-10-16), the model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon and https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud (2026-10-13). The row takes apiModelId, the shared 1,048,576-token window in place of contextWindowUnpublished, a 65,536 maxOutputTokens (the synchronous default; the long decode needs background execution), text, image, audio, video and PDF input, low/medium/high thinking levels defaulting to medium on thinkingConfig.thinkingLevel with no budget path, implicit caching from 4,096 tokens, and the introductory $2/$0.10/$10 with promo_expires_at 2026-12-01 and post_promo_prices $4/$0.20/$20. Capabilities follow the model page; computer use, listed as Preview, and deep research, not listed, are false. tierPolicy.minTier is pro, the tier of the row it replaces. The google/gemini-pro slot pattern now also matches -argon ids, and the slot moves from gemini-3.1-pro-preview to gemini-4-argon; the promotion was built with the family tool's own functions, since its promote command refuses without a probe and an eval gate run. Under the owner's order of 2026-10-07 to keep only the newest generation of every family, gemini-3.1-pro-preview then leaves through the retire tool into retired-models.json, naming gemini-4-argon, with its marketplace routes, probe and synced record; Google has announced no shutdown date for it. The slot keeps it as previous with an empty fallback chain. The tool built the retirement record from a registry that no longer had the synced record, so its context window, capabilities, release date and successor were restored from the registry before this change. gemini-3.5-flash-lite and gemini-3.8-flash now name gemini-4-argon as their variant partner, and gemini-4-argon names gemini-3.5-flash-lite. The capabilityCoverage gate fails and is recorded as failing: the slot's 2,000,000 minimum context predates the current rows, and neither model meets it. The slot is in pro_additions and serves the long_context_balanced and long_context_pro Auto slots and Google's complex_reasoning and long_context task routes, so those move to the new model; at the post-introductory price its input costs twice and its output 67% more than gemini-3.1-pro-preview did. The direct Google route carries the promotion and its end date. A marketplace route cannot carry the end date, so the one OpenRouter route is priced at the post-introductory $4/$20 with a $0.20 cache read now, which overstates the cost until 2026-12-01 and never understates it after; a registry test holds every route of a running promotion at or above the post-promotion price. Vercel AI Gateway and Experiential Labs also list the model and get no route. The row carries OpenRouter's slug google/gemini-4-argon, read from OpenRouter's model endpoints listing on 2026-10-18, because every direct-provider chat model needs one for OpenRouter failover. The OpenRouter adapter turns a prompt-cache request on a google/ slug into cache_control breakpoints, which OpenRouter uses for Gemini's explicit caching; providerCompatibility.explicitPromptCache false now makes it send none for this model. No probe was made and the eval gate was not run; the owner has not approved spend for this model."
     }
   ],
   "retiredModels": {
@@ -39119,6 +38911,39 @@
       "retiredOn": "2026-10-07",
       "replacedBy": "gemini-3.8-flash-tts",
       "metadataSource": "catalog/models.curation.json#gemini-3.1-flash-tts-preview",
+      "metadataPreserved": true
+    },
+    "gemini-3.1-pro-preview": {
+      "id": "gemini-3.1-pro-preview",
+      "displayName": "Gemini 3.1 Pro",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "reasoning",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "February 19, 2026",
+      "retiredOn": "2026-10-18",
+      "replacedBy": "gemini-4-argon",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-pro-preview",
       "metadataPreserved": true
     },
     "gemini-3.5-flash": {
@@ -40170,13 +39995,13 @@
       "canonicalFamily": "gemini-pro",
       "tier": "frontier",
       "lifecyclePolicy": "preview",
-      "activeModelKey": "gemini-3.1-pro-preview",
-      "activeGeneration": "3.1",
-      "activeLifecycle": "preview",
-      "previousModelKey": null,
+      "activeModelKey": "gemini-4-argon",
+      "activeGeneration": "4",
+      "activeLifecycle": "stable",
+      "previousModelKey": "gemini-3.1-pro-preview",
       "fallbackChain": [],
-      "promotedAt": "2026-08-18",
-      "promotionReason": "seeded from the authored catalog roster when family slots were introduced"
+      "promotedAt": "2026-10-18",
+      "promotionReason": "moved on the owner's request of 2026-10-18 to add Gemini 4 Argon, which Google made available to everyone in the Gemini API as gemini-4-argon on 2026-10-13 (https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud; model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon, stable); no probe was made and the eval gate was not run, neither approved by the owner"
     },
     "google/gemini-flash-image": {
       "provider": "google",
@@ -40832,7 +40657,7 @@
           "description": "Shared multimodal balanced route. Model and provider are selected by the canonical registry."
         },
         "long_context_balanced": {
-          "modelKey": "gemini-3.1-pro-preview",
+          "modelKey": "gemini-4-argon",
           "label": "Long Context Balanced",
           "description": "Shared long context balanced route. Model and provider are selected by the canonical registry."
         },
@@ -40932,7 +40757,7 @@
           "description": "Shared multimodal pro route. Model and provider are selected by the canonical registry."
         },
         "long_context_pro": {
-          "modelKey": "gemini-3.1-pro-preview",
+          "modelKey": "gemini-4-argon",
           "label": "Long Context Pro",
           "description": "Shared long context pro route. Model and provider are selected by the canonical registry."
         },
@@ -40958,7 +40783,7 @@
       "pro_additions": [
         "gpt-6.1-sol",
         "claude-sonnet-5-5",
-        "gemini-3.1-pro-preview",
+        "gemini-4-argon",
         "deepseek-flash",
         "deepseek-v4-pro",
         "qwen-3.7-plus",

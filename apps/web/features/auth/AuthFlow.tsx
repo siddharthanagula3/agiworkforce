@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LifecycleStatus } from '@agiworkforce/types';
 
 import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
@@ -65,6 +65,7 @@ export function AuthFlow({
   mfaEmailFallback = false,
   optedOutBySignal = false,
   redirects,
+  hostWayIn,
 }: {
   mode: AuthMode;
   providers: readonly AuthProvider[];
@@ -72,6 +73,7 @@ export function AuthFlow({
   mfaEmailFallback?: boolean;
   optedOutBySignal?: boolean;
   redirects: AuthRedirects;
+  hostWayIn?: ReactNode;
 }) {
   const client = useIdentityAuthClient(mode, redirects, { mfaEmailFallback });
   const copy = useAuthCopy();
@@ -377,6 +379,7 @@ export function AuthFlow({
       <AuthEmailStep
         mode={mode}
         providers={providers}
+        hostWayIn={hostWayIn}
         switchUrl={redirects.switchUrl}
         ready={client.isReady}
         phase={visiblePhase}

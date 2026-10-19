@@ -16,6 +16,7 @@ import {
 } from '@/features/chat/lib/chat-slash-commands';
 import { readChatMutationError } from '@/features/chat/lib/chatMutationError';
 import { NEW_CHAT_PATH, QUICK_ASK_PATH } from '../lib/new-chat-entry';
+import { completionNotificationTitle } from '../lib/completion-notification';
 import { freeQuotaSelection } from '../lib/free-quota-selection';
 import {
   freeModelAttachmentKind,
@@ -160,6 +161,8 @@ import {
   X as XIcon,
   ChevronUp,
   EyeOff,
+  ExternalLink,
+  SquarePen,
 } from '@agiworkforce/icons';
 import {
   Button,
@@ -409,8 +412,6 @@ import type { McpContextSelection } from '@/features/connectors/lib/mcp-context-
 // memoization below, which is what the exhaustive-deps warning was pointing at.
 const EMPTY_NAV_IDS: string[] = [];
 
-const AGI_WORK_DONE_TITLE = 'AGI Work finished';
-const RESEARCH_DONE_TITLE = 'Your research report is ready';
 const IMAGE_DONE_TITLE = 'Your image is ready';
 const VIDEO_DONE_TITLE = 'Your video is ready';
 
@@ -487,6 +488,7 @@ const AUTO_TITLE_PLACEHOLDERS: ReadonlySet<string> = new Set([
 const SERVER_TITLE_READ_DELAYS_MS = [0, 1200, 3000] as const;
 
 const CLIENT_FALLBACK_TITLE_LENGTH = 60;
+const OPEN_CONVERSATION_REFRESH_MIN_GAP_MS = 2_000;
 
 function clientFallbackTitle(firstUserContent: string): string {
   return firstUserContent.trim().slice(0, CLIENT_FALLBACK_TITLE_LENGTH).replace(/\n/g, ' ');
@@ -1333,6 +1335,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           statuses[status.index] = {
             phase: status.phase,
             ...(status.error ? { error: status.error } : {}),
+            ...(status.retryable === undefined ? {} : { retryable: status.retryable }),
           };
           return { ...attempt, statuses };
         }),
@@ -1518,7 +1521,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     const next = new URLSearchParams(Array.from(searchParams?.entries() ?? []));
     next.delete(SETTINGS_DEEP_LINK_QUERY_KEY);
     const qs = next.toString();
-    router.replace(qs ? `${pathname}?${qs}` : (pathname ?? '/chat'), { scroll: false });
+    const base = qs ? `${pathname}?${qs}` : (pathname ?? '/chat');
+    router.replace(`${base}${window.location.hash}`, { scroll: false });
   }, [settingsSectionParam, searchParams, openSettings, router, pathname]);
 
   // Listen for sidebar-dispatched events so keyboard shortcuts and Cmd+K still work
@@ -1573,6 +1577,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     billingPolicyReady,
     openSettings,
   });
+  useEffect(
+    () => onAppCommand('open-upgrade', () => handleOpenUpgradeDialog()),
+    [handleOpenUpgradeDialog],
+  );
 
   const handlePaywallRecovery = useCallback(
     (_messageId: string, requiredTier: string, recoveryAction: MediaPaywallRecoveryAction) => {
@@ -1638,17 +1646,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [managedUsageSummary, promotedModelActive],
   );
   const [usageWarningDismissed, setUsageWarningDismissed] = useState(false);
-  const liveUsageWarning = usageWarningDismissed ? null : usageWarning;
+  const liveUsageWarning = usageWarningDismissed || composerUsageBlock ? null : usageWarning;
   const usageBanner = (
     <UsageWarningBanner
       warning={liveUsageWarning}
       {...(isFreeBillingPlanTier(managedUsageSummary?.plan_tier)
         ? { upgradeLabel: 'Upgrade' }
         : {})}
-      // `/settings/usage` renders a SettingsModalRedirect that replaces back to
-      // /chat, so pushing it would unmount and remount this page one tick after
-      // leaving it. The modal opens in place instead.
-      onUpgrade={() => openSettings('usage')}
+      onUpgrade={() => handleOpenUpgradeDialog()}
       onDismiss={() => setUsageWarningDismissed(true)}
     />
   );
@@ -1738,6 +1743,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     getConversationLoadError,
     createConversation,
     loadConversation,
+    refreshOpenConversation,
     deleteConversation,
     updateConversation,
     setActiveConversation,
@@ -2083,6 +2089,24 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     });
   }, [isStreaming, displayedMessages, chatError, displayedConversation, browserReplyReady]);
 
+  useEffect(() => {
+    if (!authLoaded || !activeConversationId) return;
+    let lastRefreshAt = 0;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastRefreshAt < OPEN_CONVERSATION_REFRESH_MIN_GAP_MS) return;
+      lastRefreshAt = now;
+      void refreshOpenConversation(activeConversationId);
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [activeConversationId, authLoaded, refreshOpenConversation]);
+
   // On mount: if URL has a conversation ID, load it. Otherwise keep /chat as
   // the empty new-chat surface and create persistence only when the user sends.
   const routeInitializedRef = useRef(false);
@@ -2427,12 +2451,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           });
 
         const announceDesktopCompletion = () => {
-          const heading =
-            options.meta?.workMode === 'agiwork'
-              ? AGI_WORK_DONE_TITLE
-              : options.meta?.researchEnabled
-                ? RESEARCH_DONE_TITLE
-                : null;
+          const state = useChatStore.getState();
+          const heading = completionNotificationTitle({
+            workMode: options.meta?.workMode,
+            research: options.meta?.researchEnabled,
+            reply: (state.messagesByConversation[convId] ?? []).at(-1),
+            conversationTitle: state.conversations.find((c) => c.id === convId)?.title,
+            untitled: NEW_CHAT_TITLE,
+          });
           if (!heading) return;
           void notifyJobComplete({ title: heading, body: content, conversationId: convId });
         };
@@ -6476,7 +6502,32 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           tabIndex={-1}
           className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]"
         >
-          {!compact && (
+          {compact ? (
+            <header
+              data-quick-ask-header=""
+              className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-3"
+            >
+              {urlConversationId ? (
+                <a
+                  href={conversationHref(urlConversationId)}
+                  className="inline-flex min-h-[32px] items-center gap-1.5 rounded-md px-2 text-[13px] font-medium text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <ExternalLink className="h-4 w-4" aria-hidden="true" />
+                  {t('chat:quickAsk.openFullChat', 'Open full chat')}
+                </a>
+              ) : (
+                <span />
+              )}
+              <a
+                href={QUICK_ASK_PATH}
+                aria-label={t('chat:quickAsk.newChat', 'New chat')}
+                title={t('chat:quickAsk.newChat', 'New chat')}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-md text-[var(--chat-text-secondary)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              >
+                <SquarePen className="h-4 w-4" aria-hidden="true" />
+              </a>
+            </header>
+          ) : (
             <header
               data-app-header=""
               className={cn(

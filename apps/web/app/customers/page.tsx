@@ -204,7 +204,7 @@ export default function CustomersPage() {
             <div>
               <Eyebrow>Worked scenarios</Eyebrow>
               <h2 className="agi-ds-h2" id="agi-customers-scenarios-title">
-                A scenario that only lists benefits would be an advertisement.
+                Example workflows
               </h2>
               <Prose>
                 {`None of these is a customer. Each is a configuration we have built, named down to the command that proves it: the surface it runs on, the mechanics underneath, the plan limit it meets, and the work it hands back to you. All three run on the CLI. ${CLI_AVAILABILITY_NOTE} The link under each scenario goes to the page that describes the behaviour in full.`}

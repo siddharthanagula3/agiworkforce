@@ -533,5 +533,9 @@
     "thinking": "Thinking",
     "pair": "{{first}} and {{second}}",
     "list": "{{items}}, and {{last}}"
+  },
+  "quickAsk": {
+    "openFullChat": "Open full chat",
+    "newChat": "New chat"
   }
 }

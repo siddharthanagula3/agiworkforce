@@ -80,7 +80,10 @@ vi.mock('@/lib/user-connector-tools', async (importOriginal) => {
   return { ...actual, makeUserConnectorExecutor: vi.fn() };
 });
 
-import { CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS } from '@/lib/deadline-policy';
+import {
+  CLOUD_AGENT_CANCELLATION_POLL_MS,
+  CLOUD_AGENT_STEP_INVOCATION_LIMIT_MS,
+} from '@/lib/deadline-policy';
 import { executeCloudAgentWorkflowInvocation } from './steps/execute-cloud-agent-invocation';
 import type { CloudAgentWorkflowInput } from './cloud-agent-workflow-input';
 import {
@@ -246,6 +249,37 @@ describe('a cancel reaches the provider call, not only the failover plan', () =>
     await options.isCancellationRequested!();
 
     expect(options.signal!.aborted).toBe(true);
+  });
+
+  it('aborts the stream a Stop lands in, without waiting for the step to end', async () => {
+    vi.useFakeTimers();
+    try {
+      let signal: AbortSignal | undefined;
+      mocks.runToolLoop.mockImplementation(
+        (_processed: unknown, options: { signal?: AbortSignal }) => {
+          signal = options.signal;
+          return (async function* () {
+            await new Promise<void>((resolve) =>
+              options.signal?.addEventListener('abort', () => resolve()),
+            );
+            yield* [];
+          })();
+        },
+      );
+      mocks.isCancellationRequested.mockResolvedValue(false);
+
+      const invocation = executeCloudAgentWorkflowInvocation(makeInput());
+      await vi.advanceTimersByTimeAsync(CLOUD_AGENT_CANCELLATION_POLL_MS);
+      expect(signal?.aborted).toBe(false);
+
+      mocks.isCancellationRequested.mockResolvedValue(true);
+      await vi.advanceTimersByTimeAsync(CLOUD_AGENT_CANCELLATION_POLL_MS);
+
+      expect(signal?.aborted).toBe(true);
+      await invocation;
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('bounds the step from the shared policy rather than a literal at the call site', async () => {

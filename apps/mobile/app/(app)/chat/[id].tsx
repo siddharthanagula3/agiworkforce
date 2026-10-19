@@ -157,6 +157,7 @@ import {
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
+import { freeImageOfferFor } from '@/src/features/chat/actions/freeImageOffer';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -551,8 +552,18 @@ export default function ChatScreen() {
       });
 
       if (imageRequest.status === 'blocked') {
-        alertBlockedImageRequest(imageRequest);
-        return false;
+        if (imageRequest.prompt === undefined) {
+          alertBlockedImageRequest(imageRequest);
+          return false;
+        }
+        return freeImageOfferFor(imageRequest).then((offer) => {
+          if (!offer) {
+            alertBlockedImageRequest(imageRequest);
+            return false;
+          }
+          clearError();
+          return sendMessage(id, offer.prompt, offer.model);
+        });
       }
       if (imageRequest.status === 'ready') {
         let started = false;

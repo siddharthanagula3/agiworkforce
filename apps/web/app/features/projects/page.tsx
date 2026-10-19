@@ -91,11 +91,11 @@ export default function ProjectsFeaturePage() {
             <div className="agi-lp-moments">
               <article className="agi-lp-moment">
                 <div className="agi-lp-moment-copy">
-                  <h3 className="agi-lp-moment-title">An authored settings draft</h3>
+                  <h3 className="agi-lp-moment-title">Example project settings</h3>
                   <p className="agi-lp-moment-body">
                     The project dialog offers{' '}
                     {PROJECT_TEMPLATES.map((template) => template.label).join(', ')}. Presets
-                    provide starting instructions; the settings below show an authored draft.
+                    provide starting instructions; the settings below are an example.
                   </p>
                 </div>
                 <ProjectWindow />

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { getAccountToken } from '../../utils/api';
+import { forgetSharedCredentialRefusal, getAccountToken } from '../../utils/api';
 import { signInToAgiCloud, tryOpenDeviceAuthorizationUrl } from '../account-auth/deviceAuth';
 import { type CliAccountStatus, type CliCapabilityAdapter } from './cliCapabilities';
 
@@ -61,6 +61,8 @@ export async function signIn(
         return false;
       }
       if (grant.value.outcome === 'completed') {
+        forgetSharedCredentialRefusal();
+        await getAccountToken(secrets);
         vscode.window.showInformationMessage('Signed in to AGI Cloud.');
         return true;
       }

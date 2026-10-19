@@ -1,3 +1,4 @@
+import { onAppCommand } from '@shared/lib/app-commands';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { VISUAL_SOURCE_MESSAGE } from '@agiworkforce/types';
@@ -330,7 +331,7 @@ describe('VoiceModeSurface usage limit', () => {
     expect(exit).toHaveBeenCalledTimes(1);
   });
 
-  it('offers Upgrade to the plans page beside the way back to text', () => {
+  it('offers Upgrade, opening the plan dialog, beside the way back to text', () => {
     useVoiceSessionStore.setState({ usageLimited: true });
     controller.current = session({
       state: {
@@ -343,7 +344,11 @@ describe('VoiceModeSurface usage limit', () => {
 
     const upgrade = screen.getByTestId('voice-usage-upgrade');
     expect(upgrade.textContent).toBe('Upgrade');
-    expect(upgrade.getAttribute('href')).toBe('/pricing');
+    const openDialog = vi.fn();
+    const stop = onAppCommand('open-upgrade', openDialog);
+    fireEvent.click(upgrade);
+    stop();
+    expect(openDialog).toHaveBeenCalledOnce();
     expect(screen.getByRole('button', { name: 'Continue in text' })).toBeTruthy();
   });
 

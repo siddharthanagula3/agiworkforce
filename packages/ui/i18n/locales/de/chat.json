@@ -533,5 +533,9 @@
     "searchedWeb": "das Web durchsucht",
     "thinking": "Denken",
     "usedTools": "Verwendete Tools"
+  },
+  "quickAsk": {
+    "openFullChat": "Vollständigen Chat öffnen",
+    "newChat": "Neuer Chat"
   }
 }

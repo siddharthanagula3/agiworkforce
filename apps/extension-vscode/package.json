@@ -141,22 +141,22 @@
       },
       {
         "command": "agi-workforce.signIn",
-        "title": "AGI: Sign in to AGI Cloud",
+        "title": "AGI Workforce: Sign In to AGI Cloud",
         "icon": "$(sign-in)"
       },
       {
         "command": "agi-workforce.signOut",
-        "title": "AGI: Sign out of AGI Cloud",
+        "title": "AGI Workforce: Sign Out of AGI Cloud",
         "icon": "$(sign-out)"
       },
       {
         "command": "agi-workforce.openUpgrade",
-        "title": "AGI: Upgrade your plan",
+        "title": "AGI Workforce: Upgrade Your Plan",
         "icon": "$(rocket)"
       },
       {
         "command": "agi-workforce.openReferrals",
-        "title": "AGI: Invite friends",
+        "title": "AGI Workforce: Invite Friends",
         "icon": "$(gift)"
       },
       {
@@ -248,22 +248,22 @@
       },
       {
         "command": "agi.git.status",
-        "title": "AGI: Git Status",
+        "title": "AGI Workforce: Git Status",
         "icon": "$(source-control)"
       },
       {
         "command": "agi.git.diff",
-        "title": "AGI: Git Diff",
+        "title": "AGI Workforce: Git Diff",
         "icon": "$(diff)"
       },
       {
         "command": "agi.git.commit",
-        "title": "AGI: Git Commit",
+        "title": "AGI Workforce: Git Commit",
         "icon": "$(git-commit)"
       },
       {
         "command": "agi.test.run",
-        "title": "AGI: Run Tests",
+        "title": "AGI Workforce: Run Tests",
         "icon": "$(beaker)"
       },
       {
@@ -413,12 +413,12 @@
       },
       {
         "command": "agi-workforce.mentionFileInChat",
-        "title": "AGI Workforce: Mention File in @agi Chat",
+        "title": "AGI Workforce: Mention File in Chat",
         "icon": "$(mention)"
       },
       {
         "command": "agi-workforce.showSubsystemHealth",
-        "title": "AGI: Show Subsystem Health",
+        "title": "AGI Workforce: Show Subsystem Health",
         "category": "AGI"
       },
       {
@@ -474,11 +474,6 @@
         "command": "agi-workforce.memory.delete",
         "title": "AGI Workforce: Delete Memory Fact",
         "icon": "$(trash)"
-      },
-      {
-        "command": "agi-workforce.openInviteCodeModal",
-        "title": "AGI Workforce: Sign In to AGI Cloud",
-        "icon": "$(cloud)"
       },
       {
         "command": "agi-workforce.cycleAgentMode",

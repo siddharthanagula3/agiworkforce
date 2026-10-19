@@ -533,5 +533,9 @@
     "searchedWeb": "搜索了网络",
     "thinking": "思考",
     "usedTools": "已使用的工具"
+  },
+  "quickAsk": {
+    "openFullChat": "打开完整聊天",
+    "newChat": "新聊天"
   }
 }

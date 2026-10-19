@@ -29,6 +29,7 @@ import {
   type ImageDimensions,
   type MaskStroke,
 } from '../services/imageMask';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 const MIN_BRUSH = 0.02;
 const MAX_BRUSH = 0.15;
@@ -206,7 +207,7 @@ export function ImageAreaEditor({
       <KeyboardAvoidingView
         accessibilityViewIsModal
         style={{ flex: 1, backgroundColor: colors.surfaceBase }}
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={keyboardAvoidingBehavior('modal')}
       >
         <View
           style={{

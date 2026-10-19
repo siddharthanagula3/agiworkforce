@@ -96,6 +96,7 @@ import { runVideoGenerationTurn } from '@/src/features/chat/actions/runVideoGene
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
 import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
+import { freeImageOfferFor } from '@/src/features/chat/actions/freeImageOffer';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
 import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
@@ -427,8 +428,16 @@ export default function ChatTabScreen() {
             });
 
         if (imageRequest.status === 'blocked') {
-          alertBlockedImageRequest(imageRequest);
-          return false;
+          const offer = await freeImageOfferFor(imageRequest);
+          if (!offer) {
+            alertBlockedImageRequest(imageRequest);
+            return false;
+          }
+          const offerTitle =
+            offer.prompt.length > 40 ? offer.prompt.slice(0, 40).trim() + '...' : offer.prompt;
+          const offerConversationId = await createConversation(offerTitle);
+          router.push(`/(app)/chat/${offerConversationId}` as Parameters<typeof router.push>[0]);
+          return sendMessage(offerConversationId, offer.prompt, offer.model);
         }
         if (imageRequest.status === 'ready') {
           const title =

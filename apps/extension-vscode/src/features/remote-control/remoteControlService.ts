@@ -15,6 +15,11 @@ import {
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
 import {
+  LOCAL_CODE_SESSION_ACTIVITY_PATH,
+  type LocalCodeSessionActivity,
+} from '@agiworkforce/cloud-contracts';
+import {
+  createCodeSessionActivity,
   createRemoteControlHost,
   developerSessionEventFromNotification,
   type CodeRemoteDependencies,
@@ -22,7 +27,7 @@ import {
   type RemoteControlHost,
   type RemotePhoneToConfirm,
 } from '@agiworkforce/utils/remote-control';
-import type { ThreadSummary } from '@agiworkforce/types';
+import { REMOTE_CODE_LIMITS, type ThreadSummary } from '@agiworkforce/types';
 import { Config } from '../../platform/config';
 import { accountRequestHeaders } from '../../platform/accountHeaders';
 import { getExtensionVersion } from '../../platform/version';
@@ -116,6 +121,24 @@ function toSession(rootId: string, thread: ThreadSummary): LocalDeveloperSession
   };
 }
 
+/**
+ * Tells the account that a session on this computer needs an approval or has
+ * finished, so the paired phone gets a push. Delivery is best effort: a missed
+ * notice must never stop or slow the session itself.
+ */
+export async function postCodeSessionActivity(
+  secrets: vscode.SecretStorage,
+  activity: LocalCodeSessionActivity,
+): Promise<void> {
+  const token = await getAccountToken(secrets);
+  if (!token) return;
+  await fetch(`${getCloudWebOrigin()}${LOCAL_CODE_SESSION_ACTIVITY_PATH}`, {
+    method: 'POST',
+    headers: { ...accountRequestHeaders(token), 'Content-Type': 'application/json' },
+    body: JSON.stringify(activity),
+  });
+}
+
 async function requestPairing(token: string): Promise<RemoteControlStartRequest> {
   const response = await fetch(`${getCloudWebOrigin()}/api/pair/initiate`, {
     method: 'POST',
@@ -146,6 +169,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
   private _state: RemoteControlState = { ...IDLE_REMOTE_CONTROL_STATE };
   private readonly _changed = new vscode.EventEmitter<RemoteControlState>();
   private readonly _host: RemoteControlHost;
+  private readonly _reportActivity: (rootId: string, event: DeveloperSessionEvent) => Promise<void>;
   private readonly _watched = new Map<string, vscode.Disposable[]>();
   private readonly _disposables: vscode.Disposable[] = [];
 
@@ -155,6 +179,15 @@ export class VscodeRemoteControl implements vscode.Disposable {
     private readonly _context: vscode.ExtensionContext,
     private readonly _runtimes: LocalRuntimePool,
   ) {
+    this._reportActivity = createCodeSessionActivity({
+      sessionTitle: async (rootId, threadId) =>
+        (await this._runtime(this._root(rootId)).readThread(threadId)).thread.title.slice(
+          0,
+          REMOTE_CODE_LIMITS.messageLength,
+        ) || null,
+      remoteControlActive: () => this.active(),
+      report: (activity) => postCodeSessionActivity(this._context.secrets, activity),
+    });
     this._host = createRemoteControlHost({
       allowInsecureLoopback: this._context.extensionMode === vscode.ExtensionMode.Development,
       code: this._dependencies(),
@@ -225,6 +258,9 @@ export class VscodeRemoteControl implements vscode.Disposable {
 
   private _relay(rootId: string, event: DeveloperSessionEvent): void {
     this._host.handleSessionEvent(rootId, event);
+    this._reportActivity(rootId, event).catch((error: unknown) =>
+      console.warn('[AGI Workforce] could not deliver session activity:', error),
+    );
   }
 
   private _watchRoots(): void {

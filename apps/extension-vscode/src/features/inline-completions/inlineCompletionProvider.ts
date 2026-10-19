@@ -13,6 +13,8 @@ import { limitResetAt, showCloudUtilityErrorActions } from '../../core/cloudUtil
 const SECRETY_NAME_PATTERN =
   /(secret|credential|password|passwd|apikey|api[_-]key|token|private[_-]key)/i;
 
+/** What the editor typed ahead of the cursor on its own: closing brackets, quotes, `;` or `,`. */
+const AUTO_CLOSED_SUFFIX = /^[\s)\]}'"`;,]*$/u;
 const MIN_PREFIX_CHARS = 3;
 const MAX_CONTEXT_LINES = 80;
 const MAX_SUFFIX_LINES = 20;
@@ -112,7 +114,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       return [];
     }
 
-    if (lineSuffix.trim() !== '') {
+    if (!AUTO_CLOSED_SUFFIX.test(lineSuffix)) {
       return [];
     }
 

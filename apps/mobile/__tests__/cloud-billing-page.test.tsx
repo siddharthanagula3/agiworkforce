@@ -858,8 +858,13 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     const row = getByLabelText('Upgrade plan');
     expect(row.props.accessibilityState.disabled).toBe(true);
     expect(getByText('Unavailable in the app')).toBeTruthy();
-    expect(getByText('Plan changes are not available right now')).toBeTruthy();
+    expect(getByText('In-app purchases are not available yet')).toBeTruthy();
+    expect(
+      getByText('Your Free plan keeps working. Compare plans to see what each one adds.'),
+    ).toBeTruthy();
+    expect(getByLabelText('Compare plans').props.accessibilityState?.disabled).not.toBe(true);
     expect(queryByText(/agiworkforce\.com/i)).toBeNull();
+    expect(queryByText(/Everything you already pay for/)).toBeNull();
   });
 
   it('does not open a paywall whose only content is an apology', () => {

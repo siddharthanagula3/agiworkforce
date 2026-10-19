@@ -197,6 +197,61 @@ export async function clearApiKey(secrets: vscode.SecretStorage): Promise<void> 
   await secrets.delete(SECRET_KEY);
 }
 
+export interface SharedAccountCredential {
+  token: string;
+  expiresAtMs?: number;
+}
+
+/**
+ * The AGI CLI on this machine holds the account session that chat runs on. When
+ * the editor has no session of its own, it borrows that one, so a single sign-in
+ * in the terminal or in VS Code covers both, as one login cache does for Claude
+ * Code and Codex. A refusal is remembered briefly so a signed-out editor does not
+ * ask the CLI on every request.
+ */
+type SharedAccountCredentialSource = () => Promise<SharedAccountCredential | undefined>;
+
+const SHARED_CREDENTIAL_REFUSAL_TTL_MS = 30_000;
+let sharedAccountCredentialSource: SharedAccountCredentialSource | undefined;
+let sharedCredentialRefusedAt: number | undefined;
+let rejectedAccountToken: string | undefined;
+
+export function shareAccountCredentialFrom(
+  source: SharedAccountCredentialSource | undefined,
+): void {
+  sharedAccountCredentialSource = source;
+  sharedCredentialRefusedAt = undefined;
+}
+
+export function forgetSharedCredentialRefusal(): void {
+  sharedCredentialRefusedAt = undefined;
+}
+
+async function adoptSharedAccountCredential(
+  secrets: vscode.SecretStorage,
+): Promise<string | undefined> {
+  if (sharedAccountCredentialSource === undefined) return undefined;
+  if (
+    sharedCredentialRefusedAt !== undefined &&
+    Date.now() - sharedCredentialRefusedAt < SHARED_CREDENTIAL_REFUSAL_TTL_MS
+  ) {
+    return undefined;
+  }
+  const credential = await sharedAccountCredentialSource().catch(() => undefined);
+  if (
+    credential === undefined ||
+    credential.token === rejectedAccountToken ||
+    (credential.expiresAtMs !== undefined && credential.expiresAtMs <= Date.now())
+  ) {
+    sharedCredentialRefusedAt = Date.now();
+    return undefined;
+  }
+  sharedCredentialRefusedAt = undefined;
+  await setAccountToken(secrets, credential.token, credential.expiresAtMs);
+  notifyAccountTierMayHaveChanged();
+  return credential.token;
+}
+
 export async function getAccountToken(
   secrets: vscode.SecretStorage,
   options: { renew?: boolean } = {},
@@ -207,8 +262,9 @@ export async function getAccountToken(
       state = await getAccountAuthState(secrets);
     }
   }
-  if (state.status !== 'signed-in') return undefined;
-  return secrets.get(ACCOUNT_TOKEN_KEY);
+  if (state.status === 'signed-in') return secrets.get(ACCOUNT_TOKEN_KEY);
+  if (options.renew === false) return undefined;
+  return adoptSharedAccountCredential(secrets);
 }
 
 export async function setAccountToken(
@@ -259,6 +315,7 @@ async function invalidateAccountToken(
 ): Promise<void> {
   const currentToken = await secrets.get(ACCOUNT_TOKEN_KEY);
   if (currentToken !== observedToken) return;
+  rejectedAccountToken = observedToken;
   await secrets.delete(ACCOUNT_TOKEN_KEY);
   await secrets.delete(ACCOUNT_TOKEN_EXPIRES_AT_KEY);
   await secrets.store(ACCOUNT_TOKEN_EXPIRED_KEY, '1');

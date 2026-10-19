@@ -192,7 +192,7 @@ describe('/agi-work, the plan', () => {
   it('does not promise a plan on every run', () => {
     const source = collapsed(AGI_WORK);
     expect(source).not.toMatch(/three to six step plan before the first tool call/iu);
-    expect(source).toContain('leaves the run with no plan rather than stopping it');
+    expect(source).toContain('the run continues without a plan instead of stopping');
   });
 
   /**

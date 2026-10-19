@@ -34,6 +34,8 @@ import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SettingsPageLink, SettingsSectionLink } from '../components/SettingsSectionLink';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
+import { openUpgrade } from '@shared/lib/app-commands';
 
 type Granularity = AccountUsageHistoryResponse['granularity'];
 type HistoryRow = Pick<
@@ -802,6 +804,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
 
 export function UsageSection() {
   const { usage, loading, error, lastUpdatedAt, stale, refresh } = useManagedUsageSummary();
+  const { closeSettings } = useSettingsModal();
 
   const [nowMs, setNowMs] = useState(() => Date.now());
   useEffect(() => {
@@ -888,9 +891,16 @@ export function UsageSection() {
 
         <div style={CARD_BODY}>
           {isFreePlan ? (
-            <SettingsPageLink href="/pricing" className={`${PRIMARY_BUTTON_CLASS} self-start`}>
+            <button
+              type="button"
+              className={`${PRIMARY_BUTTON_CLASS} self-start`}
+              onClick={() => {
+                closeSettings();
+                openUpgrade((href) => window.location.assign(href));
+              }}
+            >
               Upgrade
-            </SettingsPageLink>
+            </button>
           ) : contractPriced ? (
             <div className="space-y-3 text-sm text-[var(--text-2)]">
               <p>Your usage allowances and billing are set by your workspace contract.</p>

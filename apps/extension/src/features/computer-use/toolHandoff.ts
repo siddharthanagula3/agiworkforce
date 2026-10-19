@@ -42,9 +42,11 @@ export function readCompleteToolCalls(
       !tools.some((tool) => tool.function.name === name)
     )
       return null;
+    // A tool that takes no input streams empty arguments; that is an empty object.
+    const argumentsText = args.trim() === '' ? '{}' : args;
     let parsedArgs: unknown;
     try {
-      parsedArgs = JSON.parse(args);
+      parsedArgs = JSON.parse(argumentsText);
     } catch {
       return null;
     }
@@ -52,7 +54,7 @@ export function readCompleteToolCalls(
     parsed.push({
       id: ids[index] as string,
       type: 'function',
-      function: { name, arguments: args },
+      function: { name, arguments: argumentsText },
     });
   }
   return parsed;

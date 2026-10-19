@@ -161,6 +161,7 @@ function harness() {
     describeCancellationReason: (reason: unknown) =>
       reason === 'user_stopped' ? 'Browser task stopped.' : null,
     saveMessages,
+    saveMessagesNow: vi.fn(async () => saveMessages()),
     renderMessages: vi.fn(),
     updateSendButton: vi.fn(),
     updateContextButton: vi.fn(),
@@ -201,6 +202,7 @@ function harness() {
     composerDocumentsSettled: () => true,
     pendingAttachmentCount: () => pendingAttachments.length,
     composerVideoMode: false,
+    composerSkill: null as string | null,
     canCreateVideos: () => false,
     startVideoTurn: vi.fn(),
     pendingAttachments,
@@ -210,6 +212,7 @@ function harness() {
       prompt.startsWith('/')
         ? { display: prompt, prompt: 'Summarize the page', captureContext: true }
         : null,
+    capturePageContextWithSiteAccess: vi.fn(() => dependencies.capturePageContext()),
     capturePageContext: vi.fn(
       async (): Promise<
         | { ok: true; text: string; source: { tabId: number; url: string } }

@@ -15,6 +15,7 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 export interface StartWorkSubmission {
   goal: string;
@@ -83,10 +84,7 @@ export function StartWorkSheet({
       onRequestClose={handleClose}
     >
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('modal')}>
           <View
             style={{
               minHeight: 52,

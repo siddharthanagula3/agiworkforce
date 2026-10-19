@@ -10,7 +10,7 @@ import {
   resolveEffectiveModelPricingForInputTokens,
   type PlatformCapability,
 } from '@agiworkforce/types';
-import { resolveAutoRoute } from '../auto';
+import { resolveAutoRoute, runtimeProfileImplementsTask } from '../auto';
 import { modelRegistry } from '@agiworkforce/model-registry';
 
 const FAST_MODEL_ID = getRoutingSlotModel('workhorse_general');
@@ -38,6 +38,13 @@ const US_ONLY_EXCLUDED_PROVIDERS: readonly string[] = (
     policies: { auto: { providerPolicies: { usOnly: { excludedProviders: string[] } } } };
   }
 ).policies.auto.providerPolicies.usOnly.excludedProviders;
+
+type AutoTaskType = Parameters<typeof resolveAutoRoute>[0]['taskType'];
+
+const AUTO_TASK_TYPES = Object.keys(
+  (modelRegistry as unknown as { policies: { auto: { tasks: Record<string, unknown> } } }).policies
+    .auto.tasks,
+) as AutoTaskType[];
 
 describe('resolveAutoRoute', () => {
   it('honors the requested economy profile even when the tier allows premium', () => {
@@ -184,19 +191,22 @@ describe('resolveAutoRoute', () => {
   });
 
   it('affordability: rejects a long request when only its short-context estimate fits', () => {
-    const request = {
-      selection: 'auto',
-      taskType: 'long_context',
-      subscriptionTier: 'pro',
-      trustMode: 'managed_cloud',
-    } as const;
-    const withoutBudget = resolveAutoRoute(request);
-    expect(withoutBudget.status).toBe('selected');
-    if (withoutBudget.status !== 'selected') return;
-    const metadata = getModelMetadataById(withoutBudget.modelKey);
-    const [firstTier] = metadata?.inputTokenPricingTiers ?? [];
-    expect(firstTier).toBeDefined();
-    if (!metadata || !firstTier) return;
+    const tieredPick = AUTO_TASK_TYPES.flatMap((taskType) => {
+      const request = {
+        selection: 'auto',
+        taskType,
+        subscriptionTier: 'pro',
+        trustMode: 'managed_cloud',
+      } as const;
+      const route = resolveAutoRoute(request);
+      if (route.status !== 'selected') return [];
+      const metadata = getModelMetadataById(route.modelKey);
+      const [firstTier] = metadata?.inputTokenPricingTiers ?? [];
+      return metadata && firstTier ? [{ request, withoutBudget: route, metadata, firstTier }] : [];
+    })[0];
+    expect(tieredPick).toBeDefined();
+    if (!tieredPick) return;
+    const { request, withoutBudget, metadata, firstTier } = tieredPick;
 
     const inputTokens = firstTier.thresholdTokens + 1;
     const outputTokens = 1_000;
@@ -876,5 +886,21 @@ describe('resolveAutoRoute tier slot admission', () => {
     expect(result).toMatchObject({ status: 'selected' });
     expect(result).not.toMatchObject({ modelKey: FLAGSHIP_CODING_MODEL_ID });
     expect(result).not.toMatchObject({ reason: 'continuity' });
+  });
+});
+
+describe('runtimeProfileImplementsTask', () => {
+  it('reports computer use as served only by a runtime that implements it', () => {
+    expect(runtimeProfileImplementsTask('web/cloud-chat', 'computer-use')).toBe(false);
+    expect(runtimeProfileImplementsTask('chrome/managed-browser-task', 'computer-use')).toBe(true);
+  });
+
+  it('serves every task whose harness features the runtime implements', () => {
+    expect(runtimeProfileImplementsTask('web/cloud-chat', 'general')).toBe(true);
+    expect(runtimeProfileImplementsTask('web/cloud-chat', 'agentic')).toBe(true);
+  });
+
+  it('serves nothing for an unknown runtime profile', () => {
+    expect(runtimeProfileImplementsTask('unknown/profile', 'general')).toBe(false);
   });
 });

@@ -50,7 +50,9 @@ describe('an explicit remember obeys the memory switch', () => {
 
     expect(result?.kind).toBe('remember');
     expect(result?.outcome).toMatchObject({ status: 'refused', reason: 'memory_disabled' });
-    expect(result?.outcome.message).toContain('Memory is turned off in your settings');
+    expect(result?.outcome.message).toBe(
+      'I did not save that. Memory is turned off in your settings.',
+    );
     expect(fake.inserts()).toHaveLength(0);
   });
 

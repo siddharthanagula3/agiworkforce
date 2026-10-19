@@ -150,6 +150,9 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
   fetchAccountSummary: async () => ({
     displayName: account.owner.authIncarnation,
     email: null,
+    planName: 'Pro',
+    planTier: 'pro',
+    greetingName: 'Ada Lovelace',
     capabilityDocument: {
       granted: [],
       deniedBy: {},
@@ -201,6 +204,20 @@ function menuLabels(menu: HTMLElement): string[] {
   return Array.from(menu.querySelectorAll('[role="menuitem"]')).map(
     (item) => item.textContent?.trim() ?? '',
   );
+}
+
+function accountMenuLabels(): string[] {
+  return ['spAccountSettings', 'spAccountMemory', 'spAccountUpgrade', 'spAccountLogOut'].map(
+    (key) => catalogMessage(key, []),
+  );
+}
+
+function panelMenuLabels(menu: HTMLElement): string[] {
+  const logOut = catalogMessage('spAccountLogOut', []);
+  return Array.from(menu.querySelectorAll('[role="menuitem"]'))
+    .filter((item) => !item.closest('.sp-more-account'))
+    .map((item) => item.textContent?.trim() ?? '')
+    .filter((label) => label !== logOut);
 }
 
 async function openSavedConversation(content: string): Promise<string> {
@@ -279,17 +296,43 @@ describe('side panel presence', () => {
 });
 
 describe('More popover', () => {
-  it('is a small role=menu with three or four rows and the version footer', () => {
+  it('is a small role=menu with three or four panel rows and the version footer', () => {
     byId('sp-menu-btn')!.click();
     const menu = moreMenu();
     expect(menu.hidden).toBe(false);
     expect(menu.getAttribute('role')).toBe('menu');
     expect(byId('sp-menu-btn')!.getAttribute('aria-expanded')).toBe('true');
-    const labels = menuLabels(menu);
+    const labels = panelMenuLabels(menu);
     expect(labels.length).toBeGreaterThanOrEqual(3);
     expect(labels.length).toBeLessThanOrEqual(4);
     expect(labels).toContain(catalogMessage('spExtensionSettings', []));
     expect(menu.querySelector('.sp-more-footer')?.textContent).toContain('v1.2.0');
+  });
+
+  it('greets the account by first name in the empty state, like web', async () => {
+    await vi.waitFor(() => {
+      const greeting = byId('sp-empty-greeting')!;
+      expect(greeting.hidden).toBe(false);
+      expect(greeting.textContent).toContain('Ada');
+      expect(greeting.textContent).not.toContain('Lovelace');
+    });
+  });
+
+  it('names the signed-in account and plan like the web account menu', async () => {
+    await vi.waitFor(() => {
+      byId('sp-menu-btn')!.click();
+      const header = moreMenu().querySelector('.sp-more-account-header');
+      expect(header?.textContent).toContain('Pro');
+      expect(header?.textContent).toContain(account.owner.authIncarnation);
+    });
+    expect(menuLabels(moreMenu())).toEqual(expect.arrayContaining(accountMenuLabels()));
+    const usage = moreMenu().querySelector<HTMLButtonElement>('.sp-more-usage')!;
+    expect(usage.getAttribute('aria-label')).toBe(catalogMessage('spAccountUsageUsed', ['0']));
+    chromeMock.tabs.create.mockClear();
+    usage.click();
+    expect((chromeMock.tabs.create.mock.calls[0]![0] as { url: string }).url).toContain(
+      '/settings/usage?from=chrome-extension',
+    );
   });
 
   it('moves focus with arrow keys, closes on Escape and returns focus to the trigger', () => {
@@ -366,11 +409,84 @@ describe('More popover Open in web', () => {
         moreMenu().querySelectorAll<HTMLButtonElement>('[role="menuitem"]'),
       ).find((item) => item.textContent?.trim() === catalogMessage('spHistoryOpenInWeb', []))!;
       expect(open).toBeDefined();
-      expect(menuLabels(moreMenu()).length).toBeLessThanOrEqual(4);
+      expect(panelMenuLabels(moreMenu()).length).toBeLessThanOrEqual(4);
       open.click();
       expect((chromeMock.tabs.create.mock.calls[0]![0] as { url: string }).url).toContain(
         `/chat/${cloudId}`,
       );
+    } finally {
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+});
+
+describe('Continue on phone', () => {
+  it('shows the cross-device chat link for an account chat and is absent for a device-only chat', async () => {
+    const deviceOnly = await openSavedConversation('Device only phone fixture');
+    try {
+      expect(menuLabels(openTitleMenu())).not.toContain(
+        catalogMessage('spTitleContinueOnPhone', []),
+      );
+    } finally {
+      await deleteConversation(account.owner, deviceOnly);
+    }
+    const content = 'Continue on phone fixture question';
+    const conversationId = await saveConversation(account.owner, [
+      { role: 'user', content, timestamp: Date.now(), runtime: 'managed-cloud' },
+    ]);
+    const cloudId = '5f0c2e7a-1b3d-4c8e-9a6f-0d2b4e6a8c10';
+    await recordCloudSyncState(account.owner, conversationId, {
+      conversationId: cloudId,
+      organizationId: null,
+    });
+    try {
+      byId('sp-history-btn')!.click();
+      await vi.waitFor(() => {
+        const restore = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('[data-conversation-restore="true"]'),
+        ).find((button) => button.textContent?.includes(content));
+        expect(restore).toBeDefined();
+        restore!.click();
+      });
+      await vi.waitFor(() =>
+        expect(byId('sp-title-menu')?.textContent).toContain(
+          catalogMessage('spTitleContinueOnPhone', []),
+        ),
+      );
+      titleMenuItem(catalogMessage('spTitleContinueOnPhone', [])).click();
+      const sheet = byId('sp-phone')!;
+      expect(sheet.hidden).toBe(false);
+      expect(sheet.querySelector('.sp-phone-link')?.textContent).toMatch(
+        new RegExp(`/open/chat/${cloudId}$`),
+      );
+    } finally {
+      await deleteConversation(account.owner, conversationId);
+    }
+  });
+});
+
+describe('chat favourites', () => {
+  it('offers Pin as the one favourite action, like web, in both chat menus', async () => {
+    const content = 'Favourite fixture question';
+    const conversationId = await openSavedConversation(content);
+    try {
+      const titleLabels = menuLabels(openTitleMenu());
+      expect(titleLabels).toContain(catalogMessage('spHistoryPin', []));
+      expect(titleLabels).not.toContain('Star');
+      byId('sp-history-btn')!.click();
+      let rowMenu!: HTMLElement;
+      await vi.waitFor(() => {
+        const more = Array.from(
+          document.querySelectorAll<HTMLButtonElement>('#sp-recents .sp-drawer-history-more'),
+        ).find((button) => button.getAttribute('aria-label')?.includes(content));
+        expect(more).toBeDefined();
+        more!.click();
+        rowMenu = more!.parentElement!.querySelector<HTMLElement>('[role="menu"]')!;
+        expect(rowMenu).toBeTruthy();
+      });
+      const rowLabels = menuLabels(rowMenu);
+      expect(rowLabels).toContain(catalogMessage('spHistoryPin', []));
+      expect(rowLabels).not.toContain('Star');
     } finally {
       await deleteConversation(account.owner, conversationId);
     }
@@ -393,7 +509,7 @@ describe('conversation title row', () => {
         expect.arrayContaining([
           catalogMessage('spTitleSchedule', []),
           catalogMessage('spHistoryRename', []),
-          catalogMessage('spHistoryStar', []),
+          catalogMessage('spHistoryPin', []),
           catalogMessage('spTitleAddToProject', []),
           catalogMessage('spHistoryDelete', []),
         ]),
@@ -425,17 +541,17 @@ describe('conversation title row', () => {
     }
   });
 
-  it('stars the open conversation', async () => {
-    const conversationId = await openSavedConversation('Star fixture question');
+  it('pins the open conversation', async () => {
+    const conversationId = await openSavedConversation('Pin fixture question');
     try {
       openTitleMenu();
-      titleMenuItem(catalogMessage('spHistoryStar', [])).click();
+      titleMenuItem(catalogMessage('spHistoryPin', [])).click();
       await vi.waitFor(async () => {
-        expect((await getConversation(account.owner, conversationId))?.starred).toBe(true);
+        expect((await getConversation(account.owner, conversationId))?.pinned).toBe(true);
       });
       await vi.waitFor(() => {
         openTitleMenu();
-        expect(titleMenuItem(catalogMessage('spHistoryUnstar', []))).toBeDefined();
+        expect(titleMenuItem(catalogMessage('spHistoryUnpin', []))).toBeDefined();
       });
     } finally {
       await deleteConversation(account.owner, conversationId);

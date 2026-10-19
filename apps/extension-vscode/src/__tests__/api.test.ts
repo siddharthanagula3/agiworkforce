@@ -31,6 +31,8 @@ import {
   clearApiKey,
   fetchBilledCredits,
   AgiWorkforceClientUpdateRequiredError,
+  forgetSharedCredentialRefusal,
+  shareAccountCredentialFrom,
 } from '../utils/api';
 import { BILLING_PLAN_PRICING, classifyManagedQuotaErrorCode } from '@agiworkforce/types';
 import { ExtensionContext } from './__mocks__/vscode';
@@ -945,5 +947,63 @@ describe('managed chat Idempotency-Key wiring', () => {
 describe('getCloudWebOrigin', () => {
   it('uses the configured trusted web origin for account-token revocation', () => {
     expect(getCloudWebOrigin()).toBe('https://agiworkforce.com');
+  });
+});
+
+describe('one sign-in shared with the AGI CLI', () => {
+  afterEach(() => {
+    shareAccountCredentialFrom(undefined);
+    vi.restoreAllMocks();
+  });
+
+  it('borrows the CLI session when the editor holds none of its own', async () => {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    const now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    shareAccountCredentialFrom(async () => ({ token: 'cli-token', expiresAtMs: now + 60_000 }));
+
+    await expect(getAccountToken(secrets)).resolves.toBe('cli-token');
+    await expect(getAccountAuthState(secrets)).resolves.toEqual({
+      status: 'signed-in',
+      expiresAt: now + 60_000,
+    });
+  });
+
+  it('keeps the editor session when it already has one', async () => {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    const source = vi.fn(async () => ({ token: 'cli-token' }));
+    shareAccountCredentialFrom(source);
+    await setAccountToken(secrets, 'editor-token');
+
+    await expect(getAccountToken(secrets)).resolves.toBe('editor-token');
+    expect(source).not.toHaveBeenCalled();
+  });
+
+  it('does not ask the CLI again right after it had no session', async () => {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    const source = vi.fn(async () => undefined);
+    shareAccountCredentialFrom(source);
+
+    await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+    await expect(getAccountToken(secrets)).resolves.toBeUndefined();
+    expect(source).toHaveBeenCalledOnce();
+    forgetSharedCredentialRefusal();
+    await getAccountToken(secrets);
+    expect(source).toHaveBeenCalledTimes(2);
+  });
+
+  it('never re-adopts a CLI token that has already expired here', async () => {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    const now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    await setAccountToken(secrets, 'stale-token', now - 1);
+    await getAccountAuthState(secrets);
+    shareAccountCredentialFrom(async () => ({ token: 'stale-token' }));
+
+    await expect(getAccountToken(secrets)).resolves.toBeUndefined();
   });
 });

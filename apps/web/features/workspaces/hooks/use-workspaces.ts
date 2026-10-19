@@ -7,6 +7,7 @@ import {
   type ManagedCloudAccountWorkspaces,
 } from '@agiworkforce/cloud-contracts';
 import { getAuthToken } from '@shared/lib/get-auth-token';
+import { identityClientReady } from '@/lib/identity/token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
@@ -32,6 +33,9 @@ async function readApiError(res: Response, fallback: string): Promise<Error> {
 async function requestJson<T>(url: string, init: RequestInit = {}): Promise<T> {
   const token = await getAuthToken();
   if (!token) {
+    if (!(await identityClientReady())) {
+      throw new Error('Sign-in is still loading. Try again in a moment.');
+    }
     throw Object.assign(new Error('Your session has expired. Sign in again to continue.'), {
       status: 401,
     });

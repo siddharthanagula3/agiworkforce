@@ -14,6 +14,7 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { toUserMessage } from '@/services/userMessage';
 import { createPersonalSkill } from './service';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 export function NewSkillSheet({
   visible,
@@ -75,7 +76,7 @@ export function NewSkillSheet({
     >
       <KeyboardAvoidingView
         accessibilityViewIsModal
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+        behavior={keyboardAvoidingBehavior('modal')}
         style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: colors.scrim }}
       >
         <ScrollView

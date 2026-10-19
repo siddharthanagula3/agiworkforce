@@ -59,6 +59,7 @@ export {
   previewAutoRoute,
   resolveAutoRoute,
   resolveTierMaximumProfile,
+  runtimeProfileImplementsTask,
   shadowMirroringEnabled,
   unhonouredCapabilityPenalty,
   CANARY_ENV,

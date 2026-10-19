@@ -3,11 +3,9 @@ import {
   ManagedCloudAgentRunReferenceSchema,
   parseGeneratedFilesDelta,
   readPersistedInteractiveCards,
-  ManagedCloudUpdateConversationRequestSchema,
   CONVERSATION_TITLE_MAX_LENGTH,
   type GeneratedFileWire,
   type ManagedCloudAgentRunReference,
-  type ManagedCloudUpdateConversationRequest,
   type ManagedCloudConversation,
 } from '@agiworkforce/cloud-contracts';
 import {
@@ -1558,64 +1556,6 @@ export async function getConversation(
   return (await readAfterMutations()).conversations.find(
     (entry) => entry.id === id && sameManagedCloudOwner(entry.owner, owner),
   );
-}
-
-export type ConversationMetadataPatch = Pick<
-  ManagedCloudUpdateConversationRequest,
-  'title' | 'projectId' | 'pinned' | 'starred' | 'archived'
->;
-
-export async function updateConversationMetadata(
-  owner: ManagedCloudOwner,
-  id: string,
-  patch: ConversationMetadataPatch,
-  ownerIsCurrent: () => boolean | Promise<boolean>,
-): Promise<ConversationEntry | undefined> {
-  assertManagedCloudOwner(owner);
-  if (!isSafeConversationId(id)) throw new Error('Invalid browser conversation id');
-  const parsed = ManagedCloudUpdateConversationRequestSchema.parse(patch);
-  if (
-    parsed.title !== undefined &&
-    (!parsed.title.trim() ||
-      parsed.title.length > MAX_CONVERSATION_TITLE_CHARS ||
-      containsControlCharacter(parsed.title))
-  )
-    throw new Error(`Chat names must contain 1 to ${MAX_CONVERSATION_TITLE_CHARS} characters.`);
-  if (
-    parsed.projectId !== undefined &&
-    parsed.projectId !== null &&
-    normalizeConversationProjectId(parsed.projectId) !== parsed.projectId
-  )
-    throw new Error('Invalid project id');
-  return mutateStore(async (store) => {
-    if (!(await ownerIsCurrent())) return undefined;
-    const index = store.conversations.findIndex(
-      (entry) => entry.id === id && sameManagedCloudOwner(entry.owner, owner),
-    );
-    const existing = index < 0 ? undefined : store.conversations[index];
-    if (!existing) return undefined;
-    let next = applyConversationProject(
-      {
-        ...existing,
-        ...(parsed.title !== undefined
-          ? { title: parsed.title.trim(), customTitle: parsed.title.trim() }
-          : {}),
-        ...(parsed.pinned !== undefined ? { pinned: parsed.pinned } : {}),
-        ...(parsed.starred !== undefined ? { starred: parsed.starred } : {}),
-        ...(parsed.archived !== undefined ? { archived: parsed.archived } : {}),
-      },
-      parsed.projectId,
-    );
-    if (isCloudMetadataPersistenceEligible(next) && conversationMetadataNeedsSync(next)) {
-      next = { ...next, cloudSync: { ...next.cloudSync!, state: 'pending' } };
-    }
-    if (!(await ownerIsCurrent())) return undefined;
-    store.conversations[index] = next;
-    const persisted = await writeStore(store);
-    return persisted.conversations.find(
-      (entry) => entry.id === id && sameManagedCloudOwner(entry.owner, owner),
-    );
-  });
 }
 
 export interface ManagedCloudHistoryImport {

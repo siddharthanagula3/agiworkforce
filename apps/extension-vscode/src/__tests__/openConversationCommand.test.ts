@@ -35,7 +35,6 @@ describe('open developer session command', () => {
         memoryTreeProvider: unused,
         diffDecorationProvider: unused,
         diagnosticsProvider: unused,
-        nativeChatAvailable: false,
       } as unknown as CommandDeps,
     );
 
@@ -47,5 +46,37 @@ describe('open developer session command', () => {
     expect(sidebarProvider.resumeConversation.mock.invocationCallOrder[0]).toBeGreaterThan(
       sidebarProvider.reveal.mock.invocationCallOrder[0] ?? 0,
     );
+  });
+
+  it("opens the AGI chat, never the editor's built-in chat", async () => {
+    const handlers = new Map<string, Handler>();
+    vi.mocked(vscode.commands.registerCommand).mockImplementation(((
+      id: string,
+      handler: Handler,
+    ) => {
+      handlers.set(id, handler);
+      return new vscode.Disposable(() => undefined);
+    }) as never);
+    const sidebarProvider = { reveal: vi.fn() };
+    const unused = new Proxy({}, { get: () => vi.fn() });
+    setupCommands(
+      { subscriptions: [], secrets: {} } as unknown as vscode.ExtensionContext,
+      {
+        sidebarProvider,
+        conversationTreeProvider: unused,
+        localRuntimes: unused,
+        contextPanelProvider: unused,
+        memoryTreeProvider: unused,
+        diffDecorationProvider: unused,
+        diagnosticsProvider: unused,
+        nativeChatAvailable: true,
+      } as unknown as CommandDeps,
+    );
+
+    await handlers.get('agi-workforce.chat')?.();
+
+    expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.sidebar.focus');
+    expect(vscode.commands.executeCommand).not.toHaveBeenCalledWith('workbench.action.chat.open');
+    expect(sidebarProvider.reveal).toHaveBeenCalledOnce();
   });
 });

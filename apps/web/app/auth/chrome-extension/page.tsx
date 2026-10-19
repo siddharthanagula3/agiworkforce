@@ -49,8 +49,7 @@ export default function ChromeExtensionAuthCompletePage() {
                   Your AGI Cloud session is ready for the browser extension.
                 </p>
                 <Prose size="sm">
-                  Return to Chrome, then close and reopen the AGI side panel to refresh your
-                  account.
+                  Return to Chrome. The AGI side panel picks up your account when you go back to it.
                 </Prose>
               </Stack>
             ) : (

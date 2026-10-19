@@ -16,6 +16,7 @@ import {
   type ToolDefinition,
 } from './cloudAgentClient';
 import { DOM_SUMMARY_HEADING, pruneObservationHistory } from './historyBudget';
+import { SCREENSHOT_MIME_TYPE } from './screenshotEncoding';
 import {
   formatConsoleEntries,
   readConsoleEntries,
@@ -131,8 +132,8 @@ export interface AgentLoopStep {
 
 const SCREENSHOT_PREVIEW_WIDTH = 640;
 
-async function screenshotPreview(base64Png: string): Promise<string> {
-  const original = `data:image/png;base64,${base64Png}`;
+async function screenshotPreview(base64Image: string): Promise<string> {
+  const original = `data:${SCREENSHOT_MIME_TYPE};base64,${base64Image}`;
   if (typeof OffscreenCanvas !== 'function' || typeof createImageBitmap !== 'function') {
     return original;
   }
@@ -160,10 +161,10 @@ async function screenshotPreview(base64Png: string): Promise<string> {
 async function reportScreenshot(
   options: AgentLoopOptions,
   stepNumber: number,
-  base64Png: string,
+  base64Image: string,
 ): Promise<void> {
-  if (!options.onProgress || !base64Png) return;
-  const screenshotDataUrl = await screenshotPreview(base64Png);
+  if (!options.onProgress || !base64Image) return;
+  const screenshotDataUrl = await screenshotPreview(base64Image);
   await assertRunOwnership(options);
   options.onProgress({ kind: 'screenshot', stepNumber, screenshotDataUrl });
 }
@@ -1071,7 +1072,7 @@ export async function runAgentLoop(
         {
           type: 'image_url',
           image_url: {
-            url: `data:image/png;base64,${initialScreenshot}`,
+            url: `data:${SCREENSHOT_MIME_TYPE};base64,${initialScreenshot}`,
             detail: 'high',
           },
         },
@@ -1161,7 +1162,7 @@ export async function runAgentLoop(
                 {
                   type: 'image_url',
                   image_url: {
-                    url: `data:image/png;base64,${resultContent.base64}`,
+                    url: `data:${SCREENSHOT_MIME_TYPE};base64,${resultContent.base64}`,
                     detail: 'high',
                   },
                 },
@@ -1197,12 +1198,13 @@ export async function runAgentLoop(
 
 /**
  * How long the ask-before-acting gate waits for a decision before failing CLOSED
- * (deny). Exported because the side panel's approval card must expire on the
+ * (deny). Long enough for a person who looked away, as ChatGPT and Claude wait
+ * for an answer; still bounded, because an unanswered gate is a denial. Exported because the side panel's approval card must expire on the
  * SAME deadline: the loop settling its promise does not remove the card, so a
  * card outliving this timeout leaves Allow/Skip buttons that look live but
  * resolve an already-settled promise. Import it rather than restating 30s.
  */
-export const APPROVAL_TIMEOUT_MS = 30_000;
+export const APPROVAL_TIMEOUT_MS = 5 * 60_000;
 
 /**
  * A `type` without an index lands on whatever holds focus, so the signature the
@@ -1248,6 +1250,9 @@ async function targetSignatureFor(
 
 interface ActionTargetSignatures {
   targetSignature: string | null;
+  // An element's label and position say nothing about which page it is on: a
+  // single-page app can route to a same-labelled button in the same place.
+  documentUrl?: string | null;
   sourceSignature?: string | null;
   destinationSignature?: string | null;
   historyTarget?: cdp.HistoryNavigationTarget | null;
@@ -1298,7 +1303,8 @@ async function actionTargetSignatures(
       navigationUrl: await runOwnedOperation(options, () => getTabUrl(tabId)),
     };
   const targetSignature = await targetSignatureFor(tabId, toolName, args, options);
-  if (toolName !== 'drag' && toolName !== 'swipe') return { targetSignature };
+  const documentUrl = await runOwnedOperation(options, () => getTabUrl(tabId));
+  if (toolName !== 'drag' && toolName !== 'swipe') return { targetSignature, documentUrl };
   const signature = async (prefix: string): Promise<string | null> => {
     try {
       return await runOwnedOperation(options, () =>
@@ -1311,6 +1317,7 @@ async function actionTargetSignatures(
   };
   return {
     targetSignature,
+    documentUrl,
     sourceSignature: await signature('start'),
     destinationSignature: await signature('end'),
   };
