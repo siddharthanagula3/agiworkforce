@@ -75,6 +75,11 @@ fn run_json_events(models_arg: &str, prompt: &str) -> (Vec<String>, String, Stri
         .arg("init")
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .output()
         .expect("failed to initialize trusted JSON-events workspace");
     assert!(
@@ -86,6 +91,11 @@ fn run_json_events(models_arg: &str, prompt: &str) -> (Vec<String>, String, Stri
         .args(["--demo", "--json-events", "exec", "-m", models_arg, prompt])
         .current_dir(workspace.path())
         .env("HOME", home.path())
+        .env(
+            "AGIWORKFORCE_HOME",
+            std::path::Path::new(home.path()).join(".agiworkforce"),
+        )
+        .env("AGIWORKFORCE_NO_KEYRING", "1")
         .output()
         .expect("failed to spawn agiworkforce");
 

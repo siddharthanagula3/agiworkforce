@@ -1738,45 +1738,49 @@ impl CliDeveloperSessionHost {
         &self,
         hosted_model: Option<&str>,
     ) -> Result<crate::sessions::HostedCopy, DeveloperSessionHostError> {
-        let concrete = hosted_model.filter(|model| crate::model_catalog::find(model).is_some());
-        let resolved = match concrete {
-            Some(model) => ResolvedThreadModel {
+        crate::tier_cache::ensure_plan_models_cached().await;
+        let system_context = context::gather_system_context_for(self.workspace_root.clone()).await;
+        let managed_cloud = models::provider_persistence_name(&Provider::ManagedCloud);
+        let start = |resolved: ResolvedThreadModel| {
+            AgentSession::new_checked(
+                &resolved.provider_model_id,
+                &system_context,
+                None,
+                Some(managed_cloud.as_str()),
+            )
+            .map(|agent| crate::sessions::HostedCopy {
+                model: resolved.provider_model_id,
+                auto_routing: resolved.auto_routing,
+                preamble: agent.messages.clone(),
+                workspace_root: Some(self.workspace_root.clone()),
+            })
+        };
+        if let Some(model) =
+            hosted_model.filter(|model| crate::model_catalog::find(model).is_some())
+        {
+            if let Ok(copy) = start(ResolvedThreadModel {
                 provider_model_id: model.to_string(),
                 auto_routing: None,
                 fallback_model_ids: Vec::new(),
-            },
-            None => {
-                let selection = hosted_model
-                    .filter(|model| agiworkforce_model_registry::is_auto_routing_selection(model))
-                    .unwrap_or_else(|| {
-                        crate::routing::profile::auto_selection(DeveloperRoutingProfile::Auto)
-                    });
-                let account_tier = crate::tier_cache::managed_auto_routing_tier().await;
-                resolve_auto_with_trust(
-                    selection,
-                    DeveloperRoutingTaskType::Coding,
-                    None,
-                    account_tier,
-                    false,
-                    agiworkforce_model_registry::TrustMode::ManagedCloud,
-                )?
+            }) {
+                return Ok(copy);
             }
-        };
-        let system_context = context::gather_system_context_for(self.workspace_root.clone()).await;
-        let managed_cloud = models::provider_persistence_name(&Provider::ManagedCloud);
-        let agent = AgentSession::new_checked(
-            &resolved.provider_model_id,
-            &system_context,
+        }
+        let selection = hosted_model
+            .filter(|model| agiworkforce_model_registry::is_auto_routing_selection(model))
+            .unwrap_or_else(|| {
+                crate::routing::profile::auto_selection(DeveloperRoutingProfile::Auto)
+            });
+        let account_tier = crate::tier_cache::managed_auto_routing_tier().await;
+        let resolved = resolve_auto_with_trust(
+            selection,
+            DeveloperRoutingTaskType::Coding,
             None,
-            Some(managed_cloud.as_str()),
-        )
-        .map_err(invalid_request)?;
-        Ok(crate::sessions::HostedCopy {
-            model: resolved.provider_model_id,
-            auto_routing: resolved.auto_routing,
-            preamble: agent.messages.clone(),
-            workspace_root: Some(self.workspace_root.clone()),
-        })
+            account_tier,
+            false,
+            agiworkforce_model_registry::TrustMode::ManagedCloud,
+        )?;
+        start(resolved).map_err(invalid_request)
     }
 
     /// Must never block a local thread on the account: any failure leaves the

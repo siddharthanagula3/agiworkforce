@@ -369,12 +369,9 @@ pub async fn hosted_conversation(
     conversation_id: &str,
 ) -> Result<Option<chat::HostedConversation>, CloudError> {
     let mut session = CloudSession::open(privacy)?;
-    let sync = chat::ChatSync::new(&session.client);
-    let response = sync.pull_all(state::INITIAL_CURSOR).await?;
-    let wanted = chat::conversation_id_for(conversation_id);
-    let found = chat::assemble(&response)
-        .into_iter()
-        .find(|conversation| conversation.id == wanted || conversation.id == conversation_id);
+    let found =
+        chat::fetch_conversation(&session.client, &chat::conversation_id_for(conversation_id))
+            .await?;
     if let Some(conversation) = &found {
         chat::record_hosted(conversation, &mut session.state);
         session.persist();
