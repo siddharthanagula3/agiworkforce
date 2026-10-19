@@ -289,6 +289,28 @@ export function scheduleShareToDraft(snapshot: ManagedCloudScheduleShareSnapshot
   return { ...scheduleToDraft(scheduleShareTask(snapshot, timezone)), projectId: null };
 }
 
+export const SCHEDULE_ROUTINE_QUERY_PARAM = 'routine';
+
+export interface RoutineGoal {
+  goal: string;
+  constraints?: string;
+  deliverable?: string;
+}
+
+export function routinePromptFromGoal(goal: RoutineGoal): string {
+  return [
+    goal.goal.trim(),
+    goal.constraints?.trim() ? `Constraints: ${goal.constraints.trim()}` : null,
+    goal.deliverable?.trim() ? `Deliverable: ${goal.deliverable.trim()}` : null,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n\n');
+}
+
+export function routineDraftFromPrompt(prompt: string): ScheduleDraft {
+  return { ...createInitialScheduleDraft(), name: deriveScheduleName(prompt), prompt };
+}
+
 const DERIVED_NAME_MAX_LENGTH = 60;
 
 /**

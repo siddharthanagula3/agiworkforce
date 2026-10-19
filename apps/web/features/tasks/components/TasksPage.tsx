@@ -7,6 +7,10 @@ import { TasksPage as SharedTasksPage, type TasksTransport } from '@agiworkforce
 import { useChatStore, PENDING_CONVERSATION_KEY } from '@shared/stores/web-chat-store';
 import { createWebCloudTasksClient, setWebCloudTaskArchived } from '../services/cloud-tasks-client';
 import { handOffConversationSend } from '@/features/chat/lib/conversation-send-handoff';
+import {
+  routinePromptFromGoal,
+  SCHEDULE_ROUTINE_QUERY_PARAM,
+} from '@/features/schedules/lib/schedule-form';
 
 const RUN_QUERY_PARAM = 'run';
 
@@ -66,6 +70,12 @@ export function TasksPage() {
         toast.success(
           'Loaded this session’s goal, constraints and deliverable into a new AGI Work chat. Edit them if you like, then send to run it again.',
         );
+      },
+      saveAsRoutine: (goal) => {
+        const params = new URLSearchParams({
+          [SCHEDULE_ROUTINE_QUERY_PARAM]: routinePromptFromGoal(goal),
+        });
+        router.push(`/chat/schedules?${params.toString()}`);
       },
     }),
     [client, router, titleByConversationId],

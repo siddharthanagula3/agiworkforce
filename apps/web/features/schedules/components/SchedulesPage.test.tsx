@@ -193,6 +193,33 @@ describe('SchedulesPage', () => {
     expect(scrollIntoView).toHaveBeenCalledTimes(1);
   });
 
+  it('opens the create dialog seeded with a routine saved from a task', async () => {
+    const api = createApi();
+    const prompt = 'Build a competitor pricing table\n\nDeliverable: a CSV';
+    render(<SchedulesPage api={api} onOpenChat={() => undefined} routinePrompt={prompt} />);
+
+    const dialog = await screen.findByRole('dialog', { name: 'Create Schedule' });
+    expect(within(dialog).getByLabelText('Task Instructions')).toHaveValue(prompt);
+    expect(within(dialog).getByLabelText('Schedule Name')).toHaveValue(
+      'Build a competitor pricing table',
+    );
+    expect(api.createSchedule).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a routine to a plan that cannot create schedules', async () => {
+    const api = createApi();
+    render(
+      <SchedulesPage
+        api={api}
+        subscriptionTier="free"
+        onOpenChat={() => undefined}
+        routinePrompt="Build a competitor pricing table"
+      />,
+    );
+    await screen.findByText(/Scheduled tasks are available on Basic and higher plans/);
+    expect(screen.queryByRole('dialog', { name: 'Create Schedule' })).toBeNull();
+  });
+
   it('moves the Managed Cloud model constraint into the create dialog as helper text', async () => {
     const api = createApi();
     const user = userEvent.setup();

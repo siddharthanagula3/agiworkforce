@@ -5,6 +5,7 @@ import { Skeleton } from '@agiworkforce/ui';
 import { useManagedCloudProjects } from '@/features/projects';
 import { useBillingStore } from '@/shared/stores/web-auth-store';
 import { SchedulesPage } from './SchedulesPage';
+import { SCHEDULE_ROUTINE_QUERY_PARAM } from '../lib/schedule-form';
 import type { ScheduleTask } from '../types';
 
 export const SCHEDULE_FOCUS_QUERY_PARAM = 'schedule';
@@ -30,6 +31,7 @@ export function SchedulesPageWithProjects() {
   const searchParams = useSearchParams();
   const focusScheduleId = searchParams?.get(SCHEDULE_FOCUS_QUERY_PARAM) ?? null;
   const sharedScheduleToken = searchParams?.get(SCHEDULE_SHARE_QUERY_PARAM) ?? null;
+  const routinePrompt = searchParams?.get(SCHEDULE_ROUTINE_QUERY_PARAM) ?? null;
   const { projects } = useManagedCloudProjects();
   const subscriptionTier = useBillingStore((state) => state.subscription?.tier ?? 'free');
   const billingIsLoading = useBillingStore((state) => state.isLoading);
@@ -41,6 +43,7 @@ export function SchedulesPageWithProjects() {
     <SchedulesPage
       focusScheduleId={focusScheduleId}
       sharedScheduleToken={sharedScheduleToken}
+      routinePrompt={routinePrompt}
       projects={projects.map((project) => ({ id: project.id, name: project.name }))}
       subscriptionTier={subscriptionTier}
       onOpenChat={(schedule: ScheduleTask) =>
