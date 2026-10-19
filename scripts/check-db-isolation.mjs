@@ -45,9 +45,13 @@ function mentionsSelfIdPredicate(sql, tables) {
   );
 }
 
-// A referral row names two accounts, so either column is its owner. Restricted to this table:
+// A referral row names two accounts, so either column is its owner, and a Slack installation
+// belongs to the person who installed it. Restricted to these tables:
 // a column spelled like an owner elsewhere proves nothing about who owns the row.
-const TABLE_OWNER_COLUMNS = new Map([['referrals', /\b(?:referrer_id|referred_user_id)\s*=/i]]);
+const TABLE_OWNER_COLUMNS = new Map([
+  ['referrals', /\b(?:referrer_id|referred_user_id)\s*=/i],
+  ['slack_installations', /\binstalled_by_user_id\s*=/i],
+]);
 
 function mentionsTableOwnerColumn(sql, tables) {
   return (

@@ -88,6 +88,9 @@ const cloudModules = [
   'workspaces',
   'agents',
   'developer-console',
+  'agent-drafts',
+  'plugin-directory',
+  'slack-channel-policies',
 ];
 
 const cloudMovedFiles = [
