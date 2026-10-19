@@ -80,6 +80,13 @@ export function isPluginOwnedSkill(skill: ManagedSkillSummary): boolean {
   return skill.source === PLUGIN_SOURCE || Boolean(skill.origin?.pluginId);
 }
 
+export function pluginOwnedNote(skill: ManagedSkillSummary): string {
+  const pluginName = skill.origin?.pluginName;
+  return pluginName
+    ? `Included with the ${pluginName} plugin. Controlled by its plugin installation.`
+    : 'Controlled by its plugin installation.';
+}
+
 export function isSkillInstalled(
   skill: ManagedSkillSummary,
   installed: ReadonlySet<string>,

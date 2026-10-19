@@ -332,7 +332,12 @@ describe('LiveVoiceSession', () => {
 
     mockApiFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ status: 'completed', output: 'Two meetings today', isError: false }),
+      json: async () => ({
+        status: 'completed',
+        output: 'Two meetings today',
+        isError: false,
+        files: [{ name: 'agenda.docx', uri: '/api/files/gf_agenda' }],
+      }),
     });
     mockState.peer.channel.receive({
       type: 'response.event',
@@ -353,6 +358,7 @@ describe('LiveVoiceSession', () => {
       label: 'Checking your calendar',
       output: 'Two meetings today',
       isError: false,
+      files: [{ name: 'agenda.docx', uri: '/api/files/gf_agenda' }],
     });
 
     mockState.peer.channel.receive({
