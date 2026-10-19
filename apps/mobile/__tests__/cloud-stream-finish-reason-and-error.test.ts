@@ -911,3 +911,23 @@ describe('cloud send: sources switched off for this chat', () => {
     useChatViewStore.setState({ disabledConnectorIdsByConversation: {} });
   });
 });
+
+describe('cloud send: another model answered', () => {
+  it('keeps the substitution reason and the model that answered on the reply', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onModelSubstitution?.({
+        fallbackReason: 'managed_failover',
+        servedModel: 'backup-model',
+      });
+      callbacks.onDelta({ content: 'Here is the answer.' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
+
+    expect(lastAssistantMessage()?.metadata).toMatchObject({
+      fallbackReason: 'managed_failover',
+      servedModel: 'backup-model',
+    });
+  });
+});

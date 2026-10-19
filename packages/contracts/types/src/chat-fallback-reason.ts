@@ -1,4 +1,5 @@
 export const FALLBACK_REASON_HEADER = 'X-AGI-Fallback-Reason';
+export const RESOLVED_MODEL_HEADER = 'X-AGI-Resolved-Model';
 
 /**
  * D-2026-09-05-06. Auto left the conversation's model on a failure signal. The

@@ -2440,6 +2440,19 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               },
             }));
           },
+          onModelSubstitution: (substitution) => {
+            if (!isTurnAccountCurrent()) return;
+            msgStore.setState((s) => ({
+              messages: {
+                ...s.messages,
+                [conversationId]: (s.messages[conversationId] ?? []).map((m) =>
+                  m.id === assistantMessageId
+                    ? { ...m, metadata: { ...m.metadata, ...substitution } }
+                    : m,
+                ),
+              },
+            }));
+          },
           onAttachmentsTruncated: (fileNames) => {
             const sentMessageId = userMessage?.id;
             if (!sentMessageId || !isTurnAccountCurrent()) return;

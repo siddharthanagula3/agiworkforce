@@ -66,6 +66,7 @@ import { CollapsibleSources } from './CollapsibleSources';
 import { MemoryUsedChip } from './MemoryUsedChip';
 import { messageSentAtLabel } from '@/src/features/chat/utils/messageTime';
 import { messageMemoryCitations } from '@/src/features/memory/services/memoryCitations';
+import { messageFallbackNotice } from '@/src/features/chat/utils/fallbackNotice';
 import { ResearchRunCard, type ResearchPlanDecision } from './research/ResearchRunCard';
 import { AgiWorkPlanReview } from './AgiWorkPlanReview';
 import {
@@ -614,6 +615,8 @@ export const MessageBubble = memo(function MessageBubble({
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
   const routeReceipt =
     isAssistant && !message.isStreaming ? autoRouteReceipt(message.metadata) : null;
+  const fallbackNotice =
+    isAssistant && message.content.trim() ? messageFallbackNotice(message.metadata) : null;
   const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
   const parsedThinking = useMemo(
     () => (isAssistant ? parseAssistantThinking(message.content) : null),
@@ -1777,6 +1780,20 @@ export const MessageBubble = memo(function MessageBubble({
                 }}
               >
                 {usageLine}
+              </Text>
+            ) : null}
+
+            {fallbackNotice ? (
+              <Text
+                testID="message-fallback-notice"
+                style={{
+                  marginTop: 2,
+                  paddingHorizontal: 2,
+                  fontSize: typeScale.caption,
+                  color: themeColors.textSecondary,
+                }}
+              >
+                {fallbackNotice}
               </Text>
             ) : null}
 
