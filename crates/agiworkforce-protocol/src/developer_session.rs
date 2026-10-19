@@ -144,6 +144,8 @@ pub mod method {
     pub const CHECKPOINT_REVERT: &str = "checkpoint/revert";
     pub const CHECKPOINT_STAGE: &str = "checkpoint/stage";
     pub const THREAD_REVERT: &str = "thread/revert";
+    pub const THREAD_SIDE_QUESTION: &str = "thread/sideQuestion";
+    pub const THREAD_SIDE_QUESTION_DELTA: &str = "thread/sideQuestion/delta";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -466,6 +468,10 @@ pub struct AppServerCapabilities {
     pub mcp_approval: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub managed_worktrees: bool,
+    /// `thread/sideQuestion` answers from a thread's conversation without
+    /// adding to it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub side_question: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1136,6 +1142,39 @@ pub struct ThreadListResponse {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub next_cursor: Option<String>,
+}
+
+/// A question about a thread that is answered and then forgotten: neither the
+/// question nor the answer joins the conversation.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadSideQuestionParams {
+    pub thread_id: String,
+    pub question: String,
+    /// Echoed on each `thread/sideQuestion/delta`, so a client with more than
+    /// one question open can tell their streams apart.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub request_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadSideQuestionResponse {
+    pub answer: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadSideQuestionDelta {
+    pub thread_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub request_id: Option<String>,
+    pub delta: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

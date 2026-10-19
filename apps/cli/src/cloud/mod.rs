@@ -236,14 +236,45 @@ pub fn continue_elsewhere(session: &crate::agent::AgentSession, arg: &str) -> St
 /// `DESKTOP_DEEP_LINK_SCHEME` in packages/contracts/local-runtime, which owns it.
 const DESKTOP_LINK_SCHEME: &str = "agiworkforce-cloud";
 
+/// The desktop app opens a local thread only for a folder its user already
+/// added there; the link grants no folder access of its own.
+pub fn desktop_thread_link(thread_id: &str, folder: &std::path::Path) -> String {
+    format!(
+        "{DESKTOP_LINK_SCHEME}://code/local/{}?folder={}",
+        urlencoding::encode(thread_id),
+        urlencoding::encode(&folder.to_string_lossy())
+    )
+}
+
 /// Opens the app without asking: only a typed command reaches this.
 pub fn open_in_desktop(session: &crate::agent::AgentSession) -> String {
+    let opens = |link: &str| {
+        crate::oauth::open_external_url(link, crate::oauth::UserActionContext::user_initiated())
+    };
+    let saved_thread = session
+        .managed_session_path
+        .as_ref()
+        .and(session.managed_session_id())
+        .zip(session.workspace_root());
+    if let Some((thread_id, folder)) = saved_thread {
+        if opens(&desktop_thread_link(thread_id, &folder)) {
+            return format!(
+                "Opened this session in AGI Workforce for desktop, in {}. It is the same session: continue it there, with the same files and tools. If the app asks, add the folder in AGI Code first.",
+                folder.display()
+            );
+        }
+    }
     let (conversation_id, base) = match account_conversation(session) {
         Ok(found) => found,
-        Err(reason) => return reason,
+        Err(reason) => {
+            return format!(
+                "The desktop app did not open. Get it at {}/download. {reason}",
+                crate::tier_cache::default_api_base().trim_end_matches('/')
+            )
+        }
     };
     let link = format!("{DESKTOP_LINK_SCHEME}://chat/{conversation_id}");
-    if crate::oauth::open_external_url(&link, crate::oauth::UserActionContext::user_initiated()) {
+    if opens(&link) {
         format!(
             "Opened this conversation in AGI Workforce for desktop. Turns you add there are saved to your account; `agi resume --cloud {conversation_id}` brings them back here."
         )
@@ -917,6 +948,17 @@ pub fn project_instructions_context(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_desktop_link_names_the_same_thread_and_its_folder() {
+        assert_eq!(
+            desktop_thread_link(
+                "3f1d2c4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+                std::path::Path::new("/Users/me/My Project")
+            ),
+            "agiworkforce-cloud://code/local/3f1d2c4e-5a6b-4c7d-8e9f-0a1b2c3d4e5f?folder=%2FUsers%2Fme%2FMy%20Project"
+        );
+    }
 
     #[test]
     fn memory_off_on_the_account_is_read_from_the_cache_in_any_mode() {

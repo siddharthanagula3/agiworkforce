@@ -1210,9 +1210,6 @@ pub fn always_loaded_tool_definitions() -> Vec<ToolDefinition> {
         .collect()
 }
 
-/// Return all built-in tool definitions regardless of `should_defer`. Used by
-/// `tool_search` to answer on-demand schema requests, and by the plan-mode
-/// filter which needs to inspect the full set.
 pub fn image_tool_definitions(allowed_tools: Option<&[String]>) -> Vec<ToolDefinition> {
     vec![def(
         "generate_image",
@@ -1239,6 +1236,9 @@ pub fn image_tool_definitions(allowed_tools: Option<&[String]>) -> Vec<ToolDefin
     .collect()
 }
 
+/// Return all built-in tool definitions regardless of `should_defer`. Used by
+/// `tool_search` to answer on-demand schema requests, and by the plan-mode
+/// filter which needs to inspect the full set.
 pub fn all_builtin_tool_definitions() -> Vec<ToolDefinition> {
     built_in_tool_definitions()
 }

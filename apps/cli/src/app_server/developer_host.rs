@@ -41,6 +41,7 @@ use agiworkforce_protocol::developer_session::{
     ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
     ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse,
     ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams, ThreadSearchResponse,
+    ThreadSideQuestionDelta, ThreadSideQuestionParams, ThreadSideQuestionResponse,
     ThreadStartParams, ThreadStatus, ThreadSummary, ThreadWriterChangedNotification,
     ThreadWriterConflictData, TrustListResponse, TrustRevokeParams, TurnEndedNotification,
     TurnFailure, TurnFailureCode, TurnInterruptParams, TurnModelNotification, TurnStartParams,
@@ -950,6 +951,7 @@ impl CliDeveloperSessionHost {
             revert_restore: true,
             mcp_approval: true,
             managed_worktrees: true,
+            side_question: true,
         }
     }
 
@@ -2792,6 +2794,52 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             });
         }
         Ok(ThreadSearchResponse { hits })
+    }
+
+    async fn side_question(
+        &self,
+        params: ThreadSideQuestionParams,
+    ) -> Result<ThreadSideQuestionResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        let question = agiworkforce_protocol::user_input::clamp_user_input_text(
+            params.question.trim().to_string(),
+        );
+        if question.is_empty() {
+            return Err(DeveloperSessionHostError::invalid_request(
+                "Ask a question about this thread",
+            ));
+        }
+        let session = self.load_agent(&params.thread_id).await?;
+        let (config, side) = {
+            let agent = session.lock().await;
+            let config = turn_config_pinned_to_session_route(&self.config, &agent);
+            let side = agent.side_query(&config).map_err(invalid_request)?;
+            (config, side)
+        };
+        let notifications = self.notifications.clone();
+        let thread_id = params.thread_id.clone();
+        let request_id = params.request_id.clone();
+        let answer = side
+            .ask(
+                &config,
+                &question,
+                Box::new(move |delta| {
+                    let delta = ThreadSideQuestionDelta {
+                        thread_id: thread_id.clone(),
+                        request_id: request_id.clone(),
+                        delta: delta.to_string(),
+                    };
+                    if let Ok(notification) = AppServerNotification::new(
+                        agiworkforce_protocol::developer_session::method::THREAD_SIDE_QUESTION_DELTA,
+                        delta,
+                    ) {
+                        let _ = notifications.send(notification);
+                    }
+                }),
+            )
+            .await
+            .map_err(|error| DeveloperSessionHostError::unavailable(format!("{error:#}")))?;
+        Ok(ThreadSideQuestionResponse { answer })
     }
 
     async fn list_checkpoints(
