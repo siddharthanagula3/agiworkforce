@@ -83,3 +83,4 @@ export * from './localized-pricing';
 export * from './workspaces';
 export * from './agents';
 export * from './agent-drafts';
+export * from './plugin-directory';
