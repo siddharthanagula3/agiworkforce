@@ -164,7 +164,7 @@ export async function checkDesktopCloudUpdate(
   // every single launch. Every other status still throws, because those do
   // mean the check itself did not work.
   if (response.status === 404) {
-    return { available: false, currentVersion, version: currentVersion, downloadUrl: '' };
+    return { available: false, currentVersion, version: '', downloadUrl: '' };
   }
   if (!response.ok) {
     throw new Error(`AGI Cloud update information is unavailable (${response.status}).`);
@@ -228,7 +228,10 @@ export function desktopUpdatePrompt(
       type: 'info',
       title: 'AGI Cloud is up to date',
       message: 'You have the latest AGI Cloud version.',
-      detail: `Installed: ${outcome.currentVersion}\nLatest published: ${outcome.version}`,
+      detail:
+        outcome.version === ''
+          ? `Installed: ${outcome.currentVersion}\nNo newer version has been published.`
+          : `Installed: ${outcome.currentVersion}\nLatest published: ${outcome.version}`,
       buttons: ['OK'],
       downloadButton: null,
       restartButton: null,
