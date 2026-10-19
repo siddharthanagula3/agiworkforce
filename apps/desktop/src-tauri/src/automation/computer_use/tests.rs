@@ -314,7 +314,6 @@ mod session_tests {
         assert_eq!(session.task.id, task.id);
         assert_eq!(session.action_count(), 0);
         assert!(!session.is_paused());
-        assert!(!session.is_cancelled());
     }
 
     #[test]
@@ -339,21 +338,6 @@ mod session_tests {
 
         session.resume();
         assert!(!session.is_paused());
-    }
-
-    #[test]
-    fn test_session_cancel() {
-        let task = create_test_task();
-        let config = SessionConfig {
-            emit_events: false,
-            ..Default::default()
-        };
-        let mut session = ComputerUseSession::new(task, config);
-
-        assert!(!session.is_cancelled());
-
-        session.cancel();
-        assert!(session.is_cancelled());
     }
 
     #[test]

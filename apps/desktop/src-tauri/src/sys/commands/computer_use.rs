@@ -721,6 +721,7 @@ pub async fn computer_use_execute_opa_task(
             return Ok(cancelled_opa_result());
         }
     };
+    let agent = agent.with_cancellation(control.cancellation.clone());
     let result = await_opa_or_cancellation(&control.cancellation, agent.execute_task(task)).await;
     finish_opa_execution(state.inner(), &execution_id, &control).await;
 
