@@ -2365,7 +2365,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let context_index = context_indices.get(*shown_index).copied().flatten();
             let projected = DeveloperMessage {
                 role: message.role.clone(),
-                text: message.text_content(),
+                text: crate::agent::user_words(&message.text_content()).to_string(),
                 index: context_index
                     .and_then(|context_index| transcript_indices.get(context_index).copied())
                     .flatten(),
