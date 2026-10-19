@@ -455,9 +455,24 @@ pub async fn tasks_for_display(
             ))
             .into_owned(),
         ),
-        ("show" | "output" | "stop" | "cancel", None, _) => CommandOutcome::Warn(format!(
-            "Name the task: /tasks {subcommand} <id>. /tasks lists them."
-        )),
+        ("show" | "output" | "stop" | "cancel" | "transcript", None, _) => {
+            CommandOutcome::Warn(format!(
+                "Name the task: /tasks {subcommand} <id>. /tasks lists them."
+            ))
+        }
+        ("transcript", Some(id), Some(manager)) => match manager.get_result(id).await {
+            Some(result) if !result.transcript.is_empty() => CommandOutcome::Block(
+                sanitize_terminal_text(&format!(
+                    "Transcript of task {id}\n{}",
+                    result.transcript.join("\n")
+                ))
+                .into_owned(),
+            ),
+            Some(_) => CommandOutcome::Info(format!("Task {id} kept no transcript.")),
+            None => CommandOutcome::Warn(format!(
+                "Task {id} has not finished, or is not in this session. /tasks lists them."
+            )),
+        },
         ("show" | "output" | "stop" | "cancel", Some(id), Some(manager)) => {
             let Some((_, role, description, status)) =
                 tasks.iter().find(|(task, _, _, _)| task == id)
@@ -480,11 +495,11 @@ pub async fn tasks_for_display(
             );
             CommandOutcome::Block(sanitize_terminal_text(&detail).into_owned())
         }
-        ("show" | "output" | "stop" | "cancel", Some(id), None) => {
+        ("show" | "output" | "stop" | "cancel" | "transcript", Some(id), None) => {
             CommandOutcome::Warn(format!("No task {id} in this session. /tasks lists them."))
         }
         (other, _, _) => CommandOutcome::Warn(format!(
-            "Unknown /tasks subcommand '{other}'. Use: /tasks [list | show <id> | stop <id>]"
+            "Unknown /tasks subcommand '{other}'. Use: /tasks [list | show <id> | transcript <id> | stop <id>]"
         )),
     }
 }
