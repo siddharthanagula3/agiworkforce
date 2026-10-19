@@ -2451,16 +2451,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           });
 
         const announceDesktopCompletion = () => {
+          // A new chat's turn ran under the client placeholder, which
+          // `ensureConversationId` renamed to the server's id.
+          const finishedIn = resolvedFreshConvId ?? convId;
           const state = useChatStore.getState();
           const heading = completionNotificationTitle({
             workMode: options.meta?.workMode,
             research: options.meta?.researchEnabled,
-            reply: (state.messagesByConversation[convId] ?? []).at(-1),
-            conversationTitle: state.conversations.find((c) => c.id === convId)?.title,
+            reply: (state.messagesByConversation[finishedIn] ?? []).at(-1),
+            conversationTitle: state.conversations.find((c) => c.id === finishedIn)?.title,
             untitled: NEW_CHAT_TITLE,
           });
           if (!heading) return;
-          void notifyJobComplete({ title: heading, body: content, conversationId: convId });
+          void notifyJobComplete({ title: heading, body: content, conversationId: finishedIn });
         };
 
         const pendingEdit = consumePendingEdit(pendingEditRollbackRef.current, convId);
