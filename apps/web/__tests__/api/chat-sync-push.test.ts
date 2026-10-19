@@ -31,6 +31,33 @@ function postReq(body: unknown) {
   });
 }
 
+describe('POST /api/chat/sync, message order', () => {
+  it('stamps the rows of one batch in the order the client sent them', async () => {
+    const conversationId = '0190a000-0000-7000-8000-0000000000cc';
+    const res = await POST(
+      postReq({
+        protocolVersion: 2,
+        conversations: [],
+        messages: [
+          { id: '0190a000-0000-7000-8000-0000000000d1', conversationId, role: 'user', content: 'Question', baseVersion: '0' },
+          { id: '0190a000-0000-7000-8000-0000000000d2', conversationId, role: 'assistant', content: 'Answer', baseVersion: '0' },
+        ],
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    const insert = queryMock.mock.calls.find((c) => String(c[0]).includes('insert into web_messages'));
+    expect(insert).toBeDefined();
+    const sql = String(insert![0]);
+    expect(sql).toContain('with ordinality as source(item, position)');
+    expect(sql).toContain("now() + (incoming.position - 1) * interval '1 millisecond'");
+    expect(JSON.parse(String(insert![1][1])).map((m: { role: string }) => m.role)).toEqual([
+      'user',
+      'assistant',
+    ]);
+  });
+});
+
 describe('POST /api/chat/sync, revision CAS', () => {
   it('uses server revisions/clocks and preserves fields omitted by Desktop', async () => {
     const res = await POST(
