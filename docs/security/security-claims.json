@@ -1374,7 +1374,7 @@
       "id": "approval-precedence-and-tool-table",
       "section": "1.1 Managed Cloud, default tool authority",
       "kind": "rows",
-      "rows": 81,
+      "rows": 82,
       "implementation": [
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts",
         "apps/web/app/api/llm/v1/chat/completions/lib/tool-metadata.ts"
@@ -1482,12 +1482,20 @@
       "section": "1.4 Chrome extension, computer use",
       "kind": "rows",
       "rows": 6,
-      "implementation": ["apps/extension/src/background.ts"],
+      "implementation": [
+        "apps/extension/src/background.ts",
+        "apps/extension/src/features/computer-use/askBeforeActing.ts"
+      ],
       "proof": [
         {
           "kind": "test",
           "file": "apps/extension/__tests__/computer-use-default-ask.test.ts",
-          "name": "computer-use default = ask-before-acting (trust-boundary P0)"
+          "name": "computer-use default = Auto, crucial actions still ask"
+        },
+        {
+          "kind": "test",
+          "file": "apps/extension/__tests__/auto-permission-mode.test.ts",
+          "name": "Auto acts without asking and stops for crucial actions"
         },
         {
           "kind": "test",
