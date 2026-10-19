@@ -292,6 +292,36 @@ describe('PUT /api/projects/[id] · round-10 fields', () => {
     expect(json.project['importedFrom']).toBe('claude');
   });
 
+  it("saves the tools a project's new chats start with and drops stored keys it does not know", async () => {
+    const dbRow = {
+      ...BASE_DB_ROW,
+      chat_defaults: { codeExecution: true, skillName: 'brand-voice', retired: true },
+    };
+    setupUpdateChain({ data: dbRow, error: null });
+
+    const res = await PUT(
+      makePutRequest('proj-1', { chatDefaults: { codeExecution: true, skillName: 'brand-voice' } }),
+      { params: Promise.resolve({ id: 'proj-1' }) },
+    );
+
+    expect(res.status).toBe(200);
+    const [sql, params] = mockNeonQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toMatch(/chat_defaults = \$\d+/);
+    expect(params).toContain(JSON.stringify({ codeExecution: true, skillName: 'brand-voice' }));
+    const json = (await res.json()) as { project: Record<string, unknown> };
+    expect(ManagedCloudProjectResponseSchema.safeParse(json).success).toBe(true);
+    expect(json.project['chatDefaults']).toEqual({ codeExecution: true, skillName: 'brand-voice' });
+  });
+
+  it('refuses a chat default the composer has no switch for', async () => {
+    const res = await PUT(makePutRequest('proj-1', { chatDefaults: { imageMode: true } }), {
+      params: Promise.resolve({ id: 'proj-1' }),
+    });
+
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when accentColor is invalid enum value', async () => {
     const req = makePutRequest('proj-1', { accentColor: 'fuchsia' });
     const res = await PUT(req, { params: Promise.resolve({ id: 'proj-1' }) });

@@ -37,6 +37,7 @@ function toWebProject(project: ManagedCloudProject): Project {
     defaultProviderMode: project.defaultProviderMode,
     allowedSurfaces: project.allowedSurfaces,
     defaultModelId: project.defaultModelId,
+    chatDefaults: project.chatDefaults ?? {},
     knowledgeFileCount: project.knowledgeFileCount,
     conversationCount: project.conversationCount,
     memberCount: project.memberCount,

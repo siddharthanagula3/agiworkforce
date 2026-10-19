@@ -10,6 +10,24 @@ const PrivacyModeSchema = z.literal('managed');
 const ProviderModeSchema = z.enum(['ManagedGateway', 'ManagedNative']);
 const SourceSurfaceSchema = z.enum(SYNCED_APP_SURFACES);
 
+export const PROJECT_CHAT_DEFAULT_SKILL_MAX_LENGTH = 128;
+
+/** Composer tools a new chat in the project starts with; absent keys leave the composer's own default. */
+export const ProjectChatDefaultsSchema = z
+  .object({
+    codeExecution: z.boolean().optional(),
+    research: z.boolean().optional(),
+    skillName: z
+      .string()
+      .trim()
+      .min(1)
+      .max(PROJECT_CHAT_DEFAULT_SKILL_MAX_LENGTH)
+      .nullable()
+      .optional(),
+  })
+  .strict();
+export type ProjectChatDefaults = z.infer<typeof ProjectChatDefaultsSchema>;
+
 export const ManagedCloudProjectSchema = z.object({
   id: z.string().min(1),
   ownerUserId: z.string().min(1),
@@ -28,6 +46,7 @@ export const ManagedCloudProjectSchema = z.object({
   defaultProviderMode: ProviderModeSchema,
   allowedSurfaces: z.array(SourceSurfaceSchema),
   defaultModelId: z.string().nullable().optional(),
+  chatDefaults: ProjectChatDefaultsSchema.optional(),
   knowledgeFileCount: z.number().int().nonnegative().nullable().optional(),
   conversationCount: z.number().int().nonnegative().nullable().optional(),
   memberCount: z.number().int().nonnegative().nullable().optional(),
@@ -66,6 +85,7 @@ const ManagedCloudProjectWriteFields = {
   defaultProviderMode: ProviderModeSchema.optional(),
   allowedSurfaces: z.array(SourceSurfaceSchema).optional(),
   defaultModelId: z.string().nullable().optional(),
+  chatDefaults: ProjectChatDefaultsSchema.optional(),
   importedFrom: ProjectImportSourceSchema.nullable().optional(),
   conversationIds: z.array(z.string().min(1).max(200)).max(500).optional(),
 };

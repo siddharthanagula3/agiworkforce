@@ -27,6 +27,7 @@ const CARRIED_COLUMNS = [
   'default_provider_mode',
   'allowed_surfaces',
   'default_model_id',
+  'chat_defaults',
   'imported_from',
   'uses_global_memory',
   'uses_account_instructions',
@@ -92,7 +93,9 @@ async function handleDuplicateProject(request: NextRequest, context: RouteContex
     source['description'] ?? '',
     source['instructions'] ?? '',
     source['color'] ?? DEFAULT_PROJECT_COLOR,
-    ...CARRIED_COLUMNS.map((column) => source[column]),
+    ...CARRIED_COLUMNS.map((column) =>
+      column === 'chat_defaults' ? JSON.stringify(source[column] ?? {}) : source[column],
+    ),
   ];
   const placeholders = values.map((_, index) => `$${index + 1}`).join(', ');
 
