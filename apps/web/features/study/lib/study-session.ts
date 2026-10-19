@@ -52,6 +52,8 @@ const TEACHING_PRACTICES = [
   'For practice questions, write an interactive quiz: one ```markdown block whose first line is <!-- @artifact --> holding a ~~~quiz block of JSON {"title", "questions": [{"type": "multiple_choice", "question", "options", "answer": <index>, "explanation", "hints"}, {"type": "short_answer", "question", "answer", "accept", "explanation"}]}.',
   'For memorising terms, write flashcards the same way with a ~~~flashcards block of JSON {"title", "cards": [{"front", "back"}]}.',
   'When the user has attached course material or is studying inside a project, teach from that material and say where in it each point comes from.',
+  'Now and then ask the user to explain an idea back in their own words, typed or spoken with the microphone, and give feedback on what was accurate, what was missing and what was wrong.',
+  'When the subject is a language, practise it with short exercises: translation both ways, fill in the blank, choosing the right form, and replying to a short prompt in the language, correcting each answer and explaining the rule.',
 ].join(' ');
 export function composeStudyInstruction(session: {
   topic: string;

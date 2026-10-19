@@ -66,6 +66,7 @@ export function PublishedArtifactView({
   const router = useRouter();
   const [copying, setCopying] = useState(false);
   const [copyError, setCopyError] = useState<string | null>(null);
+  const [dataRefresh, setDataRefresh] = useState(0);
 
   const payload = useMemo(() => buildPublishedSandboxPayload(kind, content), [kind, content]);
   const fallbackSrcDoc = useMemo(
@@ -188,7 +189,15 @@ export function PublishedArtifactView({
           onAnswer={runtime.answerAiRequest}
         />
       ) : runtime.grantedConnectorSets.length > 0 ? (
-        <div className="flex justify-end">
+        <div className="flex justify-end gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => setDataRefresh((count) => count + 1)}
+            data-testid="artifact-runtime-refresh-data"
+          >
+            {t('artifactPublish.runtimeRefreshData', 'Refresh data')}
+          </Button>
           <Button
             size="sm"
             variant="ghost"
@@ -211,6 +220,7 @@ export function PublishedArtifactView({
           className="h-[70vh] w-full rounded-lg border border-border/40 bg-white"
           onRenderError={setRenderError}
           runtime={runtime.host}
+          refreshKey={dataRefresh}
         />
       ) : kind === 'svg' ? (
         svgSrc ? (
