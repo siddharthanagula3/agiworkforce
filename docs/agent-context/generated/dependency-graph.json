@@ -731,6 +731,10 @@
       },
       {
         "from": "@agiworkforce/utils",
+        "to": "@agiworkforce/cloud-contracts"
+      },
+      {
+        "from": "@agiworkforce/utils",
         "to": "@agiworkforce/local-runtime-contract"
       },
       {
