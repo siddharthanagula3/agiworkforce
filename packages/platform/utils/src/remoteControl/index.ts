@@ -32,3 +32,7 @@ export {
 } from './dispatchEnvelope';
 export { createControlReceiptLedger, type ControlReceiptLedger } from './controlReceipts';
 export { developerSessionEventFromNotification, readTurnFailure } from './sessionEvents';
+export {
+  createCodeSessionActivity,
+  type CodeSessionActivityDependencies,
+} from './codeSessionActivity';
