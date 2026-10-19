@@ -18,6 +18,7 @@ import {
   deleteProjectMemory,
   projectMemoryEntries,
 } from '@/src/features/projects/projectMemory';
+import { ProjectMembersSection } from '@/src/features/projects/components/ProjectMembersSection';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useCloudMemoryStore } from '@/stores/memory/cloudMemoryStore';
 import { useThemeColors } from '@/src/ui/theme';
@@ -183,6 +184,9 @@ export function ProjectSettingsScreen({ projectId }: { projectId: string }) {
           icon={Users}
         />
       ) : null}
+
+      <SectionLabel>SHARING</SectionLabel>
+      <ProjectMembersSection projectId={projectId} projectName={projectName} />
 
       <SectionLabel>PERSONALIZATION</SectionLabel>
       <SettingsGroup>
