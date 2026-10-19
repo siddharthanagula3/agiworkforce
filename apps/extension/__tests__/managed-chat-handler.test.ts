@@ -80,6 +80,30 @@ describe('executeChromeManagedChat', () => {
     expect(deps.streamChat).not.toHaveBeenCalled();
   });
 
+  it('carries a selected skill to Managed Cloud and refuses a malformed one', async () => {
+    const deps = dependencies();
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-skill',
+        text: 'Draft the notes',
+        modelSelection: 'auto',
+        skillName: 'release-notes',
+      },
+      deps,
+    );
+    expect(result.status).toBe('success');
+    const [, , options] = vi.mocked(deps.streamChat).mock.calls[0]!;
+    expect(options.skillName).toBe('release-notes');
+
+    const refused = dependencies();
+    const invalid = await executeChromeManagedChat(
+      { id: 'stream-skill-2', text: 'Draft', modelSelection: 'auto', skillName: '../escape' },
+      refused,
+    );
+    expect(invalid).toMatchObject({ status: 'error', code: 'invalid_request' });
+    expect(refused.streamChat).not.toHaveBeenCalled();
+  });
+
   it('passes the registry-routed concrete model and thinking flag to Managed Cloud', async () => {
     const deps = dependencies();
     const result = await executeChromeManagedChat(

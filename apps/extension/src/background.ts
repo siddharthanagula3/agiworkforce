@@ -6264,6 +6264,7 @@ async function handleChatMessage(
         conversationId: message.conversationId,
         assistantMessageId: message.assistantMessageId,
         ...(message.memoryCommand ? { memoryCommand: message.memoryCommand } : {}),
+        ...(message.skillName !== undefined ? { skillName: message.skillName } : {}),
         ...(!delivery && isChatBrowserToolTier(message.browserToolTier)
           ? { tools: chatBrowserToolDefinitions(message.browserToolTier) }
           : {}),

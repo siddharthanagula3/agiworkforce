@@ -1565,6 +1565,25 @@ describe('streamFreeChat, model routing', () => {
     expect(body.work_mode).toBe('agiwork');
   });
 
+  it('names the selected skill in the request body', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+
+    await collectChunks(
+      streamFreeChat(SAMPLE_MESSAGES, 'token', {
+        model: FREE_TRIAL_MODEL,
+        skillName: 'release-notes',
+      }),
+    );
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as { skill_name?: string };
+    expect(body.skill_name).toBe('release-notes');
+  });
+
   it('emits the validated run handle and canonical activity event', async () => {
     const runId = '11111111-1111-4111-8111-111111111111';
     const envelope = {

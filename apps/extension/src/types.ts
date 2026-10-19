@@ -460,6 +460,7 @@ export interface ChatMessageMessage extends BaseMessage {
   historyConversationId?: string;
   assistantMessageId?: string;
   memoryCommand?: ManagedMemoryCommandTurn;
+  skillName?: string;
   browserToolTier?: ChatBrowserToolTier;
 }
 
