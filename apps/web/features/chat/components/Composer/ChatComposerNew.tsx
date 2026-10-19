@@ -1666,6 +1666,7 @@ const ChatComposerNewComponent = ({
   const newChatsTemporary = useSettingsStore((s) => s.newChatsTemporary);
   const dictationEnabled = useSettingsStore((s) => s.dictationEnabled);
   const followUpBehavior = useSettingsStore((s) => s.followUpBehavior);
+  const sendWithEnter = useSettingsStore((s) => s.sendWithEnter);
   const dictationSwitchedOff = useBillingStore((s) =>
     dictationSwitchedOffReason(s.disabledFeatures),
   );
@@ -4186,10 +4187,17 @@ const ChatComposerNewComponent = ({
         return;
       }
 
-      // Plain Enter sends; Shift+Enter inserts a newline (the ChatGPT/Claude chat
-      // convention). Cmd/Ctrl+Enter also sends. Never submit while a picker owns
-      // Enter (slash) or mid-IME-composition (e.g. CJK candidates).
-      if (e.key === 'Enter' && !e.shiftKey && !composing && !showSlashMenu) {
+      // Plain Enter sends and Shift+Enter inserts a newline (the ChatGPT/Claude
+      // convention); with Send with Enter off, Enter inserts a newline and only
+      // Cmd/Ctrl+Enter sends. Never submit while a picker owns Enter (slash) or
+      // mid-IME-composition (e.g. CJK candidates).
+      if (
+        e.key === 'Enter' &&
+        !e.shiftKey &&
+        !composing &&
+        !showSlashMenu &&
+        (sendWithEnter || e.metaKey || e.ctrlKey)
+      ) {
         e.preventDefault();
         handleSubmit();
       }
@@ -4213,6 +4221,7 @@ const ChatComposerNewComponent = ({
     },
     [
       handleSubmit,
+      sendWithEnter,
       handleSubmitInverted,
       handleStop,
       isTurnActive,

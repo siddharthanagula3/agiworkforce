@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import { act, render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import userEvent from '@testing-library/user-event';
 import { ChatComposerNew, VIDEO_MODELS, type ComposerProjectPicker } from './ChatComposerNew';
 import { IMAGE_MODELS } from '../../lib/imageGenerationOptions';
@@ -487,6 +488,24 @@ describe('ChatComposerNew', () => {
     const textarea = screen.getByRole('textbox', { name: /message input/i });
     fireEvent.keyDown(textarea, { key: 'Enter' });
     expect(onSendMock).not.toHaveBeenCalled();
+  });
+
+  it('starts a new line on Enter and sends on Cmd/Ctrl+Enter when Send with Enter is off', async () => {
+    useSettingsStore.getState().setSendWithEnter(false);
+    try {
+      const onSendMock = vi.fn();
+      render(<ChatComposerNew onSend={onSendMock} />);
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      await userEvent.type(textarea, 'first line');
+
+      expect(fireEvent.keyDown(textarea, { key: 'Enter' })).toBe(true);
+      expect(onSendMock).not.toHaveBeenCalled();
+
+      fireEvent.keyDown(textarea, { key: 'Enter', ctrlKey: true });
+      await waitFor(() => expect(onSendMock).toHaveBeenCalledTimes(1));
+    } finally {
+      useSettingsStore.getState().setSendWithEnter(true);
+    }
   });
 
   it('does not send on Shift+Enter', async () => {

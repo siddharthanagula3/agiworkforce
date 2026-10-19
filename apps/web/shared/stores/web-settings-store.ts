@@ -58,6 +58,7 @@ interface SettingsState {
   /** A follow-up sent while a local coding agent works; steer joins the running turn. */
   codeFollowUpQueueMode: FollowUpQueueMode;
   codeBlockWrap: boolean;
+  sendWithEnter: boolean;
   followUpSuggestionsEnabled: boolean;
   /**
    * A follow-up sent while a cloud chat reply runs. Steer stops the reply, so
@@ -79,6 +80,7 @@ interface SettingsState {
   setDictationEnabled: (enabled: boolean) => void;
   setCodeFollowUpQueueMode: (mode: FollowUpQueueMode) => void;
   setCodeBlockWrap: (wrap: boolean) => void;
+  setSendWithEnter: (enabled: boolean) => void;
   setFollowUpSuggestionsEnabled: (enabled: boolean) => void;
   setFollowUpBehavior: (behavior: FollowUpBehavior) => void;
   setAccentColor: (accent: AccentColor) => void;
@@ -101,6 +103,7 @@ export const useSettingsStore = create<SettingsState>()(
       dictationEnabled: true,
       codeFollowUpQueueMode: 'steer',
       codeBlockWrap: false,
+      sendWithEnter: true,
       followUpSuggestionsEnabled: true,
       followUpBehavior: 'queue',
       accentColor: 'default',
@@ -132,6 +135,7 @@ export const useSettingsStore = create<SettingsState>()(
               : [...s.hiddenNavIds, id],
         })),
       setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
+      setSendWithEnter: (sendWithEnter) => set({ sendWithEnter }),
       setFollowUpSuggestionsEnabled: (enabled) => set({ followUpSuggestionsEnabled: enabled }),
       setFollowUpBehavior: (followUpBehavior) => set({ followUpBehavior }),
       setAccentColor: (accent) => set({ accentColor: accent }),
