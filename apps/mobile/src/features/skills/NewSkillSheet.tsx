@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -13,17 +13,21 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { toUserMessage } from '@/services/userMessage';
-import { createPersonalSkill } from './service';
+import { createPersonalSkill, updatePersonalSkill, type SkillDraftInput } from './service';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
 export function NewSkillSheet({
   visible,
   onClose,
   onCreated,
+  initialDraft,
+  editingName,
 }: {
   visible: boolean;
   onClose: () => void;
   onCreated: () => void;
+  initialDraft?: SkillDraftInput;
+  editingName?: string;
 }) {
   const colors = useThemeColors();
   const [name, setName] = useState('');
@@ -32,6 +36,14 @@ export function NewSkillSheet({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const canSave = !saving && Boolean(name.trim() && description.trim() && body.trim());
+  const editing = editingName !== undefined;
+
+  useEffect(() => {
+    if (!visible || !initialDraft) return;
+    setName(initialDraft.name);
+    setDescription(initialDraft.description);
+    setBody(initialDraft.body);
+  }, [initialDraft, visible]);
 
   const close = useCallback(() => {
     setName('');
@@ -45,7 +57,11 @@ export function NewSkillSheet({
     setSaving(true);
     setError(null);
     try {
-      await createPersonalSkill({ name, description, body });
+      if (editingName !== undefined) {
+        await updatePersonalSkill(editingName, { name, description, body });
+      } else {
+        await createPersonalSkill({ name, description, body });
+      }
       onCreated();
       close();
     } catch (saveError) {
@@ -53,7 +69,7 @@ export function NewSkillSheet({
     } finally {
       setSaving(false);
     }
-  }, [body, close, description, name, onCreated]);
+  }, [body, close, description, editingName, name, onCreated]);
 
   const fieldStyle = {
     minHeight: 44,
@@ -93,7 +109,7 @@ export function NewSkillSheet({
             accessibilityRole="header"
             style={{ fontSize: typeScale.callout, fontWeight: '600', color: colors.textPrimary }}
           >
-            New skill
+            {editing ? 'Edit skill' : 'New skill'}
           </Text>
           <Text style={{ fontSize: typeScale.footnote, color: colors.textSecondary }}>
             A personal skill is only yours. Name it with lowercase letters, numbers and hyphens.
@@ -101,6 +117,7 @@ export function NewSkillSheet({
           <TextInput
             value={name}
             onChangeText={(next) => setName(next.toLowerCase())}
+            editable={!editing}
             placeholder="weekly-report"
             placeholderTextColor={colors.textMuted}
             autoCapitalize="none"
@@ -155,7 +172,7 @@ export function NewSkillSheet({
               onPress={() => void save()}
               disabled={!canSave}
               accessibilityRole="button"
-              accessibilityLabel="Create skill"
+              accessibilityLabel={editing ? 'Save skill' : 'Create skill'}
               accessibilityState={{ disabled: !canSave }}
               style={{
                 minHeight: 44,
@@ -170,7 +187,7 @@ export function NewSkillSheet({
                 <Text
                   style={{ fontSize: typeScale.subhead, fontWeight: '600', color: colors.teal }}
                 >
-                  Create
+                  {editing ? 'Save' : 'Create'}
                 </Text>
               )}
             </Pressable>
