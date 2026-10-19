@@ -46,12 +46,13 @@ describe('/auth/chrome-extension page', () => {
     authState.isSignedIn = true;
   });
 
-  it('confirms the synced web session and tells the user how to refresh the side panel', () => {
+  it('confirms the synced web session and says the side panel picks it up on return', () => {
     render(<ChromeExtensionAuthCompletePage />);
 
     expect(screen.getByRole('heading', { name: 'Chrome is connected.' })).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('session is ready');
-    expect(screen.getByText(/close and reopen the AGI side panel/i)).toBeInTheDocument();
+    expect(screen.getByText(/side panel picks up your account/i)).toBeInTheDocument();
+    expect(screen.queryByText(/close and reopen/i)).toBeNull();
     expect(screen.getByTestId('header')).toHaveAttribute('data-minimal', 'true');
   });
 
