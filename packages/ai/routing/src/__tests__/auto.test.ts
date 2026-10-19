@@ -10,7 +10,7 @@ import {
   resolveEffectiveModelPricingForInputTokens,
   type PlatformCapability,
 } from '@agiworkforce/types';
-import { resolveAutoRoute } from '../auto';
+import { resolveAutoRoute, runtimeProfileImplementsTask } from '../auto';
 import { modelRegistry } from '@agiworkforce/model-registry';
 
 const FAST_MODEL_ID = getRoutingSlotModel('workhorse_general');
@@ -876,5 +876,21 @@ describe('resolveAutoRoute tier slot admission', () => {
     expect(result).toMatchObject({ status: 'selected' });
     expect(result).not.toMatchObject({ modelKey: FLAGSHIP_CODING_MODEL_ID });
     expect(result).not.toMatchObject({ reason: 'continuity' });
+  });
+});
+
+describe('runtimeProfileImplementsTask', () => {
+  it('reports computer use as served only by a runtime that implements it', () => {
+    expect(runtimeProfileImplementsTask('web/cloud-chat', 'computer-use')).toBe(false);
+    expect(runtimeProfileImplementsTask('chrome/managed-browser-task', 'computer-use')).toBe(true);
+  });
+
+  it('serves every task whose harness features the runtime implements', () => {
+    expect(runtimeProfileImplementsTask('web/cloud-chat', 'general')).toBe(true);
+    expect(runtimeProfileImplementsTask('web/cloud-chat', 'agentic')).toBe(true);
+  });
+
+  it('serves nothing for an unknown runtime profile', () => {
+    expect(runtimeProfileImplementsTask('unknown/profile', 'general')).toBe(false);
   });
 });

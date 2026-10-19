@@ -261,6 +261,7 @@ import {
   developerJurisdictionAllowed,
   modelsPastDeprecationDate,
   resolveAutoRoute,
+  runtimeProfileImplementsTask,
   speedFirstSlots,
   taskFamilyRoutingStageEnabled,
 } from '@agiworkforce/routing';
@@ -829,17 +830,34 @@ export function applyImplicitManagedToolIntent(
   }
 }
 
+const WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID = 'web/cloud-chat';
+
+/**
+ * The server never drives a browser or a desktop itself. A browser-control turn
+ * reaches this runtime either from a client that executes the tools it declares,
+ * which is tool-calling agentic work, or as plain text, which is ordinary chat.
+ * Routing it as a task this runtime cannot serve answered every such prompt with
+ * a model-availability error.
+ */
+function taskTypeServedByWebRuntime(
+  taskType: RoutingTaskType,
+  request: Pick<ChatCompletionRequest, 'tools'>,
+): RoutingTaskType {
+  if (runtimeProfileImplementsTask(WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID, taskType)) return taskType;
+  return (request.tools?.length ?? 0) > 0 ? 'agentic' : 'general';
+}
+
 export function resolveToolAwareTaskType(
   classifiedTaskType: RoutingTaskType,
   request: Pick<
     ChatCompletionRequest,
-    'research' | 'work_mode' | 'office_creation' | 'code_execution'
+    'research' | 'work_mode' | 'office_creation' | 'code_execution' | 'tools'
   >,
 ): RoutingTaskType {
   if (request.research === true) return 'research';
   if (request.work_mode === 'agiwork' || request.office_creation === true) return 'agentic';
   if (request.code_execution === true) return 'coding';
-  return classifiedTaskType;
+  return taskTypeServedByWebRuntime(classifiedTaskType, request);
 }
 
 export { toManagedSkillFromUserSkill } from '@/lib/services/user-skill-service';
@@ -2198,7 +2216,7 @@ export function buildTaskFamilySignals(
     estimatedInputTokens: context.estimatedInputTokens,
     messageCharCount: context.messageCharCount,
     priorTurnCount: context.priorTurnCount,
-    runtimeProfileId: 'web/cloud-chat',
+    runtimeProfileId: WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID,
   };
 }
 
@@ -2385,7 +2403,7 @@ export function buildWebCloudAutoRoutingRequest(
     taskType,
     subscriptionTier,
     trustMode: MANAGED_WEB_CLOUD_TRUST_MODE,
-    runtimeProfileId: 'web/cloud-chat',
+    runtimeProfileId: WEB_CLOUD_CHAT_RUNTIME_PROFILE_ID,
     retiredModelKeys: modelsPastDeprecationDate(),
     ...(gatewayFlagHarnessIds ? { allowedHarnessIds: gatewayFlagHarnessIds } : {}),
     ...(preferSlots !== undefined && preferSlots.length > 0 ? { preferSlots } : {}),
