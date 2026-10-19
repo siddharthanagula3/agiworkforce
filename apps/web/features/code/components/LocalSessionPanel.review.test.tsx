@@ -31,6 +31,10 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
   readDeveloperSession,
   onDeveloperSessionEvent: () => () => undefined,
   useDeveloperCapabilities: () => new Set(DEVELOPER_RUNTIME_CAPABILITIES),
+  listWorkspaceFiles: vi.fn(async () => [
+    { name: 'README.md', path: 'README.md', kind: 'file', sizeBytes: 1, modifiedAtMs: 1 },
+  ]),
+  findWorkspaceFilesByName: vi.fn(async () => []),
 }));
 
 const { LocalSessionPanel } = await import('./LocalSessionPanel');
@@ -118,6 +122,31 @@ describe('LocalSessionPanel review pane', () => {
 
     await user.keyboard('{Control>}{Shift>}G{/Shift}{/Control}');
     expect(screen.queryByTestId('local-review-pane')).not.toBeInTheDocument();
+  });
+
+  it('opens the files panel on Cmd+P with the cursor in the file search, and swaps it for the review pane', async () => {
+    const user = userEvent.setup();
+    render(
+      <LocalSessionPanel
+        session={session}
+        group={{ name: 'qa-project', branch: 'main', sessions: [session] }}
+        runtimeModels={runtime}
+        verbose={false}
+        onClose={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument();
+
+    await user.keyboard('{Meta>}p{/Meta}');
+
+    const files = await screen.findByRole('complementary', { name: 'Files' });
+    expect(await within(files).findByRole('button', { name: 'README.md' })).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Search files by name')).toHaveFocus());
+    expect(screen.getByRole('button', { name: 'Files' })).toHaveAttribute('aria-pressed', 'true');
+
+    await user.keyboard('{Control>}{Shift>}G{/Shift}{/Control}');
+    expect(await screen.findByTestId('local-review-pane')).toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument();
   });
 
   it('keeps the folder controls in a worktree, which its folder grant covers', () => {

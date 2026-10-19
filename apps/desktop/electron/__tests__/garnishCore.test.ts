@@ -131,6 +131,7 @@ describe('normalizeShortcuts', () => {
   it('never counts two switched-off shortcuts as a collision', () => {
     const duplicates = duplicateShortcutKeys({
       quickAskShortcut: '',
+      newChatShortcut: '',
       screenshotShortcut: '',
       windowShotShortcut: DEFAULT_SHORTCUTS.windowShotShortcut,
       voiceShortcut: DEFAULT_SHORTCUTS.voiceShortcut,
