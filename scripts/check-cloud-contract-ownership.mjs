@@ -21,6 +21,7 @@ const cloudModules = [
   'library',
   'memory-summary',
   'partner-applications',
+  'usage-reset-reminder',
   'managed-media',
   'me',
   'client-handshake',

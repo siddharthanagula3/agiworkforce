@@ -64,7 +64,8 @@ describe('POST /api/partners/apply', () => {
     const response = await POST(post(APPLICATION));
 
     expect(response.status).toBe(503);
-    console.log(JSON.stringify(await response.json()));
+    const body = (await response.json()) as { error: { message: string } };
+    expect(body.error.message).toContain('could not be sent right now');
   });
 
   it('refuses an incomplete application without sending anything', async () => {

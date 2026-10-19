@@ -117,6 +117,63 @@ describe('WEB-CHAT-MESSAGE-LIST-ACCOUNT-WIDE-QUOTA-01 · composer', () => {
     }
   });
 
+  it('offers to notify the user when the limit resets and says once it is set', async () => {
+    let settle: (outcome: 'set') => void = () => {};
+    const onRemindAtReset = vi.fn(() => new Promise<'set'>((resolve) => (settle = resolve)));
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId={CONVERSATION_ID}
+        usageBlock={{ reason: REASON, resetAt: RESET_AT, onRemindAtReset }}
+      />,
+    );
+
+    const remind = screen.getByRole('button', { name: 'Notify me when it resets' });
+    fireEvent.click(remind);
+
+    expect(onRemindAtReset).toHaveBeenCalledTimes(1);
+    expect(remind).toBeDisabled();
+    await act(async () => settle('set'));
+    expect(screen.getByTestId('composer-usage-reminder-status')).toHaveTextContent(
+      'We will notify you when it resets.',
+    );
+    expect(screen.queryByRole('button', { name: 'Notify me when it resets' })).toBeNull();
+  });
+
+  it('says why no reminder can arrive instead of pretending one was set', async () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId={CONVERSATION_ID}
+        usageBlock={{
+          reason: REASON,
+          resetAt: RESET_AT,
+          onRemindAtReset: vi.fn(async () => 'blocked' as const),
+        }}
+      />,
+    );
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Notify me when it resets' }));
+    });
+
+    expect(screen.getByTestId('composer-usage-reminder-status')).toHaveTextContent(
+      'Notifications are blocked for this site in your browser settings.',
+    );
+  });
+
+  it('offers no reminder when the refusal carried no reset time', () => {
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        conversationId={CONVERSATION_ID}
+        usageBlock={{ reason: REASON, onRemindAtReset: vi.fn() }}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Notify me when it resets' })).toBeNull();
+  });
+
   it('stays out of the way when the account has capacity', () => {
     render(<ChatComposerNew onSend={vi.fn()} conversationId={CONVERSATION_ID} />);
 
