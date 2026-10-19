@@ -2780,7 +2780,9 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('rejects a forged selection of a tier-locked catalog model', async () => {
     const harness = makeHarness();
+    await api.setAccountToken(harness.context.secrets as never, 'signed-in-token');
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    await harness.context.globalState.update('tierStatus.cachedAtMs', Date.now());
     const lockedModel = buildGroupedQuickPickItems('local').find(
       (item) => item.modelId !== undefined && item.disabled === true,
     );
@@ -2808,7 +2810,9 @@ describe('ChatStateManager local turn lifecycle', () => {
 
   it('rejects a forged send with a tier-locked catalog model', async () => {
     const harness = makeHarness();
+    await api.setAccountToken(harness.context.secrets as never, 'signed-in-token');
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    await harness.context.globalState.update('tierStatus.cachedAtMs', Date.now());
     const lockedModel = buildGroupedQuickPickItems('local').find(
       (item) => item.modelId !== undefined && item.disabled === true,
     );
@@ -2827,6 +2831,30 @@ describe('ChatStateManager local turn lifecycle', () => {
         headline: 'This model is not available for your current plan or provider setup.',
         retryable: false,
         action: { kind: 'upgrade-plan', label: 'Upgrade your plan' },
+      },
+    });
+  });
+
+  it('asks a signed-out user to sign in, not to upgrade, when the cached plan excludes the model', async () => {
+    const harness = makeHarness();
+    await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    const lockedModel = buildGroupedQuickPickItems('local').find(
+      (item) => item.modelId !== undefined && item.disabled === true,
+    );
+    expect(lockedModel).toBeDefined();
+
+    await harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Explain this function', model: lockedModel!.modelId! },
+    });
+
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: {
+        category: 'sign-in',
+        headline: 'Sign in to AGI to run this model on your plan.',
+        retryable: false,
+        action: { kind: 'sign-in-account', label: 'Sign in to AGI' },
       },
     });
   });
@@ -3801,7 +3829,9 @@ describe('ChatStateManager error classification', () => {
 
   it('gives a plan refusal an upgrade action rather than an unknown dead end', async () => {
     const harness = makeHarness();
+    await api.setAccountToken(harness.context.secrets as never, 'signed-in-token');
     await harness.context.globalState.update('tierStatus.cachedTier', 'local');
+    await harness.context.globalState.update('tierStatus.cachedAtMs', Date.now());
     const lockedModel = buildGroupedQuickPickItems('local').find(
       (item) => item.modelId !== undefined && item.disabled === true,
     );

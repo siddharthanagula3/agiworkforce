@@ -2051,7 +2051,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       );
       // Free shows one way forward and no meters, the same as Settings > Usage on the web.
       const freePlan =
-        accountToken !== undefined && isFreeBillingPlanTier(tierInfo?.accountPlanTier);
+        accountToken !== undefined &&
+        isFreeBillingPlanTier(tierInfo?.accountPlanTier ?? tierInfo?.tier);
 
       type AccountAction =
         | 'sign-in'

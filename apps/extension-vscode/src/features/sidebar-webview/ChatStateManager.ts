@@ -99,6 +99,7 @@ import {
   fetchAccountIdentity,
   forgetSharedCredentialRefusal,
   getAccountAuthState,
+  getAccountToken,
   getCloudWebOrigin,
   type AccountIdentity,
 } from '../../utils/api';
@@ -223,6 +224,7 @@ const RUNTIME_REFUSAL: ChatErrorHint = { category: 'runtime' };
 const RUNTIME_FAILURE: ChatErrorHint = { category: 'runtime', retryable: true };
 const RUNTIME_SETUP_REFUSAL: ChatErrorHint = { category: 'runtime', action: 'open-settings' };
 const PLAN_REFUSAL: ChatErrorHint = { category: 'subscription', action: 'upgrade-plan' };
+const SIGN_IN_REFUSAL: ChatErrorHint = { category: 'sign-in', action: 'sign-in-account' };
 const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch-model' };
 
 const MANAGE_TRUST_LABEL = 'Manage Trust';
@@ -1570,7 +1572,7 @@ export class ChatStateManager {
           !this._localModelProviders.has(normalized) &&
           !isModelReachableForTier(normalized, tier)
         ) {
-          this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
+          await this._refuseModelOffPlan();
           break;
         }
         await this.selectModel(normalized);
@@ -2405,6 +2407,18 @@ export class ChatStateManager {
    * classification that decides when a thread must be restarted on a boundary
    * change, and never from a fixed literal.
    */
+  /**
+   * The tier check reads a cached plan, which outlives a revoked or expired
+   * session. Without an account the remedy is signing in, never an upgrade.
+   */
+  private async _refuseModelOffPlan(): Promise<void> {
+    if ((await getAccountToken(this._secrets)) === undefined) {
+      this._postError(t('chatError.signInToRun'), SIGN_IN_REFUSAL);
+      return;
+    }
+    this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
+  }
+
   async pushUsageMeter(shouldPost: () => boolean = () => true): Promise<void> {
     const modelId = this._activeModel;
     const boundary = this._providerBoundaryForModel(modelId);
@@ -3372,7 +3386,7 @@ export class ChatStateManager {
       !this._localModelProviders.has(requestedModel) &&
       !isModelReachableForTier(requestedModel, tier)
     ) {
-      this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
+      await this._refuseModelOffPlan();
       return false;
     }
     this._setActiveModel(requestedModel);

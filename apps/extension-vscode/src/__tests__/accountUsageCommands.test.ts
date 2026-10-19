@@ -198,11 +198,7 @@ describe('account usage in the editor', () => {
       tier: 'free',
       subscriptionSource: 'none',
     });
-    vi.mocked(fetchTierInfo).mockResolvedValue({
-      ...TIER_INFO,
-      tier: 'free',
-      accountPlanTier: 'free',
-    });
+    vi.mocked(fetchTierInfo).mockResolvedValue({ ...TIER_INFO, tier: 'free' });
     const handlers = registerHandlers(new ExtensionContext());
     vi.mocked(vscode.window.showQuickPick).mockImplementationOnce((async (items: Item[]) =>
       items.find((item) => item.action === 'upgrade')) as never);
