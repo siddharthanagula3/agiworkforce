@@ -115,6 +115,10 @@ export const LOCAL_CODE_COPY = {
     minutes < 1 ? 'Started just now' : `Running for ${minutes} min`,
   stopCommand: (command: string): string => `Stop ${command}`,
   stopAllCommands: 'Stop all',
+  panelPosition: 'Panel position',
+  openPreview: 'Preview',
+  openPreviewOf: (url: string): string => `Open a preview of ${url}`,
+  previewFailed: 'The preview could not be opened.',
   keepRunning: 'Keep running',
   keepRunningHint:
     'Start it to keep running, such as a dev server, and stop it from the list above.',
@@ -1516,4 +1520,18 @@ export function localReviewCommentsMessage(comments: readonly LocalReviewComment
     return `${index + 1}. ${where}${quoted}: ${comment.text}`;
   });
   return [LOCAL_REVIEW_COPY.commentsIntro, '', ...items].join('\n');
+}
+
+export const LOCAL_PANEL_DOCKS = ['right', 'left', 'bottom'] as const;
+
+export type LocalPanelDock = (typeof LOCAL_PANEL_DOCKS)[number];
+
+export const LOCAL_PANEL_DOCK_LABELS: Record<LocalPanelDock, string> = {
+  right: 'Right of the conversation',
+  left: 'Left of the conversation',
+  bottom: 'Below the conversation',
+};
+
+export function isLocalPanelDock(value: unknown): value is LocalPanelDock {
+  return (LOCAL_PANEL_DOCKS as readonly unknown[]).includes(value);
 }

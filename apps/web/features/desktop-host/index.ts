@@ -76,6 +76,7 @@ export {
   revokeWorkspaceRoot,
   startLocalChat,
   startBackgroundLocalCommand,
+  openLocalPreview,
   startLocalCommand,
   writeLocalCommandPolicy,
   writeWorkspaceText,

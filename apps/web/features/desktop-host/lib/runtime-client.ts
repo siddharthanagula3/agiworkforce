@@ -308,6 +308,10 @@ export function startBackgroundLocalCommand(input: {
   });
 }
 
+export function openLocalPreview(url: string): Promise<{ url: string }> {
+  return invoke<{ url: string }>('app_open_preview', { url });
+}
+
 export function openWorkspacePath(rootId: string, path: string): Promise<ApplicationOpenResult> {
   return invoke<ApplicationOpenResult>('app_open_path', { rootId, path });
 }

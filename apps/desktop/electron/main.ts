@@ -190,6 +190,7 @@ import {
 } from './runtime/computerUseService';
 import { configureDictationBarBridge, openDictationBar } from './dictationBar';
 import { createDictationElsewhere } from './dictationElsewhere';
+import { closeLocalPreview } from './previewWindow';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
   registerGarnishShortcuts,
@@ -2005,6 +2006,7 @@ if (!hasSingleInstanceLock) {
   });
 
   app.on('will-quit', () => {
+    closeLocalPreview();
     dictationElsewhere.closeAll();
     workKeeper.release();
     stopLocalRoutines();

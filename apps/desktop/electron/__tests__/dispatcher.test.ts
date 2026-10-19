@@ -200,6 +200,8 @@ const NOTES = {
 const findInstalledApplication = vi.fn(async () => NOTES);
 const launchApplication = vi.fn(async () => true as const);
 vi.mock('../runtime/applicationLaunch', () => ({ findInstalledApplication, launchApplication }));
+const openLocalPreview = vi.fn(async (url: string) => ({ url }));
+vi.mock('../previewWindow', () => ({ openLocalPreview }));
 vi.mock('../runtime/appsService', () => ({
   editorFileUrl: vi.fn(),
   openInEditor,
@@ -2259,6 +2261,24 @@ describe('the screen steps a user can stop', () => {
       const response = await screenStep('computer_click', { x: attempt * 40, y: 20 });
       expect(response, `click ${attempt}`).toMatchObject({ ok: true });
     }
+  });
+});
+
+describe('previewing what a session serves', () => {
+  it('opens a page on this computer, asking nothing', async () => {
+    const response = await dispatch(window, 'app_open_preview', { url: 'http://0.0.0.0:5173/' });
+
+    expect(response).toMatchObject({ ok: true, value: { url: 'http://localhost:5173/' } });
+    expect(openLocalPreview).toHaveBeenCalledWith('http://localhost:5173/');
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('opens nothing that is not served on this computer', async () => {
+    for (const url of ['https://agiworkforce.com', 'file:///etc/hosts', 'http://10.0.0.2:3000']) {
+      const response = await dispatch(window, 'app_open_preview', { url });
+      expect(response, url).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
+    }
+    expect(openLocalPreview).not.toHaveBeenCalled();
   });
 });
 

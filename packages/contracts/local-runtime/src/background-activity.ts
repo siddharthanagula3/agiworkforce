@@ -16,6 +16,8 @@ export interface BackgroundCommandRun {
   startedAtMs: number;
   /** Started to keep running, such as a dev server, rather than to finish and report. */
   background: boolean;
+  /** The last address on this computer the run printed, which the preview can open. */
+  previewUrl?: string;
 }
 
 export interface BackgroundActivity {

@@ -1578,6 +1578,31 @@ svg + .menuRowLabel {
   max-width: 1000px;
 }
 
+.bodyDock-left {
+  flex-direction: row-reverse;
+}
+
+.bodyDock-left > .changes {
+  border-right: 1px solid var(--chat-border-subtle);
+  border-left: none;
+}
+
+.bodyDock-bottom {
+  flex-direction: column;
+}
+
+.bodyDock-bottom > .column {
+  min-width: 0;
+}
+
+.bodyDock-bottom > .changes {
+  flex: 0 0 42%;
+  max-width: none;
+  min-width: 0;
+  border-top: 1px solid var(--chat-border-subtle);
+  border-left: none;
+}
+
 .changesHeader {
   display: flex;
   align-items: center;

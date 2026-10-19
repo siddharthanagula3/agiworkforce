@@ -194,7 +194,7 @@ export type {
   FilesystemCommand,
 } from './filesystem';
 
-export { APPLICATION_COMMANDS } from './apps';
+export { APPLICATION_COMMANDS, findLocalPreviewUrl, localPreviewUrl } from './apps';
 export type { ApplicationCommand, ApplicationOpenResult } from './apps';
 
 export { CLIPBOARD_COMMANDS, MAX_CLIPBOARD_TEXT_LENGTH } from './clipboard';
