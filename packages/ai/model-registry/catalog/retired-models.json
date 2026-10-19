@@ -62,7 +62,8 @@
     "minimax-m2.7",
     "kimi-k2.7-code",
     "qwen-3.6-27b",
-    "openrouter-free"
+    "openrouter-free",
+    "gemini-3.1-pro-preview"
   ],
   "retiredModels": [
     {
@@ -1236,6 +1237,38 @@
       "retiredOn": "2026-10-13",
       "replacedBy": "gpt-6-luna",
       "metadataSource": "catalog/models.curation.json#openrouter-free"
+    },
+    {
+      "id": "gemini-3.1-pro-preview",
+      "displayName": "Gemini 3.1 Pro",
+      "provider": "google",
+      "developer": "google",
+      "modelType": "reasoning",
+      "contextWindow": 1048576,
+      "capabilities": {
+        "textInput": true,
+        "imageInput": true,
+        "audioInput": false,
+        "videoInput": false,
+        "textOutput": true,
+        "imageOutput": false,
+        "audioOutput": false,
+        "videoOutput": false,
+        "streaming": true,
+        "structuredOutput": true,
+        "functionCalling": true,
+        "reasoning": true,
+        "computerUse": false,
+        "agentic": true,
+        "webSearch": true,
+        "deepResearch": true,
+        "codeExecution": true,
+        "promptCaching": true
+      },
+      "released": "February 19, 2026",
+      "retiredOn": "2026-10-18",
+      "replacedBy": "gemini-4-argon",
+      "metadataSource": "catalog/models.curation.json#gemini-3.1-pro-preview"
     }
   ],
   "grandfatheredWithoutMetadata": [

@@ -528,7 +528,7 @@
       "date": "2026-10-18",
       "verifiedBy": "official-google-gemini-4-argon-ga-pages-no-live-call",
       "status": "ROSTER",
-      "notes": "On the owner's request of 2026-10-18, gemini-4-argon goes from coming_soon to live. Google made it available to everyone on 2026-10-13: the Gemini API and AI Studio serve it as gemini-4-argon, labelled stable, and it is not on the free tier. Read on 2026-10-18 from https://ai.google.dev/gemini-api/docs/latest-model (last updated 2026-10-16), the model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon and https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud (2026-10-13). The row takes apiModelId, the shared 1,048,576-token window in place of contextWindowUnpublished, a 65,536 maxOutputTokens (the synchronous default; the long decode needs background execution), text, image, audio, video and PDF input, low/medium/high thinking levels defaulting to medium on thinkingConfig.thinkingLevel with no budget path, implicit caching from 4,096 tokens, and the introductory $2/$0.10/$10 with promo_expires_at 2026-12-01 and post_promo_prices $4/$0.20/$20. Capabilities follow the model page; computer use, listed as Preview, and deep research, not listed, are false. tierPolicy.minTier is pro, the tier of the row it replaces. The google/gemini-pro slot pattern now also matches -argon ids, and the slot moves from gemini-3.1-pro-preview to gemini-4-argon, which keeps gemini-3.1-pro-preview as previous and as its one fallback; the promotion was built with the family tool's own functions, since its promote command refuses without a probe and an eval gate run. The capabilityCoverage gate fails and is recorded as failing: the slot's 2,000,000 minimum context predates the current rows, and neither model meets it. The slot is in pro_additions and serves the long_context_balanced and long_context_pro Auto slots and Google's complex_reasoning and long_context task routes, so those move to the new model; at the post-introductory price its input costs twice and its output 67% more than gemini-3.1-pro-preview. The only route is the direct Google one. OpenRouter, Vercel AI Gateway and Experiential Labs list the model, but a marketplace route cannot carry the promotion end date, so its price sheet would be half the real rate from 2026-12-01. The row carries OpenRouter's slug google/gemini-4-argon, read from OpenRouter's model endpoints listing on 2026-10-18, because every direct-provider chat model needs one for OpenRouter failover. The OpenRouter adapter turns a prompt-cache request on a google/ slug into cache_control breakpoints, which OpenRouter uses for Gemini's explicit caching; providerCompatibility.explicitPromptCache false now makes it send none for this model. No probe was made and the eval gate was not run; the owner has not approved spend for this model."
+      "notes": "On the owner's request of 2026-10-18, gemini-4-argon goes from coming_soon to live. Google made it available to everyone on 2026-10-13: the Gemini API and AI Studio serve it as gemini-4-argon, labelled stable, and it is not on the free tier. Read on 2026-10-18 from https://ai.google.dev/gemini-api/docs/latest-model (last updated 2026-10-16), the model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon and https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud (2026-10-13). The row takes apiModelId, the shared 1,048,576-token window in place of contextWindowUnpublished, a 65,536 maxOutputTokens (the synchronous default; the long decode needs background execution), text, image, audio, video and PDF input, low/medium/high thinking levels defaulting to medium on thinkingConfig.thinkingLevel with no budget path, implicit caching from 4,096 tokens, and the introductory $2/$0.10/$10 with promo_expires_at 2026-12-01 and post_promo_prices $4/$0.20/$20. Capabilities follow the model page; computer use, listed as Preview, and deep research, not listed, are false. tierPolicy.minTier is pro, the tier of the row it replaces. The google/gemini-pro slot pattern now also matches -argon ids, and the slot moves from gemini-3.1-pro-preview to gemini-4-argon; the promotion was built with the family tool's own functions, since its promote command refuses without a probe and an eval gate run. Under the owner's order of 2026-10-07 to keep only the newest generation of every family, gemini-3.1-pro-preview then leaves through the retire tool into retired-models.json, naming gemini-4-argon, with its marketplace routes, probe and synced record; Google has announced no shutdown date for it. The slot keeps it as previous with an empty fallback chain. The tool built the retirement record from a registry that no longer had the synced record, so its context window, capabilities, release date and successor were restored from the registry before this change. gemini-3.5-flash-lite and gemini-3.8-flash now name gemini-4-argon as their variant partner, and gemini-4-argon names gemini-3.5-flash-lite. The capabilityCoverage gate fails and is recorded as failing: the slot's 2,000,000 minimum context predates the current rows, and neither model meets it. The slot is in pro_additions and serves the long_context_balanced and long_context_pro Auto slots and Google's complex_reasoning and long_context task routes, so those move to the new model; at the post-introductory price its input costs twice and its output 67% more than gemini-3.1-pro-preview did. The direct Google route carries the promotion and its end date. A marketplace route cannot carry the end date, so the one OpenRouter route is priced at the post-introductory $4/$20 with a $0.20 cache read now, which overstates the cost until 2026-12-01 and never understates it after; a registry test holds every route of a running promotion at or above the post-promotion price. Vercel AI Gateway and Experiential Labs also list the model and get no route. The row carries OpenRouter's slug google/gemini-4-argon, read from OpenRouter's model endpoints listing on 2026-10-18, because every direct-provider chat model needs one for OpenRouter failover. The OpenRouter adapter turns a prompt-cache request on a google/ slug into cache_control breakpoints, which OpenRouter uses for Gemini's explicit caching; providerCompatibility.explicitPromptCache false now makes it send none for this model. No probe was made and the eval gate was not run; the owner has not approved spend for this model."
     }
   ],
   "providers": {
@@ -1491,67 +1491,6 @@
         "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.embedding_default"
       }
     },
-    "gemini-3.1-pro-preview": {
-      "id": "gemini-3.1-pro-preview",
-      "apiModelId": "gemini-3.1-pro-preview",
-      "openRouterSlug": "google/gemini-3.1-pro-preview",
-      "name": "Gemini 3.1 Pro",
-      "provider": "google",
-      "developer": "google",
-      "modelType": "reasoning",
-      "variantPartner": "gemini-3.5-flash-lite",
-      "contextWindow": 1048576,
-      "inputCost": 2,
-      "outputCost": 12,
-      "cached_input": 0.2,
-      "capabilities": {
-        "streaming": true,
-        "tools": true,
-        "vision": true,
-        "json": true,
-        "thinking": true,
-        "computerUse": false,
-        "agentic": true,
-        "imageGen": false,
-        "videoGen": false,
-        "search": true,
-        "research": true,
-        "codeExecution": true,
-        "caching": true
-      },
-      "benchmarks": { "swebench": 74.2, "humaneval": 93.5, "mmlu": 89.5, "gpqa": 91.9, "aime": 95 },
-      "speed": "medium",
-      "quality": "excellent",
-      "qualityTier": "balanced",
-      "bestFor": ["Long Context", "Research", "Multimodal", "Code Execution"],
-      "released": "February 19, 2026",
-      "deprecation_date": null,
-      "inputTokenPricingTiers": [
-        { "thresholdTokens": 200000, "inputCost": 4, "cached_input": 0.4, "outputCost": 18 }
-      ],
-      "pricingNote": "Base rate (≤200,000 input tokens) is $2.00/M input, $12.00/M output, $0.20/M cache read, matching the synced models.dev baseline. Google's Gemini API pricing table publishes a higher tier above 200,000 input tokens at $4.00/M input, $18.00/M output, $0.40/M cache read, which the catalog previously omitted entirely. Verified against ai.google.dev/gemini-api/docs/pricing, retrieved 2026-09-03.",
-      "openWeight": false,
-      "license": "proprietary",
-      "reasoning": {
-        "capable": true,
-        "control": "effort_levels",
-        "supportedEfforts": ["low", "medium", "high"],
-        "defaultEffort": "medium",
-        "canDisableThinking": true,
-        "request": {
-          "api": "gen",
-          "effortPath": "thinkingConfig.thinkingLevel",
-          "togglePath": null,
-          "budgetPath": "thinkingConfig.thinkingBudget"
-        }
-      },
-      "tierPolicy": { "minTier": "pro" },
-      "lifecycle": {
-        "stage": "promoted",
-        "stagedOn": "2026-09-05",
-        "source": "packages/ai/model-registry/catalog/routing-policies.json#auto.slots.long_context_balanced"
-      }
-    },
     "gemini-4-argon": {
       "id": "gemini-4-argon",
       "apiModelId": "gemini-4-argon",
@@ -1561,6 +1500,7 @@
       "developer": "google",
       "modelType": "reasoning",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
+      "variantPartner": "gemini-3.5-flash-lite",
       "contextWindow": 1048576,
       "inputCost": 2,
       "outputCost": 10,
@@ -1623,7 +1563,7 @@
       "developer": "google",
       "modelType": "multimodal",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
-      "variantPartner": "gemini-3.1-pro-preview",
+      "variantPartner": "gemini-4-argon",
       "contextWindow": 1048576,
       "inputCost": 0.3,
       "outputCost": 2.5,
@@ -2491,7 +2431,7 @@
       "developer": "google",
       "modelType": "multimodal",
       "inputModalities": ["text", "image", "audio", "video", "pdf"],
-      "variantPartner": "gemini-3.1-pro-preview",
+      "variantPartner": "gemini-4-argon",
       "contextWindow": 1048576,
       "inputCost": 0.75,
       "outputCost": 3.75,

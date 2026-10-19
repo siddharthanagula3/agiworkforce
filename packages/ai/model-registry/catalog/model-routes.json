@@ -1,55 +1,20 @@
 {
   "schemaVersion": 1,
   "models": {
-    "gemini-3.1-pro-preview": {
+    "gemini-4-argon": {
       "additionalRoutes": [
         {
           "provider": "open_router",
           "harnessId": "open-router/chat-completions",
-          "upstreamModelId": "google/gemini-3.1-pro-preview",
+          "upstreamModelId": "google/gemini-4-argon",
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "authorized_marketplace",
           "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 12,
-            "cacheReadPerMillion": 0.2,
-            "cacheWritePerMillion": 0.375
-          }
-        },
-        {
-          "provider": "vercel_gateway",
-          "harnessId": "vercel_gateway/chat-completions",
-          "upstreamModelId": "google/gemini-3.1-pro-preview",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2,
-            "outputPerMillion": 12,
-            "cacheReadPerMillion": 0.2,
-            "cacheWritePerMillion": 0
-          }
-        },
-        {
-          "provider": "cheaperinference",
-          "harnessId": "cheaperinference/chat-completions",
-          "upstreamModelId": "gemini-3.1-pro-preview",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "discount": "gateway",
-          "pricingNote": "Priced at the canonical list price reduced by the gateway's minimum discount policy; Cheaper Inference publishes its own, often lower, list price through GET /v1/models, so the effective bill can only be at or below this ceiling."
-        },
-        {
-          "provider": "experientiallabs",
-          "harnessId": "experientiallabs/chat-completions",
-          "upstreamModelId": "gemini-3.1-pro-preview",
-          "cacheClass": "provider_implicit_prompt_cache",
-          "commercialStatus": "authorized_marketplace",
-          "pricing": {
-            "inputPerMillion": 2.0,
-            "outputPerMillion": 12.0,
-            "cacheReadPerMillion": 2.0
+            "inputPerMillion": 4,
+            "outputPerMillion": 20,
+            "cacheReadPerMillion": 0.2
           },
-          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gemini-3.1-pro-preview (gemini at $2/$12, openrouter at $2/$12); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gemini-3.1-pro-preview on 2026-09-06."
+          "pricingNote": "OpenRouter lists google/gemini-4-argon from Google at the introductory $2/$10 with a $0.10 cache read, read from https://openrouter.ai/api/v1/models/google/gemini-4-argon/endpoints on 2026-10-18. A route sheet cannot carry a promotion end date, so it is priced at Google's rates from 2026-12-01, $4/$20 with a $0.20 cache read, and never bills below cost after the promotion ends; until then it overstates the cost by half. The OpenRouter adapter sends this model no cache_control (providerCompatibility.explicitPromptCache), so the cache write is left to default to the input price."
         }
       ]
     },
@@ -114,11 +79,12 @@
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "authorized_marketplace",
           "pricing": {
-            "inputPerMillion": 0.75,
-            "outputPerMillion": 3.75,
-            "cacheReadPerMillion": 0.075,
-            "cacheWritePerMillion": 0.0417
-          }
+            "inputPerMillion": 1.5,
+            "outputPerMillion": 7.5,
+            "cacheReadPerMillion": 0.15,
+            "cacheWritePerMillion": 0.0834
+          },
+          "pricingNote": "Google prices gemini-3.8-flash at an introductory $0.75/$3.75 with a $0.075 cache read until 2027-01-01 and at $1.50/$7.50/$0.15 from then. A route sheet cannot carry a promotion end date, so this route is priced at the rates from 2027-01-01, which overstates the cost until then and never understates it after."
         },
         {
           "provider": "vercel_gateway",
@@ -127,11 +93,12 @@
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "authorized_marketplace",
           "pricing": {
-            "inputPerMillion": 0.75,
-            "outputPerMillion": 3.75,
-            "cacheReadPerMillion": 0.075,
+            "inputPerMillion": 1.5,
+            "outputPerMillion": 7.5,
+            "cacheReadPerMillion": 0.15,
             "cacheWritePerMillion": 0
-          }
+          },
+          "pricingNote": "Google prices gemini-3.8-flash at an introductory $0.75/$3.75 with a $0.075 cache read until 2027-01-01 and at $1.50/$7.50/$0.15 from then. A route sheet cannot carry a promotion end date, so this route is priced at the rates from 2027-01-01, which overstates the cost until then and never understates it after."
         },
         {
           "provider": "experientiallabs",
@@ -140,11 +107,11 @@
           "cacheClass": "provider_implicit_prompt_cache",
           "commercialStatus": "authorized_marketplace",
           "pricing": {
-            "inputPerMillion": 0.75,
-            "outputPerMillion": 3.75,
-            "cacheReadPerMillion": 0.075
+            "inputPerMillion": 1.5,
+            "outputPerMillion": 7.5,
+            "cacheReadPerMillion": 0.15
           },
-          "pricingNote": "Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gemini-3.8-flash (gemini at $0.75/$3.75, openrouter at $0.75/$3.75); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gemini-3.8-flash on 2026-09-06."
+          "pricingNote": "Priced at Google's rates from 2027-01-01, $1.50/$7.50 with a $0.15 cache read, because a route sheet cannot carry the promotion end date; this overstates the cost until then and never understates it after. Ceiling across the platform-funded rungs of the gateway's default waterfall for slug gemini-3.8-flash (gemini at $0.75/$3.75, openrouter at $0.75/$3.75); the gateway adds no markup and bills the serving rung's catalog price, so the effective bill is at or below this sheet. A rung that publishes no cached-input price is counted at its full input price, so the cache read is also a ceiling. Retention verdict not_zdr. Verified against https://api.experientiallabs.ai/api/models/gemini-3.8-flash on 2026-09-06."
         }
       ]
     },

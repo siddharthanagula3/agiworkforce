@@ -1396,7 +1396,7 @@
           "aime": 95
         }
       },
-      "fallbackChain": ["gemini-3.1-pro-preview"],
+      "fallbackChain": [],
       "history": [
         {
           "promotedAt": "2026-10-18",

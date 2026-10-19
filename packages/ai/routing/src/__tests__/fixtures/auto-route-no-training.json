@@ -271,7 +271,6 @@
   "no_training_explicit|deepseek-v4-pro|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-3-pro-image|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-3.1-flash-lite-image|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
-  "no_training_explicit|gemini-3.1-pro-preview|managed_cloud": "selected;gemini-3.1-pro-preview;cheaperinference/gemini-3.1-pro-preview;explicit;~;~;gemini-3.1-pro-preview,gemini-3.1-pro-preview",
   "no_training_explicit|gemini-3.5-flash-lite|managed_cloud": "selected;gemini-3.5-flash-lite;cheaperinference/gemini-3.5-flash-lite;explicit;~;~;gemini-3.5-flash-lite,gemini-3.5-flash-lite",
   "no_training_explicit|gemini-3.5-live-translate-preview|managed_cloud": "unavailable;~;~;explicit_model_ineligible;~;~;",
   "no_training_explicit|gemini-3.8-flash|managed_cloud": "selected;gemini-3.8-flash;google/gemini-3.8-flash;explicit;~;~;gemini-3.8-flash",
