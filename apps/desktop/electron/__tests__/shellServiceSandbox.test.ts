@@ -19,7 +19,7 @@ vi.mock('node:child_process', async (importOriginal) => {
   return { ...original, spawn, execFile, default: { ...original, spawn, execFile } };
 });
 
-const { pinnedRootPath, runShellCommand } = await import('../runtime/shellService');
+const { listShellRuns, pinnedRootPath, runShellCommand } = await import('../runtime/shellService');
 const { SEATBELT_EXECUTABLE } = await import('../runtime/shellSandbox');
 
 function fakeChild() {
@@ -307,5 +307,36 @@ describe('runShellCommand without a sandbox', () => {
       run({ backend: 'none' }, approve, { allow: [], deny: ['node'] }),
     ).rejects.toMatchObject({ reason: 'denied-by-policy' });
     expect(approve).not.toHaveBeenCalled();
+  });
+});
+
+describe('listing the commands that are running', () => {
+  it('names the folder a run belongs to and that it was asked to finish', async () => {
+    let finish: () => void = () => undefined;
+    spawn.mockImplementation(() => {
+      const child = Object.assign(new EventEmitter(), {
+        stdout: new EventEmitter(),
+        stderr: new EventEmitter(),
+        kill: vi.fn(),
+      });
+      finish = () => child.emit('close', 0, null);
+      return child;
+    });
+
+    const done = run(
+      { backend: 'seatbelt', executable: SEATBELT_EXECUTABLE },
+      vi.fn().mockResolvedValue({ approved: true, allowNetwork: false }),
+    );
+    await vi.waitFor(() => expect(listShellRuns()).toHaveLength(1));
+
+    expect(listShellRuns()[0]).toMatchObject({
+      rootId: 'r',
+      rootName: 'mocked',
+      command: 'node -e "1"',
+      background: false,
+    });
+    finish();
+    await done;
+    expect(listShellRuns()).toEqual([]);
   });
 });

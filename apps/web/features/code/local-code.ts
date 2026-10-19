@@ -108,6 +108,16 @@ export const LOCAL_CODE_COPY = {
   fileChangedOnDisk: 'This file changed on disk since you opened it.',
   fileDeletedOnDisk:
     'This file was deleted since you opened it. Overwrite to create it again with your version.',
+  runningCommands: 'Running in this folder',
+  runningCommandsEmpty: 'Nothing is running in this folder.',
+  runningCommandsFailed: 'What is running could not be read.',
+  runningSince: (minutes: number): string =>
+    minutes < 1 ? 'Started just now' : `Running for ${minutes} min`,
+  stopCommand: (command: string): string => `Stop ${command}`,
+  stopAllCommands: 'Stop all',
+  keepRunning: 'Keep running',
+  keepRunningHint: 'Start it to keep running, such as a dev server, and stop it from the list above.',
+  startedInBackground: 'Running in the background. Stop it from Running in this folder.',
   files: 'Files',
   filesShortcut: 'Files (⌘P)',
   closeFiles: 'Close files',

@@ -15,6 +15,7 @@ import {
   getHostBridge,
   type ApplicationOpenResult,
   type BackgroundActivity,
+  type BackgroundShellOutput,
   type BackgroundWorkKind,
   type BrowserActivityEntry,
   type BrowserPairingState,
@@ -292,6 +293,19 @@ export function startLocalCommand(
   })();
 
   return { runId, result };
+}
+
+export function startBackgroundLocalCommand(input: {
+  rootId: string;
+  command: string;
+  path?: string;
+}): Promise<BackgroundShellOutput> {
+  return invoke<BackgroundShellOutput>('shell_start', {
+    runId: crypto.randomUUID(),
+    rootId: input.rootId,
+    command: input.command,
+    ...(input.path ? { path: input.path } : {}),
+  });
 }
 
 export function openWorkspacePath(rootId: string, path: string): Promise<ApplicationOpenResult> {
