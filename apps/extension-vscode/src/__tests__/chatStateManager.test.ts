@@ -3944,6 +3944,97 @@ describe('ChatStateManager session compaction', () => {
     expect(row('Model')?.description).toBeTruthy();
   });
 
+  it('exports the open session as Markdown to the clipboard', async () => {
+    const harness = await startedHarness();
+    harness.runtime.readThread.mockResolvedValueOnce({
+      thread: threadSummary({ id: 'thread-1', title: 'Inspect this project' }),
+      messages: [
+        { role: 'user', text: 'Inspect this project', index: 0 },
+        { role: 'assistant', text: 'done', index: 1 },
+      ],
+      transcriptTruncated: false,
+    });
+    vi.mocked(vscode.window.showQuickPick).mockImplementationOnce(
+      async (items: unknown) =>
+        (items as Array<{ action: string }>).find((item) => item.action === 'copy') as never,
+    );
+
+    await harness.manager.exportConversation();
+
+    expect(vscode.env.clipboard.writeText).toHaveBeenCalledWith(
+      '# Inspect this project\n\n## You\n\nInspect this project\n\n## AGI\n\ndone\n',
+    );
+  });
+
+  it('revises the plan with only the notes written into the plan document', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Plan the fix' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-plan',
+      name: 'update_plan',
+      category: 'other',
+      summary: 'Plan',
+      input: { plan: [{ step: 'Change the loop bound', status: 'pending' }] },
+    } as never);
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Here is the plan.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    const planUri = vscode.Uri.parse('untitled:Untitled-1');
+    vi.mocked(vscode.workspace.openTextDocument).mockResolvedValueOnce({ uri: planUri } as never);
+    await harness.manager.openPlanDocument();
+    const original = vi.mocked(vscode.workspace.openTextDocument).mock.calls.at(-1)?.[0] as {
+      content: string;
+    };
+    expect(original.content).toBe('# Plan\n\n- [ ] Change the loop bound\n');
+
+    const decidePlan = vi.fn().mockResolvedValue(undefined);
+    Object.assign(harness.runtime, { decidePlan, offers: vi.fn().mockResolvedValue(true) });
+    vscode.window.activeTextEditor = {
+      document: {
+        uri: planUri,
+        getText: () => `${original.content}Keep the empty-array guard.\n`,
+      },
+    } as never;
+
+    const revise = harness.manager.revisePlanFromDocument();
+
+    await vi.waitFor(() =>
+      expect(decidePlan).toHaveBeenCalledWith(
+        'thread-1',
+        'reject',
+        'On "- [ ] Change the loop bound":\nKeep the empty-array guard.',
+      ),
+    );
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Revised.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await revise;
+    vscode.window.activeTextEditor = undefined;
+  });
+
   it('changes nothing when the user does not confirm', async () => {
     const harness = await startedHarness();
     const compactThread = vi.fn();

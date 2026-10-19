@@ -39,6 +39,7 @@ const sendMessage = z.object({
 const ready = z.object({ type: z.literal('ready') });
 const viewFocused = z.object({ type: z.literal('viewFocused') });
 const viewBlurred = z.object({ type: z.literal('viewBlurred') });
+const openPlanDocument = z.object({ type: z.literal('openPlanDocument') });
 const setUpWebSearch = z.object({ type: z.literal('setUpWebSearch') });
 const reconnectMcpServer = z.object({
   type: z.literal('reconnectMcpServer'),
@@ -91,6 +92,7 @@ export const CONTEXT_ATTACHMENT_KINDS = [
   'open-files',
   'problems',
   'git-diff',
+  'terminal',
   'url',
 ] as const;
 export const ContextAttachmentKindSchema = z.enum(CONTEXT_ATTACHMENT_KINDS);
@@ -292,6 +294,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   ready,
   viewFocused,
   viewBlurred,
+  openPlanDocument,
   setUpWebSearch,
   reconnectMcpServer,
   openSettings,

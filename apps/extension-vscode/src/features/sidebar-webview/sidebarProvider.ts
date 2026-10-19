@@ -310,6 +310,22 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     return this._stateManager.compactConversation();
   }
 
+  public async attachTerminalOutput(): Promise<void> {
+    this.reveal();
+    if (await this._stateManager.attachContext('terminal')) return;
+    void vscode.window.showInformationMessage(
+      'AGI Workforce: no command output has been captured in the active terminal. Run a command in a terminal with shell integration, then try again.',
+    );
+  }
+
+  public revisePlanFromDocument(): Promise<void> {
+    return this._stateManager.revisePlanFromDocument();
+  }
+
+  public exportConversation(): Promise<void> {
+    return this._stateManager.exportConversation();
+  }
+
   public showSessionStatus(): Promise<void> {
     return this._stateManager.showSessionStatus();
   }

@@ -11,6 +11,7 @@ import {
   resolveEditorContext,
 } from '../data/composerContext';
 import { getContextBuilder } from '../data/contextBuilder';
+import { setTerminalOutputSource } from '../data/terminalOutput';
 
 vi.mock('../data/contextBuilder', () => ({
   getContextBuilder: vi.fn(),
@@ -129,6 +130,33 @@ describe('selection item', () => {
   });
 });
 
+describe('terminal output item', () => {
+  afterEach(() => setTerminalOutputSource(undefined));
+
+  it('is unavailable until a terminal has run a command', async () => {
+    setTerminalOutputSource({ latestOutput: () => undefined });
+
+    expect(await stateFor('terminal')).toEqual({
+      kind: 'terminal',
+      available: false,
+      detail: 'Run a command in a terminal with shell integration first',
+    });
+    expect(await buildContextAttachment('terminal')).toBeUndefined();
+  });
+
+  it('attaches the last command and its output, named for its terminal', async () => {
+    setTerminalOutputSource({
+      latestOutput: () => ({ terminalName: 'zsh', transcript: '$ npm test\nFAIL\n[exit code 1]' }),
+    });
+
+    expect((await stateFor('terminal'))?.detail).toBe('Last command in zsh');
+    expect(await buildContextAttachment('terminal')).toEqual({
+      name: 'Terminal: zsh',
+      text: 'The last command in the "zsh" terminal and its output:\n$ npm test\nFAIL\n[exit code 1]',
+    });
+  });
+});
+
 describe('open editors item', () => {
   it('is unavailable with its reason when nothing is open', async () => {
     expect(await stateFor('open-files')).toEqual({
@@ -226,6 +254,7 @@ describe('menu ordering', () => {
       'open-files',
       'problems',
       'git-diff',
+      'terminal',
       'url',
     ]);
   });

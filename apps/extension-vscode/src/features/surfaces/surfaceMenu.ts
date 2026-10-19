@@ -115,6 +115,11 @@ export const BUILT_IN_SLASH_COMMANDS: readonly SlashCommandItem[] = [
     aliases: ['branch'],
   },
   {
+    name: '/export',
+    description: 'Copy or save this session as Markdown',
+    command: 'agi-workforce.exportConversation',
+  },
+  {
     name: '/rewind',
     description: 'Go back to an earlier prompt: code, conversation or both',
     command: 'agi-workforce.showCheckpoints',
