@@ -29,6 +29,10 @@ import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptan
 import { createChatStreamDedupe } from '@/src/lib/chat-stream-dedupe';
 import type { ManagedMemoryCitations, ResearchDeliverableSpec } from '@agiworkforce/types';
 import { readMemoryCitationsHeader } from '@/src/features/memory/services/memoryCitations';
+import {
+  readModelSubstitution,
+  type ModelSubstitution,
+} from '@/src/features/chat/utils/fallbackNotice';
 import { createManagedChatIdempotencyKey } from '@agiworkforce/utils/managed-chat-idempotency';
 import {
   createManagedCloudAgentRunClient,
@@ -147,6 +151,7 @@ export interface StreamCallbacks {
   onRunReference?: (reference: ManagedCloudAgentRunReference) => void;
   onAttachmentsTruncated?: (fileNames: string[]) => void;
   onMemoryCitations?: (citations: ManagedMemoryCitations) => void;
+  onModelSubstitution?: (substitution: ModelSubstitution) => void;
 }
 
 const MAX_RECONNECT_ATTEMPTS = 3;
@@ -298,6 +303,7 @@ interface InitialStreamRequest {
   tool_choice?: 'auto' | 'none' | 'required';
   memory_enabled?: boolean;
   connector_tools_enabled?: boolean;
+  disabled_connector_ids?: string[];
   x_interactive_cards?: { supported: string[]; canRespond: boolean };
 }
 
@@ -454,6 +460,8 @@ async function attemptStream(
     if (truncated.length > 0) callbacks.onAttachmentsTruncated?.(truncated);
     const memoryCitations = readMemoryCitationsHeader(response.headers);
     if (memoryCitations) callbacks.onMemoryCitations?.(memoryCitations);
+    const substitution = readModelSubstitution(response.headers);
+    if (substitution) callbacks.onModelSubstitution?.(substitution);
     surfaceTermsNotice(response.headers);
   }
 

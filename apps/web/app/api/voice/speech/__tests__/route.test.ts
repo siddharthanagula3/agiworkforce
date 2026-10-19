@@ -96,6 +96,8 @@ vi.mock('@/lib/managed-compute-gate', () => ({
 }));
 vi.mock('@/lib/free-chat-surface-policy', () => ({
   bindSurfaceFromClaims: vi.fn(),
+  bindTemplateSurfaceFromClaims: vi.fn(),
+  carriesSurfaceClaim: vi.fn(() => false),
   canUseManagedCloudChatSurface: vi.fn(),
   getCloudChatSurfaceCapability: vi.fn(),
   readSurfaceHint: vi.fn(),

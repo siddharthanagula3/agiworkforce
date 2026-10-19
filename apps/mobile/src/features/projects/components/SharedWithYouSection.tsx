@@ -4,10 +4,12 @@ import { useRouter } from 'expo-router';
 import { ChevronRight, Users } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
+import { API_URL } from '@/lib/constants';
 import {
   ACCESS_LABELS,
   fetchProjectSharing,
   projectsSharedWithMe,
+  sharedResourcesForMe,
   type SharedWithMeProject,
 } from '@/src/features/projects/projectSharing';
 import { useThemeColors } from '@/src/ui/theme';
@@ -17,14 +19,22 @@ export function SharedWithYouSection() {
   const colors = useThemeColors();
   const router = useRouter();
   const [projects, setProjects] = useState<SharedWithMeProject[]>([]);
+  const [otherCount, setOtherCount] = useState(0);
 
   useEffect(() => {
     const controller = new AbortController();
     void fetchProjectSharing(controller.signal)
       .then((overview) => {
-        if (!controller.signal.aborted) {
-          setProjects(overview ? projectsSharedWithMe(overview) : []);
-        }
+        if (controller.signal.aborted) return;
+        setProjects(overview ? projectsSharedWithMe(overview) : []);
+        const resources = overview ? sharedResourcesForMe(overview, API_URL) : null;
+        setOtherCount(
+          resources
+            ? resources.conversations.length +
+                resources.artifacts.length +
+                resources.connectors.length
+            : 0,
+        );
       })
       .catch(() => {
         if (!controller.signal.aborted) setProjects([]);
@@ -32,7 +42,7 @@ export function SharedWithYouSection() {
     return () => controller.abort();
   }, []);
 
-  if (projects.length === 0) return null;
+  if (projects.length === 0 && otherCount === 0) return null;
 
   return (
     <View testID="projects-shared-with-you" style={{ gap: 8, marginTop: 16, marginBottom: 8 }}>
@@ -85,6 +95,21 @@ export function SharedWithYouSection() {
           <ChevronRight size={16} color={colors.textMuted} />
         </Pressable>
       ))}
+      <Pressable
+        testID="projects-shared-see-all"
+        onPress={() => router.push('/(app)/shared' as Parameters<typeof router.push>[0])}
+        accessibilityRole="button"
+        accessibilityLabel="See everything shared with you"
+        style={{ minHeight: 44, justifyContent: 'center' }}
+      >
+        <Text
+          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+        >
+          {otherCount > 0
+            ? `See everything shared with you (${projects.length + otherCount})`
+            : 'See everything shared with you'}
+        </Text>
+      </Pressable>
     </View>
   );
 }

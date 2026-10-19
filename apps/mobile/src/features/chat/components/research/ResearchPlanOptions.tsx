@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { X } from 'lucide-react-native';
 import {
@@ -17,44 +17,13 @@ import {
 } from '@/src/features/chat/utils/researchPlanChoices';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { fetchConnectorDirectory } from '@/services/connectors';
-import { formatConnectorName } from '@/src/features/settings/cloud-connectors/connectorStatus';
+import { useChatConnectorOptions } from '@/src/features/chat/hooks/useChatConnectorOptions';
 import { Switch } from '@/components/ui/switch';
 import { Text } from '@/components/ui/text';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 const MAX_DOMAINS = 32;
-
-interface ResearchConnectorOption {
-  connectorId: string;
-  label: string;
-}
-
-function useResearchConnectorOptions(): ResearchConnectorOption[] {
-  const [options, setOptions] = useState<ResearchConnectorOption[]>([]);
-  useEffect(() => {
-    if (!FEATURES.connectors) return;
-    let cancelled = false;
-    void fetchConnectorDirectory()
-      .then((directory) => {
-        if (cancelled) return;
-        setOptions(
-          directory.connectors
-            .filter((connection) => connection.needsReauthorization !== true)
-            .map((connection) => ({
-              connectorId: connection.toolConnectorId ?? connection.connectorId,
-              label: connection.name ?? formatConnectorName(connection.connectorId),
-            })),
-        );
-      })
-      .catch(() => undefined);
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-  return options;
-}
 
 const DEPTH_LABEL: Record<ResearchDeliverableDepth, string> = {
   'executive-summary': 'Executive summary',
@@ -229,7 +198,7 @@ export function ResearchPlanOptions({
   onChange: (choices: ResearchPlanChoices) => void;
 }) {
   const colors = useThemeColors();
-  const connectorOptions = useResearchConnectorOptions();
+  const connectorOptions = useChatConnectorOptions(FEATURES.connectors);
   const { deliverable, sources } = choices;
   const setDeliverable = (patch: Partial<ResearchDeliverableSpec>) =>
     onChange({ ...choices, deliverable: { ...deliverable, ...patch } });

@@ -1,0 +1,203 @@
+export const FALLBACK_REASON_HEADER = 'X-AGI-Fallback-Reason';
+export const RESOLVED_MODEL_HEADER = 'X-AGI-Resolved-Model';
+
+/**
+ * D-2026-09-05-06. Auto left the conversation's model on a failure signal. The
+ * pair is a receipt about Auto's own continuity, distinct from the substitution
+ * notice above, which is about the model the user picked.
+ */
+export const MOVED_FROM_MODEL_HEADER = 'X-AGI-Moved-From-Model';
+export const MOVED_REASON_HEADER = 'X-AGI-Moved-Reason';
+
+export function addModelEscalationHeaders(
+  headers: Record<string, string>,
+  source: { movedFromModel?: string | null; movedReason?: string | null },
+): void {
+  const movedFrom = source.movedFromModel?.trim();
+  if (!movedFrom) return;
+  headers[MOVED_FROM_MODEL_HEADER] = movedFrom.replace(/[^\w.:/-]/g, '_').slice(0, 120);
+  const reason = source.movedReason?.trim();
+  if (reason) headers[MOVED_REASON_HEADER] = reason.replace(/[^\w .,:/-]/g, '_').slice(0, 200);
+}
+
+/**
+ * The code emitted when a substitution is known to have happened but nothing
+ * named a cause. Without it an unlabelled fallback carried no header at all,
+ * which is the silent substitution the disclosure exists to prevent.
+ */
+export const UNSPECIFIED_SUBSTITUTION_REASON = 'model_substituted';
+
+export const FREE_MODEL_HANDOFF_REASON_CODES = [
+  'free_model_research',
+  'free_model_web_search',
+  'free_model_code_execution',
+  'free_model_office_file',
+  'free_model_skill',
+  'free_model_connected_app',
+  'free_model_file',
+  'free_model_image',
+] as const;
+
+export type FreeModelHandoffReasonCode = (typeof FREE_MODEL_HANDOFF_REASON_CODES)[number];
+
+export const FALLBACK_REASON_CODES = [
+  'managed_failover',
+  'openrouter_route_failover',
+  'insufficient_credits',
+  'research_unsupported_model',
+  'free_limit_reached',
+  'free_capacity_unavailable',
+  ...FREE_MODEL_HANDOFF_REASON_CODES,
+  UNSPECIFIED_SUBSTITUTION_REASON,
+] as const;
+
+export type FallbackReasonCode = (typeof FALLBACK_REASON_CODES)[number];
+
+const FREE_MODEL_HANDOFF_CAUSE: Readonly<Record<FreeModelHandoffReasonCode, string>> = {
+  free_model_research: 'Deep Research is not available on the free model you picked',
+  free_model_web_search: 'You asked for a web search, which the free model you picked cannot run',
+  free_model_code_execution: 'You asked to run code, which the free model you picked cannot do',
+  free_model_office_file:
+    'You asked for an Office file, which the free model you picked cannot create',
+  free_model_skill: 'This message used a skill, which the free model you picked cannot run',
+  free_model_connected_app:
+    'This message used a connected app, which the free model you picked cannot read',
+  free_model_file: 'The free model you picked cannot read the attached file',
+  free_model_image: 'The free model you picked cannot read images',
+};
+
+export function isFreeModelHandoffReason(code: unknown): code is FreeModelHandoffReasonCode {
+  return (
+    typeof code === 'string' &&
+    (FREE_MODEL_HANDOFF_REASON_CODES as readonly string[]).includes(code)
+  );
+}
+
+// A reply keeps one reason. The hand-over says who answered; a server reason
+// that the request itself was not carried out says what the person did not
+// get, and replacing it with the hand-over would leave that unsaid.
+export function handedOverTurnReason(
+  handoffReason: FreeModelHandoffReasonCode | undefined,
+  serverReason: string | undefined,
+): string | undefined {
+  if (!handoffReason) return serverReason;
+  const researchNotRun: FallbackReasonCode = 'research_unsupported_model';
+  return serverReason === researchNotRun ? serverReason : handoffReason;
+}
+
+function describeFreeModelHandoff(
+  code: FreeModelHandoffReasonCode,
+  servedBy: string | undefined,
+): string {
+  return `${FREE_MODEL_HANDOFF_CAUSE[code]}, so ${servedBy ?? 'Auto'} answered this message. The conversation's model was not changed.`;
+}
+
+export interface FallbackReasonSource {
+  usedFallback?: boolean;
+  fallbackReason?: string | undefined;
+  /** The model id the caller asked for, when the caller knows it. */
+  requestedModel?: string | null | undefined;
+  /** The model id that actually served the turn. */
+  servedModel?: string | null | undefined;
+}
+
+/**
+ * True when the turn ran on something other than what the user picked. A served
+ * model that differs from the requested one is a substitution on its own terms,
+ * whether or not any layer bothered to set `usedFallback`.
+ */
+export function isSubstitution(source: FallbackReasonSource): boolean {
+  if (source.usedFallback) return true;
+  const requested = source.requestedModel?.trim();
+  const served = source.servedModel?.trim();
+  return Boolean(requested && served && requested !== served);
+}
+
+export function toFallbackReasonHeaderValue(source: FallbackReasonSource): string | null {
+  // A downgrade is worth reporting even when the model itself did not change:
+  // the request the user asked for is not the request that ran.
+  if (!isSubstitution(source) && source.fallbackReason !== 'research_unsupported_model') {
+    return null;
+  }
+  const raw = source.fallbackReason?.trim() || UNSPECIFIED_SUBSTITUTION_REASON;
+  const safe = raw.replace(/[^\w.:-]/g, '_').slice(0, 120);
+  return safe.length > 0 ? safe : UNSPECIFIED_SUBSTITUTION_REASON;
+}
+
+export function addFallbackReasonHeader(
+  headers: Record<string, string>,
+  source: FallbackReasonSource,
+): void {
+  const value = toFallbackReasonHeaderValue(source);
+  if (value) headers[FALLBACK_REASON_HEADER] = value;
+}
+
+export function describeFallbackReason(
+  reason: string | null | undefined,
+  modelLabel?: string | null,
+): string | null {
+  const code = reason?.trim();
+  if (!code) return null;
+  const servedBy = modelLabel?.trim();
+  if (isFreeModelHandoffReason(code)) return describeFreeModelHandoff(code, servedBy || undefined);
+  switch (code) {
+    case 'managed_failover':
+      return servedBy
+        ? `The model you picked was unavailable, so this reply came from ${servedBy}.`
+        : 'The model you picked was unavailable, so a backup model answered.';
+    case 'openrouter_route_failover':
+      return servedBy
+        ? `The direct route to ${servedBy} failed, so this reply was served through a backup route.`
+        : 'The direct route to that model failed, so this reply was served through a backup route.';
+    case 'insufficient_credits':
+      return servedBy
+        ? `You were out of credits for the model you picked, so this reply used ${servedBy}.`
+        : 'You were out of credits for the model you picked, so a cheaper model answered.';
+    case 'research_unsupported_model':
+      return servedBy
+        ? `${servedBy} cannot run Deep Research, so this reply used web search instead. No research report was saved.`
+        : 'This model cannot run Deep Research, so this reply used web search instead. No research report was saved.';
+    case 'free_limit_reached':
+      return servedBy
+        ? `Free Auto reached its free limit, so ${servedBy} answered instead.`
+        : 'Free Auto reached its free limit, so another free model answered instead.';
+    case 'free_capacity_unavailable':
+      return servedBy
+        ? `Free Auto had no free capacity right now, so ${servedBy} answered instead.`
+        : 'Free Auto had no free capacity right now, so another free model answered instead.';
+    case UNSPECIFIED_SUBSTITUTION_REASON:
+      return servedBy
+        ? `This reply came from ${servedBy}, not the model you picked. The reason was not recorded.`
+        : 'This reply came from a different model than the one you picked. The reason was not recorded.';
+    default:
+      return servedBy
+        ? `This reply came from ${servedBy} instead of the model you picked.`
+        : 'This reply came from a different model than the one you picked.';
+  }
+}
+
+export function fallbackStepLabel(
+  reason: string | null | undefined,
+  modelLabel?: string | null,
+): string | null {
+  const code = reason?.trim();
+  if (!code) return null;
+  const servedBy = modelLabel?.trim();
+  if (isFreeModelHandoffReason(code)) return `Handed to ${servedBy || 'Auto'} for this message`;
+  switch (code) {
+    case 'openrouter_route_failover':
+      return servedBy ? `Switched to a backup route for ${servedBy}` : 'Switched to a backup route';
+    case 'insufficient_credits':
+      return servedBy ? `Switched to ${servedBy}` : 'Switched to a cheaper model';
+    case 'research_unsupported_model':
+      return 'Switched to web search';
+    case 'free_limit_reached':
+    case 'free_capacity_unavailable':
+      return servedBy ? `Switched to ${servedBy}` : 'Switched to another free model';
+    case UNSPECIFIED_SUBSTITUTION_REASON:
+      return servedBy ? `Switched to ${servedBy}` : 'Switched to a different model';
+    case 'managed_failover':
+    default:
+      return servedBy ? `Switched to ${servedBy}` : 'Switched to a backup model';
+  }
+}

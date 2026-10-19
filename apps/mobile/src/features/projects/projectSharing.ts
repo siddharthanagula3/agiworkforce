@@ -24,12 +24,36 @@ const MemberSchema = z.object({
   canEditProjects: z.boolean(),
 });
 
+const SharedConversationSchema = z.object({
+  sharedSessionId: z.string(),
+  token: z.string(),
+  title: z.string(),
+  ownerUserId: z.string(),
+});
+
+const SharedArtifactSchema = z.object({
+  publishedArtifactId: z.string(),
+  token: z.string(),
+  title: z.string(),
+  kind: z.string(),
+  ownerUserId: z.string(),
+});
+
+const SharedConnectorSchema = z.object({
+  connectorRowId: z.string(),
+  name: z.string(),
+  ownerUserId: z.string(),
+});
+
 const OverviewSchema = z.object({
   currentUserId: z.string(),
   canManageSharing: z.boolean(),
   canShareOwnProjects: z.boolean(),
   members: z.array(MemberSchema),
   sharedProjects: z.array(SharedProjectSchema),
+  sharedConversations: z.array(SharedConversationSchema).default([]),
+  sharedArtifacts: z.array(SharedArtifactSchema).default([]),
+  sharedConnectors: z.array(SharedConnectorSchema).default([]),
 });
 
 export type ProjectSharingOverview = z.infer<typeof OverviewSchema>;
@@ -119,4 +143,49 @@ export function projectsSharedWithMe(overview: ProjectSharingOverview): SharedWi
       },
     ];
   });
+}
+
+export interface SharedWithMeResources {
+  conversations: Array<{
+    id: string;
+    token: string;
+    title: string;
+    ownerName: string;
+    url: string;
+  }>;
+  artifacts: Array<{ id: string; title: string; kind: string; ownerName: string; url: string }>;
+  connectors: Array<{ id: string; name: string; ownerName: string }>;
+}
+
+export function sharedResourcesForMe(
+  overview: ProjectSharingOverview,
+  origin: string,
+): SharedWithMeResources {
+  const base = origin.replace(/\/+$/, '');
+  const ownerName = (ownerUserId: string) => {
+    const owner = overview.members.find((member) => member.userId === ownerUserId);
+    return owner ? memberName(owner) : 'A workspace member';
+  };
+  const notMine = (entry: { ownerUserId: string }) => entry.ownerUserId !== overview.currentUserId;
+  return {
+    conversations: overview.sharedConversations.filter(notMine).map((entry) => ({
+      id: entry.sharedSessionId,
+      token: entry.token,
+      title: entry.title,
+      ownerName: ownerName(entry.ownerUserId),
+      url: `${base}/share/${encodeURIComponent(entry.token)}`,
+    })),
+    artifacts: overview.sharedArtifacts.filter(notMine).map((entry) => ({
+      id: entry.publishedArtifactId,
+      title: entry.title,
+      kind: entry.kind,
+      ownerName: ownerName(entry.ownerUserId),
+      url: `${base}/shared-artifact/${encodeURIComponent(entry.token)}`,
+    })),
+    connectors: overview.sharedConnectors.filter(notMine).map((entry) => ({
+      id: entry.connectorRowId,
+      name: entry.name,
+      ownerName: ownerName(entry.ownerUserId),
+    })),
+  };
 }

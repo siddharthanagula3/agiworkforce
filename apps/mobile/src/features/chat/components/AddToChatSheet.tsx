@@ -20,6 +20,8 @@ import {
   Check,
   Sparkles,
   BookOpen,
+  Globe,
+  ClipboardPaste,
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
@@ -45,7 +47,9 @@ import { supportedVideoDurationSecs } from '@/src/features/video/services/videog
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useChatStore } from '@/stores/chatStore';
-import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
+import { clipboardHasImage } from '@/src/features/media/clipboard-image';
+import { useChatConnectorOptions } from '@/src/features/chat/hooks/useChatConnectorOptions';
 import {
   enterMediaMode,
   exitMediaMode,
@@ -75,6 +79,7 @@ import type { Attachment } from './AttachmentPreview';
 interface AddToChatSheetProps {
   onCamera: () => void;
   onPhotos: () => void;
+  onPasteImage?: () => void;
   onFile: () => void;
   onOpenCloudAccess: () => void;
   onOpenStyleSelector: () => void;
@@ -110,6 +115,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
   {
     onCamera,
     onPhotos,
+    onPasteImage,
     onFile,
     onOpenCloudAccess,
     onOpenStyleSelector,
@@ -157,7 +163,17 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     selectedModelMetadata?.capabilities?.research === true &&
     selectedModelMetadata?.capabilities?.search === true &&
     grantedCapabilities.includes('canUseDeepResearch');
-  const showToolSection = showResearchToggle;
+  const showWebSearchToggle =
+    FEATURES.webSearch && appMode === 'cloud' && grantedCapabilities.includes('canUseWebSearch');
+  const showToolSection = showResearchToggle || showWebSearchToggle;
+  const sourcesKey = useChatViewStore((s) => s.styleConversationId) ?? NEW_CHAT_STYLE_KEY;
+  const disabledConnectorIds = useChatViewStore(
+    (s) => s.disabledConnectorIdsByConversation[sourcesKey],
+  );
+  const toggleChatConnector = useChatViewStore((s) => s.toggleChatConnector);
+  const chatConnectors = useChatConnectorOptions(
+    appMode === 'cloud' && FEATURES.connectors && grantedCapabilities.includes('canUseConnectors'),
+  );
   const imageModelId = resolveMediaModelId('image', selectedMediaModel);
   const videoModelId = resolveMediaModelId('video', selectedMediaModel);
   const imageModelSupportsReference = supportsManagedMediaImageEdit(
@@ -336,6 +352,24 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     onPhotos();
   }, [haptic, closeSheet, onPhotos]);
 
+  const [clipboardImage, setClipboardImage] = useState(false);
+  useEffect(() => {
+    if (!onPasteImage) return;
+    let cancelled = false;
+    void clipboardHasImage().then((has) => {
+      if (!cancelled) setClipboardImage(has);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [onPasteImage]);
+
+  const handlePasteImage = useCallback(() => {
+    haptic();
+    closeSheet();
+    onPasteImage?.();
+  }, [haptic, closeSheet, onPasteImage]);
+
   const handleFile = useCallback(() => {
     haptic();
     closeSheet();
@@ -442,6 +476,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
           setHandoff(null);
           return;
         }
+        if (onPasteImage) void clipboardHasImage().then(setClipboardImage);
         if (appMode === 'cloud' && cloudLibrary.status !== 'loading') loadCloudLibrary();
       }}
       snapPoints={SNAP_POINTS}
@@ -519,6 +554,15 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
             bg={cardBg}
             textColor={themeColors.textPrimary}
           />
+          {onPasteImage && clipboardImage ? (
+            <AttachmentCard
+              icon={<ClipboardPaste size={22} color={themeColors.teal} />}
+              label="Paste image"
+              onPress={handlePasteImage}
+              bg={cardBg}
+              textColor={themeColors.textPrimary}
+            />
+          ) : null}
           {appMode === 'cloud' ? (
             <AttachmentCard
               icon={<FileText size={22} color={themeColors.teal} />}
@@ -1044,6 +1088,29 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
 
         {showToolSection ? (
           <View style={{ paddingHorizontal: 20, paddingVertical: 16, gap: 4 }}>
+            {showWebSearchToggle ? (
+              <CapabilityRow
+                icon={<Globe size={18} color={themeColors.teal} />}
+                label="Web search"
+                description="Let answers look things up on the web"
+                enabled={features.webSearch}
+                onToggle={(value) => setFeature('webSearch', value)}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ) : null}
+            {chatConnectors.map((connector) => (
+              <CapabilityRow
+                key={connector.connectorId}
+                icon={<Link size={18} color={themeColors.teal} />}
+                label={connector.label}
+                description="Connected app this chat can use"
+                enabled={!(disabledConnectorIds ?? []).includes(connector.connectorId)}
+                onToggle={() => toggleChatConnector(sourcesKey, connector.connectorId)}
+                textColor={themeColors.textPrimary}
+                mutedColor={themeColors.textMuted}
+              />
+            ))}
             {showResearchToggle ? (
               <CapabilityRow
                 icon={<Telescope size={18} color={themeColors.teal} />}

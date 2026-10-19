@@ -62,6 +62,7 @@ interface ViewState {
   chatStyle: ChatStyle;
   styleConversationId: string | null;
   chatStyleByConversation: Record<string, ChatStyle>;
+  disabledConnectorIdsByConversation: Record<string, string[]>;
   features: ChatFeatures;
   /** Output kind the composer is aimed at. See {@link MediaMode}. */
   mediaMode: MediaMode;
@@ -78,6 +79,7 @@ interface ViewState {
   setChatStyle: (style: ChatStyle) => void;
   bindStyleConversation: (conversationId: string) => void;
   adoptStyleSelection: (fromKey: string, toKey: string) => void;
+  toggleChatConnector: (key: string, connectorId: string) => void;
   setFeature: (feature: keyof ChatFeatures, enabled: boolean) => void;
   setMediaMode: (mode: MediaMode) => void;
   setMediaModel: (kind: 'image' | 'video', modelId: string) => void;
@@ -298,6 +300,7 @@ export const useChatViewStore = create<ViewState>()(
       chatStyle: DEFAULT_CHAT_STYLE,
       styleConversationId: null,
       chatStyleByConversation: {},
+      disabledConnectorIdsByConversation: {},
       features: {
         webSearch: true,
         imageGen: true,
@@ -372,12 +375,32 @@ export const useChatViewStore = create<ViewState>()(
         ),
       adoptStyleSelection: (fromKey, toKey) =>
         set((state) => {
+          if (fromKey === toKey) return state;
           const pending = state.chatStyleByConversation[fromKey];
-          if (!pending || fromKey === toKey) return state;
+          const pendingSources = state.disabledConnectorIdsByConversation[fromKey];
+          if (!pending && !pendingSources) return state;
           const { [fromKey]: _pending, ...rest } = state.chatStyleByConversation;
+          const { [fromKey]: _pendingSources, ...restSources } =
+            state.disabledConnectorIdsByConversation;
           return {
-            chatStyleByConversation: { ...rest, [toKey]: rest[toKey] ?? pending },
+            chatStyleByConversation: pending
+              ? { ...rest, [toKey]: rest[toKey] ?? pending }
+              : state.chatStyleByConversation,
+            disabledConnectorIdsByConversation: pendingSources
+              ? { ...restSources, [toKey]: restSources[toKey] ?? pendingSources }
+              : state.disabledConnectorIdsByConversation,
             ...(state.styleConversationId === fromKey ? { styleConversationId: toKey } : {}),
+          };
+        }),
+      toggleChatConnector: (key, connectorId) =>
+        set((state) => {
+          const current = state.disabledConnectorIdsByConversation[key] ?? [];
+          const next = current.includes(connectorId)
+            ? current.filter((id) => id !== connectorId)
+            : [...current, connectorId];
+          const { [key]: _previous, ...rest } = state.disabledConnectorIdsByConversation;
+          return {
+            disabledConnectorIdsByConversation: next.length > 0 ? { ...rest, [key]: next } : rest,
           };
         }),
       setFeature: (feature, enabled) =>
@@ -410,6 +433,7 @@ export const useChatViewStore = create<ViewState>()(
         workMode: state.workMode,
         chatStyle: state.chatStyle,
         chatStyleByConversation: state.chatStyleByConversation,
+        disabledConnectorIdsByConversation: state.disabledConnectorIdsByConversation,
         features: state.features,
         selectedMediaModel: state.selectedMediaModel,
         videoAspectRatio: state.videoAspectRatio,

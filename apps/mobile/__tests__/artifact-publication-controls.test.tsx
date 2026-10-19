@@ -43,6 +43,22 @@ describe('published artifact controls', () => {
     expect(readPublishedTokenFromUrl(SHARE_URL)).toBe(TOKEN);
   });
 
+  it('never calls an invite-only or unrecognised audience public', async () => {
+    mockApi.get.mockResolvedValue({
+      artifacts: [
+        { artifactId: 'a1', shareUrl: SHARE_URL, visibility: 'invited' },
+        { artifactId: 'a2', shareUrl: SHARE_URL, visibility: 'something-new' },
+      ],
+    });
+
+    await expect(fetchArtifactPublication('a1')).resolves.toMatchObject({
+      publication: { visibility: 'invited' },
+    });
+    await expect(fetchArtifactPublication('a2')).resolves.toMatchObject({
+      publication: { visibility: 'invited' },
+    });
+  });
+
   it('moves the link to the workspace after confirmation', async () => {
     pressConfirm();
     mockApi.patch.mockResolvedValue({ shareUrl: SHARE_URL, visibility: 'organization' });

@@ -130,13 +130,23 @@ jest.mock('@/services/api', () => {
   return { api: {}, ApiHttpError };
 });
 
+const mockGetDocumentAsync = jest.fn();
+jest.mock('expo-document-picker', () => ({
+  getDocumentAsync: (...args: unknown[]) => mockGetDocumentAsync(...args),
+}));
+
 jest.mock('@/src/features/skills/service', () => ({
   ...jest.requireActual('@/src/features/skills/service'),
   fetchSkillCatalog: (...args: unknown[]) => mockFetchManagedSkills(...args),
   fetchInstalledSkillNames: (...args: unknown[]) => mockFetchInstalledSkillNames(...args),
   installSkill: (...args: unknown[]) => mockInstallSkill(...args),
   uninstallSkill: (...args: unknown[]) => mockUninstallSkill(...args),
+  fetchCanAuthorSkills: () => mockFetchCanAuthorSkills(),
+  importSkillFile: (...args: unknown[]) => mockImportSkillFile(...args),
 }));
+
+const mockFetchCanAuthorSkills = jest.fn().mockResolvedValue(false);
+const mockImportSkillFile = jest.fn();
 
 import { ApiHttpError } from '@/services/api';
 import { SkillsScreen } from '@/src/features/skills/SkillsScreen';
@@ -373,5 +383,50 @@ describe('Mobile Skills screen', () => {
 
     await waitFor(() => expect(mockFetchManagedSkills).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('No managed Skills yet')).toBeTruthy();
+  });
+
+  it('imports a skill file and refreshes the list', async () => {
+    mockFetchCanAuthorSkills.mockResolvedValue(true);
+    mockGetDocumentAsync.mockResolvedValueOnce({
+      canceled: false,
+      assets: [
+        {
+          uri: 'file:///cache/report-writer.zip',
+          name: 'report-writer.zip',
+          mimeType: 'application/zip',
+        },
+      ],
+    });
+    mockImportSkillFile.mockResolvedValueOnce(undefined);
+    const screen = render(<SkillsScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Import a skill from a SKILL.md or zip file'));
+
+    await waitFor(() =>
+      expect(mockImportSkillFile).toHaveBeenCalledWith({
+        uri: 'file:///cache/report-writer.zip',
+        name: 'report-writer.zip',
+        mimeType: 'application/zip',
+      }),
+    );
+    await waitFor(() => expect(mockFetchManagedSkills.mock.calls.length).toBeGreaterThan(1));
+    mockFetchCanAuthorSkills.mockResolvedValue(false);
+  });
+
+  it('shows why the server refused an imported skill', async () => {
+    mockFetchCanAuthorSkills.mockResolvedValue(true);
+    mockGetDocumentAsync.mockResolvedValueOnce({
+      canceled: false,
+      assets: [{ uri: 'file:///cache/bad.zip', name: 'bad.zip', mimeType: 'application/zip' }],
+    });
+    mockImportSkillFile.mockRejectedValueOnce(
+      new ApiHttpError('SKILL.md is at the top of the zip.', 400),
+    );
+    const screen = render(<SkillsScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Import a skill from a SKILL.md or zip file'));
+
+    expect(await screen.findByText(/SKILL.md is at the top of the zip./)).toBeTruthy();
+    mockFetchCanAuthorSkills.mockResolvedValue(false);
   });
 });

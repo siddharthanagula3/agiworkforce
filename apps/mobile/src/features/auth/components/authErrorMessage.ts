@@ -1,6 +1,14 @@
 import { classifyAuthError } from '@agiworkforce/client-runtime';
+import { API_URL } from '@/lib/constants';
 
 type AuthAction = 'sign-in' | 'sign-up' | 'send-code';
+
+export function suspensionAppealUrl(): string {
+  return `${API_URL.replace(/\/+$/, '')}/appeal?from=mobile`;
+}
+
+export const ACCOUNT_SUSPENDED_MESSAGE =
+  'This account is suspended. You can appeal if you think this is a mistake.';
 
 export function isNativeAppleCancellation(error: unknown): boolean {
   return (
@@ -23,7 +31,7 @@ export function authErrorMessage(error: unknown, action: AuthAction): string {
     case 'link_already_used':
       return 'That sign-in link is no longer valid. Start again.';
     case 'account_suspended':
-      return 'This account is suspended. Contact support for help.';
+      return ACCOUNT_SUSPENDED_MESSAGE;
     case 'account_locked':
       return 'This account is temporarily locked. Try again later.';
     case 'credentials_invalid':

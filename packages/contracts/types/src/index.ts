@@ -138,6 +138,7 @@ export * from './memory-import';
 
 export * from './research';
 export * from './study';
+export * from './chat-fallback-reason';
 
 export * from './plugins';
 

@@ -290,3 +290,21 @@ describe('MessageBubble: schedule a prompt as a task', () => {
     ).not.toContain('schedule');
   });
 });
+
+describe('MessageBubble: when a message was sent', () => {
+  it('shows the send time at the top of the message actions', () => {
+    const { getByLabelText, getByTestId } = render(
+      <MessageBubble
+        message={{
+          id: 'm-time',
+          role: 'user',
+          conversationId: 'c-time',
+          content: 'What time is it?',
+          createdAt: new Date().toISOString(),
+        }}
+      />,
+    );
+    fireEvent(getByLabelText('Your message: What time is it?'), 'longPress');
+    expect(getByTestId('message-sent-at').props.children).toMatch(/^Sent at /);
+  });
+});

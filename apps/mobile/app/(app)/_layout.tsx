@@ -8,6 +8,7 @@ import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 import { drawerGestureOptions } from '@/src/features/shell';
 import { WorkspaceMfaBanner } from '@/src/features/settings/account-security/WorkspaceMfaBanner';
 import { useReleaseUpdateNotice } from '@/src/features/release-state/releaseUpdateNotice';
+import { ServiceNoticesBanner } from '@/src/features/service-notices/ServiceNoticesBanner';
 
 export { default as ErrorBoundary } from './error';
 
@@ -71,6 +72,7 @@ export default function AppLayout() {
         <Drawer.Screen name="projects/settings/[id]" options={HIDDEN} />
         <Drawer.Screen name="projects/shared/[id]" options={HIDDEN} />
         <Drawer.Screen name="study" options={HIDDEN} />
+        <Drawer.Screen name="shared/index" options={HIDDEN} />
 
         <Drawer.Screen name="tasks" options={HIDDEN} />
 
@@ -111,6 +113,7 @@ export default function AppLayout() {
       </Drawer>
       <ContinuityOnboardingGate />
       <WorkspaceMfaBanner />
+      <ServiceNoticesBanner />
       <AppLockOffer />
     </>
   );

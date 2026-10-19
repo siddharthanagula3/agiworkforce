@@ -64,7 +64,9 @@ import { CitationChip } from './CitationChip';
 import { StreamingArtifactCard } from './StreamingArtifactCard';
 import { CollapsibleSources } from './CollapsibleSources';
 import { MemoryUsedChip } from './MemoryUsedChip';
+import { messageSentAtLabel } from '@/src/features/chat/utils/messageTime';
 import { messageMemoryCitations } from '@/src/features/memory/services/memoryCitations';
+import { messageFallbackNotice } from '@/src/features/chat/utils/fallbackNotice';
 import { ResearchRunCard, type ResearchPlanDecision } from './research/ResearchRunCard';
 import { AgiWorkPlanReview } from './AgiWorkPlanReview';
 import {
@@ -125,12 +127,14 @@ interface MessageAction {
 
 function MessageActionSheet({
   visible,
+  sentAt,
   actions,
   onSelect,
   onClose,
   onDismissed,
 }: {
   visible: boolean;
+  sentAt: string | null;
   actions: MessageAction[];
   onSelect: (action: MessageAction) => void;
   onClose: () => void;
@@ -166,6 +170,19 @@ function MessageActionSheet({
             onPress={() => undefined}
             accessible={false}
           >
+            {sentAt ? (
+              <Text
+                testID="message-sent-at"
+                style={{
+                  fontSize: typeScale.footnote,
+                  color: colors.textMuted,
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                }}
+              >
+                {sentAt}
+              </Text>
+            ) : null}
             {actions.map((action, index) => (
               <PressableBox
                 key={action.key}
@@ -335,7 +352,11 @@ function VariantPager({
   return (
     <View
       style={{ flexDirection: 'row', alignItems: 'center' }}
-      accessibilityLabel={`${noun === 'response' ? 'Response' : 'Version'} ${variant.index + 1} of ${variant.total}`}
+      accessibilityLabel={
+        noun === 'response'
+          ? `Response ${variant.index + 1} of ${variant.total}`
+          : `Edited message, version ${variant.index + 1} of ${variant.total}`
+      }
     >
       <PressableBox
         onPress={previousId ? () => onSelect(previousId) : undefined}
@@ -594,6 +615,8 @@ export const MessageBubble = memo(function MessageBubble({
   const provenance = isAssistant && !message.isStreaming ? assistantProvenance : null;
   const routeReceipt =
     isAssistant && !message.isStreaming ? autoRouteReceipt(message.metadata) : null;
+  const fallbackNotice =
+    isAssistant && message.content.trim() ? messageFallbackNotice(message.metadata) : null;
   const roleLabel = isUser ? 'You' : (assistantProvenance?.model ?? 'AGI');
   const parsedThinking = useMemo(
     () => (isAssistant ? parseAssistantThinking(message.content) : null),
@@ -1760,6 +1783,20 @@ export const MessageBubble = memo(function MessageBubble({
               </Text>
             ) : null}
 
+            {fallbackNotice ? (
+              <Text
+                testID="message-fallback-notice"
+                style={{
+                  marginTop: 2,
+                  paddingHorizontal: 2,
+                  fontSize: typeScale.caption,
+                  color: themeColors.textSecondary,
+                }}
+              >
+                {fallbackNotice}
+              </Text>
+            ) : null}
+
             {routeReceipt ? (
               <Text
                 style={{
@@ -1927,6 +1964,7 @@ export const MessageBubble = memo(function MessageBubble({
 
       <MessageActionSheet
         visible={actionsVisible}
+        sentAt={messageSentAtLabel(message.createdAt)}
         actions={messageActions}
         onSelect={handleSelectAction}
         onClose={handleCloseActions}

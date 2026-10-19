@@ -1,7 +1,12 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
-import { fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+
+const mockFetchConnectorDirectory = jest.fn();
+jest.mock('@/services/connectors', () => ({
+  fetchConnectorDirectory: () => mockFetchConnectorDirectory(),
+}));
 
 jest.mock('@gorhom/bottom-sheet', () => {
   const React = require('react');
@@ -111,6 +116,7 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useModelStore } from '../src/features/model-picker/store';
 import { useTierStore } from '../src/features/billing/store';
 import { useChatViewStore } from '../stores/chat/chatViewStore';
+import * as Clipboard from 'expo-clipboard';
 import { listMediaModels } from '../src/features/chat/actions/mediaMode';
 import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
@@ -297,12 +303,55 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Chat (default)')).toBeNull();
     });
 
+    it('offers Paste image when the clipboard holds one', async () => {
+      (Clipboard.hasImageAsync as jest.Mock).mockResolvedValueOnce(true);
+      const onPasteImage = jest.fn();
+      const { findByText } = renderSheet({ onPasteImage });
+
+      fireEvent.press(await findByText('Paste image'));
+      expect(onPasteImage).toHaveBeenCalled();
+    });
+
     it('offers Study and learn in Cloud mode', () => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
 
       const { getByText } = renderSheet();
 
       expect(getByText('Study and learn')).toBeTruthy();
+    });
+
+    it('lets this chat turn web search and each connected app on or off', async () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ grantedCapabilities: ['canUseWebSearch', 'canUseConnectors'] });
+      mockFetchConnectorDirectory.mockResolvedValue({
+        connectors: [
+          {
+            id: 'conn-1',
+            connectorId: 'gmail',
+            toolConnectorId: 'gmail',
+            authType: 'oauth',
+            connectedAt: '2026-10-01T00:00:00.000Z',
+            updatedAt: '2026-10-01T00:00:00.000Z',
+            source: 'oauth',
+          },
+        ],
+        available: [],
+        entries: [],
+        policy: null,
+      });
+      useChatViewStore.setState({
+        styleConversationId: 'chat-42',
+        disabledConnectorIdsByConversation: {},
+      });
+
+      const { getByLabelText, findByLabelText } = renderSheet();
+
+      fireEvent(getByLabelText('Web search on'), 'valueChange', false);
+      expect(useChatViewStore.getState().features.webSearch).toBe(false);
+      fireEvent(await findByLabelText('Gmail on'), 'valueChange', false);
+      expect(useChatViewStore.getState().disabledConnectorIdsByConversation).toEqual({
+        'chat-42': ['gmail'],
+      });
     });
 
     it('no longer offers AGI Work at a paid tier, the drawer owns it now', () => {

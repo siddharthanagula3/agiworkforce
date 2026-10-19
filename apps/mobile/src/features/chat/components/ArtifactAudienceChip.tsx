@@ -1,23 +1,30 @@
 import { View } from 'react-native';
-import { Globe, Users } from 'lucide-react-native';
+import { Globe, Lock, Users } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
-import { usePublishedArtifactAudience } from '../services/artifactPublishing';
+import {
+  usePublishedArtifactAudience,
+  type PublishedArtifactAudience,
+} from '../services/artifactPublishing';
 import { typeScale } from '@/src/ui/theme/tokens';
+
+const AUDIENCE_CHIP: Record<
+  PublishedArtifactAudience,
+  { Icon: typeof Globe; label: string; description: string }
+> = {
+  public: { Icon: Globe, label: 'Published', description: 'Published to anyone with the link' },
+  organization: { Icon: Users, label: 'Workspace', description: 'Shared with your workspace' },
+  invited: { Icon: Lock, label: 'Invited', description: 'Only people you invite can open this' },
+};
 
 export function ArtifactAudienceChip({ artifactId }: { artifactId: string }) {
   const colors = useThemeColors();
   const audience = usePublishedArtifactAudience(artifactId);
   if (!audience) return null;
-  const Icon = audience === 'organization' ? Users : Globe;
-  const label = audience === 'organization' ? 'Workspace' : 'Published';
+  const { Icon, label, description } = AUDIENCE_CHIP[audience];
   return (
     <View
-      accessibilityLabel={
-        audience === 'organization'
-          ? 'Shared with your workspace'
-          : 'Published to anyone with the link'
-      }
+      accessibilityLabel={description}
       style={{
         flexDirection: 'row',
         alignItems: 'center',
