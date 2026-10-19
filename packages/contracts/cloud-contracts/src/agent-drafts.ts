@@ -22,6 +22,7 @@ export const NEW_AGENT_DRAFT: AgentConfig = {
   connectorIds: null,
   skillNames: null,
   dailyTurnLimit: null,
+  monthlyCreditLimit: null,
 };
 
 const AGENT_CONFIG_KEYS = Object.keys(AgentConfigSchema.shape) as (keyof AgentConfig)[];

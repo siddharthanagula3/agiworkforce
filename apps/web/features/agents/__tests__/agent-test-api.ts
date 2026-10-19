@@ -20,6 +20,7 @@ export function managedAgent(patch: Partial<ManagedCloudAgent> = {}): ManagedClo
     connectorIds: null,
     skillNames: null,
     dailyTurnLimit: null,
+    monthlyCreditLimit: null,
     isOwner: true,
     ownerName: null,
     organizationId: '0190a000-0000-7000-8000-0000000000f1',

@@ -24,6 +24,7 @@ import {
   type SlackInstallStatus,
 } from '@/lib/slack/slack-contract';
 import { toUserMessage } from '@/lib/user-error-message';
+import { SlackChannelPolicies } from '@/features/slack/components/SlackChannelPolicies';
 
 const OVERVIEW_UNREADABLE = 'Your Slack settings could not be loaded.';
 
@@ -501,6 +502,10 @@ export function SlackSection() {
                       <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>
                         Added {formatDate(installation.installedAt)}
                       </p>
+                      <SlackChannelPolicies
+                        installationId={installation.id}
+                        teamName={installation.teamName}
+                      />
                     </div>
                     <Button
                       type="button"
