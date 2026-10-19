@@ -1418,11 +1418,81 @@ describe('LocalRuntimeClient', () => {
     await client.initialize();
 
     runtime.stdout.end();
-    await new Promise((resolve) => setImmediate(resolve));
-
-    expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('closed stdout'));
+    await vi.waitFor(
+      () => expect(disconnected).toHaveBeenCalledWith(expect.stringContaining('closed stdout')),
+      { timeout: 3_000 },
+    );
     const child = runtime.children[0] as EventEmitter & { kill: ReturnType<typeof vi.fn> };
     expect(child.kill).toHaveBeenCalledOnce();
+  });
+
+  it('reports the CLI stderr when it closes stdout and exits during startup', async () => {
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+    const child = Object.assign(new EventEmitter(), {
+      stdin,
+      stdout,
+      stderr,
+      kill: vi.fn(() => true),
+    });
+    const spawn = vi.fn(() => {
+      setImmediate(() => {
+        stderr.write('Error: Current project is not trusted. Run `agi init`.\n');
+        stdout.end();
+        setTimeout(() => child.emit('exit', 1, null), 20);
+      });
+      return child;
+    }) as unknown as SpawnLocalRuntime;
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn,
+    });
+
+    await expect(client.initialize()).rejects.toThrow('Current project is not trusted');
+    await client.dispose();
+  });
+
+  it('forwards the workspace consent the editor recorded for the folder', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      workspaceConsentAtMs: () => 1_760_000_000_000,
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.initialize();
+      expect(vi.mocked(runtime.spawn).mock.calls[0]?.[1]).toEqual([
+        'app-server',
+        '--workspace-consent',
+        '/workspace',
+        '--workspace-consent-at-ms',
+        '1760000000000',
+      ]);
+    } finally {
+      await client.dispose();
+    }
+  });
+
+  it('forwards no workspace consent when the editor withholds it', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      workspaceConsentAtMs: () => undefined,
+      spawn: runtime.spawn,
+    });
+    try {
+      await client.initialize();
+      expect(vi.mocked(runtime.spawn).mock.calls[0]?.[1]).toEqual(['app-server']);
+    } finally {
+      await client.dispose();
+    }
   });
 
   it('force-terminates a runtime that does not acknowledge shutdown', async () => {

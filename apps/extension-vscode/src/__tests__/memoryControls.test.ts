@@ -108,7 +108,6 @@ function registerMemoryCommands(
       } as unknown as CommandDeps['memoryTreeProvider'],
       diffDecorationProvider: stub,
       diagnosticsProvider: stub,
-      nativeChatAvailable: false,
     } as unknown as CommandDeps,
   );
 
