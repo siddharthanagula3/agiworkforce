@@ -86,6 +86,16 @@ describe('AgentEditorPage', () => {
     expect(vi.mocked(api.update).mock.calls[0]?.[1]).toMatchObject({ skillNames: ['pdf'] });
   });
 
+  it('saves a monthly credit cap for everyone using the agent', async () => {
+    const api = fakeApi();
+    render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={api} />);
+    await screen.findByRole('heading', { name: 'Release notes writer' });
+    await userEvent.type(screen.getByLabelText('Credits a month, across everyone'), '250');
+    await userEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(api.update).toHaveBeenCalled());
+    expect(vi.mocked(api.update).mock.calls[0]?.[1]).toMatchObject({ monthlyCreditLimit: 250 });
+  });
+
   it('keeps publishing closed until the draft is saved', async () => {
     const api = fakeApi();
     render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={api} />);

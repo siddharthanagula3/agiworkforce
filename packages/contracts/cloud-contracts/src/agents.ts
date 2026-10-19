@@ -12,6 +12,7 @@ export const AGENT_OUTPUT_EXAMPLES_MAX_CHARS = 8_000;
 export const AGENT_STARTERS_MAX = 6;
 export const AGENT_STARTER_MAX_CHARS = 200;
 export const AGENT_DAILY_TURN_LIMIT_MAX = 10_000;
+export const AGENT_MONTHLY_CREDIT_LIMIT_MAX = 100_000_000;
 export const AGENT_SELECTION_MAX = 200;
 export const AGENT_FILES_MAX = 20;
 export const AGENT_FILE_MAX_BYTES = 512_000;
@@ -45,6 +46,13 @@ export const AgentConfigSchema = z.object({
   connectorIds: SelectionSchema.nullable(),
   skillNames: SelectionSchema.nullable(),
   dailyTurnLimit: z.number().int().min(1).max(AGENT_DAILY_TURN_LIMIT_MAX).nullable(),
+  monthlyCreditLimit: z
+    .number()
+    .int()
+    .min(1)
+    .max(AGENT_MONTHLY_CREDIT_LIMIT_MAX)
+    .nullable()
+    .default(null),
 });
 export type AgentConfig = z.infer<typeof AgentConfigSchema>;
 

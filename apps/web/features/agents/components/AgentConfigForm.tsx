@@ -16,6 +16,7 @@ import {
 } from '@agiworkforce/ui';
 import {
   AGENT_DAILY_TURN_LIMIT_MAX,
+  AGENT_MONTHLY_CREDIT_LIMIT_MAX,
   AGENT_DESCRIPTION_MAX_CHARS,
   AGENT_INSTRUCTIONS_MAX_CHARS,
   AGENT_NAME_MAX_CHARS,
@@ -396,6 +397,34 @@ export function AgentConfigForm({
           <p id={`${id}-budget-help`} className={HELP}>
             Each person can send this agent up to this many messages a day. Chats stop at the limit
             until midnight UTC.
+          </p>
+        </div>
+        <div className={FIELD_GAP}>
+          <Label htmlFor={`${id}-credits`}>Credits a month, across everyone</Label>
+          <Input
+            id={`${id}-credits`}
+            type="number"
+            inputMode="numeric"
+            min={1}
+            max={AGENT_MONTHLY_CREDIT_LIMIT_MAX}
+            step={1}
+            value={draft.monthlyCreditLimit ?? ''}
+            disabled={disabled}
+            placeholder="No limit"
+            aria-describedby={`${id}-credits-help`}
+            onChange={(event) => {
+              const value = Number.parseInt(event.target.value, 10);
+              onChange({
+                monthlyCreditLimit:
+                  Number.isFinite(value) && value > 0
+                    ? Math.min(value, AGENT_MONTHLY_CREDIT_LIMIT_MAX)
+                    : null,
+              });
+            }}
+          />
+          <p id={`${id}-credits-help`} className={HELP}>
+            Chats and routines that run as this agent stop once it has used this many credits in the
+            calendar month (UTC), whoever is using it.
           </p>
         </div>
       </section>

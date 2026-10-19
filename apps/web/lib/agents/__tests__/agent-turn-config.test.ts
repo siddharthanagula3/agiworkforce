@@ -1,15 +1,18 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { microusdFromCredits } from '@agiworkforce/types';
 
 const readAgentRow = vi.fn();
 const countAgentTurnsToday = vi.fn();
 const readAgentFileTexts = vi.fn();
+const readAgentMonthSpendMicrousd = vi.fn();
 
 vi.mock('@/lib/services/custom-agent-service', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@/lib/services/custom-agent-service')>()),
   readAgentRow: (...args: unknown[]) => readAgentRow(...args),
   countAgentTurnsToday: (...args: unknown[]) => countAgentTurnsToday(...args),
   readAgentFileTexts: (...args: unknown[]) => readAgentFileTexts(...args),
+  readAgentMonthSpendMicrousd: (...args: unknown[]) => readAgentMonthSpendMicrousd(...args),
 }));
 
 import {
@@ -33,6 +36,8 @@ beforeEach(() => {
   readAgentFileTexts.mockReset();
   readAgentFileTexts.mockResolvedValue([]);
   countAgentTurnsToday.mockResolvedValue(0);
+  readAgentMonthSpendMicrousd.mockReset();
+  readAgentMonthSpendMicrousd.mockResolvedValue(0);
 });
 
 describe('loadAgentTurnConfig', () => {
@@ -72,6 +77,23 @@ describe('loadAgentTurnConfig', () => {
     await expect(loadAgentTurnConfig(db, OWNER, AGENT_ID)).rejects.toThrow('database unavailable');
     countAgentTurnsToday.mockResolvedValue(2);
     expect(await loadAgentTurnConfig(db, OWNER, AGENT_ID)).toMatchObject({ ok: true });
+  });
+
+  it('stops the agent once its month of credits is spent, across everyone, failing closed', async () => {
+    readAgentRow.mockResolvedValue(agentRow({}, { monthlyCreditLimit: 10 }));
+    readAgentMonthSpendMicrousd.mockResolvedValue(microusdFromCredits(10));
+    expect(await loadAgentTurnConfig(db, TEAMMATE, AGENT_ID)).toMatchObject({
+      ok: false,
+      code: 'agent_unavailable',
+    });
+    expect(await loadAgentTurnConfig(db, OWNER, AGENT_ID)).toMatchObject({
+      ok: false,
+      code: 'agent_credit_limit',
+    });
+    readAgentMonthSpendMicrousd.mockResolvedValue(microusdFromCredits(9));
+    expect(await loadAgentTurnConfig(db, OWNER, AGENT_ID)).toMatchObject({ ok: true });
+    readAgentMonthSpendMicrousd.mockRejectedValue(new Error('ledger unavailable'));
+    await expect(loadAgentTurnConfig(db, OWNER, AGENT_ID)).rejects.toThrow('ledger unavailable');
   });
 
   it('runs the published copy for a teammate and refuses one never published', async () => {
