@@ -488,6 +488,7 @@ const AUTO_TITLE_PLACEHOLDERS: ReadonlySet<string> = new Set([
 const SERVER_TITLE_READ_DELAYS_MS = [0, 1200, 3000] as const;
 
 const CLIENT_FALLBACK_TITLE_LENGTH = 60;
+const OPEN_CONVERSATION_REFRESH_MIN_GAP_MS = 2_000;
 
 function clientFallbackTitle(firstUserContent: string): string {
   return firstUserContent.trim().slice(0, CLIENT_FALLBACK_TITLE_LENGTH).replace(/\n/g, ' ');
@@ -1742,6 +1743,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     getConversationLoadError,
     createConversation,
     loadConversation,
+    refreshOpenConversation,
     deleteConversation,
     updateConversation,
     setActiveConversation,
@@ -2086,6 +2088,24 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         'Your response is ready.',
     });
   }, [isStreaming, displayedMessages, chatError, displayedConversation, browserReplyReady]);
+
+  useEffect(() => {
+    if (!authLoaded || !activeConversationId) return;
+    let lastRefreshAt = 0;
+    const refresh = () => {
+      if (document.visibilityState !== 'visible') return;
+      const now = Date.now();
+      if (now - lastRefreshAt < OPEN_CONVERSATION_REFRESH_MIN_GAP_MS) return;
+      lastRefreshAt = now;
+      void refreshOpenConversation(activeConversationId);
+    };
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      document.removeEventListener('visibilitychange', refresh);
+    };
+  }, [activeConversationId, authLoaded, refreshOpenConversation]);
 
   // On mount: if URL has a conversation ID, load it. Otherwise keep /chat as
   // the empty new-chat surface and create persistence only when the user sends.
@@ -6482,7 +6502,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           tabIndex={-1}
           className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]"
         >
-          {compact && (
+          {compact ? (
             <header
               data-quick-ask-header=""
               className="flex h-10 shrink-0 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-3"
@@ -6507,8 +6527,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 <SquarePen className="h-4 w-4" aria-hidden="true" />
               </a>
             </header>
-          )}
-          {!compact && (
+          ) : (
             <header
               data-app-header=""
               className={cn(
