@@ -159,6 +159,10 @@ export const RAW_SUBSCRIPTION_READERS = Object.freeze([
     path: 'apps/web/features/admin/services/',
     why: 'operator analytics aggregate every row',
   },
+  {
+    path: 'apps/web/scripts/dev-accounts/provision.ts',
+    why: 'the local test-account seeder creates, resets and allocates the subscription row it seeds',
+  },
 ]);
 
 const RAW_SUBSCRIPTION_READ_PATTERNS = Object.freeze([

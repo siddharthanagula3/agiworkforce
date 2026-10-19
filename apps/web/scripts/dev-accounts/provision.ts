@@ -6,6 +6,7 @@ import {
   isSelfServePaidPlanTier,
   quoteTopUp,
 } from '@agiworkforce/types';
+import { getIdentityProvider } from '@/lib/server/identity';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { recordTermsAcceptance } from '@/lib/server/terms';
@@ -14,6 +15,7 @@ import { getPriceSelectionForCurrency } from '@/lib/server/localized-pricing-ser
 import { getPlanSessionUsageBudgetMicrousd } from '@/lib/server/managed-usage-policy';
 import { persistProvenActiveWorkspaceSelection } from '@/lib/services/active-workspace-service';
 import { CreditService } from '@/lib/services/credit-service';
+import { deprovisionMember } from '@/lib/services/deprovision-service';
 import {
   ensureSeatMemberCreditAccount,
   resolveEntitlementBundle,
@@ -333,10 +335,11 @@ async function provisionSeat(
   if (!organizationId) {
     throw new Error(`${account.seatIn} has no workspace yet; seed it before ${account.name}.`);
   }
-  await serviceDb().transaction(async (tx) => {
-    await tx.execute(
+  const leftOrganizationIds = await serviceDb().transaction(async (tx) => {
+    const left = await tx.query<{ organization_id: string }>(
       `delete from public.organization_members
-        where user_id = $1 and organization_id <> $2 and role <> 'owner'`,
+        where user_id = $1 and organization_id <> $2 and role <> 'owner'
+        returning organization_id`,
       [userId, organizationId],
     );
     await tx.execute(
@@ -347,7 +350,19 @@ async function provisionSeat(
       [organizationId, userId],
     );
     await persistProvenActiveWorkspaceSelection(tx, userId, organizationId);
+    return left.map((row) => row.organization_id);
   });
+  for (const leftOrganizationId of leftOrganizationIds) {
+    const revoked = await deprovisionMember(serviceDb(), getIdentityProvider(), {
+      userId,
+      organizationId: leftOrganizationId,
+    });
+    if (revoked.errors.length > 0) {
+      throw new Error(
+        `${account.name} left workspace ${leftOrganizationId} with credentials still live: ${revoked.errors.join('; ')}`,
+      );
+    }
+  }
   const entitlement = await resolveEntitlementBundle(userDb(userId), userId, {
     workspaceOrganizationId: organizationId,
   });
