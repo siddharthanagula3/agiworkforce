@@ -2,7 +2,6 @@ use super::*;
 use crate::core::llm::cost_calculator::CostCalculator;
 use crate::core::llm::sse_parser::TokenUsage;
 use crate::core::llm::token_counter::TokenCounter;
-use crate::core::llm::{ChatMessage, LLMRequest};
 use crate::sys::commands::chat::interrupted_turns::ChatTurn;
 use crate::sys::commands::chat::send_message_setup::PreparedSendMessage;
 
