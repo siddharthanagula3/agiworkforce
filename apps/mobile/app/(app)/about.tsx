@@ -14,6 +14,7 @@ import {
   Info,
   LifeBuoy,
   BookOpen,
+  Activity,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -261,6 +262,12 @@ export default function AboutScreen() {
             icon={BookOpen}
             label="Help Center"
             onPress={() => void openWebPage('https://agiworkforce.com/help')}
+          />
+          <Separator />
+          <LinkRow
+            icon={Activity}
+            label="Service Status"
+            onPress={() => void openWebPage('https://agiworkforce.com/status')}
           />
           <Separator />
           <Pressable

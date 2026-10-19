@@ -64,6 +64,7 @@ import { CitationChip } from './CitationChip';
 import { StreamingArtifactCard } from './StreamingArtifactCard';
 import { CollapsibleSources } from './CollapsibleSources';
 import { MemoryUsedChip } from './MemoryUsedChip';
+import { messageSentAtLabel } from '@/src/features/chat/utils/messageTime';
 import { messageMemoryCitations } from '@/src/features/memory/services/memoryCitations';
 import { ResearchRunCard, type ResearchPlanDecision } from './research/ResearchRunCard';
 import { AgiWorkPlanReview } from './AgiWorkPlanReview';
@@ -125,12 +126,14 @@ interface MessageAction {
 
 function MessageActionSheet({
   visible,
+  sentAt,
   actions,
   onSelect,
   onClose,
   onDismissed,
 }: {
   visible: boolean;
+  sentAt: string | null;
   actions: MessageAction[];
   onSelect: (action: MessageAction) => void;
   onClose: () => void;
@@ -166,6 +169,19 @@ function MessageActionSheet({
             onPress={() => undefined}
             accessible={false}
           >
+            {sentAt ? (
+              <Text
+                testID="message-sent-at"
+                style={{
+                  fontSize: typeScale.footnote,
+                  color: colors.textMuted,
+                  paddingHorizontal: 20,
+                  paddingVertical: 10,
+                }}
+              >
+                {sentAt}
+              </Text>
+            ) : null}
             {actions.map((action, index) => (
               <PressableBox
                 key={action.key}
@@ -335,7 +351,11 @@ function VariantPager({
   return (
     <View
       style={{ flexDirection: 'row', alignItems: 'center' }}
-      accessibilityLabel={`${noun === 'response' ? 'Response' : 'Version'} ${variant.index + 1} of ${variant.total}`}
+      accessibilityLabel={
+        noun === 'response'
+          ? `Response ${variant.index + 1} of ${variant.total}`
+          : `Edited message, version ${variant.index + 1} of ${variant.total}`
+      }
     >
       <PressableBox
         onPress={previousId ? () => onSelect(previousId) : undefined}
@@ -1927,6 +1947,7 @@ export const MessageBubble = memo(function MessageBubble({
 
       <MessageActionSheet
         visible={actionsVisible}
+        sentAt={messageSentAtLabel(message.createdAt)}
         actions={messageActions}
         onSelect={handleSelectAction}
         onClose={handleCloseActions}

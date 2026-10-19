@@ -8,6 +8,7 @@ import { useTabletLayout } from '@/src/shared/hooks/useTabletLayout';
 import { drawerGestureOptions } from '@/src/features/shell';
 import { WorkspaceMfaBanner } from '@/src/features/settings/account-security/WorkspaceMfaBanner';
 import { useReleaseUpdateNotice } from '@/src/features/release-state/releaseUpdateNotice';
+import { ServiceNoticesBanner } from '@/src/features/service-notices/ServiceNoticesBanner';
 
 export { default as ErrorBoundary } from './error';
 
@@ -103,6 +104,7 @@ export default function AppLayout() {
       </Drawer>
       <ContinuityOnboardingGate />
       <WorkspaceMfaBanner />
+      <ServiceNoticesBanner />
       <AppLockOffer />
     </>
   );
