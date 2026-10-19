@@ -37,7 +37,7 @@ beforeEach(() => {
         return new Response(JSON.stringify({ item }), { status: 201 });
       }
       const id = String(input).split('/').pop();
-      server = server.filter((item) => item.id !== id);
+      server = server.filter((item) => item['id'] !== id);
       return new Response(null, { status: 204 });
     }),
   );
