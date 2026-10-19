@@ -183,6 +183,7 @@ const capabilitiesSchema = z.object({
   revertRestore: z.boolean().optional(),
   mcpApproval: z.boolean().optional(),
   managedWorktrees: z.boolean().optional(),
+  threadRename: z.boolean().optional(),
 });
 
 const worktreeSummarySchema = z.object({
