@@ -216,6 +216,22 @@ describe('Settings page', () => {
     expect(getByText('Log Out')).toBeTruthy();
   });
 
+  it('keeps Log Out reachable when Clerk holds a session that AGI Cloud could not verify', () => {
+    useAuthStore.setState({ isClerkSignedIn: false });
+    mockClerkState.user = { primaryEmailAddress: { emailAddress: 'ada@example.com' } };
+    const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
+    const { getByText } = render(<SettingsTabScreen />);
+    fireEvent.press(getByText('Log Out'));
+
+    expect(alertSpy).toHaveBeenCalledWith(
+      'Log Out',
+      'Log out of AGI Cloud on this device?',
+      expect.any(Array),
+    );
+    alertSpy.mockRestore();
+  });
+
   it('always offers the workspace screen rather than gating it on a local plan guess', () => {
     useAuthStore.setState({ isClerkSignedIn: true });
     useTierStore.setState({
