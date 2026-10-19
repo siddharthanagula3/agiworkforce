@@ -27,6 +27,7 @@ import type {
   DeveloperRuntimeModels,
   DeveloperRuntimeCapability,
   DeveloperRuntimeStatus,
+  DeveloperRuntimeUnavailable,
   LocalDeveloperSession,
   DeveloperSessionEvent,
   DeveloperSessionGroup,
@@ -138,6 +139,11 @@ const INSTALLED_BINARY = path.join('.agi', 'bin', 'agi');
 
 const DOWNLOAD_HINT =
   'Install the AGI CLI with curl -fsSL https://agiworkforce.com/install.sh | bash, or set its path under Settings.';
+const UNTRUSTED_FOLDER = /Current project is not trusted/;
+const UNTRUSTED_FOLDER_HINT =
+  'The AGI CLI chosen under Settings keeps its own folder trust. Run agi init once in this folder, or clear the CLI path under Settings to use the CLI that comes with this app.';
+const RETRY_HINT =
+  'Try again. If it keeps failing, choose Help > Copy Diagnostics and send that to support.';
 
 export type DeveloperSessionEmitter = (rootId: string, event: DeveloperSessionEvent) => void;
 
@@ -1523,14 +1529,23 @@ async function listForRoot(
     if (awaiting.length > 0) group.mcpAwaitingApproval = awaiting;
     if (!remote) worktrees = await worktreeGroups(root, server, group);
   } catch (error) {
-    group.unavailable =
-      error instanceof DeveloperRuntimeUnavailableError
-        ? { message: error.message, hint: error.hint }
-        : { message: error instanceof Error ? error.message : String(error), hint: DOWNLOAD_HINT };
+    group.unavailable = unavailableFrom(error);
     return [group];
   }
 
   return [group, ...worktrees];
+}
+
+/**
+ * An install hint belongs only to a CLI that is missing. A CLI that started and
+ * then stopped is installed, so its own reason is the one worth acting on.
+ */
+function unavailableFrom(error: unknown): DeveloperRuntimeUnavailable {
+  if (error instanceof DeveloperRuntimeUnavailableError) {
+    return { message: error.message, hint: error.hint };
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  return { message, hint: UNTRUSTED_FOLDER.test(message) ? UNTRUSTED_FOLDER_HINT : RETRY_HINT };
 }
 
 const MCP_APPROVAL_SCOPES: readonly DeveloperMcpApprovalScope[] = ['project', 'plugin'];

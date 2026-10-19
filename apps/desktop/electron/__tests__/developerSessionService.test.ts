@@ -1213,6 +1213,46 @@ describe('developer session runtime', () => {
     expect(list.groups[0]?.unavailable?.hint).toContain('agiworkforce.com/install.sh');
   });
 
+  it.each([
+    [
+      'Error: Current project is not trusted. Run `agi` interactively and accept the directory trust prompt.',
+      'agi init',
+    ],
+    ['Error: the configuration file is malformed', 'Copy Diagnostics'],
+  ])(
+    'explains a CLI that started and then stopped without telling the user to install it (%s)',
+    async (stderr, hintText) => {
+      vi.resetModules();
+      const service = await import('../runtime/developerSessionService');
+      service.configureDeveloperSessions({
+        emit: () => undefined,
+        resolveBinary: () => 'agi',
+        mayRunIn: () => true,
+        spawn: ((_command: string, args: readonly string[]) => {
+          const child = new FakeChild(() => undefined);
+          if (args[0] !== '--version') {
+            setTimeout(() => {
+              child.stderr.emit('data', stderr);
+              child.emit('exit', 1, null);
+            }, 0);
+          } else {
+            setTimeout(() => {
+              child.stdout.emit('data', 'agi 1.7.1\n');
+              child.emit('exit', 0, null);
+            }, 0);
+          }
+          return child;
+        }) as never,
+      });
+
+      const list: DeveloperSessionList = await service.listDeveloperSessions();
+
+      expect(list.groups[0]?.unavailable?.message).toContain('The AGI CLI exited (1)');
+      expect(list.groups[0]?.unavailable?.hint).toContain(hintText);
+      expect(list.groups[0]?.unavailable?.hint).not.toContain('install.sh');
+    },
+  );
+
   it('reads the models, the configured default and the account in one call', async () => {
     const { service } = await loadService();
 
