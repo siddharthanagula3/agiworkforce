@@ -184,6 +184,7 @@ import {
 } from '@/features/chat/utils/research-plan';
 import { parseResearchGapsEvent } from '@/features/chat/components/research/ResearchPlan';
 import { settingsSectionPath } from '@/features/settings/lib/web-settings-sections';
+import { surfaceUsageCreditsNotice } from '@/features/billing/lib/usage-credits-notice';
 import { deriveAgentActivityLabel, extractToolActivityArgument } from './agentActivityLabel';
 import {
   linearTail,
@@ -4344,6 +4345,7 @@ export function useChatStream(
 
           surfaceTermsNotice(response);
           surfaceBillingNotice(response);
+          surfaceUsageCreditsNotice(response);
           const truncatedAttachments = readAttachmentTruncationHeader(
             response.headers.get(ATTACHMENTS_TRUNCATED_HEADER),
           );

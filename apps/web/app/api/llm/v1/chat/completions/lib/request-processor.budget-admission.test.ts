@@ -51,6 +51,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 });
 
 import { CreditService } from '@/lib/services/credit-service';
+import { SubscriptionService } from '@/lib/services/subscription-service';
 import { processRequest } from './request-processor';
 
 const proSubscription = {
@@ -135,6 +136,73 @@ describe('budget admission control runs before any provider work', () => {
     if (result.ok) return;
     expect(result.response.status).toBe(402);
     expect(mocks.reserveManagedUsage).not.toHaveBeenCalled();
+  });
+
+  it('names a billing period that ended without renewal instead of calling the budget spent', async () => {
+    vi.spyOn(CreditService, 'getBalance').mockResolvedValue({
+      account_id: '',
+      credits_allocated_microusd: 0,
+      credits_used_microusd: 0,
+      credits_remaining_microusd: 0,
+      credits_allocated_cents: 0,
+      credits_used_cents: 0,
+      credits_remaining_cents: 0,
+      period_start: '',
+      period_end: '',
+    });
+    vi.spyOn(SubscriptionService, 'allocateCreditsForPeriod').mockResolvedValue('acct-expired');
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
+
+    const result = await processRequest(chatRequest('admission-lapsed-period'), {
+      ok: true,
+      userId: 'user-pro',
+      token: 'session-token',
+      subscription: {
+        ...proSubscription,
+        current_period_start: new Date(Date.now() - 31 * 86_400_000),
+        current_period_end: new Date(Date.now() - 86_400_000),
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    expect(result.response.status).toBe(402);
+    const body = (await result.response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('billing_period_not_renewed');
+    expect(body.error.message).not.toMatch(/exhausted/i);
+    expect(mocks.reserveManagedUsage).not.toHaveBeenCalled();
+  });
+
+  it('keeps the spent-budget refusal while the stored period is still running', async () => {
+    vi.spyOn(CreditService, 'getBalance').mockResolvedValue({
+      account_id: '',
+      credits_allocated_microusd: 0,
+      credits_used_microusd: 0,
+      credits_remaining_microusd: 0,
+      credits_allocated_cents: 0,
+      credits_used_cents: 0,
+      credits_remaining_cents: 0,
+      period_start: '',
+      period_end: '',
+    });
+    vi.spyOn(SubscriptionService, 'allocateCreditsForPeriod').mockResolvedValue('');
+    vi.spyOn(CreditService, 'checkAvailableMicrousd').mockResolvedValue(false);
+
+    const result = await processRequest(chatRequest('admission-running-period'), {
+      ok: true,
+      userId: 'user-pro',
+      token: 'session-token',
+      subscription: {
+        ...proSubscription,
+        current_period_start: new Date(Date.now() - 86_400_000),
+        current_period_end: new Date(Date.now() + 29 * 86_400_000),
+      },
+    });
+
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    const body = (await result.response.json()) as { error: { code: string } };
+    expect(body.error.code).not.toBe('billing_period_not_renewed');
   });
 
   it('denies deterministically when the reservation declines the spend', async () => {

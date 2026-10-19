@@ -233,6 +233,92 @@ describe('managed usage request service', () => {
     expect(error).toMatchObject({ status: 429, code });
   });
 
+  it('reports a reservation that usage credits paid for once the plan window was full', async () => {
+    const db = {
+      query: vi.fn(async (sql: string) =>
+        sql.includes('select is_overage')
+          ? [{ is_overage: true }]
+          : [
+              {
+                reservation_decision: 'acquired',
+                request_status: 'reserved',
+                lease_token: 'lease-credits',
+                estimated_cost_microusd: 70000,
+                settlement_status: 'succeeded',
+                error_code: null,
+              },
+            ],
+      ),
+      execute: vi.fn(),
+    } as unknown as DatabaseAdapter;
+
+    const reservation = await reserveManagedUsageRequest({
+      db,
+      userId: 'user_1',
+      idempotencyKey: 'agi.chat.web.send.turn_credits',
+      requestHash: 'c'.repeat(64),
+      provider: 'anthropic',
+      model: 'fixture-model',
+      estimatedCostCents: 7,
+      leaseToken: 'lease-credits',
+      planTier: 'max_15x',
+      isFlagship: false,
+    });
+
+    expect(reservation.fundedByUsageCredits).toBe(true);
+  });
+
+  it.each([
+    [
+      true,
+      0,
+      'Your 5-hour usage limit is reached and your usage credits do not cover this message. Buy more credits to keep going, or wait for the limit to reset.',
+    ],
+    [
+      false,
+      5_000_000,
+      'Your 5-hour usage limit is reached. Turn on usage credits in Settings > Billing to keep going with the credits you bought, or wait for the limit to reset.',
+    ],
+  ] as const)(
+    'states what usage credits can do at a full 5-hour window (on: %s)',
+    async (overageEnabled, availableMicrousd, message) => {
+      const db = {
+        query: vi.fn(async (sql: string) =>
+          sql.includes('subscription.overage_enabled')
+            ? [{ overage_enabled: overageEnabled, available_microusd: availableMicrousd }]
+            : [
+                {
+                  reservation_decision: 'session_limit',
+                  request_status: 'declined',
+                  lease_token: null,
+                  estimated_cost_microusd: 70000,
+                },
+              ],
+        ),
+        execute: vi.fn(),
+      } as unknown as DatabaseAdapter;
+
+      const error = await reserveManagedUsageRequest({
+        db,
+        userId: 'user_1',
+        idempotencyKey: 'external-client:turn_window',
+        requestHash: 'e'.repeat(64),
+        provider: 'anthropic',
+        model: 'fixture-model',
+        estimatedCostCents: 7,
+        leaseToken: 'lease-window',
+        planTier: 'max_15x',
+        isFlagship: false,
+      }).catch((caught) => caught);
+
+      expect(error).toMatchObject({
+        status: 429,
+        code: 'rolling_five_hour_limit_reached',
+        message,
+      });
+    },
+  );
+
   it('logs the database failure it hides behind the billing-unavailable envelope', async () => {
     const failure = Object.assign(
       new Error('permission denied for function reserve_managed_usage'),

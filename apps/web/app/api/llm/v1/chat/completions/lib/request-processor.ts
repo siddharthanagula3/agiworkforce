@@ -1,4 +1,5 @@
 import 'server-only';
+import { resolveUsageCreditsNotice } from '@/lib/server/usage-credits-notice';
 import { conversationInstructionBlock } from '@/lib/prompts/conversation-instructions';
 
 import { randomUUID } from 'node:crypto';
@@ -2827,6 +2828,27 @@ export function handleCreditError(
   );
 }
 
+/**
+ * No open credit period exists for an entitled plan: the stored period ended
+ * and no renewal opened the next one. Nothing was spent, so it must not read as
+ * a spent budget the user could buy their way out of.
+ */
+function billingPeriodNotRenewedResponse(subscription: SubscriptionInfo): NextResponse {
+  const error = new ManagedUsageRequestError(
+    "Your plan's billing period has ended and its renewal has not reached your account yet, so no usage is available right now. Check your plan in Settings > Billing.",
+    402,
+    'billing_period_not_renewed',
+  );
+  return NextResponse.json(
+    createManagedUsageErrorBody(
+      error,
+      'insufficient_quota',
+      quotaRecoveryFor(error.code, subscription),
+    ),
+    { status: error.status },
+  );
+}
+
 function managedUsageErrorResponse(
   error: ManagedUsageRequestError,
   subscription?: SubscriptionInfo,
@@ -5605,6 +5627,14 @@ async function processAdmittedRequest(
       'Credit availability check result',
     );
 
+    if (
+      !hasCredits &&
+      !existingBalance?.account_id &&
+      new Date(subscription.current_period_end).getTime() <= Date.now()
+    ) {
+      return { ok: false, response: billingPeriodNotRenewedResponse(subscription) };
+    }
+
     if (!hasCredits) {
       const monthlyLimitRefusal = async (): Promise<ProcessFailure> => ({
         ok: false,
@@ -5752,12 +5782,22 @@ async function processAdmittedRequest(
     }
 
     quotaWarningHeader =
+      (await resolveUsageCreditsNotice({
+        db: (await scopedDbPromise).db,
+        userId,
+        plan: subscription.plan_tier,
+        reservationFundedByCredits: managedUsage?.fundedByUsageCredits === true,
+        creditsUsedMicrousd: existingBalance?.credits_used_microusd ?? 0,
+        creditsRemainingMicrousd: existingBalance?.credits_remaining_microusd ?? 0,
+        estimatedCostMicrousd,
+      })) ??
       buildQuotaWarningHeader({
         planTier: subscription.plan_tier,
         creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
         creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
         estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
-      }) ?? computerUseSoftCapWarning;
+      }) ??
+      computerUseSoftCapWarning;
   }
 
   const dynamicSystemBlocks: InstructionBlock[] = [];

@@ -140,6 +140,8 @@ export interface ManagedUsageRequestReservation {
   model?: string;
   routeId?: string | null;
   attribution?: UsageAttribution;
+  /** The plan limit was reached and this request is paid for from usage credits. */
+  fundedByUsageCredits?: boolean;
 }
 
 /**
@@ -489,11 +491,48 @@ async function readPlanLimitResetAt(
   return rollingResetAt(usage.oldestAt, window.hours);
 }
 
+const ROLLING_LIMIT_NAMES: ReadonlyMap<string, string> = new Map([
+  ['session_limit', 'Your 5-hour usage limit'],
+  ['weekly_limit', 'Your weekly usage limit'],
+  ['flagship_weekly_limit', 'Your weekly limit for the most capable models'],
+]);
+
+/**
+ * Purchased credits change what a rolling-limit refusal can honestly offer: an
+ * account that has them switched on has spent them, and one that holds them
+ * switched off can keep going by turning them on.
+ */
+async function withUsageCreditsState(
+  error: ManagedUsageRequestError,
+  decision: string,
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<ManagedUsageRequestError> {
+  const limitName = ROLLING_LIMIT_NAMES.get(decision);
+  if (!limitName) return error;
+  const credits = await getSpendableCredits(db, userId);
+  let message: string | null = null;
+  if (credits.overageEnabled) {
+    message = `${limitName} is reached and your usage credits do not cover this message. Buy more credits to keep going, or wait for the limit to reset.`;
+  } else if ((credits.availableMicrousd ?? 0) > 0) {
+    message = `${limitName} is reached. Turn on usage credits in Settings > Billing to keep going with the credits you bought, or wait for the limit to reset.`;
+  }
+  if (message === null) return error;
+  const refined = new ManagedUsageRequestError(message, error.status, error.code);
+  refined.limitContext = error.limitContext;
+  return refined;
+}
+
 async function planLimitRefusal(
   decision: string,
   input: { db: DatabaseAdapter; userId: string; planTier: string; model: string | undefined },
 ): Promise<ManagedUsageRequestError> {
-  const error = reservationError(decision);
+  const error = await withUsageCreditsState(
+    reservationError(decision),
+    decision,
+    input.db,
+    input.userId,
+  );
   const window = PLAN_LIMIT_WINDOWS.get(decision);
   if (!window) return error;
   try {
@@ -736,9 +775,34 @@ export async function reserveManagedUsageRequest(
     provider: input.provider,
     model: input.model,
     routeId: buildRouteId(input.provider, input.model),
+    fundedByUsageCredits:
+      input.funding === 'extra_usage' ||
+      (await reservedOnUsageCredits(input.db, input.userId, idempotencyKey)),
     ...(input.quotaFeature ? { quotaFeature: input.quotaFeature } : {}),
     ...(input.attribution ? { attribution: input.attribution } : {}),
   };
+}
+
+async function reservedOnUsageCredits(
+  db: DatabaseAdapter,
+  userId: string,
+  idempotencyKey: string,
+): Promise<boolean> {
+  try {
+    const [row] = await db.query<{ is_overage: boolean | null }>(
+      `select is_overage from public.managed_usage_requests
+        where user_id = $1 and idempotency_key = $2
+        limit 1`,
+      [userId, idempotencyKey],
+    );
+    return row?.is_overage === true;
+  } catch (error) {
+    logger.warn(
+      { error, userId, idempotencyKey },
+      'Whether usage credits fund this request could not be read; no notice is sent',
+    );
+    return false;
+  }
 }
 
 export async function reserveManagedUsageProviderStep(
