@@ -2352,6 +2352,9 @@ importers:
 
   packages/platform/utils:
     dependencies:
+      '@agiworkforce/cloud-contracts':
+        specifier: workspace:*
+        version: link:../../contracts/cloud-contracts
       '@agiworkforce/local-runtime-contract':
         specifier: workspace:*
         version: link:../../contracts/local-runtime
