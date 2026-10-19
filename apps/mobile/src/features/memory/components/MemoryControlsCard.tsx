@@ -3,6 +3,7 @@ import { Brain, LockKeyhole, MessageSquareText, Sparkles } from 'lucide-react-na
 import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
 import { Text } from '@/components/ui/text';
 import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
+import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
@@ -108,6 +109,9 @@ export function MemoryControlsCard({
             ? 'Memory is off. This device will not read or add memories, and new account memories are no longer generated from your chats. Existing entries stay on your account until you delete them.'
             : 'Memory is off. Nothing is read or added while it stays off. Existing entries stay on this device until you delete them.'}
       </Text>
+      <View style={{ marginTop: -8, marginBottom: 8 }}>
+        <HelpArticleLink docId="memory" label="How memory works" />
+      </View>
     </View>
   );
 }
