@@ -1250,6 +1250,9 @@ async function targetSignatureFor(
 
 interface ActionTargetSignatures {
   targetSignature: string | null;
+  // An element's label and position say nothing about which page it is on: a
+  // single-page app can route to a same-labelled button in the same place.
+  documentUrl?: string | null;
   sourceSignature?: string | null;
   destinationSignature?: string | null;
   historyTarget?: cdp.HistoryNavigationTarget | null;
@@ -1300,7 +1303,8 @@ async function actionTargetSignatures(
       navigationUrl: await runOwnedOperation(options, () => getTabUrl(tabId)),
     };
   const targetSignature = await targetSignatureFor(tabId, toolName, args, options);
-  if (toolName !== 'drag' && toolName !== 'swipe') return { targetSignature };
+  const documentUrl = await runOwnedOperation(options, () => getTabUrl(tabId));
+  if (toolName !== 'drag' && toolName !== 'swipe') return { targetSignature, documentUrl };
   const signature = async (prefix: string): Promise<string | null> => {
     try {
       return await runOwnedOperation(options, () =>
@@ -1313,6 +1317,7 @@ async function actionTargetSignatures(
   };
   return {
     targetSignature,
+    documentUrl,
     sourceSignature: await signature('start'),
     destinationSignature: await signature('end'),
   };
