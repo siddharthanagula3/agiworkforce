@@ -324,6 +324,18 @@ describe('Credits Balance API', () => {
         expect(data.credits.has_usage_remaining).toBe(false);
       });
 
+      it('states no credits left on a paid plan whose credit period never opened', async () => {
+        vi.mocked(CreditService.getBalance).mockResolvedValue(null);
+
+        const request = new NextRequest('http://localhost/api/llm/v1/credits/balance', {
+          headers: { Authorization: 'Bearer valid-token' },
+        });
+
+        const data = await (await GET(request)).json();
+        expect(data.credits.usage_allocation).toBe('pending');
+        expect(data.credits.remaining_credits).toBe(0);
+      });
+
       it('uses the rolling Free daily snapshot when no paid ledger exists', async () => {
         vi.mocked(SubscriptionService.getSubscription).mockResolvedValue({
           ...mockSubscription,

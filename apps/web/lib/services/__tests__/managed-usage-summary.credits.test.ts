@@ -142,6 +142,27 @@ describe('managed usage summary, stated in credits', () => {
     expect(summary.effective_plan_tier).toBe('pro');
   });
 
+  it('leaves nothing to spend in a month whose credit period never opened, as the gate does', async () => {
+    mockResolveEffectiveSubscription.mockResolvedValue(subscription('max_15x'));
+    mockGetBalance.mockResolvedValue({
+      account_id: '',
+      credits_allocated_microusd: 0,
+      credits_used_microusd: 0,
+      credits_remaining_microusd: 0,
+      period_start: '',
+      period_end: '',
+    });
+
+    const summary = await getManagedUsageSummary(db, 'user-1');
+
+    expect(summary.usage_allocation).toBe('pending');
+    expect(summary.has_usage_remaining).toBe(false);
+    expect(summary.credits?.monthly).toMatchObject({
+      allowance: MANAGED_USAGE_LIMITS.max_15x.monthlyCredits,
+      remaining: 0,
+    });
+  });
+
   it('states the entitled tier beside the subscription row tier when the row has lapsed', async () => {
     mockResolveEffectiveSubscription.mockResolvedValue({
       ...subscription('pro'),

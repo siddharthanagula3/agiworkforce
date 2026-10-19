@@ -290,6 +290,36 @@ describe('UsageSection stated in credits', () => {
     expect(screen.getAllByText(/Used 400 of 2,000 credits · 1,600 left/).length).toBeGreaterThan(0);
   });
 
+  it('says the billing period has not opened instead of showing an unspent allowance', async () => {
+    stubUsageApi({
+      summary: () =>
+        answer({
+          ...proSummary({ monthly: { ...creditWindow(2_000, 0), remaining: 0 } }),
+          usage_percentage: 0,
+          has_usage_remaining: false,
+          usage_allocation: 'pending',
+          period_start: null,
+          period_end: null,
+          usage_reset_at: null,
+        }),
+      limits: () => answer(monthlyLimits()),
+      history: () => FAILED,
+    });
+    renderSection();
+
+    await screen.findByText(managedUsageBucketLabel('session'));
+    expect(
+      screen
+        .getAllByRole('status')
+        .some(
+          (node) =>
+            node.textContent ===
+            'Usage for your current billing period is not available yet, because your plan has not renewed on your account. Check your plan in Billing.',
+        ),
+    ).toBe(true);
+    expect(screen.queryByText(/2,000 left/)).toBeNull();
+  });
+
   it('keeps the bar fill on the percentage the server sends', async () => {
     stubPro();
     renderSection();
