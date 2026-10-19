@@ -1060,6 +1060,24 @@ impl AgentSession {
         Ok(())
     }
 
+    /// A Managed session stays on the account for a model its plan runs; the
+    /// model id alone names a provider and would ask for that provider's key.
+    pub fn switch_model_by_name(&mut self, model: &str) -> Result<()> {
+        self.switch_model_on(model, &models::AccountRoute::load())
+    }
+
+    fn switch_model_on(&mut self, model: &str, account: &models::AccountRoute) -> Result<()> {
+        if self.privacy_mode == PrivacyMode::Managed
+            && self.provider_privacy_mode() == PrivacyMode::Managed
+            && account.runs_managed(model)
+        {
+            self.model = model.to_string();
+            self.provider = models::Provider::ManagedCloud;
+            return Ok(());
+        }
+        self.switch_model(model)
+    }
+
     /// Switch to a model discovered from the AGI managed gateway while
     /// preserving the managed trust/billing boundary instead of inferring the
     /// upstream vendor from the model id.
@@ -2693,6 +2711,24 @@ fn provider_privacy_mode(provider: &Provider) -> PrivacyMode {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_typed_model_the_plan_runs_stays_on_the_account() {
+        let catalog = crate::model_catalog::catalog();
+        let cloud = catalog.cloud_models();
+        let (first, second) = (&cloud[0].id, &cloud[1].id);
+        let mut session =
+            AgentSession::new_checked(first, &test_context(), None, Some("managed_cloud"))
+                .expect("managed");
+        assert_eq!(session.provider, models::Provider::ManagedCloud);
+
+        session
+            .switch_model_on(second, &models::AccountRoute::with(true, None))
+            .expect("switch");
+        assert_eq!(&session.model, second);
+        assert_eq!(session.provider, models::Provider::ManagedCloud);
+        assert_eq!(session.privacy_mode, PrivacyMode::Managed);
+    }
 
     #[test]
     fn the_cli_turn_context_never_reads_as_what_the_user_typed() {

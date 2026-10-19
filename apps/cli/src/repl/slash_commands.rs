@@ -118,7 +118,7 @@ pub(super) async fn handle_slash_command(
                      interactive model picker (search + provider sections + effort selector).",
                 );
             } else {
-                match session.switch_model(arg) {
+                match session.switch_model_by_name(arg) {
                     Ok(()) => {
                         let provider = crate::models::provider_name(&session.provider);
                         output::print_info(&format!("Switched to {} ({})", arg, provider));

@@ -4419,7 +4419,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.model_picker.open(&all, &current);
                 SlashResult::SystemMessage(String::new()) // picker UI handles confirmation
             } else {
-                match app.session.switch_model(arg) {
+                match app.session.switch_model_by_name(arg) {
                     Ok(()) => {
                         app.sync_stats();
                         let provider = crate::models::provider_name(&app.session.provider);
