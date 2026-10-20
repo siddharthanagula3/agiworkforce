@@ -65,7 +65,7 @@
     "@e2b/code-interpreter": "^2.8.0",
     "@hookform/resolvers": "^5.9.1",
     "@lezer/highlight": "^1.2.5",
-    "@modelcontextprotocol/client": "2.2.0",
+    "@modelcontextprotocol/client": "2.3.0",
     "@modelcontextprotocol/core": "2.2.0",
     "@modelcontextprotocol/ext-apps": "2.0.3",
     "@neondatabase/serverless": "^1.1.0",
