@@ -167,6 +167,25 @@ export interface ConnectorToolPermissions {
   readonly size: number;
 }
 
+/**
+ * The verdict a call is gated on when it is made. A critical tool asks every
+ * time even when an allow is saved for it; only a grant made for this
+ * conversation, after its own confirmation and for no lower risk than the tool
+ * carries now, lets it run. Every surface that gates a tool call reads it here.
+ */
+export function decisionTimeConnectorLevel(
+  permissions: ConnectorToolPermissions,
+  qualifiedName: string,
+  risk: ToolApprovalRiskTier,
+): ConnectorToolPermissionLevel | undefined {
+  if (permissions.isDenied(qualifiedName)) return 'deny';
+  const level = permissions.levelFor(qualifiedName);
+  if (permissions.isSessionGranted?.(qualifiedName)) {
+    return permissions.isSessionGranted(qualifiedName, risk) ? level : 'ask';
+  }
+  return level === 'allow' && risk === 'critical' ? 'ask' : level;
+}
+
 function levelKey(connectorId: string, toolName: string): string {
   return connectorId + ' ' + toolName;
 }

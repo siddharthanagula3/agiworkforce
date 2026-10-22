@@ -3,6 +3,7 @@ import 'server-only';
 import {
   TOOL_APPROVAL_RISK_TIERS,
   type ToolApprovalDecisionWire,
+  type ToolApprovalReviewWire,
   type ToolApprovalRiskTier,
   isConnectorCategoryToolName,
 } from '@agiworkforce/cloud-contracts';
@@ -168,6 +169,26 @@ export async function revokeConnectorSessionGrants(
     ],
   );
   return removed.length;
+}
+
+/**
+ * What an approval card offers. Only a call the caller found rememberable is
+ * offered for the conversation, and a critical tool is never offered always.
+ */
+export function toolApprovalReviewWire(input: {
+  riskTier: ToolApprovalRiskTier;
+  destructive: boolean;
+  rememberable: boolean;
+}): ToolApprovalReviewWire {
+  return {
+    risk_tier: input.riskTier,
+    destructive: input.destructive,
+    approval_scopes: [
+      'once',
+      ...(input.rememberable ? ['session' as const] : []),
+      ...(input.rememberable && input.riskTier !== 'critical' ? ['always' as const] : []),
+    ],
+  };
 }
 
 export interface ScopedToolApproval extends ConnectorToolSessionGrant {

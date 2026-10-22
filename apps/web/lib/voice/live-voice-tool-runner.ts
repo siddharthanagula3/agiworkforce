@@ -11,18 +11,29 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventToolCategory } from '@agiworkforce/types/protocol';
 import {
+  decisionTimeConnectorLevel,
   loadConnectorToolPermissions,
   withoutStandingApprovals,
 } from '@/app/api/llm/v1/chat/completions/lib/connector-tool-permissions';
+import {
+  managedConversationGrantScope,
+  toolApprovalReviewWire,
+} from '@/app/api/llm/v1/chat/completions/lib/connector-tool-session-grants';
 import { resolveToolCallGate } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import {
   applyToolResultSecretPolicy,
   canonicalToolSummary,
   executeOfferedToolCall,
+  loadMcpToolDefs,
   recordToolCallAudit,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
-import { policyAutoApprovesTool } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
+import {
+  isDestructiveToolMetadata,
+  policyAutoApprovesTool,
+  resolveToolMetadata,
+  toolRiskTier,
+} from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import {
   markConversationGoogleUserData,
   readsGoogleUserData,
@@ -144,7 +155,13 @@ async function runOfficeFile(
   });
   if (!persisted.ok) return { content: 'The Office file could not be saved.', isError: true };
   return {
-    files: [{ name: persisted.file.file_name, uri: persisted.file.uri }],
+    files: [
+      {
+        name: persisted.file.file_name,
+        uri: persisted.file.uri,
+        ...(persisted.file.mime_type ? { mimeType: persisted.file.mime_type } : {}),
+      },
+    ],
     content: JSON.stringify({
       ok: true,
       verification: generated.verification,
@@ -255,6 +272,7 @@ async function runSandboxTool(
   const files = (result.generatedFiles ?? []).map((file) => ({
     name: file.file_name,
     uri: file.uri,
+    ...(file.mime_type ? { mimeType: file.mime_type } : {}),
   }));
   return {
     content:
@@ -311,12 +329,20 @@ export async function handleLiveVoiceToolCall(
   const args = parseArguments(call.arguments);
   if (!args) return { status: 'completed', output: MESSAGE.malformed, isError: true };
 
-  const [toolApprovalPolicy, savedPermissions, temporaryChat] = await Promise.all([
+  const [toolApprovalPolicy, temporaryChat, operatorTools] = await Promise.all([
     loadToolApprovalPolicy(input.db, input.userId),
-    loadConnectorToolPermissions(input.db, input.userId, input.organizationId),
     conversationIsTemporary(input),
+    parseQualifiedToolName(call.name) ? loadMcpToolDefs() : Promise.resolve([]),
   ]);
+  const savedPermissions = await loadConnectorToolPermissions(
+    input.db,
+    input.userId,
+    input.organizationId,
+    managedConversationGrantScope(input.conversationId, temporaryChat),
+  );
   const permissions = temporaryChat ? withoutStandingApprovals(savedPermissions) : savedPermissions;
+  const annotations = operatorTools.find((tool) => tool.qualifiedName === call.name)?.annotations;
+  const riskTier = toolRiskTier(call.name, annotations);
   const approvalMode = input.offeredTools.some(
     (name) =>
       parseQualifiedToolName(name) !== null || !policyAutoApprovesTool(toolApprovalPolicy, name),
@@ -326,7 +352,7 @@ export async function handleLiveVoiceToolCall(
   const gate = resolveToolCallGate(
     {
       qualifiedName: call.name,
-      savedLevel: permissions.levelFor(call.name),
+      savedLevel: decisionTimeConnectorLevel(permissions, call.name, riskTier),
       batchIntroducesUntrustedContent: false,
     },
     {
@@ -351,6 +377,11 @@ export async function handleLiveVoiceToolCall(
         name: call.name,
         summary: canonicalToolSummary(call.name, toolCategory(call.name), args),
         input: inputPreview(args),
+        review: toolApprovalReviewWire({
+          riskTier,
+          destructive: isDestructiveToolMetadata(resolveToolMetadata(call.name, annotations)),
+          rememberable: false,
+        }),
       },
     };
   }

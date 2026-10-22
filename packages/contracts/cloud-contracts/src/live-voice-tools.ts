@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
 import { MAX_AGIWORK_GOAL_CHARS } from './cloud-agent-runs';
+import { ToolApprovalReviewWireSchema } from './tool-approval-resume';
 
 export const LIVE_VOICE_TOOL_DECISIONS = ['approved', 'rejected'] as const;
 export const LIVE_VOICE_TOOL_ARGUMENTS_MAX_CHARS = 65_536;
@@ -18,11 +19,13 @@ export const LiveVoiceToolApprovalSchema = z.object({
   name: z.string().min(1).max(128),
   summary: z.string().min(1).max(500),
   input: z.string().max(LIVE_VOICE_TOOL_INPUT_PREVIEW_MAX_CHARS).nullable(),
+  review: ToolApprovalReviewWireSchema.optional(),
 });
 
 export const LiveVoiceToolFileSchema = z.object({
   name: z.string().min(1).max(500),
   uri: z.string().min(1).max(2_048),
+  mimeType: z.string().min(1).max(255).optional(),
 });
 export type LiveVoiceToolFile = z.infer<typeof LiveVoiceToolFileSchema>;
 

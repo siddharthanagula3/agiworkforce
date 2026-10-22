@@ -352,11 +352,13 @@ import {
   type ToolCallGate,
 } from './tool-call-gate';
 import {
+  decisionTimeConnectorLevel,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissionLevel,
   type ConnectorToolPermissions,
 } from './connector-tool-permissions';
+import { toolApprovalReviewWire } from './connector-tool-session-grants';
 import { persistRoutingDecisionOutcome } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import {
   DEFAULT_TOOL_APPROVAL_POLICY,
@@ -3700,47 +3702,35 @@ export async function* runToolLoop(
     : (options.connectorPermissions ?? EMPTY_CONNECTOR_TOOL_PERMISSIONS);
   const toolApprovalPolicy = options.toolApprovalPolicy ?? DEFAULT_TOOL_APPROVAL_POLICY;
 
-  // A critical tool asks every time even when an allow is saved for it; only a
-  // grant made for this conversation, after its own confirmation and for no lower
-  // risk than the tool carries now, lets it run.
   function decisionTimeLevel(qualifiedName: string): ConnectorToolPermissionLevel | undefined {
-    if (connectorPermissions.isDenied(qualifiedName)) return 'deny';
-    const level = connectorPermissions.levelFor(qualifiedName);
-    const risk = toolRiskTier(
+    return decisionTimeConnectorLevel(
+      connectorPermissions,
       qualifiedName,
-      mcpTools.find((tool) => tool.qualifiedName === qualifiedName)?.annotations,
+      toolRiskTier(
+        qualifiedName,
+        mcpTools.find((tool) => tool.qualifiedName === qualifiedName)?.annotations,
+      ),
     );
-    if (connectorPermissions.isSessionGranted?.(qualifiedName)) {
-      return connectorPermissions.isSessionGranted(qualifiedName, risk) ? level : 'ask';
-    }
-    return level === 'allow' && risk === 'critical' ? 'ask' : level;
   }
 
   // A grant for the conversation or for always only changes anything for a
   // connector tool the gate would otherwise ask about; under the lethal-trifecta
-  // escalation a saved allow still asks, so offering one there would mislead. A
-  // critical tool asks every time whatever is saved, so it is never offered always.
+  // escalation a saved allow still asks, so offering one there would mislead.
   function toolApprovalReview(qualifiedName: string, gate: ToolCallGate): ToolApprovalReviewWire {
     const annotations = mcpTools.find((tool) => tool.qualifiedName === qualifiedName)?.annotations;
-    const risk = toolRiskTier(qualifiedName, annotations);
-    const rememberable =
-      parseQualifiedToolName(qualifiedName) !== null &&
-      mcpTools.some(
-        (tool) => tool.qualifiedName === qualifiedName && tool.origin === 'connector',
-      ) &&
-      gate.reason !== 'lethal_trifecta' &&
-      processed.conversationIsTemporary !== true &&
-      connectorPermissions.canRememberApproval?.(qualifiedName) === true &&
-      connectorPermissions.sessionGrantsAvailable === true;
-    return {
-      risk_tier: risk,
+    return toolApprovalReviewWire({
+      riskTier: toolRiskTier(qualifiedName, annotations),
       destructive: isDestructiveToolMetadata(resolveToolMetadata(qualifiedName, annotations)),
-      approval_scopes: [
-        'once',
-        ...(rememberable ? ['session' as const] : []),
-        ...(rememberable && risk !== 'critical' ? ['always' as const] : []),
-      ],
-    };
+      rememberable:
+        parseQualifiedToolName(qualifiedName) !== null &&
+        mcpTools.some(
+          (tool) => tool.qualifiedName === qualifiedName && tool.origin === 'connector',
+        ) &&
+        gate.reason !== 'lethal_trifecta' &&
+        processed.conversationIsTemporary !== true &&
+        connectorPermissions.canRememberApproval?.(qualifiedName) === true &&
+        connectorPermissions.sessionGrantsAvailable === true,
+    });
   }
 
   const privateContextPresent = hasPrivateContext(processed, messages);
