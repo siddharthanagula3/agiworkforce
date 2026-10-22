@@ -119,6 +119,9 @@ describe('AttachmentMenu, live visual session', () => {
     await waitFor(() => expect(getDisplayMedia).toHaveBeenCalled());
     expect(getUserMedia).not.toHaveBeenCalled();
     expect(screen.getByRole('dialog', { name: 'Live screen' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Live screen' }).className).toContain(
+      'bg-[var(--scrim)]',
+    );
   });
 
   it('marks the source live only once it is actually capturing', async () => {

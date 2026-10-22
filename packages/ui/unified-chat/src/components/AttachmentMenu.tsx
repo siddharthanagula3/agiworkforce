@@ -12,6 +12,7 @@ import {
   GitBranch,
   Sparkles,
   Plug,
+  Puzzle,
   BookOpen,
   Globe,
   Terminal,
@@ -261,7 +262,7 @@ function CameraCaptureOverlay({
       role="dialog"
       aria-modal="true"
       aria-label="Take a photo"
-      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-[var(--scrim)] p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -439,7 +440,7 @@ function LiveVisualOverlay({
       role="dialog"
       aria-modal="true"
       aria-label={LIVE_SOURCE_TITLE[source]}
-      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black/70 p-4"
+      className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-[var(--scrim)] p-4"
       onClick={(event) => {
         if (event.target === event.currentTarget) onClose();
       }}
@@ -804,6 +805,18 @@ export function AttachmentMenu({
                 window.dispatchEvent(
                   new CustomEvent('chat:action', {
                     detail: { type: 'open-settings', tab: 'connectors' },
+                  }),
+                );
+                onOpenChange(false);
+              }}
+            />
+            <MenuItem
+              icon={<Puzzle size={15} />}
+              label="Add plugins…"
+              onClick={() => {
+                window.dispatchEvent(
+                  new CustomEvent('chat:action', {
+                    detail: { type: 'open-settings', tab: 'plugins' },
                   }),
                 );
                 onOpenChange(false);

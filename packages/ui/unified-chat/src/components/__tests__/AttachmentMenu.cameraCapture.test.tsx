@@ -73,6 +73,15 @@ describe('AttachmentMenu, webcam capture', () => {
     expect(screen.getByRole('dialog', { name: 'Take a photo' })).toBeTruthy();
   });
 
+  it('dims the page behind the camera with the shared scrim token', async () => {
+    renderMenu(vi.fn());
+    fireEvent.click(screen.getByRole('button', { name: 'Take a photo' }));
+
+    const overlay = await screen.findByRole('dialog', { name: 'Take a photo' });
+    expect(overlay.className).toContain('bg-[var(--scrim)]');
+    expect(overlay.className).not.toContain('bg-black');
+  });
+
   it('delivers the captured frame to the host sink as a compressed JPEG File', async () => {
     const onScreenshot = vi.fn();
     const drawImage = vi.fn();
