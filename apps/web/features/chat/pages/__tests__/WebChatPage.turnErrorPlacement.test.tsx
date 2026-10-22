@@ -252,6 +252,34 @@ function openStalledTurn(sentAgoMs: number): void {
   ]);
 }
 
+const ASSISTANT_MESSAGE_ID = '00000000-0000-4000-8000-0000000009c2';
+const IMAGE_FAILURE = /Image generation did not finish/;
+
+function openFailedImageTurn(metadata: Record<string, unknown> = {}): void {
+  openStalledTurn(120_000);
+  useChatStore.getState().setActiveConversationWithMessages(CONVERSATION_ID, [
+    {
+      id: USER_MESSAGE_ID,
+      role: 'user',
+      content: 'draw a lighthouse at dusk',
+      createdAt: new Date(Date.now() - 120_000).toISOString(),
+    },
+    {
+      id: ASSISTANT_MESSAGE_ID,
+      role: 'assistant',
+      content: 'Image generation failed: The provider is unavailable.',
+      createdAt: new Date().toISOString(),
+      metadata: {
+        toolType: 'image-generation',
+        imageGenPrompt: 'a lighthouse at dusk',
+        imageGenAspect: '1:1',
+        errorCode: 'image_generation_failed',
+        ...metadata,
+      },
+    },
+  ]);
+}
+
 function noticeFor(text: string | RegExp): HTMLElement {
   const alert = screen.getByText(text).closest('[role="alert"]');
   if (!(alert instanceof HTMLElement)) throw new Error('turn error notice is not an alert');
@@ -330,5 +358,29 @@ describe('WebChatPage turn error notice placement', () => {
     render(<WebChatPage />);
 
     expect(screen.queryByText(EMPTY_RESPONSE)).toBeNull();
+  });
+
+  it('names an image generation failure and links to the status page beside retry', () => {
+    openFailedImageTurn();
+
+    render(<WebChatPage />);
+
+    const notice = noticeFor(IMAGE_FAILURE);
+    const status = notice.querySelector('a');
+    expect(status).not.toBeNull();
+    expect(status).toHaveTextContent('Status');
+    expect(status).toHaveAttribute('href', '/status');
+    expect(notice.querySelector('button[aria-label="Retry this image"]')).not.toBeNull();
+    expect(notice.querySelector('button[aria-label="Retry this turn"]')).toBeNull();
+  });
+
+  it('keeps the status link but holds retry while the provider asked to wait', () => {
+    openFailedImageTurn({ imageRetryAt: new Date(Date.now() + 60_000).toISOString() });
+
+    render(<WebChatPage />);
+
+    const notice = noticeFor(IMAGE_FAILURE);
+    expect(notice.querySelector('a[href="/status"]')).not.toBeNull();
+    expect(notice.querySelector('button[aria-label="Retry this image"]')).toBeNull();
   });
 });

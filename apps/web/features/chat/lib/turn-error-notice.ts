@@ -36,11 +36,20 @@ export function isStoppedTurn(message: ChatMessage | undefined | null): boolean 
  * Distinct from streamError (additive mid-stream failure with partial content)
  * and refusal, it gets an explicit "didn't complete" affordance with Retry.
  */
+export const IMAGE_GENERATION_FAILED_CODE = 'image_generation_failed';
+
+export function isImageGenerationFailure(message: ChatMessage | undefined | null): boolean {
+  if (message?.role !== 'assistant' || message.isStreaming) return false;
+  const errorCode = (message.metadata as { errorCode?: unknown } | undefined)?.errorCode;
+  return errorCode === IMAGE_GENERATION_FAILED_CODE;
+}
+
 export function isIncompleteTurn(message: ChatMessage | undefined | null): boolean {
   if (!message) return false;
   if (message.role === 'user') return true;
   if (message.role !== 'assistant') return false;
   if (message.error) return true;
+  if (isImageGenerationFailure(message)) return true;
   return (message.metadata as { truncated?: unknown } | undefined)?.truncated === true;
 }
 
@@ -221,8 +230,14 @@ function causeMessage(cause: IncompleteTurnCause): string {
   return translateUi('errors', `turn.cause.${cause}`, INCOMPLETE_TURN_MESSAGE_BY_CAUSE[cause]);
 }
 
+const IMAGE_GENERATION_FAILED_MESSAGE =
+  'Image generation did not finish. Check the status page for an outage, or retry.';
+
 function incompleteTurnCauseMessage(message: ChatMessage | undefined | null): string {
   if (message?.role === 'user') return causeMessage('emptyResponse');
+  if (isImageGenerationFailure(message)) {
+    return translateUi('errors', 'turn.imageGeneration', IMAGE_GENERATION_FAILED_MESSAGE);
+  }
 
   const errorCode = (message?.metadata as { errorCode?: unknown } | undefined)?.errorCode;
   const cause =

@@ -294,7 +294,11 @@ import { AgiWorkAutonomyNotice } from '../components/work-session/AgiWorkAutonom
 import { AGI_WORK_LABEL } from '../lib/agi-work';
 import { resolveTurnFailureNotice } from '../lib/turn-failure-notice';
 import { useTurnErrorNotice } from '../hooks/use-turn-error-notice';
-import { turnNeedsTwoFactor } from '../lib/turn-error-notice';
+import {
+  IMAGE_GENERATION_FAILED_CODE,
+  isImageGenerationFailure,
+  turnNeedsTwoFactor,
+} from '../lib/turn-error-notice';
 import { TranscriptNotice } from '../components/messages/TranscriptNotice';
 import { ApprovalInbox } from '../components/approvals/ApprovalInbox';
 import { hasPendingApproval } from '../lib/pending-approval';
@@ -330,6 +334,7 @@ import { CONNECTORS } from '@/features/connectors/data/connectors';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
 import { CreateProjectDialog } from '../components/dialogs/CreateProjectDialog';
 import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
+import Link from 'next/link';
 import { toast } from 'sonner';
 import { safeClipboard } from '@shared/utils/browser-utils';
 import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
@@ -487,6 +492,7 @@ const NEW_CHAT_SEND_GUARD_KEY = '__new_conversation__';
 
 /** Placeholder title every lazily created chat conversation starts with. */
 const NEW_CHAT_TITLE = 'New Chat';
+const STATUS_PAGE_HREF = '/status';
 /** Placeholder titles the image / video harnesses create their conversation with. */
 const IMAGE_GENERATION_TITLE = 'Image generation';
 const VIDEO_GENERATION_TITLE = 'Video generation';
@@ -508,6 +514,21 @@ const SERVER_TITLE_READ_DELAYS_MS = [0, 1200, 3000] as const;
 
 const CLIENT_FALLBACK_TITLE_LENGTH = 60;
 const OPEN_CONVERSATION_REFRESH_MIN_GAP_MS = 2_000;
+
+function failedImageRetryRequest(
+  metadata: MessageMetadata | undefined,
+  nowMs: number,
+): ImageRevisionRequest | null {
+  const prompt = metadata?.imageGenPrompt;
+  if (!prompt) return null;
+  const retryAtMs = metadata.imageRetryAt ? Date.parse(metadata.imageRetryAt) : Number.NaN;
+  if (Number.isFinite(retryAtMs) && retryAtMs > nowMs) return null;
+  return {
+    prompt,
+    aspectRatio: (metadata.imageGenAspect as ImageAspectRatio | undefined) ?? 'auto',
+    ...(metadata.imageGenModel ? { modelId: metadata.imageGenModel } : {}),
+  };
+}
 
 function clientFallbackTitle(firstUserContent: string): string {
   return firstUserContent.trim().slice(0, CLIENT_FALLBACK_TITLE_LENGTH).replace(/\n/g, ' ');
@@ -2765,15 +2786,15 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             usage: managedUsageSummary,
           })
         : null;
-      const content = paywall
-        ? ''
-        : apiError?.code === IMAGE_GENERATION_CANCELLED_CODE
-          ? raw
-          : `Image generation failed: ${raw}`;
-      const metadata = imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
-        ...(paywall ? { paywall } : {}),
-        ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
-      });
+      const cancelled = apiError?.code === IMAGE_GENERATION_CANCELLED_CODE;
+      const content = paywall ? '' : cancelled ? raw : `Image generation failed: ${raw}`;
+      const metadata: MessageMetadata = {
+        ...imageGenerationFailureMetadata(readMessageMetadata(conversationId, msgId), {
+          ...(paywall ? { paywall } : {}),
+          ...(apiError?.resetAt ? { retryAt: apiError.resetAt } : {}),
+        }),
+        errorCode: paywall || cancelled ? undefined : IMAGE_GENERATION_FAILED_CODE,
+      };
       updateMessage(
         msgId,
         {
@@ -3128,6 +3149,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             imageGenPrompt: opts.prompt,
             imageGenAspect: requestedAspect,
             imageRetryAt: undefined,
+            errorCode: undefined,
             ...((generatedImage?.model ?? requestedModel)
               ? { imageGenModel: generatedImage?.model ?? requestedModel }
               : {}),
@@ -6256,6 +6278,19 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     isLoading: isLoading && !isStreaming,
     turnError: turnFailureNotice.placement === 'inline' ? turnFailureNotice.message : null,
   });
+  const imageFailureRetry =
+    lastChatMessage && isImageGenerationFailure(lastChatMessage)
+      ? failedImageRetryRequest(lastChatMessage.metadata, Date.now())
+      : undefined;
+  const retryFailedImage = (messageId: string, request: ImageRevisionRequest) => {
+    const conversationId = displayedConversationId;
+    handleRegenerateImageInPlace(messageId, request).catch((error: unknown) => {
+      const failed = conversationId
+        ? readMessageMetadata(conversationId, messageId)?.errorCode === IMAGE_GENERATION_FAILED_CODE
+        : false;
+      if (!failed) toast.error(toUserMessage(error, 'The image could not be retried. Try again.'));
+    });
+  };
   const turnErrorNoticeElement =
     turnErrorNotice && lastChatMessage ? (
       <TranscriptNotice
@@ -6264,25 +6299,49 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         icon={CircleAlert}
         className="mb-2"
         message={turnErrorNotice}
-        {...(turnNeedsTwoFactor(lastChatMessage)
+        {...(imageFailureRetry !== undefined
           ? {
               actionSlot: (
-                <button
-                  type="button"
-                  onClick={() => openSettings('security')}
+                <Link
+                  href={STATUS_PAGE_HREF}
                   className="flex min-h-6 shrink-0 items-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11"
                 >
-                  Turn on two-factor
-                </button>
+                  Status
+                </Link>
               ),
             }
-          : {})}
-        action={{
-          label: 'Retry',
-          ariaLabel: 'Retry this turn',
-          icon: RefreshCw,
-          onClick: () => void handleRegenerateMessage(lastChatMessage.id),
-        }}
+          : turnNeedsTwoFactor(lastChatMessage)
+            ? {
+                actionSlot: (
+                  <button
+                    type="button"
+                    onClick={() => openSettings('security')}
+                    className="flex min-h-6 shrink-0 items-center rounded-md px-2 py-1 font-medium text-foreground underline-offset-2 transition-colors hover:bg-muted hover:underline pointer-coarse:min-h-11"
+                  >
+                    Turn on two-factor
+                  </button>
+                ),
+              }
+            : {})}
+        {...(imageFailureRetry === undefined
+          ? {
+              action: {
+                label: 'Retry',
+                ariaLabel: 'Retry this turn',
+                icon: RefreshCw,
+                onClick: () => void handleRegenerateMessage(lastChatMessage.id),
+              },
+            }
+          : imageFailureRetry
+            ? {
+                action: {
+                  label: 'Retry',
+                  ariaLabel: 'Retry this image',
+                  icon: RefreshCw,
+                  onClick: () => retryFailedImage(lastChatMessage.id, imageFailureRetry),
+                },
+              }
+            : {})}
       />
     ) : null;
 

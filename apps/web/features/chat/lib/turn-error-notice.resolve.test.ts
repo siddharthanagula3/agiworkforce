@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import type { ChatMessage } from '@agiworkforce/unified-chat';
-import { resolveTurnErrorNotice } from './turn-error-notice';
+import {
+  IMAGE_GENERATION_FAILED_CODE,
+  isImageGenerationFailure,
+  resolveTurnErrorNotice,
+} from './turn-error-notice';
 
 const REPORTED = 'Could not start the conversation.';
 
@@ -23,6 +27,38 @@ function resolve(overrides: Partial<Parameters<typeof resolveTurnErrorNotice>[0]
     ...overrides,
   });
 }
+
+const IMAGE_FAILURE =
+  'Image generation did not finish. Check the status page for an outage, or retry.';
+
+function imageTurn(errorCode: string | undefined, extra: Partial<ChatMessage> = {}): ChatMessage {
+  return message({
+    content: 'Image generation failed: The provider is unavailable.',
+    metadata: {
+      toolType: 'image-generation',
+      imageGenPrompt: 'a lighthouse at dusk',
+      ...(errorCode ? { errorCode } : {}),
+    },
+    ...extra,
+  } as Partial<ChatMessage>);
+}
+
+describe('image generation failures', () => {
+  it('names image generation and points at the status page', () => {
+    expect(resolve({ lastMessage: imageTurn(IMAGE_GENERATION_FAILED_CODE) })).toBe(IMAGE_FAILURE);
+    expect(isImageGenerationFailure(imageTurn(IMAGE_GENERATION_FAILED_CODE))).toBe(true);
+  });
+
+  it('stays quiet for an image that was stopped, refused by a paywall or is still running', () => {
+    expect(resolve({ lastMessage: imageTurn(undefined) })).toBeNull();
+    expect(
+      resolve({ lastMessage: imageTurn(IMAGE_GENERATION_FAILED_CODE, { isStreaming: true }) }),
+    ).toBeNull();
+    expect(
+      isImageGenerationFailure(imageTurn(IMAGE_GENERATION_FAILED_CODE, { isStreaming: true })),
+    ).toBe(false);
+  });
+});
 
 describe('resolveTurnErrorNotice', () => {
   it('states the reported send failure as soon as the turn fails', () => {
