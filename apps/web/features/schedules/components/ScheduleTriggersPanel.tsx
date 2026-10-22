@@ -6,7 +6,9 @@ import {
   MANAGED_CLOUD_TRIGGERS_PATH,
   ManagedCloudEventTriggerCreatedResponseSchema,
   ManagedCloudEventTriggerListResponseSchema,
+  ManagedCloudEventTriggerSigningSecretResponseSchema,
   managedCloudTriggerPath,
+  managedCloudTriggerSigningSecretPath,
   managedCloudTriggersForTaskPath,
   managedCloudTriggerWatchPath,
 } from '@agiworkforce/cloud-contracts';
@@ -14,6 +16,7 @@ import { CONNECTORS_COMING_SOON_LABEL } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { apiErrorMessage } from '@/shared/utils/api-error';
+import { safeClipboard } from '@/shared/utils/browser-utils';
 import {
   GITHUB_TRIGGER_EVENT_TYPES,
   GMAIL_TRIGGER_EVENT_TYPES,
@@ -37,6 +40,7 @@ interface ScheduleTriggersPanelProps {
 
 interface CreatedTriggerSecrets {
   triggerId: string;
+  regenerated: boolean;
   verificationCode: string | null;
   signingSecret: string | null;
   webhookPath: string;
@@ -102,6 +106,25 @@ const SOURCE_LABELS: Record<TriggerSource, string> = {
 
 const FIELD_CLASS = 'text-xs text-muted-foreground';
 
+function absoluteEndpoint(webhookPath: string): string {
+  return typeof window === 'undefined'
+    ? webhookPath
+    : new URL(webhookPath, window.location.origin).toString();
+}
+
+function signedWebhookExampleCurl(endpoint: string, signingSecret: string): string {
+  return [
+    'ts=$(date +%s)',
+    `body='{"id":"evt_1","type":"example.created","data":{}}'`,
+    `sig=$(printf '%s.%s' "$ts" "$body" | openssl dgst -sha256 -hmac '${signingSecret}' | sed 's/^.* //')`,
+    `curl -X POST '${endpoint}' \\`,
+    `  -H 'content-type: application/json' \\`,
+    `  -H "x-agi-timestamp: $ts" \\`,
+    `  -H "x-agi-signature: sha256=$sig" \\`,
+    `  -d "$body"`,
+  ].join('\n');
+}
+
 function mailboxWatchNotice(trigger: EventTrigger): string | null {
   if (trigger.source !== 'gmail') return null;
   if (trigger.watchError) return trigger.watchError;
@@ -136,6 +159,8 @@ export default function ScheduleTriggersPanel({
   } | null>(null);
   const [savingConditions, setSavingConditions] = useState(false);
   const [watching, setWatching] = useState<string | null>(null);
+  const [regenerating, setRegenerating] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
   const { confirm, dialog } = useConfirmAction();
 
   const selected = SOURCES.find((entry) => entry.value === source)!;
@@ -192,8 +217,10 @@ export default function ScheduleTriggersPanel({
         throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
       }
       const created = ManagedCloudEventTriggerCreatedResponseSchema.parse(body);
+      setCopied(false);
       setSecrets({
         triggerId: created.trigger.id,
+        regenerated: false,
         verificationCode: created.verificationCode,
         signingSecret: created.signingSecret,
         webhookPath: created.webhookPath,
@@ -276,6 +303,50 @@ export default function ScheduleTriggersPanel({
     }
   }
 
+  function regenerateSecret(trigger: EventTrigger) {
+    confirm({
+      title: `Regenerate the signing secret for “${trigger.name}”?`,
+      description:
+        'Every sender using the current secret stops working at once: its events are rejected ' +
+        `and no longer start ${scheduleName}. The URL stays the same. The new secret is shown ` +
+        'once, and the old one cannot be restored.',
+      confirmLabel: 'Regenerate secret',
+      destructive: true,
+      onConfirm: async () => {
+        setRegenerating(trigger.id);
+        setError(null);
+        try {
+          const response = await fetch(managedCloudTriggerSigningSecretPath(trigger.id), {
+            method: 'POST',
+            headers: await addCsrfHeaders({}),
+          });
+          const body = await response.json().catch(() => null);
+          if (!response.ok) {
+            throw new Error(apiErrorMessage(body, `Request failed (${response.status})`));
+          }
+          const rotated = ManagedCloudEventTriggerSigningSecretResponseSchema.parse(body);
+          setCopied(false);
+          setSecrets({
+            triggerId: rotated.trigger.id,
+            regenerated: true,
+            verificationCode: null,
+            signingSecret: rotated.signingSecret,
+            webhookPath: rotated.webhookPath,
+          });
+          await load();
+        } catch (rotateError) {
+          setError(toUserMessage(rotateError, 'Could not regenerate the signing secret.'));
+        } finally {
+          setRegenerating(null);
+        }
+      },
+    });
+  }
+
+  async function copyExample(example: string) {
+    setCopied(await safeClipboard.writeText(example));
+  }
+
   async function remove(trigger: EventTrigger) {
     confirm({
       title: `Delete the ${SOURCE_LABELS[trigger.source]} trigger “${trigger.name}”?`,
@@ -334,11 +405,47 @@ export default function ScheduleTriggersPanel({
       ) : null}
 
       {secrets ? (
-        <div className="mt-3 space-y-1 rounded-lg border border-border bg-muted/30 p-3 text-xs">
-          <p className="font-medium text-foreground">Shown once. Copy what you need now.</p>
-          <p className="break-all">Endpoint: {secrets.webhookPath}</p>
+        <div
+          role="status"
+          className="mt-3 space-y-2 rounded-lg border border-border bg-muted/30 p-3 text-sm"
+        >
+          <p className="font-medium text-foreground">
+            {secrets.regenerated
+              ? 'New signing secret. The previous one no longer works. Shown once.'
+              : 'Shown once. Copy what you need now.'}
+          </p>
+          <p className="break-all">Endpoint: {absoluteEndpoint(secrets.webhookPath)}</p>
           {secrets.signingSecret ? (
             <p className="break-all font-mono">Signing secret: {secrets.signingSecret}</p>
+          ) : null}
+          {secrets.signingSecret ? (
+            <details>
+              <summary className="cursor-pointer font-medium text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+                Example request
+              </summary>
+              <pre className="mt-2 overflow-x-auto whitespace-pre rounded-md border border-border bg-background p-2 font-mono text-sm">
+                {signedWebhookExampleCurl(
+                  absoluteEndpoint(secrets.webhookPath),
+                  secrets.signingSecret,
+                )}
+              </pre>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={() =>
+                  void copyExample(
+                    signedWebhookExampleCurl(
+                      absoluteEndpoint(secrets.webhookPath),
+                      secrets.signingSecret ?? '',
+                    ),
+                  )
+                }
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </Button>
+            </details>
           ) : null}
           {secrets.verificationCode ? (
             <p className="break-all font-mono">
@@ -527,6 +634,19 @@ export default function ScheduleTriggersPanel({
                   >
                     Conditions
                   </Button>
+                  {trigger.source === 'connector' ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={regenerating === trigger.id}
+                      aria-busy={regenerating === trigger.id}
+                      onClick={() => regenerateSecret(trigger)}
+                    >
+                      {regenerating === trigger.id ? <Spinner size="sm" /> : null}
+                      Regenerate secret
+                    </Button>
+                  ) : null}
                   <Switch
                     checked={trigger.isEnabled}
                     onCheckedChange={(checked) => void setEnabled(trigger, checked)}
