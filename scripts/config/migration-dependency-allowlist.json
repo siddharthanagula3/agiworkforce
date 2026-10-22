@@ -220,6 +220,11 @@
       "file": "apps/web/lib/services/deletion-manifest.ts",
       "migration": 369,
       "reason": "Classifies the artifact_comments table(s) that 0369 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0369 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/spend-limit-service.ts",
+      "migration": 378,
+      "reason": "Reads personal_spend_limits and personal_overage_spent_microusd that 0378 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0378 is applied."
     }
   ]
 }
