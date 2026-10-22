@@ -108,6 +108,7 @@ import {
 import { uploadProjectKnowledgeFile } from '@features/projects/services/project-knowledge-upload';
 import { useLocalPersonalContextPrefetch } from '@features/chat/lib/local-personal-context';
 import { conversationHoldsLocalTurns } from '@features/chat/lib/local-turn';
+import { CHATS_AND_TASKS_ROUTE } from '@features/chat/components/ChatsAndTasksList';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -6397,6 +6398,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     setMobileNavOpen(false);
     handleOpenSearch();
   }, [handleOpenSearch]);
+  const handleSidebarOpenAllChats = useCallback(() => {
+    setMobileNavOpen(false);
+    router.push(CHATS_AND_TASKS_ROUTE);
+  }, [router]);
   const handleSidebarOpenUsage = useCallback(() => {
     setMobileNavOpen(false);
     openSettings('usage');
@@ -6434,6 +6439,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     onOpenCode: disabledFeatures.includes('code') ? undefined : handleSidebarOpenCode,
     onToggleCollapse: handleToggleSidebar,
     onOpenSearch: handleSidebarOpenSearch,
+    onOpenAllChats: handleSidebarOpenAllChats,
+    allChatsHref: CHATS_AND_TASKS_ROUTE,
     navItems: sidebarNavItems,
     footerSlot: sidebarFooterSlot,
     collapsedFooterSlot: sidebarCollapsedFooterSlot,
