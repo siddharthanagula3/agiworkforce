@@ -999,6 +999,12 @@
   color: var(--chat-text-muted);
 }
 
+[data-design='agi'] .agi-scene-memory-count .agi-scene-btnrow {
+  flex: 0 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 [data-design='agi'] .agi-scene-panel.agi-scene-editor {
   gap: calc(var(--u) * 16);
   padding: calc(var(--u) * 24);

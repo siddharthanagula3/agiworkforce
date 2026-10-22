@@ -579,6 +579,7 @@ function MemoryControls() {
           <span>{MEMORY_FACTS.length} saved memories</span>
           <span className="agi-scene-btnrow">
             <span className="agi-scene-btn">Import memories</span>
+            <span className="agi-scene-btn">Export memories</span>
             <span className="agi-scene-btn">Manage memories</span>
             <span className="agi-scene-btn" data-danger="true">
               Clear all memories
@@ -668,7 +669,7 @@ export function MemoryScenePreview({
                       <span
                         key={key}
                         className="agi-scene-settings-item"
-                        data-active={key === 'memory' || undefined}
+                        data-active={key === 'personalization' || undefined}
                       >
                         <Icon className="agi-app-icon" />
                         {label}
@@ -1359,7 +1360,7 @@ export function ComposerScenePreview({
                   <FileText className="agi-app-icon agi-app-quiet" />
                   <span>
                     <b>deck-v7.pdf</b>
-                    <i>2.4 MB</i>
+                    <i>PDF · 2.4 MB</i>
                   </span>
                 </span>
                 <span className="agi-scene-attachment-remove">

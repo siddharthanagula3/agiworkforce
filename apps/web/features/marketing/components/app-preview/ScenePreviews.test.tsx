@@ -126,6 +126,9 @@ vi.mock('@/features/projects/components/ProjectMemoryPanel', () => ({
 vi.mock('@/features/projects/components/ProjectDefaultModelField', () => ({
   ProjectDefaultModelField: () => null,
 }));
+vi.mock('@/features/projects/components/ProjectChatDefaultsField', () => ({
+  ProjectChatDefaultsField: () => null,
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -474,7 +477,7 @@ describe('memory settings', () => {
     expect(texts(container, '.agi-scene-settings-item')).toEqual(
       WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items.map((item) => item.label)),
     );
-    expect(texts(container, '.agi-scene-settings-item[data-active]')).toEqual(['Memory']);
+    expect(texts(container, '.agi-scene-settings-item[data-active]')).toEqual(['Personalization']);
     expect(container.querySelector('.agi-scene-scrim')).not.toBeNull();
   });
 
@@ -500,6 +503,7 @@ describe('memory settings', () => {
     expect(text(controls, '.agi-scene-memory-count > span')).toBe('5 saved memories');
     expect(texts(controls, '.agi-scene-memory-count .agi-scene-btn')).toEqual([
       'Import memories',
+      'Export memories',
       'Manage memories',
       'Clear all memories',
     ]);
@@ -526,7 +530,7 @@ describe('memory settings', () => {
 
   it('the memory settings still ship what the scene shows', () => {
     expectSource('apps/web/features/settings/sections/MemorySection.tsx', [
-      'Memory\n        </h1>',
+      'Memory\n        </h2>',
       'Facts the assistant should remember about you across conversations. Stored on this device,',
       'and synced to your account across devices when you&apos;re signed in.',
       '<HelpArticleLink docId="memory" label="How memory works" />',
@@ -534,6 +538,7 @@ describe('memory settings', () => {
       "'Allow AGI to remember details across conversations',",
       "other: '{{count}} saved memories',",
       'Import memories',
+      'Export memories',
       'Manage memories',
       'Clear all memories',
       "'Save memories from chats',",
@@ -564,9 +569,12 @@ describe('memory settings', () => {
       '<div ref={paneRef} className="mx-auto w-full max-w-[672px]">',
       "?.scrollIntoView({ block: 'nearest' });",
     ]);
+    expectSource('apps/web/features/settings/sections/PersonalizationSection.tsx', [
+      '<MemorySection />',
+    ]);
     expectSource('apps/web/features/settings/components/web-settings-navigation.ts', [
-      "label: 'Memory',",
-      "{ item: MEMORY_NAV_ITEM, after: 'slack' }",
+      "label: 'Personalization',",
+      "{ item: PERSONALIZATION_NAV_ITEM, after: 'notifications' }",
     ]);
   });
 });
@@ -934,7 +942,7 @@ describe('composer', () => {
   });
 
   it('attachments view shows the chips above the box and no menu', () => {
-    expect(text(attachments, '.agi-scene-attachment-file')).toBe('deck-v7.pdf2.4 MB');
+    expect(text(attachments, '.agi-scene-attachment-file')).toBe('deck-v7.pdfPDF · 2.4 MB');
     expect(attachments.querySelector('.agi-scene-attachment-image')).toHaveAttribute(
       'data-file',
       'screenshot.png',
@@ -969,7 +977,9 @@ describe('composer', () => {
     ]);
     expectSource('apps/web/features/chat/components/Composer/AttachmentPreview.tsx', [
       'return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;',
-      "if (mimeType === 'application/pdf') return FileText;",
+      "const PDF_KIND: DocumentKind = { Icon: FileText, label: 'PDF' };",
+      "if (mimeType === 'application/pdf') return PDF_KIND;",
+      '{`${kindLabel} · ${formatSize(preview.file.size)}`}',
       "'max-w-[180px]',",
       'className="h-14 w-14 overflow-hidden rounded-lg border border-border/50 bg-muted/30"',
       "'absolute -end-1.5 -top-1.5 z-[var(--z-control)]',",
@@ -2349,7 +2359,9 @@ describe('research plan corresponds to the native approval step', () => {
 
     await user.click(assertNativeStartReady(container));
     expect(onStart).toHaveBeenCalledTimes(1);
-    assert.deepEqual(onStart.mock.calls[0], [{ steps, deliverable: DEFAULT_RESEARCH_DELIVERABLE }]);
+    assert.deepEqual(onStart.mock.calls[0], [
+      { steps, deliverable: DEFAULT_RESEARCH_DELIVERABLE, answers: [] },
+    ]);
 
     const illustration = draw(<ResearchScenePreview />);
     const depth = one(
@@ -2373,7 +2385,11 @@ describe('research plan corresponds to the native approval step', () => {
     await user.click(assertNativeStartReady(container));
     expect(onStart).toHaveBeenCalledTimes(2);
     assert.deepEqual(onStart.mock.calls[1], [
-      { steps, deliverable: { ...DEFAULT_RESEARCH_DELIVERABLE, depth: RESEARCH_SCENE_DEPTH } },
+      {
+        steps,
+        deliverable: { ...DEFAULT_RESEARCH_DELIVERABLE, depth: RESEARCH_SCENE_DEPTH },
+        answers: [],
+      },
     ]);
 
     await user.click(within(container).getByTestId('research-plan-cancel'));
