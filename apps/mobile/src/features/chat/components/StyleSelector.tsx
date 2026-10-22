@@ -18,6 +18,7 @@ const STYLE_OPTIONS: Array<{
   { id: 'normal', label: 'Normal', description: 'Your style from Personalization' },
   { id: 'concise', label: 'Concise', description: 'Short, direct answers' },
   { id: 'explanatory', label: 'Explanatory', description: 'Reasoning and context' },
+  { id: 'learning', label: 'Learning', description: 'Step by step, with check-ins' },
   { id: 'formal', label: 'Formal', description: 'Formal register' },
 ];
 

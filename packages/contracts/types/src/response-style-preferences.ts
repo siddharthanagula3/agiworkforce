@@ -1,6 +1,6 @@
 export const MAX_CUSTOM_INSTRUCTIONS_CHARS = 2_000;
 
-export const RESPONSE_STYLES = ['default', 'concise', 'explanatory', 'formal'] as const;
+export const RESPONSE_STYLES = ['default', 'concise', 'explanatory', 'learning', 'formal'] as const;
 export type ResponseStyle = (typeof RESPONSE_STYLES)[number];
 
 export const TECHNICAL_LEVELS = ['unspecified', 'beginner', 'intermediate', 'expert'] as const;
@@ -48,6 +48,8 @@ export const RESPONSE_STYLE_GUIDANCE: Readonly<Record<Exclude<ResponseStyle, 'de
   {
     concise: 'Keep responses short and direct. Lead with the answer.',
     explanatory: 'Explain your reasoning and give context, as if teaching.',
+    learning:
+      'Teach step by step. Start from what the user already knows, explain one idea at a time, and end each step with a short question that checks understanding before moving on.',
     formal: 'Use a formal register. Avoid contractions and casual phrasing.',
   };
 

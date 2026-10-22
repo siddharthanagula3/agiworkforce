@@ -133,6 +133,13 @@ describe('StyleSelector', () => {
     expect(useChatStore.getState().chatStyle).toBe('explanatory');
   });
 
+  it('tapping Learning sets chatStyle to learning', () => {
+    const { getByLabelText } = renderOpenStyleSelector();
+
+    fireEvent.press(getByLabelText('Learning style'));
+    expect(useChatStore.getState().chatStyle).toBe('learning');
+  });
+
   it('tapping Formal sets chatStyle to formal', () => {
     const { getByLabelText } = renderOpenStyleSelector();
 

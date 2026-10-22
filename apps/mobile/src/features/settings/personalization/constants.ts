@@ -11,6 +11,7 @@ export const PERSONALIZATION_STYLES: StyleOption[] = [
   { value: 'default', label: 'Default', description: 'Balanced, adaptive tone' },
   { value: 'concise', label: 'Concise', description: 'Short, to the point' },
   { value: 'explanatory', label: 'Explanatory', description: 'More detail and context' },
+  { value: 'learning', label: 'Learning', description: 'Step by step, with check-ins' },
   { value: 'formal', label: 'Formal', description: 'Professional, precise language' },
 ];
 

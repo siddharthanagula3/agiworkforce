@@ -106,7 +106,7 @@ describe('response style controls on web', () => {
 
     const select = await screen.findByLabelText('Response style');
     const values = Array.from(select.querySelectorAll('option')).map((o) => o.value);
-    expect(values).toEqual(['default', 'concise', 'explanatory', 'formal']);
+    expect(values).toEqual(['default', 'concise', 'explanatory', 'learning', 'formal']);
   });
 
   it('offers all four characteristics', async () => {

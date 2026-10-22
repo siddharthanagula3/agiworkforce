@@ -40,6 +40,7 @@ const STYLE_LABELS: Record<(typeof RESPONSE_STYLES)[number], string> = {
   default: 'Default',
   concise: 'Concise',
   explanatory: 'Explanatory',
+  learning: 'Learning',
   formal: 'Formal',
 };
 const LEVEL_LABELS: Record<(typeof TECHNICAL_LEVELS)[number], string> = {

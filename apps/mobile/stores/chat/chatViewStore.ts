@@ -10,7 +10,7 @@ import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 
 export type ChatMode = 'chat' | 'research' | 'create';
 
-export type ChatStyle = 'normal' | 'concise' | 'explanatory' | 'formal';
+export type ChatStyle = 'normal' | 'concise' | 'explanatory' | 'learning' | 'formal';
 
 const RETIRED_CHAT_STYLES: Readonly<Record<string, ChatStyle>> = {
   detailed: 'explanatory',

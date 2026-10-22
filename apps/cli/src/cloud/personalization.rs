@@ -50,7 +50,7 @@ const FIELDS: &[Field] = &[
         namespace: PERSONALIZATION,
         key: "style",
         label: "Response style",
-        kind: FieldKind::Choice(&["default", "concise", "explanatory", "formal"]),
+        kind: FieldKind::Choice(&["default", "concise", "explanatory", "learning", "formal"]),
     },
     Field {
         name: "technical",
@@ -369,4 +369,16 @@ fn format_terms(terms: &[String]) -> String {
         terms.len(),
         terms.join(", ")
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn response_style_accepts_learning() {
+        let field = FIELDS.iter().find(|field| field.name == "style").unwrap();
+        assert_eq!(validate(field, "learning").unwrap(), json!("learning"));
+        assert!(validate(field, "unknown").is_err());
+    }
 }

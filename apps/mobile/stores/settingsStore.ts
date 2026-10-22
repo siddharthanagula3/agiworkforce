@@ -20,7 +20,7 @@ export function isListArrangement(value: unknown): value is ListArrangement {
   return LIST_ARRANGEMENTS.some((arrangement) => arrangement === value);
 }
 
-export type PersonalizationStyle = 'default' | 'concise' | 'explanatory' | 'formal';
+export type PersonalizationStyle = 'default' | 'concise' | 'explanatory' | 'learning' | 'formal';
 
 export interface Personalization {
   fullName: string;

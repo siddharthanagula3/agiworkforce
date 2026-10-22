@@ -777,6 +777,7 @@ const CHAT_STYLE_PROMPTS: Record<ChatStyle, string | null> = {
   normal: null,
   concise: `Style: Concise. ${RESPONSE_STYLE_GUIDANCE.concise} ${CHAT_STYLE_OVERRIDE}`,
   explanatory: `Style: Explanatory. ${RESPONSE_STYLE_GUIDANCE.explanatory} ${CHAT_STYLE_OVERRIDE}`,
+  learning: `Style: Learning. ${RESPONSE_STYLE_GUIDANCE.learning} ${CHAT_STYLE_OVERRIDE}`,
   formal: `Style: Formal. ${RESPONSE_STYLE_GUIDANCE.formal} ${CHAT_STYLE_OVERRIDE}`,
 };
 

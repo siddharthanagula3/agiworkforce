@@ -83,7 +83,7 @@ describe('renderPersonalizationBlock', () => {
 
   it('encodes the concise style preset', () => {
     const out = renderPersonalizationBlock({ ...NEUTRAL, style: 'concise' });
-    expect(out).toContain('short and to the point');
+    expect(out).toContain('short and direct');
   });
 
   it('encodes the explanatory style preset', () => {
@@ -93,6 +93,11 @@ describe('renderPersonalizationBlock', () => {
 
   it('encodes the formal style preset', () => {
     const out = renderPersonalizationBlock({ ...NEUTRAL, style: 'formal' });
-    expect(out).toContain('professional language');
+    expect(out).toContain('formal register');
+  });
+
+  it('encodes the learning style preset', () => {
+    const out = renderPersonalizationBlock({ ...NEUTRAL, style: 'learning' });
+    expect(out).toContain('Teach step by step');
   });
 });

@@ -311,14 +311,11 @@ function syncToServer(): void {
 const OVERRIDE_PREAMBLE =
   'For this conversation the user chose a response style in the composer. Follow it over any saved response style or length.';
 
-const LEARNING_INSTRUCTION =
-  'Teach step by step. Start from what the user already knows, explain one idea at a time, and end each step with a short question that checks understanding before moving on.';
-
 const STYLE_INSTRUCTIONS: Record<PresetStyle, string> = {
   default: '',
   concise: RESPONSE_STYLE_GUIDANCE.concise,
   explanatory: RESPONSE_STYLE_GUIDANCE.explanatory,
-  learning: LEARNING_INSTRUCTION,
+  learning: RESPONSE_STYLE_GUIDANCE.learning,
   formal: RESPONSE_STYLE_GUIDANCE.formal,
 };
 

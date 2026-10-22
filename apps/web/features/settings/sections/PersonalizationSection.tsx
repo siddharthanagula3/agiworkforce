@@ -30,6 +30,7 @@ const RESPONSE_STYLES = [
   { value: 'default', label: 'Default' },
   { value: 'concise', label: 'Concise' },
   { value: 'explanatory', label: 'Explanatory' },
+  { value: 'learning', label: 'Learning' },
   { value: 'formal', label: 'Formal' },
 ] as const;
 
