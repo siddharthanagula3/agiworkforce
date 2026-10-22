@@ -136,6 +136,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session plugin toggle graph");
     agiworkforce_protocol::developer_session::McpServerListResponse::export_all_to(dir)
         .expect("export developer-session mcp graph");
+    agiworkforce_protocol::developer_session::McpSetEnabledParams::export_all_to(dir)
+        .expect("export developer-session mcp toggle graph");
     agiworkforce_protocol::developer_session::McpLoginParams::export_all_to(dir)
         .expect("export developer-session mcp login params graph");
     agiworkforce_protocol::developer_session::McpLoginResponse::export_all_to(dir)

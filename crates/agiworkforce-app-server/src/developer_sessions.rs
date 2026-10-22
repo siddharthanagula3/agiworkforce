@@ -12,8 +12,8 @@ use agiworkforce_protocol::developer_session::{
     ManagedWorktreeListResponse, ManagedWorktreeSummary, McpAddParams, McpApprovalGrantParams,
     McpApprovalReadParams, McpApprovalRequest, McpLoginParams, McpLoginResponse,
     McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
-    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
-    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
+    McpServerToolsResponse, McpSetEnabledParams, MemoryAddParams, MemoryAddResponse,
+    ModelListParams, PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
     PermissionsRemoveParams, PlanDecideParams, PluginInstallParams, PluginListResponse,
     PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
     ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
@@ -451,6 +451,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported(method::MCP_REMOVE))
     }
 
+    async fn set_mcp_server_enabled(
+        &self,
+        _params: McpSetEnabledParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_SET_ENABLED))
+    }
+
     async fn add_hook(
         &self,
         _params: HookAddParams,
@@ -839,6 +846,7 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     (method::HOOKS_REMOVE, MethodEffect::GrantsTrust),
     (method::MCP_ADD, MethodEffect::GrantsTrust),
     (method::MCP_REMOVE, MethodEffect::GrantsTrust),
+    (method::MCP_SET_ENABLED, MethodEffect::GrantsTrust),
     (method::PERMISSIONS_ADD, MethodEffect::GrantsTrust),
     (method::PERMISSIONS_REMOVE, MethodEffect::GrantsTrust),
     (method::PLAN_DECIDE, MethodEffect::GrantsTrust),
@@ -1670,6 +1678,16 @@ impl DeveloperSessionProcessor {
                 };
                 self.host
                     .remove_mcp_server(params)
+                    .await
+                    .map(serde_json::to_value)
+            }
+            method::MCP_SET_ENABLED => {
+                let params = match parse_params::<McpSetEnabledParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host
+                    .set_mcp_server_enabled(params)
                     .await
                     .map(serde_json::to_value)
             }

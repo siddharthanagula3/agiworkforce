@@ -186,6 +186,7 @@ const capabilitiesSchema = z.object({
   managedWorktrees: z.boolean().optional(),
   threadRename: z.boolean().optional(),
   reasoningEffortLadder: z.boolean().optional(),
+  mcpSetEnabled: z.boolean().optional(),
 });
 
 const worktreeSummarySchema = z.object({
@@ -725,6 +726,7 @@ const mcpServerListResponseSchema = z.object({
           status: mcpServerStatusSchema,
           policyRefusal: z.string().min(1).max(4_096).optional(),
           url: z.string().max(16_384).optional(),
+          disabled: z.boolean().optional(),
         })
         .refine((server) => server.status !== 'blocked' || server.policyRefusal !== undefined, {
           message: 'Blocked MCP servers must explain the workspace policy refusal',
@@ -1901,6 +1903,13 @@ export class LocalRuntimeClient {
     const connection = await this.readyConnection();
     return mcpServerListResponseSchema.parse(
       await connection.request('mcp/add', params),
+    ) as McpServerListResponse;
+  }
+
+  async setMcpServerEnabled(name: string, enabled: boolean): Promise<McpServerListResponse> {
+    const connection = await this.readyConnection();
+    return mcpServerListResponseSchema.parse(
+      await connection.request('mcp/setEnabled', { name, enabled }),
     ) as McpServerListResponse;
   }
 

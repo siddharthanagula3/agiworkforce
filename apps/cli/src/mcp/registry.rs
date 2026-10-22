@@ -196,6 +196,43 @@ impl McpRegistry {
     }
 }
 
+/// Turn a server in the global registry on or off and save the file. Returns
+/// false when it was already in that state; fails for a name the registry
+/// does not hold, such as a server another config file defines.
+pub fn set_server_enabled(name: &str, enabled: bool) -> Result<bool> {
+    set_server_enabled_in(McpRegistry::default_path()?, name, enabled)
+}
+
+pub fn set_server_enabled_in(path: impl Into<PathBuf>, name: &str, enabled: bool) -> Result<bool> {
+    let mut registry = McpRegistry::load_from(path)?;
+    let changed = if enabled {
+        registry.enable(name)?
+    } else {
+        registry.disable(name)?
+    };
+    if changed {
+        registry.save()?;
+    }
+    Ok(changed)
+}
+
+/// The servers the user turned off in the global registry, which discovery
+/// skips because the loader never reads them.
+pub fn disabled_servers() -> Vec<RegistryEntry> {
+    McpRegistry::default_path()
+        .and_then(McpRegistry::load_from)
+        .map(|registry| disabled_entries(&registry))
+        .unwrap_or_default()
+}
+
+fn disabled_entries(registry: &McpRegistry) -> Vec<RegistryEntry> {
+    registry
+        .list()
+        .into_iter()
+        .filter(|row| !row.enabled)
+        .collect()
+}
+
 fn object_section(root: &Value, key: &str) -> Map<String, Value> {
     root.get(key)
         .and_then(Value::as_object)
@@ -432,6 +469,27 @@ mod tests {
         reg.save().unwrap();
         let final_reg = McpRegistry::load_from(&path).unwrap();
         assert!(final_reg.list().is_empty());
+    }
+
+    #[test]
+    fn switching_a_server_off_and_on_saves_only_a_change() {
+        let tmp = tempfile::tempdir().unwrap();
+        let path = tmp.path().join("mcp.json");
+        let mut reg = McpRegistry::load_from(&path).unwrap();
+        let entry = build_server_entry(TransportKind::Stdio, "npx", &[]).unwrap();
+        reg.add("local", entry, false).unwrap();
+        reg.save().unwrap();
+
+        assert!(set_server_enabled_in(&path, "local", false).unwrap());
+        assert!(!set_server_enabled_in(&path, "local", false).unwrap());
+        let off = disabled_entries(&McpRegistry::load_from(&path).unwrap());
+        assert_eq!(off.len(), 1);
+        assert_eq!(off[0].name, "local");
+        assert_eq!(off[0].kind, "stdio");
+
+        assert!(set_server_enabled_in(&path, "local", true).unwrap());
+        assert!(disabled_entries(&McpRegistry::load_from(&path).unwrap()).is_empty());
+        assert!(set_server_enabled_in(&path, "elsewhere", false).is_err());
     }
 
     #[test]

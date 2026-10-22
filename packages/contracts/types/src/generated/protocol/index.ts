@@ -255,6 +255,7 @@ export * from './McpServerScope';
 export * from './McpServerSummary';
 export * from './McpServerTestResponse';
 export * from './McpServerToolsResponse';
+export * from './McpSetEnabledParams';
 export * from './McpStartupCompleteEvent';
 export * from './McpStartupFailure';
 export * from './McpStartupStatus';

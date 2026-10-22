@@ -117,6 +117,18 @@ const V8_RESULTS = {
     ],
   },
   'mcp/login': { name: 'github', status: 'authorized' },
+  'mcp/setEnabled': {
+    servers: [
+      {
+        name: 'github',
+        transport: 'http',
+        scope: 'user',
+        status: 'configured',
+        url: 'https://api.githubcopilot.com/mcp',
+        disabled: true,
+      },
+    ],
+  },
   'hooks/list': {
     hooks: [
       {
@@ -1795,6 +1807,10 @@ describe('LocalRuntimeClient', () => {
     expect((await client.setPluginEnabled('reviewer', false)).plugins[0]?.enabled).toBe(false);
     expect((await client.listMcpServers()).servers[0]?.status).toBe('needs_auth');
     expect(await client.loginMcpServer('github', 5_000)).toMatchObject({ status: 'authorized' });
+    expect((await client.setMcpServerEnabled('github', false)).servers[0]?.disabled).toBe(true);
+    expect(runtime.requests.find((request) => request.method === 'mcp/setEnabled')?.params).toEqual(
+      { name: 'github', enabled: false },
+    );
     expect((await client.listHooks()).hooks[0]?.scope).toBe('user');
     expect((await client.readSettings()).permissionMode).toBe('ask');
     expect((await client.writeSettings({ defaultEffort: 'low' })).defaultEffort).toBe('low');

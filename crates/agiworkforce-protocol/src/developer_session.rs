@@ -105,6 +105,7 @@ pub mod method {
     pub const MCP_AUTH_REQUIRED: &str = "mcp/authRequired";
     pub const MCP_ADD: &str = "mcp/add";
     pub const MCP_REMOVE: &str = "mcp/remove";
+    pub const MCP_SET_ENABLED: &str = "mcp/setEnabled";
     pub const MCP_APPROVAL_READ: &str = "mcp/approval/read";
     pub const MCP_APPROVAL_GRANT: &str = "mcp/approval/grant";
     pub const HOOKS_LIST: &str = "hooks/list";
@@ -482,6 +483,11 @@ pub struct AppServerCapabilities {
     /// xhigh only when this is true.
     #[serde(default, skip_serializing_if = "is_false")]
     pub reasoning_effort_ladder: bool,
+    /// `mcp/setEnabled` turns a user server on or off, and `mcp/list` names
+    /// the user servers that are off. A host without it lists only the
+    /// servers it loads, so a client shows no switch.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mcp_set_enabled: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -2429,6 +2435,17 @@ pub struct McpServerSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub url: Option<String>,
+    /// Turned off by the user: the host keeps its entry but does not load it.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub disabled: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpSetEnabledParams {
+    pub name: String,
+    pub enabled: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -4274,6 +4291,48 @@ mod tests {
             Some(DeveloperReasoningEffort::Xhigh)
         );
         assert_eq!(DeveloperReasoningEffort::parse("ultra"), None);
+    }
+
+    #[test]
+    fn mcp_switches_are_offered_only_by_a_host_that_advertises_them() {
+        let older: AppServerCapabilities = serde_json::from_value(serde_json::json!({
+            "threads": true, "turns": true, "streaming": true, "approvals": true,
+            "tools": true, "mcp": true, "checkpoints": true, "worktrees": true,
+            "models": true
+        }))
+        .unwrap();
+        assert!(!older.mcp_set_enabled);
+        let current = AppServerCapabilities {
+            mcp_set_enabled: true,
+            ..older
+        };
+        assert_eq!(
+            serde_json::to_value(&current).unwrap()["mcpSetEnabled"],
+            serde_json::json!(true)
+        );
+
+        let listed: McpServerListResponse = serde_json::from_value(serde_json::json!({
+            "servers": [{ "name": "a", "transport": "stdio", "scope": "user", "status": "configured" }]
+        }))
+        .unwrap();
+        assert!(!listed.servers[0].disabled);
+        let mut off = listed.servers[0].clone();
+        off.disabled = true;
+        assert_eq!(
+            serde_json::to_value(&off).unwrap()["disabled"],
+            serde_json::json!(true)
+        );
+        assert!(
+            serde_json::to_value(&listed.servers[0])
+                .unwrap()
+                .get("disabled")
+                .is_none()
+        );
+
+        let params: McpSetEnabledParams =
+            serde_json::from_value(serde_json::json!({ "name": "a", "enabled": false })).unwrap();
+        assert_eq!(params.name, "a");
+        assert!(!params.enabled);
     }
 
     #[test]

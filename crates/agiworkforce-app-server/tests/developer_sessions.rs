@@ -18,20 +18,21 @@ use agiworkforce_protocol::developer_session::{
     InitializeParams, InitializeResponse, InstructionFile, InstructionFileKind,
     LocalModelListResponse, LocalModelProvider, LocalModelSummary, ManagedWorktreeCreateParams,
     McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerListResponse,
-    McpServerScope, McpServerSummary, ModelListParams, PendingApprovalSnapshot, PluginListResponse,
-    PluginScope, PluginSetEnabledParams, PluginSummary, ProtocolVersionUnsupportedData,
-    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentParams,
-    SkillConsentResponse, SkillListResponse, SkillSetEnabledParams, SkillSummary,
-    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunParams,
-    SlashCommandRunResponse, SlashCommandSummary, ThreadDeleteParams, ThreadDeleteResponse,
-    ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams,
-    ThreadListParams, ThreadListResponse, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadSideQuestionParams, ThreadSideQuestionResponse, ThreadStartParams, ThreadStartResponse,
-    ThreadStatus, ThreadSummary, ThreadWriterConflictData, TurnInterruptParams, TurnStartParams,
-    TurnStartResponse, TurnStatus, TurnSteerParams, TurnSummary, WorktreeCreateResponse,
-    DEVELOPER_SESSION_PROTOCOL_VERSION, LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
-    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
+    McpServerScope, McpServerSummary, McpSetEnabledParams, ModelListParams,
+    PendingApprovalSnapshot, PluginListResponse, PluginScope, PluginSetEnabledParams,
+    PluginSummary, ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams,
+    SkillCatalogScope, SkillConsentParams, SkillConsentResponse, SkillListResponse,
+    SkillSetEnabledParams, SkillSummary, SlashCommandListResponse, SlashCommandResultKind,
+    SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary, ThreadDeleteParams,
+    ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse,
+    ThreadStartParams, ThreadStartResponse, ThreadStatus, ThreadSummary, ThreadWriterConflictData,
+    TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnStatus, TurnSteerParams,
+    TurnSummary, WorktreeCreateResponse, DEVELOPER_SESSION_PROTOCOL_VERSION,
+    LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION,
+    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use async_trait::async_trait;
 use futures_util::{SinkExt, StreamExt};
@@ -432,6 +433,7 @@ fn capabilities() -> AppServerCapabilities {
         side_question: true,
         thread_rename: true,
         reasoning_effort_ladder: false,
+        mcp_set_enabled: false,
     }
 }
 
@@ -1466,6 +1468,24 @@ impl DeveloperSessionHost for SurfaceHost {
                 status: McpServerConfiguredStatus::NeedsAuth,
                 policy_refusal: None,
                 url: Some("https://api.githubcopilot.com/mcp".to_string()),
+                disabled: false,
+            }],
+        })
+    }
+
+    async fn set_mcp_server_enabled(
+        &self,
+        params: McpSetEnabledParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        Ok(McpServerListResponse {
+            servers: vec![McpServerSummary {
+                name: params.name,
+                transport: "stdio".to_string(),
+                scope: McpServerScope::User,
+                status: McpServerConfiguredStatus::Configured,
+                policy_refusal: None,
+                url: None,
+                disabled: !params.enabled,
             }],
         })
     }
@@ -1716,6 +1736,21 @@ async fn every_v8_method_dispatches_and_returns_its_typed_shape() {
         serde_json::json!("needs_auth")
     );
     serde_json::from_value::<McpServerListResponse>(servers).expect("typed mcp list");
+
+    let switched_off = result_of(
+        processor
+            .process(request(
+                120,
+                method::MCP_SET_ENABLED,
+                serde_json::json!({ "name": "memory", "enabled": false }),
+            ))
+            .await,
+    );
+    assert_eq!(
+        switched_off["servers"][0]["disabled"],
+        serde_json::json!(true)
+    );
+    serde_json::from_value::<McpServerListResponse>(switched_off).expect("typed mcp toggle");
 
     let logged_in = result_of(
         processor

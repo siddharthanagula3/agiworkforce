@@ -27,8 +27,8 @@ use agiworkforce_protocol::developer_session::{
     McpApprovalGrantParams, McpApprovalReadParams, McpApprovalRequest, McpAuthRequiredNotification,
     McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerInspectResponse,
     McpServerListResponse, McpServerParams, McpServerScope, McpServerTestResponse,
-    McpServerToolsResponse, MemoryAddParams, MemoryAddResponse, ModelListParams,
-    PendingApprovalSnapshot, PendingUserInputSnapshot, PermissionRulesResponse,
+    McpServerToolsResponse, McpSetEnabledParams, MemoryAddParams, MemoryAddResponse,
+    ModelListParams, PendingApprovalSnapshot, PendingUserInputSnapshot, PermissionRulesResponse,
     PermissionsAddParams, PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams,
     PlanDecision, PluginInstallParams, PluginListResponse, PluginRemoveParams,
     PluginSetEnabledParams, PluginUpdateResponse, ProviderParams, ProviderSetKeyParams,
@@ -329,6 +329,40 @@ fn approval_for_client(
 
 /// Whether a server to approve is declared by the project's plugins rather
 /// than its MCP file. The user's own servers start without this approval.
+/// Only a server in the user's own registry has a switch: one the workspace's
+/// `.mcp.json` names is changed there, and one a plugin adds goes with it.
+fn set_user_mcp_server_enabled(
+    workspace_root: &Path,
+    params: &McpSetEnabledParams,
+) -> Result<bool, DeveloperSessionHostError> {
+    let origin = crate::mcp::discover_servers(workspace_root)
+        .into_iter()
+        .find(|server| server.name == params.name)
+        .map(|server| server.origin);
+    match origin {
+        Some(crate::mcp::McpServerOrigin::Project) => {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "'{}' comes from this workspace's .mcp.json; turn it off there",
+                params.name
+            )))
+        }
+        Some(crate::mcp::McpServerOrigin::Plugin) => {
+            return Err(DeveloperSessionHostError::conflict(format!(
+                "'{}' comes from a plugin; turn that plugin off instead",
+                params.name
+            )))
+        }
+        Some(crate::mcp::McpServerOrigin::User) | None => {}
+    }
+    crate::mcp::registry::set_server_enabled(&params.name, params.enabled).map_err(|error| {
+        DeveloperSessionHostError::conflict(format!(
+            "'{}' could not be turned {}: {error:#}",
+            params.name,
+            if params.enabled { "on" } else { "off" }
+        ))
+    })
+}
+
 fn approval_from_plugin(scope: McpServerScope) -> Result<bool, DeveloperSessionHostError> {
     match scope {
         McpServerScope::Project => Ok(false),
@@ -955,6 +989,7 @@ impl CliDeveloperSessionHost {
             side_question: true,
             thread_rename: true,
             reasoning_effort_ladder: true,
+            mcp_set_enabled: true,
         }
     }
 
@@ -4814,6 +4849,25 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         Ok(changed)
     }
 
+    async fn set_mcp_server_enabled(
+        &self,
+        params: McpSetEnabledParams,
+    ) -> Result<McpServerListResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let workspace_root = self.workspace_root.clone();
+        let (changed, listed) = tokio::task::spawn_blocking(move || {
+            set_user_mcp_server_enabled(&workspace_root, &params)
+                .map(|changed| (changed, surfaces::list_mcp_servers(&workspace_root)))
+        })
+        .await
+        .map_err(internal_error)??;
+        if changed {
+            self.emit("mcp/changed", serde_json::json!({}));
+            self.reload_integrations().await;
+        }
+        Ok(listed)
+    }
+
     async fn add_hook(
         &self,
         params: HookAddParams,
@@ -8353,6 +8407,7 @@ mod tests {
         let store = tempdir().expect("store");
         let host = boundary_host(workspace.path(), store.path());
         assert!(host.capabilities().reasoning_effort_ladder);
+        assert!(host.capabilities().mcp_set_enabled);
     }
 
     #[test]

@@ -303,10 +303,34 @@ pub fn list_mcp_servers_for(
                     .as_deref()
                     .map(crate::mcp::consent::shown_endpoint),
                 name: server.name,
+                disabled: false,
             }
         })
-        .collect();
-    McpServerListResponse { servers }
+        .collect::<Vec<_>>();
+    McpServerListResponse {
+        servers: with_disabled_servers(servers, crate::mcp::registry::disabled_servers()),
+    }
+}
+
+fn with_disabled_servers(
+    mut servers: Vec<McpServerSummary>,
+    disabled: Vec<crate::mcp::registry::RegistryEntry>,
+) -> Vec<McpServerSummary> {
+    for row in disabled {
+        if servers.iter().any(|server| server.name == row.name) {
+            continue;
+        }
+        servers.push(McpServerSummary {
+            url: (row.kind != "stdio").then(|| crate::mcp::consent::shown_endpoint(&row.target)),
+            transport: row.kind,
+            scope: McpServerScope::User,
+            status: McpServerConfiguredStatus::Configured,
+            policy_refusal: None,
+            name: row.name,
+            disabled: true,
+        });
+    }
+    servers
 }
 
 // ---------------------------------------------------------------------------
@@ -634,6 +658,7 @@ pub fn run_command(
                 .iter()
                 .map(|server| match &server.policy_refusal {
                     Some(reason) => format!("{} (blocked): {reason}", server.name),
+                    None if server.disabled => format!("{} (off)", server.name),
                     None => format!("{} ({})", server.name, server.transport),
                 })
                 .collect::<Vec<_>>()
@@ -1835,5 +1860,52 @@ mod workspace_mcp_refusal_tests {
                 });
             })
         });
+    }
+}
+
+#[cfg(test)]
+mod disabled_server_tests {
+    use super::*;
+    use crate::mcp::registry::RegistryEntry;
+
+    fn listed(name: &str) -> McpServerSummary {
+        McpServerSummary {
+            name: name.to_string(),
+            transport: "stdio".to_string(),
+            scope: McpServerScope::Project,
+            status: McpServerConfiguredStatus::Configured,
+            policy_refusal: None,
+            url: None,
+            disabled: false,
+        }
+    }
+
+    fn off(name: &str, kind: &str, target: &str) -> RegistryEntry {
+        RegistryEntry {
+            name: name.to_string(),
+            enabled: false,
+            kind: kind.to_string(),
+            target: target.to_string(),
+        }
+    }
+
+    #[test]
+    fn servers_the_user_turned_off_are_listed_as_off_user_servers() {
+        let servers = with_disabled_servers(
+            vec![listed("shared")],
+            vec![
+                off("remote", "http", "https://mcp.example.test/v1"),
+                off("local", "stdio", "npx"),
+                off("shared", "stdio", "npx"),
+            ],
+        );
+        let names: Vec<_> = servers.iter().map(|server| server.name.as_str()).collect();
+        assert_eq!(names, ["shared", "remote", "local"]);
+        assert!(!servers[0].disabled);
+        assert!(servers[1].disabled && servers[2].disabled);
+        assert_eq!(servers[1].scope, McpServerScope::User);
+        assert_eq!(servers[1].transport, "http");
+        assert!(servers[1].url.is_some());
+        assert_eq!(servers[2].url, None);
     }
 }

@@ -12,4 +12,8 @@ export type McpServerSummary = {
   status: McpServerConfiguredStatus;
   policyRefusal?: string;
   url?: string;
+  /**
+   * Turned off by the user: the host keeps its entry but does not load it.
+   */
+  disabled?: boolean;
 };

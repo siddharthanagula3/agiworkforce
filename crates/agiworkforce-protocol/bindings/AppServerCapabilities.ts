@@ -103,4 +103,10 @@ export type AppServerCapabilities = {
    * xhigh only when this is true.
    */
   reasoningEffortLadder?: boolean;
+  /**
+   * `mcp/setEnabled` turns a user server on or off, and `mcp/list` names
+   * the user servers that are off. A host without it lists only the
+   * servers it loads, so a client shows no switch.
+   */
+  mcpSetEnabled?: boolean;
 };
