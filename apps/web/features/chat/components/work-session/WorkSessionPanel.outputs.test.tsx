@@ -59,13 +59,17 @@ describe('WorkSessionPanel outputs rail', () => {
     vi.setSystemTime(NOW);
   });
 
-  it('hides every section the run has not filled yet', () => {
+  it('shows Progress, Outputs and Context in their empty states before the run fills them', () => {
     render(<WorkSessionPanel messages={run('running', [])} open onClose={vi.fn()} agiWork />);
 
     expect(screen.getByText('Progress')).toBeVisible();
     expect(screen.getByText('Steps appear here once the session plans its work')).toBeVisible();
-    expect(screen.queryByText('Outputs')).toBeNull();
-    expect(screen.queryByText('Context')).toBeNull();
+    expect(screen.getByText('Outputs')).toBeVisible();
+    expect(
+      screen.getByText('Files this session creates show up here to view and open.'),
+    ).toBeVisible();
+    expect(screen.getByText('Context')).toBeVisible();
+    expect(screen.getByText('Tools and files this session uses show up here.')).toBeVisible();
     expect(screen.queryByText('Sources')).toBeNull();
   });
 
@@ -85,7 +89,9 @@ describe('WorkSessionPanel outputs rail', () => {
     expect(screen.getByText('1/2')).toBeVisible();
     expect(screen.getByText('Read the brief')).toBeVisible();
     expect(screen.getByText('Draft the summary')).toBeVisible();
-    expect(screen.queryByText('Outputs')).toBeNull();
+    expect(
+      screen.getByText('Files this session creates show up here to view and open.'),
+    ).toBeVisible();
   });
 
   it('lists each finished deliverable with its type line and a download control', () => {

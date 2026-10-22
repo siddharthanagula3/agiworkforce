@@ -2,11 +2,13 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  ChartColumn,
   CheckCircle2,
   ChevronRight,
   Circle,
   CircleAlert,
   FileText,
+  Files,
   FolderOpen,
   FolderPlus,
   Globe,
@@ -16,6 +18,7 @@ import {
   Puzzle,
   Sparkles,
   X,
+  type LucideIcon,
 } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import {
@@ -50,9 +53,11 @@ import {
   CHAT_DOCK_FALLBACK_TITLE,
   CHAT_DOCK_PANEL_LABEL,
   TASK_DOCK_ARTIFACTS_LABEL,
+  TASK_DOCK_CONTEXT_EMPTY,
   TASK_DOCK_CONTEXT_LABEL,
   TASK_DOCK_FALLBACK_TITLE,
   TASK_DOCK_LABEL,
+  TASK_DOCK_OUTPUTS_EMPTY,
   TASK_DOCK_OUTPUTS_LABEL,
   TASK_DOCK_PANEL_LABEL,
   TASK_DOCK_PROGRESS_EMPTY,
@@ -250,26 +255,47 @@ function DockDisclosure({
   );
 }
 
+interface DockSectionEmptyState {
+  icon: LucideIcon;
+  caption: string;
+}
+
+function DockEmptyState({ icon: Icon, caption }: DockSectionEmptyState) {
+  return (
+    <div className="flex flex-col items-start gap-2">
+      <span
+        className="flex h-10 w-16 items-center justify-center rounded-xl border border-[var(--chat-border)] text-muted-foreground"
+        aria-hidden="true"
+      >
+        <Icon className="h-5 w-5" strokeWidth={1.5} />
+      </span>
+      <p className="text-sm text-muted-foreground">{caption}</p>
+    </div>
+  );
+}
+
 function DockSection({
   label,
   count,
   actions,
+  empty,
   children,
 }: {
   label: string;
   count: number;
   actions?: React.ReactNode;
+  empty?: DockSectionEmptyState;
   children: React.ReactNode;
 }) {
-  if (count === 0) return null;
+  if (count === 0 && !empty) return null;
   return (
     <DockDisclosure
       label={label}
-      count={count}
+      {...(count > 0 ? { count } : {})}
       actions={actions}
       className="border-t border-[var(--chat-border)]"
     >
-      {children}
+      {count === 0 && empty ? <DockEmptyState {...empty} /> : children}
     </DockDisclosure>
   );
 }
@@ -445,7 +471,7 @@ function TaskDockProgressSection({
         </ol>
       )}
       {showEmptySteps && (
-        <p className="mt-1.5 text-xs text-muted-foreground">{TASK_DOCK_PROGRESS_EMPTY}</p>
+        <p className="mt-1.5 text-sm text-muted-foreground">{TASK_DOCK_PROGRESS_EMPTY}</p>
       )}
     </DockDisclosure>
   );
@@ -620,7 +646,11 @@ export function WorkSessionPanel({
     );
 
   const outputsSection = (
-    <DockSection label={TASK_DOCK_OUTPUTS_LABEL} count={summary.outputs.length}>
+    <DockSection
+      label={TASK_DOCK_OUTPUTS_LABEL}
+      count={summary.outputs.length}
+      {...(agiWork ? { empty: { icon: ChartColumn, caption: TASK_DOCK_OUTPUTS_EMPTY } } : {})}
+    >
       <OutputsList outputs={summary.outputs} />
     </DockSection>
   );
@@ -630,6 +660,7 @@ export function WorkSessionPanel({
       label={TASK_DOCK_CONTEXT_LABEL}
       count={summary.context.length}
       actions={<ContextActions />}
+      {...(agiWork ? { empty: { icon: Files, caption: TASK_DOCK_CONTEXT_EMPTY } } : {})}
     >
       <ul className="space-y-2">
         {summary.context.map((item) => (

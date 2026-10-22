@@ -66,13 +66,14 @@ const AGI_WORK_MODE: CloudWorkMode = 'agiwork';
 const AGI_WORK_RUNNING_PREFIX = 'Working for';
 const AGI_WORK_COMPLETED_PREFIX = 'Worked for';
 const INPUT_WAIT_LABEL = 'Waiting for your input';
+const THINKING_LABEL = 'Thinking';
 
 export interface AgentActivityTimelineProps {
   activity: AgentActivityState;
   /**
-   * The mode the turn was sent in. In AGI Work the collapsed line is a live
-   * elapsed counter rather than the latest step label, which is what both
-   * leaders show for an autonomous run.
+   * The mode the turn was sent in. In AGI Work the collapsed line names the
+   * running step beside a live elapsed counter, which is what both leaders show
+   * for an autonomous run.
    */
   workMode?: CloudWorkMode;
   className?: string;
@@ -288,10 +289,14 @@ function finalSummary(activity: AgentActivityState): string | undefined {
 
 function thinkingLabel(startedAtMs: number, nowMs: number): string {
   const elapsedSeconds = Math.max(0, Math.round((nowMs - startedAtMs) / 1000));
-  return elapsedSeconds > 0 ? `Thinking · ${elapsedSeconds}s` : 'Thinking';
+  return elapsedSeconds > 0 ? `${THINKING_LABEL} · ${elapsedSeconds}s` : THINKING_LABEL;
 }
 
-function labelForActivity(activity: AgentActivityState, nowMs: number): string | undefined {
+function labelForActivity(
+  activity: AgentActivityState,
+  nowMs: number,
+  showThinkingElapsed = true,
+): string | undefined {
   for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
     const entry = activity.entries[index];
     if (!entry) continue;
@@ -308,7 +313,7 @@ function labelForActivity(activity: AgentActivityState, nowMs: number): string |
         return entry.summary || 'Searching the web';
       }
       if (isGenerationProgressEntry(entry) && entry.summary === REASONING_PROGRESS_SUMMARY) {
-        return thinkingLabel(entry.startedAtMs, nowMs);
+        return showThinkingElapsed ? thinkingLabel(entry.startedAtMs, nowMs) : THINKING_LABEL;
       }
       return stepSummary(entry);
     }
@@ -442,6 +447,10 @@ export function buildAgentActivitySummary(
       : collapsedCompletionSummary(activity);
   }
   if (isAgiWork) {
+    const currentStep = labelForActivity(activity, nowMs, false);
+    if (currentStep) {
+      return `${currentStep} · ${formatElapsedDuration(activity.startedAtMs, nowMs)}`;
+    }
     return `${AGI_WORK_RUNNING_PREFIX} ${formatElapsedDuration(activity.startedAtMs, nowMs)}`;
   }
   const liveLabel = labelForActivity(activity, nowMs);

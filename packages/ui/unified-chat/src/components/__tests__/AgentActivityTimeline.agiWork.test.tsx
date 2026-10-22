@@ -1,7 +1,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { AgentActivityTimeline } from '../AgentActivityTimeline';
-import type { AgentActivityState } from '@agiworkforce/client-runtime';
+import { REASONING_PROGRESS_SUMMARY, type AgentActivityState } from '@agiworkforce/client-runtime';
 
 afterEach(cleanup);
 
@@ -50,8 +50,6 @@ function triggerText(): string {
   return screen.getByRole('button', { name: /agent activity/i }).textContent ?? '';
 }
 
-// ChatGPT Work and Claude Cowork both report an autonomous run as elapsed time,
-// not as the latest step label; ours only had the completed half of that.
 describe('AgentActivityTimeline in AGI Work', () => {
   it('counts the run up live, one second at a time, with no spinner glyph', () => {
     vi.useFakeTimers();
@@ -59,7 +57,7 @@ describe('AgentActivityTimeline in AGI Work', () => {
     try {
       render(<AgentActivityTimeline activity={runningRun()} workMode="agiwork" />);
 
-      expect(triggerText()).toContain('Working for 3s');
+      expect(triggerText()).toContain('Searching official sources · 3s');
       expect(
         screen.getByRole('button', { name: /agent activity/i }).querySelector('.animate-spin'),
       ).toBeNull();
@@ -67,7 +65,51 @@ describe('AgentActivityTimeline in AGI Work', () => {
       act(() => {
         vi.advanceTimersByTime(2_000);
       });
-      expect(triggerText()).toContain('Working for 5s');
+      expect(triggerText()).toContain('Searching official sources · 5s');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('falls back to the elapsed counter alone while no step is running', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(4_000);
+    try {
+      const between = runningRun();
+      between.entries = between.entries.slice(0, 2);
+      render(<AgentActivityTimeline activity={between} workMode="agiwork" />);
+
+      expect(triggerText()).toContain('Working for 3s');
+      expect(triggerText()).not.toContain(' · ');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('names a reasoning step without a second elapsed counter', () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(64_000);
+    try {
+      render(
+        <AgentActivityTimeline
+          activity={runningRun({
+            entries: [
+              {
+                kind: 'progress',
+                id: 'progress:generation',
+                progressId: 'generation',
+                summary: REASONING_PROGRESS_SUMMARY,
+                status: 'running',
+                startedAtMs: 4_000,
+              },
+            ],
+          })}
+          workMode="agiwork"
+        />,
+      );
+
+      expect(triggerText()).toContain('Thinking · 1m 3s');
+      expect(triggerText()).not.toMatch(/Thinking · \d+s/);
     } finally {
       vi.useRealTimers();
     }

@@ -31,6 +31,10 @@ export const TASK_DOCK_PROGRESS_LABEL = 'Progress';
 
 export const TASK_DOCK_PROGRESS_EMPTY = 'Steps appear here once the session plans its work';
 
+export const TASK_DOCK_OUTPUTS_EMPTY = 'Files this session creates show up here to view and open.';
+
+export const TASK_DOCK_CONTEXT_EMPTY = 'Tools and files this session uses show up here.';
+
 export const DELIVERABLES_LABEL = 'Files this session produced';
 
 /**

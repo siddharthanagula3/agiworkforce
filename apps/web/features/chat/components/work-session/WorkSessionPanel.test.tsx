@@ -138,6 +138,29 @@ function workMessages(): Message[] {
   ] as unknown as Message[];
 }
 
+function idleRun(): Message[] {
+  return [
+    {
+      id: 'assistant-1',
+      role: 'assistant',
+      content: '',
+      createdAt: '2026-07-30T12:00:01.000Z',
+      metadata: {
+        agentActivity: {
+          schemaVersion: 1,
+          sessionId: 'conv-1',
+          turnId: 'assistant-1',
+          lastSequence: 0,
+          status: 'running',
+          startedAtMs: Date.now(),
+          updatedAtMs: Date.now(),
+          entries: [],
+        },
+      },
+    },
+  ] as unknown as Message[];
+}
+
 function reportArtifact(): Artifact {
   return {
     id: 'artifact-report',
@@ -238,35 +261,61 @@ describe('WorkSessionPanel', () => {
     expect(screen.getByText('Plan the report')).toBeVisible();
   });
 
-  it('shows only progress for a run that has produced nothing yet', () => {
-    const idle = [
-      {
-        id: 'assistant-1',
-        role: 'assistant',
-        content: '',
-        createdAt: '2026-07-30T12:00:01.000Z',
-        metadata: {
-          agentActivity: {
-            schemaVersion: 1,
-            sessionId: 'conv-1',
-            turnId: 'assistant-1',
-            lastSequence: 0,
-            status: 'running',
-            startedAtMs: Date.now(),
-            updatedAtMs: Date.now(),
-            entries: [],
-          },
-        },
-      },
-    ] as unknown as Message[];
+  it('keeps Progress, Outputs and Context with empty states for a run that has produced nothing yet', () => {
+    render(<WorkSessionPanel messages={idleRun()} open onClose={vi.fn()} agiWork />);
 
-    render(<WorkSessionPanel messages={idle} open onClose={vi.fn()} agiWork />);
-
-    expect(screen.queryByText('Outputs')).toBeNull();
-    expect(screen.queryByText('Context')).toBeNull();
+    for (const label of ['Progress', 'Outputs', 'Context']) {
+      const header = screen.getByText(label);
+      expect(header.closest('summary')).not.toBeNull();
+      expect(header.closest('details')).toHaveAttribute('open');
+    }
     expect(screen.queryByText('Sources')).toBeNull();
     expect(screen.getByText(/Working for/)).toBeVisible();
     expect(screen.getByText('Steps appear here once the session plans its work')).toBeVisible();
+    expect(
+      screen.getByText('Files this session creates show up here to view and open.'),
+    ).toBeVisible();
+    expect(screen.getByText('Tools and files this session uses show up here.')).toBeVisible();
+  });
+
+  it('collapses an empty Outputs section like a filled one', () => {
+    render(<WorkSessionPanel messages={idleRun()} open onClose={vi.fn()} agiWork />);
+
+    const header = screen.getByText('Outputs');
+    fireEvent.click(header);
+    expect(header.closest('details')).not.toHaveAttribute('open');
+    expect(
+      screen.getByText('Files this session creates show up here to view and open.'),
+    ).not.toBeVisible();
+  });
+
+  it('still hides empty Outputs and Context in a plain chat dock', () => {
+    render(<WorkSessionPanel messages={idleRun()} open onClose={vi.fn()} />);
+
+    expect(screen.queryByText('Outputs')).toBeNull();
+    expect(screen.queryByText('Context')).toBeNull();
+  });
+
+  it('names the running step beside the elapsed time in the Progress row', () => {
+    const run = idleRun();
+    const activity = run[0]!.metadata!.agentActivity!;
+    activity.startedAtMs = Date.now() - 5_000;
+    activity.entries = [
+      {
+        kind: 'tool',
+        id: 'tool-read',
+        toolCallId: 'call-read',
+        name: 'file_read',
+        category: 'filesystem',
+        summary: 'Reading the brief',
+        status: 'running',
+        startedAtMs: activity.startedAtMs,
+      },
+    ];
+
+    render(<WorkSessionPanel messages={run} open onClose={vi.fn()} agiWork />);
+
+    expect(screen.getByRole('status')).toHaveTextContent(/^Reading the brief · \ds$/);
   });
 
   it('offers a way back to the artifacts half of the shared slot', () => {

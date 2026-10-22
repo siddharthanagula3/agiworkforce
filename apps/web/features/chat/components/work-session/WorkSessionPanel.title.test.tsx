@@ -83,14 +83,14 @@ describe('WorkSessionPanel header (agentic-modes-gap-04)', () => {
     expect(screen.getByRole('heading', { level: 2 }).textContent).toBe(TASK_DOCK_FALLBACK_TITLE);
   });
 
-  it('keeps the work labels and shows only the sections the run has filled', () => {
+  it('keeps the work labels and the three work sections, with Sources only once filled', () => {
     render(<WorkSessionPanel messages={messages(true)} open onClose={vi.fn()} agiWork />);
 
     expect(screen.getByText(AGI_WORK_LABEL)).toBeTruthy();
     expect(screen.getByText(TASK_DOCK_PROGRESS_LABEL)).toBeTruthy();
     expect(screen.queryByText(TASK_DOCK_SOURCES_LABEL)).toBeNull();
-    expect(screen.queryByText(TASK_DOCK_OUTPUTS_LABEL)).toBeNull();
-    expect(screen.queryByText(TASK_DOCK_CONTEXT_LABEL)).toBeNull();
+    expect(screen.getByText(TASK_DOCK_OUTPUTS_LABEL)).toBeTruthy();
+    expect(screen.getByText(TASK_DOCK_CONTEXT_LABEL)).toBeTruthy();
   });
 });
 
