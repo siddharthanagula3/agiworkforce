@@ -172,3 +172,71 @@ describe('AttachmentPreview · image order', () => {
     expect(screen.queryByTestId('attachment-order')).toBeNull();
   });
 });
+
+describe('AttachmentPreview · many documents', () => {
+  function documents(count: number): AttachmentPreviewData[] {
+    return Array.from({ length: count }, (_, index) => ({
+      file: new File(['pdf'], `lecture-${index + 1}.pdf`, { type: 'application/pdf' }),
+      url: `blob:lecture-${index + 1}`,
+      type: 'document' as const,
+    }));
+  }
+
+  it('shows every chip and no toggle while the documents fit', () => {
+    render(<AttachmentPreview previews={documents(4)} onRemove={vi.fn()} />);
+
+    expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'Show all attachments' })).toBeNull();
+  });
+
+  it('collapses the documents past the limit behind a toggle and reveals them on demand', () => {
+    render(<AttachmentPreview previews={documents(6)} onRemove={vi.fn()} />);
+
+    expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(4);
+    expect(screen.queryByRole('button', { name: 'Remove lecture-5.pdf' })).toBeNull();
+
+    const toggle = screen.getByRole('button', { name: 'Show all attachments' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+
+    expect(screen.getAllByRole('button', { name: /^Remove / })).toHaveLength(6);
+    const collapse = screen.getByRole('button', { name: 'Show fewer attachments' });
+    expect(collapse).toHaveAttribute('aria-expanded', 'true');
+    fireEvent.click(collapse);
+    expect(screen.queryByRole('button', { name: 'Remove lecture-6.pdf' })).toBeNull();
+  });
+
+  it('removes a revealed chip by its place in the whole list', () => {
+    const onRemove = vi.fn();
+    render(<AttachmentPreview previews={documents(6)} onRemove={onRemove} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Show all attachments' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove lecture-6.pdf' }));
+
+    expect(onRemove).toHaveBeenCalledWith(5);
+  });
+
+  it('never hides images behind the toggle', () => {
+    const image: AttachmentPreviewData = {
+      file: new File(['png'], 'diagram.png', { type: 'image/png' }),
+      url: 'blob:diagram',
+      type: 'image',
+    };
+    render(<AttachmentPreview previews={[...documents(6), image]} onRemove={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Remove diagram.png' })).toBeInTheDocument();
+  });
+
+  it('keeps a failed upload visible even when its chip is past the limit', () => {
+    const statuses = documents(6).map((_, index) =>
+      index === 5
+        ? { phase: 'failed' as const, error: 'Upload failed' }
+        : { phase: 'ready' as const },
+    );
+    render(<AttachmentPreview previews={documents(6)} statuses={statuses} onRemove={vi.fn()} />);
+
+    expect(screen.getByRole('button', { name: 'Remove lecture-6.pdf' })).toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Upload failed');
+    expect(screen.queryByRole('button', { name: 'Show all attachments' })).toBeNull();
+  });
+});

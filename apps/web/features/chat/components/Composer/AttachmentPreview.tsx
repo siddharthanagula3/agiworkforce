@@ -1,7 +1,15 @@
 'use client';
 
-import { memo } from 'react';
-import { X, FileText, FileSpreadsheet, FileCode, File as FileIcon } from '@agiworkforce/icons';
+import { memo, useState } from 'react';
+import {
+  X,
+  ChevronDown,
+  ChevronUp,
+  FileText,
+  FileSpreadsheet,
+  FileCode,
+  File as FileIcon,
+} from '@agiworkforce/icons';
 import { AnimatePresence, motion } from 'framer-motion';
 import { cn } from '@shared/lib/utils';
 import type { AttachmentPreview as AttachmentPreviewData } from '@features/chat/hooks/use-attachments';
@@ -73,6 +81,9 @@ function documentKind(mimeType: string): DocumentKind {
 }
 
 const IMAGE_ORDER_PREFIX = 'Image ';
+const DOCUMENT_CHIP_LIMIT = 4;
+const SHOW_ALL_LABEL = 'Show all attachments';
+const SHOW_FEWER_LABEL = 'Show fewer attachments';
 
 const itemVariants = {
   initial: { opacity: 0, scale: 0.8, y: 8 },
@@ -304,6 +315,7 @@ function AttachmentPreviewComponent({
   numberImages = false,
   className,
 }: AttachmentPreviewProps) {
+  const [expanded, setExpanded] = useState(false);
   if (previews.length === 0) return null;
   const imageOrder = new Map<number, number>();
   if (numberImages) {
@@ -312,11 +324,21 @@ function AttachmentPreviewComponent({
     });
   }
 
+  const documentIndexes = previews.flatMap((preview, index) =>
+    preview.type === 'image' ? [] : [index],
+  );
+  const collapsible = documentIndexes.length > DOCUMENT_CHIP_LIMIT;
+  const overflowIndexes = new Set(documentIndexes.slice(DOCUMENT_CHIP_LIMIT));
+  const overflowFailed = [...overflowIndexes].some(
+    (index) => statuses?.[index]?.phase === 'failed',
+  );
+  const showingAll = !collapsible || expanded || overflowFailed;
+
   return (
     <div className={cn('flex flex-wrap items-center gap-2 pb-2', className)}>
       <AnimatePresence mode="popLayout">
         {previews.map((preview, index) =>
-          preview.type === 'image' ? (
+          !showingAll && overflowIndexes.has(index) ? null : preview.type === 'image' ? (
             <ImageThumbnail
               key={preview.url}
               preview={preview}
@@ -340,6 +362,21 @@ function AttachmentPreviewComponent({
           ),
         )}
       </AnimatePresence>
+      {collapsible && !overflowFailed && (
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded((open) => !open)}
+          className="flex items-center gap-1 rounded-full px-2 py-1 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+        >
+          {expanded ? SHOW_FEWER_LABEL : SHOW_ALL_LABEL}
+          {expanded ? (
+            <ChevronUp className="h-4 w-4" aria-hidden="true" />
+          ) : (
+            <ChevronDown className="h-4 w-4" aria-hidden="true" />
+          )}
+        </button>
+      )}
     </div>
   );
 }
