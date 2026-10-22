@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0387: website rules per agent
+-- Migration 0388: website rules per agent
 --
 -- Why    : a workspace could limit the sites web search and page fetching
 --          read (0336), and a chat request could narrow them further, but an
