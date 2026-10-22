@@ -9,6 +9,7 @@ import {
 import {
   HOSTED_SETTINGS_NAV_GROUPS,
   WEB_SETTINGS_NAV_GROUPS,
+  WEB_SETTINGS_NAV_PLACEMENTS,
   settingsSectionFromPath,
 } from '../web-settings-navigation';
 
@@ -92,5 +93,55 @@ describe('web settings answer every address from one section list', () => {
       const keys = railKeys(groups);
       expect(new Set(keys).size).toBe(keys.length);
     }
+  });
+});
+
+describe('web settings rail order', () => {
+  const groupKeys = (groups: typeof WEB_SETTINGS_NAV_GROUPS, label: string) =>
+    groups.find((group) => group.label === label)?.items.map((item) => item.key);
+
+  it('lists the Settings group in the reference order', () => {
+    expect(groupKeys(WEB_SETTINGS_NAV_GROUPS, 'Settings')).toEqual([
+      'general',
+      'notifications',
+      'voice',
+      'capabilities',
+      'privacy',
+      'safety',
+      'security',
+      'account',
+      'billing',
+      'usage',
+      'referrals',
+      'team',
+      'reflect',
+      'time-focus',
+      'help',
+    ]);
+  });
+
+  it('keeps Customize after Settings with Memory last', () => {
+    expect(WEB_SETTINGS_NAV_GROUPS.map((group) => group.label)).toEqual(['Settings', 'Customize']);
+    expect(groupKeys(WEB_SETTINGS_NAV_GROUPS, 'Customize')).toEqual([
+      'skills',
+      'connectors',
+      'plugins',
+      'slack',
+      'memory',
+    ]);
+  });
+
+  it('places every web-only item exactly once, right after its anchor', () => {
+    const keys = railKeys(WEB_SETTINGS_NAV_GROUPS);
+    for (const { item, after } of WEB_SETTINGS_NAV_PLACEMENTS) {
+      expect(keys.filter((key) => key === item.key)).toEqual([item.key]);
+      expect(keys[keys.indexOf(item.key) - 1]).toBe(after);
+    }
+  });
+
+  it('keeps the same Settings order when the desktop shell hosts the page', () => {
+    expect(groupKeys(HOSTED_SETTINGS_NAV_GROUPS, 'Settings')).toEqual(
+      groupKeys(WEB_SETTINGS_NAV_GROUPS, 'Settings'),
+    );
   });
 });

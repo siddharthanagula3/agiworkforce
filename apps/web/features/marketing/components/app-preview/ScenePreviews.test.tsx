@@ -566,7 +566,7 @@ describe('memory settings', () => {
     ]);
     expectSource('apps/web/features/settings/components/web-settings-navigation.ts', [
       "label: 'Memory',",
-      'items: [...group.items, MEMORY_NAV_ITEM]',
+      "{ item: MEMORY_NAV_ITEM, after: 'slack' }",
     ]);
   });
 });

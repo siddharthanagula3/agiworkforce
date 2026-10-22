@@ -4,7 +4,7 @@ import {
   SETTINGS_NAV_GROUP_CUSTOMIZE,
   SETTINGS_NAV_GROUP_DESKTOP_APP,
 } from '@agiworkforce/ui';
-import type { SettingsNavGroupResolved, SettingsNavItem } from '@agiworkforce/ui';
+import type { SettingsNavGroupResolved, SettingsNavItem, SettingsNavKey } from '@agiworkforce/ui';
 import { isWebSettingsSection } from '../lib/web-settings-sections';
 
 const MEMORY_NAV_ITEM: SettingsNavItem = {
@@ -21,8 +21,6 @@ const VOICE_NAV_ITEM: SettingsNavItem = {
   keywords: ['speech', 'tts', 'microphone', 'audio', 'dictation'],
 };
 
-const VOICE_NAV_ANCHOR = 'notifications';
-
 const GENERAL_NAV_KEY = 'general';
 
 const GENERAL_NAV_FIELDS: NonNullable<SettingsNavItem['fields']> = [
@@ -30,17 +28,33 @@ const GENERAL_NAV_FIELDS: NonNullable<SettingsNavItem['fields']> = [
   { label: 'Chat text size', keywords: ['font size'] },
 ];
 
+interface WebSettingsNavPlacement {
+  item: SettingsNavItem;
+  after: SettingsNavKey;
+}
+
+export const WEB_SETTINGS_NAV_PLACEMENTS: readonly WebSettingsNavPlacement[] = [
+  { item: VOICE_NAV_ITEM, after: 'notifications' },
+  { item: MEMORY_NAV_ITEM, after: 'slack' },
+];
+
+function placeWebItems(items: SettingsNavItem[]): SettingsNavItem[] {
+  return WEB_SETTINGS_NAV_PLACEMENTS.reduce((placed, { item, after }) => {
+    const anchor = placed.findIndex((entry) => entry.key === after);
+    if (anchor === -1) return placed;
+    return [...placed.slice(0, anchor + 1), item, ...placed.slice(anchor + 1)];
+  }, items);
+}
+
 export const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
-  (group) =>
-    group.label === SETTINGS_NAV_GROUP_CUSTOMIZE
-      ? { ...group, items: [...group.items, MEMORY_NAV_ITEM] }
-      : {
-          ...group,
-          items: group.items.flatMap((item) => {
-            if (item.key === GENERAL_NAV_KEY) return [{ ...item, fields: GENERAL_NAV_FIELDS }];
-            return item.key === VOICE_NAV_ANCHOR ? [item, VOICE_NAV_ITEM] : [item];
-          }),
-        },
+  (group) => ({
+    ...group,
+    items: placeWebItems(
+      group.items.map((item) =>
+        item.key === GENERAL_NAV_KEY ? { ...item, fields: GENERAL_NAV_FIELDS } : item,
+      ),
+    ),
+  }),
 );
 
 /**
