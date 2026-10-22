@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from '@testing-library/react';
+import type { ComponentProps } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { INITIAL_SCHEDULE_DRAFT } from '../lib/schedule-form';
 import type { ScheduleDraft } from '../types';
@@ -18,7 +19,11 @@ vi.mock('@/features/connectors/hooks/use-connectors', async (importOriginal) => 
   }),
 }));
 
-function renderForm(patch: Partial<ScheduleDraft>, onChange = vi.fn()) {
+function renderForm(
+  patch: Partial<ScheduleDraft>,
+  onChange = vi.fn(),
+  agentOptions: ComponentProps<typeof ScheduleForm>['agentOptions'] = [],
+) {
   render(
     <ScheduleForm
       draft={{ ...INITIAL_SCHEDULE_DRAFT, ...patch }}
@@ -28,6 +33,7 @@ function renderForm(patch: Partial<ScheduleDraft>, onChange = vi.fn()) {
       isEdit={false}
       creditsUsed={null}
       modelOptions={[{ value: 'auto', label: 'Auto' }]}
+      agentOptions={agentOptions}
       onChange={onChange}
       onSubmit={vi.fn()}
       onCancel={vi.fn()}
@@ -67,5 +73,27 @@ describe('ScheduleForm end date', () => {
     renderForm({ recurrence: 'once', expiresLocal: '2027-01-31T09:00' });
 
     expect(screen.getByLabelText('End date (optional)')).toHaveValue('2027-01-31T09:00');
+  });
+});
+
+describe('ScheduleForm agent choice', () => {
+  const agents = [
+    { id: 'a1', name: 'Release notes', description: 'Drafts notes from merged work.' },
+    { id: 'a2', name: 'Triage', description: '' },
+  ];
+
+  it('describes the chosen agent in one line under the select', () => {
+    renderForm({ agentId: 'a1' }, vi.fn(), agents);
+
+    const select = screen.getByLabelText('Run as agent');
+    expect(select).toHaveValue('a1');
+    expect(select).toHaveAccessibleDescription(/Drafts notes from merged work\./);
+  });
+
+  it('shows no description line for no agent or an agent without one', () => {
+    renderForm({ agentId: 'a2' }, vi.fn(), agents);
+
+    expect(screen.queryByText('Drafts notes from merged work.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Run as agent')).toHaveAccessibleDescription(/^Each run follows/);
   });
 });

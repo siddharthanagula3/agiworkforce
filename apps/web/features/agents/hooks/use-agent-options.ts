@@ -7,6 +7,7 @@ import { agentsApi, type AgentsApi } from '../services/agents-client';
 export interface AgentOption {
   id: string;
   name: string;
+  description: string;
 }
 
 const NO_OPTIONS: readonly AgentOption[] = [];
@@ -22,7 +23,7 @@ export function useAgentOptions(api: AgentsApi = agentsApi): readonly AgentOptio
         setOptions(
           agents
             .filter((agent) => agent.status === 'active')
-            .map((agent) => ({ id: agent.id, name: agent.name })),
+            .map((agent) => ({ id: agent.id, name: agent.name, description: agent.description })),
         );
       })
       .catch(() => {

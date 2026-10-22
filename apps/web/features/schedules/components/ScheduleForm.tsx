@@ -18,6 +18,7 @@ import { ScheduleAccessFields } from './ScheduleAccessFields';
 export interface ScheduleAgentOption {
   id: string;
   name: string;
+  description?: string;
 }
 
 interface ScheduleFormProps {
@@ -131,6 +132,8 @@ export function ScheduleForm({
   }, [errors]);
 
   const set = (patch: Partial<ScheduleDraft>) => onChange(patch);
+  const selectedAgentDescription =
+    agentOptions.find((agent) => agent.id === draft.agentId)?.description?.trim() ?? '';
   const toggleDay = (day: number) => {
     set({
       daysOfWeek: draft.daysOfWeek.includes(day)
@@ -265,7 +268,11 @@ export function ScheduleForm({
                 className={nativeSelectClass}
                 value={draft.agentId ?? ''}
                 onChange={(event) => set({ agentId: event.target.value || null })}
-                aria-describedby="schedule-agent-helper"
+                aria-describedby={
+                  selectedAgentDescription
+                    ? 'schedule-agent-description schedule-agent-helper'
+                    : 'schedule-agent-helper'
+                }
               >
                 <option value="">No agent</option>
                 {agentOptions.map((agent) => (
@@ -279,6 +286,11 @@ export function ScheduleForm({
                   </option>
                 ) : null}
               </select>
+              {selectedAgentDescription ? (
+                <p id="schedule-agent-description" className="text-sm text-foreground">
+                  {selectedAgentDescription}
+                </p>
+              ) : null}
               <p id="schedule-agent-helper" className="text-xs text-muted-foreground">
                 Each run follows the agent&rsquo;s instructions and files and uses only the tools
                 and connectors it allows.
