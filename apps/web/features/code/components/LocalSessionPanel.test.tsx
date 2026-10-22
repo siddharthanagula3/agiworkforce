@@ -670,7 +670,7 @@ describe('local session approvals', () => {
     const card = within(await screen.findByTestId('local-approval'));
     expect(card.getAllByRole('button').map((button) => button.textContent)).toEqual([
       'Allow once',
-      'Deny',
+      'Deny (Esc)',
     ]);
   });
 

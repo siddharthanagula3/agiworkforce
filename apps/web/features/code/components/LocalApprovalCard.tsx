@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useConfirmAction } from '@agiworkforce/ui';
 import type { DeveloperApprovalDecision } from '@agiworkforce/local-runtime-contract';
 import {
@@ -61,6 +61,32 @@ export function LocalApprovalCard({
     });
   };
 
+  const cardRef = useRef<HTMLDivElement>(null);
+  const denyRef = useRef<() => void>(() => {});
+  denyRef.current = () => {
+    if (!answering) choose('deny');
+  };
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (document.querySelector('[role="dialog"], [role="alertdialog"]')) return;
+      const target = event.target;
+      const inCard = target instanceof Node && cardRef.current?.contains(target);
+      if (!inCard && (waiting > 0 || !(target instanceof HTMLElement) || target.isContentEditable))
+        return;
+      if (
+        !inCard &&
+        target instanceof HTMLElement &&
+        /^(INPUT|TEXTAREA|SELECT)$/.test(target.tagName)
+      )
+        return;
+      event.preventDefault();
+      denyRef.current();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [waiting]);
+
   const facts: string[] = [];
   if (approval.riskLevel) facts.push(LOCAL_APPROVAL_RISK_LABELS[approval.riskLevel]);
   if (approval.reversible === false) facts.push(LOCAL_CODE_COPY.approvalIrreversible);
@@ -68,6 +94,7 @@ export function LocalApprovalCard({
 
   return (
     <div
+      ref={cardRef}
       className={styles['approval']}
       role="group"
       aria-label={LOCAL_CODE_COPY.approvalHeading}
@@ -93,7 +120,9 @@ export function LocalApprovalCard({
               disabled={answering}
               onClick={() => choose(decision)}
             >
-              {LOCAL_APPROVAL_DECISION_LABELS[decision]}
+              {decision === 'deny'
+                ? `${LOCAL_APPROVAL_DECISION_LABELS[decision]} (Esc)`
+                : LOCAL_APPROVAL_DECISION_LABELS[decision]}
             </button>
           ))}
       </div>

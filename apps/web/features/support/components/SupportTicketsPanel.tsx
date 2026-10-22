@@ -146,17 +146,22 @@ function NewTicketForm({
           onChange={(event) => setSubject(event.target.value)}
         />
       </label>
-      <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-foreground">What happened</span>
-        <textarea
-          className={`${FIELD_CLASS} resize-y`}
-          rows={4}
-          value={message}
-          maxLength={MAX_TICKET_MESSAGE_CHARS}
-          disabled={submitting}
-          onChange={(event) => setMessage(event.target.value)}
-        />
-      </label>
+      <div className="flex flex-col gap-1">
+        <label className="flex flex-col gap-1">
+          <span className="text-xs font-medium text-foreground">What happened</span>
+          <textarea
+            className={`${FIELD_CLASS} resize-y`}
+            rows={4}
+            value={message}
+            maxLength={MAX_TICKET_MESSAGE_CHARS}
+            disabled={submitting}
+            onChange={(event) => setMessage(event.target.value)}
+          />
+        </label>
+        <span className="self-end text-sm text-muted-foreground">
+          {message.length} / {MAX_TICKET_MESSAGE_CHARS}
+        </span>
+      </div>
       <div className="flex flex-col gap-2">
         <label className="flex items-start gap-2 text-xs text-foreground">
           <input
@@ -334,17 +339,22 @@ function TicketThreadView({
 
       {canReply ? (
         <form className="flex flex-col gap-2" onSubmit={sendReply}>
-          <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium text-foreground">Reply</span>
-            <textarea
-              className={`${FIELD_CLASS} resize-y`}
-              rows={3}
-              value={reply}
-              maxLength={MAX_TICKET_MESSAGE_CHARS}
-              disabled={busy}
-              onChange={(event) => setReply(event.target.value)}
-            />
-          </label>
+          <div className="flex flex-col gap-1">
+            <label className="flex flex-col gap-1">
+              <span className="text-xs font-medium text-foreground">Reply</span>
+              <textarea
+                className={`${FIELD_CLASS} resize-y`}
+                rows={3}
+                value={reply}
+                maxLength={MAX_TICKET_MESSAGE_CHARS}
+                disabled={busy}
+                onChange={(event) => setReply(event.target.value)}
+              />
+            </label>
+            <span className="self-end text-sm text-muted-foreground">
+              {reply.length} / {MAX_TICKET_MESSAGE_CHARS}
+            </span>
+          </div>
           {ticket.status === 'resolved' ? (
             <p className="text-xs text-muted-foreground">
               This ticket is marked resolved. Replying puts it back in the queue.

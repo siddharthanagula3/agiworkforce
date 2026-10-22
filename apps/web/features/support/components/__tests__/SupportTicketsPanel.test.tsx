@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 vi.mock('@/lib/client/csrf', () => ({ addCsrfHeaders: async () => ({}) }));
 
+import { MAX_TICKET_MESSAGE_CHARS } from '@agiworkforce/cloud-contracts/support';
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 import { SupportTicketsPanel } from '../SupportTicketsPanel';
 
@@ -165,6 +166,18 @@ describe('SupportTicketsPanel', () => {
     const created = JSON.parse(String((mocks.fetch.mock.calls[1]?.[1] as RequestInit).body));
     expect(created.subject).toBe('Billing looks wrong');
     expect(created.diagnostics).toBeTruthy();
+  });
+
+  it('counts the characters typed against the ticket limit', async () => {
+    const user = userEvent.setup();
+    mocks.fetch.mockResolvedValueOnce(jsonResponse({ tickets: [] }));
+    render(<SupportTicketsPanel />);
+
+    await user.click(await screen.findByRole('button', { name: 'Raise a ticket' }));
+    expect(screen.getByText(`0 / ${MAX_TICKET_MESSAGE_CHARS}`)).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: /What happened/ }), 'Charged twice.');
+
+    expect(screen.getByText(`14 / ${MAX_TICKET_MESSAGE_CHARS}`)).toBeInTheDocument();
   });
 
   describe('what a new ticket says about who was told', () => {
