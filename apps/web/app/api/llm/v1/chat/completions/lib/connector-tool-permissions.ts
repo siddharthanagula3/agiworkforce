@@ -317,10 +317,10 @@ export const LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS: ConnectorToolPermissions = 
 };
 
 /**
- * Layers a per-conversation connector opt-out on top of a user's standing
- * allow/ask/deny verdicts. Neither replaces the other: a connector switched
- * off for one chat stays off for that catalog build, while every other
- * conversation keeps reading the saved verdicts unchanged.
+ * Layers a connector opt-out on top of a user's standing allow/ask/deny
+ * verdicts: the connectors the account switched off, and those one chat
+ * switched off. Every tool of a switched-off connector is denied whatever a
+ * per-tool verdict or grant says, while other connectors keep their verdicts.
  */
 export function withDisabledConnectorIds(
   permissions: ConnectorToolPermissions,
@@ -345,6 +345,16 @@ export function withDisabledConnectorIds(
         permissions.isSessionGranted?.(qualifiedName, currentRisk) === true
       );
     },
+    levelFor: (qualifiedName) => {
+      const parsed = parseQualifiedToolName(qualifiedName);
+      return parsed !== null && disabledConnectorIds.has(parsed.serverId)
+        ? 'deny'
+        : permissions.levelFor(qualifiedName);
+    },
+    levelForConnectorTool: (connectorId, toolName) =>
+      disabledConnectorIds.has(connectorId)
+        ? 'deny'
+        : permissions.levelForConnectorTool(connectorId, toolName),
     isConnectorToolDenied: (connectorId, toolName) =>
       disabledConnectorIds.has(connectorId) ||
       permissions.isConnectorToolDenied(connectorId, toolName),
@@ -487,6 +497,34 @@ export async function isLockedDown(db: DatabaseAdapter, userId: string): Promise
   return (await readLockdown(db, userId)) !== false;
 }
 
+export async function readDisabledConnectorIds(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<ReadonlySet<string>> {
+  const rows = await db.query<{ connector_id: string }>(
+    `select connector_id
+       from public.connector_account_states
+      where user_id = $1 and not enabled`,
+    [userId],
+  );
+  return new Set(rows.map((row) => row.connector_id));
+}
+
+async function readAccountDisabledConnectorIds(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<ReadonlySet<string> | null> {
+  try {
+    return await readDisabledConnectorIds(db, userId);
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.message : error, userId },
+      '[connector-permissions] account connector switches unavailable; denying connector tools',
+    );
+    return null;
+  }
+}
+
 export async function loadConnectorToolPermissions(
   db: DatabaseAdapter,
   userId: string,
@@ -497,7 +535,13 @@ export async function loadConnectorToolPermissions(
   // Checked here rather than at each caller: the completions, approve and
   // resume-input routes all resolve permissions through this function, so a
   // route added later inherits lockdown instead of having to remember it.
-  if (await isLockedDown(db, userId)) return LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS;
+  const [lockedDown, disabledConnectorIds] = await Promise.all([
+    isLockedDown(db, userId),
+    readAccountDisabledConnectorIds(db, userId),
+  ]);
+  // A connector the account switched off has to stay off when its state
+  // cannot be read, so a read error denies every connector.
+  if (lockedDown || disabledConnectorIds === null) return LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS;
   let rows: PermissionRow[] = [];
   let standingPermissionsReadable = true;
   try {
@@ -529,12 +573,15 @@ export async function loadConnectorToolPermissions(
     workspaceToolRules(db, organizationId),
   ]);
   const governed = withWorkspaceToolRules(grants ? withSessionGrants(base, grants) : base, rules);
-  return {
-    ...governed,
-    sessionGrantsAvailable: grants !== null && grants !== NO_SESSION_GRANTS,
-    canRememberApproval: (qualifiedName) =>
-      standingPermissionsReadable && governed.canRememberApproval?.(qualifiedName) === true,
-  };
+  return withDisabledConnectorIds(
+    {
+      ...governed,
+      sessionGrantsAvailable: grants !== null && grants !== NO_SESSION_GRANTS,
+      canRememberApproval: (qualifiedName) =>
+        standingPermissionsReadable && governed.canRememberApproval?.(qualifiedName) === true,
+    },
+    disabledConnectorIds,
+  );
 }
 
 async function workspaceToolRules(

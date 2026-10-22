@@ -112,6 +112,7 @@ function permissionDatabase(
 ) {
   const query = vi.fn(async (sql: string) => {
     if (sql.includes('from public.user_settings')) return [{ settings: {} }];
+    if (sql.includes('from public.connector_account_states')) return [];
     if (sql.includes('from public.connector_tool_permissions')) {
       if (options.standingUnavailable) throw new Error('Standing permissions unavailable');
       return [{ connector_id: 'github', tool_name: 'create_issue', level: 'needs-approval' }];

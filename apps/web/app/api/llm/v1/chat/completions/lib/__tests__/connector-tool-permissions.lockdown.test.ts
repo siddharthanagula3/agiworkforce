@@ -17,6 +17,7 @@ function dbReturning(
   permissionsResult: QueryResult | Error = [],
 ): DatabaseAdapter {
   const query = vi.fn(async (sql: string) => {
+    if (sql.includes('connector_account_states')) return [];
     const wantsSettings = sql.includes('user_settings');
     const result = wantsSettings ? settingsResult : permissionsResult;
     if (result instanceof Error) throw result;

@@ -500,3 +500,182 @@ describe('github pull request review setting', () => {
     });
   });
 });
+
+describe('account-wide connector switch', () => {
+  type Call = { url: string; init?: RequestInit };
+
+  function stubAccountFetch(options: {
+    disabled?: string[];
+    accountStateOk?: boolean;
+    putOk?: boolean;
+    customRows?: unknown[];
+  }): Call[] {
+    const calls: Call[] = [];
+    let disabled = [...(options.disabled ?? [])];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown, init?: RequestInit) => {
+        const url = String(input);
+        calls.push({ url, init });
+        if (url.includes('/api/connectors/account-state')) {
+          if (init?.method === 'PUT') {
+            const sent = JSON.parse(String(init.body)) as { connectorId: string; enabled: boolean };
+            if (options.putOk === false)
+              return {
+                ok: false,
+                status: 500,
+                json: async () => ({ error: 'Database unavailable' }),
+              };
+            disabled = sent.enabled
+              ? disabled.filter((id) => id !== sent.connectorId)
+              : [...disabled, sent.connectorId];
+            return { ok: true, status: 200, json: async () => sent };
+          }
+          return options.accountStateOk === false
+            ? { ok: false, status: 503, json: async () => ({}) }
+            : {
+                ok: true,
+                status: 200,
+                json: async () => ({ disabledConnectorIds: disabled }),
+              };
+        }
+        const body = url.includes('/api/connectors/custom')
+          ? { connectors: options.customRows ?? [] }
+          : url.includes('/api/github/installations')
+            ? { installations: [] }
+            : CONNECTED_BODY;
+        return { ok: true, status: 200, json: async () => body };
+      }),
+    );
+    return calls;
+  }
+
+  function notionFooter(): ReactNode {
+    return footerFor({ connected: true, name: 'Notion' }, 'notion');
+  }
+
+  it('shows the connector on when the account has not switched it off', async () => {
+    stubAccountFetch({ disabled: ['github'] });
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    const view = render(<>{notionFooter()}</>);
+    await waitFor(() => {
+      view.rerender(<>{notionFooter()}</>);
+      expect(screen.getByRole('switch', { name: /Notion/ })).toBeEnabled();
+    });
+    expect(screen.getByRole('switch', { name: /Notion/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('shows the connector off when the account switched it off', async () => {
+    stubAccountFetch({ disabled: ['notion'] });
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    const view = render(<>{notionFooter()}</>);
+    await waitFor(() => {
+      view.rerender(<>{notionFooter()}</>);
+      expect(screen.getByRole('switch', { name: /Notion/ })).toBeEnabled();
+    });
+    expect(screen.getByRole('switch', { name: /Notion/ })).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('is not offered before a connector is connected', async () => {
+    stubAccountFetch({});
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    render(<>{footerFor({ connected: false, name: 'Notion' }, 'notion')}</>);
+
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
+  it('saves the switch through the account-state route with the csrf header', async () => {
+    const calls = stubAccountFetch({});
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    const view = render(<>{notionFooter()}</>);
+    await waitFor(() => {
+      view.rerender(<>{notionFooter()}</>);
+      expect(screen.getByRole('switch', { name: /Notion/ })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('switch', { name: /Notion/ }));
+
+    await waitFor(() => {
+      const write = calls.find((call) => call.init?.method === 'PUT');
+      expect(write).toBeDefined();
+      expect(JSON.parse(String(write?.init?.body))).toEqual({
+        connectorId: 'notion',
+        enabled: false,
+      });
+    });
+    const { getCsrfToken } = await import('@/lib/client/csrf');
+    expect(getCsrfToken).toHaveBeenCalled();
+    await waitFor(() => {
+      view.rerender(<>{notionFooter()}</>);
+      expect(screen.getByRole('switch', { name: /Notion/ })).toHaveAttribute(
+        'aria-checked',
+        'false',
+      );
+    });
+  });
+
+  it('switches a directory-installed connector by the id chats use for it', async () => {
+    const calls = stubAccountFetch({
+      customRows: [{ ...LINKED_ROW, shortId: 'sentry1' }],
+    });
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    const sentryFooter = () => footerFor({ connected: true, name: 'Sentry' }, 'io.sentry/mcp');
+    const view = render(<>{sentryFooter()}</>);
+    await waitFor(() => {
+      view.rerender(<>{sentryFooter()}</>);
+      expect(screen.getByRole('switch', { name: /Sentry/ })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('switch', { name: /Sentry/ }));
+
+    await waitFor(() => {
+      const write = calls.find((call) => call.init?.method === 'PUT');
+      expect(JSON.parse(String(write?.init?.body))).toEqual({
+        connectorId: 'custom-sentry1',
+        enabled: false,
+      });
+    });
+  });
+
+  it('keeps the switch on and says so when the write is refused', async () => {
+    stubAccountFetch({ putOk: false });
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    const view = render(<>{notionFooter()}</>);
+    await waitFor(() => {
+      view.rerender(<>{notionFooter()}</>);
+      expect(screen.getByRole('switch', { name: /Notion/ })).toBeEnabled();
+    });
+    fireEvent.click(screen.getByRole('switch', { name: /Notion/ }));
+
+    await waitFor(() => {
+      view.rerender(<>{notionFooter()}</>);
+      expect(screen.getByRole('alert')).toBeVisible();
+    });
+    expect(screen.getByRole('switch', { name: /Notion/ })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('disables the switch and offers a retry when the state cannot be loaded', async () => {
+    const calls = stubAccountFetch({ accountStateOk: false });
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+    await waitFor(() =>
+      expect(calls.some((call) => call.url.includes('/api/connectors/account-state'))).toBe(true),
+    );
+
+    const view = render(<>{notionFooter()}</>);
+    view.rerender(<>{notionFooter()}</>);
+
+    expect(screen.getByRole('switch', { name: /Notion/ })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+  });
+});

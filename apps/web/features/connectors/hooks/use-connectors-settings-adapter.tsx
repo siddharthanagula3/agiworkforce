@@ -1,15 +1,17 @@
 'use client';
 
-import { translateUiPlural } from '@agiworkforce/ui';
+import { Switch, translateUiPlural } from '@agiworkforce/ui';
 import { connectorsReleased } from '@agiworkforce/types';
 import { useCapability } from '@agiworkforce/unified-chat';
 import { useRouter } from 'next/navigation';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { z } from 'zod';
 import {
+  CONNECTOR_ACCOUNT_STATE_PATH,
   CONNECTOR_OAUTH_START_PATH,
   CUSTOM_CONNECTORS_PATH,
   ConnectConflictResponseSchema,
+  ConnectorAccountStateResponseSchema,
   ConnectorConnectionSchema,
   ConnectorOAuthStartResponseSchema,
   CreatedCustomConnectorSchema,
@@ -18,8 +20,10 @@ import {
   ListConnectorsResponseSchema,
   ListCustomConnectorsResponseSchema,
   MANAGED_CLOUD_CONNECTORS_PATH,
+  SetConnectorAccountStateResponseSchema,
   connectorErrorMessage,
   type ConnectRequest,
+  type SetConnectorAccountStateRequest,
   type CreateCustomConnectorRequest,
 } from '@agiworkforce/cloud-contracts';
 import type {
@@ -68,6 +72,13 @@ const GITHUB_PR_REVIEW_LABEL = 'Review pull requests';
 const GITHUB_PR_REVIEW_HINT =
   'When a pull request opens on an account below, AGI reviews it and posts the review as a comment.';
 const GITHUB_PR_REVIEW_FAILED = 'Could not save the pull request review setting.';
+
+export const CONNECTOR_ACCOUNT_SWITCH_TESTID = 'connector-account-switch';
+const CONNECTOR_ACCOUNT_SWITCH_LABEL = 'Use in chats';
+const CONNECTOR_ACCOUNT_SWITCH_HINT = 'When off, AGI cannot use this connector in any chat.';
+const CONNECTOR_ACCOUNT_STATE_UNAVAILABLE =
+  'Whether this connector is on could not be loaded. Retry to change it.';
+const CONNECTOR_ACCOUNT_STATE_SAVE_FAILED = 'Could not save whether this connector is on.';
 
 const TOOL_PERMISSIONS_LABEL = 'Tool permissions';
 const TOOL_PERMISSIONS_HINT = 'Choose when the assistant may use each of this connector’s tools.';
@@ -377,6 +388,12 @@ export function useConnectorsSettingsAdapter({
   const [customConnectors, setCustomConnectors] = useState<ParsedCustomConnectorRow[]>([]);
   const [oauthRedirectUri, setOauthRedirectUri] = useState<string | null>(null);
 
+  const [accountDisabledIds, setAccountDisabledIds] = useState<ReadonlySet<string> | null>(null);
+  const [accountStateNotice, setAccountStateNotice] = useState<string | null>(null);
+  const [accountStatePending, setAccountStatePending] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  );
+
   const [connectorsError, setConnectorsError] = useState<string | null>(null);
   const [connectorsNotice, setConnectorsNotice] = useState<string | null>(null);
   const [githubInstallationsNotice, setGithubInstallationsNotice] = useState<string | null>(null);
@@ -493,6 +510,39 @@ export function useConnectorsSettingsAdapter({
     },
     [authedHeaders],
   );
+
+  const loadAccountState = useCallback(
+    async (signal?: AbortSignal) => {
+      try {
+        const response = await fetch(CONNECTOR_ACCOUNT_STATE_PATH, {
+          credentials: 'include',
+          headers: await authedHeaders(),
+          ...(signal ? { signal } : {}),
+        });
+        const parsed = response.ok
+          ? ConnectorAccountStateResponseSchema.safeParse(await response.json())
+          : null;
+        if (signal?.aborted) return;
+        if (!parsed?.success) {
+          setAccountDisabledIds(null);
+          return;
+        }
+        setAccountDisabledIds(new Set(parsed.data.disabledConnectorIds));
+      } catch {
+        if (!signal?.aborted) setAccountDisabledIds(null);
+      }
+    },
+    [authedHeaders],
+  );
+
+  useEffect(() => {
+    if (!open) return;
+    const controller = new AbortController();
+    void loadAccountState(controller.signal);
+    return () => {
+      controller.abort();
+    };
+  }, [loadAccountState, open]);
 
   useEffect(() => {
     if (!open) return;
@@ -724,6 +774,104 @@ export function useConnectorsSettingsAdapter({
     ],
   );
 
+  const accountStateConnectorId = useCallback(
+    (connectorId: string): string | null => {
+      if (!connectorId.startsWith(CUSTOM_CONNECTOR_ID_PREFIX)) {
+        const linked = customConnectors.find((row) => row.directoryId === connectorId);
+        if (!linked) return connectorId;
+        return linked.shortId ? `${CUSTOM_CONNECTOR_ID_PREFIX}${linked.shortId}` : null;
+      }
+      const row = customConnectors.find(
+        (custom) => `${CUSTOM_CONNECTOR_ID_PREFIX}${custom.id}` === connectorId,
+      );
+      return row?.shortId ? `${CUSTOM_CONNECTOR_ID_PREFIX}${row.shortId}` : null;
+    },
+    [customConnectors],
+  );
+
+  const setConnectorAccountEnabled = useCallback(
+    async (serverId: string, enabled: boolean) => {
+      setAccountStateNotice(null);
+      setAccountStatePending((pending) => new Set(pending).add(serverId));
+      try {
+        const csrfToken = await getCsrfToken();
+        const request: SetConnectorAccountStateRequest = { connectorId: serverId, enabled };
+        const res = await fetch(CONNECTOR_ACCOUNT_STATE_PATH, {
+          method: 'PUT',
+          headers: await authedHeaders({
+            'Content-Type': 'application/json',
+            'x-csrf-token': csrfToken,
+          }),
+          credentials: 'include',
+          body: JSON.stringify(request),
+        });
+        const raw: unknown = await res.json().catch(() => null);
+        const saved = res.ok ? SetConnectorAccountStateResponseSchema.safeParse(raw) : null;
+        if (!saved?.success) {
+          throw new Error(connectorErrorMessage(raw, CONNECTOR_ACCOUNT_STATE_SAVE_FAILED));
+        }
+        setAccountDisabledIds((current) => {
+          const next = new Set(current ?? []);
+          if (saved.data.enabled) next.delete(saved.data.connectorId);
+          else next.add(saved.data.connectorId);
+          return next;
+        });
+      } catch (error) {
+        setAccountStateNotice(toUserMessage(error, CONNECTOR_ACCOUNT_STATE_SAVE_FAILED));
+      } finally {
+        setAccountStatePending((pending) => {
+          const next = new Set(pending);
+          next.delete(serverId);
+          return next;
+        });
+      }
+    },
+    [authedHeaders],
+  );
+
+  const renderAccountSwitch = (connectorId: string, name: string): ReactNode => {
+    const serverId = accountStateConnectorId(connectorId);
+    if (serverId === null) return null;
+    const loaded = accountDisabledIds !== null;
+    const enabled = loaded && !accountDisabledIds.has(serverId);
+    return (
+      <div
+        className="flex flex-col gap-1 rounded-lg border border-border px-3 py-2"
+        data-testid={CONNECTOR_ACCOUNT_SWITCH_TESTID}
+      >
+        <div className="flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-foreground">{CONNECTOR_ACCOUNT_SWITCH_LABEL}</p>
+            <p className="text-sm text-muted-foreground">{CONNECTOR_ACCOUNT_SWITCH_HINT}</p>
+          </div>
+          <Switch
+            aria-label={`${CONNECTOR_ACCOUNT_SWITCH_LABEL}: ${name}`}
+            checked={enabled}
+            disabled={!loaded || accountStatePending.has(serverId)}
+            onCheckedChange={(next) => void setConnectorAccountEnabled(serverId, next)}
+          />
+        </div>
+        {!loaded ? (
+          <div className="flex items-center justify-between gap-3">
+            <p className="text-sm text-muted-foreground">{CONNECTOR_ACCOUNT_STATE_UNAVAILABLE}</p>
+            <button
+              type="button"
+              onClick={() => void loadAccountState()}
+              className="shrink-0 rounded-full border border-border px-3 py-1 text-sm text-foreground transition-colors hover:bg-muted"
+            >
+              Retry
+            </button>
+          </div>
+        ) : null}
+        {accountStateNotice ? (
+          <p role="alert" className="text-sm text-destructive-text">
+            {accountStateNotice}
+          </p>
+        ) : null}
+      </div>
+    );
+  };
+
   const setGithubPrReview = useCallback(
     async (installationId: number, enabled: boolean) => {
       const csrfToken = await getCsrfToken();
@@ -942,6 +1090,7 @@ export function useConnectorsSettingsAdapter({
         ) : null}
         {detail.connected ? (
           <>
+            {renderAccountSwitch(connectorId, detail.name)}
             <ConnectorAccountSummary connectorId={connectorId} />
             <ConnectorCapabilitiesPanel connectorRef={connectorId} connected />
             <McpResourceList connectorId={connectorId} />

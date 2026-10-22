@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ConnectorRefSchema } from './connectors';
 
 export const CONNECTOR_DIRECTORY_PATH = '/api/connectors/directory';
 export const CONNECTOR_DIRECTORY_ICON_PATH = '/api/connectors/directory/icon';
@@ -176,3 +177,27 @@ export const ConnectorDirectoryEntryResponseSchema = z.object({
   entry: ConnectorDirectoryEntrySchema,
 });
 export type ConnectorDirectoryEntryResponse = z.infer<typeof ConnectorDirectoryEntryResponseSchema>;
+
+export const CONNECTOR_ACCOUNT_STATE_PATH = '/api/connectors/account-state';
+export const CONNECTOR_ACCOUNT_STATE_MAX_ENTRIES = 500;
+
+export const ConnectorAccountStateResponseSchema = z.object({
+  disabledConnectorIds: z.array(ConnectorRefSchema).max(CONNECTOR_ACCOUNT_STATE_MAX_ENTRIES),
+});
+export type ConnectorAccountStateResponse = z.infer<typeof ConnectorAccountStateResponseSchema>;
+
+export const SetConnectorAccountStateRequestSchema = z
+  .object({
+    connectorId: ConnectorRefSchema,
+    enabled: z.boolean(),
+  })
+  .strict();
+export type SetConnectorAccountStateRequest = z.infer<typeof SetConnectorAccountStateRequestSchema>;
+
+export const SetConnectorAccountStateResponseSchema = z.object({
+  connectorId: ConnectorRefSchema,
+  enabled: z.boolean(),
+});
+export type SetConnectorAccountStateResponse = z.infer<
+  typeof SetConnectorAccountStateResponseSchema
+>;
