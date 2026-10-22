@@ -37,6 +37,10 @@ import {
 } from '@/lib/services/organization-policy-gate';
 import type { ArtifactRuntimeCompleteResponse } from '@agiworkforce/cloud-contracts';
 import { connectorDisplayName } from '@/app/chat/live-artifacts/live-artifact-contract';
+import {
+  CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE,
+  publishedArtifactAllowsConnectors,
+} from '@/lib/services/published-artifact-service';
 
 export const ARTIFACT_RUNTIME_NO_STORE = { 'Cache-Control': 'private, no-store' };
 
@@ -94,6 +98,17 @@ export async function respondToArtifactCompletion(
   const connectors = [...new Set(input.connectors)];
   if (connectors.length > 0 && !connectorsReleased()) {
     return artifactRuntimeRefusal(403, 'connectors_coming_soon', CONNECTORS_COMING_SOON_MESSAGE);
+  }
+  if (
+    connectors.length > 0 &&
+    subject.kind === 'published' &&
+    !(await publishedArtifactAllowsConnectors(scoped.db, subject.publishedArtifactId))
+  ) {
+    return artifactRuntimeRefusal(
+      403,
+      'connectors_not_on_public_share',
+      CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE,
+    );
   }
 
   const privacy = await evaluateActiveWorkspacePolicy(

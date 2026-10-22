@@ -7,7 +7,7 @@ import {
   type OrganizationToolDecisions,
 } from '@agiworkforce/types';
 
-import { SETTLED, num } from '@/lib/services/usage-aggregation';
+import { num } from '@/lib/services/usage-aggregation';
 
 interface SessionDayRow {
   day: string | Date;
@@ -42,17 +42,8 @@ async function readCodeSessionDays(
   window: { from: string; to: string },
 ): Promise<SessionDayRow[]> {
   return db.query<SessionDayRow>(
-    `select date_trunc('day', created_at at time zone 'UTC') at time zone 'UTC' as day,
-            count(distinct usage->>'sessionId')::int as sessions
-       from public.managed_usage_requests
-      where organization_id = $1
-        and ${SETTLED}
-        and usage->>'workload' = 'code'
-        and usage->>'sessionId' is not null
-        and created_at >= $2
-        and created_at < $3
-      group by 1
-      order by 1 asc`,
+    `select day, sessions
+       from public.app_org_code_session_days($1::uuid, $2::timestamptz, $3::timestamptz)`,
     [organizationId, window.from, window.to],
   );
 }

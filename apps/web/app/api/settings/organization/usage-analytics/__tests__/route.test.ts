@@ -131,7 +131,7 @@ describe('GET /api/settings/organization/usage-analytics', () => {
     const res = await GET(req() as never);
     const body = (await res.json()) as OrganizationUsageResponse;
 
-    expect(body.activity).toEqual([day]);
+    expect(body.activity).toEqual({ status: 'ok', days: [day] });
     expect(mockActivity).toHaveBeenCalledWith(expect.anything(), ORG, {
       from: body.usage.from,
       to: body.usage.to,
@@ -143,5 +143,23 @@ describe('GET /api/settings/organization/usage-analytics', () => {
 
     expect((await GET(req() as never)).status).toBe(403);
     expect(mockActivity).not.toHaveBeenCalled();
+  });
+
+  it('keeps the spend view when the activity section cannot be read', async () => {
+    bind({ role: 'admin' });
+    mockActivity.mockRejectedValueOnce(
+      new Error('function app_org_code_session_days does not exist'),
+    );
+
+    const res = await GET(req() as never);
+    const body = (await res.json()) as OrganizationUsageResponse;
+
+    expect(res.status).toBe(200);
+    expect(body.usage.totals.credits).toBe(150);
+    expect(body.activity).toEqual({
+      status: 'unavailable',
+      message: 'Daily code activity could not be loaded. Try again later.',
+    });
+    expect(JSON.stringify(body)).not.toContain('does not exist');
   });
 });

@@ -68,7 +68,7 @@ describe('a first publish of an artifact with a connector binding', () => {
       entry.sql.includes('insert into public.published_artifacts'),
     );
     expect(insert?.sql).toMatch(/from public\.live_artifacts live/);
-    expect(insert?.sql).toMatch(/live\.user_id = \$2 and live\.artifact_id::text = \$3/);
+    expect(insert?.sql).toMatch(/live\.user_id = \$2 and live\.artifact_id::text = lower\(\$3\)/);
     expect(insert?.sql).toMatch(/then 'invited' else 'public' end/);
     expect(insert?.sql).not.toMatch(/visibility = excluded\.visibility/);
     expect(published.visibility).toBe('invited');
@@ -83,6 +83,7 @@ describe('publicationUsesConnectors', () => {
       true,
     );
     expect(issued[0]?.sql).toMatch(/live\.user_id = publication\.user_id/);
+    expect(issued[0]?.sql).toMatch(/live\.artifact_id::text = lower\(publication\.artifact_id\)/);
     expect(issued[0]?.sql).toMatch(/publication\.token = \$1 and publication\.user_id = \$2/);
     expect(issued[0]?.params).toEqual([TOKEN, 'user-1']);
   });

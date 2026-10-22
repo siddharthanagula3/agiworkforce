@@ -1,12 +1,13 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import type { OrganizationActivityDay } from '@agiworkforce/types';
+import type { OrganizationActivitySection } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { SETTINGS_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import { handleCorsPreflightRequest } from '@/lib/cors';
+import { logger } from '@/lib/logger';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { logAdminDataAccess } from '@/lib/server/admin-data-access';
 import { requireOrgMember, resolveOrgMembership } from '@/lib/services/org-sharing-service';
@@ -24,7 +25,22 @@ export const runtime = 'nodejs';
 export interface OrganizationUsageResponse {
   currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
   usage: OrganizationUsage;
-  activity: OrganizationActivityDay[];
+  activity: OrganizationActivitySection;
+}
+
+const ACTIVITY_UNAVAILABLE_MESSAGE = 'Daily code activity could not be loaded. Try again later.';
+
+async function readActivitySection(
+  db: Parameters<typeof readOrganizationActivityDays>[0],
+  organizationId: string,
+  window: { from: string; to: string },
+): Promise<OrganizationActivitySection> {
+  try {
+    return { status: 'ok', days: await readOrganizationActivityDays(db, organizationId, window) };
+  } catch (error) {
+    logger.warn({ error, organizationId }, 'Workspace code activity could not be read');
+    return { status: 'unavailable', message: ACTIVITY_UNAVAILABLE_MESSAGE };
+  }
 }
 
 /**
@@ -53,7 +69,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const [usage, activity] = await Promise.all([
     readOrganizationUsage(db, membership.organizationId, window),
-    readOrganizationActivityDays(db, membership.organizationId, window),
+    readActivitySection(db, membership.organizationId, window),
   ]);
 
   await logAdminDataAccess(request, {

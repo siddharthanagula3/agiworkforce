@@ -385,6 +385,10 @@ export interface OrganizationActivityDay {
   readonly toolAcceptanceRate: number | null;
 }
 
+export type OrganizationActivitySection =
+  | { readonly status: 'ok'; readonly days: readonly OrganizationActivityDay[] }
+  | { readonly status: 'unavailable'; readonly message: string };
+
 export function toolAcceptanceRate(decisions: OrganizationToolDecisions): number | null {
   const decided = decisions.accepted + decisions.rejected;
   return decided > 0 ? decisions.accepted / decided : null;

@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   describeArtifactConnectors: vi.fn(),
   resolveEntitlementBundle: vi.fn(),
   gate: vi.fn(),
+  allowsConnectors: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -42,6 +43,10 @@ vi.mock('@/lib/services/entitlement-resolution', () => ({
   resolveEntitledPlanTier: vi.fn(),
   resolveEntitlementBundle: mocks.resolveEntitlementBundle,
 }));
+vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  publishedArtifactAllowsConnectors: mocks.allowsConnectors,
+}));
 vi.mock('@/lib/services/artifact-connector-gate', () => ({
   artifactConnectorsGateResponse: mocks.gate,
 }));
@@ -67,7 +72,11 @@ async function errorCode(response: Response): Promise<string | undefined> {
 describe('POST /api/artifacts/runtime/[token]/connectors', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.readRunnableArtifact.mockResolvedValue({ id: 'artifact-1' });
+    mocks.readRunnableArtifact.mockResolvedValue({
+      publishedArtifactId: 'published-1',
+      ownerUserId: 'owner-1',
+    });
+    mocks.allowsConnectors.mockResolvedValue(true);
     mocks.resolveEntitlementBundle.mockResolvedValue({ plan: 'pro' });
     mocks.gate.mockResolvedValue(null);
     mocks.describeArtifactConnectors.mockResolvedValue([{ id: 'github', ready: true }]);
@@ -121,4 +130,28 @@ describe('POST /api/artifacts/runtime/[token]/connectors', () => {
       expect.objectContaining({ userId: 'user-1', planTier: 'pro', connectors: ['github'] }),
     );
   });
+
+  it.each([
+    ['a viewer with the app connected', [{ id: 'github', connected: true, tools: [] }]],
+    ['a viewer without it', [{ id: 'github', connected: false, tools: [] }]],
+  ])(
+    'answers %s on a public artifact the same way, before reading any catalog',
+    async (_viewer, catalog) => {
+      mocks.allowsConnectors.mockResolvedValue(false);
+      mocks.describeArtifactConnectors.mockResolvedValue(catalog);
+
+      const response = await call({ connectors: ['github'] });
+
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        error: {
+          code: 'connectors_not_on_public_share',
+          message: expect.stringContaining('not available on publicly shared artifacts'),
+        },
+      });
+      expect(mocks.allowsConnectors).toHaveBeenCalledWith(expect.anything(), 'published-1');
+      expect(mocks.describeArtifactConnectors).not.toHaveBeenCalled();
+      expect(mocks.resolveEntitlementBundle).not.toHaveBeenCalled();
+    },
+  );
 });

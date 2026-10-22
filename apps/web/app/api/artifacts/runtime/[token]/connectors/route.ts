@@ -17,7 +17,11 @@ import {
   readRunnableArtifact,
 } from '@/lib/services/artifact-runtime-service';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
-import { PUBLISHED_TOKEN_REGEX } from '@/lib/services/published-artifact-service';
+import {
+  CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE,
+  PUBLISHED_TOKEN_REGEX,
+  publishedArtifactAllowsConnectors,
+} from '@/lib/services/published-artifact-service';
 
 export const runtime = 'nodejs';
 
@@ -50,6 +54,9 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
 
   const artifact = await readRunnableArtifact(scoped.db, token);
   if (!artifact) return refusal(404, 'artifact_not_found', UNAVAILABLE_MESSAGE);
+  if (!(await publishedArtifactAllowsConnectors(scoped.db, artifact.publishedArtifactId))) {
+    return refusal(403, 'connectors_not_on_public_share', CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE);
+  }
 
   const entitlement = await resolveEntitlementBundle(scoped.db, scoped.userId);
   const gate = await artifactConnectorsGateResponse(

@@ -68,14 +68,14 @@ describe('readOrganizationActivityDays', () => {
     await expect(readOrganizationActivityDays(scopedDb, ORG, WINDOW)).resolves.toEqual([]);
   });
 
-  it('counts sessions from the organization’s settled code usage on the caller’s connection', async () => {
+  it('counts the workspace’s code sessions through the permission-checked database function', async () => {
     await readOrganizationActivityDays(scopedDb, ORG, WINDOW);
 
-    const [sql, params] = statement('managed_usage_requests');
-    expect(sql).toContain("count(distinct usage->>'sessionId')");
-    expect(sql).toContain("usage->>'workload' = 'code'");
-    expect(sql).toContain("status = 'completed'");
-    expect(sql).toContain('organization_id = $1');
+    const [sql, params] = statement('app_org_code_session_days');
+    expect(sql).toContain(
+      'public.app_org_code_session_days($1::uuid, $2::timestamptz, $3::timestamptz)',
+    );
+    expect(sql).not.toMatch(/managed_usage_requests/);
     expect(params).toEqual([ORG, WINDOW.from, WINDOW.to]);
   });
 

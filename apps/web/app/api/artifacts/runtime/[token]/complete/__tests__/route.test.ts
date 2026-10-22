@@ -29,6 +29,7 @@ const mocks = vi.hoisted(() => ({
   applySecretHandlingToTexts: vi.fn(),
   buildModelPolicyGateResponse: vi.fn(),
   buildProviderEgressGateResponse: vi.fn(),
+  allowsConnectors: vi.fn(),
   db: { query: vi.fn() },
 }));
 
@@ -123,6 +124,9 @@ vi.mock('@/lib/services/published-artifact-service', () => ({
   unpublishArtifactRecord: vi.fn(),
   unpublishArtifactsForConversations: vi.fn(),
   PUBLISHED_TOKEN_REGEX: /^[A-Za-z0-9_-]{24}$/,
+  CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE:
+    'This artifact uses connected apps, which are not available on publicly shared artifacts.',
+  publishedArtifactAllowsConnectors: mocks.allowsConnectors,
 }));
 vi.mock('@/lib/services/organization-policy-gate', () => ({
   diagnoseMemberPolicy: vi.fn(),
@@ -272,6 +276,7 @@ beforeEach(() => {
   mocks.buildProviderEgressGateResponse.mockResolvedValue(null);
   mocks.buildArtifactConnectorPlan.mockResolvedValue({ unusable: [] });
   mocks.completeArtifactPrompt.mockResolvedValue('A short summary');
+  mocks.allowsConnectors.mockResolvedValue(true);
 });
 
 describe('POST /api/artifacts/runtime/[token]/complete', () => {
@@ -506,6 +511,34 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
       }),
     );
     expect(mocks.buildArtifactConnectorPlan).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/artifacts/runtime/[token]/complete on a publicly shared app', () => {
+  it.each([
+    ['a viewer with the app connected', { unusable: [] }],
+    ['a viewer without it', { unusable: ['gmail'] }],
+  ])('answers %s the same way, before any plan or catalog', async (_viewer, plan) => {
+    mocks.allowsConnectors.mockResolvedValue(false);
+    mocks.buildArtifactConnectorPlan.mockResolvedValue(plan);
+
+    const response = await call({ prompt: 'Summarize', connectors: ['gmail'] });
+
+    expect(response.status).toBe(403);
+    expect(await errorCode(response)).toBe('connectors_not_on_public_share');
+    expect(mocks.allowsConnectors).toHaveBeenCalledWith(mocks.db, ARTIFACT.publishedArtifactId);
+    expect(mocks.evaluateManagedComputeAccess).not.toHaveBeenCalled();
+    expect(mocks.buildArtifactConnectorPlan).not.toHaveBeenCalled();
+    expect(mocks.completeArtifactPrompt).not.toHaveBeenCalled();
+  });
+
+  it('still runs AI without connected apps on a public app', async () => {
+    mocks.allowsConnectors.mockResolvedValue(false);
+
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.allowsConnectors).not.toHaveBeenCalled();
   });
 });
 

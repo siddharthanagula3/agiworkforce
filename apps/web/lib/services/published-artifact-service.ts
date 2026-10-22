@@ -357,7 +357,7 @@ export async function publishArtifactRecord(
        $1, $2, $3, $4, $5, $6, $7, $8,
        case when exists (
          select 1 from public.live_artifacts live
-          where live.user_id = $2 and live.artifact_id::text = $3
+          where live.user_id = $2 and live.artifact_id::text = lower($3)
        ) then 'invited' else 'public' end
      )
      on conflict (user_id, artifact_id) do update set
@@ -450,7 +450,7 @@ export async function publicationUsesConnectors(
          from public.published_artifacts publication
          join public.live_artifacts live
            on live.user_id = publication.user_id
-          and live.artifact_id::text = publication.artifact_id
+          and live.artifact_id::text = lower(publication.artifact_id)
         where publication.token = $1 and publication.user_id = $2
      ) as uses_connectors`,
     [token, userId],
