@@ -1,4 +1,4 @@
-import { useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useLiveVoiceSession } from '@/src/features/voice/hooks/useLiveVoiceSession';
 import { LiveVoiceBar } from './LiveVoiceBar';
 
@@ -21,8 +21,12 @@ export function LiveVoiceComposer({
   onEnded,
   onStartWorkTask,
 }: LiveVoiceComposerProps) {
+  const [paused, setPaused] = useState(false);
+  useEffect(() => {
+    if (!visible) setPaused(false);
+  }, [visible]);
   const controller = useLiveVoiceSession({
-    active: visible,
+    active: visible && !paused,
     conversationId,
     model,
     ensureConversation,
@@ -31,12 +35,14 @@ export function LiveVoiceComposer({
   });
 
   const handleExit = useCallback(() => onEnded(null), [onEnded]);
+  const togglePause = useCallback(() => setPaused((value) => !value), []);
 
   return (
     <LiveVoiceBar
       visible={visible}
       status={controller.status}
       reconnecting={controller.reconnecting}
+      paused={paused}
       muted={controller.muted}
       assistantSpeaking={controller.assistantSpeaking}
       backendBusy={controller.backendBusy}
@@ -48,6 +54,7 @@ export function LiveVoiceComposer({
       toolOutcomes={controller.toolOutcomes}
       onDecideApproval={controller.decideToolApproval}
       onToggleMute={controller.toggleMute}
+      onTogglePause={togglePause}
       onStopTask={controller.cancelBackendWork}
       onSwitchToText={onSwitchToText}
       onRetry={controller.retry}

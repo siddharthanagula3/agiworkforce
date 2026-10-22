@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  Image,
   ScrollView,
   useWindowDimensions,
   View,
@@ -9,18 +10,36 @@ import {
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { Check, Keyboard, Mic, MicOff, RotateCcw, ShieldQuestion, X } from 'lucide-react-native';
+import {
+  Check,
+  Keyboard,
+  Mic,
+  MicOff,
+  Pause,
+  Play,
+  RotateCcw,
+  Settings,
+  ShieldAlert,
+  ShieldQuestion,
+  X,
+} from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
-import type {
-  LiveVoicePendingApproval,
-  LiveVoiceToolDecision,
+import { useRouter } from 'expo-router';
+import { useTranslation } from 'react-i18next';
+import { TOOL_APPROVAL_ACTION_LABELS, TOOL_APPROVAL_HIGH_RISK_NOTICE } from '@agiworkforce/types';
+import {
+  readToolApprovalReview,
+  type LiveVoicePendingApproval,
+  type LiveVoiceToolDecision,
+  type LiveVoiceToolFile,
 } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { StatusStep } from '@/src/features/chat/components/StatusStep';
+import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
+import { formatClock } from '@/src/lib/time';
 import { VoiceOrb } from './VoiceOrb';
 import { AudioRoutePicker } from './AudioRoutePicker';
 import { VoiceToolFiles } from './VoiceToolFiles';
@@ -35,6 +54,7 @@ export interface LiveVoiceBarProps {
   visible: boolean;
   status: LiveVoiceStatus;
   reconnecting: boolean;
+  paused: boolean;
   muted: boolean;
   assistantSpeaking: boolean;
   backendBusy: boolean;
@@ -46,6 +66,7 @@ export interface LiveVoiceBarProps {
   toolOutcomes: readonly LiveVoiceToolOutcome[];
   onDecideApproval: (callId: string, decision: LiveVoiceToolDecision) => void;
   onToggleMute: () => void;
+  onTogglePause: () => void;
   onStopTask: () => void;
   onSwitchToText: () => void;
   onRetry: () => void;
@@ -61,6 +82,73 @@ const SLOW_TOOL_SUFFIX = 'is taking longer than usual';
 const TOOL_RESULTS_TITLE = 'What the actions returned';
 const TOOL_FAILED_LABEL = 'Did not complete';
 const TOOL_OUTPUT_LINES = 3;
+const TOOL_IMAGE_HEIGHT = 180;
+const CALL_CLOCK_TICK_MS = 1_000;
+const VOICE_SETTINGS_ROUTE = '/(app)/settings/voice';
+const ELEVATED_RISK_TIERS = new Set(['high', 'critical']);
+
+interface CallClock {
+  accumulatedMs: number;
+  runningSince: number | null;
+}
+
+function callClockMs(clock: CallClock, now: number): number {
+  return clock.accumulatedMs + (clock.runningSince === null ? 0 : now - clock.runningSince);
+}
+
+function useCallClock(visible: boolean, running: boolean): number {
+  const clockRef = useRef<CallClock>({ accumulatedMs: 0, runningSince: null });
+  const [elapsedMs, setElapsedMs] = useState(0);
+
+  useEffect(() => {
+    const clock = clockRef.current;
+    const now = Date.now();
+    if (!visible) {
+      clockRef.current = { accumulatedMs: 0, runningSince: null };
+      setElapsedMs(0);
+      return undefined;
+    }
+    if (running && clock.runningSince === null) clock.runningSince = now;
+    if (!running && clock.runningSince !== null) {
+      clock.accumulatedMs += now - clock.runningSince;
+      clock.runningSince = null;
+    }
+    setElapsedMs(callClockMs(clock, now));
+    if (!running) return undefined;
+    const timer = setInterval(
+      () => setElapsedMs(callClockMs(clockRef.current, Date.now())),
+      CALL_CLOCK_TICK_MS,
+    );
+    return () => clearInterval(timer);
+  }, [visible, running]);
+
+  return elapsedMs;
+}
+
+function isImageFile(file: LiveVoiceToolFile): boolean {
+  return file.mimeType?.startsWith('image/') === true;
+}
+
+function VoiceToolImage({ file }: { file: LiveVoiceToolFile }) {
+  const colors = useThemeColors();
+  const { source, status } = useGeneratedImageSource(file.uri, false);
+  if (status !== 'ready' || !source) return null;
+  return (
+    <Image
+      testID="live-voice-tool-image"
+      source={source}
+      accessibilityRole="image"
+      accessibilityLabel={file.name}
+      resizeMode="contain"
+      style={{
+        width: '100%',
+        height: TOOL_IMAGE_HEIGHT,
+        borderRadius: 10,
+        backgroundColor: colors.surfaceElevated,
+      }}
+    />
+  );
+}
 
 function activityMessage(activity: LiveVoiceToolActivity): string {
   return activity.state === 'timed_out' ? `${activity.label} ${SLOW_TOOL_SUFFIX}` : activity.label;
@@ -74,11 +162,13 @@ export function liveVoiceOrbSize(windowWidth: number, stageHeight: number): numb
 
 function statusLabel(
   status: LiveVoiceStatus,
+  pausedLabel: string | null,
   muted: boolean,
   assistantSpeaking: boolean,
   interrupted: boolean,
   reconnecting: boolean,
 ): string {
+  if (pausedLabel) return pausedLabel;
   if (reconnecting) return 'Reconnecting live voice...';
   if (status === 'connecting') return 'Connecting live voice...';
   if (status === 'error') return 'Live voice stopped';
@@ -92,6 +182,7 @@ export function LiveVoiceBar({
   visible,
   status,
   reconnecting,
+  paused,
   muted,
   assistantSpeaking,
   backendBusy,
@@ -103,13 +194,17 @@ export function LiveVoiceBar({
   toolOutcomes,
   onDecideApproval,
   onToggleMute,
+  onTogglePause,
   onStopTask,
   onSwitchToText,
   onRetry,
   onExit,
 }: LiveVoiceBarProps) {
   const colors = useThemeColors();
+  const { t } = useTranslation('chat');
+  const router = useRouter();
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const callElapsedMs = useCallClock(visible, status === 'live' && !paused);
   const insets = useSafeAreaInsets();
   const transcriptRef = useRef<ScrollView>(null);
   const { width: windowWidth } = useWindowDimensions();
@@ -128,6 +223,18 @@ export function LiveVoiceBar({
     fn();
   };
 
+  const callTime = formatClock(callElapsedMs);
+  const showCallTime = paused || status === 'live' || callElapsedMs > 0;
+  const canPause = paused || status === 'live';
+  const pauseLabel = paused ? t('liveVoice.resumeCall') : t('liveVoice.pauseCall');
+  const headerButtonStyle = {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.inputSurface,
+  } as const;
   const orbPhase =
     status === 'connecting'
       ? 'thinking'
@@ -153,6 +260,59 @@ export function LiveVoiceBar({
       accessibilityLiveRegion="polite"
     >
       <View
+        testID="live-voice-header"
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          minHeight: 44,
+        }}
+      >
+        {showCallTime ? (
+          <Text
+            testID="live-voice-call-time"
+            accessibilityLabel={t('liveVoice.callTime', { time: callTime })}
+            style={{
+              color: colors.textSecondary,
+              fontSize: typeScale.callout,
+              fontVariant: ['tabular-nums'],
+            }}
+          >
+            {callTime}
+          </Text>
+        ) : (
+          <View />
+        )}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          {canPause ? (
+            <Pressable
+              onPress={tap(onTogglePause)}
+              accessibilityRole="button"
+              accessibilityLabel={pauseLabel}
+              accessibilityState={{ selected: paused }}
+              testID="live-voice-pause"
+              style={headerButtonStyle}
+            >
+              {paused ? (
+                <Play size={20} color={colors.textPrimary} />
+              ) : (
+                <Pause size={20} color={colors.textPrimary} />
+              )}
+            </Pressable>
+          ) : null}
+          <Pressable
+            onPress={tap(() => router.push(VOICE_SETTINGS_ROUTE))}
+            accessibilityRole="button"
+            accessibilityLabel={t('liveVoice.voiceSettings')}
+            testID="live-voice-settings"
+            style={headerButtonStyle}
+          >
+            <Settings size={20} color={colors.textPrimary} />
+          </Pressable>
+        </View>
+      </View>
+
+      <View
         testID="live-voice-stage"
         onLayout={handleStageLayout}
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}
@@ -170,7 +330,14 @@ export function LiveVoiceBar({
             textAlign: 'center',
           }}
         >
-          {statusLabel(status, muted, assistantSpeaking, interrupted, reconnecting)}
+          {statusLabel(
+            status,
+            paused ? t('liveVoice.paused') : null,
+            muted,
+            assistantSpeaking,
+            interrupted,
+            reconnecting,
+          )}
         </Text>
       </View>
 
@@ -293,110 +460,150 @@ export function LiveVoiceBar({
               >
                 {outcome.output}
               </Text>
+              {outcome.files.filter(isImageFile).map((file) => (
+                <VoiceToolImage key={file.uri} file={file} />
+              ))}
               <VoiceToolFiles files={outcome.files} />
             </View>
           ))}
         </View>
       ) : null}
 
-      {approvals.map((approval) => (
-        <View
-          key={approval.callId}
-          testID="live-voice-approval"
-          accessibilityLabel={`${APPROVAL_TITLE}: ${approval.summary}`}
-          style={{
-            borderRadius: 14,
-            borderWidth: 1,
-            borderColor: colors.warningBorder,
-            backgroundColor: colors.warningSurface,
-            padding: 12,
-            marginBottom: 12,
-            gap: 8,
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <ShieldQuestion size={16} color={colors.agentWarning} />
-            <Text
-              style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
-            >
-              {APPROVAL_TITLE}
-            </Text>
-          </View>
-          <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>
-            {approval.summary}
-          </Text>
-          <Text style={{ color: colors.textMuted, fontSize: typeScale.caption }} numberOfLines={1}>
-            {approval.name}
-          </Text>
-          {approval.input ? (
-            <Text
-              style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 17 }}
-              numberOfLines={6}
-            >
-              {approval.input}
-            </Text>
-          ) : null}
-          <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Pressable
-              onPress={tap(() => onDecideApproval(approval.callId, 'approved'))}
-              disabled={approval.deciding}
-              accessibilityRole="button"
-              accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.approve}: ${approval.summary}`}
-              accessibilityState={{ disabled: approval.deciding, busy: approval.deciding }}
-              testID="live-voice-approve"
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                height: 44,
-                borderRadius: 999,
-                backgroundColor: colors.teal,
-                opacity: approval.deciding ? 0.6 : 1,
-              }}
-            >
-              {approval.deciding ? (
-                <ActivityIndicator size="small" color={colors.accentText} />
-              ) : (
-                <Check size={16} color={colors.accentText} />
-              )}
+      {approvals.map((approval) => {
+        const review = readToolApprovalReview(approval.review);
+        const elevated = review === undefined || ELEVATED_RISK_TIERS.has(review.riskTier);
+        return (
+          <View
+            key={approval.callId}
+            testID="live-voice-approval"
+            accessibilityLabel={`${APPROVAL_TITLE}: ${approval.summary}`}
+            style={{
+              borderRadius: 14,
+              borderWidth: 1,
+              borderColor: colors.warningBorder,
+              backgroundColor: colors.warningSurface,
+              padding: 12,
+              marginBottom: 12,
+              gap: 8,
+            }}
+          >
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <ShieldQuestion size={16} color={colors.agentWarning} />
               <Text
-                style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '600' }}
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.footnote,
+                  fontWeight: '600',
+                }}
               >
-                {TOOL_APPROVAL_ACTION_LABELS.approve}
+                {APPROVAL_TITLE}
               </Text>
-            </Pressable>
-            <Pressable
-              onPress={tap(() => onDecideApproval(approval.callId, 'rejected'))}
-              disabled={approval.deciding}
-              accessibilityRole="button"
-              accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny}: ${approval.summary}`}
-              accessibilityState={{ disabled: approval.deciding }}
-              testID="live-voice-deny"
-              style={{
-                flex: 1,
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 6,
-                height: 44,
-                borderRadius: 999,
-                borderWidth: 1,
-                borderColor: colors.agentError,
-                opacity: approval.deciding ? 0.6 : 1,
-              }}
+            </View>
+            {elevated ? (
+              <View
+                testID="live-voice-approval-risk"
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <ShieldAlert size={14} color={colors.agentError} />
+                <Text
+                  style={{
+                    flex: 1,
+                    color: colors.agentError,
+                    fontSize: typeScale.caption,
+                    fontWeight: '600',
+                  }}
+                >
+                  {TOOL_APPROVAL_HIGH_RISK_NOTICE}
+                </Text>
+              </View>
+            ) : null}
+            <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead }}>
+              {approval.summary}
+            </Text>
+            <Text
+              style={{ color: colors.textMuted, fontSize: typeScale.caption }}
+              numberOfLines={1}
             >
-              <X size={16} color={colors.agentError} />
+              {approval.name}
+            </Text>
+            {approval.input ? (
               <Text
-                style={{ color: colors.agentError, fontSize: typeScale.subhead, fontWeight: '600' }}
+                style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 17 }}
+                numberOfLines={6}
               >
-                {TOOL_APPROVAL_ACTION_LABELS.deny}
+                {approval.input}
               </Text>
-            </Pressable>
+            ) : null}
+            <View style={{ flexDirection: 'row', gap: 10 }}>
+              <Pressable
+                onPress={tap(() => onDecideApproval(approval.callId, 'approved'))}
+                disabled={approval.deciding}
+                accessibilityRole="button"
+                accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.allow}: ${approval.summary}`}
+                accessibilityState={{ disabled: approval.deciding, busy: approval.deciding }}
+                testID="live-voice-approve"
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  height: 44,
+                  borderRadius: 999,
+                  backgroundColor: colors.teal,
+                  opacity: approval.deciding ? 0.6 : 1,
+                }}
+              >
+                {approval.deciding ? (
+                  <ActivityIndicator size="small" color={colors.accentText} />
+                ) : (
+                  <Check size={16} color={colors.accentText} />
+                )}
+                <Text
+                  style={{
+                    color: colors.accentText,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                  }}
+                >
+                  {TOOL_APPROVAL_ACTION_LABELS.allow}
+                </Text>
+              </Pressable>
+              <Pressable
+                onPress={tap(() => onDecideApproval(approval.callId, 'rejected'))}
+                disabled={approval.deciding}
+                accessibilityRole="button"
+                accessibilityLabel={`${TOOL_APPROVAL_ACTION_LABELS.deny}: ${approval.summary}`}
+                accessibilityState={{ disabled: approval.deciding }}
+                testID="live-voice-deny"
+                style={{
+                  flex: 1,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  height: 44,
+                  borderRadius: 999,
+                  borderWidth: 1,
+                  borderColor: colors.agentError,
+                  opacity: approval.deciding ? 0.6 : 1,
+                }}
+              >
+                <X size={16} color={colors.agentError} />
+                <Text
+                  style={{
+                    color: colors.agentError,
+                    fontSize: typeScale.subhead,
+                    fontWeight: '600',
+                  }}
+                >
+                  {TOOL_APPROVAL_ACTION_LABELS.deny}
+                </Text>
+              </Pressable>
+            </View>
           </View>
-        </View>
-      ))}
+        );
+      })}
 
       {backendBusy ? (
         <View testID="live-voice-activity" style={{ marginBottom: 12 }}>

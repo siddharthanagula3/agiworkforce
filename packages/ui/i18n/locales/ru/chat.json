@@ -677,5 +677,12 @@
   "timeDivider": {
     "today": "Сегодня",
     "yesterday": "Вчера"
+  },
+  "liveVoice": {
+    "pauseCall": "Приостановить звонок",
+    "resumeCall": "Возобновить звонок",
+    "paused": "На паузе",
+    "callTime": "Длительность звонка {{time}}",
+    "voiceSettings": "Настройки голоса"
   }
 }

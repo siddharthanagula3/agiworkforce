@@ -56,6 +56,7 @@ function session(overrides: Record<string, unknown> = {}) {
     pause: vi.fn(),
     resume: vi.fn(),
     paused: false,
+    callElapsedMs: 0,
     rejoinOffer: null,
     answerRejoin: vi.fn(),
     decideToolApproval: vi.fn(),
@@ -426,5 +427,155 @@ describe('VoiceModeSurface live camera', () => {
 
     expect(stop).toHaveBeenCalledTimes(1);
     expect(visual.current?.start).not.toHaveBeenCalled();
+  });
+});
+
+describe('VoiceModeSurface call clock and agent status', () => {
+  const live = { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening };
+
+  it('shows the elapsed call time once the call is connected', () => {
+    controller.current = session({ state: live, callElapsedMs: 83_000 });
+    renderSurface();
+
+    const timer = screen.getByRole('timer');
+    expect(timer.textContent).toBe('1:23');
+    expect(timer).toHaveAccessibleName('Call time 1:23');
+  });
+
+  it('shows no clock while the call is still connecting', () => {
+    controller.current = session({
+      state: { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.entering },
+    });
+    renderSurface();
+
+    expect(screen.queryByTestId('voice-call-time')).toBeNull();
+  });
+
+  it('names the step the agent is on in one line, with a way to stop it', () => {
+    const cancelBackendWork = vi.fn();
+    controller.current = session({
+      state: live,
+      backendBusy: true,
+      cancelBackendWork,
+      toolActivity: [
+        {
+          delegationId: 'd1',
+          toolId: 'web_search',
+          label: 'Searching the web',
+          state: 'running',
+          startedAt: 0,
+        },
+        {
+          delegationId: 'd2',
+          toolId: 'url_fetch',
+          label: 'Fetching a page',
+          state: 'timed_out',
+          startedAt: 0,
+        },
+      ],
+    });
+    renderSurface();
+
+    const status = screen.getByTestId('voice-agent-status');
+    expect(status.textContent).toContain('Fetching a page is taking longer than usual');
+    expect(status.textContent).not.toContain('Searching the web');
+    fireEvent.click(within(status).getByRole('button', { name: 'Stop the task' }));
+    expect(cancelBackendWork).toHaveBeenCalledOnce();
+  });
+
+  it('says it is working while the backend is busy before a step is named', () => {
+    controller.current = session({ state: live, backendBusy: true });
+    renderSurface();
+
+    expect(screen.getByTestId('voice-agent-status').textContent).toContain(
+      'Working on your request',
+    );
+  });
+
+  it('shows no agent status when nothing is running', () => {
+    controller.current = session({ state: live });
+    renderSurface();
+
+    expect(screen.queryByTestId('voice-agent-status')).toBeNull();
+  });
+});
+
+describe('VoiceModeSurface tool approvals and results', () => {
+  const live = { ...INITIAL_VOICE_SESSION_STATE, status: VOICE_SESSION_STATUS.listening };
+
+  it('asks on the same approval card a typed turn uses, with its risk review', () => {
+    const decideToolApproval = vi.fn();
+    controller.current = session({
+      state: live,
+      decideToolApproval,
+      toolApprovals: [
+        {
+          callId: 'call-1',
+          name: 'mcp__gmail__send_draft',
+          summary: 'Send the draft to Sam',
+          input: '{"draft_id":"d-1"}',
+          deciding: false,
+          review: { risk_tier: 'critical', destructive: true, approval_scopes: ['once'] },
+        },
+      ],
+    });
+    renderSurface();
+
+    const card = screen.getByTestId('voice-tool-approval');
+    expect(within(card).getByText('Critical risk')).toBeInTheDocument();
+    expect(within(card).getByText('draft_id')).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: 'Always allow' })).toBeNull();
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Allow once' }));
+    expect(decideToolApproval).toHaveBeenCalledWith('call-1', 'approved');
+    fireEvent.click(within(card).getByRole('button', { name: 'Deny' }));
+    expect(decideToolApproval).toHaveBeenCalledWith('call-1', 'rejected');
+  });
+
+  it('treats an approval with no review as high risk and destructive', () => {
+    controller.current = session({
+      state: live,
+      toolApprovals: [
+        {
+          callId: 'call-2',
+          name: 'write_file',
+          summary: 'Write notes.md',
+          input: null,
+          deciding: false,
+        },
+      ],
+    });
+    renderSurface();
+
+    const card = screen.getByTestId('voice-tool-approval');
+    expect(within(card).getByText('High risk')).toBeInTheDocument();
+  });
+
+  it('shows an image a tool returned in place, and other files as links', () => {
+    controller.current = session({
+      state: live,
+      toolOutcomes: [
+        {
+          callId: 'call-3',
+          label: 'Running code',
+          output: 'Saved chart.png',
+          isError: false,
+          files: [
+            { name: 'chart.png', uri: '/api/files/file_1', mimeType: 'image/png' },
+            { name: 'data.csv', uri: '/api/files/file_2', mimeType: 'text/csv' },
+          ],
+        },
+      ],
+    });
+    renderSurface();
+
+    const image = within(screen.getByTestId('voice-tool-image')).getByRole('img', {
+      name: 'chart.png',
+    });
+    expect(image).toHaveAttribute('src', '/api/files/file_1');
+    expect(screen.getByRole('link', { name: 'Open data.csv' })).toHaveAttribute(
+      'href',
+      '/api/files/file_2',
+    );
   });
 });

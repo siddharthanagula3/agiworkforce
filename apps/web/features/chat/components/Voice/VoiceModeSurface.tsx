@@ -3,8 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { openUpgrade } from '@shared/lib/app-commands';
 import { CircleAlert, X } from '@agiworkforce/icons';
-import { ApprovalCard, Button, Spinner } from '@agiworkforce/ui';
-import { TOOL_APPROVAL_ACTION_LABELS, type VisualFrame } from '@agiworkforce/types';
+import { Button, Spinner } from '@agiworkforce/ui';
+import type { VisualFrame } from '@agiworkforce/types';
+import {
+  readToolApprovalReview,
+  type LiveVoicePendingApproval,
+  type LiveVoiceToolDecision,
+  type LiveVoiceToolFile,
+} from '@agiworkforce/cloud-contracts';
 
 import { cn } from '@shared/lib/utils';
 import { useVoiceSession, type VoiceTranscriptTurn } from '@features/chat/hooks/use-voice-session';
@@ -13,11 +19,12 @@ import {
   useVoiceSessionStore,
   type VoiceIntelligence,
 } from '@features/chat/stores/voice-session-store';
-import { VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
+import { formatVoiceCallTime, VOICE_SESSION_STATUS } from '@agiworkforce/unified-chat';
 import { liveVoiceOutputRef } from '@features/chat/hooks/use-voice-session';
 import { useDesktopHost } from '@/features/desktop-host/lib/host';
 import { useVisualSession } from '@/lib/visual/use-visual-session';
 import { VOICE_ATTACHMENT_ACCEPT } from '@features/chat/lib/voice-attachments';
+import { ToolApprovalCard } from '../approvals/ToolApprovalCard';
 import { ToolTimeline, type ToolEntry } from '../messages/ToolTimeline';
 import { SourcesControl } from '../research/ResearchPanel';
 import { AudioRoutePicker } from './AudioRoutePicker';
@@ -42,7 +49,8 @@ const LABEL = {
   stopCamera: 'Stop sharing your camera',
   cameraPreview: 'Preview of what your camera is sharing',
   cameraSharing: 'Your camera is being shared with this call.',
-  approvalTitle: 'Waiting for your approval',
+  working: 'Working on your request',
+  callTime: 'Call time',
   stopTask: 'Stop the task',
   stopTaskHint: 'Stops the running action and keeps the call open.',
   slowTool: 'is taking longer than usual',
@@ -62,6 +70,54 @@ const VOICE_SOURCES_ID = 'voice-session-sources';
 
 function isGeneratedFilePath(uri: string): boolean {
   return GENERATED_FILE_PATH.test(uri);
+}
+
+function isImageFile(file: LiveVoiceToolFile): boolean {
+  return file.mimeType?.startsWith('image/') === true;
+}
+
+function approvalParameters(input: string | null): Record<string, unknown> | undefined {
+  if (!input) return undefined;
+  try {
+    const parsed: unknown = JSON.parse(input);
+    return parsed && typeof parsed === 'object' && !Array.isArray(parsed)
+      ? (parsed as Record<string, unknown>)
+      : { arguments: input };
+  } catch {
+    return { arguments: input };
+  }
+}
+
+function voiceDecision(decision: string): LiveVoiceToolDecision | null {
+  if (decision === 'approved') return 'approved';
+  if (decision === 'rejected') return 'rejected';
+  return null;
+}
+
+function VoiceToolApproval({
+  approval,
+  onDecide,
+}: {
+  approval: LiveVoicePendingApproval;
+  onDecide: (callId: string, decision: LiveVoiceToolDecision) => void;
+}) {
+  const review = readToolApprovalReview(approval.review);
+  const parameters = approvalParameters(approval.input);
+  return (
+    <div data-testid="voice-tool-approval" className="w-full max-w-md">
+      <ToolApprovalCard
+        toolCallId={approval.callId}
+        label={approval.summary}
+        {...(parameters ? { parameters } : {})}
+        {...(review ? { review } : {})}
+        decided={approval.deciding}
+        onDecide={(callId, decision) => {
+          const allowed = voiceDecision(decision);
+          if (allowed) onDecide(callId, allowed);
+        }}
+      />
+    </div>
+  );
 }
 
 const ESCAPE = 'Escape';
@@ -160,6 +216,18 @@ export function VoiceModeSurface({
     [session.toolOutcomes],
   );
   const { status, muted, pendingUtterance, error } = state;
+  const latestActivity = session.toolActivity[session.toolActivity.length - 1];
+  const agentStatus = latestActivity
+    ? latestActivity.state === 'timed_out'
+      ? `${latestActivity.label} ${LABEL.slowTool}`
+      : latestActivity.label
+    : session.backendBusy
+      ? LABEL.working
+      : null;
+  const callTime =
+    status !== VOICE_SESSION_STATUS.exited && status !== VOICE_SESSION_STATUS.entering
+      ? formatVoiceCallTime(session.callElapsedMs)
+      : null;
   const announcement = voiceStatusAnnouncement({
     status,
     muted,
@@ -388,56 +456,42 @@ export function VoiceModeSurface({
           </div>
         </div>
       ) : null}
-      {session.toolActivity.length > 0 ? (
-        <div data-testid="voice-tool-activity" className="flex w-full max-w-md flex-col gap-2">
-          {session.toolActivity.map((activity) => (
-            <div
-              key={activity.delegationId}
-              className="flex items-center gap-2 rounded-full border border-[var(--chat-border-strong)] bg-[var(--chat-surface-elevated)] px-3 py-1.5 text-sm text-[var(--chat-text-primary)]"
-            >
-              {activity.state === 'running' ? (
-                <Spinner size="sm" className="h-4 w-4 shrink-0" />
-              ) : (
-                <CircleAlert
-                  className="h-4 w-4 shrink-0 text-[var(--chat-text-secondary)]"
-                  aria-hidden="true"
-                />
-              )}
-              <span className="min-w-0 flex-1 truncate">
-                {activity.state === 'timed_out'
-                  ? `${activity.label} ${LABEL.slowTool}`
-                  : activity.label}
-              </span>
-            </div>
-          ))}
-          <button
-            type="button"
-            data-testid="voice-stop-task"
-            onClick={session.cancelBackendWork}
-            title={LABEL.stopTaskHint}
-            className="min-h-11 self-center rounded-full border border-[var(--chat-border-strong)] px-4 py-2 text-sm font-medium text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)]"
-          >
-            {LABEL.stopTask}
-          </button>
-        </div>
-      ) : null}
       {session.toolOutcomes.length > 0 ? (
         <div data-testid="voice-tool-results" className="w-full max-w-md text-sm">
           <ToolTimeline tools={toolEntries} />
           {session.toolOutcomes.flatMap((outcome) =>
             outcome.files
               .filter((file) => isGeneratedFilePath(file.uri))
-              .map((file) => (
-                <a
-                  key={`${outcome.callId}-${file.uri}`}
-                  href={file.uri}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="mt-1 inline-flex min-h-6 items-center gap-1 font-medium text-[var(--chat-accent-primary-text)] underline-offset-2 hover:underline"
-                >
-                  {LABEL.openFile} {file.name}
-                </a>
-              )),
+              .map((file) =>
+                isImageFile(file) ? (
+                  <a
+                    key={`${outcome.callId}-${file.uri}`}
+                    href={file.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="voice-tool-image"
+                    aria-label={`${LABEL.openFile} ${file.name}`}
+                    className="mt-2 block w-fit overflow-hidden rounded-xl border border-[var(--chat-border-strong)]"
+                  >
+                    <img
+                      src={file.uri}
+                      alt={file.name}
+                      loading="lazy"
+                      className="block max-h-64 max-w-full object-contain"
+                    />
+                  </a>
+                ) : (
+                  <a
+                    key={`${outcome.callId}-${file.uri}`}
+                    href={file.uri}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-1 inline-flex min-h-6 items-center gap-1 font-medium text-[var(--chat-accent-primary-text)] underline-offset-2 hover:underline"
+                  >
+                    {LABEL.openFile} {file.name}
+                  </a>
+                ),
+              ),
           )}
         </div>
       ) : null}
@@ -447,24 +501,11 @@ export function VoiceModeSurface({
         </div>
       ) : null}
       {session.toolApprovals.map((approval) => (
-        <ApprovalCard
+        <VoiceToolApproval
           key={approval.callId}
-          data-testid="voice-tool-approval"
-          className="w-full max-w-md"
-          title={LABEL.approvalTitle}
-          requests={[{ id: approval.callId, name: approval.summary, detail: approval.name }]}
-          approveLabel={TOOL_APPROVAL_ACTION_LABELS.approve}
-          denyLabel={TOOL_APPROVAL_ACTION_LABELS.deny}
-          onApprove={() => session.decideToolApproval(approval.callId, 'approved')}
-          onDeny={() => session.decideToolApproval(approval.callId, 'rejected')}
-          pending={approval.deciding}
-        >
-          {approval.input ? (
-            <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background/70 p-2 font-mono text-caption text-muted-foreground">
-              {approval.input}
-            </pre>
-          ) : null}
-        </ApprovalCard>
+          approval={approval}
+          onDecide={session.decideToolApproval}
+        />
       ))}
       {sendingChip}
       {captionsOpen ? <VoiceCaptions lines={captions} /> : null}
@@ -514,6 +555,43 @@ export function VoiceModeSurface({
       >
         {orb}
       </div>
+
+      {callTime !== null || agentStatus !== null ? (
+        <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-2 text-sm">
+          {callTime !== null ? (
+            <p
+              role="timer"
+              aria-label={`${LABEL.callTime} ${callTime}`}
+              data-testid="voice-call-time"
+              className="tabular-nums text-[var(--chat-text-muted)]"
+            >
+              {callTime}
+            </p>
+          ) : null}
+          {agentStatus !== null ? (
+            <div
+              data-testid="voice-agent-status"
+              className="flex max-w-full items-center gap-2 text-[var(--chat-text-secondary)]"
+            >
+              {latestActivity?.state === 'timed_out' ? (
+                <CircleAlert className="h-4 w-4 shrink-0" aria-hidden="true" />
+              ) : (
+                <Spinner size="sm" className="h-4 w-4 shrink-0" />
+              )}
+              <span className="min-w-0 truncate">{agentStatus}</span>
+              <button
+                type="button"
+                data-testid="voice-stop-task"
+                onClick={session.cancelBackendWork}
+                title={LABEL.stopTaskHint}
+                className="min-h-11 shrink-0 rounded-full px-3 font-medium text-[var(--chat-accent-primary-text)] transition-colors hover:bg-[var(--chat-surface-hover)]"
+              >
+                {LABEL.stopTask}
+              </button>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
 
       <VoiceComposer
         value={typed}

@@ -541,5 +541,12 @@
   "timeDivider": {
     "today": "Heute",
     "yesterday": "Gestern"
+  },
+  "liveVoice": {
+    "pauseCall": "Anruf pausieren",
+    "resumeCall": "Anruf fortsetzen",
+    "paused": "Pausiert",
+    "callTime": "Anrufdauer {{time}}",
+    "voiceSettings": "Spracheinstellungen"
   }
 }

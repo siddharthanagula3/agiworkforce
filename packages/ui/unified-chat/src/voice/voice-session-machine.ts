@@ -306,3 +306,51 @@ export function advanceBargeIn(consecutive: number, level: number): BargeInResul
     triggered: next >= BARGE_IN_SAMPLE_COUNT,
   };
 }
+
+export interface VoiceCallClock {
+  readonly accumulatedMs: number;
+  readonly runningSince: number | null;
+}
+
+export const INITIAL_VOICE_CALL_CLOCK: VoiceCallClock = {
+  accumulatedMs: 0,
+  runningSince: null,
+};
+
+export function advanceVoiceCallClock(
+  clock: VoiceCallClock,
+  running: boolean,
+  now: number,
+): VoiceCallClock {
+  if (running) return clock.runningSince === null ? { ...clock, runningSince: now } : clock;
+  if (clock.runningSince === null) return clock;
+  return {
+    accumulatedMs: clock.accumulatedMs + Math.max(0, now - clock.runningSince),
+    runningSince: null,
+  };
+}
+
+export function voiceCallElapsedMs(clock: VoiceCallClock, now: number): number {
+  return (
+    clock.accumulatedMs + (clock.runningSince === null ? 0 : Math.max(0, now - clock.runningSince))
+  );
+}
+
+export function voiceCallClockRunning(status: VoiceSessionStatus, paused: boolean): boolean {
+  return (
+    !paused &&
+    status !== VOICE_SESSION_STATUS.exited &&
+    status !== VOICE_SESSION_STATUS.entering &&
+    status !== VOICE_SESSION_STATUS.error
+  );
+}
+
+export function formatVoiceCallTime(ms: number): string {
+  const totalSeconds = Math.max(0, Math.floor(ms / 1_000));
+  const hours = Math.floor(totalSeconds / 3_600);
+  const minutes = Math.floor((totalSeconds % 3_600) / 60);
+  const seconds = String(totalSeconds % 60).padStart(2, '0');
+  return hours > 0
+    ? `${hours}:${String(minutes).padStart(2, '0')}:${seconds}`
+    : `${minutes}:${seconds}`;
+}

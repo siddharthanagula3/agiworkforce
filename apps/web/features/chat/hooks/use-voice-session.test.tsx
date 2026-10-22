@@ -280,6 +280,35 @@ describe('useVoiceSession', () => {
     });
   });
 
+  it('times the call while it runs, holds the time while paused and clears it on exit', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(1_000);
+    try {
+      const { result } = mount();
+      await enterAndStart(result);
+      expect(result.current.callElapsedMs).toBe(0);
+
+      now.mockReturnValue(31_000);
+      await act(async () => {
+        result.current.pause();
+      });
+      expect(result.current.paused).toBe(true);
+      expect(result.current.callElapsedMs).toBe(30_000);
+
+      now.mockReturnValue(90_000);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(result.current.callElapsedMs).toBe(30_000);
+
+      await act(async () => {
+        result.current.exit();
+      });
+      expect(result.current.callElapsedMs).toBe(0);
+    } finally {
+      now.mockRestore();
+    }
+  });
+
   it('settles the delegated backend usage the session collected with the close', async () => {
     live.backendUsage = {
       inputTokens: 1_300,

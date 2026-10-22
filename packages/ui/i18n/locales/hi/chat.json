@@ -541,5 +541,12 @@
   "timeDivider": {
     "today": "आज",
     "yesterday": "कल"
+  },
+  "liveVoice": {
+    "pauseCall": "कॉल रोकें",
+    "resumeCall": "कॉल फिर से शुरू करें",
+    "paused": "रुका हुआ",
+    "callTime": "कॉल का समय {{time}}",
+    "voiceSettings": "वॉइस सेटिंग्स"
   }
 }

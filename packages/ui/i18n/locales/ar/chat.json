@@ -813,5 +813,12 @@
   "timeDivider": {
     "today": "اليوم",
     "yesterday": "أمس"
+  },
+  "liveVoice": {
+    "pauseCall": "إيقاف المكالمة مؤقتًا",
+    "resumeCall": "استئناف المكالمة",
+    "paused": "متوقفة مؤقتًا",
+    "callTime": "مدة المكالمة {{time}}",
+    "voiceSettings": "إعدادات الصوت"
   }
 }

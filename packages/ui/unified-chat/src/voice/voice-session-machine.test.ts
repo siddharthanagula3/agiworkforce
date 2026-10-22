@@ -3,9 +3,12 @@ import { describe, expect, it } from 'vitest';
 import {
   advanceBargeIn,
   advanceSpeechWindow,
+  advanceVoiceCallClock,
   BARGE_IN_LEVEL_THRESHOLD,
   BARGE_IN_SAMPLE_COUNT,
+  formatVoiceCallTime,
   INITIAL_SPEECH_WINDOW,
+  INITIAL_VOICE_CALL_CLOCK,
   INITIAL_VOICE_SESSION_STATE,
   isVoiceSessionActive,
   MIN_UTTERANCE_MS,
@@ -16,6 +19,8 @@ import {
   SILENCE_WINDOW_MS,
   SPEECH_LEVEL_THRESHOLD,
   UTTERANCE_CANCEL_WINDOW_MS,
+  voiceCallClockRunning,
+  voiceCallElapsedMs,
   voiceSessionReducer,
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
@@ -305,5 +310,40 @@ describe('barge-in detection', () => {
 
   it('demands a louder sample than ordinary speech so playback is not its own trigger', () => {
     expect(BARGE_IN_LEVEL_THRESHOLD).toBeGreaterThan(SPEECH_LEVEL_THRESHOLD);
+  });
+});
+
+describe('call clock', () => {
+  it('counts only the time the call was running, across a pause', () => {
+    let clock = advanceVoiceCallClock(INITIAL_VOICE_CALL_CLOCK, true, 1_000);
+    expect(voiceCallElapsedMs(clock, 31_000)).toBe(30_000);
+
+    clock = advanceVoiceCallClock(clock, false, 31_000);
+    expect(voiceCallElapsedMs(clock, 120_000)).toBe(30_000);
+
+    clock = advanceVoiceCallClock(clock, true, 120_000);
+    expect(voiceCallElapsedMs(clock, 132_000)).toBe(42_000);
+  });
+
+  it('keeps the start of a run that is already counting', () => {
+    const started = advanceVoiceCallClock(INITIAL_VOICE_CALL_CLOCK, true, 1_000);
+    expect(advanceVoiceCallClock(started, true, 5_000)).toBe(started);
+  });
+
+  it('runs while a call is connected and stops while connecting, failed, paused or ended', () => {
+    expect(voiceCallClockRunning(VOICE_SESSION_STATUS.listening, false)).toBe(true);
+    expect(voiceCallClockRunning(VOICE_SESSION_STATUS.speaking, false)).toBe(true);
+    expect(voiceCallClockRunning(VOICE_SESSION_STATUS.muted, false)).toBe(true);
+    expect(voiceCallClockRunning(VOICE_SESSION_STATUS.listening, true)).toBe(false);
+    expect(voiceCallClockRunning(VOICE_SESSION_STATUS.entering, false)).toBe(false);
+    expect(voiceCallClockRunning(VOICE_SESSION_STATUS.error, false)).toBe(false);
+    expect(voiceCallClockRunning(VOICE_SESSION_STATUS.exited, false)).toBe(false);
+  });
+
+  it('reads as minutes and seconds, adding hours only once an hour has passed', () => {
+    expect(formatVoiceCallTime(0)).toBe('0:00');
+    expect(formatVoiceCallTime(42_900)).toBe('0:42');
+    expect(formatVoiceCallTime(605_000)).toBe('10:05');
+    expect(formatVoiceCallTime(3_725_000)).toBe('1:02:05');
   });
 });

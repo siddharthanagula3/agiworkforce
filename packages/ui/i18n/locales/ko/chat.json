@@ -541,5 +541,12 @@
   "timeDivider": {
     "today": "오늘",
     "yesterday": "어제"
+  },
+  "liveVoice": {
+    "pauseCall": "통화 일시정지",
+    "resumeCall": "통화 재개",
+    "paused": "일시정지됨",
+    "callTime": "통화 시간 {{time}}",
+    "voiceSettings": "음성 설정"
   }
 }

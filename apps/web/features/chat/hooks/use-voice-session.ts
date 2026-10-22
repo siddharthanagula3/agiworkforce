@@ -16,10 +16,15 @@ import {
 import { usePrefersReducedMotion } from '@features/support/hooks/usePrefersReducedMotion';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import {
+  advanceVoiceCallClock,
+  INITIAL_VOICE_CALL_CLOCK,
   isVoiceSessionActive,
   reportClientFailure,
+  voiceCallClockRunning,
+  voiceCallElapsedMs,
   VOICE_SESSION_EVENT,
   VOICE_SESSION_STATUS,
+  type VoiceCallClock,
   type VoiceOrbLevelSource,
   type VoiceSessionState,
 } from '@agiworkforce/unified-chat';
@@ -48,6 +53,7 @@ const REMOTE_CLOSE_REASONS_WITH_NOTICE = new Set(['expired', 'content', 'connect
 const EXTEND_LEAD_MS = 15_000;
 const EXTEND_RETRY_MS = 10_000;
 const FIRST_EXTENSION_BLOCK = 2;
+const CALL_CLOCK_TICK_MS = 1_000;
 
 interface SessionBudget {
   session: LiveVoiceSession;
@@ -93,6 +99,7 @@ export interface VoiceSessionController {
   pause: () => void;
   resume: () => void;
   paused: boolean;
+  callElapsedMs: number;
   rejoinOffer: VoiceRejoinOffer | null;
   answerRejoin: (rejoin: boolean) => void;
   cancelPending: () => void;
@@ -141,6 +148,7 @@ const controller = {
   budgetTimer: null as number | null,
   providerNoticeTimer: null as number | null,
   paused: false,
+  clock: INITIAL_VOICE_CALL_CLOCK as VoiceCallClock,
 };
 
 /**
@@ -604,15 +612,34 @@ export function useVoiceSession({
     () => NOT_RECONNECTING,
   );
   const [deviceName, setDeviceName] = useState(() => controller.session?.microphoneLabel ?? '');
+  const [callElapsedMs, setCallElapsedMs] = useState(() =>
+    voiceCallElapsedMs(controller.clock, Date.now()),
+  );
 
   const { status, muted } = state;
   const active = isVoiceSessionActive(status);
+  const callEnded = status === VOICE_SESSION_STATUS.exited;
+  const callRunning = voiceCallClockRunning(status, paused);
 
   controller.sink = { conversationId, onStartWorkTask, onEnsureConversation, onTranscript };
 
   useEffect(() => {
     resumeVoiceSessionAfterNavigation();
   }, []);
+
+  useEffect(() => {
+    const now = Date.now();
+    controller.clock = callEnded
+      ? INITIAL_VOICE_CALL_CLOCK
+      : advanceVoiceCallClock(controller.clock, callRunning, now);
+    setCallElapsedMs(voiceCallElapsedMs(controller.clock, now));
+    if (!callRunning) return undefined;
+    const timer = window.setInterval(
+      () => setCallElapsedMs(voiceCallElapsedMs(controller.clock, Date.now())),
+      CALL_CLOCK_TICK_MS,
+    );
+    return () => window.clearInterval(timer);
+  }, [callEnded, callRunning]);
 
   // The settings a session starts with are read once, so a later change
   // re-negotiates the open session below instead of restarting the connection.
@@ -814,6 +841,7 @@ export function useVoiceSession({
     pause,
     resume,
     paused,
+    callElapsedMs,
     rejoinOffer,
     answerRejoin,
     cancelPending,

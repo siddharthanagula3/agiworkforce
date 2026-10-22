@@ -5,7 +5,16 @@ jest.mock('@/services/fileCreation', () => ({
   shareFile: jest.fn().mockResolvedValue(undefined),
 }));
 
-import { render, fireEvent, waitFor } from '@testing-library/react-native';
+jest.mock('@/src/features/image/hooks/useGeneratedImageSource', () => ({
+  useGeneratedImageSource: (uri: string) => ({
+    source: { uri: `https://api.test${uri}`, headers: { Authorization: 'Bearer t' } },
+    status: 'ready',
+  }),
+}));
+
+import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { router } from 'expo-router';
+import '@/src/i18n';
 import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
 import { LiveVoiceBar, liveVoiceOrbSize } from '@/src/features/voice/components/LiveVoiceBar';
@@ -38,8 +47,10 @@ function renderLiveBar(props: Partial<React.ComponentProps<typeof LiveVoiceBar>>
         toolOutcomes={[]}
         onDecideApproval={jest.fn()}
         onToggleMute={jest.fn()}
+        onTogglePause={jest.fn()}
         onStopTask={jest.fn()}
         reconnecting={false}
+        paused={false}
         onSwitchToText={jest.fn()}
         onRetry={jest.fn()}
         onExit={jest.fn()}
@@ -130,8 +141,10 @@ describe('LiveVoiceBar', () => {
           toolOutcomes={[]}
           onDecideApproval={jest.fn()}
           onToggleMute={jest.fn()}
+          onTogglePause={jest.fn()}
           onStopTask={jest.fn()}
           reconnecting={false}
+          paused={false}
           onSwitchToText={jest.fn()}
           onRetry={jest.fn()}
           onExit={jest.fn()}
@@ -290,6 +303,113 @@ describe('LiveVoiceBar', () => {
     fireEvent.press(getByLabelText('End live voice'));
     expect(onExit).toHaveBeenCalledTimes(1);
     expect(onToggleMute).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('LiveVoiceBar call controls', () => {
+  beforeEach(() => {
+    useSettingsStore.setState({ hapticsEnabled: false });
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('counts the call time while the call is live', () => {
+    jest.useFakeTimers();
+    const { getByTestId } = renderLiveBar();
+    expect(getByTestId('live-voice-call-time').props.children).toBe('00:00');
+
+    act(() => {
+      jest.advanceTimersByTime(65_000);
+    });
+    const clock = getByTestId('live-voice-call-time');
+    expect(clock.props.children).toBe('01:05');
+    expect(clock.props.accessibilityLabel).toBe('Call time 01:05');
+  });
+
+  it('shows no clock or pause while the call is still connecting', () => {
+    const { queryByTestId, getByTestId } = renderLiveBar({ status: 'connecting' });
+    expect(queryByTestId('live-voice-call-time')).toBeNull();
+    expect(queryByTestId('live-voice-pause')).toBeNull();
+    expect(getByTestId('live-voice-settings')).toBeTruthy();
+  });
+
+  it('pauses from the header, says it is paused and offers resume', () => {
+    const onTogglePause = jest.fn();
+    const live = renderLiveBar({ onTogglePause });
+    fireEvent.press(live.getByLabelText('Pause call'));
+    expect(onTogglePause).toHaveBeenCalledTimes(1);
+    live.unmount();
+
+    const paused = renderLiveBar({ status: 'idle', paused: true, onTogglePause });
+    expect(paused.getByTestId('live-voice-status').props.children).toBe('Paused');
+    fireEvent.press(paused.getByLabelText('Resume call'));
+    expect(onTogglePause).toHaveBeenCalledTimes(2);
+  });
+
+  it('opens voice settings from the gear', () => {
+    const { getByLabelText } = renderLiveBar();
+    fireEvent.press(getByLabelText('Voice settings'));
+    expect(router.push).toHaveBeenCalledWith('/(app)/settings/voice');
+  });
+
+  it('shows an image a tool returned in the results, beside the file link', () => {
+    const { getByTestId, getAllByTestId } = renderLiveBar({
+      toolOutcomes: [
+        {
+          callId: 'chart',
+          label: 'Running code',
+          output: 'Saved chart.png',
+          isError: false,
+          files: [
+            {
+              name: 'chart.png',
+              uri: '/api/files/0190a000-0000-7000-8000-000000000001',
+              mimeType: 'image/png',
+            },
+            { name: 'data.csv', uri: '/api/files/gf_data', mimeType: 'text/csv' },
+          ],
+        },
+      ],
+    });
+    const image = getByTestId('live-voice-tool-image');
+    expect(image.props.accessibilityLabel).toBe('chart.png');
+    expect(getAllByTestId('live-voice-tool-image')).toHaveLength(1);
+  });
+
+  it('warns on a high-risk approval with the label a typed approval uses', () => {
+    const { getByTestId, getByText } = renderLiveBar({
+      approvals: [
+        {
+          callId: 'call_2',
+          name: 'mcp__github__post_issue_comment',
+          summary: 'Comment on issue 12',
+          input: null,
+          deciding: false,
+          review: { risk_tier: 'critical', destructive: true, approval_scopes: ['once'] },
+        },
+      ],
+    });
+    expect(getByTestId('live-voice-approval-risk')).toBeTruthy();
+    getByText('Allow');
+    getByText('Deny');
+  });
+
+  it('shows no risk warning for a low-risk approval', () => {
+    const { queryByTestId } = renderLiveBar({
+      approvals: [
+        {
+          callId: 'call_3',
+          name: 'url_fetch',
+          summary: 'Read a page',
+          input: null,
+          deciding: false,
+          review: { risk_tier: 'low', destructive: false, approval_scopes: ['once'] },
+        },
+      ],
+    });
+    expect(queryByTestId('live-voice-approval-risk')).toBeNull();
   });
 });
 
