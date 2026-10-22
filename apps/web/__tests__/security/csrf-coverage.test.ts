@@ -13,6 +13,44 @@ const COOKIE_AUTH = /getClerkAuthUser\s*\(|getRequestIdentity\s*\(/;
 const CSRF = /requireCsrfToken|withCsrf|requireCsrfUnlessWorkspaceApiKey\s*\(/;
 const RETIRED = /ENDPOINT_RETIRED|status:\s*410/;
 
+const WEB_ROOT = path.resolve(import.meta.dirname, '../..');
+
+/**
+ * Shared route openers that run requireCsrfToken before handing a route its
+ * user-scoped database. A route counts as CSRF-checked through one of these only
+ * while the opener's own body still makes that call, which the last test pins.
+ */
+const CSRF_OPENERS: ReadonlyArray<{
+  file: string;
+  name: string;
+  call: RegExp;
+  check: RegExp;
+}> = [
+  {
+    file: 'lib/agents/agent-route.ts',
+    name: 'openAgentWrite',
+    call: /\bopenAgentWrite\s*\(/,
+    check: /^\s*const csrfError = await requireCsrfToken\(request\);\s*if \(csrfError\) return/,
+  },
+  {
+    file: 'lib/developers/prompt-route.ts',
+    name: 'openPromptWrite',
+    call: /\bopenPromptWrite\s*\(/,
+    check: /^\s*const csrfError = await requireCsrfToken\(request\);\s*if \(csrfError\) return/,
+  },
+  {
+    file: 'features/security-scan/server/route-access.ts',
+    name: 'securityScanRouteContext',
+    call: /\bsecurityScanRouteContext\s*\(\s*request\s*,\s*\w+\s*,\s*\{\s*mutation:\s*true\s*\}\s*\)/,
+    check:
+      /if \(options\.mutation\) \{\s*const csrfError = await requireCsrfToken\(request, userId\);\s*if \(csrfError\) return/,
+  },
+];
+
+function checksCsrf(src: string): boolean {
+  return CSRF.test(src) || CSRF_OPENERS.some((opener) => opener.call.test(src));
+}
+
 const EXEMPT: Record<string, string> = {
   'stripe-webhook/route.ts':
     'Stripe signs the payload; there is no cookie principal and no browser involved.',
@@ -134,6 +172,11 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
     call: /verifyGoogleCalendarChannelToken\s*\(/,
     reason: 'Google echoes the channel token this app issued for the watch.',
   },
+  'webhooks/slack-interactions/route.ts': {
+    call: /verifySlackSignature\s*\(/,
+    reason:
+      'Slack signs the interaction payload with the app signing secret; only the Slack user who started the run, linked to its account, can decide it, and no session is read.',
+  },
   'webhooks/slack/route.ts': {
     call: /verifySlackSignature\s*\(/,
     reason: 'Slack signs the request with the app signing secret.',
@@ -168,7 +211,7 @@ describe('CSRF coverage on state-changing routes', () => {
       if (!COOKIE_AUTH.test(src)) continue;
       if (RETIRED.test(src)) continue;
       if (rel in EXEMPT) continue;
-      if (CSRF.test(src)) continue;
+      if (checksCsrf(src)) continue;
 
       offenders.push(rel);
     }
@@ -191,7 +234,7 @@ describe('CSRF coverage on state-changing routes', () => {
       const src = fs.readFileSync(file, 'utf8');
 
       if (!MUTATING.test(src)) continue;
-      if (CSRF.test(src) || RETIRED.test(src) || rel in EXEMPT) continue;
+      if (checksCsrf(src) || RETIRED.test(src) || rel in EXEMPT) continue;
 
       const principal = NON_COOKIE_PRINCIPAL[rel];
       if (!principal) {
@@ -218,7 +261,7 @@ describe('CSRF coverage on state-changing routes', () => {
       const full = path.join(API_ROOT, rel);
       expect(fs.existsSync(full), `stale principal entry: ${rel}`).toBe(true);
       const src = fs.readFileSync(full, 'utf8');
-      expect(CSRF.test(src), `${rel} now checks CSRF; drop its principal entry`).toBe(false);
+      expect(checksCsrf(src), `${rel} now checks CSRF; drop its principal entry`).toBe(false);
     }
   });
 
@@ -230,6 +273,19 @@ describe('CSRF coverage on state-changing routes', () => {
     expect(caller.slice(at, at + 240)).toMatch(
       /presentsWorkspaceApiKey\(request\)\s*\?\s*null\s*:\s*requireCsrfToken\(request\)/,
     );
+  });
+
+  it('counts a shared route opener only while it still requires the CSRF token first', () => {
+    for (const opener of CSRF_OPENERS) {
+      const src = fs.readFileSync(path.join(WEB_ROOT, opener.file), 'utf8');
+      const at = src.indexOf(`export async function ${opener.name}(`);
+      expect(at, `${opener.name} is gone from ${opener.file}`).toBeGreaterThan(-1);
+      const end = src.indexOf('\n}\n', at);
+      const body = src.slice(src.indexOf(' {\n', src.indexOf('): Promise<', at)) + 2, end);
+      expect(body, `${opener.name} no longer refuses a request without a CSRF token`).toMatch(
+        opener.check,
+      );
+    }
   });
 
   it('keeps the exemption list honest', () => {
