@@ -30,6 +30,7 @@ export function useCloudCodeChanges(
   sessionId: string,
   active: boolean,
   onSessionChanged: () => void,
+  reloadKey = 0,
 ): CloudCodeChangesView {
   const [changes, setChanges] = useState<CloudCodeChanges | null>(null);
   const [loading, setLoading] = useState(false);
@@ -66,7 +67,7 @@ export function useCloudCodeChanges(
 
   useEffect(() => {
     if (active) void load();
-  }, [active, load]);
+  }, [active, load, reloadKey]);
 
   const perform = useCallback(
     async (action: CloudCodeChangesAction, run: () => Promise<void>, fallback: string) => {

@@ -230,7 +230,17 @@ function SessionView({
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [turnMode, setTurnMode] = useState<CloudCodeTurnMode>(CLOUD_CODE_DEFAULT_TURN_MODE);
   const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
-  const changes = useCloudCodeChanges(sessionId, changesOpen, view.reload);
+  const finishedTurns = useMemo(
+    () => view.transcript.filter((item) => item.kind === 'reply').length,
+    [view.transcript],
+  );
+  const changes = useCloudCodeChanges(
+    sessionId,
+    view.status === 'ready',
+    view.reload,
+    finishedTurns,
+  );
+  const openChanges = useCallback(() => setChangesOpen(true), []);
   const turnControls = view.session?.runtimeId === null;
   const turnOptions = useMemo<CloudCodeTurnOptions>(
     () => (turnControls ? { maxSteps: turnSteps, mode: turnMode } : {}),
@@ -340,7 +350,7 @@ function SessionView({
         behavior={keyboard.behavior}
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
-        <Header session={session} onBack={onBack} onOpenChanges={() => setChangesOpen(true)} />
+        <Header session={session} onBack={onBack} onOpenChanges={openChanges} />
         <CloudCodeChangesSheet
           visible={changesOpen}
           session={session}
@@ -422,7 +432,11 @@ function SessionView({
             </Text>
           ) : null}
 
-          <CloudCodeTranscript items={view.transcript} />
+          <CloudCodeTranscript
+            items={view.transcript}
+            changes={changes.changes}
+            onOpenChanges={openChanges}
+          />
 
           {view.pendingGoal ? <CloudCodeTaskBubble text={view.pendingGoal} /> : null}
 
@@ -482,6 +496,8 @@ function SessionView({
             onSend={() => void handleSend()}
             onStop={view.stop}
             onOpenOptions={() => setOptionsOpen(true)}
+            changes={changes.changes}
+            onOpenChanges={openChanges}
           />
         )}
       </KeyboardAvoidingView>
