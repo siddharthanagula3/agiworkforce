@@ -290,6 +290,11 @@
       "file": "apps/web/app/api/user/export/route.ts",
       "migration": 381,
       "reason": "Exports connector_account_states that 0381 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0381 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/cloud-code-session-service.ts",
+      "migration": 382,
+      "reason": "Reads or writes cloud_code_sessions.security_scan_id and security_scan_issued_at that 0382 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0382 is applied."
     }
   ]
 }
