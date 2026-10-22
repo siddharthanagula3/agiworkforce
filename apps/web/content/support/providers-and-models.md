@@ -5,6 +5,7 @@ path: /providers
 category: providers
 tags: providers, models, switch model, model picker, anthropic, openai, google, xai, deepseek, perplexity, qwen, moonshot, zhipu, ollama, lm studio, routing
 updated: 2026-10-05
+description: How to choose a product surface, read the catalog counts, change the model route and use automatic routing.
 scope: public
 ---
 

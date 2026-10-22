@@ -6,6 +6,7 @@ category: surfaces
 tags: computer use, control my computer, mouse, keyboard, screen, allowed apps, refused apps, add app, stop, take over, accessibility, screen recording
 platforms: desktop, macos
 updated: 2026-10-22
+description: What computer use does in AGI Desktop, how to turn it on and how to stop or pause a run.
 scope: public
 ---
 

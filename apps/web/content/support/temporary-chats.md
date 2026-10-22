@@ -5,6 +5,7 @@ path: /privacy
 category: chat
 tags: temporary chat, incognito, private chat, not saved, no history, off the record, end temporary chat, ephemeral
 updated: 2026-10-02
+description: What a temporary chat does, how to turn it on and end it and what you cannot do with one.
 scope: public
 ---
 

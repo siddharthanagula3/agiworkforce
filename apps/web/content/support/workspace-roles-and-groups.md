@@ -5,6 +5,7 @@ path: /workspace/roles
 category: administration
 tags: roles, permissions, owner, primary owner, admin, member, viewer, custom role, groups, directory group, scim groups, transfer ownership, seats
 updated: 2026-09-17
+description: The built-in roles, what each permission grants, custom roles, directory groups and seats.
 scope: public
 ---
 

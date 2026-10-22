@@ -1,4 +1,3 @@
-
 import { execFileSync } from 'node:child_process';
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -89,6 +88,22 @@ describe('corpus builder guards', () => {
     const result = buildFromDocument(documentWith({ scope: 'internal' }));
     expect(result.ok).toBe(false);
     expect(result.message).toContain('scope must be "public"');
+  });
+
+  it('accepts an optional one-sentence description', () => {
+    expect(buildFromDocument(documentWith({ description: 'What the probe covers.' })).ok).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['one that is not a sentence', 'What the probe covers'],
+    ['one that is too long', `${'a'.repeat(200)}.`],
+    ['one that holds a fact token', 'Works on {{SURFACES.names}}.'],
+  ])('rejects a description %s', (_label, description) => {
+    const result = buildFromDocument(documentWith({ description }));
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('description must be one plain sentence');
   });
 
   it('rejects unknown frontmatter keys', () => {

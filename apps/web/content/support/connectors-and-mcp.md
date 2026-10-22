@@ -5,6 +5,7 @@ path: /connectors
 category: connectors
 tags: connector, connectors, mcp, integration, github, tools, revoke, disconnect, permissions, always allow
 updated: 2026-10-12
+description: What connectors do, how to add and remove one and how tool permissions work.
 scope: public
 ---
 

@@ -170,6 +170,7 @@ export function buildCorpus(contentDir = CONTENT_DIR) {
       category: data['category'],
       tags,
       ...(platforms.length > 0 ? { platforms } : {}),
+      ...(data['description'] ? { description: data['description'] } : {}),
       updated: data['updated'],
       source: file,
       chunks,

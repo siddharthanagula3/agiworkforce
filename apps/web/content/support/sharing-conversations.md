@@ -5,6 +5,7 @@ path: /chat
 category: chat
 tags: share, share link, public link, workspace only, revoke, shared links, unpublish, published artifacts, export chat, pdf, docx
 updated: 2026-10-02
+description: How to create, change and revoke a share link, find your links and export a chat instead of sharing it.
 scope: public
 ---
 

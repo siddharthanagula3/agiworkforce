@@ -6,6 +6,7 @@ category: surfaces
 tags: install, download, desktop app, macos, windows, linux, dmg, installer, mobile app, ios, android, release notes, signature, notarized, get notified
 platforms: desktop, mobile, macos, windows, linux, ios, android
 updated: 2026-10-05
+description: How to check release availability and install the desktop and mobile apps.
 scope: public
 ---
 

@@ -5,6 +5,7 @@ path: /help
 category: getting-started
 tags: getting started, first steps, setup, sign in, new account, onboarding, install
 updated: 2026-10-05
+description: How to create an account, start a chat, choose a model route and decide what to set up first.
 scope: public
 ---
 

@@ -32,6 +32,23 @@ describe('help article page chrome', () => {
     expect(last?.querySelector('a')).toBeNull();
   });
 
+  it('renders the article description as the lede between the title and the meta line', async () => {
+    const { container } = await renderArticle(ARTICLE_ID);
+    const lede = container.querySelector('.dx-desc');
+
+    expect(getHelpArticle(ARTICLE_ID)?.description).toBeTruthy();
+    expect(lede?.textContent).toBe(getHelpArticle(ARTICLE_ID)?.description);
+    expect(lede?.previousElementSibling?.classList.contains('dx-head')).toBe(true);
+    expect(lede?.nextElementSibling?.classList.contains('dx-meta')).toBe(true);
+  });
+
+  it('gives every article a description', () => {
+    for (const link of docsNavGroups().flatMap((group) => group.links)) {
+      if (!link.href.startsWith('/help/')) continue;
+      expect(getHelpArticle(link.href.split('/').pop() ?? '')?.description, link.href).toBeTruthy();
+    }
+  });
+
   it('renders the feedback block, support cards and related articles after the body', async () => {
     const { container } = await renderArticle(ARTICLE_ID);
     const body = container.querySelector('.dx-prose');

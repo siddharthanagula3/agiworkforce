@@ -5,6 +5,7 @@ path: /chat
 category: chat
 tags: keyboard, shortcut, shortcuts, hotkey, search shortcut, cmd shift f, ctrl shift f, new chat shortcut, toggle sidebar, escape, regenerate shortcut, disable shortcut, terminal shortcut, code shortcut
 updated: 2026-10-22
+description: The keyboard shortcuts for the app, the message composer and local Code sessions, and how to turn one off.
 scope: public
 ---
 

@@ -1,6 +1,8 @@
 const REQUIRED_KEYS = ['id', 'title', 'path', 'category', 'tags', 'updated', 'scope'];
 
-const OPTIONAL_KEYS = ['platforms'];
+const OPTIONAL_KEYS = ['platforms', 'description'];
+
+export const DESCRIPTION_MAX_CHARS = 200;
 
 export class BuildError extends Error {}
 
@@ -40,6 +42,17 @@ export function parseFrontmatter(raw, file) {
   }
   if (data['scope'] !== 'public') {
     throw new BuildError(`${file}: scope must be "public" (got "${data['scope']}")`);
+  }
+  if (
+    'description' in data &&
+    (data['description'] === '' ||
+      data['description'].length > DESCRIPTION_MAX_CHARS ||
+      !data['description'].endsWith('.') ||
+      data['description'].includes('{{'))
+  ) {
+    throw new BuildError(
+      `${file}: description must be one plain sentence ending in a full stop, at most ${DESCRIPTION_MAX_CHARS} characters`,
+    );
   }
   if (!/^[a-z0-9][a-z0-9-]*$/.test(data['id'])) {
     throw new BuildError(`${file}: id must be kebab-case (got "${data['id']}")`);

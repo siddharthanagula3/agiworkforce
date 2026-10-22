@@ -6,6 +6,7 @@ category: providers
 tags: byok, api key, provider key, anthropic, openai, google, bring your own key, add key, encrypted
 platforms: cli, vscode
 updated: 2026-10-05
+description: How to add your own provider API key, where it is stored and how to use a custom OpenAI-compatible endpoint.
 scope: public
 ---
 

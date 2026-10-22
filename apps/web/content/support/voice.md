@@ -5,6 +5,7 @@ path: /chat
 category: voice
 tags: voice, voice mode, dictation, microphone, speech to text, transcript, voices, marin, mute, microphone denied, speak
 updated: 2026-09-19
+description: The difference between dictation and voice mode, and what to check when voice will not start.
 scope: public
 ---
 

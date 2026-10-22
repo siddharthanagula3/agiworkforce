@@ -5,6 +5,7 @@ path: /agi-work
 category: work
 tags: agi work, work, agent, task, autonomous, session dock, outputs, progress, sources, approvals, work history, deliverables
 updated: 2026-10-12
+description: How AGI Work runs a multi-step task, shows progress, asks for approvals and keeps past sessions.
 scope: public
 ---
 

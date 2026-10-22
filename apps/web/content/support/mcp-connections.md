@@ -5,6 +5,7 @@ path: /connectors/mcp-directory
 category: connectors
 tags: mcp, model context protocol, custom mcp, mcp server, remote mcp, mcp url, auth token, tool discovery, mcp directory, mcp-server, scopes
 updated: 2026-10-12
+description: How to connect a custom MCP server, what discovery results mean and which permissions and limits apply.
 scope: public
 ---
 

@@ -94,6 +94,7 @@ export interface CorpusChunk {
   headingPath: string;
   text: string;
   updated: string;
+  description?: string;
   origin: 'markdown' | 'static-data';
 }
 

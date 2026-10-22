@@ -5,6 +5,7 @@ path: /chat/schedules
 category: work
 tags: schedule, scheduled task, cron, recurring, timezone, trigger, webhook, gmail, google calendar, github, run history, automation
 updated: 2026-10-12
+description: How to create a schedule or a trigger, what an unattended run means and the limits that apply.
 scope: public
 ---
 

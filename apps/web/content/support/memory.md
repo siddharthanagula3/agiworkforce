@@ -5,6 +5,7 @@ path: /features/memory
 category: chat
 tags: memory, remember, forget, persistent memory, past chats, memory settings, forget everything, import memory, project memory
 updated: 2026-10-15
+description: The memory switches in Settings, what memory is designed not to keep and how to clear it.
 scope: public
 ---
 

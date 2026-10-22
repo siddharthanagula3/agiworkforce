@@ -5,6 +5,7 @@ path: /chat/artifacts
 category: chat
 tags: artifact, artifacts, canvas, document, code, preview, publish artifact, unpublish, duplicate, fullscreen, save to project, version conflict
 updated: 2026-10-22
+description: What an artifact is, how to edit, copy out and publish one, and what to do when a preview will not render.
 scope: public
 ---
 

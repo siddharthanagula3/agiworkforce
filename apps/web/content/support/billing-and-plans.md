@@ -5,6 +5,7 @@ path: /pricing
 category: billing
 tags: billing, plan, upgrade, downgrade, waitlist, access code, cancel, cancel subscription, invoice, receipt, payment method, card, billing portal, app store, google play, seats, renewal
 updated: 2026-10-15
+description: Where billing lives, and how to upgrade, switch between monthly and yearly billing, cancel and find invoices.
 scope: public
 ---
 

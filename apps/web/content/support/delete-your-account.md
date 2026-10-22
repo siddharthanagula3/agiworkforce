@@ -5,6 +5,7 @@ path: /privacy
 category: account
 tags: delete account, close account, erase, deletion, cancel deletion, undo deletion, permanently delete, account erasure, remove my data
 updated: 2026-09-19
+description: How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.
 scope: public
 ---
 

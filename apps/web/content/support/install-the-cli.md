@@ -6,6 +6,7 @@ category: surfaces
 tags: cli, install cli, install.sh, agi command, terminal, agi login, auth-status, list-models, exec, resume, fork, sandbox, update, checksum, signature
 platforms: cli, macos, windows, linux
 updated: 2026-10-12
+description: How to get the CLI binary, run it for the first time and work with sessions and trust boundaries.
 scope: public
 ---
 

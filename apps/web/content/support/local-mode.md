@@ -6,6 +6,7 @@ category: local
 tags: local mode, offline, ollama, lm studio, on device, privacy, free
 platforms: cli
 updated: 2026-10-05
+description: How to run a local model with the CLI, how to set it up and how model routes and tool permissions apply.
 scope: public
 ---
 

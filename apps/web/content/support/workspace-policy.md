@@ -5,6 +5,7 @@ path: /workspace/policy
 category: administration
 tags: policy, workspace policy, feature controls, disable feature, model policy, connector policy, reasoning effort, allowed countries, surfaces, retention, exceptions, override
 updated: 2026-09-17
+description: What a workspace policy controls, including exceptions, retention, spend and audit.
 scope: public
 ---
 

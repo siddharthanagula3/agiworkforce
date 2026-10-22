@@ -52,6 +52,7 @@ export const corpusDocumentSchema = z
     category: z.string().min(1),
     tags: z.array(z.string().min(1)).min(1),
     platforms: z.array(supportPlatformSchema).min(1).optional(),
+    description: z.string().min(1).max(200).optional(),
     updated: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     source: z.string().min(1),
     chunks: z.array(corpusChunkSchema).min(1),

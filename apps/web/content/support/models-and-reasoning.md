@@ -5,6 +5,7 @@ path: /models
 category: models
 tags: model picker, choose model, auto, switch model, extended thinking, reasoning effort, thinking budget, vision, image output, video output, tools, model unavailable, retired model, prompt cache
 updated: 2026-10-12
+description: How to pick a model by name, what the capability badges mean and how to control thinking effort.
 scope: public
 ---
 

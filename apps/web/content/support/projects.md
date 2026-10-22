@@ -5,6 +5,7 @@ path: /chat/projects
 category: projects
 tags: project, projects, knowledge, sources, project instructions, project memory, knowledge files, indexing, google drive, duplicate project, delete project
 updated: 2026-10-12
+description: How to create a project, add sources, share, duplicate and delete it, and the limits that apply.
 scope: public
 ---
 

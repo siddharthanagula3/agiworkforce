@@ -6,6 +6,7 @@ category: getting-started
 tags: glossary, terminology, definitions, what does mean, jargon, terms, vocabulary, acronym
 platforms: web, desktop, cli, mobile, vscode, chrome, macos, windows, linux, ios, android
 updated: 2026-10-12
+description: Definitions of the terms AGI uses for trust modes, usage and billing, chat, tools, connectors and surfaces.
 scope: public
 ---
 

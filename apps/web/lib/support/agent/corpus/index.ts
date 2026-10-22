@@ -108,6 +108,7 @@ function buildMarkdownChunks(): CorpusChunk[] {
         headingPath: interpolateFacts(chunk.headingPath, document.id),
         text: interpolateFacts(chunk.text, document.id),
         updated: document.updated,
+        ...(document.description ? { description: document.description } : {}),
         origin: 'markdown',
       });
     }

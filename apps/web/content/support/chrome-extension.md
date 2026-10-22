@@ -6,6 +6,7 @@ category: surfaces
 tags: chrome, browser extension, browser companion, side panel, capture page, screenshot, tabs, browser automation, computer use
 platforms: chrome
 updated: 2026-10-15
+description: What the Chrome extension does, how it automates the browser and what to use without it.
 scope: public
 ---
 

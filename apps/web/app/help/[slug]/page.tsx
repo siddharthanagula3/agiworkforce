@@ -30,7 +30,7 @@ export async function generateMetadata({ params }: ArticleProps) {
   if (!article) notFound();
   return buildMetadata({
     title: `${article.title} | Help`,
-    description: `Read the AGI help guide: ${article.title}.`,
+    description: article.description ?? `Read the AGI help guide: ${article.title}.`,
     path: helpArticlePath(article.id),
     ogType: 'article',
   });
@@ -84,6 +84,7 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
             <CopyPageButton markdown={articleMarkdown(article.title, article.sections)} />
           </div>
         </div>
+        {article.description ? <p className="dx-desc">{article.description}</p> : null}
         <ul className="dx-meta">
           <li>{`Updated ${article.updated}`}</li>
           {metadata ? (

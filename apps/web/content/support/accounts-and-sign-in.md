@@ -5,6 +5,7 @@ path: /support
 category: account
 tags: sign in, login, sign up, password, email, verification, verify email, account, multiple devices, sync
 updated: 2026-10-05
+description: How to sign in, use one account on several devices and contact support about your account.
 scope: public
 ---
 

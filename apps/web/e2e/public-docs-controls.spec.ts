@@ -324,6 +324,8 @@ const controlsSources = [
   'apps/web/features/docs/components/DocsArticleBody.tsx',
   'apps/web/features/docs/components/DocsCodeBlock.tsx',
   'apps/web/features/docs/components/CopyPageButton.tsx',
+  'apps/web/features/docs/components/ArticleFeedback.tsx',
+  'apps/web/features/docs/components/ArticleSupportCards.tsx',
   'apps/web/features/docs/components/DocsNavigation.tsx',
   'apps/web/features/docs/lib/docs-nav.ts',
   'apps/web/features/docs/docs.css',

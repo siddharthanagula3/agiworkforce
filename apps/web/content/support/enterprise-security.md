@@ -5,6 +5,7 @@ path: /enterprise
 category: administration
 tags: enterprise, security review, questionnaire, soc 2, hipaa, certification, audit export, siem, trust ledger, data residency, procurement, evaluation
 updated: 2026-10-12
+description: What to evaluate before you sign: what is claimed, administrator controls, audit evidence and data residency.
 scope: public
 ---
 

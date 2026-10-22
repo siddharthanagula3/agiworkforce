@@ -6,6 +6,7 @@ category: surfaces
 tags: custom instructions, instructions, agents.md, claude.md, instructions.md, rules, repository memory, remember for this repository, project instructions
 platforms: cli, vscode, macos, windows, linux
 updated: 2026-10-12
+description: Which instruction files the CLI reads before a session, how repository memory works and how VS Code sets instructions.
 scope: public
 ---
 

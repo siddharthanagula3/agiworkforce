@@ -28,6 +28,7 @@
         "revoke session",
         "api keys"
       ],
+      "description": "How to manage passkeys, two-factor authentication, your password, active sessions and API keys.",
       "updated": "2026-10-15",
       "source": "content/support/account-security.md",
       "chunks": [
@@ -127,6 +128,7 @@
         "multiple devices",
         "sync"
       ],
+      "description": "How to sign in, use one account on several devices and contact support about your account.",
       "updated": "2026-10-05",
       "source": "content/support/accounts-and-sign-in.md",
       "chunks": [
@@ -179,6 +181,7 @@
         "work history",
         "deliverables"
       ],
+      "description": "How AGI Work runs a multi-step task, shows progress, asks for approvals and keeps past sessions.",
       "updated": "2026-10-12",
       "source": "content/support/agi-work.md",
       "chunks": [
@@ -238,6 +241,7 @@
         "save to project",
         "version conflict"
       ],
+      "description": "What an artifact is, how to edit, copy out and publish one, and what to do when a preview will not render.",
       "updated": "2026-10-22",
       "source": "content/support/artifacts.md",
       "chunks": [
@@ -302,6 +306,7 @@
         "seats",
         "renewal"
       ],
+      "description": "Where billing lives, and how to upgrade, switch between monthly and yearly billing, cancel and find invoices.",
       "updated": "2026-10-15",
       "source": "content/support/billing-and-plans.md",
       "chunks": [
@@ -390,6 +395,7 @@
         "cli",
         "vscode"
       ],
+      "description": "How to add your own provider API key, where it is stored and how to use a custom OpenAI-compatible endpoint.",
       "updated": "2026-10-05",
       "source": "content/support/byok-provider-keys.md",
       "chunks": [
@@ -470,6 +476,7 @@
         "thinking",
         "response style"
       ],
+      "description": "How to start a chat, choose how answers are written, attach files, edit or branch a conversation and organize chats.",
       "updated": "2026-10-16",
       "source": "content/support/chat-basics.md",
       "chunks": [
@@ -550,6 +557,7 @@
       "platforms": [
         "chrome"
       ],
+      "description": "What the Chrome extension does, how it automates the browser and what to use without it.",
       "updated": "2026-10-15",
       "source": "content/support/chrome-extension.md",
       "chunks": [
@@ -613,6 +621,7 @@
         "desktop",
         "macos"
       ],
+      "description": "What computer use does in AGI Desktop, how to turn it on and how to stop or pause a run.",
       "updated": "2026-10-22",
       "source": "content/support/computer-use.md",
       "chunks": [
@@ -680,6 +689,7 @@
         "vscode",
         "windows"
       ],
+      "description": "Where the CLI keeps its settings, how to view and change them and which setting wins.",
       "updated": "2026-10-12",
       "source": "content/support/configuration.md",
       "chunks": [
@@ -744,6 +754,7 @@
         "permissions",
         "always allow"
       ],
+      "description": "What connectors do, how to add and remove one and how tool permissions work.",
       "updated": "2026-10-12",
       "source": "content/support/connectors-and-mcp.md",
       "chunks": [
@@ -806,6 +817,7 @@
         "someone in danger",
         "safety"
       ],
+      "description": "Who to contact in an emergency and how AGI responds to a message about self-harm.",
       "updated": "2026-10-08",
       "source": "content/support/crisis-resources.md",
       "chunks": [
@@ -869,6 +881,7 @@
         "vscode",
         "windows"
       ],
+      "description": "Which instruction files the CLI reads before a session, how repository memory works and how VS Code sets instructions.",
       "updated": "2026-10-12",
       "source": "content/support/custom-instructions.md",
       "chunks": [
@@ -911,6 +924,7 @@
         "account erasure",
         "remove my data"
       ],
+      "description": "How account deletion works, how to cancel a scheduled deletion and how to delete conversations without deleting the account.",
       "updated": "2026-09-19",
       "source": "content/support/delete-your-account.md",
       "chunks": [
@@ -968,6 +982,7 @@
         "macos",
         "windows"
       ],
+      "description": "How to check availability before installing, and how the desktop app and the CLI reach managed cloud.",
       "updated": "2026-10-05",
       "source": "content/support/desktop-and-cli.md",
       "chunks": [
@@ -1020,6 +1035,7 @@
         "procurement",
         "evaluation"
       ],
+      "description": "What to evaluate before you sign: what is claimed, administrator controls, audit evidence and data residency.",
       "updated": "2026-10-12",
       "source": "content/support/enterprise-security.md",
       "chunks": [
@@ -1077,6 +1093,7 @@
         "portability",
         "backup conversations"
       ],
+      "description": "How to request an export of your account data, and what else you can ask for.",
       "updated": "2026-10-06",
       "source": "content/support/export-your-data.md",
       "chunks": [
@@ -1132,6 +1149,7 @@
         "too large",
         "unsupported file"
       ],
+      "description": "How to attach a file to a chat, what a chat can read and where attachments end up.",
       "updated": "2026-09-17",
       "source": "content/support/files-and-attachments.md",
       "chunks": [
@@ -1186,6 +1204,7 @@
         "onboarding",
         "install"
       ],
+      "description": "How to create an account, start a chat, choose a model route and decide what to set up first.",
       "updated": "2026-10-05",
       "source": "content/support/getting-started.md",
       "chunks": [
@@ -1254,6 +1273,7 @@
         "web",
         "windows"
       ],
+      "description": "Definitions of the terms AGI uses for trust modes, usage and billing, chat, tools, connectors and surfaces.",
       "updated": "2026-10-12",
       "source": "content/support/glossary.md",
       "chunks": [
@@ -1332,6 +1352,7 @@
         "mobile",
         "windows"
       ],
+      "description": "How to check release availability and install the desktop and mobile apps.",
       "updated": "2026-10-05",
       "source": "content/support/install-desktop-and-mobile.md",
       "chunks": [
@@ -1400,6 +1421,7 @@
         "macos",
         "windows"
       ],
+      "description": "How to get the CLI binary, run it for the first time and work with sessions and trust boundaries.",
       "updated": "2026-10-12",
       "source": "content/support/install-the-cli.md",
       "chunks": [
@@ -1475,6 +1497,7 @@
         "terminal shortcut",
         "code shortcut"
       ],
+      "description": "The keyboard shortcuts for the app, the message composer and local Code sessions, and how to turn one off.",
       "updated": "2026-10-22",
       "source": "content/support/keyboard-shortcuts.md",
       "chunks": [
@@ -1535,6 +1558,7 @@
         "list view",
         "search files"
       ],
+      "description": "How to find, open, delete and restore your uploads, generated files and artifacts in the Library.",
       "updated": "2026-10-06",
       "source": "content/support/library.md",
       "chunks": [
@@ -1592,6 +1616,7 @@
       "platforms": [
         "cli"
       ],
+      "description": "How to run a local model with the CLI, how to set it up and how model routes and tool permissions apply.",
       "updated": "2026-10-05",
       "source": "content/support/local-mode.md",
       "chunks": [
@@ -1641,6 +1666,7 @@
         "quota",
         "limit"
       ],
+      "description": "How AGI managed cloud works: access, usage, running out of capacity, where data is hosted and training.",
       "updated": "2026-10-12",
       "source": "content/support/managed-cloud.md",
       "chunks": [
@@ -1699,6 +1725,7 @@
         "mcp-server",
         "scopes"
       ],
+      "description": "How to connect a custom MCP server, what discovery results mean and which permissions and limits apply.",
       "updated": "2026-10-12",
       "source": "content/support/mcp-connections.md",
       "chunks": [
@@ -1769,6 +1796,7 @@
         "import memory",
         "project memory"
       ],
+      "description": "The memory switches in Settings, what memory is designed not to keep and how to clear it.",
       "updated": "2026-10-15",
       "source": "content/support/memory.md",
       "chunks": [
@@ -1837,6 +1865,7 @@
         "retired model",
         "prompt cache"
       ],
+      "description": "How to pick a model by name, what the capability badges mean and how to control thinking effort.",
       "updated": "2026-10-12",
       "source": "content/support/models-and-reasoning.md",
       "chunks": [
@@ -1901,6 +1930,7 @@
         "sell data",
         "anonymized usage"
       ],
+      "description": "What is stored where, how diagnostics and temporary chats work and how to manage your data and sessions.",
       "updated": "2026-10-12",
       "source": "content/support/privacy-controls.md",
       "chunks": [
@@ -1966,6 +1996,7 @@
         "duplicate project",
         "delete project"
       ],
+      "description": "How to create a project, add sources, share, duplicate and delete it, and the limits that apply.",
       "updated": "2026-10-12",
       "source": "content/support/projects.md",
       "chunks": [
@@ -2036,6 +2067,7 @@
         "lm studio",
         "routing"
       ],
+      "description": "How to choose a product surface, read the catalog counts, change the model route and use automatic routing.",
       "updated": "2026-10-05",
       "source": "content/support/providers-and-models.md",
       "chunks": [
@@ -2088,6 +2120,7 @@
         "run history",
         "automation"
       ],
+      "description": "How to create a schedule or a trigger, what an unattended run means and the limits that apply.",
       "updated": "2026-10-12",
       "source": "content/support/schedules-and-triggers.md",
       "chunks": [
@@ -2145,6 +2178,7 @@
         "citations",
         "help search"
       ],
+      "description": "How web search, Deep Research and searching your own chats and the help centre work.",
       "updated": "2026-10-12",
       "source": "content/support/search.md",
       "chunks": [
@@ -2203,6 +2237,7 @@
         "pdf",
         "docx"
       ],
+      "description": "How to create, change and revoke a share link, find your links and export a chat instead of sharing it.",
       "updated": "2026-10-02",
       "source": "content/support/sharing-conversations.md",
       "chunks": [
@@ -2264,6 +2299,7 @@
         "first message",
         "first chat"
       ],
+      "description": "How to create an account, what you can do right away and what to try if sign-up does not complete.",
       "updated": "2026-10-15",
       "source": "content/support/signing-up.md",
       "chunks": [
@@ -2321,6 +2357,7 @@
         "voice",
         "notifications"
       ],
+      "description": "The browsers and browser features AGI needs, what we test, phones and tablets, and what works offline.",
       "updated": "2026-10-08",
       "source": "content/support/system-requirements.md",
       "chunks": [
@@ -2390,6 +2427,7 @@
         "end temporary chat",
         "ephemeral"
       ],
+      "description": "What a temporary chat does, how to turn it on and end it and what you cannot do with one.",
       "updated": "2026-10-02",
       "source": "content/support/temporary-chats.md",
       "chunks": [
@@ -2441,6 +2479,7 @@
         "call log",
         "reset permissions"
       ],
+      "description": "How the account-wide default, per-tool permissions and in-the-moment approvals decide what a tool may do.",
       "updated": "2026-10-12",
       "source": "content/support/tool-approvals.md",
       "chunks": [
@@ -2510,6 +2549,7 @@
         "device code",
         "extension"
       ],
+      "description": "What to check when a page, chat, message, file, tool, model, voice, search, the CLI or an extension does not work.",
       "updated": "2026-10-12",
       "source": "content/support/troubleshooting.md",
       "chunks": [
@@ -2626,6 +2666,7 @@
         "rate limit",
         "out of capacity"
       ],
+      "description": "How usage is measured, what happens when an allowance runs out and how credits and concurrency limits work.",
       "updated": "2026-09-19",
       "source": "content/support/usage-and-credits.md",
       "chunks": [
@@ -2691,6 +2732,7 @@
         "microphone denied",
         "speak"
       ],
+      "description": "The difference between dictation and voice mode, and what to check when voice will not start.",
       "updated": "2026-09-19",
       "source": "content/support/voice.md",
       "chunks": [
@@ -2746,6 +2788,7 @@
       "platforms": [
         "vscode"
       ],
+      "description": "How to check availability, use the editor commands, manage credentials and check the local runtime.",
       "updated": "2026-10-05",
       "source": "content/support/vscode-extension.md",
       "chunks": [
@@ -2812,6 +2855,7 @@
         "successor",
         "owner"
       ],
+      "description": "How to create, switch, leave and delete a workspace, use its console and what members see.",
       "updated": "2026-10-12",
       "source": "content/support/workspace-administration.md",
       "chunks": [
@@ -2899,6 +2943,7 @@
         "exceptions",
         "override"
       ],
+      "description": "What a workspace policy controls, including exceptions, retention, spend and audit.",
       "updated": "2026-09-17",
       "source": "content/support/workspace-policy.md",
       "chunks": [
@@ -2966,6 +3011,7 @@
         "transfer ownership",
         "seats"
       ],
+      "description": "The built-in roles, what each permission grants, custom roles, directory groups and seats.",
       "updated": "2026-09-17",
       "source": "content/support/workspace-roles-and-groups.md",
       "chunks": [

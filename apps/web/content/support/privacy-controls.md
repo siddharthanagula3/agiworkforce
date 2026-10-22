@@ -5,6 +5,7 @@ path: /privacy
 category: privacy
 tags: privacy, data controls, telemetry, crash reports, training, retention, where is my data, encryption, sell data, anonymized usage
 updated: 2026-10-12
+description: What is stored where, how diagnostics and temporary chats work and how to manage your data and sessions.
 scope: public
 ---
 

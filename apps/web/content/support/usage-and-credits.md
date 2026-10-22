@@ -5,6 +5,7 @@ path: /pricing
 category: billing
 tags: usage, limit, quota, capacity, allowance, reset, credits, top up, buy credits, overage, ran out, rate limit, out of capacity
 updated: 2026-09-19
+description: How usage is measured, what happens when an allowance runs out and how credits and concurrency limits work.
 scope: public
 ---
 

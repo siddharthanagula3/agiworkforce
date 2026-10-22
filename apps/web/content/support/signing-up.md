@@ -5,6 +5,7 @@ path: /get-started
 category: getting-started
 tags: sign up, signup, create account, register, new account, google, github, oauth, verification code, password, age, terms, first message, first chat
 updated: 2026-10-15
+description: How to create an account, what you can do right away and what to try if sign-up does not complete.
 scope: public
 ---
 

@@ -5,6 +5,7 @@ path: /security
 category: account
 tags: passkey, two factor, 2fa, mfa, totp, authenticator, backup codes, recovery codes, advanced account security, security key, recovery key, change password, forgot password, sessions, log out all devices, revoke session, api keys
 updated: 2026-10-15
+description: How to manage passkeys, two-factor authentication, your password, active sessions and API keys.
 scope: public
 ---
 

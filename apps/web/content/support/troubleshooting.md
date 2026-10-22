@@ -5,6 +5,7 @@ path: /support
 category: troubleshooting
 tags: troubleshooting, not working, error, failed, broken, stuck, unsupported browser, supported browsers, javascript, cannot send, no response, offline, retry, upgrade required, unavailable, contact support, search failed, search unavailable, cli login, agi login, device code, extension
 updated: 2026-10-12
+description: What to check when a page, chat, message, file, tool, model, voice, search, the CLI or an extension does not work.
 scope: public
 ---
 

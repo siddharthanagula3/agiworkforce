@@ -6,6 +6,7 @@ category: surfaces
 tags: vs code, vscode, editor, extension, ide, explain selection, refactor, generate tests, fix issue, agent mode, sign in to cloud, local runtime
 platforms: vscode
 updated: 2026-10-05
+description: How to check availability, use the editor commands, manage credentials and check the local runtime.
 scope: public
 ---
 

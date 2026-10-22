@@ -5,6 +5,7 @@ path: /privacy
 category: account
 tags: export, download my data, json export, gdpr, dsar, data request, consent record, correct my data, portability, backup conversations
 updated: 2026-10-06
+description: How to request an export of your account data, and what else you can ask for.
 scope: public
 ---
 

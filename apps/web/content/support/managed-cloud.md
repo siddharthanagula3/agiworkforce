@@ -5,6 +5,7 @@ path: /docs
 category: managed-cloud
 tags: managed cloud, hosted, open by default, waitlist, usage, metered, capacity, quota, limit
 updated: 2026-10-12
+description: How AGI managed cloud works: access, usage, running out of capacity, where data is hosted and training.
 scope: public
 ---
 

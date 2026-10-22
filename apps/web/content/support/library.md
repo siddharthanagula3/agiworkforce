@@ -5,6 +5,7 @@ path: /chat/library
 category: files
 tags: library, files, my files, artifacts, generated files, documents, uploads, recently deleted, restore file, download, grid view, list view, search files
 updated: 2026-10-06
+description: How to find, open, delete and restore your uploads, generated files and artifacts in the Library.
 scope: public
 ---
 

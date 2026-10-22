@@ -5,6 +5,7 @@ path: /chat
 category: chat
 tags: theme, dark theme, dark mode, light mode, appearance, accent colour, high contrast, motion, chat font, text size, display language, chat, new chat, conversation, compose, send message, edit message, regenerate, retry, branch, variant, rename, archive, delete chat, thinking, response style
 updated: 2026-10-16
+description: How to start a chat, choose how answers are written, attach files, edit or branch a conversation and organize chats.
 scope: public
 ---
 

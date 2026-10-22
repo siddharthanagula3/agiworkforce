@@ -5,6 +5,7 @@ path: /get-started
 category: getting-started
 tags: system requirements, supported browsers, browser support, minimum requirements, chrome, edge, firefox, safari, javascript, phone browser, mobile browser, tablet, offline, install, operating system, voice, notifications
 updated: 2026-10-08
+description: The browsers and browser features AGI needs, what we test, phones and tablets, and what works offline.
 scope: public
 ---
 

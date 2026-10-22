@@ -5,6 +5,7 @@ path: /agent-permissions
 category: connectors
 tags: approval, approvals, permission, always allow, ask every time, auto approve, read only, tool permissions, deny tool, call log, reset permissions
 updated: 2026-10-12
+description: How the account-wide default, per-tool permissions and in-the-moment approvals decide what a tool may do.
 scope: public
 ---
 

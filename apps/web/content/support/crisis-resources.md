@@ -5,6 +5,7 @@ path: /acceptable-use
 category: safety
 tags: crisis, suicide, self-harm, self harm, eating disorder, helpline, hotline, crisis line, 988, tele manas, 14416, emergency, mental health, someone in danger, safety
 updated: 2026-10-08
+description: Who to contact in an emergency and how AGI responds to a message about self-harm.
 scope: public
 ---
 

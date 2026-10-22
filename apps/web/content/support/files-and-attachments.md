@@ -5,6 +5,7 @@ path: /chat
 category: files
 tags: attach, attachment, upload, file, pdf, image, docx, xlsx, pptx, csv, drag and drop, paste, screenshot, too large, unsupported file
 updated: 2026-09-17
+description: How to attach a file to a chat, what a chat can read and where attachments end up.
 scope: public
 ---
 

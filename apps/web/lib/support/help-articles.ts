@@ -21,6 +21,7 @@ export function getHelpArticle(docId: string) {
     title: first.docTitle,
     relatedPath: first.path,
     updated: first.updated,
+    description: first.description ?? null,
     sections,
   };
 }

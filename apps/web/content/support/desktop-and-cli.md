@@ -6,6 +6,7 @@ category: surfaces
 tags: desktop, cli, terminal, install, download, macos, windows, linux, agi install, command line
 platforms: desktop, cli, macos, windows, linux
 updated: 2026-10-05
+description: How to check availability before installing, and how the desktop app and the CLI reach managed cloud.
 scope: public
 ---
 

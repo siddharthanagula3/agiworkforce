@@ -6,6 +6,7 @@ category: surfaces
 tags: configuration, config, config.toml, settings, default model, permission mode, agi init, agiworkforce_home, multiple accounts, update check, project config, mcp.json, hooks.json
 platforms: cli, vscode, macos, windows, linux
 updated: 2026-10-12
+description: Where the CLI keeps its settings, how to view and change them and which setting wins.
 scope: public
 ---
 

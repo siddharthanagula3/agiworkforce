@@ -5,6 +5,7 @@ path: /workspace
 category: administration
 tags: admin, administration, workspace console, members, seats, invite, audit log, usage analytics, sharing, legal hold, retention, api keys, spend limit, create workspace, switch workspace, leave workspace, delete workspace, successor, owner
 updated: 2026-10-12
+description: How to create, switch, leave and delete a workspace, use its console and what members see.
 scope: public
 ---
 

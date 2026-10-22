@@ -5,6 +5,7 @@ path: /chat
 category: search
 tags: search, web search, find a conversation, search messages, search history, search past chats, deep research, sources, citations, help search
 updated: 2026-10-12
+description: How web search, Deep Research and searching your own chats and the help centre work.
 scope: public
 ---
 
