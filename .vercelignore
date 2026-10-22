@@ -80,6 +80,7 @@ LICENSE
 !/scripts/lib
 /scripts/lib/*
 !/scripts/lib/neon-migrations.mjs
+!/scripts/lib/third-party-notices.mjs
 .lintstagedrc.json
 
 # Rust/Cargo (Not needed for web deployment)

@@ -4,8 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
-    "build:next-only": "next build",
+    "build": "pnpm notices && next build",
+    "build:next-only": "pnpm notices && next build",
+    "notices": "node scripts/generate-third-party-notices.mjs",
     "start": "next start",
     "lint": "eslint . --cache --cache-strategy content --cache-location .cache/eslint --max-warnings=0",
     "typecheck": "tsc --noEmit",

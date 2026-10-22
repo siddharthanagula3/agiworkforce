@@ -104,6 +104,7 @@
       "test": "pnpm --filter @agiworkforce/web test",
       "testSingle": "pnpm --filter @agiworkforce/web test <file-or-pattern>",
       "testE2e": "pnpm --filter @agiworkforce/web test:e2e",
+      "notices": "pnpm --filter @agiworkforce/web notices",
       "build": "pnpm --filter @agiworkforce/web build"
     },
     "mobile": {

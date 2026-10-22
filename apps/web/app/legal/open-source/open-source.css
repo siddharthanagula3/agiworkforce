@@ -1,0 +1,95 @@
+[data-design='agi'].agi-oss .agi-oss-groups {
+  display: flex;
+  flex-direction: column;
+  border-block-start: 1px solid var(--public-rule);
+}
+
+[data-design='agi'].agi-oss .agi-oss-group {
+  border-block-end: 1px solid var(--public-rule);
+  scroll-margin-top: 6rem;
+}
+
+[data-design='agi'].agi-oss .agi-oss-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: var(--space-1) var(--space-4);
+  padding-block: var(--space-4);
+  cursor: pointer;
+  list-style: none;
+}
+
+[data-design='agi'].agi-oss .agi-oss-summary::-webkit-details-marker {
+  display: none;
+}
+
+[data-design='agi'].agi-oss .agi-oss-summary:focus-visible {
+  outline: 2px solid var(--public-ink);
+  outline-offset: 2px;
+}
+
+[data-design='agi'].agi-oss .agi-oss-summary-title {
+  font-size: var(--public-text-body);
+  font-weight: 600;
+  color: var(--public-ink);
+  overflow-wrap: anywhere;
+}
+
+[data-design='agi'].agi-oss .agi-oss-meta {
+  margin: 0;
+  font-size: var(--public-text-meta);
+  line-height: 1.5;
+  color: var(--public-ink-secondary);
+}
+
+[data-design='agi'].agi-oss .agi-oss-packages {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0 0 var(--space-4);
+  list-style: none;
+}
+
+[data-design='agi'].agi-oss .agi-oss-package {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0 var(--space-3);
+  min-inline-size: 0;
+  font-size: var(--public-text-meta);
+  line-height: 1.5;
+  color: var(--public-ink);
+  overflow-wrap: anywhere;
+}
+
+[data-design='agi'].agi-oss .agi-oss-copyright {
+  flex-basis: 100%;
+  white-space: pre-line;
+  color: var(--public-ink-secondary);
+  overflow-wrap: anywhere;
+}
+
+[data-design='agi'].agi-oss .agi-oss-text {
+  margin: 0 0 var(--space-5);
+  padding: var(--space-4);
+  max-block-size: 28rem;
+  overflow: auto;
+  border: 1px solid var(--public-rule);
+  border-radius: var(--corner-panel);
+  background: var(--public-surface-subtle);
+  font-family: var(--public-font-code);
+  font-size: var(--public-text-code);
+  line-height: 1.55;
+  color: var(--public-ink-secondary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+[data-design='agi'].agi-oss .agi-oss-status {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-3);
+  padding-block-end: var(--space-4);
+  color: var(--public-ink-secondary);
+}
