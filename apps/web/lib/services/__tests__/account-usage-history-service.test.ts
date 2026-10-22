@@ -174,6 +174,30 @@ describe('readAccountUsageHistory', () => {
     expect(history.freshness.latestActivityAt).toBeNull();
   });
 
+  it('binds a workload scope as a parameter on every query, never inlined', async () => {
+    const h = harness();
+    await readAccountUsageHistory(h.db, USER, WINDOW, 'day', { workload: 'code' });
+
+    for (const [sql, params] of h.query.mock.calls) {
+      const text = String(sql);
+      const index = /date_trunc\(\$4::text/.test(text) ? 5 : 4;
+      expect(text).toContain(`usage->>'workload' = $${index}::text`);
+      expect(text).not.toContain(`'code'`);
+      expect((params as unknown[])[index - 1]).toBe('code');
+      expect(params as unknown[]).toHaveLength(index);
+    }
+  });
+
+  it('leaves the account-wide queries unchanged without a workload scope', async () => {
+    const h = harness();
+    await readAccountUsageHistory(h.db, USER, WINDOW);
+
+    for (const [sql, params] of h.query.mock.calls) {
+      expect(String(sql)).not.toContain(`usage->>'workload' =`);
+      expect(params as unknown[]).not.toContain(null);
+    }
+  });
+
   it('never selects anything the account typed', async () => {
     const h = harness();
     await readAccountUsageHistory(h.db, USER, WINDOW);

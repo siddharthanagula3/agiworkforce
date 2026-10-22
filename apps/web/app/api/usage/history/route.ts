@@ -16,8 +16,15 @@ import {
   usageHistoryWindowStart,
 } from '@/lib/services/account-usage-history-service';
 import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
+import { USAGE_WORKLOADS, type UsageWorkload } from '@/lib/billing/usage-attribution';
 
 export const runtime = 'nodejs';
+
+function resolveWorkload(value: string | null): UsageWorkload | null {
+  if (value === null) return null;
+  if (USAGE_WORKLOADS.includes(value as UsageWorkload)) return value as UsageWorkload;
+  throw createError.validation('Unknown usage workload');
+}
 
 async function handler(request: NextRequest) {
   let scoped: UserScopedDb;
@@ -32,6 +39,7 @@ async function handler(request: NextRequest) {
 
   const params = new URL(request.url).searchParams;
   const granularity = resolveUsageHistoryGranularity(params.get('granularity'));
+  const workload = resolveWorkload(params.get('workload'));
   const window = resolveUsageWindow(
     params.get('from') ?? usageHistoryWindowStart(granularity).toISOString(),
     params.get('to'),
@@ -43,6 +51,7 @@ async function handler(request: NextRequest) {
       scoped.userId,
       window,
       granularity,
+      { workload },
     );
     return NextResponse.json(history);
   } catch (error) {

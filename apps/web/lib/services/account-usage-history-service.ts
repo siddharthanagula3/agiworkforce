@@ -24,6 +24,7 @@ import {
   toIsoOrNull,
   type FreshnessRow,
 } from '@/lib/services/usage-aggregation';
+import type { UsageWorkload } from '@/lib/billing/usage-attribution';
 
 export type UsageHistoryGranularity = AccountUsageHistoryGranularity;
 
@@ -129,20 +130,33 @@ function toBreakdownRow(row: CreditAggregateRow): AccountUsageBreakdownRow {
   };
 }
 
+interface WorkloadScope {
+  workload: UsageWorkload | null;
+}
+
+function workloadClause(scope: WorkloadScope, index: number): string {
+  return scope.workload ? `\n    and usage->>'workload' = $${index}::text` : '';
+}
+
+function workloadParams(scope: WorkloadScope): string[] {
+  return scope.workload ? [scope.workload] : [];
+}
+
 async function aggregateBy(
   db: DatabaseAdapter,
   userId: string,
   window: { from: string; to: string },
   keyExpression: string,
+  scope: WorkloadScope,
 ): Promise<AccountUsageBreakdownRow[]> {
   const rows = await db.query<CreditAggregateRow>(
     `select ${keyExpression} as key,
             ${SUMS}
-     ${OWN_SETTLED_ROWS}
+     ${OWN_SETTLED_ROWS}${workloadClause(scope, 4)}
     group by 1
     order by cost_microusd desc, requests desc
     limit ${BREAKDOWN_LIMIT}`,
-    [userId, window.from, window.to],
+    [userId, window.from, window.to, ...workloadParams(scope)],
   );
   return rows.map(toBreakdownRow);
 }
@@ -151,6 +165,7 @@ async function aggregateByProject(
   db: DatabaseAdapter,
   userId: string,
   window: { from: string; to: string },
+  scope: WorkloadScope,
 ): Promise<AccountUsageBreakdownRow[]> {
   const rows = await db.query<CreditAggregateRow>(
     `select own.project_id as key,
@@ -165,7 +180,7 @@ async function aggregateByProject(
                 ${TOKENS} as input_tokens,
                 ${OUT_TOKENS} as output_tokens,
                 coalesce(actual_cost_microusd, 0) as cost_microusd
-         ${OWN_SETTLED_ROWS}
+         ${OWN_SETTLED_ROWS}${workloadClause(scope, 4)}
             and usage->>'projectId' is not null
        ) own
        left join public.user_projects project
@@ -174,7 +189,7 @@ async function aggregateByProject(
       group by own.project_id
       order by cost_microusd desc, requests desc
       limit ${BREAKDOWN_LIMIT}`,
-    [userId, window.from, window.to],
+    [userId, window.from, window.to, ...workloadParams(scope)],
   );
   return rows.map(toBreakdownRow);
 }
@@ -184,31 +199,33 @@ export async function readAccountUsageHistory(
   userId: string,
   window: { from: string; to: string },
   granularity: UsageHistoryGranularity = 'day',
+  scope: WorkloadScope = { workload: null },
 ): Promise<AccountUsageHistoryResponse> {
-  const params = [userId, window.from, window.to];
+  const params = [userId, window.from, window.to, ...workloadParams(scope)];
+  const ownRows = `${OWN_SETTLED_ROWS}${workloadClause(scope, 4)}`;
 
   const [totalsRows, periodRows, byWorkload, byModel, byProject, freshnessRows] = await Promise.all(
     [
-      db.query<CreditAggregateRow>(`select null as key, ${SUMS} ${OWN_SETTLED_ROWS}`, params),
+      db.query<CreditAggregateRow>(`select null as key, ${SUMS} ${ownRows}`, params),
       db.query<PeriodRow>(
         `select date_trunc($4::text, created_at, 'UTC') as period,
                 count(*)::int as requests,
                 sum(coalesce(actual_cost_microusd, 0))::bigint as cost_microusd
-         ${OWN_SETTLED_ROWS}
+         ${OWN_SETTLED_ROWS}${workloadClause(scope, 5)}
         group by 1
         order by 1 asc`,
-        [...params, granularity],
+        [userId, window.from, window.to, granularity, ...workloadParams(scope)],
       ),
-      aggregateBy(db, userId, window, `usage->>'workload'`),
-      aggregateBy(db, userId, window, 'model'),
-      aggregateByProject(db, userId, window),
+      aggregateBy(db, userId, window, `usage->>'workload'`, scope),
+      aggregateBy(db, userId, window, 'model', scope),
+      aggregateByProject(db, userId, window, scope),
       db.query<FreshnessRow>(
         `select max(created_at) filter (where ${SETTLED}) as latest_activity_at,
                 count(*) filter (where ${UNSETTLED})::int as unsettled_requests
            from public.managed_usage_requests
           where user_id = $1
             and created_at >= $2
-            and created_at < $3`,
+            and created_at < $3${workloadClause(scope, 4)}`,
         params,
       ),
     ],

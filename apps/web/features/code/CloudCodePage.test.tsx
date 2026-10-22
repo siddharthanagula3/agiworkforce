@@ -73,6 +73,12 @@ vi.mock('@/features/notebook/NotebookPanel', () => ({
   ),
 }));
 
+vi.mock('./components/CodeUsageDashboard', () => ({
+  CodeUsageDashboard: ({ planTier }: { planTier: string | null }) => (
+    <div data-testid="code-usage-dashboard" data-plan-tier={planTier ?? ''} />
+  ),
+}));
+
 vi.mock('@features/chat/components/Composer/ComposerFooter', () => ({
   ComposerFooter: () => <div data-testid="model-trigger" />,
 }));
@@ -439,6 +445,15 @@ describe('CloudCodePage', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/Build in an isolated cloud workspace/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Managed Code/i)).not.toBeInTheDocument();
+  });
+
+  it('places the usage card under the home greeting with the account plan', async () => {
+    render(<CloudCodePage api={createApi()} />);
+
+    await screen.findByRole('heading', { name: "What's up next, Ada?" });
+    await waitFor(() =>
+      expect(screen.getByTestId('code-usage-dashboard')).toHaveAttribute('data-plan-tier', 'pro'),
+    );
   });
 
   it('opens the microphone on the first press with no notice in between', async () => {

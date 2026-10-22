@@ -138,6 +138,22 @@ describe('GET /api/usage/history', () => {
     expect(to - from).toBeLessThanOrEqual(367 * 24 * 60 * 60 * 1000);
   });
 
+  it('scopes every aggregate to one product area when a workload is asked for', async () => {
+    const response = await GET(makeRequest('?workload=code'));
+    expect(response.status).toBe(200);
+    expect(mockDbQuery.mock.calls.length).toBeGreaterThan(0);
+    for (const [sql, params] of mockDbQuery.mock.calls) {
+      expect(String(sql)).toMatch(/usage->>'workload' = \$\d::text/);
+      expect(params as unknown[]).toContain('code');
+    }
+  });
+
+  it('refuses a workload it does not know before reading anything', async () => {
+    const response = await GET(makeRequest('?workload=everything'));
+    expect(response.status).toBe(400);
+    expect(mockDbQuery).not.toHaveBeenCalled();
+  });
+
   it('refuses an unauthenticated reader', async () => {
     mockGetUserScopedDb.mockRejectedValue(new Error('no session'));
     const response = await GET(makeRequest());
