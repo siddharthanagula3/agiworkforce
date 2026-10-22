@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
 import golden from '../__fixtures__/managed-media-requests.golden.json';
 import {
+  MANAGED_MEDIA_MAX_VIDEO_INPUT_IMAGES,
   ManagedMediaImageGenerationRequestSchema,
   ManagedMediaVideoGenerationRequestSchema,
+  managedMediaVideoInputImageLimit,
+  refineManagedMediaVideoImageInputs,
 } from '../managed-media';
 
 describe('managed media cloud request contracts', () => {
@@ -162,5 +165,58 @@ describe('managed media cloud request contracts', () => {
       ManagedMediaVideoGenerationRequestSchema.safeParse({ prompt: 'video', style: 'cinematic' })
         .success,
     ).toBe(false);
+  });
+
+  it('carries a first frame or reference images on a video request, never both', () => {
+    const image = { b64_json: 'aGVsbG8=' };
+    const schema = ManagedMediaVideoGenerationRequestSchema.superRefine(
+      refineManagedMediaVideoImageInputs,
+    );
+    expect(schema.safeParse({ prompt: 'v', first_frame_image: image }).success).toBe(true);
+    expect(schema.safeParse({ prompt: 'v', reference_images: [image, image] }).success).toBe(true);
+    expect(
+      schema.safeParse({ prompt: 'v', first_frame_image: image, reference_images: [image] })
+        .success,
+    ).toBe(false);
+    expect(schema.safeParse({ prompt: 'v', reference_images: [] }).success).toBe(false);
+    expect(
+      schema.safeParse({
+        prompt: 'v',
+        reference_images: Array.from(
+          { length: MANAGED_MEDIA_MAX_VIDEO_INPUT_IMAGES + 1 },
+          () => image,
+        ),
+      }).success,
+    ).toBe(false);
+  });
+
+  it('lets a video model take input images only on catalog evidence and a supporting adapter', () => {
+    const imageVideoModel = {
+      modelType: 'video',
+      inputModalities: ['text', 'image'],
+      imageInput: { maxImagesPerRequest: 9 },
+    };
+    expect(managedMediaVideoInputImageLimit('openrouter', imageVideoModel)).toBe(
+      MANAGED_MEDIA_MAX_VIDEO_INPUT_IMAGES,
+    );
+    expect(
+      managedMediaVideoInputImageLimit('openrouter', {
+        ...imageVideoModel,
+        imageInput: { maxImagesPerRequest: 2 },
+      }),
+    ).toBe(2);
+    expect(managedMediaVideoInputImageLimit('google', imageVideoModel)).toBe(0);
+    expect(
+      managedMediaVideoInputImageLimit('openrouter', { ...imageVideoModel, imageInput: undefined }),
+    ).toBe(0);
+    expect(
+      managedMediaVideoInputImageLimit('openrouter', {
+        ...imageVideoModel,
+        inputModalities: ['text'],
+      }),
+    ).toBe(0);
+    expect(
+      managedMediaVideoInputImageLimit('openrouter', { ...imageVideoModel, modelType: 'image' }),
+    ).toBe(0);
   });
 });

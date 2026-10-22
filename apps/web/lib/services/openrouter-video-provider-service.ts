@@ -101,6 +101,21 @@ function retryAfterSeconds(response: Response): number | undefined {
   return Number.isFinite(seconds) && seconds > 0 ? Math.max(5, Math.min(seconds, 600)) : undefined;
 }
 
+export type OpenRouterVideoInputImages =
+  { kind: 'first_frame'; dataUrl: string } | { kind: 'reference'; dataUrls: readonly string[] };
+
+function imagePart(url: string) {
+  return { type: 'image_url', image_url: { url } } as const;
+}
+
+function inputImageFields(images: OpenRouterVideoInputImages | undefined) {
+  if (!images) return {};
+  if (images.kind === 'first_frame') {
+    return { frame_images: [{ ...imagePart(images.dataUrl), frame_type: 'first_frame' }] };
+  }
+  return { input_references: images.dataUrls.map(imagePart) };
+}
+
 export async function submitOpenRouterVideo(input: {
   providerModelId: string;
   prompt: string;
@@ -108,6 +123,7 @@ export async function submitOpenRouterVideo(input: {
   width: number;
   height: number;
   generateAudio: boolean;
+  inputImages?: OpenRouterVideoInputImages;
 }): Promise<{ taskId: string }> {
   const key = apiKey();
   if (!key) {
@@ -129,6 +145,7 @@ export async function submitOpenRouterVideo(input: {
         duration: input.durationSecs,
         size: `${input.width}x${input.height}`,
         generate_audio: input.generateAudio,
+        ...inputImageFields(input.inputImages),
         ...(configuredCallbackUrl ? { callback_url: configuredCallbackUrl } : {}),
       }),
       signal: AbortSignal.timeout(30_000),

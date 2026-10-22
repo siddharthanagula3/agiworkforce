@@ -158,6 +158,37 @@ export const ManagedMediaImageGenerationRequestSchema = z
   });
 
 export const MANAGED_MEDIA_MAX_VIDEO_CANDIDATES = 4;
+export const MANAGED_MEDIA_MAX_VIDEO_INPUT_IMAGES = 4;
+
+/**
+ * The video adapters whose request carries input images. Like
+ * `MANAGED_MEDIA_IMAGE_EDIT_APIS`, this names a request format the server
+ * speaks; the catalog entry decides whether a model on it takes images.
+ */
+export const MANAGED_MEDIA_VIDEO_IMAGE_INPUT_PROVIDERS = ['openrouter'] as const;
+
+export interface ManagedMediaVideoImageInputModel {
+  modelType?: string;
+  inputModalities?: readonly string[];
+  imageInput?: { maxImagesPerRequest?: number };
+}
+
+export function managedMediaVideoInputImageLimit(
+  provider: string | null | undefined,
+  model: ManagedMediaVideoImageInputModel | null | undefined,
+): number {
+  if (
+    !MANAGED_MEDIA_VIDEO_IMAGE_INPUT_PROVIDERS.includes(
+      provider as (typeof MANAGED_MEDIA_VIDEO_IMAGE_INPUT_PROVIDERS)[number],
+    )
+  ) {
+    return 0;
+  }
+  if (model?.modelType !== 'video' || !model.inputModalities?.includes('image')) return 0;
+  const declared = model.imageInput?.maxImagesPerRequest;
+  if (declared === undefined || !Number.isInteger(declared) || declared < 1) return 0;
+  return Math.min(declared, MANAGED_MEDIA_MAX_VIDEO_INPUT_IMAGES);
+}
 
 export const ManagedMediaVideoGenerationRequestSchema = z
   .object({
@@ -174,8 +205,29 @@ export const ManagedMediaVideoGenerationRequestSchema = z
      * asking for four costs four videos. Absent means one.
      */
     n: z.number().int().min(1).max(MANAGED_MEDIA_MAX_VIDEO_CANDIDATES).optional(),
+    /** Animate this image: the clip opens on it. */
+    first_frame_image: ManagedMediaImageRefSchema.optional(),
+    /** Blend these images into one clip as visual references. */
+    reference_images: z
+      .array(ManagedMediaImageRefSchema)
+      .min(1)
+      .max(MANAGED_MEDIA_MAX_VIDEO_INPUT_IMAGES)
+      .optional(),
   })
   .strict();
+
+export function refineManagedMediaVideoImageInputs(
+  value: { first_frame_image?: unknown; reference_images?: readonly unknown[] },
+  ctx: z.RefinementCtx,
+): void {
+  if (value.first_frame_image !== undefined && value.reference_images !== undefined) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['reference_images'],
+      message: 'send first_frame_image or reference_images, not both',
+    });
+  }
+}
 
 export const ManagedMediaModelAdmissionStateSchema = z.enum([
   'enabled',

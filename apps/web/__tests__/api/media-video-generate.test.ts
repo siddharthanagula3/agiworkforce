@@ -184,6 +184,7 @@ vi.mock('@/lib/server/media-storage', () => ({
   isVideoStorageConfigured: vi.fn(() => true),
   authenticatedMediaUrl: vi.fn(),
   deleteStoredMedia: vi.fn(),
+  readStoredMedia: vi.fn(),
   storeMediaFile: vi.fn(),
   videoStoragePathname: vi.fn(),
 }));

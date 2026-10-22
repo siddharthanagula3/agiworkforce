@@ -6,6 +6,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import {
   ManagedMediaVideoGenerationRequestSchema,
+  managedMediaVideoInputImageLimit,
+  refineManagedMediaVideoImageInputs,
+  type ManagedMediaImageRef,
   type ManagedMediaVideoAspectRatio,
   type ManagedMediaVideoProvider,
   type ManagedMediaVideoResolution,
@@ -15,7 +18,15 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
-import { moderateManagedPrompt } from '@/lib/moderation';
+import {
+  inspectImageBytes,
+  matchDenylistedUpload,
+  moderateManagedPrompt,
+  recordModerationEvent,
+  PLATFORM_POLICY_REFUSAL,
+  UPLOADED_IMAGE_REFUSAL,
+} from '@/lib/moderation';
+import { resolveImageRefBytes } from '@/app/api/media/image/lib/image-generation-provider';
 import {
   MEDIA_DIAGNOSTIC_HEADER,
   recordMediaSafety,
@@ -107,6 +118,7 @@ import {
   OpenRouterVideoSubmissionError,
   OpenRouterVideoSubmissionOutcomeUnknownError,
   submitOpenRouterVideo,
+  type OpenRouterVideoInputImages,
 } from '@/lib/services/openrouter-video-provider-service';
 
 /**
@@ -151,6 +163,7 @@ const VideoGenerationRouteRequestSchema = ManagedMediaVideoGenerationRequestSche
   conversation_id: z.string().uuid().optional(),
   assistant_message_id: z.string().uuid().optional(),
 }).superRefine((value, ctx) => {
+  refineManagedMediaVideoImageInputs(value, ctx);
   if (value.assistant_message_id && !value.conversation_id) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -691,6 +704,7 @@ async function generateWithOpenRouter(
   aspectRatio: VideoAspectRatio,
   generateAudio: boolean,
   model: ModelMetadata,
+  inputImages: OpenRouterVideoInputImages | undefined,
 ): Promise<{ taskId: string }> {
   const output = resolveVideoGenerationOutputSize(model, resolution, aspectRatio);
   const providerModelId = model.apiModelId;
@@ -708,6 +722,7 @@ async function generateWithOpenRouter(
       width: output.width,
       height: output.height,
       generateAudio,
+      ...(inputImages ? { inputImages } : {}),
     });
   } catch (error) {
     if (error instanceof OpenRouterVideoSubmissionOutcomeUnknownError) throw error;
@@ -723,6 +738,124 @@ async function generateWithOpenRouter(
         throw createError.serviceUnavailable('Video generation service is temporarily unavailable');
     }
   }
+}
+
+const VIDEO_INPUT_IMAGE_FORMATS: ReadonlySet<string> = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]);
+
+type VideoInputImagesOutcome =
+  | { kind: 'images'; images: OpenRouterVideoInputImages | undefined }
+  | { kind: 'response'; response: NextResponse };
+
+function inputImageRefusal(
+  request: NextRequest,
+  message: string,
+  code: string,
+  param: string,
+): VideoInputImagesOutcome {
+  return {
+    kind: 'response',
+    response: NextResponse.json(
+      { error: { message, type: 'invalid_request_error', code, param } },
+      { status: 422, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
+    ),
+  };
+}
+
+async function resolveVideoInputImages(input: {
+  request: NextRequest;
+  db: ManagedUsageRequestReservation['db'];
+  userId: string;
+  provider: VideoProvider;
+  model: ModelMetadata;
+  firstFrameImage: ManagedMediaImageRef | undefined;
+  referenceImages: ManagedMediaImageRef[] | undefined;
+}): Promise<VideoInputImagesOutcome> {
+  const refs = input.firstFrameImage ? [input.firstFrameImage] : (input.referenceImages ?? []);
+  if (refs.length === 0) return { kind: 'images', images: undefined };
+  const param = input.firstFrameImage ? 'first_frame_image' : 'reference_images';
+
+  const limit = managedMediaVideoInputImageLimit(input.provider, input.model);
+  if (limit === 0) {
+    throw createError.validation(
+      `${input.model.name} cannot take input images. Choose a video model that can, or send the prompt alone.`,
+    );
+  }
+  if (refs.length > limit) {
+    throw createError.validation(`${input.model.name} takes at most ${limit} input images.`);
+  }
+
+  let images: Uint8Array[];
+  try {
+    images = await Promise.all(
+      refs.map((ref) => resolveImageRefBytes(ref, input.userId, input.db)),
+    );
+  } catch (error) {
+    logger.warn(
+      { error: error instanceof Error ? error.message : String(error), userId: input.userId },
+      'Video input image could not be resolved',
+    );
+    return inputImageRefusal(
+      input.request,
+      'An input image could not be read. Attach it again and retry.',
+      'invalid_input_image',
+      param,
+    );
+  }
+
+  const dataUrls: string[] = [];
+  for (const [index, bytes] of images.entries()) {
+    const imageParam = input.firstFrameImage ? param : `${param}.${index}`;
+    const hashMatch = matchDenylistedUpload(bytes);
+    if (hashMatch.matched) {
+      recordMediaSafety({ media: 'video', decision: 'blocked', reason: 'upload_hash_denylist' });
+      recordModerationEvent({
+        surface: 'upload',
+        action: 'block',
+        categories: ['known_illegal_media'],
+        ruleIds: [`managed-video.${imageParam}.hash-denylist`],
+        userId: input.userId,
+        contentSha256: hashMatch.sha256,
+        ...(hashMatch.listLabel ? { listLabel: hashMatch.listLabel } : {}),
+      });
+      return inputImageRefusal(
+        input.request,
+        PLATFORM_POLICY_REFUSAL,
+        'content_policy_violation',
+        imageParam,
+      );
+    }
+    const structure = inspectImageBytes(bytes);
+    if (!structure.valid || !VIDEO_INPUT_IMAGE_FORMATS.has(structure.format)) {
+      const reason = structure.valid ? 'unsupported_format' : structure.reason;
+      recordMediaSafety({ media: 'video', decision: 'blocked', reason: 'upload_structure' });
+      recordModerationEvent({
+        surface: 'upload',
+        action: 'block',
+        categories: ['malformed_media'],
+        ruleIds: [`managed-video.${imageParam}.${reason}`],
+        userId: input.userId,
+        contentSha256: hashMatch.sha256,
+      });
+      return inputImageRefusal(
+        input.request,
+        structure.valid ? 'Input images must be PNG, JPEG or WebP.' : UPLOADED_IMAGE_REFUSAL,
+        'invalid_input_image',
+        imageParam,
+      );
+    }
+    dataUrls.push(`data:${structure.format};base64,${Buffer.from(bytes).toString('base64')}`);
+  }
+
+  return {
+    kind: 'images',
+    images: input.firstFrameImage
+      ? { kind: 'first_frame', dataUrl: dataUrls[0]! }
+      : { kind: 'reference', dataUrls },
+  };
 }
 
 async function handleVideoGeneration(request: NextRequest): Promise<NextResponse> {
@@ -886,6 +1019,8 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     conversation_id: conversationId,
     assistant_message_id: assistantMessageId,
     n: requestedCandidateCount,
+    first_frame_image: firstFrameImage,
+    reference_images: referenceImages,
   } = validationResult.data;
   const candidateCount = requestedCandidateCount ?? 1;
 
@@ -1037,6 +1172,17 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
       'This video provider is not available while its managed billing controls are being finalized.',
     );
   }
+  const inputImagesOutcome = await resolveVideoInputImages({
+    request,
+    db: scopedDb,
+    userId,
+    provider,
+    model,
+    firstFrameImage,
+    referenceImages,
+  });
+  if (inputImagesOutcome.kind === 'response') return inputImagesOutcome.response;
+  const inputImages = inputImagesOutcome.images;
   const aspectRatio = requestedAspectRatio ?? '16:9';
   const generateAudio =
     requestedGenerateAudio ?? model.videoGeneration?.supportsAudio ?? provider === 'google';
@@ -1110,6 +1256,7 @@ async function handleVideoGeneration(request: NextRequest): Promise<NextResponse
     resolution,
     aspectRatio,
     generateAudio,
+    inputImages,
     sourceSurface,
     estimatedCostCents,
     estimatedDurationSecs: estimatedDuration,
@@ -1163,6 +1310,7 @@ interface VideoCandidateSubmissionInput {
   resolution: VideoResolution;
   aspectRatio: VideoAspectRatio;
   generateAudio: boolean;
+  inputImages: OpenRouterVideoInputImages | undefined;
   sourceSurface: 'web' | 'mobile' | 'desktop' | 'chrome';
   estimatedCostCents: number;
   estimatedDurationSecs: number;
@@ -1235,6 +1383,7 @@ async function submitVideoCandidate(
     resolution,
     aspectRatio,
     generateAudio,
+    inputImages,
     estimatedCostCents,
   } = input;
   const billableDurationSecs = input.durationSecs;
@@ -1524,6 +1673,8 @@ async function submitVideoCandidate(
       aspectRatio,
       generateAudio,
       promptLength: prompt.length,
+      inputImageCount:
+        inputImages?.kind === 'first_frame' ? 1 : (inputImages?.dataUrls.length ?? 0),
     },
     'Starting video generation task',
   );
@@ -1572,6 +1723,7 @@ async function submitVideoCandidate(
         aspectRatio,
         generateAudio,
         model,
+        inputImages,
       );
       providerTaskId = result.taskId;
     }
