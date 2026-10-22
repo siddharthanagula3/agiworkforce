@@ -59,6 +59,11 @@ jest.mock('../lib/mmkv', () => ({
   },
 }));
 
+const mockOpenExternalUrl = jest.fn(async (_url: string) => true);
+jest.mock('../lib/safeOpenURL', () => ({
+  openExternalUrl: (url: string) => mockOpenExternalUrl(url),
+}));
+
 jest.mock('../services/authSession', () => ({
   getAuthToken: jest.fn(async () => null),
   getAuthHeaders: jest.fn(async () => ({})),
@@ -73,6 +78,7 @@ import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { API_URL } from '../lib/constants';
 
 const defaultPersonalization = {
   fullName: '',
@@ -122,7 +128,7 @@ describe('Personalization page', () => {
 
     expect(getByText('Warmth')).toBeTruthy();
     expect(getByText('Enthusiasm')).toBeTruthy();
-    expect(getByText('Headers / Lists')).toBeTruthy();
+    expect(getByText('Headers and lists')).toBeTruthy();
     expect(getByText('Emoji')).toBeTruthy();
   });
 
@@ -179,7 +185,8 @@ describe('Personalization page', () => {
 
   it('Save pops back to whichever screen pushed it', () => {
     mockCanGoBack.mockReturnValue(true);
-    const { getByLabelText } = render(<PersonalizationScreen />);
+    const { getByLabelText, getByPlaceholderText } = render(<PersonalizationScreen />);
+    fireEvent.changeText(getByPlaceholderText('Your full name'), 'Alice');
 
     fireEvent.press(getByLabelText('Save personalization settings'));
 
@@ -190,7 +197,8 @@ describe('Personalization page', () => {
 
   it('Save falls back to the Settings root only on a deep link with no history', () => {
     mockCanGoBack.mockReturnValue(false);
-    const { getByLabelText } = render(<PersonalizationScreen />);
+    const { getByLabelText, getByPlaceholderText } = render(<PersonalizationScreen />);
+    fireEvent.changeText(getByPlaceholderText('Your full name'), 'Alice');
 
     fireEvent.press(getByLabelText('Save personalization settings'));
 
@@ -203,6 +211,73 @@ describe('Personalization page', () => {
 
     const saveText = getByText('Save');
     expect(saveText).toBeTruthy();
+  });
+
+  it('keeps Save disabled until a field changes and again once the edit is undone', () => {
+    const { getByLabelText, getByPlaceholderText } = render(<PersonalizationScreen />);
+    const save = () => getByLabelText('Save personalization settings');
+
+    expect(save()).toBeDisabled();
+    fireEvent.press(save());
+    expect(mockBack).not.toHaveBeenCalled();
+
+    fireEvent.changeText(getByPlaceholderText('What should AGI call you?'), 'Al');
+    expect(save()).toBeEnabled();
+
+    fireEvent.changeText(getByPlaceholderText('What should AGI call you?'), '');
+    expect(save()).toBeDisabled();
+  });
+
+  it('enables Save after Reset response style even when every field is already default', () => {
+    const { getByLabelText } = render(<PersonalizationScreen />);
+
+    expect(getByLabelText('Save personalization settings')).toBeDisabled();
+    fireEvent.press(getByLabelText('Reset response style'));
+    expect(getByLabelText('Save personalization settings')).toBeEnabled();
+  });
+
+  it('blocks saving a cleared full name with an inline error', () => {
+    useLocalSettingsStore.setState({
+      personalization: { ...defaultPersonalization, fullName: 'John Doe', nickname: 'JD' },
+    });
+    const { getByLabelText, getByPlaceholderText, getByText, queryByText } = render(
+      <PersonalizationScreen />,
+    );
+
+    expect(queryByText('Enter your full name.')).toBeNull();
+    fireEvent.changeText(getByPlaceholderText('Your full name'), '   ');
+
+    expect(getByText('Enter your full name.')).toBeTruthy();
+    expect(getByLabelText('Save personalization settings')).toBeDisabled();
+    fireEvent.press(getByLabelText('Save personalization settings'));
+    expect(useLocalSettingsStore.getState().personalization.fullName).toBe('John Doe');
+    expect(mockBack).not.toHaveBeenCalled();
+
+    fireEvent.changeText(getByPlaceholderText('Your full name'), 'Jane Doe');
+    expect(queryByText('Enter your full name.')).toBeNull();
+    fireEvent.press(getByLabelText('Save personalization settings'));
+    expect(useLocalSettingsStore.getState().personalization.fullName).toBe('Jane Doe');
+  });
+
+  it('lets a user who never set a name save other changes', () => {
+    const { getByLabelText, getByPlaceholderText, queryByText } = render(<PersonalizationScreen />);
+
+    fireEvent.changeText(getByPlaceholderText('What should AGI call you?'), 'Sam');
+
+    expect(queryByText('Enter your full name.')).toBeNull();
+    fireEvent.press(getByLabelText('Save personalization settings'));
+    expect(useLocalSettingsStore.getState().personalization.nickname).toBe('Sam');
+  });
+
+  it('explains the nickname and links the instructions helper to the acceptable use policy', () => {
+    const { getByText } = render(<PersonalizationScreen />);
+
+    expect(getByText('AGI uses your nickname in chat.')).toBeTruthy();
+    fireEvent.press(getByText('acceptable use policy'));
+
+    expect(mockOpenExternalUrl).toHaveBeenCalledWith(
+      new URL('/acceptable-use', API_URL).toString(),
+    );
   });
 
   it('renders the Response Style section header', () => {

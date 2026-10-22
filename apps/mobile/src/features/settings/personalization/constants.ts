@@ -41,6 +41,6 @@ export interface StyleSliderConfig {
 export const PERSONALIZATION_SLIDERS: StyleSliderConfig[] = [
   { key: 'warmth', label: 'Warmth', leftLabel: 'Cold', rightLabel: 'Warm' },
   { key: 'enthusiasm', label: 'Enthusiasm', leftLabel: 'Neutral', rightLabel: 'Enthusiastic' },
-  { key: 'headersLists', label: 'Headers / Lists', leftLabel: 'Prose', rightLabel: 'Structured' },
+  { key: 'headersLists', label: 'Headers and lists', leftLabel: 'Prose', rightLabel: 'Structured' },
   { key: 'emoji', label: 'Emoji', leftLabel: 'None', rightLabel: 'Frequent' },
 ];

@@ -1,17 +1,17 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, ScrollView, TextInput, Platform, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Slider from '@react-native-community/slider';
-import { ArrowLeft, Check } from 'lucide-react-native';
+import { Check } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { PreferredLength, TechnicalLevel } from '@agiworkforce/types';
-import { RESPONSE_LANGUAGE_AUTO } from '@agiworkforce/types';
+import { PRODUCT_BRAND, RESPONSE_LANGUAGE_AUTO } from '@agiworkforce/types';
 import { SELECTABLE_LANGUAGES } from '@agiworkforce/i18n';
 import { useThemeColors } from '@/src/ui/theme';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
@@ -26,8 +26,13 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
 import { toUserMessage } from '@/services/userMessage';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
+import { API_URL } from '@/lib/constants';
+import { openExternalUrl } from '@/lib/safeOpenURL';
 
 const MAX_ABOUT_YOU_CHARS = 1500;
+
+const ACCEPTABLE_USE_URL = new URL('/acceptable-use', API_URL).toString();
 
 const RESPONSE_LANGUAGE_OPTIONS: ReadonlyArray<{ value: string; label: string }> = [
   { value: RESPONSE_LANGUAGE_AUTO, label: 'Match my message' },
@@ -94,12 +99,16 @@ function LabeledInput({
   onChangeText,
   placeholder,
   multiline,
+  helper,
+  error,
 }: {
   label: string;
   value: string;
   onChangeText: (text: string) => void;
   placeholder?: string;
   multiline?: boolean;
+  helper?: ReactNode;
+  error?: string | null;
 }) {
   const c = useThemeColors();
   return (
@@ -112,10 +121,12 @@ function LabeledInput({
         style={{
           backgroundColor: c.surfaceElevated,
           borderWidth: 1,
-          borderColor: c.border,
+          borderColor: error ? c.agentError : c.border,
           color: c.textPrimary,
           letterSpacing: 0,
         }}
+        accessibilityLabel={label}
+        accessibilityHint={error ?? undefined}
         value={value}
         onChangeText={onChangeText}
         placeholder={placeholder}
@@ -126,6 +137,15 @@ function LabeledInput({
         autoCorrect={false}
         returnKeyType={multiline ? 'default' : 'done'}
       />
+      {error ? (
+        <Text accessibilityRole="alert" className="text-sm" style={{ color: c.agentError }}>
+          {error}
+        </Text>
+      ) : helper ? (
+        <Text className="text-sm leading-5" style={{ color: c.textMuted }}>
+          {helper}
+        </Text>
+      ) : null}
     </View>
   );
 }
@@ -199,7 +219,7 @@ export default function PersonalizationScreen() {
   const [responseLanguage, setResponseLanguage] = useState(
     personalization.responseLanguage ?? RESPONSE_LANGUAGE_AUTO,
   );
-  const resetChatStyleRef = useRef(false);
+  const [resetChatStyle, setResetChatStyle] = useState(false);
   const [style, setStyle] = useState(personalization.style);
   const [warmth, setWarmth] = useState(personalization.warmth);
   const [enthusiasm, setEnthusiasm] = useState(personalization.enthusiasm);
@@ -229,7 +249,7 @@ export default function PersonalizationScreen() {
     setPreferredLength(personalization.preferredLength ?? 'default');
     setTechnicalLevel(personalization.technicalLevel ?? 'unspecified');
     setResponseLanguage(personalization.responseLanguage ?? RESPONSE_LANGUAGE_AUTO);
-    resetChatStyleRef.current = false;
+    setResetChatStyle(false);
     setStyle(personalization.style);
     setWarmth(personalization.warmth);
     setEnthusiasm(personalization.enthusiasm);
@@ -281,7 +301,7 @@ export default function PersonalizationScreen() {
       preferredLength !== (personalization.preferredLength ?? 'default') ||
       technicalLevel !== (personalization.technicalLevel ?? 'unspecified') ||
       responseLanguage !== (personalization.responseLanguage ?? RESPONSE_LANGUAGE_AUTO) ||
-      resetChatStyleRef.current ||
+      resetChatStyle ||
       style !== personalization.style ||
       warmth !== personalization.warmth ||
       enthusiasm !== personalization.enthusiasm ||
@@ -297,6 +317,7 @@ export default function PersonalizationScreen() {
     preferredLength,
     technicalLevel,
     responseLanguage,
+    resetChatStyle,
     style,
     warmth,
     enthusiasm,
@@ -307,7 +328,7 @@ export default function PersonalizationScreen() {
 
   const handleResetStyle = useCallback(() => {
     draftDirtyRef.current = true;
-    resetChatStyleRef.current = true;
+    setResetChatStyle(true);
     setStyle('default');
     setPreferredLength('default');
     setTechnicalLevel('unspecified');
@@ -326,7 +347,14 @@ export default function PersonalizationScreen() {
     }
   }, [hasChanges, goBack]);
 
+  const fullNameError =
+    personalization.fullName.trim() !== '' && fullName.trim() === ''
+      ? 'Enter your full name.'
+      : null;
+  const canSave = hasChanges && fullNameError === null;
+
   const handleSave = useCallback(() => {
+    if (!canSave) return;
     draftDirtyRef.current = false;
     const trimmedName = fullName.trim();
     if (isCloud && trimmedName && trimmedName !== personalization.fullName.trim()) {
@@ -353,12 +381,13 @@ export default function PersonalizationScreen() {
       headersLists,
       emoji,
     });
-    if (resetChatStyleRef.current) {
+    if (resetChatStyle) {
       useChatViewStore.getState().setChatStyle('normal');
-      resetChatStyleRef.current = false;
+      setResetChatStyle(false);
     }
     goBack();
   }, [
+    canSave,
     fullName,
     nickname,
     occupation,
@@ -367,6 +396,7 @@ export default function PersonalizationScreen() {
     preferredLength,
     technicalLevel,
     responseLanguage,
+    resetChatStyle,
     style,
     warmth,
     enthusiasm,
@@ -380,38 +410,28 @@ export default function PersonalizationScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
-      <View className="flex-row items-center justify-between px-3 h-12">
-        <View className="flex-row items-center">
+      <ScreenHeader
+        title={isCloud ? 'Cloud Personalization' : 'Personalization'}
+        onBack={handleBack}
+        trailing={
           <Pressable
-            onPress={handleBack}
-            className="p-2 rounded-lg"
+            onPress={handleSave}
+            disabled={!canSave}
+            className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg"
             style={({ pressed }) => ({
               backgroundColor: pressed ? c.surfaceHover : c.transparent,
             })}
-            accessibilityLabel="Go back"
+            accessibilityLabel="Save personalization settings"
             accessibilityRole="button"
+            accessibilityState={{ disabled: !canSave }}
           >
-            <ArrowLeft size={20} color={c.textSecondary} />
+            <Check size={16} color={canSave ? c.teal : c.textMuted} />
+            <Text className="text-sm font-medium" style={{ color: canSave ? c.teal : c.textMuted }}>
+              Save
+            </Text>
           </Pressable>
-          <Text variant="subheading" className="ml-2" style={{ color: c.textPrimary }}>
-            {isCloud ? 'Cloud Personalization' : 'Personalization'}
-          </Text>
-        </View>
-        <Pressable
-          onPress={handleSave}
-          className="flex-row items-center gap-1.5 px-3 py-1.5 rounded-lg"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? c.surfaceHover : c.transparent,
-          })}
-          accessibilityLabel="Save personalization settings"
-          accessibilityRole="button"
-        >
-          <Check size={16} color={c.teal} />
-          <Text className="text-sm font-medium" style={{ color: c.teal }}>
-            Save
-          </Text>
-        </Pressable>
-      </View>
+        }
+      />
 
       <ScrollView
         className="flex-1 px-4"
@@ -428,6 +448,7 @@ export default function PersonalizationScreen() {
               setFullName(value);
             }}
             placeholder="Your full name"
+            error={fullNameError}
           />
           <LabeledInput
             label="Nickname"
@@ -437,6 +458,7 @@ export default function PersonalizationScreen() {
               setNickname(value);
             }}
             placeholder="What should AGI call you?"
+            helper={`${PRODUCT_BRAND} uses your nickname in chat.`}
           />
           <LabeledInput
             label="Occupation"
@@ -466,6 +488,20 @@ export default function PersonalizationScreen() {
             }}
             placeholder="e.g. I prefer direct, technical answers..."
             multiline
+            helper={
+              <>
+                Used in every chat, within our{' '}
+                <Text
+                  className="text-sm leading-5"
+                  style={{ color: c.teal }}
+                  accessibilityRole="link"
+                  onPress={() => void openExternalUrl(ACCEPTABLE_USE_URL)}
+                >
+                  acceptable use policy
+                </Text>
+                .
+              </>
+            }
           />
         </Card>
 
