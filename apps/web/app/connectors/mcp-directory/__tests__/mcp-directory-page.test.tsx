@@ -296,6 +296,50 @@ describe('McpDirectoryPage', () => {
     }
   });
 
+  it('lists featured connectors first under their own label and the rest under All connectors', async () => {
+    getSnapshotViewMock.mockResolvedValue(
+      snapshot([
+        record({ id: 'linear', name: 'Linear' }),
+        record({ id: 'vercel', name: 'Vercel', featured: true }),
+        record({ id: 'canva', name: 'Canva', featured: true }),
+      ]),
+    );
+
+    await renderPage();
+
+    const featured = screen.getByRole('list', { name: 'Featured' });
+    expect(
+      within(featured)
+        .getAllByRole('heading', { level: 3 })
+        .map((heading) => heading.textContent),
+    ).toEqual(['Vercel', 'Canva']);
+    const rest = screen.getByRole('list', { name: 'All connectors' });
+    expect(within(rest).getByRole('heading', { level: 3, name: 'Linear' })).toBeInTheDocument();
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+  });
+
+  it('drops the Featured label once a search narrows the list', async () => {
+    getSnapshotViewMock.mockResolvedValue(
+      snapshot([
+        record({ id: 'vercel', name: 'Vercel', featured: true }),
+        record({ id: 'linear', name: 'Linear' }),
+      ]),
+    );
+
+    await renderPage({ q: 'e' });
+
+    expect(screen.queryByRole('list', { name: 'Featured' })).toBeNull();
+    expect(screen.getAllByRole('listitem')).toHaveLength(2);
+  });
+
+  it('offers no custom connector row while connectors are not released', async () => {
+    getSnapshotViewMock.mockResolvedValue(snapshot([record()]));
+
+    await renderPage();
+
+    expect(screen.queryByTestId('mcp-directory-custom-row') !== null).toBe(connectorsReleased());
+  });
+
   describe('listing policy', () => {
     const community = (overrides: Partial<DirectoryRecord>) =>
       record({ badge: 'registry', sourceRegistry: 'mcp-registry', ...overrides });

@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Plus } from 'lucide-react';
 
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
@@ -19,7 +20,7 @@ import {
   isEligibleForListing,
   isInDefaultListing,
 } from '@/lib/connectors/directory/listing';
-import { isConnectableNow } from '@/lib/connectors/directory/snapshot-view';
+import { isConnectableNow, isFeatured } from '@/lib/connectors/directory/snapshot-view';
 import { helpEntryPoint, helpHref } from '@/lib/support/help-entry-points';
 import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
 import { DirectoryRecordCard } from './DirectoryRecordCard';
@@ -62,6 +63,14 @@ const PAGE_SIZE = 60;
 const SEARCH_PARAM = 'q';
 const CATEGORY_PARAM = 'category';
 const ALL_CATEGORIES_LABEL = 'All';
+const FEATURED_LABEL = 'Featured';
+const ALL_CONNECTORS_LABEL = 'All connectors';
+const FEATURED_LABEL_ID = 'agi-mcp-directory-featured';
+const ALL_CONNECTORS_LABEL_ID = 'agi-mcp-directory-all';
+const CUSTOM_ROW_TITLE = 'Custom connector';
+const CUSTOM_ROW_SUBTITLE = 'Add any remote MCP server by its URL.';
+const GROUP_LABEL_CLASS = 'text-sm font-medium text-muted-foreground';
+const GRID_CLASS = 'grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3';
 const SEARCH_INPUT_ID = 'agi-mcp-directory-search';
 const CATEGORY_SELECT_ID = 'agi-mcp-directory-category';
 
@@ -116,7 +125,14 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
       matches(record, search) &&
       (!category || record.categories.includes(category)),
   );
-  const page = selected.slice(0, PAGE_SIZE);
+  const grouped = !community && !filtered;
+  const ordered = grouped
+    ? [...selected.filter(isFeatured), ...selected.filter((record) => !isFeatured(record))]
+    : selected;
+  const page = ordered.slice(0, PAGE_SIZE);
+  const featuredOnPage = grouped ? page.filter(isFeatured) : [];
+  const restOnPage =
+    featuredOnPage.length > 0 ? page.filter((record) => !isFeatured(record)) : page;
   const truncated = selected.length > page.length;
   const total = selected.length.toLocaleString();
   const shortList = !community && !filtered && selected.length < DEFAULT_LIST_SHORT_BELOW;
@@ -254,15 +270,59 @@ export default async function McpDirectoryPage({ searchParams }: PageProps) {
               </Prose>
             ) : null}
 
+            {CONNECTORS_RELEASED ? (
+              <Link
+                href={SIGN_IN_HREF}
+                className="agi-ds-card flex w-full items-center gap-3"
+                data-testid="mcp-directory-custom-row"
+              >
+                <span
+                  aria-hidden
+                  className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-border text-foreground"
+                >
+                  <Plus className="size-4" />
+                </span>
+                <span className="min-w-0">
+                  <span className="block text-sm font-medium text-foreground">
+                    {CUSTOM_ROW_TITLE}
+                  </span>
+                  <span className="block text-sm text-muted-foreground">{CUSTOM_ROW_SUBTITLE}</span>
+                </span>
+              </Link>
+            ) : null}
+
             {page.length === 0 ? (
               <Prose>
                 {view.bootstrapComplete
                   ? 'No indexed connector matches that search yet.'
                   : 'The directory is still being indexed, so this search may be incomplete. Try again shortly.'}
               </Prose>
+            ) : featuredOnPage.length > 0 ? (
+              <>
+                <p id={FEATURED_LABEL_ID} className={GROUP_LABEL_CLASS}>
+                  {FEATURED_LABEL}
+                </p>
+                <ul aria-labelledby={FEATURED_LABEL_ID} className={GRID_CLASS}>
+                  {featuredOnPage.map((record) => (
+                    <DirectoryRecordCard key={record.id} record={record} />
+                  ))}
+                </ul>
+                {restOnPage.length > 0 ? (
+                  <>
+                    <p id={ALL_CONNECTORS_LABEL_ID} className={GROUP_LABEL_CLASS}>
+                      {ALL_CONNECTORS_LABEL}
+                    </p>
+                    <ul aria-labelledby={ALL_CONNECTORS_LABEL_ID} className={GRID_CLASS}>
+                      {restOnPage.map((record) => (
+                        <DirectoryRecordCard key={record.id} record={record} />
+                      ))}
+                    </ul>
+                  </>
+                ) : null}
+              </>
             ) : (
-              <ul className="grid w-full gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {page.map((record) => (
+              <ul className={GRID_CLASS}>
+                {restOnPage.map((record) => (
                   <DirectoryRecordCard key={record.id} record={record} />
                 ))}
               </ul>
