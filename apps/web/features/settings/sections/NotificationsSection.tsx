@@ -15,11 +15,16 @@ import {
 } from '@/lib/surface-status';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
+import { SettingsPageLink } from '../components/SettingsSectionLink';
 
 const NAMESPACE = 'notifications';
 
 export type NotifKey =
-  'browserReplyReady' | 'mobilePushScheduleDone' | 'emailScheduleDone' | 'emailSecurityAlerts';
+  | 'browserReplyReady'
+  | 'mobilePushScheduleDone'
+  | 'emailScheduleDone'
+  | 'emailSecurityAlerts'
+  | 'pushUsageReset';
 
 interface ChannelSpec {
   id: NotifKey;
@@ -32,6 +37,7 @@ interface EventSpec {
   heading: string;
   subheading: string;
   channels: ChannelSpec[];
+  link?: { label: string; href: string };
 }
 
 const EVENTS: ReadonlyArray<EventSpec> = [
@@ -53,12 +59,18 @@ const EVENTS: ReadonlyArray<EventSpec> = [
         surface: 'mobile',
       },
     ],
+    link: { label: 'Manage tasks', href: '/tasks' },
   },
   {
     heading: 'Security alerts',
     subheading:
       'A new sign-in, a password, email or two-factor change, or a new device. Always shown in the app and sent even during quiet hours; choose whether they are also emailed.',
     channels: [{ id: 'emailSecurityAlerts', channel: 'Email', defaultValue: true }],
+  },
+  {
+    heading: 'Usage',
+    subheading: 'We will notify you when your usage limit resets.',
+    channels: [{ id: 'pushUsageReset', channel: 'Push', defaultValue: true }],
   },
 ];
 
@@ -269,6 +281,20 @@ export function NotificationsSection({
                 <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
                   {event.subheading}
                 </div>
+                {event.link ? (
+                  <SettingsPageLink
+                    href={event.link.href}
+                    className="underline underline-offset-4"
+                    style={{
+                      display: 'inline-block',
+                      fontSize: 14,
+                      color: 'var(--text-1)',
+                      marginTop: 'var(--space-1)',
+                    }}
+                  >
+                    {event.link.label}
+                  </SettingsPageLink>
+                ) : null}
               </div>
               <select
                 aria-label={event.heading}

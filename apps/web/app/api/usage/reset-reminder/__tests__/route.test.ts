@@ -4,12 +4,16 @@ import { NextRequest } from 'next/server';
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   claimed: new Set<string>(),
+  enabled: true,
 }));
 
 vi.mock('server-only', () => ({}));
 vi.mock('workflow/api', () => ({ start: mocks.start }));
 vi.mock('@/lib/workflows/usage-reset-reminder-workflow', () => ({
   usageResetReminderWorkflow: vi.fn(),
+}));
+vi.mock('@/lib/workflows/steps/send-usage-reset-reminder', () => ({
+  usageResetReminderEnabled: vi.fn(async () => mocks.enabled),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
@@ -52,9 +56,19 @@ beforeEach(() => {
   mocks.start.mockReset();
   mocks.start.mockResolvedValue({ runId: 'run-1' });
   mocks.claimed.clear();
+  mocks.enabled = true;
 });
 
 describe('POST /api/usage/reset-reminder', () => {
+  it('refuses and schedules nothing when usage notifications are off', async () => {
+    mocks.enabled = false;
+
+    const response = await POST(post({ resetAt: inHours(3) }));
+
+    expect(response.status).toBe(400);
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
   it('schedules one reminder for the reset time and returns it', async () => {
     const resetAt = inHours(3);
 

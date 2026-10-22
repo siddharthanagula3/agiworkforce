@@ -15,6 +15,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { usageResetReminderEnabled } from '@/lib/workflows/steps/send-usage-reset-reminder';
 import { usageResetReminderWorkflow } from '@/lib/workflows/usage-reset-reminder-workflow';
 
 function reminderKey(userId: string, resetAt: string): string {
@@ -36,13 +37,17 @@ async function releaseReminder(userId: string, resetAt: string): Promise<void> {
 }
 
 async function handleRemind(request: NextRequest): Promise<NextResponse> {
-  const { userId } = await getUserScopedDb(request);
+  const { db, userId } = await getUserScopedDb(request);
 
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError as NextResponse;
 
   const rateLimitResponse = await withRateLimit(request, 'usage-reset-reminder');
   if (rateLimitResponse) return rateLimitResponse;
+
+  if (!(await usageResetReminderEnabled(db, userId))) {
+    throw createError.validation('Usage reminders are turned off in Notifications settings.');
+  }
 
   const parsed = UsageResetReminderRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) throw createError.validation('A reset time is required.');

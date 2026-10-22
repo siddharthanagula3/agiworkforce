@@ -132,6 +132,7 @@ describe('NotificationsSection grouping', () => {
         emailScheduleDone: true,
         mobilePushScheduleDone: true,
         emailSecurityAlerts: true,
+        pushUsageReset: true,
       }),
     );
   });
@@ -159,6 +160,7 @@ describe('NotificationsSection grouping', () => {
         emailScheduleDone: false,
         mobilePushScheduleDone: false,
         emailSecurityAlerts: true,
+        pushUsageReset: true,
       }),
     );
   });
@@ -189,7 +191,28 @@ describe('NotificationsSection grouping', () => {
         emailScheduleDone: false,
         mobilePushScheduleDone: true,
         emailSecurityAlerts: true,
+        pushUsageReset: true,
       }),
     );
+  });
+
+  it('offers a Usage push preference that defaults on and saves when turned off', async () => {
+    render(<NotificationsSection />);
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+    const usage = screen.getByRole('combobox', { name: 'Usage' });
+    expect(usage).toHaveValue('pushUsageReset');
+    fireEvent.change(usage, { target: { value: 'off' } });
+    await waitFor(() =>
+      expect(mocks.savePreferenceNamespace).toHaveBeenCalledWith(
+        'notifications',
+        expect.objectContaining({ pushUsageReset: false }),
+      ),
+    );
+  });
+
+  it('links the scheduled task row to the tasks page', async () => {
+    render(<NotificationsSection />);
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+    expect(screen.getByRole('link', { name: 'Manage tasks' })).toHaveAttribute('href', '/tasks');
   });
 });
