@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { formatDistanceToNow } from 'date-fns';
 import { Archive, ArchiveRestore, Check, MessageSquare, Pause, Play, X } from 'lucide-react';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
@@ -15,10 +15,14 @@ import {
   isArchivableState,
   isCancellableState,
   isPausableState,
+  isTaskUnread,
+  loadTaskViews,
+  markTaskViewed,
   runWorkState,
   taskStateLabel,
   taskStateTone,
   workModeLabel,
+  type TaskViews,
 } from './task-display';
 
 const CARD_ACTION_CLASS = 'h-7 px-2 text-xs text-muted-foreground pointer-coarse:min-h-11';
@@ -64,6 +68,8 @@ export function TasksBoard({
 }: TasksBoardProps) {
   const cardButtons = useRef(new Map<string, HTMLButtonElement>());
   const pendingFocus = useRef<{ runId: string; from: AgentTaskBoardStage } | null>(null);
+  const actedOn = useRef(new Map<string, string>());
+  const [views, setViews] = useState<TaskViews | null>(() => loadTaskViews());
 
   const grouped = new Map<AgentTaskBoardStage, CloudAgentRun[]>();
   for (const run of runs) {
@@ -91,9 +97,29 @@ export function TasksBoard({
     cardButtons.current.get(run.id)?.focus();
   }, [archivingId, cancellingId, pausingId, resolvingApprovalId, runs]);
 
+  useEffect(() => {
+    if (!views) return;
+    let next = views;
+    const busyIds = [cancellingId, pausingId, archivingId, resolvingApprovalId];
+    for (const run of runs) {
+      const before = actedOn.current.get(run.id);
+      const settledAfterAction = before !== undefined && before !== run.updatedAt;
+      if (settledAfterAction || (before !== undefined && !busyIds.includes(run.id))) {
+        actedOn.current.delete(run.id);
+      }
+      if (settledAfterAction || run.id === selectedRunId) next = markTaskViewed(next, run);
+    }
+    if (next !== views) setViews(next);
+  }, [archivingId, cancellingId, pausingId, resolvingApprovalId, runs, selectedRunId, views]);
+
+  const act = (run: CloudAgentRun, action: () => void) => {
+    actedOn.current.set(run.id, run.updatedAt);
+    action();
+  };
+
   const move = (run: CloudAgentRun, action: () => void) => {
     pendingFocus.current = { runId: run.id, from: agentTaskBoardStage(runWorkState(run)) };
-    action();
+    act(run, action);
   };
 
   return (
@@ -132,6 +158,7 @@ export function TasksBoard({
                   const { title, isFallback } = runTitle(run);
                   const pending = run.state === 'awaiting_input' ? run.pendingApproval : null;
                   const resolving = resolvingApprovalId === run.id;
+                  const unread = !selected && isTaskUnread(run, views);
                   return (
                     <li
                       key={run.id}
@@ -147,13 +174,24 @@ export function TasksBoard({
                           if (node) cardButtons.current.set(run.id, node);
                           else cardButtons.current.delete(run.id);
                         }}
-                        aria-label={`View details for ${title}, ${taskStateLabel(workState)}`}
+                        aria-label={`View details for ${title}, ${taskStateLabel(workState)}${unread ? ', unread' : ''}`}
                         aria-pressed={selected}
                         onClick={() => onSelect(run.id)}
                         className="flex min-w-0 flex-col gap-1 rounded-md text-start focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        <span className="line-clamp-2 text-sm font-medium">{title}</span>
-                        <span className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                        <span className="flex items-start gap-2">
+                          <span className="line-clamp-2 min-w-0 flex-1 text-sm font-medium">
+                            {title}
+                          </span>
+                          {unread ? (
+                            <span
+                              data-testid={`tasks-board-unread-${run.id}`}
+                              aria-hidden
+                              className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-info-fill"
+                            />
+                          ) : null}
+                        </span>
+                        <span className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
                           <span
                             className={cn(
                               'rounded-full border px-2 py-0.5 text-caption font-medium',
@@ -163,9 +201,9 @@ export function TasksBoard({
                             {pauseRequested ? 'Pausing' : taskStateLabel(workState)}
                           </span>
                           {isFallback ? null : <span>{workModeLabel(run.workMode)}</span>}
-                          <span>
-                            {formatDistanceToNow(new Date(run.createdAt), { addSuffix: true })}
-                          </span>
+                          <time dateTime={run.updatedAt}>
+                            {formatDistanceToNow(new Date(run.updatedAt), { addSuffix: true })}
+                          </time>
                         </span>
                       </button>
                       {pending ? (
@@ -272,7 +310,7 @@ export function TasksBoard({
                             className={CARD_ACTION_CLASS}
                             disabled={archivingId === run.id}
                             aria-label={`Restore: ${title}`}
-                            onClick={() => onArchive(run, false)}
+                            onClick={() => act(run, () => onArchive(run, false))}
                           >
                             {archivingId === run.id ? (
                               <Spinner size="sm" aria-label="Restoring task" />
@@ -290,7 +328,7 @@ export function TasksBoard({
                             className={CARD_ACTION_CLASS}
                             disabled={archivingId === run.id}
                             aria-label={`Archive: ${title}`}
-                            onClick={() => onArchive(run, true)}
+                            onClick={() => act(run, () => onArchive(run, true))}
                           >
                             {archivingId === run.id ? (
                               <Spinner size="sm" aria-label="Archiving task" />
@@ -307,7 +345,10 @@ export function TasksBoard({
                             size="sm"
                             className={CARD_ACTION_CLASS}
                             aria-label={`Open chat: ${title}`}
-                            onClick={() => onOpenConversation(run)}
+                            onClick={() => {
+                              if (views) setViews(markTaskViewed(views, run));
+                              onOpenConversation(run);
+                            }}
                           >
                             <MessageSquare className="me-1 h-3 w-3" aria-hidden /> Open chat
                           </Button>

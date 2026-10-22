@@ -140,3 +140,90 @@ export function taskResultText(events: readonly AgentEventEnvelope[]): string {
   const text = (segment.trim() ? segment : lastSegment).trim();
   return text.length > TASK_RESULT_MAX_CHARS ? `${text.slice(0, TASK_RESULT_MAX_CHARS)}…` : text;
 }
+
+const TASK_VIEWS_STORAGE_KEY = 'agi-task-views';
+const TASK_VIEWS_CAP = 500;
+
+export interface TaskViews {
+  since: string;
+  seen: Record<string, string>;
+}
+
+function isTaskViews(value: unknown): value is TaskViews {
+  if (typeof value !== 'object' || value === null) return false;
+  const candidate = value as Partial<TaskViews>;
+  return (
+    typeof candidate.since === 'string' &&
+    !Number.isNaN(Date.parse(candidate.since)) &&
+    typeof candidate.seen === 'object' &&
+    candidate.seen !== null &&
+    Object.values(candidate.seen).every((stamp) => typeof stamp === 'string')
+  );
+}
+
+function saveTaskViews(views: TaskViews): void {
+  try {
+    window.localStorage.setItem(TASK_VIEWS_STORAGE_KEY, JSON.stringify(views));
+  } catch {
+    return;
+  }
+}
+
+/**
+ * Where this device last looked at each run. A device that has never looked
+ * starts from now, so a first visit does not mark every past run unread; a
+ * device without storage tracks nothing and shows no unread marks.
+ */
+export function loadTaskViews(now: Date = new Date()): TaskViews | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const stored: unknown = JSON.parse(
+      window.localStorage.getItem(TASK_VIEWS_STORAGE_KEY) ?? 'null',
+    );
+    if (isTaskViews(stored)) return stored;
+    const fresh: TaskViews = { since: now.toISOString(), seen: {} };
+    window.localStorage.setItem(TASK_VIEWS_STORAGE_KEY, JSON.stringify(fresh));
+    return fresh;
+  } catch {
+    return null;
+  }
+}
+
+function latestStamp(a: string, b: string): string {
+  return Date.parse(a) >= Date.parse(b) ? a : b;
+}
+
+export function markTaskViewed(
+  views: TaskViews,
+  run: Pick<CloudAgentRun, 'id' | 'updatedAt'>,
+  now: Date = new Date(),
+): TaskViews {
+  const previous = views.seen[run.id];
+  if (previous && Date.parse(previous) >= Date.parse(run.updatedAt)) return views;
+  const stamp = latestStamp(run.updatedAt, now.toISOString());
+  const entries = Object.entries(views.seen).filter(([id]) => id !== run.id);
+  entries.push([run.id, stamp]);
+  const next: TaskViews = {
+    since: views.since,
+    seen: Object.fromEntries(entries.slice(-TASK_VIEWS_CAP)),
+  };
+  saveTaskViews(next);
+  return next;
+}
+
+/**
+ * A run is unread when it has settled into something for the user (a result,
+ * a failure or a question) after this device last looked at it. Runs still
+ * working, cancelled or archived carry no mark.
+ */
+export function isTaskUnread(
+  run: Pick<CloudAgentRun, 'id' | 'state' | 'workState' | 'updatedAt'>,
+  views: TaskViews | null,
+): boolean {
+  if (!views) return false;
+  const tone = taskStateTone(runWorkState(run));
+  if (tone === 'active' || tone === 'muted') return false;
+  const updated = Date.parse(run.updatedAt);
+  if (Number.isNaN(updated)) return false;
+  return updated > Date.parse(views.seen[run.id] ?? views.since);
+}
