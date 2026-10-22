@@ -27,7 +27,7 @@ function envIsTruthy(name) {
 }
 
 const SPLASH_BACKGROUND_LIGHT = '#ffffff';
-const SPLASH_BACKGROUND_DARK = '#0f0f0f';
+const SPLASH_BACKGROUND_DARK = '#000000';
 // PNGs are 4x this, so the same asset is crisp on iOS @3x and Android xxxhdpi.
 const SPLASH_IMAGE_WIDTH = 220;
 

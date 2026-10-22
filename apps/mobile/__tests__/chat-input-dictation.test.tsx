@@ -159,7 +159,7 @@ jest.mock('../stores/settingsStore', () => ({
 
 jest.mock('../src/ui/theme', () => {
   const themeColors = {
-    background: '#0f0f0f',
+    background: '#000000',
     surfaceBase: '#171717',
     teal: '#14b8a6',
     terraCotta: '#e07a5f',

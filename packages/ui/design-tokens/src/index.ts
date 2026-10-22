@@ -590,7 +590,7 @@ export const agiMobileColors = {
     terraCotta: '#f4f4f4',
     teal: '#f4f4f4',
     warmPeach: '#2f2f2f',
-    background: '#0f0f0f',
+    background: '#000000',
     surfaceBase: '#171717',
     surfaceElevated: '#212121',
     surfaceOverlay: '#2a2a2a',
