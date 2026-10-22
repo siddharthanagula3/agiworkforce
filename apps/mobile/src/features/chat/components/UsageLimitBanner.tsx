@@ -4,6 +4,7 @@ import { Gauge, X } from 'lucide-react-native';
 import {
   normalizeUsagePercentage,
   selectUsageWarning,
+  type ManagedUsageBucketReading,
   type ManagedUsageCreditWindow,
   type ManagedUsageWarning,
 } from '@agiworkforce/types';
@@ -16,38 +17,40 @@ function inCredits(window: ManagedUsageCreditWindow | null | undefined) {
   return window ? { allowanceCredits: window.allowance, usedCredits: window.used } : {};
 }
 
-export function usageWarningFromSnapshot(snapshot: UsageSnapshot): ManagedUsageWarning | null {
+export function usageReadingsFromSnapshot(snapshot: UsageSnapshot): ManagedUsageBucketReading[] {
   const credits = snapshot.credits;
-  return selectUsageWarning(
-    [
-      {
-        bucket: 'session',
-        percentRemaining: 100 - normalizeUsagePercentage(snapshot.sessionUsagePercentage),
-        resetAt: snapshot.sessionResetAt,
-        ...inCredits(credits?.five_hour),
-      },
-      {
-        bucket: 'weekly',
-        percentRemaining: 100 - normalizeUsagePercentage(snapshot.weeklyUsagePercentage),
-        resetAt: snapshot.weeklyResetAt,
-        ...inCredits(credits?.weekly),
-      },
-      {
-        bucket: 'weeklyFlagship',
-        percentRemaining: 100 - normalizeUsagePercentage(snapshot.flagshipWeeklyUsagePercentage),
-        resetAt: snapshot.flagshipWeeklyResetAt,
-        ...inCredits(credits?.flagship_weekly),
-      },
-      {
-        bucket: 'period',
-        percentRemaining: 100 - normalizeUsagePercentage(snapshot.usagePercentage),
-        resetAt: snapshot.usageResetAt,
-        ...inCredits(credits?.monthly),
-      },
-    ],
-    Date.now(),
-    { planTier: snapshot.planTier },
-  );
+  return [
+    {
+      bucket: 'session',
+      percentRemaining: 100 - normalizeUsagePercentage(snapshot.sessionUsagePercentage),
+      resetAt: snapshot.sessionResetAt,
+      ...inCredits(credits?.five_hour),
+    },
+    {
+      bucket: 'weekly',
+      percentRemaining: 100 - normalizeUsagePercentage(snapshot.weeklyUsagePercentage),
+      resetAt: snapshot.weeklyResetAt,
+      ...inCredits(credits?.weekly),
+    },
+    {
+      bucket: 'weeklyFlagship',
+      percentRemaining: 100 - normalizeUsagePercentage(snapshot.flagshipWeeklyUsagePercentage),
+      resetAt: snapshot.flagshipWeeklyResetAt,
+      ...inCredits(credits?.flagship_weekly),
+    },
+    {
+      bucket: 'period',
+      percentRemaining: 100 - normalizeUsagePercentage(snapshot.usagePercentage),
+      resetAt: snapshot.usageResetAt,
+      ...inCredits(credits?.monthly),
+    },
+  ];
+}
+
+export function usageWarningFromSnapshot(snapshot: UsageSnapshot): ManagedUsageWarning | null {
+  return selectUsageWarning(usageReadingsFromSnapshot(snapshot), Date.now(), {
+    planTier: snapshot.planTier,
+  });
 }
 
 export function UsageLimitBanner({

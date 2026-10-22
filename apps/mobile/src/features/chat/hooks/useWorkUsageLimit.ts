@@ -1,45 +1,39 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { AppState } from 'react-native';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
-  getNextUpgradeTier,
-  isFreeBillingPlanTier,
-  isSelfServePaidPlanTier,
-  WORK_USAGE_COPY,
+  earliestExhaustedUsageResetAt,
+  resolveExhaustedUsageRecovery,
+  resolvePlanUsageRecovery,
+  workUsageRecoveryActionLabel,
   type ManagedUsageWarning,
   type WorkUsageRecovery,
 } from '@agiworkforce/types';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
-import { usageWarningFromSnapshot } from '@/src/features/chat/components/UsageLimitBanner';
+import {
+  usageReadingsFromSnapshot,
+  usageWarningFromSnapshot,
+} from '@/src/features/chat/components/UsageLimitBanner';
 import type { UsageSnapshot } from '@/services/usage';
 
 export const USAGE_RECOVERY_ROUTE = '/(app)/settings/cloud-billing';
+const RESET_RECHECK_MAX_MS = 60_000;
 
-export function usageRecoveryForPlan(planTier: string | null | undefined): WorkUsageRecovery {
-  if (isFreeBillingPlanTier(planTier)) return 'upgrade';
-  if (isSelfServePaidPlanTier(planTier)) return 'add_credits';
-  return getNextUpgradeTier(planTier) ? 'upgrade' : 'wait';
-}
-
-export function usageRecoveryActionLabel(recovery: WorkUsageRecovery): string | null {
-  if (recovery === 'add_credits') return WORK_USAGE_COPY.addCredits;
-  if (recovery === 'upgrade') return WORK_USAGE_COPY.upgrade;
-  return null;
-}
-
-/**
- * True only when the server reports no usage left and no purchased, bonus or
- * overage credits could still carry a turn. Anything unknown counts as usable:
- * the server limit stays authoritative and this never blocks a send it would take.
- */
-export function isUsageExhausted(snapshot: UsageSnapshot): boolean {
-  if (snapshot.hasUsageRemaining) return false;
-  const credits = snapshot.credits;
-  if (!credits) return false;
-  const purchased = credits.purchased;
-  if (purchased.overage_enabled) return false;
-  if (purchased.remaining === null || purchased.remaining > 0) return false;
-  return (credits.bonus?.remaining ?? 0) <= 0;
+export function exhaustedUsageRecoveryFromSnapshot(
+  snapshot: UsageSnapshot,
+  now: number = Date.now(),
+): WorkUsageRecovery | null {
+  return resolveExhaustedUsageRecovery(
+    {
+      planTier: snapshot.planTier,
+      hasUsageRemaining: snapshot.hasUsageRemaining,
+      usageAllocation: snapshot.usageAllocation ?? null,
+      credits: snapshot.credits,
+      readings: usageReadingsFromSnapshot(snapshot),
+    },
+    now,
+  );
 }
 
 export interface WorkUsageLimit {
@@ -65,8 +59,10 @@ export function useWorkUsageLimit({
   const ownSnapshot = useCloudUsageStore((s) =>
     s.ownerId !== null && s.ownerId === clerkUserId ? s.snapshot : null,
   );
+  const usageError = useCloudUsageStore((s) => s.error);
   const refresh = useCloudUsageStore((s) => s.refresh);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
     if (metered && !isStreaming) void refresh();
@@ -78,14 +74,45 @@ export function useWorkUsageLimit({
     }, [metered, refresh]),
   );
 
+  useEffect(() => {
+    if (!metered) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') {
+        setNow(Date.now());
+        void refresh();
+      }
+    });
+    return () => subscription.remove();
+  }, [metered, refresh]);
+
   const snapshot = metered ? ownSnapshot : null;
+  const pending = snapshot?.usageAllocation === 'pending';
   const liveWarning = useMemo(
-    () => (snapshot ? usageWarningFromSnapshot(snapshot) : null),
-    [snapshot],
+    () => (snapshot && !pending ? usageWarningFromSnapshot(snapshot) : null),
+    [pending, snapshot],
   );
+  const exhaustedRecovery =
+    snapshot && usageError === null ? exhaustedUsageRecoveryFromSnapshot(snapshot, now) : null;
+  const nextResetAt =
+    snapshot && exhaustedRecovery
+      ? earliestExhaustedUsageResetAt(usageReadingsFromSnapshot(snapshot))
+      : null;
+
+  useEffect(() => {
+    if (nextResetAt === null) return;
+    const timer = setTimeout(
+      () => {
+        setNow(Date.now());
+        if (Date.now() >= nextResetAt) void refresh();
+      },
+      Math.max(1_000, Math.min(nextResetAt - Date.now() + 1_000, RESET_RECHECK_MAX_MS)),
+    );
+    return () => clearTimeout(timer);
+  }, [nextResetAt, now, refresh]);
+
   const warningKey = liveWarning ? `${liveWarning.bucket}:${liveWarning.severity}` : null;
-  const recovery = snapshot ? usageRecoveryForPlan(snapshot.planTier) : null;
-  const exhaustedRecovery = snapshot && recovery && isUsageExhausted(snapshot) ? recovery : null;
+  const recovery =
+    exhaustedRecovery ?? (snapshot ? resolvePlanUsageRecovery(snapshot.planTier) : null);
 
   const openRecovery = useCallback(() => {
     router.push(USAGE_RECOVERY_ROUTE as Parameters<typeof router.push>[0]);
@@ -99,7 +126,7 @@ export function useWorkUsageLimit({
     snapshot,
     warning: warningKey !== null && warningKey !== dismissedKey ? liveWarning : null,
     exhaustedRecovery,
-    actionLabel: recovery ? usageRecoveryActionLabel(recovery) : null,
+    actionLabel: recovery ? workUsageRecoveryActionLabel(recovery) : null,
     openRecovery,
     dismissWarning,
   };

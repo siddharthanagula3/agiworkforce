@@ -1,6 +1,10 @@
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { WORK_USAGE_COPY, type WorkUsageRecovery } from '@agiworkforce/types';
+import {
+  WORK_USAGE_COPY,
+  workUsageRecoveryActionLabel,
+  type WorkUsageRecovery,
+} from '@agiworkforce/types';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
 import { radii, useTheme } from '@/src/ui/theme';
@@ -11,12 +15,7 @@ const BILLING_ROUTE = '/(app)/settings/cloud-billing';
 export function WorkUsageCard({ recovery }: { recovery: WorkUsageRecovery }) {
   const router = useRouter();
   const { colors } = useTheme();
-  const actionLabel =
-    recovery === 'add_credits'
-      ? WORK_USAGE_COPY.addCredits
-      : recovery === 'upgrade'
-        ? WORK_USAGE_COPY.upgrade
-        : null;
+  const actionLabel = workUsageRecoveryActionLabel(recovery);
 
   return (
     <View

@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 889007b85bd6fee3a7b83b0f9e3d5c38665030110df2bdd441c171990847b8f8 -->
+<!-- ui-gaps-csv-sha256: 9813eacf5ee14e7ede9d5387b1480d4a468a64760c1524df8d9c92d3ea6335e8 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,7 +21,7 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 53 P1, 107 P2, 35 P3.
+- Unresolved: 0 P0, 53 P1, 106 P2, 35 P3.
 
 | Surface          | Gaps |
 | ---------------- | ---: |
@@ -34,11 +34,11 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 | Status      | Gaps |
 | ----------- | ---: |
 | Open        |  184 |
-| In Progress |   11 |
+| In Progress |   10 |
 | Blocked     |    0 |
 | Deferred    |    0 |
 | Done        |  120 |
-| Not Planned |   26 |
+| Not Planned |   27 |
 
 ## P0
 
@@ -3251,7 +3251,7 @@ Not recommended unless agiworkforce is entering the health-assistant vertical; i
 
 ### GAP-141, Empty chat quick actions need draft prefill and capability-aware labels
 
-- **Status:** In Progress
+- **Status:** Not Planned
 - **Owner:** Mobile
 - **Surface/type:** mobile · missing-control
 - **Reference:** ChatGPT · iOS · Chat empty state
@@ -3262,11 +3262,11 @@ The empty chat pins Create an image, Write or edit, and Search the web actions a
 
 **Evidence**
 
-TaskChips.tsx owns the starter copy and checks model search support, server capability, and the persisted web-search preference; the new-chat screen and existing-thread Composer pass their selected model and prefill through ChatInput. chat-input.test.tsx verifies that the draft is editable, is never auto-sent, and preserves existing text. task-chips-web-search.test.tsx covers available, disabled, Local, and server-off states. A repository search found no ConversationStarters component.
+Removed on mobile: the starter chips contradicted the 2026-08-06 removal of sample-prompt chips on every surface recorded at packages/ui/unified-chat/src/components/ChatInterface.tsx:991-994, so the mobile new chat no longer renders them and the empty state is the greeting only. Image, Web search and Deep research stay reachable from the composer's + sheet (apps/mobile/src/features/chat/components/AddToChatSheet.tsx). chat-tab-mode-toggle.test.tsx asserts that no starter chip renders in the empty new chat.
 
 **Suggested fix**
 
-Verify keyboard and compact-screen layout on a device.
+None; reopen only if the founder reverses the 2026-08-06 removal.
 
 **Reference screenshot(s)**
 

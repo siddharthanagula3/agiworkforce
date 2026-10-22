@@ -658,7 +658,11 @@ describe('Chat tab mode toggle', () => {
   });
 
   describe('new-chat usage limit', () => {
-    function exhaustedSnapshot(planTier: string, purchasedRemaining: number | null = 0) {
+    function exhaustedSnapshot(
+      planTier: string,
+      purchasedRemaining: number | null = 0,
+      overageEnabled = false,
+    ) {
       const window = { allowance: 100, used: 100, remaining: 0, reset_at: null };
       return {
         planTier,
@@ -679,7 +683,7 @@ describe('Chat tab mode toggle', () => {
           weekly: window,
           five_hour: window,
           flagship_weekly: null,
-          purchased: { remaining: purchasedRemaining, overage_enabled: false },
+          purchased: { remaining: purchasedRemaining, overage_enabled: overageEnabled },
           bonus: null,
         },
       };
@@ -714,11 +718,25 @@ describe('Chat tab mode toggle', () => {
       expect(screen.queryByTestId('chat.usage-limit')).toBeNull();
     });
 
-    it('does not treat usage as exhausted while purchased credits remain', async () => {
+    it('asks to turn on usage credits when bought credits are switched off', async () => {
       mockWorkMode = 'agiwork';
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useWaitlistStore.setState({ cloudUnlocked: true });
       mockUsageSnapshot = exhaustedSnapshot('pro', 25);
+
+      const screen = render(<ChatTabScreen />);
+
+      await waitFor(() => {
+        expect(mockChatInputExhaustedUsageRecovery).toBe('enable_usage_credits');
+      });
+      expect(screen.queryByTestId('chat.usage-limit')).toBeNull();
+    });
+
+    it('does not treat usage as exhausted while usage credits are on and funded', async () => {
+      mockWorkMode = 'agiwork';
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockUsageSnapshot = exhaustedSnapshot('pro', 25, true);
 
       const screen = render(<ChatTabScreen />);
 
@@ -728,9 +746,17 @@ describe('Chat tab mode toggle', () => {
       expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
     });
 
-    it('reads no Cloud usage for a Local new chat', () => {
+    it('reads no Cloud usage for a Local new chat', async () => {
       mockUsageSnapshot = exhaustedSnapshot('pro');
+      const { fetchUsageSnapshot } = require('@/services/usage') as {
+        fetchUsageSnapshot: jest.Mock;
+      };
       const screen = render(<ChatTabScreen />);
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      expect(fetchUsageSnapshot).not.toHaveBeenCalled();
+      expect(useCloudUsageStore.getState().snapshot).toBeNull();
       expect(screen.queryByTestId('chat.usage-limit')).toBeNull();
       expect(mockChatInputExhaustedUsageRecovery).toBeNull();
     });

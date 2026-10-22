@@ -25,6 +25,7 @@ export interface UsageSnapshot {
   flagshipWeeklyUsagePercentage: number;
   flagshipWeeklyResetAt: string | null;
   credits: ManagedUsageCredits | null;
+  usageAllocation?: 'provisioned' | 'pending';
 }
 
 function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
@@ -43,6 +44,7 @@ function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
     flagshipWeeklyUsagePercentage: summary.flagship_weekly_usage_percentage,
     flagshipWeeklyResetAt: summary.flagship_weekly_reset_at,
     credits: summary.credits ?? null,
+    ...(summary.usage_allocation ? { usageAllocation: summary.usage_allocation } : {}),
   };
 }
 

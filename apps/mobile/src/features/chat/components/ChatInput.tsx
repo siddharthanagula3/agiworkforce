@@ -347,6 +347,8 @@ export function ChatInput({
       previousDraftTargetRef.current = { key: draftKey, provenance: draftProvenance };
       queuedFollowUpsRef.current = [];
       setQueuedFollowUps([]);
+      heldSendRef.current = null;
+      setSendHeld(false);
       setText(draftKey && !draftProvenance ? '' : getDraft(draftKey, draftProvenance));
       setAttachments([]);
       return;

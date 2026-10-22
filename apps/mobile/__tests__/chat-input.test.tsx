@@ -1191,6 +1191,50 @@ describe('ChatInput', () => {
       expect((onSend.mock.calls[0][1] as unknown[]) ?? []).toHaveLength(1);
     });
 
+    it('drops a held Cloud send when the composer switches to Local', async () => {
+      const onSend = jest.fn().mockResolvedValue(undefined);
+      const attachRef = React.createRef<ChatInputHandle>();
+      const cloudProps = {
+        onSend,
+        attachRef,
+        draftKey: 'new-chat',
+        draftProvenance: { scope: 'cloud' as const, ownerId: 'account-a' },
+      };
+      const { getByLabelText, getByTestId, queryByLabelText, rerender } = renderInput(cloudProps);
+
+      await attachOne(attachRef);
+      act(() => {
+        uploading().begin('up-1');
+      });
+      fireEvent.changeText(getByLabelText('Message input'), 'cloud only');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+      expect(getByLabelText('Sending when the upload finishes')).toBeTruthy();
+
+      await act(async () => {
+        rerender(
+          <ChatInput
+            {...defaultProps}
+            onSend={onSend}
+            attachRef={attachRef}
+            draftKey="new-chat"
+            draftProvenance={{ scope: 'local' }}
+          />,
+        );
+      });
+      expect(queryByLabelText('Sending when the upload finishes')).toBeNull();
+
+      await act(async () => {
+        uploading().settle('up-1', 'done');
+      });
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+
+      expect(onSend).not.toHaveBeenCalled();
+    });
+
     it('keeps the message in the composer when the upload ends any other way', async () => {
       const onSend = jest.fn().mockResolvedValue(undefined);
       const attachRef = React.createRef<ChatInputHandle>();
