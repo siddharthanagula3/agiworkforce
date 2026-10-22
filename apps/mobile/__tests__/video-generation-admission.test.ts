@@ -1,7 +1,19 @@
+const mockVideoSlot: { modelId: string | undefined } = { modelId: undefined };
+
+jest.mock('@agiworkforce/types', () =>
+  jest
+    .requireActual('../test-utils/videoSlotMock')
+    .withVideoGenerationSlot(
+      jest.requireActual('@agiworkforce/types'),
+      () => mockVideoSlot.modelId,
+    ),
+);
+
 import {
   getVideoAspectOptionsForModel,
   getVideoQualityOptionsForModel,
   isVideoOutputSupported,
+  modelsCatalog,
 } from '@agiworkforce/types';
 import {
   MANAGED_MEDIA_VIDEO_ASPECT_RATIOS,
@@ -9,9 +21,15 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import { useChatViewStore } from '@/stores/chat/chatViewStore';
+import {
+  SYNTHETIC_RETIRED_VIDEO_MODEL_ID,
+  requireLiveVideoModelId,
+} from '../test-utils/modelFixtures';
 
 const features = FEATURES as { videoGen: boolean };
 features.videoGen = true;
+mockVideoSlot.modelId = requireLiveVideoModelId();
 
 const ENTITLED = {
   executionMode: 'cloud' as const,
@@ -135,6 +153,48 @@ describe('resolveMobileVideoGenerationRequest', () => {
     expect(decision.code).toBe('offline');
   });
 
+  describe('when the video slot holds a model that is no longer live', () => {
+    beforeEach(() => {
+      mockVideoSlot.modelId = SYNTHETIC_RETIRED_VIDEO_MODEL_ID;
+    });
+
+    afterEach(() => {
+      mockVideoSlot.modelId = requireLiveVideoModelId();
+    });
+
+    it.each([
+      ['video mode', { mediaMode: 'video' as const, text: 'a cat surfing' }],
+      ['the /video command', { mediaMode: 'text' as const, text: '/video a cat surfing' }],
+    ])('blocks %s with a one-line reason instead of sending', (_label, request) => {
+      const decision = resolveMobileVideoGenerationRequest({ ...ENTITLED, ...request });
+
+      expect(decision.status).toBe('blocked');
+      if (decision.status !== 'blocked') return;
+      expect(decision.code).toBe('route_unavailable');
+      expect(decision.alert.message).toBe(
+        'No eligible video model is available right now. Try again later.',
+      );
+    });
+
+    it('still admits a user-chosen live model', () => {
+      const chosen = requireLiveVideoModelId();
+      useChatViewStore.getState().setMediaModel('video', chosen);
+
+      try {
+        const decision = resolveMobileVideoGenerationRequest({
+          ...ENTITLED,
+          text: 'a cat surfing',
+        });
+
+        expect(decision.status).toBe('ready');
+        if (decision.status !== 'ready') return;
+        expect(decision.model).toBe(chosen);
+      } finally {
+        useChatViewStore.setState({ selectedMediaModel: {} });
+      }
+    });
+  });
+
   it('carries a user-facing alert on every blocked decision', () => {
     const decision = resolveMobileVideoGenerationRequest({
       ...ENTITLED,
@@ -216,18 +276,54 @@ describe('resolveMobileVideoGenerationRequest, Auto intent routing', () => {
   });
 });
 
+function narrowCatalogVideoModel() {
+  const model = Object.values(modelsCatalog.models)
+    .filter((candidate) => candidate.modelType === 'video' && candidate.capabilities.videoGen)
+    .sort((left, right) => left.id.localeCompare(right.id))
+    .find((candidate) => {
+      const aspects = getVideoAspectOptionsForModel(candidate.id).map((option) => option.id);
+      if (aspects.length === 0) return false;
+      const qualities = getVideoQualityOptionsForModel(candidate.id, aspects[0]).map(
+        (option) => option.id,
+      );
+      return (
+        MANAGED_MEDIA_VIDEO_ASPECT_RATIOS.some((id) => !aspects.includes(id)) &&
+        MANAGED_MEDIA_VIDEO_RESOLUTIONS.some((id) => !qualities.includes(id))
+      );
+    });
+  if (!model) throw new Error('Canonical catalog has no video model with a narrow output catalog');
+  return model;
+}
+
 describe('resolveMobileVideoGenerationRequest, output shape follows the routed model', () => {
-  const routed = resolveMobileVideoGenerationRequest({
-    ...ENTITLED,
-    text: 'a cat surfing',
-    aspectRatio: '16:9',
-    resolution: '720p',
+  const narrow = narrowCatalogVideoModel();
+  const original = { availability: narrow.availability, deprecation_date: narrow.deprecation_date };
+  let routedModel = '';
+  let publishedAspects: string[] = [];
+  let publishedQualities: string[] = [];
+
+  beforeAll(() => {
+    narrow.availability = 'live';
+    narrow.deprecation_date = null;
+    mockVideoSlot.modelId = narrow.id;
+    const routed = resolveMobileVideoGenerationRequest({
+      ...ENTITLED,
+      text: 'a cat surfing',
+      aspectRatio: '16:9',
+      resolution: '720p',
+    });
+    routedModel = routed.status === 'ready' ? routed.model : '';
+    publishedAspects = getVideoAspectOptionsForModel(routedModel).map((option) => option.id);
+    publishedQualities = getVideoQualityOptionsForModel(routedModel, publishedAspects[0]).map(
+      (option) => option.id,
+    );
   });
-  const routedModel = routed.status === 'ready' ? routed.model : '';
-  const publishedAspects = getVideoAspectOptionsForModel(routedModel).map((option) => option.id);
-  const publishedQualities = getVideoQualityOptionsForModel(routedModel, publishedAspects[0]).map(
-    (option) => option.id,
-  );
+
+  afterAll(() => {
+    narrow.availability = original.availability;
+    narrow.deprecation_date = original.deprecation_date;
+    mockVideoSlot.modelId = requireLiveVideoModelId();
+  });
 
   it('routes to a model whose published output catalog is narrower than the contract enums', () => {
     expect(routedModel).toBeTruthy();

@@ -1,3 +1,14 @@
+const mockVideoSlot: { modelId: string | undefined } = { modelId: undefined };
+
+jest.mock('@agiworkforce/types', () =>
+  jest
+    .requireActual('../test-utils/videoSlotMock')
+    .withVideoGenerationSlot(
+      jest.requireActual('@agiworkforce/types'),
+      () => mockVideoSlot.modelId,
+    ),
+);
+
 import { getRoutingSlotModel, isModelLive, modelsCatalog } from '@agiworkforce/types';
 import {
   clearInvalidMediaModelSelections,
@@ -10,11 +21,16 @@ import {
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { FEATURES } from '@/lib/v1FeatureFlags';
+import {
+  SYNTHETIC_RETIRED_VIDEO_MODEL_ID,
+  requireLiveVideoModelId,
+} from '../test-utils/modelFixtures';
 
 const TEXT_MODEL = 'fixture-chat-model';
 
 describe('media mode', () => {
   beforeEach(() => {
+    mockVideoSlot.modelId = requireLiveVideoModelId();
     useChatViewStore.setState({ mediaMode: 'text', selectedMediaModel: {} });
     useModelStore.setState({ selectedModel: TEXT_MODEL });
   });
@@ -182,6 +198,47 @@ describe('media mode', () => {
 
       enterMediaMode('video');
       expect(useModelStore.getState().selectedModel).toBe(TEXT_MODEL);
+    });
+  });
+
+  describe('when the video slot holds a model that is no longer live', () => {
+    const withVideoGeneration = (run: () => void) => {
+      const features = FEATURES as { videoGen: boolean };
+      features.videoGen = true;
+      try {
+        run();
+      } finally {
+        features.videoGen = false;
+      }
+    };
+
+    beforeEach(() => {
+      mockVideoSlot.modelId = SYNTHETIC_RETIRED_VIDEO_MODEL_ID;
+    });
+
+    it('resolves no video model rather than the retired one', () => {
+      expect(getRoutingSlotModel('video_generation')).toBe(SYNTHETIC_RETIRED_VIDEO_MODEL_ID);
+      expect(resolveMediaModelId('video')).toBeNull();
+      expect(mediaModelIdForMode('video')).toBeNull();
+    });
+
+    it('keeps a live model the user chose themselves', () => {
+      const chosen = requireLiveVideoModelId();
+      useChatViewStore.getState().setMediaModel('video', chosen);
+
+      expect(resolveMediaModelId('video')).toBe(chosen);
+    });
+
+    it('refuses video mode and stays in text mode', () => {
+      withVideoGeneration(() => {
+        expect(enterMediaMode('video')).toBe(false);
+      });
+
+      expect(useChatViewStore.getState().mediaMode).toBe('text');
+    });
+
+    it('leaves image mode available', () => {
+      expect(enterMediaMode('image')).toBe(true);
     });
   });
 

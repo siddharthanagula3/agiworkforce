@@ -2,6 +2,8 @@ import {
   getModelsForTierAndSurface,
   getAutoRoutingProfiles,
   getRoutingSlotModel,
+  getVideoAspectOptionsForModel,
+  isModelLive,
   modelsCatalog,
   type ModelMetadata,
   type OnDeviceModel,
@@ -12,6 +14,7 @@ import { getShippableModels } from '@agiworkforce/local-llm';
 export const SYNTHETIC_CLOUD_MODEL_ID = 'fixture-cloud-model';
 export const SYNTHETIC_IMAGE_MODEL_ID = 'fixture-image-output-model';
 export const SYNTHETIC_LOCAL_MODEL_ID = 'fixture-local-model';
+export const SYNTHETIC_RETIRED_VIDEO_MODEL_ID = 'fixture-retired-video-model';
 
 export function requireAutoMode() {
   const mode = getAutoRoutingProfiles()[0];
@@ -26,6 +29,27 @@ export function requireCatalogModel(
   const model = Object.values(modelsCatalog.models).find(predicate);
   if (!model) throw new Error(`Canonical catalog has no ${description}`);
   return model;
+}
+
+export function requireLiveVideoModelId(): string {
+  const ids = Object.values(modelsCatalog.models)
+    .filter(
+      (model) =>
+        model.modelType === 'video' &&
+        model.capabilities.videoGen === true &&
+        model.deprecated !== true &&
+        model.status !== 'deprecated' &&
+        isModelLive(model) &&
+        getVideoAspectOptionsForModel(model.id).length > 0,
+    )
+    .map((model) => model.id)
+    .sort();
+  const id = ids[0];
+  if (!id)
+    throw new Error(
+      'Canonical catalog has no live video generation model with a published output catalog',
+    );
+  return id;
 }
 
 export function requireMobileCloudModel(

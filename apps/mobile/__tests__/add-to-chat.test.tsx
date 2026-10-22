@@ -3,6 +3,17 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
+const mockVideoSlot: { modelId: string | undefined } = { modelId: undefined };
+
+jest.mock('@agiworkforce/types', () =>
+  jest
+    .requireActual('../test-utils/videoSlotMock')
+    .withVideoGenerationSlot(
+      jest.requireActual('@agiworkforce/types'),
+      () => mockVideoSlot.modelId,
+    ),
+);
+
 const mockFetchConnectorDirectory = jest.fn();
 jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: () => mockFetchConnectorDirectory(),
@@ -119,7 +130,11 @@ import { useChatViewStore } from '../stores/chat/chatViewStore';
 import * as Clipboard from 'expo-clipboard';
 import { listMediaModels } from '../src/features/chat/actions/mediaMode';
 import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
-import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import {
+  SYNTHETIC_RETIRED_VIDEO_MODEL_ID,
+  requireLiveVideoModelId,
+  requireMobileCloudModel,
+} from '../test-utils/modelFixtures';
 import { FEATURES } from '../lib/v1FeatureFlags';
 
 const SEARCH_CAPABLE_MODEL_ID = requireMobileCloudModel(
@@ -184,6 +199,7 @@ function renderSheet(overrides = {}) {
 describe('AddToChatSheet', () => {
   beforeEach(() => {
     resetStores();
+    mockVideoSlot.modelId = requireLiveVideoModelId();
     mockWaitlistStoreState.joined = false;
     mockWaitlistStoreState.rank = undefined;
     jest.clearAllMocks();
@@ -445,6 +461,47 @@ describe('AddToChatSheet', () => {
     it('shows the Video row on an entitled plan in a build with video generation', () => {
       const features = FEATURES as { videoGen: boolean };
       features.videoGen = true;
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({
+        tier: 'max_15x',
+        grantedCapabilities: ['canUseImages', 'canUseVideoGeneration'],
+      });
+
+      try {
+        const { getByText } = renderSheet();
+        expect(getByText('Video')).toBeTruthy();
+      } finally {
+        features.videoGen = false;
+      }
+    });
+
+    it('hides the Video row when the video slot has no live model and none was chosen', () => {
+      const features = FEATURES as { videoGen: boolean };
+      features.videoGen = true;
+      mockVideoSlot.modelId = SYNTHETIC_RETIRED_VIDEO_MODEL_ID;
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({
+        tier: 'max_15x',
+        grantedCapabilities: ['canUseImages', 'canUseVideoGeneration'],
+      });
+
+      try {
+        const { queryByText } = renderSheet();
+        expect(queryByText('Video')).toBeNull();
+        expect(queryByText('Generate video in this chat')).toBeNull();
+      } finally {
+        features.videoGen = false;
+      }
+    });
+
+    it('keeps the Video row when the user chose a live video model and the slot is retired', () => {
+      const features = FEATURES as { videoGen: boolean };
+      features.videoGen = true;
+      mockVideoSlot.modelId = SYNTHETIC_RETIRED_VIDEO_MODEL_ID;
+      useChatViewStore.setState({
+        mediaMode: 'text',
+        selectedMediaModel: { video: requireLiveVideoModelId() },
+      });
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({
         tier: 'max_15x',
