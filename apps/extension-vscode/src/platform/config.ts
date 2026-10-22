@@ -46,6 +46,7 @@ export interface MutableConfigValues {
   'agent.effort': ExtensionAgentEffort;
   'agent.thinking': boolean;
   activateOnStartup: boolean;
+  useTerminal: boolean;
 }
 
 export type MutableConfigKey = keyof MutableConfigValues;
@@ -79,6 +80,7 @@ export const SETTINGS_PANEL_SETTING_KEYS = [
   'editorContext.autoAttach',
   'respectGitIgnore',
   'activateOnStartup',
+  'useTerminal',
 ] as const satisfies readonly MutableConfigKey[];
 
 export interface ExtensionSettingsSnapshot {
@@ -110,6 +112,7 @@ const DEFAULTS = {
   currentTier: 'unknown',
   cliPath: 'agi',
   activateOnStartup: false,
+  useTerminal: false,
 } as const;
 
 function get<T>(key: string, fallback: T): T {
@@ -152,6 +155,9 @@ export const Config = {
   },
   activateOnStartup(): boolean {
     return getUserScoped<boolean>('activateOnStartup', DEFAULTS.activateOnStartup);
+  },
+  useTerminal(): boolean {
+    return getUserScoped<boolean>('useTerminal', DEFAULTS.useTerminal);
   },
 
   hoverEnabled(): boolean {
@@ -243,6 +249,7 @@ export const Config = {
         'agent.effort': this.agentEffort(),
         'agent.thinking': this.agentThinking(),
         activateOnStartup: this.activateOnStartup(),
+        useTerminal: this.useTerminal(),
         currentTier: this.currentTier(),
         currentTierLabel: currentTierLabel(this.currentTier()),
       },

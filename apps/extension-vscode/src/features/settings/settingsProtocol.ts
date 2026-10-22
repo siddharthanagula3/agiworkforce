@@ -128,6 +128,7 @@ const settingValueSchemas = {
   'agent.effort': z.enum(['low', 'medium', 'high', 'max']),
   'agent.thinking': z.boolean(),
   activateOnStartup: z.boolean(),
+  useTerminal: z.boolean(),
 } satisfies {
   [K in MutableConfigKey]: z.ZodType<MutableConfigValues[K]>;
 };

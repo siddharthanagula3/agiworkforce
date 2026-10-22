@@ -22,6 +22,7 @@ const validValues: MutableConfigValues = {
   'agent.mode': 'auto',
   'agent.effort': 'medium',
   'agent.thinking': false,
+  useTerminal: false,
 };
 
 describe('settings webview protocol', () => {

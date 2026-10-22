@@ -56,6 +56,7 @@ const KEY_MAP: Record<keyof typeof __CONFIG_DEFAULTS, string> = {
   currentTier: 'agiWorkforce.currentTier',
   cliPath: 'agiWorkforce.cliPath',
   activateOnStartup: 'agiWorkforce.activateOnStartup',
+  useTerminal: 'agiWorkforce.useTerminal',
 };
 
 describe('Config DEFAULTS ↔ package.json parity', () => {

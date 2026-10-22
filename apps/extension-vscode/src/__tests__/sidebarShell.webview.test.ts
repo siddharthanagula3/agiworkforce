@@ -549,3 +549,69 @@ describe('the composer command list', () => {
     expect(document.getElementById('composerStatusBoundary')?.textContent).toBe('Local');
   });
 });
+
+describe('the terminal hint', () => {
+  beforeEach(() => {
+    document.head.innerHTML = '';
+    document.body.innerHTML = '';
+  });
+
+  afterEach(() => {
+    Reflect.deleteProperty(globalThis, 'acquireVsCodeApi');
+    vi.restoreAllMocks();
+  });
+
+  const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+  const hint = (): HTMLElement => document.getElementById('terminalHint') as HTMLElement;
+
+  it('sits under the empty state and sends the person to Settings', () => {
+    const postMessage = boot();
+
+    expect(hint().hidden).toBe(false);
+    expect(hint().textContent).toContain('Prefer the terminal?');
+
+    click('#terminalHintSettings');
+
+    expect(postMessage).toHaveBeenCalledWith({ origin: 'chat', epoch: 0, type: 'openSettings' });
+  });
+
+  it('goes away once the chat has messages and returns with the empty state', async () => {
+    boot();
+
+    deliver({
+      type: 'conversationLoaded',
+      payload: {
+        threadId: 't2',
+        title: 'A replayed session',
+        trustMode: 'byok',
+        messages: [{ role: 'user', text: 'hello' }],
+      },
+    });
+    await settle();
+    expect(hint().hidden).toBe(true);
+
+    deliver({
+      type: 'conversationLoaded',
+      payload: { threadId: 't3', title: 'Nothing to replay', trustMode: 'byok', messages: [] },
+    });
+    await settle();
+    expect(hint().hidden).toBe(false);
+  });
+
+  it('stays dismissed after the close button, including when the empty state returns', async () => {
+    boot();
+
+    expect(document.getElementById('terminalHintDismiss')?.getAttribute('aria-label')).toBe(
+      'Dismiss the terminal hint',
+    );
+    click('#terminalHintDismiss');
+    expect(hint().hidden).toBe(true);
+
+    deliver({
+      type: 'conversationLoaded',
+      payload: { threadId: 't3', title: 'Nothing to replay', trustMode: 'byok', messages: [] },
+    });
+    await settle();
+    expect(hint().hidden).toBe(true);
+  });
+});

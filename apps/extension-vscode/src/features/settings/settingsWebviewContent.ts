@@ -1528,6 +1528,21 @@ ${LOCAL_CAPABILITY_TABS.map(
                 spellcheck="false"
               />
             </div>
+            <div class="setting-row">
+              <div>
+                <label class="setting-name" for="setting-use-terminal">Use terminal</label>
+                <span class="setting-description">Open the AGI CLI in the integrated terminal instead of the native UI.</span>
+              </div>
+              <label class="toggle" title="Use terminal">
+                <input
+                  id="setting-use-terminal"
+                  data-setting="useTerminal"
+                  data-kind="boolean"
+                  type="checkbox"
+                />
+                <span class="toggle-track" aria-hidden="true"></span>
+              </label>
+            </div>
             <div class="empty-capability">
               <h3>Agent configuration file</h3>
               <p>
@@ -2240,7 +2255,8 @@ ${capabilityTabs}
           'agent.mode': 'Agent mode',
           'agent.effort': 'Reasoning effort',
           'agent.thinking': 'Extended thinking',
-          activateOnStartup: 'Startup connection'
+          activateOnStartup: 'Startup connection',
+          useTerminal: 'Use terminal'
         };
 
         function setStatus(message, kind) {

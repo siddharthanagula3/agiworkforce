@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 8d6c207580c99e47382517d7900bf34a17cc8cbe9c6cb8053b6245dd058310f3 -->
+<!-- ui-gaps-csv-sha256: bbb18c185852b2afb175b8333eccaad1aa1bb005263a1a05d89175ec00b6a48c -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,24 +21,24 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 52 P1, 106 P2, 35 P3.
+- Unresolved: 0 P0, 52 P1, 105 P2, 34 P3.
 
-| Surface | Gaps |
-| --- | ---: |
-| mobile | 114 |
-| desktop | 141 |
-| web | 44 |
-| extension | 5 |
-| extension-vscode | 37 |
+| Surface          | Gaps |
+| ---------------- | ---: |
+| mobile           |  114 |
+| desktop          |  141 |
+| web              |   44 |
+| extension        |    5 |
+| extension-vscode |   37 |
 
-| Status | Gaps |
-| --- | ---: |
-| Open | 183 |
-| In Progress | 10 |
-| Blocked | 0 |
-| Deferred | 0 |
-| Done | 121 |
-| Not Planned | 27 |
+| Status      | Gaps |
+| ----------- | ---: |
+| Open        |  181 |
+| In Progress |   10 |
+| Blocked     |    0 |
+| Deferred    |    0 |
+| Done        |  123 |
+| Not Planned |   27 |
 
 ## P0
 
@@ -3285,7 +3285,7 @@ Mobile now renders the selected model’s supported reasoning efforts as full-wi
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx renders the tier list from getModelReasoning supportedEfforts; apps/mobile/__tests__/model-picker.test.tsx covers visibility, selection, the checked state, and switching models. The focused picker suite passed on 2026-09-27.
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx renders the tier list from getModelReasoning supportedEfforts; apps/mobile/**tests**/model-picker.test.tsx covers visibility, selection, the checked state, and switching models. The focused picker suite passed on 2026-09-27.
 
 **Suggested fix**
 
@@ -3304,11 +3304,11 @@ Keep the tier list tied to supportedEfforts and preserve full-width accessible s
 
 **Gap**
 
-NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/code-sessions/index.tsx) was deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). There is no standalone Code screen left to add a Devices section to; only a leftover test filename (__tests__/artifacts-code-sessions.test.tsx) still references 'code-sessions', and it tests an artifacts gallery screen, not a Code screen. Do not treat this row as verified-open until re-audited against whatever, if anything, replaced device-awareness inside Companion. Original complaint, preserved verbatim: Reference's Code tab shows a 'Devices' label and a card listing recently connected devices (or 'No recently connected devices') above the sessions list, letting the user see which desktop/mobile devices have been used for remote code sessions. agiworkforce's Code screen went straight from the header into the session list/empty state with no device-awareness section, before that screen was removed entirely.
+NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/code-sessions/index.tsx) was deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). There is no standalone Code screen left to add a Devices section to; only a leftover test filename (**tests**/artifacts-code-sessions.test.tsx) still references 'code-sessions', and it tests an artifacts gallery screen, not a Code screen. Do not treat this row as verified-open until re-audited against whatever, if anything, replaced device-awareness inside Companion. Original complaint, preserved verbatim: Reference's Code tab shows a 'Devices' label and a card listing recently connected devices (or 'No recently connected devices') above the sessions list, letting the user see which desktop/mobile devices have been used for remote code sessions. agiworkforce's Code screen went straight from the header into the session list/empty state with no device-awareness section, before that screen was removed entirely.
 
 **Evidence**
 
-STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/__tests__/artifacts-code-sessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
+STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/**tests**/artifacts-code-sessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
 
 **Suggested fix**
 
@@ -4090,7 +4090,7 @@ AGI Mobile provides Cloud Archived chats, Archive all chats, and Delete all chat
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx gates bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive/delete. apps/mobile/__tests__/data-controls-bulk-chats.test.tsx covers confirmations, errors, mode/account switching, and response validation. Signed-device verification remains unavailable while deployed sign-in routes are incomplete. apps/mobile/app/(app)/settings/archived-chats.tsx now binds loaded rows and restore/delete actions to the current account and Cloud mode; archived-chats-screen.test.tsx covers old-account rows and stale confirmations.
+apps/mobile/src/features/settings/data-controls/index.tsx gates bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive/delete. apps/mobile/**tests**/data-controls-bulk-chats.test.tsx covers confirmations, errors, mode/account switching, and response validation. Signed-device verification remains unavailable while deployed sign-in routes are incomplete. apps/mobile/app/(app)/settings/archived-chats.tsx now binds loaded rows and restore/delete actions to the current account and Cloud mode; archived-chats-screen.test.tsx covers old-account rows and stale confirmations.
 
 **Suggested fix**
 
@@ -4132,15 +4132,15 @@ Completed for supported Cloud search. Keep the UI preference and Cloud request b
 
 **Gap**
 
-The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '__default__' project key with no UI), so users must re-set it repeatedly.
+The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '**default**' project key with no UI), so users must re-set it repeatedly.
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('__default__')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('**default**')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
 
 **Suggested fix**
 
-Add an 'Intelligence' row in General bound to the existing agentControlStore '__default__' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
+Add an 'Intelligence' row in General bound to the existing agentControlStore '**default**' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
 
 **Reference screenshot(s)**
 
@@ -4182,7 +4182,7 @@ Settings Device section now includes the existing Remote destination with live c
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx reads the canonical companion connection status and opens /(app)/companion. apps/mobile/__tests__/settings-page.test.tsx checks navigation and status; six settings suites passed 48 tests. ConnectionStateViews.tsx and DesktopSetupChecklistView.tsx align failure and setup guidance with the code-based trust boundary; three companion/drawer suites passed 24 tests. Device UI remains to be smoke-tested.
+apps/mobile/src/features/settings/index.tsx reads the canonical companion connection status and opens /(app)/companion. apps/mobile/**tests**/settings-page.test.tsx checks navigation and status; six settings suites passed 48 tests. ConnectionStateViews.tsx and DesktopSetupChecklistView.tsx align failure and setup guidance with the code-based trust boundary; three companion/drawer suites passed 24 tests. Device UI remains to be smoke-tested.
 
 **Suggested fix**
 
@@ -6367,7 +6367,7 @@ Closed 2026-08-21 for the parts that are real. An account-level default effort a
 
 **Evidence**
 
-apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings, no match
+apps/web/features/chat/components/Composer/**tests**/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings, no match
 
 **Suggested fix**
 
@@ -6676,24 +6676,24 @@ Add a 'Goal' item to the plus menu that stores a workspace-scoped objective (alo
 
 - `chatgpt_reference/010-codex-vscode-ext-plugins-menu-add-files-goal-plan-mode-plugins-list.png`
 
-### GAP-290, No 'Use Terminal' setting to launch the extension in the integrated terminal
+### GAP-290, A 'Use terminal' setting launches AGI Code in the integrated terminal
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-control
 - **Reference:** Claude · VS Code extension · Native VS Code Settings, claudeCode.useTerminal
 
 **Gap**
 
-Claude Code exposes a native VS Code checkbox setting ('claudeCode.useTerminal'). UPDATED 2026-08-21: the core claim (no useTerminal-equivalent key) still holds, but this row's supporting evidence was WRONG, not just stale -- apps/extension-vscode/package.json exists and always did; the original 'no package.json found' claim was a search error. The file has a full contributes.configuration block with 20 real settings (model, agent.mode/effort/thinking, composer.followUpBehavior, desktopBridge.*, inlineCompletions.*, telemetry, etc.), all genuinely discoverable via VS Code's native Settings search -- the extension is not missing settings-UI infrastructure, it is missing this one specific key.
+Claude Code exposes a native VS Code checkbox setting ('claudeCode.useTerminal'). AGI Code now contributes agiWorkforce.useTerminal, a boolean that is off by default and read from user scope only. When it is on, AGI Code: Open Chat starts the AGI CLI in VS Code's own integrated terminal instead of opening the native chat, and offers the install.sh installer when no CLI is found. No terminal panel is added to the extension.
 
 **Evidence**
 
-apps/extension-vscode/package.json exists (confirmed via `find apps/extension-vscode -maxdepth 1 -iname package.json`) with contributes.configuration.properties listing 20 agiWorkforce.* settings. Grepped every property name plus apps/extension-vscode/src/platform/config.ts's MutableConfigValues (the file's own doc comment: the single source of truth for every mutable setting the extension reads) -- neither contains a useTerminal-equivalent key.
+apps/extension-vscode/package.json contributes agiWorkforce.useTerminal and lists it as restricted in untrusted workspaces. platform/config.ts reads it through Config.useTerminal() and settingsProtocol.ts validates it. settingsWebviewContent.ts renders the Use terminal switch beside the AGI CLI path in Runtime. commandSetup.ts routes agi-workforce.chat to openAgiInTheTerminal, which checks the CLI, offers Install AGI CLI, resumes the held session or reuses the running AGI terminal. useTerminal.test.ts, configDefaults.test.ts, settingsProtocol.test.ts and GAP-012-settings-webview.webview.test.ts cover the setting, the routing and the install offer.
 
 **Suggested fix**
 
-Add an 'agiWorkforce.useTerminal' boolean setting (contributed via package.json configuration schema so it's searchable in native VS Code Settings) that, when enabled, launches the CLI in the integrated terminal instead of the webview UI.
+None. The native sidebar stays reachable from the activity bar; the setting changes only what AGI Code: Open Chat and its keybinding do.
 
 **Reference screenshot(s)**
 
@@ -7036,7 +7036,7 @@ The mobile primary drawer already exposes Remote as a first-class destination ne
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS includes Remote using MOBILE_REMOTE_SCREEN_LABEL; apps/mobile/__tests__/drawer-content.test.tsx checks presence and navigation. The focused drawer suite passed 2026-09-27.
+apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS includes Remote using MOBILE_REMOTE_SCREEN_LABEL; apps/mobile/**tests**/drawer-content.test.tsx checks presence and navigation. The focused drawer suite passed 2026-09-27.
 
 **Suggested fix**
 
@@ -7082,7 +7082,7 @@ Manual pairing now disables Connect until the trimmed field has content, reads a
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/QRScanner.tsx implements disabled submission, paste, denied-camera manual entry and exit. apps/mobile/__tests__/qr-scanner-manual.test.tsx covers these flows and full pairing payload submission; focused tests, mobile typecheck, lint and formatting passed 2026-09-27. Signed-device verification remains open in ACTIVE_ISSUES.md.
+apps/mobile/src/features/companion/components/QRScanner.tsx implements disabled submission, paste, denied-camera manual entry and exit. apps/mobile/**tests**/qr-scanner-manual.test.tsx covers these flows and full pairing payload submission; focused tests, mobile typecheck, lint and formatting passed 2026-09-27. Signed-device verification remains open in ACTIVE_ISSUES.md.
 
 **Suggested fix**
 
@@ -7097,7 +7097,7 @@ Completed locally; verify the camera-denied and clipboard permission paths on a 
 - **Status:** Done
 - **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
-- **Reference:**  Codex · iOS · Remote overflow menu, Usage remaining
+- **Reference:** Codex · iOS · Remote overflow menu, Usage remaining
 
 **Gap**
 
@@ -7828,24 +7828,24 @@ Add a 'Keyboard shortcuts' row to the account QuickPick that runs workbench.acti
 
 - `chatgpt_reference/013-codex-vscode-ext-account-menu-profile-dropdown-settings-logout.png`
 
-### GAP-340, No inline hint to switch to a terminal-based experience
+### GAP-340, A dismissible hint under the empty state offers the terminal experience
 
-- **Status:** Open
-- **Owner:** Unassigned
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-copy
 - **Reference:** Claude · VS Code extension · Claude Code panel, 'Prefer the Terminal experience?' banner
 
 **Gap**
 
-Claude's panel footer shows a dismissible 'Prefer the Terminal experience? Switch back in Settings.' hint, guiding power users to the CLI/terminal mode. No equivalent hint exists in agiworkforce's webview footer, though a related useTerminal-style setting is also entirely absent (see separate finding).
+Claude's panel shows a dismissible 'Prefer the Terminal experience? Switch back in Settings.' hint. The AGI Code sidebar now shows a one-line dismissible hint under its empty state that opens Settings, where the Use terminal switch lives.
 
 **Evidence**
 
-Re-verified 2026-08-21, conclusion unchanged: grepped 'prefer the terminal'/'terminal experience'/'switch back' (case-insensitive) across apps/extension-vscode/src/features/sidebar-webview/webviewContent.ts -- no matches.
+webviewContent.ts renders #terminalHint between the messages and the composer, shown only while the empty state is visible and until it is dismissed (kept in the webview state). The link posts openSettings, which opens the Runtime section where Use terminal is. sidebarShell.webview.test.ts covers the visible, hidden-with-messages, settings and dismissed states.
 
 **Suggested fix**
 
-Once a terminal/native UI toggle is added (see the useTerminal gap), surface a matching dismissible hint in the composer footer.
+None.
 
 **Reference screenshot(s)**
 

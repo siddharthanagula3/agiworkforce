@@ -338,6 +338,28 @@ describe('settings webview', () => {
     expect(contextLines.disabled).toBe(true);
   });
 
+  it('offers Use terminal beside the CLI path, off until the snapshot says otherwise', () => {
+    const postMessage = boot();
+    const toggle = document.getElementById('setting-use-terminal') as HTMLInputElement;
+
+    expect(toggle.closest('[data-settings-section]')?.getAttribute('data-settings-section')).toBe(
+      'configuration',
+    );
+    expect(toggle.checked).toBe(false);
+    expect(document.querySelector('label[for="setting-use-terminal"]')?.textContent).toBe(
+      'Use terminal',
+    );
+
+    toggle.checked = true;
+    toggle.dispatchEvent(new Event('change', { bubbles: true }));
+
+    expect(postMessage).toHaveBeenCalledWith({
+      type: 'settings.update',
+      key: 'useTerminal',
+      value: true,
+    });
+  });
+
   it('reflects host snapshots for overrides, trust, and account connection', () => {
     boot();
     window.dispatchEvent(

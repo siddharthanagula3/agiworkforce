@@ -470,10 +470,52 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
     return;
   }
   const cli = resolveCliPath(Config.cliPath(), nodeCliResolutionHost());
-  const terminal = vscode.window.createTerminal({ name: 'AGI', cwd: folder.uri });
+  const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder.uri });
   terminal.show();
   terminal.sendText(
     `${shellQuoteForCurrentPlatform(cli)} --resume ${shellQuoteForCurrentPlatform(threadId)}`,
+  );
+}
+
+const AGI_TERMINAL_NAME = 'AGI';
+const INSTALL_CLI_ACTION = 'Install AGI CLI';
+
+async function ensureCliForTerminal(): Promise<boolean> {
+  const environment = describeRemoteEnvironment(vscode.env.remoteName);
+  const probe = await probeCli(
+    resolveCliPath(Config.cliPath(), nodeCliResolutionHost()),
+    runCliVersion,
+  );
+  if (probe.ok) return true;
+  const choice = await vscode.window.showWarningMessage(
+    cliProbeMessage(probe, environment),
+    INSTALL_CLI_ACTION,
+  );
+  if (choice !== INSTALL_CLI_ACTION) return false;
+  const installed = await vscode.commands.executeCommand<{ ok: boolean }>(
+    'agi-workforce.installCli',
+  );
+  return installed?.ok === true;
+}
+
+async function openAgiInTheTerminal(sidebarProvider: SidebarProvider): Promise<void> {
+  if (!(await ensureCliForTerminal())) return;
+  if (sidebarProvider.activeThreadId() !== undefined) {
+    await continueThisSessionInTheTerminal(sidebarProvider);
+    return;
+  }
+  const running = vscode.window.terminals.find(
+    (terminal) => terminal.name === AGI_TERMINAL_NAME && terminal.exitStatus === undefined,
+  );
+  if (running !== undefined) {
+    running.show();
+    return;
+  }
+  const folder = getActiveWorkspaceFolderSync();
+  const terminal = vscode.window.createTerminal({ name: AGI_TERMINAL_NAME, cwd: folder?.uri });
+  terminal.show();
+  terminal.sendText(
+    shellQuoteForCurrentPlatform(resolveCliPath(Config.cliPath(), nodeCliResolutionHost())),
   );
 }
 
@@ -537,7 +579,7 @@ async function continueCliSessionHere(
   if (choice !== CONTINUE_HANDOFF_HERE) return;
   accepted.add(outcome.receipt);
   await runtime.acceptHandoff(handoff);
-  await vscode.commands.executeCommand('agi-workforce.chat');
+  await vscode.commands.executeCommand('agi-workforce.sidebar.focus');
 }
 
 async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<void> {
@@ -1017,6 +1059,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       vscode.window.showInformationMessage(describeDiffScope(restored, 'restored'));
     }),
     register('agi-workforce.chat', async () => {
+      if (Config.useTerminal()) {
+        await openAgiInTheTerminal(sidebarProvider);
+        return;
+      }
       await revealFirstPartyChat();
     }),
 

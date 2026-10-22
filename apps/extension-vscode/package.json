@@ -62,7 +62,8 @@
         "agiWorkforce.autoApplyFixes",
         "agiWorkforce.memory.enabled",
         "agiWorkforce.telemetryEnabled",
-        "agiWorkforce.activateOnStartup"
+        "agiWorkforce.activateOnStartup",
+        "agiWorkforce.useTerminal"
       ]
     },
     "virtualWorkspaces": {
@@ -1326,6 +1327,11 @@
           "type": "boolean",
           "default": false,
           "description": "Start AGI Code background work (device heartbeat, plan lookup) as soon as the window opens. Off by default, so nothing leaves the machine until you open the AGI view, run an AGI command or reopen an AGI session."
+        },
+        "agiWorkforce.useTerminal": {
+          "type": "boolean",
+          "default": false,
+          "description": "Launch the AGI CLI in the integrated terminal instead of the native UI when you run AGI Code: Open Chat."
         }
       }
     },

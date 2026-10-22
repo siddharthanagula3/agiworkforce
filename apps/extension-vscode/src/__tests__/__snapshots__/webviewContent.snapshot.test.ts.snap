@@ -1924,6 +1924,31 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     .empty-state--has-recents .empty-state-mark { margin-top: auto; }
     .empty-state--has-recents .empty-state-copy { margin-bottom: auto; }
 
+    .terminal-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 2px 4px;
+      padding: 4px 12px;
+      color: var(--text-secondary);
+      font-size: var(--type-body-small-size);
+      line-height: var(--type-body-small-height);
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .terminal-hint[hidden] { display: none; }
+    .terminal-hint-link {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--text-primary);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      border-radius: var(--corner-control);
+    }
+
     .recent-chats {
       align-self: stretch;
       display: flex;
@@ -2838,6 +2863,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
       <div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>
     </div>
+  </div>
+
+  <div class="terminal-hint" id="terminalHint" hidden>
+    <span>Prefer the terminal?</span>
+    <button class="terminal-hint-link" id="terminalHintSettings" type="button">Turn on Use terminal in Settings.</button>
+    <button class="icon-btn" id="terminalHintDismiss" type="button" title="Dismiss" aria-label="Dismiss the terminal hint">
+      <span class="codicon codicon-close" aria-hidden="true"></span>
+    </button>
   </div>
 
   <!-- ── Input ── -->
@@ -8042,7 +8075,31 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     var emptyStateEl = document.getElementById('emptyState');
     function hideEmptyState() {
       if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
+      syncTerminalHint();
     }
+
+    var terminalHintEl = document.getElementById('terminalHint');
+    function terminalHintDismissed() {
+      var state = vscode.getState() || {};
+      return state.terminalHintDismissed === true;
+    }
+    function syncTerminalHint() {
+      if (!terminalHintEl) return;
+      var current = document.getElementById('emptyState');
+      var emptyVisible = Boolean(current) && current.style.display !== 'none';
+      terminalHintEl.hidden = !emptyVisible || terminalHintDismissed();
+    }
+    document.getElementById('terminalHintSettings').addEventListener('click', function () {
+      vscode.postMessage({ type: 'openSettings' });
+    });
+    document.getElementById('terminalHintDismiss').addEventListener('click', function () {
+      var state = vscode.getState() || {};
+      state.terminalHintDismissed = true;
+      vscode.setState(state);
+      syncTerminalHint();
+    });
+    new MutationObserver(syncTerminalHint).observe(messagesEl, { childList: true });
+    syncTerminalHint();
 
     var recentChats = { conversations: [], total: 0 };
     var startSuggestions = { projects: [], skills: [], connectors: [] };
@@ -10098,6 +10155,31 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     .empty-state--has-recents .empty-state-mark { margin-top: auto; }
     .empty-state--has-recents .empty-state-copy { margin-bottom: auto; }
 
+    .terminal-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 2px 4px;
+      padding: 4px 12px;
+      color: var(--text-secondary);
+      font-size: var(--type-body-small-size);
+      line-height: var(--type-body-small-height);
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .terminal-hint[hidden] { display: none; }
+    .terminal-hint-link {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--text-primary);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      border-radius: var(--corner-control);
+    }
+
     .recent-chats {
       align-self: stretch;
       display: flex;
@@ -11012,6 +11094,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
       <div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>
     </div>
+  </div>
+
+  <div class="terminal-hint" id="terminalHint" hidden>
+    <span>Prefer the terminal?</span>
+    <button class="terminal-hint-link" id="terminalHintSettings" type="button">Turn on Use terminal in Settings.</button>
+    <button class="icon-btn" id="terminalHintDismiss" type="button" title="Dismiss" aria-label="Dismiss the terminal hint">
+      <span class="codicon codicon-close" aria-hidden="true"></span>
+    </button>
   </div>
 
   <!-- ── Input ── -->
@@ -16216,7 +16306,31 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     var emptyStateEl = document.getElementById('emptyState');
     function hideEmptyState() {
       if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
+      syncTerminalHint();
     }
+
+    var terminalHintEl = document.getElementById('terminalHint');
+    function terminalHintDismissed() {
+      var state = vscode.getState() || {};
+      return state.terminalHintDismissed === true;
+    }
+    function syncTerminalHint() {
+      if (!terminalHintEl) return;
+      var current = document.getElementById('emptyState');
+      var emptyVisible = Boolean(current) && current.style.display !== 'none';
+      terminalHintEl.hidden = !emptyVisible || terminalHintDismissed();
+    }
+    document.getElementById('terminalHintSettings').addEventListener('click', function () {
+      vscode.postMessage({ type: 'openSettings' });
+    });
+    document.getElementById('terminalHintDismiss').addEventListener('click', function () {
+      var state = vscode.getState() || {};
+      state.terminalHintDismissed = true;
+      vscode.setState(state);
+      syncTerminalHint();
+    });
+    new MutationObserver(syncTerminalHint).observe(messagesEl, { childList: true });
+    syncTerminalHint();
 
     var recentChats = { conversations: [], total: 0 };
     var startSuggestions = { projects: [], skills: [], connectors: [] };
@@ -18272,6 +18386,31 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     .empty-state--has-recents .empty-state-mark { margin-top: auto; }
     .empty-state--has-recents .empty-state-copy { margin-bottom: auto; }
 
+    .terminal-hint {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 2px 4px;
+      padding: 4px 12px;
+      color: var(--text-secondary);
+      font-size: var(--type-body-small-size);
+      line-height: var(--type-body-small-height);
+      text-align: center;
+      flex-shrink: 0;
+    }
+    .terminal-hint[hidden] { display: none; }
+    .terminal-hint-link {
+      background: none;
+      border: none;
+      padding: 0;
+      color: var(--text-primary);
+      font: inherit;
+      text-decoration: underline;
+      cursor: pointer;
+      border-radius: var(--corner-control);
+    }
+
     .recent-chats {
       align-self: stretch;
       display: flex;
@@ -19186,6 +19325,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
       <div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>
     </div>
+  </div>
+
+  <div class="terminal-hint" id="terminalHint" hidden>
+    <span>Prefer the terminal?</span>
+    <button class="terminal-hint-link" id="terminalHintSettings" type="button">Turn on Use terminal in Settings.</button>
+    <button class="icon-btn" id="terminalHintDismiss" type="button" title="Dismiss" aria-label="Dismiss the terminal hint">
+      <span class="codicon codicon-close" aria-hidden="true"></span>
+    </button>
   </div>
 
   <!-- ── Input ── -->
@@ -24390,7 +24537,31 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     var emptyStateEl = document.getElementById('emptyState');
     function hideEmptyState() {
       if (emptyStateEl) { emptyStateEl.style.display = 'none'; }
+      syncTerminalHint();
     }
+
+    var terminalHintEl = document.getElementById('terminalHint');
+    function terminalHintDismissed() {
+      var state = vscode.getState() || {};
+      return state.terminalHintDismissed === true;
+    }
+    function syncTerminalHint() {
+      if (!terminalHintEl) return;
+      var current = document.getElementById('emptyState');
+      var emptyVisible = Boolean(current) && current.style.display !== 'none';
+      terminalHintEl.hidden = !emptyVisible || terminalHintDismissed();
+    }
+    document.getElementById('terminalHintSettings').addEventListener('click', function () {
+      vscode.postMessage({ type: 'openSettings' });
+    });
+    document.getElementById('terminalHintDismiss').addEventListener('click', function () {
+      var state = vscode.getState() || {};
+      state.terminalHintDismissed = true;
+      vscode.setState(state);
+      syncTerminalHint();
+    });
+    new MutationObserver(syncTerminalHint).observe(messagesEl, { childList: true });
+    syncTerminalHint();
 
     var recentChats = { conversations: [], total: 0 };
     var startSuggestions = { projects: [], skills: [], connectors: [] };
