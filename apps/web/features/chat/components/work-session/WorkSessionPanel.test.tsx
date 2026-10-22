@@ -10,9 +10,11 @@ import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { useCoworkFolderStore } from '@shared/stores/cowork-folder-store';
 import { onLocalFolderAttachRequest } from '../Composer/ComposerPlusMenu';
 
+type DesktopHostModule = typeof import('@/features/desktop-host/lib/host');
+
 const desktopHost = vi.hoisted(() => ({ value: null as object | null }));
 vi.mock('@/features/desktop-host/lib/host', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/desktop-host/lib/host')>()),
+  ...(await importOriginal<DesktopHostModule>()),
   useDesktopHost: () => desktopHost.value,
 }));
 

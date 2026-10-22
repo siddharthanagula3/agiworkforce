@@ -74,11 +74,13 @@ const providerState = vi.hoisted(() => ({
   } | null,
 }));
 
+type SurfaceStatusModule = typeof import('@/lib/surface-status');
+
 const settingsModalState = vi.hoisted(() => ({ openSettings: vi.fn() }));
 const surfaceState = vi.hoisted(() => ({ desktopReleased: false }));
 
 vi.mock('@/lib/surface-status', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@/lib/surface-status')>();
+  const actual = await importOriginal<SurfaceStatusModule>();
   return {
     ...actual,
     isReleased: (surface: Parameters<typeof actual.isReleased>[0]) =>
