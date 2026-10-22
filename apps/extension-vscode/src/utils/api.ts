@@ -40,7 +40,7 @@ import {
   MINIMUM_API_VERSION_RESPONSE_HEADER,
   type EffectiveCapabilityDocumentWire,
 } from '@agiworkforce/cloud-contracts';
-import { Config, __CONFIG_DEFAULTS } from '../platform/config';
+import { Config, __CONFIG_DEFAULTS, type ExtensionAgentEffort } from '../platform/config';
 import { platformRequestHeaders } from '../platform/platformHeaders';
 
 export interface LlmChatMessage {
@@ -53,7 +53,7 @@ export interface CloudUtilityChatCompletionRequest {
   messages: LlmChatMessage[];
   stream: true;
   thinking_mode: boolean;
-  effort: 'low' | 'medium' | 'high' | 'max';
+  effort: ExtensionAgentEffort;
 }
 
 interface ChatCompletionChunk {

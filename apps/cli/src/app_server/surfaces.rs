@@ -391,22 +391,11 @@ fn read_project_instruction_file(workspace_root: &Path, path: &Path) -> Option<S
 }
 
 fn effort_from_config(raw: &str) -> Option<DeveloperReasoningEffort> {
-    match raw.trim().to_ascii_lowercase().as_str() {
-        "low" => Some(DeveloperReasoningEffort::Low),
-        "medium" => Some(DeveloperReasoningEffort::Medium),
-        "high" => Some(DeveloperReasoningEffort::High),
-        "max" => Some(DeveloperReasoningEffort::Max),
-        _ => None,
-    }
+    DeveloperReasoningEffort::parse(raw)
 }
 
 fn effort_to_config(effort: DeveloperReasoningEffort) -> &'static str {
-    match effort {
-        DeveloperReasoningEffort::Low => "low",
-        DeveloperReasoningEffort::Medium => "medium",
-        DeveloperReasoningEffort::High => "high",
-        DeveloperReasoningEffort::Max => "max",
-    }
+    effort.as_str()
 }
 
 fn permission_mode_from_config(raw: &str) -> Option<DeveloperAgentMode> {

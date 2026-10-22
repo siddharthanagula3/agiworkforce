@@ -30,6 +30,7 @@ export const SETTINGS_COMMANDS = [
   'showAccountUsage',
   'signIn',
   'signOut',
+  'manageAccount',
   'manageUsage',
   'manageBilling',
   'viewPlans',

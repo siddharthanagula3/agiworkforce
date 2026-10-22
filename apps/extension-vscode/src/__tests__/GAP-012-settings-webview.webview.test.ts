@@ -199,6 +199,15 @@ describe('settings webview', () => {
     );
   });
 
+  it('links the account section to the web account page, marked as leaving the editor', () => {
+    const doc = parse();
+    const manage = doc.querySelector<HTMLButtonElement>(
+      '#section-account [data-command="manageAccount"]',
+    );
+    expect(manage?.textContent?.replace(/\s+/gu, ' ').trim()).toBe('Manage account on Web ↗');
+    expect(manage?.querySelector('[aria-hidden="true"]')?.textContent).toBe('↗');
+  });
+
   it('keeps surface-bound capabilities visible with honest VS Code availability', () => {
     const doc = parse();
     const rows = Array.from(

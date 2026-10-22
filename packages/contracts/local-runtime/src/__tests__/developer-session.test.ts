@@ -12,7 +12,10 @@ import {
   MCP_APPROVAL_STALE_ERROR_CODE,
   normalizeDeveloperAgentMode,
   remoteTurnAgentMode,
+  developerEffortLevels,
+  DEVELOPER_CHILD_TASK_STATE_LABELS,
 } from '../developer-session';
+import { getModelMetadataById, listCanonicalModels } from '@agiworkforce/types';
 
 const rustContract = readFileSync(
   fileURLToPath(
@@ -119,5 +122,38 @@ describe('permission postures', () => {
     expect(normalizeDeveloperAgentMode('')).toBeNull();
     expect(normalizeDeveloperAgentMode(null)).toBeNull();
     expect(normalizeDeveloperAgentMode(undefined)).toBeNull();
+  });
+});
+
+describe('developer effort levels per model', () => {
+  it('offers every level for a model the catalog does not know', () => {
+    expect(developerEffortLevels('a-local-model-the-catalog-never-heard-of')).toBeNull();
+    expect(developerEffortLevels('')).toBeNull();
+    expect(developerEffortLevels(null)).toBeNull();
+  });
+
+  it('keeps a catalog model to the levels its row names, in ladder order', () => {
+    const rows = listCanonicalModels();
+    const listed = rows.find(
+      (row) => row.reasoning?.capable && (row.reasoning.supportedEfforts?.length ?? 0) > 0,
+    );
+    expect(listed, 'the catalog has a model with a level list').toBeDefined();
+    const levels = developerEffortLevels(listed!.id);
+    const named = getModelMetadataById(listed!.id)!.reasoning!.supportedEfforts!;
+    expect(levels).toEqual(DEVELOPER_REASONING_EFFORTS.filter((effort) => named.includes(effort)));
+
+    const incapable = rows.find((row) => row.reasoning && !row.reasoning.capable);
+    if (incapable) expect(developerEffortLevels(incapable.id)).toEqual([]);
+  });
+
+  it('names every child task state the wire carries', () => {
+    const variants = rustContract
+      .slice(rustContract.indexOf('pub enum DeveloperChildTaskState {'))
+      .split('}')[0]!
+      .split('\n')
+      .map((line) => line.trim().replace(/,$/u, ''))
+      .filter((line) => /^[A-Z][A-Za-z]*$/u.test(line))
+      .map((variant) => variant.replace(/(?<!^)([A-Z])/gu, '_$1').toLowerCase());
+    expect(Object.keys(DEVELOPER_CHILD_TASK_STATE_LABELS).sort()).toEqual(variants.sort());
   });
 });

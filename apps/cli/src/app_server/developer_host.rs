@@ -6729,9 +6729,12 @@ fn apply_agent_controls(
 
     if let Some(effort) = effort {
         let effort = match effort {
+            DeveloperReasoningEffort::None => crate::design_system::Effort::None,
+            DeveloperReasoningEffort::Minimal => crate::design_system::Effort::Minimal,
             DeveloperReasoningEffort::Low => crate::design_system::Effort::Low,
             DeveloperReasoningEffort::Medium => crate::design_system::Effort::Medium,
             DeveloperReasoningEffort::High => crate::design_system::Effort::High,
+            DeveloperReasoningEffort::Xhigh => crate::design_system::Effort::Xhigh,
             DeveloperReasoningEffort::Max => crate::design_system::Effort::Max,
         };
         agent.thinking_budget_tokens = effort.thinking_budget_for_anthropic();
@@ -8341,6 +8344,26 @@ mod tests {
             .expect("authorized controls");
         let max = agent.effort.expect("effort retained");
         assert_eq!(max.openai_effort_str(), "high");
+    }
+
+    #[test]
+    fn every_developer_effort_reaches_the_session_as_its_own_level() {
+        let mut agent = test_agent();
+        for effort in DeveloperReasoningEffort::ALL {
+            apply_agent_controls(&mut agent, None, Some(effort)).expect("authorized controls");
+            let applied = agent.effort.expect("effort retained");
+            assert_eq!(applied.wire_value(), effort.as_str());
+            assert_eq!(
+                agent.thinking_budget_tokens,
+                applied.thinking_budget_for_anthropic()
+            );
+        }
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::Xhigh))
+            .expect("authorized controls");
+        assert_eq!(agent.thinking_budget_tokens, Some(49_152));
+        apply_agent_controls(&mut agent, None, Some(DeveloperReasoningEffort::None))
+            .expect("authorized controls");
+        assert_eq!(agent.thinking_budget_tokens, None);
     }
 
     #[test]

@@ -11,6 +11,7 @@ import {
   DEVELOPER_AGENT_MODE_LABELS,
   DEVELOPER_REASONING_EFFORTS,
   DEVELOPER_REASONING_EFFORT_LABELS,
+  DEVELOPER_CHILD_TASK_STATE_LABELS,
   type DeveloperAgentMode,
   type DeveloperReasoningEffort,
 } from '@agiworkforce/local-runtime-contract';
@@ -52,7 +53,7 @@ function serializeForInlineScript(value: unknown): string {
 const DEVELOPER_MODE_DESCRIPTIONS: Record<DeveloperAgentMode, string> = {
   plan: 'Generate a plan; no edits until approved',
   ask: 'Confirm every edit before it runs',
-  auto: 'Safe reads run automatically; writes and commands require approval',
+  auto: 'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
   bypass: 'Skip all approval prompts (dangerous)',
 };
 
@@ -1849,6 +1850,25 @@ export function getWebviewContent(
     }
 
     /* ── Structured plan visualization ── */
+    .subagents {
+      border: 1px solid var(--border);
+      border-radius: var(--corner-field);
+      background: var(--bg-elevated);
+      margin: 0 0 8px;
+      max-height: 30vh;
+      overflow-y: auto;
+      font-size: var(--type-body-size);
+    }
+    .subagents[hidden] { display: none; }
+    .subagents > summary {
+      cursor: pointer;
+      padding: 6px 10px;
+      color: var(--text-primary);
+    }
+    .subagents__list { list-style: none; margin: 0; padding: 0 10px 8px; }
+    .subagents__row { display: flex; gap: 6px; padding: 2px 0; }
+    .subagents__title { color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+    .subagents__state { color: var(--text-secondary); flex: none; }
     .side-question {
       border: 1px solid var(--border);
       border-radius: var(--corner-field);
@@ -2752,6 +2772,10 @@ export function getWebviewContent(
 
   <!-- ── Input ── -->
   <div class="input-area">
+    <details class="subagents" id="subagentsPanel" aria-label="Subagents" hidden>
+      <summary id="subagentsSummary"></summary>
+      <ul class="subagents__list" id="subagentsList"></ul>
+    </details>
     <section class="side-question" id="sideQuestion" aria-label="Side question" hidden>
       <div class="side-question__header">
         <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
@@ -2979,6 +3003,43 @@ export function getWebviewContent(
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const subagentsPanel = document.getElementById('subagentsPanel');
+    const subagentsSummary = document.getElementById('subagentsSummary');
+    const subagentsList = document.getElementById('subagentsList');
+    var SUBAGENT_STATE_LABELS = ${serializeForInlineScript(DEVELOPER_CHILD_TASK_STATE_LABELS)};
+    function renderSubagents(tasks) {
+      if (!subagentsPanel || !subagentsSummary || !subagentsList) return;
+      var list = Array.isArray(tasks) ? tasks : [];
+      subagentsList.replaceChildren();
+      subagentsPanel.hidden = list.length === 0;
+      if (list.length === 0) return;
+      var counts = Object.keys(SUBAGENT_STATE_LABELS)
+        .map(function (state) {
+          var count = list.filter(function (task) { return task.state === state; }).length;
+          return count > 0 ? count + ' ' + SUBAGENT_STATE_LABELS[state].toLowerCase() : '';
+        })
+        .filter(Boolean);
+      subagentsSummary.textContent = 'Subagents (' + list.length + ') · ' + counts.join(' · ');
+      var active = false;
+      for (var i = 0; i < list.length; i++) {
+        var task = list[i];
+        if (task.state === 'running' || task.state === 'queued' || task.state === 'awaiting_input') {
+          active = true;
+        }
+        var row = document.createElement('li');
+        row.className = 'subagents__row';
+        row.dataset.state = task.state;
+        var title = document.createElement('span');
+        title.className = 'subagents__title';
+        title.textContent = task.title;
+        var state = document.createElement('span');
+        state.className = 'subagents__state';
+        state.textContent = SUBAGENT_STATE_LABELS[task.state] || '';
+        row.append(title, state);
+        subagentsList.appendChild(row);
+      }
+      subagentsPanel.open = active;
+    }
     const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -6745,6 +6806,7 @@ export function getWebviewContent(
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
         renderTranscript(msg.payload);
+        renderSubagents(msg.payload.subagents);
         if (messagesEl.childElementCount === 0) {
           // A session the CLI created can resume with nothing to replay. An
           // empty panel says nothing; the empty state at least names the view.
@@ -6774,6 +6836,10 @@ export function getWebviewContent(
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
+      else if (msg.type === 'subagents') {
+        renderSubagents(msg.payload.tasks);
+      }
+
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
@@ -6790,6 +6856,7 @@ export function getWebviewContent(
 
       else if (msg.type === 'conversationCleared') {
         closeSideQuestion();
+        renderSubagents([]);
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();

@@ -402,97 +402,123 @@ pub fn capability_for_model(model_id: &str) -> CapabilityTier {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Effort {
+    None,
+    Minimal,
     Low,
     #[default]
     Medium,
     High,
+    Xhigh,
     Max,
 }
 
 impl Effort {
-    #[allow(dead_code)] // used in tests; future effort-cycle iterator
-    pub const ALL: &'static [Effort] = &[Effort::Low, Effort::Medium, Effort::High, Effort::Max];
+    pub const ALL: &'static [Effort] = &[
+        Effort::None,
+        Effort::Minimal,
+        Effort::Low,
+        Effort::Medium,
+        Effort::High,
+        Effort::Xhigh,
+        Effort::Max,
+    ];
 
+    /// Mirrors `DEVELOPER_REASONING_EFFORT_LABELS` in the local runtime contract.
     pub fn label(self) -> &'static str {
         match self {
+            Effort::None => "None",
+            Effort::Minimal => "Minimal",
             Effort::Low => "Low",
             Effort::Medium => "Medium",
             Effort::High => "High",
+            Effort::Xhigh => "xHigh",
             Effort::Max => "Max",
+        }
+    }
+
+    /// The shared ladder spelling: the wire value, the catalog level and the
+    /// persisted `[default] reasoning_effort` value.
+    pub fn wire_value(self) -> &'static str {
+        match self {
+            Effort::None => "none",
+            Effort::Minimal => "minimal",
+            Effort::Low => "low",
+            Effort::Medium => "medium",
+            Effort::High => "high",
+            Effort::Xhigh => "xhigh",
+            Effort::Max => "max",
         }
     }
 
     /// Parse the `[default] reasoning_effort` config value onboarding writes.
     pub fn from_config_value(value: &str) -> Option<Effort> {
-        match value.trim().to_ascii_lowercase().as_str() {
-            "low" => Some(Effort::Low),
-            "medium" => Some(Effort::Medium),
-            "high" => Some(Effort::High),
-            "max" => Some(Effort::Max),
-            _ => None,
-        }
+        let value = value.trim();
+        Self::ALL
+            .iter()
+            .copied()
+            .find(|effort| effort.wire_value().eq_ignore_ascii_case(value))
     }
 
-    /// Anthropic `thinking.budget_tokens` value (mirrors `ANTHROPIC_THINKING_BUDGET`).
-    #[allow(dead_code)]
+    /// Anthropic `thinking.budget_tokens` value (mirrors `ANTHROPIC_THINKING_BUDGET`);
+    /// zero for the levels that take no thinking budget.
     pub fn anthropic_budget_tokens(self) -> u32 {
         match self {
+            Effort::None | Effort::Minimal => 0,
             Effort::Low => 4_096,
             Effort::Medium => 16_384,
             Effort::High => 32_768,
+            Effort::Xhigh => 49_152,
             Effort::Max => 65_536,
         }
     }
 
     /// Returns the Anthropic extended-thinking budget for this effort level,
-    /// or `None` for Low/Medium where standard inference is used.
-    /// High = 32K tokens, Max = 65K tokens.
+    /// or `None` up to Medium, where standard inference is used.
     pub fn thinking_budget_for_anthropic(self) -> Option<u32> {
         match self {
-            Effort::Low | Effort::Medium => None,
-            Effort::High => Some(32_768),
-            Effort::Max => Some(65_536),
+            Effort::None | Effort::Minimal | Effort::Low | Effort::Medium => None,
+            Effort::High | Effort::Xhigh | Effort::Max => Some(self.anthropic_budget_tokens()),
         }
     }
 
-    /// OpenAI `reasoning.effort` string (mirrors `OPENAI_REASONING_EFFORT`).
-    /// Note: `Max` falls back to `"high"` for o-series.
+    /// OpenAI `reasoning.effort` for a model whose catalog row names no levels.
+    /// Only low, medium and high are safe to send without a level list, so the
+    /// levels outside them fall back to the nearest of the three.
     pub fn openai_effort_str(self) -> &'static str {
         match self {
-            Effort::Low => "low",
+            Effort::None | Effort::Minimal | Effort::Low => "low",
             Effort::Medium => "medium",
-            Effort::High | Effort::Max => "high",
+            Effort::High | Effort::Xhigh | Effort::Max => "high",
         }
     }
 
     /// Gemini `thinkingConfig.thinkingBudget` value (mirrors `GEMINI_THINKING_BUDGET`).
     pub fn gemini_thinking_budget(self) -> u32 {
         match self {
+            Effort::None | Effort::Minimal => 1_024,
             Effort::Low => 4_096,
             Effort::Medium => 16_384,
             Effort::High => 32_768,
+            Effort::Xhigh => 49_152,
             Effort::Max => 65_536,
         }
     }
 
+    fn position(self) -> usize {
+        Self::ALL
+            .iter()
+            .position(|effort| *effort == self)
+            .unwrap_or_default()
+    }
+
     /// Advance to the next effort level (wraps around).
     pub fn next(self) -> Effort {
-        match self {
-            Effort::Low => Effort::Medium,
-            Effort::Medium => Effort::High,
-            Effort::High => Effort::Max,
-            Effort::Max => Effort::Low,
-        }
+        Self::ALL[(self.position() + 1) % Self::ALL.len()]
     }
 
     /// Retreat to the previous effort level (wraps around).
     pub fn prev(self) -> Effort {
-        match self {
-            Effort::Low => Effort::Max,
-            Effort::Medium => Effort::Low,
-            Effort::High => Effort::Medium,
-            Effort::Max => Effort::High,
-        }
+        Self::ALL[(self.position() + Self::ALL.len() - 1) % Self::ALL.len()]
     }
 }
 
@@ -541,10 +567,32 @@ mod tests {
 
     #[test]
     fn effort_labels_match_ts() {
-        assert_eq!(Effort::Low.label(), "Low");
-        assert_eq!(Effort::Medium.label(), "Medium");
-        assert_eq!(Effort::High.label(), "High");
-        assert_eq!(Effort::Max.label(), "Max");
+        let contract =
+            include_str!("../../../packages/contracts/local-runtime/src/developer-session.ts");
+        for &effort in Effort::ALL {
+            assert!(
+                contract.contains(&format!("{}: '{}'", effort.wire_value(), effort.label())),
+                "{} is labelled {} in the TS contract",
+                effort.wire_value(),
+                effort.label()
+            );
+        }
+    }
+
+    #[test]
+    fn effort_ladder_round_trips_and_cycles() {
+        for &effort in Effort::ALL {
+            assert_eq!(Effort::from_config_value(effort.wire_value()), Some(effort));
+            assert_eq!(effort.next().prev(), effort);
+        }
+        assert_eq!(Effort::Max.next(), Effort::None);
+        assert_eq!(Effort::None.prev(), Effort::Max);
+        assert_eq!(Effort::from_config_value("XHIGH"), Some(Effort::Xhigh));
+        assert_eq!(Effort::from_config_value("ultra"), None);
+        assert_eq!(Effort::Xhigh.thinking_budget_for_anthropic(), Some(49_152));
+        assert_eq!(Effort::Minimal.thinking_budget_for_anthropic(), None);
+        assert_eq!(Effort::None.openai_effort_str(), "low");
+        assert_eq!(Effort::Xhigh.openai_effort_str(), "high");
     }
 
     #[test]
@@ -579,9 +627,11 @@ mod tests {
     #[test]
     fn effort_cycle() {
         assert_eq!(Effort::Low.next(), Effort::Medium);
-        assert_eq!(Effort::Max.next(), Effort::Low);
+        assert_eq!(Effort::High.next(), Effort::Xhigh);
+        assert_eq!(Effort::Max.next(), Effort::None);
         assert_eq!(Effort::Medium.prev(), Effort::Low);
-        assert_eq!(Effort::Low.prev(), Effort::Max);
+        assert_eq!(Effort::Low.prev(), Effort::Minimal);
+        assert_eq!(Effort::None.prev(), Effort::Max);
     }
 
     #[test]

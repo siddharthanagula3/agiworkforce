@@ -1734,9 +1734,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
         {
           label: `$(symbol-misc) ${DEVELOPER_AGENT_MODE_LABELS.auto}`,
-          description: 'Safe reads run automatically; writes and commands require approval',
+          description:
+            'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
           detail:
-            'Example: reading files and searching run on their own; npm install still asks first.',
+            'Example: reading and editing files run on their own; npm install still asks first.',
           mode: 'auto',
           picked: currentMode === 'auto',
         },

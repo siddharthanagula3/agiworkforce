@@ -42,6 +42,7 @@ import {
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
 
 const EXTERNAL_DESTINATION_PATHS: Partial<Record<SettingsCommand, string>> = {
+  manageAccount: '/settings/account?from=vscode-extension',
   manageUsage: '/settings/usage?from=vscode-extension',
   manageBilling: '/settings/billing?from=vscode-extension',
   viewPlans: '/pricing?from=vscode-extension',

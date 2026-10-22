@@ -1964,6 +1964,9 @@ ${capabilityAvailabilityRows}
                 Review session usage here or continue to Web for plan usage, billing, connectors, and Team administration.
               </p>
               <div class="action-row">
+                <button class="secondary-button" type="button" data-command="manageAccount">
+                  Manage account on Web <span aria-hidden="true">↗</span>
+                </button>
                 <button class="secondary-button" type="button" data-command="showAccountUsage">
                   Account &amp; usage
                 </button>

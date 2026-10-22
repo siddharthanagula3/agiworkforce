@@ -43,14 +43,16 @@ import {
 } from '@agiworkforce/types';
 import {
   DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_CHILD_TASK_STATE_LABELS,
   DEVELOPER_TURN_LIMITS,
+  developerEffortLevels,
+  type DeveloperChildTaskState,
   type DeveloperRuntimeModels,
   type LocalDeveloperSession,
   type DeveloperSessionGroup,
 } from '@agiworkforce/local-runtime-contract';
 import type {
   DeveloperChildTask,
-  DeveloperChildTaskState,
   ThreadDeleteResponse,
   WorktreeCleanupFailure,
 } from '@agiworkforce/types/protocol';
@@ -151,22 +153,14 @@ const SUBMIT_KEY = 'Enter';
 const IMAGE_TYPE_PREFIX = 'image/';
 const MEGABYTE = 1_000_000;
 
-const SUBAGENT_STATE_LABELS: Record<DeveloperChildTaskState, string> = {
-  queued: 'Queued',
-  running: 'Running',
-  awaiting_input: 'Waiting for input',
-  paused: 'Interrupted',
-  completed: 'Done',
-  cancelled: 'Stopped',
-  failed: 'Failed',
-};
-
-const SUBAGENT_STATE_ORDER = Object.keys(SUBAGENT_STATE_LABELS) as DeveloperChildTaskState[];
+const SUBAGENT_STATE_ORDER = Object.keys(
+  DEVELOPER_CHILD_TASK_STATE_LABELS,
+) as DeveloperChildTaskState[];
 
 function subagentCounts(tasks: readonly DeveloperChildTask[]): string {
   return SUBAGENT_STATE_ORDER.map((state) => {
     const count = tasks.filter((task) => task.state === state).length;
-    return count > 0 ? `${count} ${SUBAGENT_STATE_LABELS[state].toLowerCase()}` : null;
+    return count > 0 ? `${count} ${DEVELOPER_CHILD_TASK_STATE_LABELS[state].toLowerCase()}` : null;
   })
     .filter((part): part is string => part !== null)
     .join(' · ');
@@ -187,7 +181,10 @@ function LocalSubagents({ tasks }: { tasks: readonly DeveloperChildTask[] }) {
         {tasks.map((task) => (
           <li key={task.id} id={`local-child-${task.id}`} data-state={task.state}>
             <span>{task.title}</span>
-            <span className="text-muted-foreground"> · {SUBAGENT_STATE_LABELS[task.state]}</span>
+            <span className="text-muted-foreground">
+              {' '}
+              · {DEVELOPER_CHILD_TASK_STATE_LABELS[task.state]}
+            </span>
             {task.state === 'paused' && (
               <p className="text-muted-foreground">
                 Interrupted work is kept for review and will not restart on its own.
@@ -1533,6 +1530,7 @@ export function LocalSessionPanel({
                   <LocalTurnControls
                     agentMode={options.agentMode}
                     reasoningEffort={options.reasoningEffort}
+                    effortLevels={developerEffortLevels(activeModel)}
                     showMode={canChooseMode}
                     showEffort={canChooseEffort}
                     disabled={state.sending}

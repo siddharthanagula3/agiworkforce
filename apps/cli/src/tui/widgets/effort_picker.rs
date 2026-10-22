@@ -39,7 +39,7 @@ impl Default for EffortPickerState {
     fn default() -> Self {
         Self {
             visible: false,
-            cursor: 1, // Medium
+            cursor: medium_cursor(),
             current: Effort::Medium,
         }
     }
@@ -50,7 +50,10 @@ impl EffortPickerState {
     pub fn open(&mut self, current: Effort) {
         self.visible = true;
         self.current = current;
-        self.cursor = Effort::ALL.iter().position(|&e| e == current).unwrap_or(1);
+        self.cursor = Effort::ALL
+            .iter()
+            .position(|&e| e == current)
+            .unwrap_or_else(medium_cursor);
     }
 
     pub fn close(&mut self) {
@@ -121,10 +124,20 @@ pub fn handle_key(state: &mut EffortPickerState, key: crossterm::event::KeyEvent
 // Rendering
 // ---------------------------------------------------------------------------
 
+fn medium_cursor() -> usize {
+    Effort::ALL
+        .iter()
+        .position(|&e| e == Effort::Medium)
+        .unwrap_or_default()
+}
+
 static EFFORT_DESCRIPTIONS: &[&str] = &[
-    "Concise responses. Fastest.",
+    "No extra reasoning. Fastest.",
+    "Minimal reasoning. Very fast.",
+    "Concise responses. Fast.",
     "Balanced quality and speed. Default.",
     "More thorough responses. Slower.",
+    "Extended reasoning. Slower still.",
     "Most thorough responses. Slowest.",
 ];
 
@@ -137,7 +150,7 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &EffortPickerState)
         return;
     }
 
-    let popup_height: u16 = 8; // border(2) + blank(1) + rows(4) + blank(1)
+    let popup_height: u16 = Effort::ALL.len() as u16 + 4;
     let popup_width: u16 = 76.min(area.width.saturating_sub(4));
 
     let popup_area = Rect {
@@ -172,7 +185,9 @@ pub fn render(frame: &mut ratatui::Frame, area: Rect, state: &EffortPickerState)
 
             let bullet = if is_active { "●" } else { " " };
             let budget = effort.anthropic_budget_tokens();
-            let budget_str = if budget >= 1_000 {
+            let budget_str = if budget == 0 {
+                "no thinking".to_string()
+            } else if budget >= 1_000 {
                 format!("~{}K tokens", budget / 1_000)
             } else {
                 format!("~{} tokens", budget)

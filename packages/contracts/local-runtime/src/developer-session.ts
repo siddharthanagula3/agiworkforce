@@ -9,10 +9,15 @@
 import {
   DEVELOPER_SESSION_PROTOCOL_VERSION,
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
+  getModelMetadataById,
 } from '@agiworkforce/types';
-import type { DeveloperAgentMode, DeveloperReasoningEffort } from '@agiworkforce/types/protocol';
+import type {
+  DeveloperAgentMode,
+  DeveloperChildTaskState,
+  DeveloperReasoningEffort,
+} from '@agiworkforce/types/protocol';
 
-export type { DeveloperAgentMode, DeveloperReasoningEffort };
+export type { DeveloperAgentMode, DeveloperChildTaskState, DeveloperReasoningEffort };
 
 /** Every posture on the wire, weakest first. */
 export const DEVELOPER_AGENT_MODES = [
@@ -78,17 +83,51 @@ export function normalizeDeveloperAgentMode(
 
 /** Every reasoning level on the wire, least first. */
 export const DEVELOPER_REASONING_EFFORTS = [
+  'none',
+  'minimal',
   'low',
   'medium',
   'high',
+  'xhigh',
   'max',
 ] as const satisfies readonly DeveloperReasoningEffort[];
 
 export const DEVELOPER_REASONING_EFFORT_LABELS: Record<DeveloperReasoningEffort, string> = {
+  none: 'None',
+  minimal: 'Minimal',
   low: 'Low',
   medium: 'Medium',
   high: 'High',
+  xhigh: 'xHigh',
   max: 'Max',
+};
+
+/**
+ * The levels a model's catalog row says it takes, in ladder order. Null when
+ * the catalog does not know the model or names no list, so every level is
+ * offered and the runtime maps it to the nearest one the model takes; empty
+ * when the model takes no reasoning effort.
+ */
+export function developerEffortLevels(
+  modelId: string | null | undefined,
+): DeveloperReasoningEffort[] | null {
+  if (!modelId) return null;
+  const reasoning = getModelMetadataById(modelId)?.reasoning;
+  if (reasoning === undefined) return null;
+  if (!reasoning.capable) return [];
+  const supported = reasoning.supportedEfforts;
+  if (supported === undefined) return null;
+  return DEVELOPER_REASONING_EFFORTS.filter((effort) => supported.includes(effort));
+}
+
+export const DEVELOPER_CHILD_TASK_STATE_LABELS: Record<DeveloperChildTaskState, string> = {
+  queued: 'Queued',
+  running: 'Running',
+  awaiting_input: 'Waiting for input',
+  paused: 'Interrupted',
+  completed: 'Done',
+  cancelled: 'Stopped',
+  failed: 'Failed',
 };
 
 export { DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE };

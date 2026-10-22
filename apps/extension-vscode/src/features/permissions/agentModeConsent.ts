@@ -1,8 +1,12 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import {
+  DEVELOPER_REASONING_EFFORTS,
+  type DeveloperReasoningEffort,
+} from '@agiworkforce/local-runtime-contract';
 import * as vscode from 'vscode';
 
 export type ExtensionAgentMode = 'ask' | 'auto' | 'plan' | 'bypass';
-export type ExtensionAgentEffort = 'low' | 'medium' | 'high' | 'max';
+export type ExtensionAgentEffort = DeveloperReasoningEffort;
 
 const BYPASS_CONSENT_KEY = 'agiWorkforce.agentMode.bypassConsentVersion';
 const BYPASS_CONSENT_VERSION = 2;
@@ -67,9 +71,7 @@ function configuredAgentEffort(): ExtensionAgentEffort {
   const value = vscode.workspace
     .getConfiguration('agiWorkforce')
     .get<string>('agent.effort', 'medium');
-  return value === 'low' || value === 'medium' || value === 'high' || value === 'max'
-    ? value
-    : 'medium';
+  return DEVELOPER_REASONING_EFFORTS.find((effort) => effort === value) ?? 'medium';
 }
 
 async function persistBypassConsent(

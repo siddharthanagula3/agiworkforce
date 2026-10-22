@@ -1288,20 +1288,23 @@
           ],
           "enumDescriptions": [
             "Ask before edits and commands.",
-            "Run safe, read-only operations automatically; require approval for writes and commands.",
+            "Read and edit files without asking; running commands and changing git hooks or MCP settings still ask first.",
             "Propose a plan before making edits.",
             "Skip approval prompts for workspace/additional-directory, terminal, network-capable command, and configured MCP tool access. Selecting this requires a modal risk confirmation."
           ],
           "default": "auto",
           "scope": "machine",
-          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' runs safe, read-only operations automatically while writes and commands still require approval, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is machine-scoped, and Bypass Permissions is confirmed per workspace."
+          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is machine-scoped, and Bypass Permissions is confirmed per workspace."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",
           "enum": [
+            "none",
+            "minimal",
             "low",
             "medium",
             "high",
+            "xhigh",
             "max"
           ],
           "default": "medium",

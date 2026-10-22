@@ -145,10 +145,16 @@ export {
   remoteTurnAgentMode,
   DEVELOPER_REASONING_EFFORTS,
   DEVELOPER_REASONING_EFFORT_LABELS,
+  DEVELOPER_CHILD_TASK_STATE_LABELS,
+  developerEffortLevels,
   THREAD_WRITER_CONFLICT_ERROR_CODE,
   MCP_APPROVAL_STALE_ERROR_CODE,
 } from './developer-session';
-export type { DeveloperAgentMode, DeveloperReasoningEffort } from './developer-session';
+export type {
+  DeveloperAgentMode,
+  DeveloperChildTaskState,
+  DeveloperReasoningEffort,
+} from './developer-session';
 
 export { BROWSER_PAIRING_COMMANDS } from './browser-bridge';
 export type {

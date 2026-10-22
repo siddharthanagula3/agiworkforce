@@ -1756,6 +1756,25 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     /* ── Structured plan visualization ── */
+    .subagents {
+      border: 1px solid var(--border);
+      border-radius: var(--corner-field);
+      background: var(--bg-elevated);
+      margin: 0 0 8px;
+      max-height: 30vh;
+      overflow-y: auto;
+      font-size: var(--type-body-size);
+    }
+    .subagents[hidden] { display: none; }
+    .subagents > summary {
+      cursor: pointer;
+      padding: 6px 10px;
+      color: var(--text-primary);
+    }
+    .subagents__list { list-style: none; margin: 0; padding: 0 10px 8px; }
+    .subagents__row { display: flex; gap: 6px; padding: 2px 0; }
+    .subagents__title { color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+    .subagents__state { color: var(--text-secondary); flex: none; }
     .side-question {
       border: 1px solid var(--border);
       border-radius: var(--corner-field);
@@ -2759,6 +2778,10 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
   <!-- ── Input ── -->
   <div class="input-area">
+    <details class="subagents" id="subagentsPanel" aria-label="Subagents" hidden>
+      <summary id="subagentsSummary"></summary>
+      <ul class="subagents__list" id="subagentsList"></ul>
+    </details>
     <section class="side-question" id="sideQuestion" aria-label="Side question" hidden>
       <div class="side-question__header">
         <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
@@ -2986,6 +3009,43 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const subagentsPanel = document.getElementById('subagentsPanel');
+    const subagentsSummary = document.getElementById('subagentsSummary');
+    const subagentsList = document.getElementById('subagentsList');
+    var SUBAGENT_STATE_LABELS = {"queued":"Queued","running":"Running","awaiting_input":"Waiting for input","paused":"Interrupted","completed":"Done","cancelled":"Stopped","failed":"Failed"};
+    function renderSubagents(tasks) {
+      if (!subagentsPanel || !subagentsSummary || !subagentsList) return;
+      var list = Array.isArray(tasks) ? tasks : [];
+      subagentsList.replaceChildren();
+      subagentsPanel.hidden = list.length === 0;
+      if (list.length === 0) return;
+      var counts = Object.keys(SUBAGENT_STATE_LABELS)
+        .map(function (state) {
+          var count = list.filter(function (task) { return task.state === state; }).length;
+          return count > 0 ? count + ' ' + SUBAGENT_STATE_LABELS[state].toLowerCase() : '';
+        })
+        .filter(Boolean);
+      subagentsSummary.textContent = 'Subagents (' + list.length + ') · ' + counts.join(' · ');
+      var active = false;
+      for (var i = 0; i < list.length; i++) {
+        var task = list[i];
+        if (task.state === 'running' || task.state === 'queued' || task.state === 'awaiting_input') {
+          active = true;
+        }
+        var row = document.createElement('li');
+        row.className = 'subagents__row';
+        row.dataset.state = task.state;
+        var title = document.createElement('span');
+        title.className = 'subagents__title';
+        title.textContent = task.title;
+        var state = document.createElement('span');
+        state.className = 'subagents__state';
+        state.textContent = SUBAGENT_STATE_LABELS[task.state] || '';
+        row.append(title, state);
+        subagentsList.appendChild(row);
+      }
+      subagentsPanel.open = active;
+    }
     const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -3751,7 +3811,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     var MODE_LABELS = {"plan":"Plan","ask":"Ask","auto":"Auto","bypass":"Bypass permissions"};
-    var EFFORT_LABELS = {"low":"Low","medium":"Medium","high":"High","max":"Max"};
+    var EFFORT_LABELS = {"none":"None","minimal":"Minimal","low":"Low","medium":"Medium","high":"High","xhigh":"xHigh","max":"Max"};
     function modeLabel(value) {
       return Object.prototype.hasOwnProperty.call(MODE_LABELS, value) ? MODE_LABELS[value] : '';
     }
@@ -4410,9 +4470,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
 
-    var MODE_OPTIONS = [{"value":"plan","label":"Plan","description":"Generate a plan; no edits until approved"},{"value":"ask","label":"Ask","description":"Confirm every edit before it runs"},{"value":"auto","label":"Auto","description":"Safe reads run automatically; writes and commands require approval"},{"value":"bypass","label":"Bypass permissions","description":"Skip all approval prompts (dangerous)"}];
+    var MODE_OPTIONS = [{"value":"plan","label":"Plan","description":"Generate a plan; no edits until approved"},{"value":"ask","label":"Ask","description":"Confirm every edit before it runs"},{"value":"auto","label":"Auto","description":"Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings."},{"value":"bypass","label":"Bypass permissions","description":"Skip all approval prompts (dangerous)"}];
     var activeEffortLevels = null;
-    var EFFORT_OPTIONS = [{"value":"low","label":"Low","description":"A short reasoning pass with less waiting."},{"value":"medium","label":"Medium","description":"A balance of reasoning depth and response time."},{"value":"high","label":"High","description":"More reasoning for complex tasks; may take longer."},{"value":"max","label":"Max","description":"The highest available reasoning setting; expect the longest wait."}];
+    var EFFORT_OPTIONS = [{"value":"none","label":"None","description":"No extra reasoning for straightforward replies."},{"value":"minimal","label":"Minimal","description":"Minimal extra reasoning for simple tasks."},{"value":"low","label":"Low","description":"A short reasoning pass with less waiting."},{"value":"medium","label":"Medium","description":"A balance of reasoning depth and response time."},{"value":"high","label":"High","description":"More reasoning for complex tasks; may take longer."},{"value":"xhigh","label":"xHigh","description":"Additional reasoning for difficult tasks; may take longer."},{"value":"max","label":"Max","description":"The highest available reasoning setting; expect the longest wait."}];
 
     function closeControlsPopover() {
       if (!controlsPopoverEl) return;
@@ -6752,6 +6812,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
         renderTranscript(msg.payload);
+        renderSubagents(msg.payload.subagents);
         if (messagesEl.childElementCount === 0) {
           // A session the CLI created can resume with nothing to replay. An
           // empty panel says nothing; the empty state at least names the view.
@@ -6781,6 +6842,10 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
+      else if (msg.type === 'subagents') {
+        renderSubagents(msg.payload.tasks);
+      }
+
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
@@ -6797,6 +6862,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'conversationCleared') {
         closeSideQuestion();
+        renderSubagents([]);
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();
@@ -9605,6 +9671,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     /* ── Structured plan visualization ── */
+    .subagents {
+      border: 1px solid var(--border);
+      border-radius: var(--corner-field);
+      background: var(--bg-elevated);
+      margin: 0 0 8px;
+      max-height: 30vh;
+      overflow-y: auto;
+      font-size: var(--type-body-size);
+    }
+    .subagents[hidden] { display: none; }
+    .subagents > summary {
+      cursor: pointer;
+      padding: 6px 10px;
+      color: var(--text-primary);
+    }
+    .subagents__list { list-style: none; margin: 0; padding: 0 10px 8px; }
+    .subagents__row { display: flex; gap: 6px; padding: 2px 0; }
+    .subagents__title { color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+    .subagents__state { color: var(--text-secondary); flex: none; }
     .side-question {
       border: 1px solid var(--border);
       border-radius: var(--corner-field);
@@ -10608,6 +10693,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
   <!-- ── Input ── -->
   <div class="input-area">
+    <details class="subagents" id="subagentsPanel" aria-label="Subagents" hidden>
+      <summary id="subagentsSummary"></summary>
+      <ul class="subagents__list" id="subagentsList"></ul>
+    </details>
     <section class="side-question" id="sideQuestion" aria-label="Side question" hidden>
       <div class="side-question__header">
         <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
@@ -10835,6 +10924,43 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const subagentsPanel = document.getElementById('subagentsPanel');
+    const subagentsSummary = document.getElementById('subagentsSummary');
+    const subagentsList = document.getElementById('subagentsList');
+    var SUBAGENT_STATE_LABELS = {"queued":"Queued","running":"Running","awaiting_input":"Waiting for input","paused":"Interrupted","completed":"Done","cancelled":"Stopped","failed":"Failed"};
+    function renderSubagents(tasks) {
+      if (!subagentsPanel || !subagentsSummary || !subagentsList) return;
+      var list = Array.isArray(tasks) ? tasks : [];
+      subagentsList.replaceChildren();
+      subagentsPanel.hidden = list.length === 0;
+      if (list.length === 0) return;
+      var counts = Object.keys(SUBAGENT_STATE_LABELS)
+        .map(function (state) {
+          var count = list.filter(function (task) { return task.state === state; }).length;
+          return count > 0 ? count + ' ' + SUBAGENT_STATE_LABELS[state].toLowerCase() : '';
+        })
+        .filter(Boolean);
+      subagentsSummary.textContent = 'Subagents (' + list.length + ') · ' + counts.join(' · ');
+      var active = false;
+      for (var i = 0; i < list.length; i++) {
+        var task = list[i];
+        if (task.state === 'running' || task.state === 'queued' || task.state === 'awaiting_input') {
+          active = true;
+        }
+        var row = document.createElement('li');
+        row.className = 'subagents__row';
+        row.dataset.state = task.state;
+        var title = document.createElement('span');
+        title.className = 'subagents__title';
+        title.textContent = task.title;
+        var state = document.createElement('span');
+        state.className = 'subagents__state';
+        state.textContent = SUBAGENT_STATE_LABELS[task.state] || '';
+        row.append(title, state);
+        subagentsList.appendChild(row);
+      }
+      subagentsPanel.open = active;
+    }
     const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -11600,7 +11726,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     var MODE_LABELS = {"plan":"Plan","ask":"Ask","auto":"Auto","bypass":"Bypass permissions"};
-    var EFFORT_LABELS = {"low":"Low","medium":"Medium","high":"High","max":"Max"};
+    var EFFORT_LABELS = {"none":"None","minimal":"Minimal","low":"Low","medium":"Medium","high":"High","xhigh":"xHigh","max":"Max"};
     function modeLabel(value) {
       return Object.prototype.hasOwnProperty.call(MODE_LABELS, value) ? MODE_LABELS[value] : '';
     }
@@ -12259,9 +12385,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
 
-    var MODE_OPTIONS = [{"value":"plan","label":"Plan","description":"Generate a plan; no edits until approved"},{"value":"ask","label":"Ask","description":"Confirm every edit before it runs"},{"value":"auto","label":"Auto","description":"Safe reads run automatically; writes and commands require approval"},{"value":"bypass","label":"Bypass permissions","description":"Skip all approval prompts (dangerous)"}];
+    var MODE_OPTIONS = [{"value":"plan","label":"Plan","description":"Generate a plan; no edits until approved"},{"value":"ask","label":"Ask","description":"Confirm every edit before it runs"},{"value":"auto","label":"Auto","description":"Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings."},{"value":"bypass","label":"Bypass permissions","description":"Skip all approval prompts (dangerous)"}];
     var activeEffortLevels = null;
-    var EFFORT_OPTIONS = [{"value":"low","label":"Low","description":"A short reasoning pass with less waiting."},{"value":"medium","label":"Medium","description":"A balance of reasoning depth and response time."},{"value":"high","label":"High","description":"More reasoning for complex tasks; may take longer."},{"value":"max","label":"Max","description":"The highest available reasoning setting; expect the longest wait."}];
+    var EFFORT_OPTIONS = [{"value":"none","label":"None","description":"No extra reasoning for straightforward replies."},{"value":"minimal","label":"Minimal","description":"Minimal extra reasoning for simple tasks."},{"value":"low","label":"Low","description":"A short reasoning pass with less waiting."},{"value":"medium","label":"Medium","description":"A balance of reasoning depth and response time."},{"value":"high","label":"High","description":"More reasoning for complex tasks; may take longer."},{"value":"xhigh","label":"xHigh","description":"Additional reasoning for difficult tasks; may take longer."},{"value":"max","label":"Max","description":"The highest available reasoning setting; expect the longest wait."}];
 
     function closeControlsPopover() {
       if (!controlsPopoverEl) return;
@@ -14601,6 +14727,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
         renderTranscript(msg.payload);
+        renderSubagents(msg.payload.subagents);
         if (messagesEl.childElementCount === 0) {
           // A session the CLI created can resume with nothing to replay. An
           // empty panel says nothing; the empty state at least names the view.
@@ -14630,6 +14757,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
+      else if (msg.type === 'subagents') {
+        renderSubagents(msg.payload.tasks);
+      }
+
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
@@ -14646,6 +14777,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'conversationCleared') {
         closeSideQuestion();
+        renderSubagents([]);
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();
@@ -17454,6 +17586,25 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     /* ── Structured plan visualization ── */
+    .subagents {
+      border: 1px solid var(--border);
+      border-radius: var(--corner-field);
+      background: var(--bg-elevated);
+      margin: 0 0 8px;
+      max-height: 30vh;
+      overflow-y: auto;
+      font-size: var(--type-body-size);
+    }
+    .subagents[hidden] { display: none; }
+    .subagents > summary {
+      cursor: pointer;
+      padding: 6px 10px;
+      color: var(--text-primary);
+    }
+    .subagents__list { list-style: none; margin: 0; padding: 0 10px 8px; }
+    .subagents__row { display: flex; gap: 6px; padding: 2px 0; }
+    .subagents__title { color: var(--text-primary); min-width: 0; overflow-wrap: anywhere; }
+    .subagents__state { color: var(--text-secondary); flex: none; }
     .side-question {
       border: 1px solid var(--border);
       border-radius: var(--corner-field);
@@ -18457,6 +18608,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
   <!-- ── Input ── -->
   <div class="input-area">
+    <details class="subagents" id="subagentsPanel" aria-label="Subagents" hidden>
+      <summary id="subagentsSummary"></summary>
+      <ul class="subagents__list" id="subagentsList"></ul>
+    </details>
     <section class="side-question" id="sideQuestion" aria-label="Side question" hidden>
       <div class="side-question__header">
         <span class="codicon codicon-comment-discussion" aria-hidden="true"></span>
@@ -18684,6 +18839,43 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     // ── DOM refs ──────────────────────────────────────────────────────────────
     const messagesEl = document.getElementById('messages');
+    const subagentsPanel = document.getElementById('subagentsPanel');
+    const subagentsSummary = document.getElementById('subagentsSummary');
+    const subagentsList = document.getElementById('subagentsList');
+    var SUBAGENT_STATE_LABELS = {"queued":"Queued","running":"Running","awaiting_input":"Waiting for input","paused":"Interrupted","completed":"Done","cancelled":"Stopped","failed":"Failed"};
+    function renderSubagents(tasks) {
+      if (!subagentsPanel || !subagentsSummary || !subagentsList) return;
+      var list = Array.isArray(tasks) ? tasks : [];
+      subagentsList.replaceChildren();
+      subagentsPanel.hidden = list.length === 0;
+      if (list.length === 0) return;
+      var counts = Object.keys(SUBAGENT_STATE_LABELS)
+        .map(function (state) {
+          var count = list.filter(function (task) { return task.state === state; }).length;
+          return count > 0 ? count + ' ' + SUBAGENT_STATE_LABELS[state].toLowerCase() : '';
+        })
+        .filter(Boolean);
+      subagentsSummary.textContent = 'Subagents (' + list.length + ') · ' + counts.join(' · ');
+      var active = false;
+      for (var i = 0; i < list.length; i++) {
+        var task = list[i];
+        if (task.state === 'running' || task.state === 'queued' || task.state === 'awaiting_input') {
+          active = true;
+        }
+        var row = document.createElement('li');
+        row.className = 'subagents__row';
+        row.dataset.state = task.state;
+        var title = document.createElement('span');
+        title.className = 'subagents__title';
+        title.textContent = task.title;
+        var state = document.createElement('span');
+        state.className = 'subagents__state';
+        state.textContent = SUBAGENT_STATE_LABELS[task.state] || '';
+        row.append(title, state);
+        subagentsList.appendChild(row);
+      }
+      subagentsPanel.open = active;
+    }
     const contextLimitNotice = document.getElementById('contextLimitNotice');
     const userInput = document.getElementById('userInput');
     const sendBtn = document.getElementById('sendBtn');
@@ -19449,7 +19641,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     var MODE_LABELS = {"plan":"Plan","ask":"Ask","auto":"Auto","bypass":"Bypass permissions"};
-    var EFFORT_LABELS = {"low":"Low","medium":"Medium","high":"High","max":"Max"};
+    var EFFORT_LABELS = {"none":"None","minimal":"Minimal","low":"Low","medium":"Medium","high":"High","xhigh":"xHigh","max":"Max"};
     function modeLabel(value) {
       return Object.prototype.hasOwnProperty.call(MODE_LABELS, value) ? MODE_LABELS[value] : '';
     }
@@ -20108,9 +20300,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
 
-    var MODE_OPTIONS = [{"value":"plan","label":"Plan","description":"Generate a plan; no edits until approved"},{"value":"ask","label":"Ask","description":"Confirm every edit before it runs"},{"value":"auto","label":"Auto","description":"Safe reads run automatically; writes and commands require approval"},{"value":"bypass","label":"Bypass permissions","description":"Skip all approval prompts (dangerous)"}];
+    var MODE_OPTIONS = [{"value":"plan","label":"Plan","description":"Generate a plan; no edits until approved"},{"value":"ask","label":"Ask","description":"Confirm every edit before it runs"},{"value":"auto","label":"Auto","description":"Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings."},{"value":"bypass","label":"Bypass permissions","description":"Skip all approval prompts (dangerous)"}];
     var activeEffortLevels = null;
-    var EFFORT_OPTIONS = [{"value":"low","label":"Low","description":"A short reasoning pass with less waiting."},{"value":"medium","label":"Medium","description":"A balance of reasoning depth and response time."},{"value":"high","label":"High","description":"More reasoning for complex tasks; may take longer."},{"value":"max","label":"Max","description":"The highest available reasoning setting; expect the longest wait."}];
+    var EFFORT_OPTIONS = [{"value":"none","label":"None","description":"No extra reasoning for straightforward replies."},{"value":"minimal","label":"Minimal","description":"Minimal extra reasoning for simple tasks."},{"value":"low","label":"Low","description":"A short reasoning pass with less waiting."},{"value":"medium","label":"Medium","description":"A balance of reasoning depth and response time."},{"value":"high","label":"High","description":"More reasoning for complex tasks; may take longer."},{"value":"xhigh","label":"xHigh","description":"Additional reasoning for difficult tasks; may take longer."},{"value":"max","label":"Max","description":"The highest available reasoning setting; expect the longest wait."}];
 
     function closeControlsPopover() {
       if (!controlsPopoverEl) return;
@@ -22450,6 +22642,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         if (attachmentStrip) attachmentStrip.replaceChildren();
         renderAttachmentStrip();
         renderTranscript(msg.payload);
+        renderSubagents(msg.payload.subagents);
         if (messagesEl.childElementCount === 0) {
           // A session the CLI created can resume with nothing to replay. An
           // empty panel says nothing; the empty state at least names the view.
@@ -22479,6 +22672,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         messagesEl.scrollTop = messagesEl.scrollHeight;
       }
 
+      else if (msg.type === 'subagents') {
+        renderSubagents(msg.payload.tasks);
+      }
+
       else if (msg.type === 'recentConversations') {
         recentChats = msg.payload;
         syncRecentChats();
@@ -22495,6 +22692,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'conversationCleared') {
         closeSideQuestion();
+        renderSubagents([]);
         lastSendPayload = null;
         turnSources = [];
         clearContextUsage();

@@ -2631,7 +2631,7 @@ describe('the environment the composer starts a session in', () => {
     const permissions = await screen.findByText('Permissions: Auto');
     expect(permissions).toHaveAttribute(
       'title',
-      'Edits files in this folder and runs safe commands without asking. Asks before anything else, such as changing git hooks or MCP servers.',
+      'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
     );
     expect(screen.queryByRole('button', { name: 'Approval mode' })).not.toBeInTheDocument();
     expect(screen.queryByText('Ask before every action')).not.toBeInTheDocument();

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { AGENT_MODE_LABEL, type AgentMode } from '@agiworkforce/types';
+import { type AgentMode } from '@agiworkforce/types';
+import { DEVELOPER_AGENT_MODE_LABELS } from '@agiworkforce/local-runtime-contract';
 
 import type { AccountIdentity } from '../../utils/api';
 
@@ -95,7 +96,7 @@ export function buildTrustReviewItems(
   return [
     { label: 'Trust & review', kind: vscode.QuickPickItemKind.Separator },
     {
-      label: `$(shield) Autonomy: ${AGENT_MODE_LABEL[mode]}`,
+      label: `$(shield) Autonomy: ${DEVELOPER_AGENT_MODE_LABELS[mode]}`,
       description: 'Review permission behavior and autonomy docs',
       action: 'permission-docs',
     },

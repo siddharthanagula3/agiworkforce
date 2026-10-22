@@ -16,7 +16,6 @@ import { type DiffDecorationProvider } from '../../providers/diffDecorationProvi
 import {
   normalizeConfiguredModelId,
   getModelProviderInfo,
-  registryEffortLevels,
   supportedEffort,
   buildGroupedQuickPickItems,
   isManagedModelAccessBlocked,
@@ -35,8 +34,6 @@ import {
   capabilityDenialDescriptor,
   formatUsageRemaining,
   formatUsageResetIn,
-  AGENT_MODE_LABEL,
-  EFFORT_LABEL,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   canAccessManualModelSelection,
   getBillingPlanPricing,
@@ -57,6 +54,12 @@ import {
   type UserInput,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
+import {
+  DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_REASONING_EFFORT_LABELS,
+  developerEffortLevels,
+} from '@agiworkforce/local-runtime-contract';
+import type { DeveloperChildTask } from '@agiworkforce/types/protocol';
 import {
   presentChatError,
   presentTurnFailure,
@@ -459,8 +462,10 @@ export type ExtToWebviewMessage =
           rating?: AnswerRating;
         }>;
         plan?: PlanVisualization;
+        subagents?: DeveloperChildTask[];
       };
     }
+  | { type: 'subagents'; payload: { tasks: DeveloperChildTask[] } }
   | {
       type: 'transcriptRefreshed';
       payload: {
@@ -998,12 +1003,12 @@ export class ChatStateManager {
 
   modelEffortLevels(modelId: string): DeveloperReasoningEffort[] | null {
     if (this._localModelProviders.has(modelId)) return null;
-    return registryEffortLevels(modelId);
+    return developerEffortLevels(modelId);
   }
 
   modelSupportsEffort(modelId: string): boolean {
     if (this._localModelProviders.has(modelId)) return false;
-    const levels = registryEffortLevels(modelId);
+    const levels = developerEffortLevels(modelId);
     if (levels !== null) return levels.length > 0;
     const { providerId } = getModelProviderInfo(modelId);
     if (providerId === null) return false;
@@ -3145,14 +3150,15 @@ export class ChatStateManager {
       },
       {
         label: '$(shield) Mode',
-        description: AGENT_MODE_LABEL[enforceAgentModeConsent(this._mode ?? Config.agentMode())],
+        description:
+          DEVELOPER_AGENT_MODE_LABELS[enforceAgentModeConsent(this._mode ?? Config.agentMode())],
         run: () => vscode.commands.executeCommand('agi-workforce.setAgentMode'),
       },
       ...(this.modelSupportsEffort(model)
         ? [
             {
               label: '$(dashboard) Reasoning effort',
-              description: EFFORT_LABEL[this._effort ?? Config.agentEffort()],
+              description: DEVELOPER_REASONING_EFFORT_LABELS[this._effort ?? Config.agentEffort()],
               run: () => vscode.commands.executeCommand('agi-workforce.setAgentEffort'),
             },
           ]
@@ -4158,6 +4164,7 @@ export class ChatStateManager {
         response.thread.trustMode,
         response,
       );
+      this._postSubagents(this._loadedConversation);
       if (announce) {
         this._post({
           type: 'transcriptRefreshed',
@@ -4420,7 +4427,10 @@ export class ChatStateManager {
   private _conversationPayload(
     summary: Pick<ThreadSummary, 'id' | 'title' | 'model' | 'provider'>,
     trustMode: Exclude<DeveloperSessionTrustMode, 'unknown'>,
-    response: Pick<ThreadReadResponse, 'messages' | 'transcriptTruncated' | 'plan' | 'todos'>,
+    response: Pick<
+      ThreadReadResponse,
+      'messages' | 'transcriptTruncated' | 'plan' | 'todos' | 'childTasks'
+    >,
   ): ConversationLoadedPayload {
     const plan = planFromThread(response.plan, response.todos);
     const messages = normalizeTranscriptMessages(response.messages).map((message) => {
@@ -4446,7 +4456,12 @@ export class ChatStateManager {
       transcriptTruncated: response.transcriptTruncated,
       messages,
       ...(plan === undefined ? {} : { plan }),
+      ...(response.childTasks?.length ? { subagents: response.childTasks } : {}),
     };
+  }
+
+  private _postSubagents(conversation: ConversationLoadedPayload): void {
+    this._post({ type: 'subagents', payload: { tasks: conversation.subagents ?? [] } });
   }
 
   public async syncStoredTranscript(): Promise<void> {
@@ -4497,6 +4512,7 @@ export class ChatStateManager {
       response,
     );
     this._loadedConversation = stored;
+    this._postSubagents(stored);
     if (
       shown === undefined ||
       shown.threadId !== thread.id ||

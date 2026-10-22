@@ -181,6 +181,7 @@ function fakeRuntime(
     trustMode?: string;
     createdBy?: string;
     threadStatus?: string;
+    childTasks?: unknown;
   } = {},
 ): {
   spawn: SpawnLocalRuntime;
@@ -291,6 +292,9 @@ function fakeRuntime(
                       ...(options.omitTranscriptTruncated === true
                         ? {}
                         : { transcriptTruncated: false }),
+                      ...(options.childTasks === undefined
+                        ? {}
+                        : { childTasks: options.childTasks }),
                     }
                   : method === 'turn/start' || method === 'turn/steer'
                     ? { turn: { id: 'turn-1', threadId: 'thread-1', status: 'running' } }
@@ -1215,6 +1219,36 @@ describe('LocalRuntimeClient', () => {
       'thread/archive',
     ]);
     await client.dispose();
+  });
+
+  it('keeps the subagent tasks a thread read reports, and drops a malformed list', async () => {
+    const child = {
+      id: 'subagent_a',
+      parentSessionId: 'thread-1',
+      title: 'Read the tests',
+      state: 'completed',
+    };
+    const runtime = fakeRuntime(8, { childTasks: [child] });
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    expect((await client.readThread('thread-1')).childTasks).toEqual([child]);
+    await client.dispose();
+
+    const malformed = fakeRuntime(8, { childTasks: [{ ...child, state: 'invented' }] });
+    const malformedClient = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: malformed.spawn,
+    });
+    const read = await malformedClient.readThread('thread-1');
+    expect(read.childTasks).toBeUndefined();
+    expect(read.messages).toEqual([{ role: 'user', text: 'Fix it' }]);
+    await malformedClient.dispose();
   });
 
   it('rejects thread history that omits the protocol-v7 truncation signal', async () => {

@@ -361,6 +361,26 @@ const threadReadResponseSchema = z.object({
     )
     .optional()
     .catch(undefined),
+  childTasks: z
+    .array(
+      z.object({
+        id: z.string().max(200),
+        parentSessionId: z.string().max(200),
+        title: z.string().max(400),
+        state: z.enum([
+          'queued',
+          'running',
+          'paused',
+          'awaiting_input',
+          'completed',
+          'cancelled',
+          'failed',
+        ]),
+      }),
+    )
+    .max(50)
+    .optional()
+    .catch(undefined),
 });
 const threadCheckpointsResponseSchema = z.object({
   checkpoints: z

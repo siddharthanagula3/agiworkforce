@@ -7,19 +7,17 @@
  */
 
 import { getBillingPlanPricing, isBillingPlanTier } from '@agiworkforce/types';
-import {
-  DEVELOPER_REASONING_EFFORTS,
-  type DeveloperReasoningEffort,
-} from '@agiworkforce/local-runtime-contract';
+import { DEVELOPER_REASONING_EFFORTS } from '@agiworkforce/local-runtime-contract';
 import * as vscode from 'vscode';
 import {
   enforceAgentModeConsent,
   setAgentEffortWithConsent,
   setAgentModeWithConsent,
+  type ExtensionAgentEffort,
   type ExtensionAgentMode,
 } from '../features/permissions/agentModeConsent';
 
-export type ExtensionAgentEffort = DeveloperReasoningEffort;
+export type { ExtensionAgentEffort };
 export type ComposerFollowUpBehavior = 'queue' | 'steer';
 export type ComposerEnterBehavior = 'enter' | 'modifierIfMultiline' | 'modifier';
 const COMPOSER_ENTER_BEHAVIORS: readonly ComposerEnterBehavior[] = [

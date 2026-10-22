@@ -606,10 +606,7 @@ async fn run_spec_observing(
     };
     let reasoning_effort = match (&support, effort) {
         (crate::model_catalog::EffortSupport::Levels(levels), Some(effort)) => {
-            crate::model_catalog::nearest_supported_effort(
-                &effort.label().to_ascii_lowercase(),
-                levels,
-            )
+            crate::model_catalog::nearest_supported_effort(effort.wire_value(), levels)
         }
         (_, effort) => effort.map(|e| e.openai_effort_str()),
     };

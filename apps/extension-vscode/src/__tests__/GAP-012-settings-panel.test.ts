@@ -259,6 +259,15 @@ describe('SettingsPanel', () => {
     );
   });
 
+  it('opens the web account page from Manage account on Web', async () => {
+    SettingsPanel.createOrShow(context, 'account');
+
+    await webviewMessageHandler!({ type: 'settings.command', command: 'manageAccount' });
+
+    const opened = vi.mocked(vscode.env.openExternal).mock.calls.at(-1)?.[0];
+    expect(String(opened)).toMatch(/\/settings\/account\?from=vscode-extension$/u);
+  });
+
   it('publishes the cleared account state when a concurrent refresh invalidates the token', async () => {
     vi.spyOn(accountApi, 'getAccountAuthState')
       .mockResolvedValueOnce({ status: 'signed-in' })

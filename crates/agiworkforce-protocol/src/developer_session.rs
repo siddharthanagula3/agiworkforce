@@ -1517,15 +1517,52 @@ pub fn negotiate_developer_session_protocol(requested: Option<u32>) -> Developer
     }
 }
 
-/// Reasoning control supported by the current CLI developer runtime.
+/// Reasoning control supported by the current CLI developer runtime: the
+/// shared effort ladder, least first. The runtime maps a level a model does
+/// not take to the nearest one it does.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(rename_all = "snake_case")]
 pub enum DeveloperReasoningEffort {
+    None,
+    Minimal,
     Low,
     Medium,
     High,
+    Xhigh,
     Max,
+}
+
+impl DeveloperReasoningEffort {
+    pub const ALL: [DeveloperReasoningEffort; 7] = [
+        DeveloperReasoningEffort::None,
+        DeveloperReasoningEffort::Minimal,
+        DeveloperReasoningEffort::Low,
+        DeveloperReasoningEffort::Medium,
+        DeveloperReasoningEffort::High,
+        DeveloperReasoningEffort::Xhigh,
+        DeveloperReasoningEffort::Max,
+    ];
+
+    /// The wire spelling, which is also the persisted config value.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            DeveloperReasoningEffort::None => "none",
+            DeveloperReasoningEffort::Minimal => "minimal",
+            DeveloperReasoningEffort::Low => "low",
+            DeveloperReasoningEffort::Medium => "medium",
+            DeveloperReasoningEffort::High => "high",
+            DeveloperReasoningEffort::Xhigh => "xhigh",
+            DeveloperReasoningEffort::Max => "max",
+        }
+    }
+
+    pub fn parse(raw: &str) -> Option<DeveloperReasoningEffort> {
+        let raw = raw.trim();
+        Self::ALL
+            .into_iter()
+            .find(|effort| effort.as_str().eq_ignore_ascii_case(raw))
+    }
 }
 
 /// Canonical Auto-routing task attached by a presentation client to a local
@@ -4213,6 +4250,25 @@ mod tests {
         AGENT_EVENT_SCHEMA_VERSION, AgentEvent, AgentEventToolCategory,
         AgentEventToolExecutionStart,
     };
+
+    #[test]
+    fn reasoning_effort_wire_spelling_is_the_serde_spelling() {
+        for effort in DeveloperReasoningEffort::ALL {
+            assert_eq!(
+                serde_json::to_value(effort).unwrap(),
+                serde_json::json!(effort.as_str())
+            );
+            assert_eq!(
+                DeveloperReasoningEffort::parse(effort.as_str()),
+                Some(effort)
+            );
+        }
+        assert_eq!(
+            DeveloperReasoningEffort::parse(" XHigh "),
+            Some(DeveloperReasoningEffort::Xhigh)
+        );
+        assert_eq!(DeveloperReasoningEffort::parse("ultra"), None);
+    }
 
     #[test]
     fn basic_worktree_wire_shapes_remain_unchanged() {

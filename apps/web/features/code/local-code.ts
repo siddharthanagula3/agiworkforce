@@ -327,7 +327,7 @@ export function localSessionStatusLabel(status: ThreadStatus): string | null {
 export const LOCAL_AGENT_MODE_HINTS: Record<DeveloperAgentMode, string> = {
   plan: 'Reads and plans. Changes nothing.',
   ask: 'Asks before each edit or command.',
-  auto: 'Edits files in this folder and runs safe commands without asking. Asks before anything else, such as changing git hooks or MCP servers.',
+  auto: 'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
   bypass: 'Does everything without asking, changes to git hooks and MCP servers included.',
 };
 

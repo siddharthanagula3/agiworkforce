@@ -89,7 +89,7 @@ describe('AGI Cloud account presentation', () => {
 
     expect(items.map((item) => item.label)).toEqual([
       'Trust & review',
-      '$(shield) Autonomy: Edit automatically',
+      '$(shield) Autonomy: Auto',
       '$(warning) Review generated code and commands',
       '$(lock) Developer-session boundary: shown in chat',
       '$(eye) Privacy & data controls',

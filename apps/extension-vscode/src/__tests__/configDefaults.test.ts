@@ -116,15 +116,18 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     );
   });
 
-  it('describes Auto mode using the runtime safe-tool approval boundary', () => {
+  it('describes Auto mode by what the CLI runs without asking under it', () => {
     const description = pkgSettings['agiWorkforce.agent.mode']?.description ?? '';
     const commandSetup = fs.readFileSync(
       path.resolve(__dirname, '../core/commandSetup.ts'),
       'utf8',
     );
 
-    expect(description).toContain('safe, read-only');
-    expect(description).toContain('writes and commands still require approval');
+    expect(description).toContain('reads and edits files without asking');
+    expect(description).toContain(
+      'running commands and changing git hooks or MCP settings still ask first',
+    );
+    expect(description).not.toContain('writes and commands still require approval');
     expect(commandSetup).not.toContain('Edits run without confirmation');
   });
 
