@@ -20,8 +20,11 @@ import {
   resolveConnectorAccessToken,
 } from '@/lib/connectors/oauth-access';
 import { GOOGLE_DRIVE_CONNECTOR_ID } from '@/lib/connectors/google-drive-files';
-import { canCreateDriveFiles } from '@/lib/connectors/google-docs-export';
-import { DriveFileUploadError, uploadDriveFile } from './upload';
+import {
+  GoogleDocsExportError,
+  canCreateDriveFiles,
+  uploadDriveFile,
+} from '@/lib/connectors/google-docs-export';
 
 export const runtime = 'nodejs';
 
@@ -85,7 +88,7 @@ async function handleSave(request: NextRequest): Promise<Response> {
       { status: 201 },
     );
   } catch (error) {
-    if (error instanceof DriveFileUploadError) {
+    if (error instanceof GoogleDocsExportError) {
       throw createError.conflict(error.message);
     }
     throw error;

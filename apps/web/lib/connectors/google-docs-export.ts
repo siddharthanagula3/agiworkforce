@@ -26,22 +26,24 @@ export function canCreateDriveFiles(grantedScopes: readonly string[]): boolean {
   );
 }
 
-export async function createGoogleDocFromDocx(
+export async function uploadDriveFile(
   accessToken: string,
-  name: string,
-  docx: Uint8Array,
-): Promise<{ id: string; webViewLink: string }> {
+  file: { name: string; mimeType: string; bytes: Uint8Array; convertTo?: string },
+): Promise<{ id: string; webViewLink?: string }> {
   const boundary = `agi-${crypto.randomUUID()}`;
-  const metadata = JSON.stringify({ name, mimeType: GOOGLE_DOC_MIME });
+  const metadata = JSON.stringify({
+    name: file.name,
+    ...(file.convertTo ? { mimeType: file.convertTo } : {}),
+  });
   const encoder = new TextEncoder();
   const head = encoder.encode(
-    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${DOCX_MIME}\r\n\r\n`,
+    `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadata}\r\n--${boundary}\r\nContent-Type: ${file.mimeType}\r\n\r\n`,
   );
   const tail = encoder.encode(`\r\n--${boundary}--`);
-  const body = new Uint8Array(head.byteLength + docx.byteLength + tail.byteLength);
+  const body = new Uint8Array(head.byteLength + file.bytes.byteLength + tail.byteLength);
   body.set(head, 0);
-  body.set(docx, head.byteLength);
-  body.set(tail, head.byteLength + docx.byteLength);
+  body.set(file.bytes, head.byteLength);
+  body.set(tail, head.byteLength + file.bytes.byteLength);
 
   const url = new URL(DRIVE_UPLOAD_URL);
   url.searchParams.set('uploadType', 'multipart');
@@ -58,14 +60,28 @@ export async function createGoogleDocFromDocx(
   if (!response.ok) {
     throw new GoogleDocsExportError(
       response.status === 403 || response.status === 401
-        ? 'Google Drive did not allow creating a document. Reconnect Google Drive and allow it to create files.'
-        : 'Google Drive could not create the document. Try again.',
+        ? 'Google Drive did not allow creating a file. Reconnect Google Drive and allow it to create files.'
+        : 'Google Drive could not save the file. Try again.',
       response.status,
     );
   }
   const created = (await response.json()) as { id?: string; webViewLink?: string };
   if (!created.id)
-    throw new GoogleDocsExportError('Google Drive did not return the new document.', 502);
+    throw new GoogleDocsExportError('Google Drive did not return the new file.', 502);
+  return { id: created.id, ...(created.webViewLink ? { webViewLink: created.webViewLink } : {}) };
+}
+
+export async function createGoogleDocFromDocx(
+  accessToken: string,
+  name: string,
+  docx: Uint8Array,
+): Promise<{ id: string; webViewLink: string }> {
+  const created = await uploadDriveFile(accessToken, {
+    name,
+    mimeType: DOCX_MIME,
+    bytes: docx,
+    convertTo: GOOGLE_DOC_MIME,
+  });
   return {
     id: created.id,
     webViewLink:
