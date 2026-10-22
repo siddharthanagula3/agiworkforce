@@ -302,6 +302,7 @@ describe('clearLocalCloudAccountState', () => {
       referencePastChats: false,
       generateMemoryFromHistory: true,
       memoryPolicyInitialized: false,
+      connectorDiscoveryEnabled: true,
       personalization: {
         fullName: '',
         nickname: '',

@@ -11,6 +11,7 @@ const DEFAULT_CLOUD_SETTINGS = {
   referencePastChats: false,
   generateMemoryFromHistory: true,
   memoryPolicyInitialized: false,
+  connectorDiscoveryEnabled: true,
   personalization: {
     fullName: '',
     nickname: '',
