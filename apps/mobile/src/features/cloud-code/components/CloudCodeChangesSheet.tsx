@@ -37,9 +37,14 @@ import {
   CLOUD_CODE_CHANGES_COPY as COPY,
   CLOUD_CODE_CHANGE_STATE_LABELS,
   cloudCodeCommitChosenLabel,
+  cloudCodeChangeTotals,
   cloudCodeDiffByPath,
   cloudCodeDiffLineKind,
+  cloudCodeFilesChangedLabel,
+  cloudCodeLineCountsByPath,
+  type CloudCodeLineCounts,
 } from '../presentation';
+import { CloudCodeLineCountsText } from './CloudCodeChangesCard';
 import type { CloudCodeChangesView } from '../useCloudCodeChanges';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 
@@ -133,6 +138,7 @@ function ChangedFile({
   path,
   state,
   body,
+  counts,
   included,
   busy,
   onIncludedChange,
@@ -141,6 +147,7 @@ function ChangedFile({
   path: string;
   state: string;
   body: string | undefined;
+  counts: CloudCodeLineCounts | undefined;
   included: boolean;
   busy: boolean;
   onIncludedChange: (included: boolean) => void;
@@ -189,11 +196,12 @@ function ChangedFile({
           <Text
             variant="mono"
             numberOfLines={1}
-            ellipsizeMode="middle"
+            ellipsizeMode="head"
             style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.footnote }}
           >
             {path}
           </Text>
+          {counts ? <CloudCodeLineCountsText counts={counts} /> : null}
           {body ? (
             <View style={{ transform: [{ rotate: expanded ? '90deg' : '0deg' }] }}>
               <ChevronRight size={14} color={colors.textMuted} />
@@ -323,6 +331,11 @@ export function CloudCodeChangesSheet({
   const workingBranch = changes?.workingBranch ?? session.workingBranch;
   const base = session.baseBranch ?? changes?.base ?? session.repositoryBranch;
   const diffs = useMemo(() => cloudCodeDiffByPath(changes?.diff ?? ''), [changes?.diff]);
+  const lineCounts = useMemo(() => cloudCodeLineCountsByPath(changes?.diff ?? ''), [changes?.diff]);
+  const totals = useMemo(
+    () => cloudCodeChangeTotals(changes?.files ?? [], changes?.diff ?? ''),
+    [changes?.files, changes?.diff],
+  );
   const changedPaths = changes?.files.map((file) => file.path) ?? [];
   const includedPaths = changedPaths.filter((path) => !excluded.has(path));
   const choosingFiles = includedPaths.length < changedPaths.length;
@@ -433,6 +446,31 @@ export function CloudCodeChangesSheet({
             </IconButton>
           </View>
 
+          {changes && changes.files.length > 0 ? (
+            <View
+              testID="cloud-code-changes-totals"
+              style={{
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: 10,
+                marginBottom: 8,
+              }}
+            >
+              <Text
+                accessibilityRole="header"
+                style={{
+                  color: colors.textPrimary,
+                  fontSize: typeScale.callout,
+                  fontWeight: '600',
+                }}
+              >
+                {cloudCodeFilesChangedLabel(totals.files)}
+              </Text>
+              <CloudCodeLineCountsText counts={totals} />
+            </View>
+          ) : null}
+
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ gap: 18, paddingBottom: 32 }}
@@ -472,6 +510,7 @@ export function CloudCodeChangesSheet({
                     path={file.path}
                     state={CLOUD_CODE_CHANGE_STATE_LABELS[file.state]}
                     body={diffs.get(file.path)}
+                    counts={lineCounts.get(file.path)}
                     included={!excluded.has(file.path)}
                     busy={busy || !committable}
                     onIncludedChange={(included) => setIncluded(file.path, included)}

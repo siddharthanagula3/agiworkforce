@@ -135,3 +135,96 @@ export function cloudCodeDiffLineKind(line: string): CloudCodeDiffLineKind {
   if (line.startsWith('-')) return 'removed';
   return 'context';
 }
+
+export interface CloudCodeLineCounts {
+  added: number;
+  removed: number;
+}
+
+export interface CloudCodeChangeTotals extends CloudCodeLineCounts {
+  files: number;
+}
+
+export const CLOUD_CODE_MINUS_SIGN = '−';
+
+export function cloudCodeDiffLineCounts(diff: string): CloudCodeLineCounts {
+  let added = 0;
+  let removed = 0;
+  let inHunk = false;
+  for (const line of diff.split('\n')) {
+    if (line.startsWith('diff --git ')) inHunk = false;
+    else if (line.startsWith('@@')) inHunk = true;
+    else if (inHunk && line.startsWith('+')) added += 1;
+    else if (inHunk && line.startsWith('-')) removed += 1;
+  }
+  return { added, removed };
+}
+
+export function cloudCodeLineCountsByPath(diff: string): Map<string, CloudCodeLineCounts> {
+  const counts = new Map<string, CloudCodeLineCounts>();
+  for (const [path, section] of cloudCodeDiffByPath(diff)) {
+    counts.set(path, cloudCodeDiffLineCounts(section));
+  }
+  return counts;
+}
+
+export function cloudCodeChangeTotals(
+  files: ReadonlyArray<{ path: string }>,
+  diff: string,
+): CloudCodeChangeTotals {
+  const totals: CloudCodeChangeTotals = { files: files.length, added: 0, removed: 0 };
+  const counts = cloudCodeLineCountsByPath(diff);
+  for (const file of files) {
+    const own = counts.get(file.path);
+    if (!own) continue;
+    totals.added += own.added;
+    totals.removed += own.removed;
+  }
+  return totals;
+}
+
+const THOUSAND = 1_000;
+const MILLION = 1_000_000;
+const THOUSAND_ROUNDS_UP_AT = 999_950;
+
+function trimmedDecimal(value: number): string {
+  return value.toFixed(1).replace(/\.0$/, '');
+}
+
+export function cloudCodeCompactCount(count: number): string {
+  if (count < THOUSAND) return String(count);
+  if (count < THOUSAND_ROUNDS_UP_AT) return `${trimmedDecimal(count / THOUSAND)}K`;
+  return `${trimmedDecimal(count / MILLION)}M`;
+}
+
+export function cloudCodeAddedLabel(count: number): string {
+  return `+${cloudCodeCompactCount(count)}`;
+}
+
+export function cloudCodeRemovedLabel(count: number): string {
+  return `${CLOUD_CODE_MINUS_SIGN}${cloudCodeCompactCount(count)}`;
+}
+
+export function cloudCodeFileCountLabel(count: number): string {
+  return count === 1 ? '1 file' : `${count} files`;
+}
+
+export function cloudCodeFilesChangedLabel(count: number): string {
+  return `${cloudCodeFileCountLabel(count)} changed`;
+}
+
+export function cloudCodeViewMoreFilesLabel(remaining: number): string {
+  return `View ${remaining} more ${remaining === 1 ? 'file' : 'files'}`;
+}
+
+export function cloudCodeChangeCountsLabel({ added, removed }: CloudCodeLineCounts): string {
+  return `${added} lines added, ${removed} lines removed`;
+}
+
+export const CLOUD_CODE_CHANGES_CARD_PREVIEW_ROWS = 3;
+
+export const CLOUD_CODE_REPLY_COPY = Object.freeze({
+  actions: 'Reply actions',
+  copy: 'Copy reply',
+  share: 'Share reply',
+});

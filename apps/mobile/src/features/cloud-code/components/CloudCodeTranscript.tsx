@@ -1,8 +1,8 @@
 import { useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, Alert, Share, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
-import { ChevronRight } from 'lucide-react-native';
-import type { CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
+import { Check, ChevronRight, Copy, Share2, TriangleAlert } from 'lucide-react-native';
+import type { CloudCodeChanges, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 import {
   CLOUD_CODE_SESSION_COPY,
   CLOUD_CODE_STOP_REASON_LABELS,
@@ -14,12 +14,18 @@ import {
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { CLOUD_CODE_REPLY_COPY } from '../presentation';
+import { CloudCodeChangesCard } from './CloudCodeChangesCard';
 
 const EXIT_CODE_OK = 0;
 const CHEVRON_SIZE = 14;
 const EXPANDED_ROTATION = '90deg';
+const REPLY_ACTION_ICON_SIZE = 16;
+const SHARE_FAILED_TITLE = 'Could not share';
+const SHARE_FAILED_BODY = 'Sharing is not available right now. Try again, or copy the reply.';
 
 function firstLine(output: string): string {
   return output.split('\n')[0]?.trim() ?? '';
@@ -198,6 +204,69 @@ export function CloudCodeTaskBubble({ text }: { text: string }) {
   );
 }
 
+function ReplyActionButton({
+  label,
+  icon: Icon,
+  color,
+  onPress,
+}: {
+  label: string;
+  icon: typeof Copy;
+  color: string;
+  onPress: () => void;
+}) {
+  return (
+    <PressableBox
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      hitSlop={4}
+      style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
+    >
+      <Icon size={REPLY_ACTION_ICON_SIZE} color={color} />
+    </PressableBox>
+  );
+}
+
+function ReplyActions({ text }: { text: string }) {
+  const colors = useThemeColors();
+  const { status, copy } = useCopyAction();
+  const copyColor =
+    status === 'copied'
+      ? colors.agentSuccess
+      : status === 'failed'
+        ? colors.agentError
+        : colors.textMuted;
+
+  const share = async () => {
+    try {
+      await Share.share({ message: text });
+    } catch {
+      Alert.alert(SHARE_FAILED_TITLE, SHARE_FAILED_BODY);
+    }
+  };
+
+  return (
+    <View
+      accessibilityLabel={CLOUD_CODE_REPLY_COPY.actions}
+      style={{ flexDirection: 'row', alignItems: 'center', marginLeft: -10 }}
+    >
+      <ReplyActionButton
+        label={copyControlLabel(status, CLOUD_CODE_REPLY_COPY.copy)}
+        icon={status === 'copied' ? Check : status === 'failed' ? TriangleAlert : Copy}
+        color={copyColor}
+        onPress={() => void copy(text)}
+      />
+      <ReplyActionButton
+        label={CLOUD_CODE_REPLY_COPY.share}
+        icon={Share2}
+        color={colors.textMuted}
+        onPress={() => void share()}
+      />
+    </View>
+  );
+}
+
 function Reply({
   text,
   stopReason,
@@ -220,6 +289,7 @@ function Reply({
           {CLOUD_CODE_STOP_REASON_LABELS[stopReason]}
         </Text>
       ) : null}
+      {text.trim() ? <ReplyActions text={text} /> : null}
     </View>
   );
 }
@@ -243,7 +313,15 @@ export function CloudCodeWorkingRow({
   );
 }
 
-export function CloudCodeTranscript({ items }: { items: CodeTranscriptItem[] }) {
+export function CloudCodeTranscript({
+  items,
+  changes,
+  onOpenChanges,
+}: {
+  items: CodeTranscriptItem[];
+  changes?: CloudCodeChanges | null;
+  onOpenChanges?: () => void;
+}) {
   return (
     <View style={{ gap: 14 }}>
       {items.map((item) => {
@@ -260,6 +338,9 @@ export function CloudCodeTranscript({ items }: { items: CodeTranscriptItem[] }) 
         }
         return <Reply key={item.id} text={item.text} stopReason={item.stopReason} />;
       })}
+      {changes && onOpenChanges ? (
+        <CloudCodeChangesCard changes={changes} onOpen={onOpenChanges} />
+      ) : null}
     </View>
   );
 }
