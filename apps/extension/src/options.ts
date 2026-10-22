@@ -1326,7 +1326,7 @@ function buildPage(): void {
     el(
       'p',
       { class: 'opt-allowlist-help' },
-      'Approve the current site to use its page assistant. Browser control requires a separate confirmation. You can remove access here at any time.',
+      'Approve a site so the assistant can act on it, and remove it any time.',
     ),
   );
 

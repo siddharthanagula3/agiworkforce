@@ -115,6 +115,7 @@ import { buildTasksSheet } from './features/side-panel/tasksSheet';
 import { buildPhoneSheet } from './features/side-panel/phoneSheet';
 import { SIDE_PANEL_PORT_NAME } from './features/side-panel/panelPresence';
 import { OPTIONS_DESTINATION, openOptionsDestination } from './features/side-panel/optionsLinks';
+import { compactAge } from './features/side-panel/compactAge';
 import { scheduleDraftFromChat, stageScheduleDraft } from './features/side-panel/schedulesSection';
 import {
   refreshManagedCloudRecentHistory,
@@ -265,6 +266,7 @@ import {
   Loader2,
   Folder,
   ArrowUp,
+  ExternalLink,
   Clock,
   Monitor,
   Globe,
@@ -3934,13 +3936,6 @@ function injectStyles(): void {
     #sp-bridge-notice-reconnect:hover {
       background: color-mix(in srgb, var(--agi-ext-danger) 12%, transparent);
     }
-       immediate effect until the desktop bridge is connected. */
-    .sp-model-selector-wrap.bridge-offline #sp-model-selector-btn {
-      opacity: 0.45;
-      cursor: default;
-      pointer-events: none;
-    }
-
     /* ── Tab bar ── */
     #sp-tab-bar {
       display: flex;
@@ -4148,8 +4143,10 @@ function injectStyles(): void {
       color: var(--agi-ext-text-muted);
     }
     .sp-drawer-history-open:disabled:hover { background: transparent; }
-    .sp-drawer-history-text { flex: 1; min-width: 0; }
+    .sp-drawer-history-text { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; }
     .sp-drawer-history-title {
+      flex: 1 1 auto;
+      min-width: 0;
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
       color: var(--agi-ext-text);
@@ -4157,7 +4154,7 @@ function injectStyles(): void {
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .sp-drawer-history-date { font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); margin-top: 1px; }
+    .sp-drawer-history-date { flex-shrink: 0; white-space: nowrap; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); }
     .sp-drawer-history-item { position: relative; flex-wrap: wrap; }
     .sp-drawer-history-open[hidden] { display: none; }
     .sp-drawer-history-more-wrap { position: relative; flex-shrink: 0; margin-right: 4px; }
@@ -4207,6 +4204,13 @@ function injectStyles(): void {
     .sp-history-menu-item:hover,
     .sp-history-menu-item:focus-visible { background: var(--agi-ext-hover); }
     .sp-history-menu-item.is-danger { color: var(--agi-ext-danger-text); }
+    .sp-history-menu-item.has-external-mark {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .sp-history-menu-item .sp-external-mark { color: var(--agi-ext-text-muted); }
     .sp-drawer-history-edit { display: flex; flex: 1 1 100%; align-items: center; gap: 6px; padding: 6px 8px; }
     .sp-drawer-history-edit-input {
       flex: 1;
@@ -4426,6 +4430,7 @@ function injectStyles(): void {
       justify-content: center;
     }
     .sp-attach-btn:hover,
+    .sp-attach-btn[aria-expanded='true'],
     #sp-mic-btn:hover {
       border-color: transparent;
       background: var(--agi-ext-hover);
@@ -9932,6 +9937,28 @@ function buildUI(): void {
     return '';
   }
 
+  function formatCompactHistoryAge(ts: number): string {
+    const age = compactAge(Date.now() - ts);
+    switch (age.unit) {
+      case 'now':
+        return t('spAgeNow');
+      case 'minute':
+        return t('spAgeMinutes', [String(age.value)]);
+      case 'hour':
+        return t('spAgeHours', [String(age.value)]);
+      case 'day':
+        return t('spAgeDays', [String(age.value)]);
+      case 'week':
+        return t('spAgeWeeks', [String(age.value)]);
+      case 'date':
+        return new Intl.DateTimeFormat(undefined, {
+          month: 'short',
+          day: 'numeric',
+          ...(new Date(ts).getFullYear() === new Date().getFullYear() ? {} : { year: 'numeric' }),
+        }).format(ts);
+    }
+  }
+
   function historyActivityAt(entry: ConversationEntry): number {
     const remote = Date.parse(entry.cloudSync?.remoteUpdatedAt ?? '');
     if (!Number.isFinite(remote)) return entry.savedAt;
@@ -10123,11 +10150,15 @@ function buildUI(): void {
       run: () => openOptionsDestination(OPTIONS_DESTINATION.help),
     },
   ];
-  const openChatInWebItem = el(
-    'button',
-    { type: 'button', role: 'menuitem', class: 'sp-history-menu-item' },
-    t('spHistoryOpenInWeb'),
-  );
+  const buildExternalMenuRow = (label: string, ...trailing: Node[]): HTMLButtonElement =>
+    el(
+      'button',
+      { type: 'button', role: 'menuitem', class: 'sp-history-menu-item has-external-mark' },
+      el('span', {}, label),
+      ...trailing,
+      renderIcon(ExternalLink, 14, 'sp-external-mark'),
+    );
+  const openChatInWebItem = buildExternalMenuRow(t('spHistoryOpenInWeb'));
   const memorySheet = buildMemorySheet({
     send: (message) => chrome.runtime.sendMessage(message),
     openWeb: (path) => void chrome.tabs.create({ url: agiWebUrl(path) }),
@@ -10149,16 +10180,22 @@ function buildUI(): void {
     moreHandle.close();
     void chrome.tabs.create({ url: agiWebUrl(path) });
   };
-  const accountMenuItem = (label: string, run: () => void, danger = false): HTMLElement => {
-    const row = el(
-      'button',
-      {
-        type: 'button',
-        role: 'menuitem',
-        class: danger ? 'sp-history-menu-item is-danger' : 'sp-history-menu-item',
-      },
-      label,
-    );
+  const accountMenuItem = (
+    label: string,
+    run: () => void,
+    { danger = false, external = false } = {},
+  ): HTMLElement => {
+    const row = external
+      ? buildExternalMenuRow(label)
+      : el(
+          'button',
+          {
+            type: 'button',
+            role: 'menuitem',
+            class: danger ? 'sp-history-menu-item is-danger' : 'sp-history-menu-item',
+          },
+          label,
+        );
     row.addEventListener('click', run);
     return row;
   };
@@ -10188,8 +10225,10 @@ function buildUI(): void {
     }
     accountBlock.appendChild(header);
     accountBlock.appendChild(
-      accountMenuItem(t('spAccountSettings'), () =>
-        openWebFromMenu('/settings?from=chrome-extension'),
+      accountMenuItem(
+        t('spAccountSettings'),
+        () => openWebFromMenu('/settings?from=chrome-extension'),
+        { external: true },
       ),
     );
     const freePlan = isFreeBillingPlanTier(normalizeBillingPlanTier(identity.planTier));
@@ -10197,8 +10236,10 @@ function buildUI(): void {
       const percent = Math.round(
         Math.max(0, ...usageWindowViews(managedModelAccess.usage).map((view) => view.usedPercent)),
       );
-      const usageRow = accountMenuItem(t('spAccountUsage'), () =>
-        openWebFromMenu('/settings/usage?from=chrome-extension'),
+      const usageRow = accountMenuItem(
+        t('spAccountUsage'),
+        () => openWebFromMenu('/settings/usage?from=chrome-extension'),
+        { external: true },
       );
       usageRow.classList.add('sp-more-usage');
       usageRow.setAttribute('aria-label', t('spAccountUsageUsed', [String(percent)]));
@@ -10206,7 +10247,10 @@ function buildUI(): void {
       const fill = el('span', { class: 'sp-more-usage-fill' });
       fill.style.width = `${Math.min(100, percent)}%`;
       meter.appendChild(fill);
-      usageRow.append(meter, el('span', { class: 'sp-more-usage-percent' }, `${percent}%`));
+      usageRow.children[0]?.after(
+        meter,
+        el('span', { class: 'sp-more-usage-percent' }, `${percent}%`),
+      );
       accountBlock.appendChild(usageRow);
     }
     accountBlock.appendChild(
@@ -10223,8 +10267,10 @@ function buildUI(): void {
     );
     if (identity.planTier && getNextUpgradeTier(identity.planTier) !== null) {
       accountBlock.appendChild(
-        accountMenuItem(t('spAccountUpgrade'), () =>
-          openWebFromMenu('/pricing?from=chrome-extension'),
+        accountMenuItem(
+          t('spAccountUpgrade'),
+          () => openWebFromMenu('/pricing?from=chrome-extension'),
+          { external: true },
         ),
       );
     }
@@ -10240,7 +10286,7 @@ function buildUI(): void {
         .catch(() => showTitleStatus(t('spAccountLogOutFailed')))
         .finally(() => void refreshCloudAccountUI(true));
     },
-    true,
+    { danger: true },
   );
   menuBtn.addEventListener(
     'click',
@@ -10263,11 +10309,7 @@ function buildUI(): void {
     true,
   );
   for (const destination of moreMenuDestinations) {
-    const row = el(
-      'button',
-      { type: 'button', role: 'menuitem', class: 'sp-history-menu-item' },
-      destination.label,
-    );
+    const row = buildExternalMenuRow(destination.label);
     row.addEventListener('click', () => {
       moreHandle.close();
       destination.run();
@@ -10836,7 +10878,10 @@ function buildUI(): void {
         class: 'sp-drawer-history-open',
         type: 'button',
         'data-conversation-restore': 'true',
-        'aria-label': t('spHistoryOpenChat', [entry.title]),
+        'aria-label': t('spHistoryOpenChat', [
+          entry.title,
+          formatHistoryDate(historyActivityAt(entry)),
+        ]),
         ...(active ? { 'aria-current': 'page' } : {}),
       }) as HTMLButtonElement;
       openButton.disabled = _ctx.isStreaming || historyRestoreInProgress;
@@ -10856,10 +10901,13 @@ function buildUI(): void {
       const title = el('div', { class: 'sp-drawer-history-title' }, entry.title);
       const date = el(
         'div',
-        { class: 'sp-drawer-history-date' },
+        {
+          class: 'sp-drawer-history-date',
+          title: formatHistoryDate(historyActivityAt(entry)),
+        },
         [
           entry.pinned ? t('spHistoryPinnedMarker') : '',
-          formatHistoryDate(historyActivityAt(entry)),
+          formatCompactHistoryAge(historyActivityAt(entry)),
         ]
           .filter(Boolean)
           .join(' · '),
@@ -13306,15 +13354,11 @@ function buildUI(): void {
 
   const bridgeNotice = el('div', { id: 'sp-bridge-notice' });
   const bridgeNoticeDot = el('span', { id: 'sp-bridge-notice-dot' });
-  const bridgeNoticeText = el(
-    'span',
-    { id: 'sp-bridge-notice-text' },
-    'Desktop tools are optional and currently disconnected',
-  );
+  const bridgeNoticeText = el('span', { id: 'sp-bridge-notice-text' }, t('spBridgeNoticeText'));
   const bridgeNoticeReconnect = el(
     'button',
     { id: 'sp-bridge-notice-reconnect', type: 'button' },
-    'Reconnect',
+    t('spBridgeNoticeReconnect'),
   );
   bridgeNoticeReconnect.addEventListener('click', () => {
     chrome.runtime

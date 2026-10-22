@@ -888,12 +888,16 @@
     "description": "Shown in the recent chats list when the search matches nothing."
   },
   "spHistoryOpenChat": {
-    "message": "Open chat: $TITLE$",
-    "description": "Accessible name of a recent chat row.",
+    "message": "Open chat: $TITLE$, $AGE$",
+    "description": "Accessible name of a recent chat row, with its long-form age.",
     "placeholders": {
       "title": {
         "content": "$1",
         "example": "Plan the Denver trip"
+      },
+      "age": {
+        "content": "$2",
+        "example": "3 days ago"
       }
     }
   },
@@ -2560,6 +2564,58 @@
   "spHistoryUnpinned": {
     "message": "Chat unpinned.",
     "description": "Confirms a chat was unpinned"
+  },
+  "spAgeNow": {
+    "message": "now",
+    "description": "Compact age of a recent chat touched under a minute ago"
+  },
+  "spAgeMinutes": {
+    "message": "$COUNT$m",
+    "description": "Compact age of a recent chat in minutes",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "5"
+      }
+    }
+  },
+  "spAgeHours": {
+    "message": "$COUNT$h",
+    "description": "Compact age of a recent chat in hours",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spAgeDays": {
+    "message": "$COUNT$d",
+    "description": "Compact age of a recent chat in days",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "2"
+      }
+    }
+  },
+  "spAgeWeeks": {
+    "message": "$COUNT$w",
+    "description": "Compact age of a recent chat in weeks",
+    "placeholders": {
+      "count": {
+        "content": "$1",
+        "example": "3"
+      }
+    }
+  },
+  "spBridgeNoticeText": {
+    "message": "Desktop tools are optional and currently disconnected.",
+    "description": "Notice above the composer while the desktop bridge is disconnected"
+  },
+  "spBridgeNoticeReconnect": {
+    "message": "Reconnect",
+    "description": "Button in the disconnected desktop notice that retries the bridge connection"
   },
   "spHistoryPinnedMarker": {
     "message": "Pinned",
