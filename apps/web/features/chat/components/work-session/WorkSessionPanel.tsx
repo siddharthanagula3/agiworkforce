@@ -2,6 +2,7 @@
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  Brain,
   ChartColumn,
   CheckCircle2,
   ChevronRight,
@@ -15,11 +16,16 @@ import {
   Info,
   Monitor,
   PanelRight,
-  Puzzle,
   Sparkles,
+  SquareTerminal,
   X,
   type LucideIcon,
 } from 'lucide-react';
+import type {
+  AgentActivityEntry,
+  AgentActivityState,
+  AgentActivityToolEntry,
+} from '@agiworkforce/client-runtime';
 import { Button } from '@agiworkforce/ui';
 import {
   agiWorkPlanSentence,
@@ -53,9 +59,13 @@ import {
   CHAT_DOCK_FALLBACK_TITLE,
   CHAT_DOCK_PANEL_LABEL,
   TASK_DOCK_ARTIFACTS_LABEL,
+  TASK_DOCK_BROWSER_ACTIVE,
+  TASK_DOCK_CHIPS_OVERFLOW_LABEL,
+  TASK_DOCK_CONNECTORS_LABEL,
   TASK_DOCK_CONTEXT_EMPTY,
   TASK_DOCK_CONTEXT_LABEL,
   TASK_DOCK_FALLBACK_TITLE,
+  TASK_DOCK_KNOWLEDGE_LABEL,
   TASK_DOCK_LABEL,
   TASK_DOCK_OUTPUTS_EMPTY,
   TASK_DOCK_OUTPUTS_LABEL,
@@ -64,6 +74,7 @@ import {
   TASK_DOCK_PROGRESS_LABEL,
   TASK_DOCK_SOURCES_LABEL,
   TASK_DOCK_STEPS_LABEL,
+  TASK_DOCK_TERMINAL_ACTIVE,
 } from '../../lib/agi-work';
 import { useDesktopHost } from '@/features/desktop-host/lib/host';
 import { supportsDirectoryPicker, useCoworkFolderStore } from '@shared/stores/cowork-folder-store';
@@ -74,7 +85,9 @@ import {
 } from '../Composer/ComposerPlusMenu';
 import { OutputsList, useTaskDockSummary } from './OutputsList';
 import {
+  connectorDisplayName,
   type TaskDockContextItem,
+  type TaskDockStep,
   type TaskDockStepStatus,
   type TaskDockSummary,
 } from './taskDockSummary';
@@ -91,6 +104,16 @@ const DOCK_CHEVRON_CLASS =
   'h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none';
 const DOCK_ACTION_CLASS =
   'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none pointer-coarse:h-11 pointer-coarse:w-11';
+const STEP_SUMMARY_CLASS =
+  'flex min-w-0 cursor-pointer list-none items-start gap-2 rounded-md marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden';
+const CHIP_CLASS =
+  'inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full bg-[var(--chat-surface-hover)] px-2.5 py-1 text-sm text-muted-foreground';
+const MAX_STEP_CHIPS = 4;
+const MAX_STACKED_CONNECTOR_MARKS = 3;
+const PLAN_STEP_PROGRESS_ID_PREFIX = 'agiwork:plan:';
+const FILE_INPUT_KEYS = ['file_path', 'path', 'notebook_path'] as const;
+const FILE_EXTENSION_PATTERN = /\.[A-Za-z0-9]+$/;
+const PATH_SEPARATOR_PATTERN = /[\\/]/;
 const CLOSE_ACTION_VERB = 'Close';
 const OPEN_ACTION_VERB = 'Open';
 const PAUSED_STATUS_LABEL = 'Paused';
@@ -174,6 +197,342 @@ function StatusIcon({ status }: { status: TaskDockStepStatus }) {
     return <CircleAlert className="h-3.5 w-3.5 text-warning-text" aria-hidden="true" />;
   }
   return <Circle className="h-3.5 w-3.5 text-muted-foreground" aria-hidden="true" />;
+}
+
+interface StepChip {
+  id: string;
+  kind: 'command' | 'file';
+  label: string;
+  title: string;
+}
+
+interface StepRow {
+  step: TaskDockStep;
+  chips: StepChip[];
+}
+
+interface StepGroup {
+  id: string;
+  header: TaskDockStep | null;
+  rows: StepRow[];
+  connectors: string[];
+}
+
+interface ActiveTool {
+  mode: 'terminal' | 'browser';
+  detail: string;
+}
+
+function inputString(input: unknown, keys: readonly string[]): string | undefined {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
+  const record = input as Record<string, unknown>;
+  for (const key of keys) {
+    const value = record[key];
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return undefined;
+}
+
+function pathBaseName(path: string): string {
+  return path.split(PATH_SEPARATOR_PATTERN).filter(Boolean).pop() ?? path;
+}
+
+function commandOf(entry: AgentActivityToolEntry): string | undefined {
+  const reported = entry.command?.trim();
+  if (reported) return reported;
+  return entry.category === 'shell' ? inputString(entry.input, ['command']) : undefined;
+}
+
+function filePathsOf(entry: AgentActivityToolEntry): Array<{ path: string; title: string }> {
+  if (entry.files?.length) {
+    return entry.files.map((file) => ({ path: file.path, title: `${file.change} ${file.path}` }));
+  }
+  if (entry.category !== 'filesystem') return [];
+  const path = inputString(entry.input, FILE_INPUT_KEYS);
+  return path ? [{ path, title: path }] : [];
+}
+
+function chipsFor(stepId: string, entry: AgentActivityEntry | undefined): StepChip[] {
+  if (entry?.kind !== 'tool') return [];
+  const chips: StepChip[] = [];
+  const command = commandOf(entry);
+  if (command) {
+    chips.push({ id: `${stepId}:command`, kind: 'command', label: command, title: command });
+  }
+  const seen = new Set<string>();
+  for (const file of filePathsOf(entry)) {
+    if (seen.has(file.path)) continue;
+    seen.add(file.path);
+    chips.push({
+      id: `${stepId}:file:${file.path}`,
+      kind: 'file',
+      label: pathBaseName(file.path),
+      title: file.title,
+    });
+  }
+  return chips;
+}
+
+function isPlanStepEntry(entry: AgentActivityEntry | undefined): boolean {
+  return entry?.kind === 'progress' && entry.progressId.startsWith(PLAN_STEP_PROGRESS_ID_PREFIX);
+}
+
+function activityEntriesByStepId(messages: readonly Message[]): Map<string, AgentActivityEntry> {
+  const entries = new Map<string, AgentActivityEntry>();
+  for (const message of messages) {
+    for (const entry of message.metadata?.agentActivity?.entries ?? []) {
+      entries.set(`${message.id}:${entry.id}`, entry);
+    }
+  }
+  return entries;
+}
+
+function groupSteps(steps: readonly TaskDockStep[], messages: readonly Message[]): StepGroup[] {
+  const entries = activityEntriesByStepId(messages);
+  const groups: StepGroup[] = [];
+  let current: StepGroup = { id: 'ungrouped', header: null, rows: [], connectors: [] };
+  const close = () => {
+    if (current.header || current.rows.length > 0) groups.push(current);
+  };
+  for (const step of steps) {
+    const entry = entries.get(step.id);
+    if (isPlanStepEntry(entry)) {
+      close();
+      current = { id: step.id, header: step, rows: [], connectors: [] };
+      continue;
+    }
+    current.rows.push({ step, chips: chipsFor(step.id, entry) });
+    if (entry?.kind === 'tool' && (entry.category === 'connector' || entry.category === 'mcp')) {
+      const name = connectorDisplayName(entry.name, entry.summary);
+      if (name && !current.connectors.includes(name)) current.connectors.push(name);
+    }
+  }
+  close();
+  return groups;
+}
+
+function recalledMemories(output: unknown): string[] {
+  let value = output;
+  if (typeof output === 'string') {
+    try {
+      value = JSON.parse(output);
+    } catch {
+      return [];
+    }
+  }
+  if (!value || typeof value !== 'object') return [];
+  const memories = (value as { memories?: unknown }).memories;
+  if (!Array.isArray(memories)) return [];
+  return memories.filter(
+    (memory): memory is string => typeof memory === 'string' && memory.trim().length > 0,
+  );
+}
+
+function collectRecalledKnowledge(messages: readonly Message[]): string[] {
+  const recalled = new Set<string>();
+  for (const message of messages) {
+    for (const entry of message.metadata?.agentActivity?.entries ?? []) {
+      if (entry.kind !== 'tool' || entry.category !== 'memory' || entry.status !== 'completed') {
+        continue;
+      }
+      for (const memory of recalledMemories(entry.output)) recalled.add(memory.trim());
+    }
+  }
+  return Array.from(recalled);
+}
+
+function activeToolOf(activity: AgentActivityState | null): ActiveTool | null {
+  if (activity?.status !== 'running') return null;
+  for (let index = activity.entries.length - 1; index >= 0; index -= 1) {
+    const entry = activity.entries[index];
+    if (entry?.kind !== 'tool' || entry.status !== 'running') continue;
+    const command = commandOf(entry);
+    if (command) return { mode: 'terminal', detail: command };
+    const url = entry.category === 'web-fetch' ? inputString(entry.input, ['url']) : undefined;
+    return url ? { mode: 'browser', detail: url } : null;
+  }
+  return null;
+}
+
+function isFilePath(path: string): boolean {
+  return FILE_EXTENSION_PATTERN.test(pathBaseName(path));
+}
+
+function StepChips({ chips }: { chips: readonly StepChip[] }) {
+  if (chips.length === 0) return null;
+  const shown = chips.slice(0, MAX_STEP_CHIPS);
+  const hidden = chips.length - shown.length;
+  return (
+    <ul className="mt-1.5 flex flex-wrap gap-1.5" data-testid="task-dock-step-chips">
+      {shown.map((chip) => (
+        <li key={chip.id} className={CHIP_CLASS} title={chip.title}>
+          {chip.kind === 'command' ? (
+            <SquareTerminal className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          ) : (
+            <FileText className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
+          )}
+          <span className={cn('truncate', chip.kind === 'command' && 'font-mono')}>
+            {chip.label}
+          </span>
+        </li>
+      ))}
+      {hidden > 0 && (
+        <li className={CHIP_CLASS}>{`+${hidden} ${TASK_DOCK_CHIPS_OVERFLOW_LABEL}`}</li>
+      )}
+    </ul>
+  );
+}
+
+function ConnectorsChip({ names }: { names: readonly string[] }) {
+  return (
+    <details className="group" data-testid="task-dock-connectors">
+      <summary
+        className={cn(
+          CHIP_CLASS,
+          'cursor-pointer list-none marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11 [&::-webkit-details-marker]:hidden',
+        )}
+      >
+        <span className="flex items-center -space-x-1" aria-hidden="true">
+          {names.slice(0, MAX_STACKED_CONNECTOR_MARKS).map((name) => (
+            <span
+              key={name}
+              className="flex h-5 w-5 items-center justify-center rounded-full bg-[var(--chat-surface-elevated)] text-caption font-semibold text-muted-foreground ring-2 ring-[var(--chat-surface-hover)]"
+            >
+              {name.charAt(0).toUpperCase()}
+            </span>
+          ))}
+        </span>
+        <span>{TASK_DOCK_CONNECTORS_LABEL}</span>
+        <span className="tabular-nums">{names.length}</span>
+        <ChevronRight className={DOCK_CHEVRON_CLASS} aria-hidden="true" />
+      </summary>
+      <ul className="mt-1.5 space-y-1 ps-2 text-sm text-foreground">
+        {names.map((name) => (
+          <li key={name} className="truncate">
+            {name}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function KnowledgeRecalled({ items }: { items: readonly string[] }) {
+  return (
+    <details className="group mt-2" data-testid="task-dock-knowledge">
+      <summary className={cn(STEP_SUMMARY_CLASS, 'items-center')}>
+        <Brain className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
+        <span className="text-sm text-foreground">{TASK_DOCK_KNOWLEDGE_LABEL}</span>
+        <span className="text-sm tabular-nums text-muted-foreground">{items.length}</span>
+        <ChevronRight className={DOCK_CHEVRON_CLASS} aria-hidden="true" />
+      </summary>
+      <ul className="mt-1.5 space-y-1.5 ps-5">
+        {items.map((item) => (
+          <li key={item} className="line-clamp-3 text-sm text-muted-foreground">
+            {item}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
+
+function ActiveToolHeader({ tool }: { tool: ActiveTool }) {
+  const Icon = tool.mode === 'terminal' ? SquareTerminal : Globe;
+  return (
+    <div
+      className="mt-2 rounded-lg bg-[var(--chat-surface-hover)] px-3 py-2"
+      data-testid="task-dock-active-tool"
+    >
+      <p className="flex items-center gap-2 text-sm font-medium text-foreground">
+        <Icon className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+        {tool.mode === 'terminal' ? TASK_DOCK_TERMINAL_ACTIVE : TASK_DOCK_BROWSER_ACTIVE}
+      </p>
+      <p
+        className={cn(
+          'mt-1 truncate text-sm text-muted-foreground',
+          tool.mode === 'terminal' && 'font-mono',
+        )}
+        title={tool.detail}
+      >
+        {tool.detail}
+      </p>
+    </div>
+  );
+}
+
+function StepRowView({ row }: { row: StepRow }) {
+  const { step, chips } = row;
+  return (
+    <li className="flex items-start gap-2">
+      <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+        <StatusIcon status={step.status} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <p
+          className={cn(
+            'text-sm leading-5',
+            step.status === 'completed' ? 'text-muted-foreground' : 'text-foreground',
+          )}
+        >
+          {step.label}
+        </p>
+        {step.detail && (
+          <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{step.detail}</p>
+        )}
+        <StepChips chips={chips} />
+      </div>
+    </li>
+  );
+}
+
+function StepGroupItem({ group }: { group: StepGroup }) {
+  const header = group.header;
+  const [userOpen, setUserOpen] = useState<boolean | null>(null);
+  if (!header) return null;
+  if (group.rows.length === 0 && group.connectors.length === 0) {
+    return <StepRowView row={{ step: header, chips: [] }} />;
+  }
+  const finished =
+    header.status === 'completed' && group.rows.every((row) => row.step.status === 'completed');
+  const open = userOpen ?? !finished;
+  return (
+    <li>
+      <details
+        open={open}
+        onToggle={(event) => {
+          if (event.currentTarget.open !== open) setUserOpen(event.currentTarget.open);
+        }}
+        className="group"
+        data-testid="task-dock-step-group"
+      >
+        <summary className={STEP_SUMMARY_CLASS}>
+          <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
+            <StatusIcon status={header.status} />
+          </span>
+          <span
+            className={cn(
+              'min-w-0 flex-1 text-sm leading-5',
+              header.status === 'completed' ? 'text-muted-foreground' : 'text-foreground',
+            )}
+          >
+            {header.label}
+          </span>
+          <ChevronRight className={cn(DOCK_CHEVRON_CLASS, 'mt-1')} aria-hidden="true" />
+        </summary>
+        <ul className="mt-2 space-y-2 ps-6">
+          {group.rows.map((row) => (
+            <StepRowView key={row.step.id} row={row} />
+          ))}
+          {group.connectors.length > 0 && (
+            <li>
+              <ConnectorsChip names={group.connectors} />
+            </li>
+          )}
+        </ul>
+      </details>
+    </li>
+  );
 }
 
 function formatDetailDate(value: string | undefined): string {
@@ -346,8 +705,9 @@ function ContextMark({ item }: { item: TaskDockContextItem }) {
     return <span className="text-caption font-semibold text-muted-foreground">{item.mark}</span>;
   }
   if (item.kind === 'skill') return <Sparkles className={className} aria-hidden="true" />;
-  if (item.kind === 'project') return <Puzzle className={className} aria-hidden="true" />;
-  if (item.kind === 'attachment') return <FileText className={className} aria-hidden="true" />;
+  if (item.kind === 'attachment' || (item.kind === 'path' && isFilePath(item.label))) {
+    return <FileText className={className} aria-hidden="true" />;
+  }
   return <FolderOpen className={className} aria-hidden="true" />;
 }
 
@@ -402,9 +762,11 @@ export function WorkSessionToggleButton({
 
 function TaskDockProgressSection({
   summary,
+  messages,
   agiWork,
 }: {
   summary: TaskDockSummary;
+  messages: readonly Message[];
   agiWork: boolean;
 }) {
   const activity = summary.activity;
@@ -425,6 +787,9 @@ function TaskDockProgressSection({
   const completed = summary.steps.filter((step) => step.status === 'completed').length;
 
   const showEmptySteps = summary.steps.length === 0 && agiWork && isRunning;
+  const groups = useMemo(() => groupSteps(summary.steps, messages), [summary.steps, messages]);
+  const knowledge = useMemo(() => collectRecalledKnowledge(messages), [messages]);
+  const activeTool = activeToolOf(activity);
 
   return (
     <DockDisclosure
@@ -446,28 +811,28 @@ function TaskDockProgressSection({
         </p>
       )}
 
-      {summary.steps.length > 0 && (
+      {activeTool && <ActiveToolHeader tool={activeTool} />}
+
+      {knowledge.length > 0 && <KnowledgeRecalled items={knowledge} />}
+
+      {groups.length > 0 && (
         <ol aria-label={TASK_DOCK_STEPS_LABEL} className="mt-2.5 space-y-2">
-          {summary.steps.map((step) => (
-            <li key={step.id} className="flex items-start gap-2">
-              <span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center">
-                <StatusIcon status={step.status} />
-              </span>
-              <div className="min-w-0 flex-1">
-                <p
-                  className={cn(
-                    'text-sm leading-5',
-                    step.status === 'completed' ? 'text-muted-foreground' : 'text-foreground',
-                  )}
-                >
-                  {step.label}
-                </p>
-                {step.detail && (
-                  <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{step.detail}</p>
-                )}
-              </div>
-            </li>
-          ))}
+          {groups.flatMap((group) =>
+            group.header ? (
+              <StepGroupItem key={group.id} group={group} />
+            ) : (
+              [
+                ...group.rows.map((row) => <StepRowView key={row.step.id} row={row} />),
+                ...(group.connectors.length > 0
+                  ? [
+                      <li key={`${group.id}:connectors`}>
+                        <ConnectorsChip names={group.connectors} />
+                      </li>,
+                    ]
+                  : []),
+              ]
+            ),
+          )}
         </ol>
       )}
       {showEmptySteps && (
@@ -743,7 +1108,7 @@ export function WorkSessionPanel({
         {conversationArtifacts.length > 0 && <SlotTabs onShowArtifacts={showArtifacts} />}
 
         <div className="min-h-0 flex-1 overflow-y-auto [scrollbar-width:thin]">
-          <TaskDockProgressSection summary={summary} agiWork={agiWork} />
+          <TaskDockProgressSection summary={summary} messages={messages} agiWork={agiWork} />
           {outputsSection}
           {contextSection}
           {sourcesSection}

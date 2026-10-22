@@ -52,3 +52,13 @@ export const TASK_DOCK_STEPS_LABEL = 'session steps';
 export const TASK_DOCK_OPEN_ACTION = 'Open';
 
 export const TASK_DOCK_DOWNLOAD_ACTION = 'Download';
+
+export const TASK_DOCK_KNOWLEDGE_LABEL = 'Knowledge recalled';
+
+export const TASK_DOCK_CONNECTORS_LABEL = 'Connectors';
+
+export const TASK_DOCK_TERMINAL_ACTIVE = 'Using terminal';
+
+export const TASK_DOCK_BROWSER_ACTIVE = 'Using browser';
+
+export const TASK_DOCK_CHIPS_OVERFLOW_LABEL = 'more';
