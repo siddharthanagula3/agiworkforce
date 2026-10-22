@@ -4,9 +4,11 @@ Status: Current
 Owner: Repository maintainers
 Last updated: 2026-10-21
 
-Claude Code adapter. **Read `AGENTS.md` first and obey it**; it is the canonical
-contract for every agent. Nothing here overrides or weakens it; this file only
-adds what is specific to Claude Code.
+Claude Code adapter. `AGENTS.md`, imported below, is the canonical contract for
+every agent; obey it. Nothing here overrides or weakens it; this file only adds
+what is specific to Claude Code.
+
+@AGENTS.md
 
 ## Delegation
 
