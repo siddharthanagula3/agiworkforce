@@ -729,3 +729,51 @@ describe('BillingSection row density', () => {
     expect(invoices.closest('section')).toBeNull();
   });
 });
+
+describe('BillingSection section order and invoice table', () => {
+  it('orders Payment, Invoices, then Credit history, with headings and a labelled Actions column', async () => {
+    global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const body = String(input).includes('/api/billing/invoices')
+        ? {
+            invoices: [
+              {
+                id: 'in_paid',
+                number: 'AGI-0002',
+                status: 'paid',
+                amount: 2_000,
+                currency: 'usd',
+                created_at: '2026-09-01T00:00:00.000Z',
+                hosted_invoice_url: 'https://invoice.stripe.com/i/in_paid',
+              },
+            ],
+          }
+        : {};
+      return { ok: true, json: async () => body } as Response;
+    }) as typeof fetch;
+
+    render(<BillingSection />);
+
+    expect(await screen.findByRole('link', { name: 'View' })).toBeTruthy();
+    const headings = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((heading) => heading.textContent);
+    const payment = headings.indexOf('Payment');
+    const invoices = headings.indexOf('Invoices');
+    const credit = headings.indexOf('Credit history');
+    expect(payment).toBeGreaterThanOrEqual(0);
+    expect(invoices).toBeGreaterThan(payment);
+    expect(credit).toBeGreaterThan(invoices);
+
+    const columns = screen
+      .getAllByRole('columnheader')
+      .map((cell) => cell.textContent)
+      .filter((label) => ['Date', 'Total', 'Status', 'Actions'].includes(label ?? ''));
+    expect(columns.slice(0, 4)).toEqual(['Date', 'Total', 'Status', 'Actions']);
+
+    for (const name of ['Payment', 'Invoices', 'Credit history']) {
+      const heading = screen.getByRole('heading', { level: 2, name });
+      expect(heading.style.fontSize).toBe('16px');
+      expect(heading.style.color).toBe('var(--text-1)');
+    }
+  });
+});

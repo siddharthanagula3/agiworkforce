@@ -17,6 +17,14 @@ import {
   useConfirmAction,
 } from '@agiworkforce/ui';
 import { useAuthStore } from '@shared/stores/authentication-store';
+import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
+import {
+  getBillingPlanPricing,
+  isBillingPlanTier,
+  isFreeBillingPlanTier,
+} from '@agiworkforce/types';
+import { hasLiveBillingRelationship } from '@/lib/services/subscription-access-policy';
+import { formatBillingDateFromSeconds } from '@/features/billing/lib/billing-format';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
@@ -44,6 +52,20 @@ function formatDateTime(value: Date | null | undefined): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function livePaidPlanOf(subscription: SubscriptionPlan | null): SubscriptionPlan | null {
+  if (!subscription) return null;
+  const tier = String(subscription.tier ?? 'free')
+    .trim()
+    .toLowerCase();
+  if (isFreeBillingPlanTier(tier)) return null;
+  return hasLiveBillingRelationship(subscription.status) ? subscription : null;
+}
+
+function planLabelOf(subscription: SubscriptionPlan): string {
+  const tier = String(subscription.tier).trim().toLowerCase();
+  return isBillingPlanTier(tier) ? getBillingPlanPricing(tier).label : subscription.display_name;
 }
 
 const SESSION_TRUNCATION_HINT =
@@ -95,9 +117,9 @@ const titleStyle: CSSProperties = {
 };
 
 const sectionHeadingStyle: CSSProperties = {
-  fontSize: 13,
+  fontSize: 16,
   fontWeight: 600,
-  color: 'var(--text-2)',
+  color: 'var(--text-1)',
   margin: 'var(--space-5) 0 var(--space-3)',
 };
 
@@ -128,7 +150,7 @@ const rowLabelStyle: CSSProperties = {
 };
 
 const rowHintStyle: CSSProperties = {
-  fontSize: 12,
+  fontSize: 14,
   color: 'var(--text-3)',
   margin: 'var(--space-1) 0 0',
 };
@@ -139,7 +161,7 @@ const outlineButtonStyle: CSSProperties = {
   alignItems: 'center',
   gap: 'var(--space-2)',
   padding: 'var(--space-2) var(--space-4)',
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 500,
   color: 'var(--text-1)',
   background: 'transparent',
@@ -151,7 +173,7 @@ const outlineButtonStyle: CSSProperties = {
 const dangerButtonStyle: CSSProperties = {
   flexShrink: 0,
   padding: 'var(--space-2) var(--space-4)',
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 500,
   color: 'var(--settings-destructive-text)',
   background: 'transparent',
@@ -160,13 +182,21 @@ const dangerButtonStyle: CSSProperties = {
   cursor: 'pointer',
 };
 
+const blockedDangerButtonStyle: CSSProperties = {
+  ...dangerButtonStyle,
+  color: 'var(--text-disabled)',
+  background: 'var(--bg-hover)',
+  border: '1px solid var(--settings-border)',
+  cursor: 'not-allowed',
+};
+
 const backRowStyle: CSSProperties = {
   alignSelf: 'flex-start',
   display: 'inline-flex',
   alignItems: 'center',
   gap: 'var(--space-2)',
   padding: 0,
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 500,
   color: 'var(--text-2)',
   background: 'transparent',
@@ -176,7 +206,7 @@ const backRowStyle: CSSProperties = {
 
 const errorTextStyle: CSSProperties = {
   margin: 0,
-  fontSize: 12,
+  fontSize: 14,
   color: 'var(--settings-destructive-text)',
 };
 
@@ -184,11 +214,13 @@ function AccountRow({
   label,
   labelTestId,
   hint,
+  hintId,
   children,
 }: {
   label: string;
   labelTestId?: string;
-  hint?: string;
+  hint?: React.ReactNode;
+  hintId?: string;
   children: React.ReactNode;
 }) {
   return (
@@ -197,7 +229,11 @@ function AccountRow({
         <p data-testid={labelTestId} style={rowLabelStyle}>
           {label}
         </p>
-        {hint && <p style={rowHintStyle}>{hint}</p>}
+        {hint && (
+          <p id={hintId} style={rowHintStyle}>
+            {hint}
+          </p>
+        )}
       </div>
       {children}
     </div>
@@ -341,6 +377,14 @@ export function AccountSection() {
 
   const pendingDeletion = deletionStatus.data?.pending === true;
 
+  const billingInitialized = useBillingStore((s) => s.initialized);
+  const livePaidPlan = livePaidPlanOf(useBillingStore((s) => s.subscription));
+  const livePlanLabel = livePaidPlan ? planLabelOf(livePaidPlan) : null;
+  const livePlanEnds = livePaidPlan?.cancel_at_period_end
+    ? formatBillingDateFromSeconds(livePaidPlan.current_period_end ?? null)
+    : null;
+  const deleteBlockedByPlan = livePaidPlan !== null;
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-5)' }}>
       {confirmDialog}
@@ -412,18 +456,50 @@ export function AccountSection() {
             ) : (
               <AccountRow
                 label="Delete account"
-                hint="Deletion is scheduled for 24 hours later. You can cancel before erasure begins."
+                hintId="delete-account-hint"
+                hint={
+                  deleteBlockedByPlan ? (
+                    <span data-testid="delete-account-plan-note">
+                      {livePaidPlan?.cancel_at_period_end ? (
+                        `You can delete your account once your ${livePlanLabel} plan ends${livePlanEnds ? ` on ${livePlanEnds}` : ''}.`
+                      ) : (
+                        <>
+                          {`Cancel your ${livePlanLabel} plan in `}
+                          <SettingsSectionLink
+                            section="billing"
+                            style={{
+                              color: 'var(--text-1)',
+                              textDecoration: 'underline',
+                              cursor: 'pointer',
+                            }}
+                          >
+                            Billing
+                          </SettingsSectionLink>
+                          {' before deleting your account.'}
+                        </>
+                      )}
+                    </span>
+                  ) : (
+                    'Deletion is scheduled for 24 hours later. You can cancel before erasure begins.'
+                  )
+                }
               >
                 <button
                   type="button"
                   data-testid="delete-account-trigger"
-                  disabled={deletionStatus.isLoading || deletionStatus.isError}
+                  aria-describedby="delete-account-hint"
+                  disabled={
+                    deletionStatus.isLoading ||
+                    deletionStatus.isError ||
+                    !billingInitialized ||
+                    deleteBlockedByPlan
+                  }
                   onClick={() => {
                     setDeleteConfirmInput('');
                     deleteAccountMutation.reset();
                     setShowDeleteDialog(true);
                   }}
-                  style={dangerButtonStyle}
+                  style={deleteBlockedByPlan ? blockedDangerButtonStyle : dangerButtonStyle}
                 >
                   Delete
                 </button>
@@ -496,16 +572,13 @@ export function AccountSection() {
             {sessionsLoading ? (
               <div
                 role="status"
-                style={{ padding: 'var(--space-2) 0', fontSize: 13, color: 'var(--text-3)' }}
+                style={{ padding: 'var(--space-2) 0', fontSize: 14, color: 'var(--text-3)' }}
               >
                 Loading active sessions…
               </div>
             ) : sessionsError ? (
               <div>
-                <p
-                  role="alert"
-                  style={{ ...errorTextStyle, margin: '0 0 var(--space-3)', fontSize: 13 }}
-                >
+                <p role="alert" style={{ ...errorTextStyle, margin: '0 0 var(--space-3)' }}>
                   {sessionsError}
                 </p>
                 <button
@@ -521,7 +594,7 @@ export function AccountSection() {
               <p
                 style={{
                   padding: 'var(--space-2) 0',
-                  fontSize: 13,
+                  fontSize: 14,
                   color: 'var(--text-3)',
                   margin: 0,
                 }}
@@ -530,7 +603,7 @@ export function AccountSection() {
               </p>
             ) : (
               <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
                   <thead>
                     <tr style={{ borderBottom: '1px solid var(--settings-border)' }}>
                       {[
@@ -547,10 +620,8 @@ export function AccountSection() {
                           style={{
                             padding: '0 var(--space-4) var(--space-3) 0',
                             textAlign: 'left',
-                            fontSize: 12,
-                            fontWeight: 700,
-                            letterSpacing: '0.06em',
-                            textTransform: 'uppercase',
+                            fontSize: 14,
+                            fontWeight: 400,
                             color: 'var(--text-3)',
                             whiteSpace: 'nowrap',
                           }}
@@ -582,7 +653,7 @@ export function AccountSection() {
                               style={{
                                 marginTop: 'var(--space-1)',
                                 color: 'var(--text-3)',
-                                fontSize: 12,
+                                fontSize: 14,
                                 fontWeight: 400,
                               }}
                             >
@@ -593,10 +664,8 @@ export function AccountSection() {
                             <span
                               style={{
                                 marginLeft: 'var(--space-2)',
-                                fontSize: 12,
-                                fontWeight: 700,
-                                letterSpacing: '0.05em',
-                                textTransform: 'uppercase',
+                                fontSize: 14,
+                                fontWeight: 500,
                                 color: 'var(--teal-text)',
                                 background: 'rgba(33,128,141,0.12)',
                                 borderRadius: 'var(--corner-compact)',
@@ -608,7 +677,7 @@ export function AccountSection() {
                           )}
                           <dl
                             data-testid={`mobile-session-details-${row.id}`}
-                            className="mt-2 space-y-0.5 text-xs font-normal text-muted-foreground sm:hidden"
+                            className="mt-2 space-y-0.5 text-sm font-normal text-muted-foreground sm:hidden"
                           >
                             <div>
                               <dt className="inline font-medium">Location</dt>
@@ -677,7 +746,7 @@ export function AccountSection() {
                             }
                             style={{
                               padding: 'var(--space-2) var(--space-3)',
-                              fontSize: 12,
+                              fontSize: 14,
                               fontWeight: 500,
                               // The fill value, not the text one: in dark it is
                               // 0 62.8% 30.6%, which measured 1.77:1 on the panel
@@ -720,7 +789,7 @@ export function AccountSection() {
                 role="status"
                 style={{
                   padding: 'var(--space-3) 0 0',
-                  fontSize: 12,
+                  fontSize: 14,
                   color: 'var(--text-2)',
                   margin: 0,
                 }}
@@ -732,7 +801,7 @@ export function AccountSection() {
             <p
               style={{
                 padding: 'var(--space-3) 0 0',
-                fontSize: 12,
+                fontSize: 14,
                 color: 'var(--text-3)',
                 margin: 0,
               }}
@@ -777,7 +846,7 @@ export function AccountSection() {
               {deleteAccountMutation.data?.scheduledFor && (
                 <p
                   style={{
-                    fontSize: 12,
+                    fontSize: 14,
                     color: 'var(--text-3)',
                     margin: 'calc(var(--space-2) * -1) 0 0',
                   }}
@@ -812,7 +881,7 @@ export function AccountSection() {
               <div className="py-1">
                 <label
                   htmlFor="account-delete-confirm-input"
-                  className="mb-2 block text-[13px] text-foreground"
+                  className="mb-2 block text-sm text-foreground"
                 >
                   Type <strong>DELETE</strong> to confirm:
                 </label>
@@ -827,7 +896,7 @@ export function AccountSection() {
                   className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none focus:ring-1 focus:ring-ring"
                 />
                 {deleteAccountMutation.error && !isStepUpCancelled(deleteAccountMutation.error) && (
-                  <p className="mt-2 text-xs text-danger">
+                  <p className="mt-2 text-sm text-danger">
                     {toUserMessage(deleteAccountMutation.error, 'Account deletion failed.')}
                   </p>
                 )}
@@ -879,7 +948,7 @@ export function AccountSection() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           {cancelDeletionMutation.error && (
-            <p className="text-xs text-danger">
+            <p className="text-sm text-danger">
               {toUserMessage(cancelDeletionMutation.error, 'Could not cancel account deletion.')}
             </p>
           )}

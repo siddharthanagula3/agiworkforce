@@ -38,7 +38,7 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
         htmlFor={id}
         style={{
           display: 'block',
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 500,
           color: 'var(--text-2)',
           marginBottom: 'var(--space-2)',
@@ -54,7 +54,7 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
           value={value ?? 'Not available'}
           style={{
             flex: 1,
-            fontSize: 13,
+            fontSize: 14,
             fontFamily: 'var(--mono)',
             padding: 'var(--space-2) var(--space-3)',
             background: 'var(--bg-base)',
@@ -93,7 +93,7 @@ export function CopyableIdField({ id, label, value, hint, copyLabel }: CopyableI
           {copied ? <Check size={14} /> : <Copy size={14} />}
         </button>
       </div>
-      <p style={{ fontSize: 12, color: 'var(--text-3)', margin: 'var(--space-2) 0 0' }}>{hint}</p>
+      <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 'var(--space-2) 0 0' }}>{hint}</p>
     </>
   );
 }

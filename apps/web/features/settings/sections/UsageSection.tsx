@@ -325,7 +325,7 @@ function UsageBar({
             ? 'bg-[var(--chat-destructive)]'
             : urgency === 'warning'
               ? 'bg-[var(--chat-warning)]'
-              : 'bg-[var(--chat-accent-primary)]'
+              : 'bg-[var(--chat-text-primary)]'
         }
         style={{ background: 'var(--chat-border-strong)' }}
       />

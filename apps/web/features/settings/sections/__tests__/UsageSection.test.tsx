@@ -5,8 +5,12 @@ import React from 'react';
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
-  Progress: ({ value }: { value: number }) =>
-    React.createElement('div', { 'data-testid': 'progress', 'data-value': value }),
+  Progress: ({ value, indicatorClassName }: { value: number; indicatorClassName?: string }) =>
+    React.createElement('div', {
+      'data-testid': 'progress',
+      'data-value': value,
+      'data-indicator': indicatorClassName,
+    }),
 }));
 
 vi.mock('@/lib/client/csrf', () => ({
@@ -387,6 +391,19 @@ describe('UsageSection stated in credits', () => {
     renderSection();
     await screen.findByText(managedUsageBucketLabel('session'));
     expect(barFills()).toEqual(['60', '40', '10', '20']);
+  });
+
+  it('fills a bar below the warning level with the neutral ink, never the accent', async () => {
+    stubPro();
+    renderSection();
+    await screen.findByText(managedUsageBucketLabel('session'));
+    const indicators = screen
+      .getAllByTestId('progress')
+      .map((bar) => bar.getAttribute('data-indicator'));
+    expect(indicators.length).toBeGreaterThan(0);
+    for (const indicator of indicators) {
+      expect(indicator).toBe('bg-[var(--chat-text-primary)]');
+    }
   });
 
   it('shows bonus and purchased balances in the order they are spent, and no currency anywhere', async () => {

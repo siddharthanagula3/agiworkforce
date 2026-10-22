@@ -205,19 +205,33 @@ function PlanIcon({ tier }: { tier: string }) {
   );
 }
 
+const SECTION_HEADING_STYLE: React.CSSProperties = {
+  margin: '0 0 var(--space-2)',
+  fontSize: 16,
+  fontWeight: 600,
+  color: 'var(--text-1)',
+};
+
+const TABLE_HEADER_CELL_STYLE: React.CSSProperties = {
+  padding: 'var(--space-3) var(--space-4)',
+  fontSize: 14,
+  fontWeight: 500,
+  color: 'var(--text-3)',
+  whiteSpace: 'nowrap',
+};
+
 function SectionHeader({ title }: { title: string }) {
   return (
-    <div
+    <h2
       style={{
+        ...SECTION_HEADING_STYLE,
+        margin: 0,
         padding: 'var(--space-4) var(--space-5)',
         borderBottom: '1px solid var(--settings-border)',
-        fontSize: 13,
-        fontWeight: 600,
-        color: 'var(--text-2)',
       }}
     >
       {title}
-    </div>
+    </h2>
   );
 }
 
@@ -244,7 +258,7 @@ const OUTLINE_BUTTON_STYLE: React.CSSProperties = {
   border: '1px solid var(--settings-border)',
   borderRadius: 'var(--radius)',
   color: 'var(--text-2)',
-  fontSize: 13,
+  fontSize: 14,
 };
 
 export function BillingSection() {
@@ -694,7 +708,7 @@ export function BillingSection() {
                 {isFreeTier ? 'Free plan' : `${displayPlanLabel} plan`}
               </div>
               {isFreeTier ? null : (
-                <div style={{ fontSize: 13, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+                <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
                   {usageComparison ?? humanizeStatus(subscription.status ?? 'none')}
                 </div>
               )}
@@ -732,7 +746,7 @@ export function BillingSection() {
                   border: 'none',
                   borderRadius: 'var(--radius)',
                   color: isFreeTier ? 'var(--bg-base)' : 'var(--chat-accent-on-primary)',
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: 600,
                   textDecoration: 'none',
                   cursor: 'pointer',
@@ -744,7 +758,7 @@ export function BillingSection() {
           ) : (
             <span
               role="status"
-              style={{ flexShrink: 0, color: 'var(--text-3)', fontSize: 13, lineHeight: 1.4 }}
+              style={{ flexShrink: 0, color: 'var(--text-3)', fontSize: 14, lineHeight: 1.4 }}
             >
               {planChangeBlockedCopy}
             </span>
@@ -804,7 +818,7 @@ export function BillingSection() {
             {planStateError ? (
               <p
                 role="alert"
-                style={{ margin: 0, fontSize: 13, color: 'var(--settings-destructive-text)' }}
+                style={{ margin: 0, fontSize: 14, color: 'var(--settings-destructive-text)' }}
               >
                 {planStateError}{' '}
                 <button
@@ -878,7 +892,7 @@ export function BillingSection() {
             style={{
               margin: 0,
               padding: '0 0 var(--space-4)',
-              fontSize: 13,
+              fontSize: 14,
               color: 'var(--settings-destructive-text)',
             }}
           >
@@ -889,16 +903,7 @@ export function BillingSection() {
 
       {hasStripeBilling && (
         <div>
-          <p
-            style={{
-              margin: '0 0 var(--space-2)',
-              fontSize: 13,
-              fontWeight: 600,
-              color: 'var(--text-2)',
-            }}
-          >
-            Payment
-          </p>
+          <h2 style={SECTION_HEADING_STYLE}>Payment</h2>
           {paymentMethods.status === 'loading' || paymentMethods.status === 'idle' ? (
             <div
               aria-hidden="true"
@@ -1003,7 +1008,7 @@ export function BillingSection() {
                 margin: 0,
                 padding: 'var(--space-2) 0 0',
                 color: 'var(--settings-destructive-text)',
-                fontSize: 13,
+                fontSize: 14,
               }}
             >
               {paymentMethods.message}{' '}
@@ -1014,6 +1019,132 @@ export function BillingSection() {
           )}
         </div>
       )}
+
+      <div>
+        <h2 style={SECTION_HEADING_STYLE}>Invoices</h2>
+        {invoices.status === 'loading' || invoices.status === 'idle' ? (
+          <div aria-hidden="true" className="flex flex-col gap-2 py-1">
+            {[0, 1, 2].map((row) => (
+              <div
+                key={row}
+                className="h-8 w-full animate-pulse rounded-compact bg-foreground/[0.07]"
+              />
+            ))}
+          </div>
+        ) : invoices.status === 'ready' && invoices.items.length > 0 ? (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr
+                  style={{
+                    borderBottom: '1px solid var(--settings-border)',
+                    background: 'var(--bg-hover)',
+                  }}
+                >
+                  {['Date', 'Total', 'Status', 'Actions'].map((col, i) => (
+                    <th
+                      key={col}
+                      scope="col"
+                      style={{
+                        ...TABLE_HEADER_CELL_STYLE,
+                        textAlign: i === 3 ? 'right' : 'left',
+                      }}
+                    >
+                      {col}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {invoices.items.map((inv, idx) => (
+                  <tr
+                    key={inv.id}
+                    style={{
+                      borderBottom:
+                        idx < invoices.items.length - 1
+                          ? '1px solid var(--settings-border)'
+                          : 'none',
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: 'var(--space-3) var(--space-4)',
+                        color: 'var(--text-1)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {formatBillingDate(inv.created_at) ?? ''}
+                    </td>
+                    <td
+                      style={{
+                        padding: 'var(--space-3) var(--space-4)',
+                        color: 'var(--text-2)',
+                        fontFamily: 'var(--mono)',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {formatBillingMoney(inv.amount, inv.currency)}
+                    </td>
+                    <td
+                      style={{
+                        padding: 'var(--space-3) var(--space-4)',
+                        color: 'var(--text-3)',
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {inv.status}
+                    </td>
+                    <td
+                      style={{
+                        padding: 'var(--space-3) var(--space-4)',
+                        textAlign: 'right',
+                        whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {inv.hosted_invoice_url ? (
+                        <a
+                          href={inv.hosted_invoice_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={{
+                            fontSize: 14,
+                            color: 'var(--text-2)',
+                            textDecoration: 'underline',
+                          }}
+                        >
+                          {inv.status === 'open' ? 'Pay' : 'View'}
+                        </a>
+                      ) : (
+                        <span style={{ fontSize: 14, color: 'var(--text-3)' }}>Not issued yet</span>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : invoices.status === 'error' ? (
+          <p
+            role="alert"
+            style={{ margin: 0, color: 'var(--settings-destructive-text)', fontSize: 14 }}
+          >
+            {invoices.message}{' '}
+            <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
+              Try again
+            </button>
+          </p>
+        ) : (
+          <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
+            {isStoreBilled
+              ? `Receipts for this plan are issued by ${BILLING_SOURCE_LABEL[billingSource as string]} and are not available here.`
+              : billingSource === 'manual'
+                ? 'Invoices for this plan are provided by your organization and are not available here.'
+                : isFreeTier
+                  ? 'Invoices appear here once you are billed on a paid plan.'
+                  : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
+          </p>
+        )}
+      </div>
 
       {canBuyTopUps || isFreeTier ? <TopUpPanel tier={tier} canBuy={canBuyTopUps} /> : null}
 
@@ -1039,11 +1170,11 @@ export function BillingSection() {
           <div style={{ minWidth: 0, flex: '1 1 260px' }}>
             <p
               id="overage-toggle-label"
-              style={{ margin: 0, fontSize: 13, fontWeight: 600, color: 'var(--text-1)' }}
+              style={{ margin: 0, fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}
             >
               Keep going after a usage limit
             </p>
-            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 12, color: 'var(--text-3)' }}>
+            <p style={{ margin: 'var(--space-1) 0 0', fontSize: 14, color: 'var(--text-3)' }}>
               {overageAvailableCredits > 0
                 ? `Spend your credits when a usage limit stops you. ${formatCreditsShared(overageAvailableCredits, { maximumFractionDigits: CREDIT_FRACTION_DIGITS })} available.`
                 : 'Spend your credits when a usage limit stops you. Buy credits above to use this.'}
@@ -1053,7 +1184,7 @@ export function BillingSection() {
                 role="alert"
                 style={{
                   margin: 'var(--space-2) 0 0',
-                  fontSize: 12,
+                  fontSize: 14,
                   color: 'var(--settings-destructive-text)',
                 }}
               >
@@ -1081,7 +1212,7 @@ export function BillingSection() {
         <SectionHeader title="Credit history" />
         {creditHistory.status === 'ready' && creditHistory.items.length > 0 ? (
           <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
               <thead>
                 <tr
                   style={{
@@ -1092,15 +1223,10 @@ export function BillingSection() {
                   {['Date', 'Description', 'Amount'].map((col) => (
                     <th
                       key={col}
+                      scope="col"
                       style={{
-                        padding: 'var(--space-3) var(--space-4)',
+                        ...TABLE_HEADER_CELL_STYLE,
                         textAlign: col === 'Amount' ? 'right' : 'left',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        color: 'var(--text-3)',
-                        whiteSpace: 'nowrap',
                       }}
                     >
                       {col}
@@ -1161,7 +1287,7 @@ export function BillingSection() {
             style={{
               padding: 'var(--space-4) var(--space-5)',
               color: 'var(--settings-destructive-text)',
-              fontSize: 13,
+              fontSize: 14,
             }}
           >
             {creditHistory.message}{' '}
@@ -1171,7 +1297,7 @@ export function BillingSection() {
           </div>
         ) : (
           <div style={{ padding: 'var(--space-4) var(--space-5)' }}>
-            <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
+            <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
               {creditHistory.status === 'loading' || creditHistory.status === 'idle'
                 ? 'Loading credit history…'
                 : 'No credit activity yet. Purchases, refunds, bonus grants, adjustments, and per-task usage debits will appear here as they happen.'}
@@ -1181,146 +1307,6 @@ export function BillingSection() {
       </section>
 
       {hasStripeBilling ? <BillingPaymentHistory refreshKey={billingDetailsRefresh} /> : null}
-
-      <div>
-        <p
-          style={{
-            margin: '0 0 var(--space-2)',
-            fontSize: 13,
-            fontWeight: 600,
-            color: 'var(--text-2)',
-          }}
-        >
-          Invoices
-        </p>
-        {invoices.status === 'loading' || invoices.status === 'idle' ? (
-          <div aria-hidden="true" className="flex flex-col gap-2 py-1">
-            {[0, 1, 2].map((row) => (
-              <div
-                key={row}
-                className="h-8 w-full animate-pulse rounded-compact bg-foreground/[0.07]"
-              />
-            ))}
-          </div>
-        ) : invoices.status === 'ready' && invoices.items.length > 0 ? (
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr
-                  style={{
-                    borderBottom: '1px solid var(--settings-border)',
-                    background: 'var(--bg-hover)',
-                  }}
-                >
-                  {['Date', 'Total', 'Status', ''].map((col, i) => (
-                    <th
-                      key={col || `col-${i}`}
-                      style={{
-                        padding: 'var(--space-3) var(--space-4)',
-                        textAlign: i === 3 ? 'right' : 'left',
-                        fontSize: 12,
-                        fontWeight: 700,
-                        letterSpacing: '0.06em',
-                        textTransform: 'uppercase',
-                        color: 'var(--text-3)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {col}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {invoices.items.map((inv, idx) => (
-                  <tr
-                    key={inv.id}
-                    style={{
-                      borderBottom:
-                        idx < invoices.items.length - 1
-                          ? '1px solid var(--settings-border)'
-                          : 'none',
-                    }}
-                  >
-                    <td
-                      style={{
-                        padding: 'var(--space-3) var(--space-4)',
-                        color: 'var(--text-1)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {formatBillingDate(inv.created_at) ?? ''}
-                    </td>
-                    <td
-                      style={{
-                        padding: 'var(--space-3) var(--space-4)',
-                        color: 'var(--text-2)',
-                        fontFamily: 'var(--mono)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {formatBillingMoney(inv.amount, inv.currency)}
-                    </td>
-                    <td
-                      style={{
-                        padding: 'var(--space-3) var(--space-4)',
-                        color: 'var(--text-3)',
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {inv.status}
-                    </td>
-                    <td
-                      style={{
-                        padding: 'var(--space-3) var(--space-4)',
-                        textAlign: 'right',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      {inv.hosted_invoice_url ? (
-                        <a
-                          href={inv.hosted_invoice_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          style={{
-                            fontSize: 13,
-                            color: 'var(--text-2)',
-                            textDecoration: 'underline',
-                          }}
-                        >
-                          {inv.status === 'open' ? 'Pay' : 'View'}
-                        </a>
-                      ) : (
-                        <span style={{ fontSize: 13, color: 'var(--text-3)' }}>Not issued yet</span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : invoices.status === 'error' ? (
-          <p
-            role="alert"
-            style={{ margin: 0, color: 'var(--settings-destructive-text)', fontSize: 13 }}
-          >
-            {invoices.message}{' '}
-            <button type="button" onClick={() => setBillingDetailsRefresh((value) => value + 1)}>
-              Try again
-            </button>
-          </p>
-        ) : (
-          <p style={{ fontSize: 13, color: 'var(--text-3)', margin: 0 }}>
-            {isStoreBilled
-              ? `Receipts for this plan are issued by ${BILLING_SOURCE_LABEL[billingSource as string]} and are not available here.`
-              : billingSource === 'manual'
-                ? 'Invoices for this plan are provided by your organization and are not available here.'
-                : isFreeTier
-                  ? 'Invoices appear here once you are billed on a paid plan.'
-                  : 'No invoices yet. Invoices appear here once your first billing cycle closes.'}
-          </p>
-        )}
-      </div>
 
       <DowngradeReviewDialog
         open={downgradeOpen}
