@@ -21,6 +21,7 @@ import {
 } from './service';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
+import { startFavouritesSync, type FavouriteChanges } from './useFavouritesSync';
 
 const MAX_RECENT = 5;
 const CLOUD_PROVIDER_ID = 'cloud_managed';
@@ -59,6 +60,16 @@ function filterThinkingState(
   );
 }
 
+function filterFavouriteChanges(changes: unknown): FavouriteChanges {
+  if (!changes || typeof changes !== 'object' || Array.isArray(changes)) return {};
+  return Object.fromEntries(
+    Object.entries(changes).filter(
+      (entry): entry is [string, boolean] =>
+        typeof entry[1] === 'boolean' && isCloudManagedModelId(entry[0]),
+    ),
+  );
+}
+
 function providerForModelId(modelId: string): string {
   return isCloudManagedModelId(modelId) ? CLOUD_PROVIDER_ID : 'local';
 }
@@ -73,6 +84,8 @@ interface ModelState {
   selectedProvider: string;
   routingProfile: RoutingProfileChoice;
   favorites: string[];
+  favoriteChanges: FavouriteChanges;
+  favoritesSyncedAccountId: string | null;
   recentModels: string[];
   thinkingModeEnabled: boolean;
   thinkingEnabledPerModel: Record<string, boolean>;
@@ -92,6 +105,8 @@ export const useModelStore = create<ModelState>()(
       selectedProvider: 'local',
       routingProfile: DEFAULT_ROUTING_PROFILE,
       favorites: [],
+      favoriteChanges: {},
+      favoritesSyncedAccountId: null,
       recentModels: [],
       thinkingModeEnabled: false,
       thinkingEnabledPerModel: {},
@@ -128,10 +143,18 @@ export const useModelStore = create<ModelState>()(
         if (!resolvedModelId || isAutoMode(resolvedModelId)) return;
 
         const current = get().favorites;
-        const next = current.includes(resolvedModelId)
-          ? current.filter((id) => id !== resolvedModelId)
-          : [...current, resolvedModelId];
-        set({ favorites: next });
+        const isFavourite = !current.includes(resolvedModelId);
+        const next = isFavourite
+          ? [...current, resolvedModelId]
+          : current.filter((id) => id !== resolvedModelId);
+        if (!isCloudManagedModelId(resolvedModelId)) {
+          set({ favorites: next });
+          return;
+        }
+        set((state) => ({
+          favorites: next,
+          favoriteChanges: { ...state.favoriteChanges, [resolvedModelId]: isFavourite },
+        }));
       },
 
       setThinkingMode: (enabled: boolean) => {
@@ -222,6 +245,11 @@ export const useModelStore = create<ModelState>()(
             ? persistedState.routingProfile
             : DEFAULT_ROUTING_PROFILE,
           favorites: filterSelectableModelIds(persistedState.favorites ?? []),
+          favoriteChanges: filterFavouriteChanges(persistedState.favoriteChanges),
+          favoritesSyncedAccountId:
+            typeof persistedState.favoritesSyncedAccountId === 'string'
+              ? persistedState.favoritesSyncedAccountId
+              : null,
           recentModels: filterSelectableModelIds(persistedState.recentModels ?? []).slice(
             0,
             MAX_RECENT,
@@ -241,6 +269,16 @@ export const useModelStore = create<ModelState>()(
 );
 
 rehydrateWhenMmkvReady(useModelStore, 'model-store');
+
+startFavouritesSync({
+  getState: () => useModelStore.getState(),
+  setState: (patch) => useModelStore.setState(patch),
+  subscribe: (listener) => useModelStore.subscribe(listener),
+  hasHydrated: () => useModelStore.persist.hasHydrated(),
+  onFinishHydration: (listener) => useModelStore.persist.onFinishHydration(listener),
+  isAccountModelId: isCloudManagedModelId,
+  isSelectable: (modelId) => normalizeSelectableModelId(modelId) === modelId,
+});
 
 function revalidateSelectedModelForTier(tier: string): void {
   const { selectedModel, thinkingEnabledPerModel } = useModelStore.getState();
