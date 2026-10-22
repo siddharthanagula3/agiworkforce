@@ -118,6 +118,7 @@ export const CONSENT_SURFACES = [
   'mobile-settings',
   'web-signup',
   'web-login',
+  'email-unsubscribe',
 ] as const;
 
 export type ConsentSurface = (typeof CONSENT_SURFACES)[number];

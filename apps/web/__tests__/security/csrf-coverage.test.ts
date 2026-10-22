@@ -60,6 +60,11 @@ const NON_COOKIE_PRINCIPAL: Record<string, { call: RegExp; reason: string }> = {
     call: /verifyProviderProxyToken\s*\(/,
     reason: 'A sandbox presents a signed provider proxy token as its bearer, never a cookie.',
   },
+  'email/unsubscribe/route.ts': {
+    call: /unsubscribeFromMarketingEmail\s*\(/,
+    reason:
+      'RFC 8058 one-click unsubscribe: the principal is the HMAC-signed, expiring token in the link, which can only withdraw marketing email consent for the account it names; no session is read.',
+  },
   'github/webhook/route.ts': {
     call: /verifyGitHubWebhookSignature\s*\(/,
     reason: 'GitHub signs the payload; there is no browser and no cookie principal.',

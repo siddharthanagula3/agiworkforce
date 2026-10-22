@@ -10,6 +10,7 @@
     "apps/web/app/api/connectors/directory/popularity/route.ts": "a connector ranking aggregated over every account, the same for every caller and naming no account",
     "apps/web/app/api/connectors/directory/route.ts": "the connector directory is the same catalogue for every caller",
     "apps/web/app/api/csrf/route.ts": "mints a CSRF token for an anonymous session before any account exists",
+    "apps/web/app/api/email/unsubscribe/route.ts": "the signed, expiring link in a promotional email is the only principal, and it can only record that the one account it names withdrew marketing email consent",
     "apps/web/app/api/download/checksums/route.ts": "published release artefacts are the same for every caller",
     "apps/web/app/api/download/route.ts": "published release artefacts are the same for every caller",
     "apps/web/app/api/health/route.ts": "a liveness probe that reads no account data",
