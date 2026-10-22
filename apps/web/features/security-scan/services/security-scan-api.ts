@@ -13,6 +13,7 @@ import {
   type SecurityScanResponse,
   type SecurityScanStateResponse,
 } from '@agiworkforce/cloud-contracts';
+import type { Effort } from '@agiworkforce/types';
 
 export class SecurityScanApiError extends Error {
   readonly status: number;
@@ -26,7 +27,10 @@ export class SecurityScanApiError extends Error {
 
 export interface SecurityScanApi {
   read(sessionId: string): Promise<SecurityScanStateResponse>;
-  scan(sessionId: string, input: { scope: string | null }): Promise<SecurityScanCompletedReport>;
+  scan(
+    sessionId: string,
+    input: { scope: string | null; model?: string | null; effort?: Effort | null },
+  ): Promise<SecurityScanCompletedReport>;
   decide(
     sessionId: string,
     input: { scanId: string; findingId: string; decision: SecurityScanDecision },
@@ -77,6 +81,8 @@ export function createSecurityScanApi(
       const body: SecurityScanRequest = {
         consent: true,
         ...(input.scope ? { scope: input.scope } : {}),
+        ...(input.model ? { model: input.model } : {}),
+        ...(input.model && input.effort ? { effort: input.effort } : {}),
       };
       const result = await post<SecurityScanResponse>(securityScanSessionPath(sessionId), body);
       return result.report;

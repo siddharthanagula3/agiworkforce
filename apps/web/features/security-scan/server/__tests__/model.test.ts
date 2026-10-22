@@ -53,6 +53,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
   drainToLlmResponse: mocks.drain,
 }));
 
+import { getModelEffortOptions, getSelectableModels } from '@agiworkforce/types';
 import {
   SecurityScanBudgetError,
   SecurityScanNoRouteError,
@@ -101,6 +102,46 @@ const CALL = {
   prompt: 'REPOSITORY-SOURCE',
   maxOutputTokens: 100,
 };
+
+describe('resolveSecurityScanModel choice', () => {
+  it('routes on the model the account chose and sends the effort that model offers', async () => {
+    const option = getSelectableModels().find(
+      (model) => getModelEffortOptions(model.id).length > 0,
+    );
+    expect(option).toBeDefined();
+    const effort = getModelEffortOptions(option!.id)[0]!;
+    mocks.resolveAutoRoute.mockReturnValue({
+      ...ROUTE,
+      modelKey: option!.id,
+      providerModelId: option!.id,
+    });
+
+    const model = await resolveSecurityScanModel({ ...INPUT, selection: option!.id, effort });
+    await model.call(CALL);
+
+    expect(mocks.routingRequest).toHaveBeenCalledWith(
+      INPUT.db,
+      'user-1',
+      expect.objectContaining({ selection: option!.id }),
+    );
+    expect(mocks.stream).toHaveBeenCalledWith(
+      expect.objectContaining({ effort: expect.any(String) }),
+      expect.anything(),
+    );
+  });
+
+  it('leaves the effort off a model that does not offer it', async () => {
+    const model = await resolveSecurityScanModel({ ...INPUT, effort: 'high' });
+    await model.call(CALL);
+
+    expect(mocks.routingRequest).toHaveBeenCalledWith(
+      INPUT.db,
+      'user-1',
+      expect.objectContaining({ selection: 'auto' }),
+    );
+    expect(mocks.stream.mock.calls[0]?.[0]).not.toHaveProperty('effort');
+  });
+});
 
 describe('resolveSecurityScanModel', () => {
   it('routes on the managed coding route and settles each call as security scan usage', async () => {

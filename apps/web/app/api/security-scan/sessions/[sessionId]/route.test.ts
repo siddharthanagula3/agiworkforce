@@ -65,13 +65,40 @@ describe('POST /api/security-scan/sessions/[sessionId]', () => {
   it('runs the scan on consent and audits it', async () => {
     const response = await POST(post({ consent: true, scope: 'src/' }), params);
     expect(response.status).toBe(200);
-    expect(mocks.runScan).toHaveBeenCalledWith(scanContext, 'src');
+    expect(mocks.runScan).toHaveBeenCalledWith(scanContext, 'src', {
+      model: undefined,
+      effort: undefined,
+    });
     expect(mocks.audit).toHaveBeenCalledWith(
       expect.objectContaining({
         eventType: 'code_session_lifecycle_changed',
         detail: expect.objectContaining({ status: 'security_scan_completed', count: 1 }),
       }),
     );
+  });
+
+  it('passes the chosen model and effort to the scan', async () => {
+    const response = await POST(
+      post({ consent: true, model: 'some-model', effort: 'high' }),
+      params,
+    );
+    expect(response.status).toBe(200);
+    expect(mocks.runScan).toHaveBeenCalledWith(scanContext, null, {
+      model: 'some-model',
+      effort: 'high',
+    });
+  });
+
+  it('refuses an effort off the ladder, an empty model and a field it does not know', async () => {
+    for (const body of [
+      { consent: true, effort: 'extreme' },
+      { consent: true, model: '' },
+      { consent: true, provider: 'x' },
+    ]) {
+      const response = await POST(post(body), params);
+      expect(response.status).toBe(400);
+    }
+    expect(mocks.runScan).not.toHaveBeenCalled();
   });
 
   it('returns the access gate response without scanning', async () => {

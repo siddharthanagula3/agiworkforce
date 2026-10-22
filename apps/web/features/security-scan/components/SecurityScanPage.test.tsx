@@ -40,8 +40,17 @@ const REPORT: SecurityScanCompletedReport = {
   findings: [FINDING],
 };
 
-function state(report: SecurityScanStateResponse['report']): SecurityScanStateResponse {
+const MODELS: SecurityScanStateResponse['models'] = [
+  { id: 'model-one', name: 'Model One', efforts: ['low', 'high'] },
+  { id: 'model-two', name: 'Model Two', efforts: [] },
+];
+
+function state(
+  report: SecurityScanStateResponse['report'],
+  models: SecurityScanStateResponse['models'] = [],
+): SecurityScanStateResponse {
   return {
+    models,
     session: {
       id: SESSION_ID,
       title: 'acme/app',
@@ -84,6 +93,64 @@ describe('SecurityScanPage', () => {
     expect(branch).toHaveTextContent('agi/app-1');
   });
 
+  it('offers no model or effort where the plan leaves the model to Auto', async () => {
+    render(<SecurityScanPage sessionId={SESSION_ID} api={fakeApi(state(null))} />);
+
+    await screen.findByRole('button', { name: 'Scan repository' });
+    expect(screen.queryByLabelText('Model')).toBeNull();
+    expect(screen.queryByLabelText('Effort')).toBeNull();
+  });
+
+  it('scans on Auto by default and sends the chosen model with an effort from the ladder', async () => {
+    const user = userEvent.setup();
+    const api = fakeApi(state(null, MODELS));
+    render(<SecurityScanPage sessionId={SESSION_ID} api={api} />);
+
+    const model = await screen.findByLabelText('Model');
+    expect(model).toHaveValue('');
+    expect(screen.queryByLabelText('Effort')).toBeNull();
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Scan repository' }));
+    await waitFor(() =>
+      expect(api.scan).toHaveBeenLastCalledWith(SESSION_ID, {
+        scope: null,
+        model: null,
+        effort: null,
+      }),
+    );
+
+    await user.selectOptions(model, 'model-one');
+    const effort = screen.getByLabelText('Effort');
+    expect(
+      within(effort)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual(['Default', 'Quick', 'Deep']);
+    await user.selectOptions(effort, 'high');
+    await user.click(screen.getByRole('checkbox'));
+    await user.click(screen.getByRole('button', { name: 'Scan again' }));
+    await waitFor(() =>
+      expect(api.scan).toHaveBeenLastCalledWith(SESSION_ID, {
+        scope: null,
+        model: 'model-one',
+        effort: 'high',
+      }),
+    );
+  });
+
+  it('drops the effort when the model changes to one that offers none', async () => {
+    const user = userEvent.setup();
+    render(<SecurityScanPage sessionId={SESSION_ID} api={fakeApi(state(null, MODELS))} />);
+
+    const model = await screen.findByLabelText('Model');
+    await user.selectOptions(model, 'model-one');
+    await user.selectOptions(screen.getByLabelText('Effort'), 'low');
+    await user.selectOptions(model, 'model-two');
+    expect(screen.queryByLabelText('Effort')).toBeNull();
+    await user.selectOptions(model, 'model-one');
+    expect(screen.getByLabelText('Effort')).toHaveValue('');
+  });
+
   it('leaves the branch out when the session has none', async () => {
     const api = fakeApi(state(null));
     const base = state(null);
@@ -112,7 +179,11 @@ describe('SecurityScanPage', () => {
     );
     await user.click(scan);
 
-    expect(api.scan).toHaveBeenCalledWith(SESSION_ID, { scope: 'src/api' });
+    expect(api.scan).toHaveBeenCalledWith(SESSION_ID, {
+      scope: 'src/api',
+      model: null,
+      effort: null,
+    });
     expect(await screen.findByText('1 validated finding')).toBeInTheDocument();
     expect(screen.getByText(/3 of 4 source files scanned/)).toBeInTheDocument();
     expect(screen.getByText('2 possible issues set aside after validation')).toBeInTheDocument();

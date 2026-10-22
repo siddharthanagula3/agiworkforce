@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  SECURITY_SCAN_EFFORTS,
+  SECURITY_SCAN_MODEL_MAX_LENGTH,
   SecurityScanDecisionRequestSchema,
   SecurityScanReportSchema,
   SecurityScanRequestSchema,
@@ -16,6 +18,25 @@ describe('security scan contract', () => {
     expect(SecurityScanRequestSchema.safeParse({ consent: false }).success).toBe(false);
     expect(SecurityScanRequestSchema.safeParse({}).success).toBe(false);
     expect(SecurityScanRequestSchema.safeParse({ consent: true, extra: 1 }).success).toBe(false);
+  });
+
+  it('takes an optional model and an effort from the shared ladder, and nothing else', () => {
+    const base = { consent: true as const };
+    expect(
+      SecurityScanRequestSchema.safeParse({ ...base, model: 'some-model', effort: 'high' }).success,
+    ).toBe(true);
+    for (const effort of SECURITY_SCAN_EFFORTS) {
+      expect(SecurityScanRequestSchema.safeParse({ ...base, effort }).success, effort).toBe(true);
+    }
+    expect(SecurityScanRequestSchema.safeParse({ ...base, effort: 'extreme' }).success).toBe(false);
+    expect(SecurityScanRequestSchema.safeParse({ ...base, model: '' }).success).toBe(false);
+    expect(
+      SecurityScanRequestSchema.safeParse({
+        ...base,
+        model: 'm'.repeat(SECURITY_SCAN_MODEL_MAX_LENGTH + 1),
+      }).success,
+    ).toBe(false);
+    expect(SecurityScanRequestSchema.safeParse({ ...base, provider: 'x' }).success).toBe(false);
   });
 
   it('accepts only the two decisions on a scan id', () => {

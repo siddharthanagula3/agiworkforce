@@ -51,7 +51,13 @@ import type {
 } from '@agiworkforce/cloud-contracts';
 import type { SecurityScanModel, SecurityScanModelCall } from '../model';
 import { SECURITY_SCAN_REPLAY_MESSAGE, SecurityScanReportReplayError } from '../report-signing';
-import { decideSecurityScanFinding, readSecurityScanState, runSecurityScan } from '../service';
+import { SECURITY_SCAN_EFFORTS } from '@agiworkforce/cloud-contracts';
+import {
+  decideSecurityScanFinding,
+  readSecurityScanState,
+  runSecurityScan,
+  securityScanModelOptions,
+} from '../service';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const COMMIT = 'a'.repeat(40);
@@ -240,7 +246,94 @@ describe('readSecurityScanState', () => {
   });
 });
 
+describe('the models a scan may use', () => {
+  it('lists catalogue models with the efforts each offers where the plan may choose a model', () => {
+    const options = securityScanModelOptions('pro');
+
+    expect(options.length).toBeGreaterThan(0);
+    expect(options.every((option) => option.id !== '' && option.name !== '')).toBe(true);
+    expect(options.some((option) => option.efforts.length > 0)).toBe(true);
+    for (const option of options) {
+      for (const effort of option.efforts) expect(SECURITY_SCAN_EFFORTS).toContain(effort);
+    }
+  });
+
+  it('lists none where the plan leaves the model to Auto, and sends the list with the state', async () => {
+    expect(securityScanModelOptions('free')).toEqual([]);
+    fakeWorkspace();
+
+    const paid = await readSecurityScanState(context(scriptedModel({ scan: {} })));
+    const free = await readSecurityScanState({
+      ...context(scriptedModel({ scan: {} })),
+      planTier: 'free',
+    });
+
+    expect(paid.models).toEqual(securityScanModelOptions('pro'));
+    expect(free.models).toEqual([]);
+  });
+});
+
 describe('runSecurityScan', () => {
+  it('scans on Auto with no effort when nothing is chosen', async () => {
+    fakeWorkspace();
+    const resolveModel = vi.fn(async () => scriptedModel({ scan: {} }));
+
+    await runSecurityScan({ ...context(scriptedModel({ scan: {} })), resolveModel }, null);
+
+    expect(resolveModel).toHaveBeenCalledWith(
+      expect.objectContaining({ selection: null, effort: null, planTier: 'pro' }),
+    );
+  });
+
+  it('resolves the chosen model and effort through the model resolver', async () => {
+    fakeWorkspace();
+    const option = securityScanModelOptions('pro').find(
+      (candidate) => candidate.efforts.length > 0,
+    );
+    expect(option).toBeDefined();
+    const effort = option!.efforts[0]!;
+    const resolveModel = vi.fn(async () => scriptedModel({ scan: {} }));
+
+    await runSecurityScan({ ...context(scriptedModel({ scan: {} })), resolveModel }, null, {
+      model: option!.id,
+      effort,
+    });
+
+    expect(resolveModel).toHaveBeenCalledWith(
+      expect.objectContaining({ selection: option!.id, effort }),
+    );
+  });
+
+  it('refuses a model outside the list, an effort without a model, and an effort the model lacks', async () => {
+    const resolveModel = vi.fn();
+    const run = (choice: { model?: string; effort?: 'low' }, planTier = 'pro') =>
+      runSecurityScan(
+        { ...context(scriptedModel({ scan: {} })), planTier, resolveModel },
+        null,
+        choice,
+      );
+
+    await expect(run({ model: 'not-a-catalogue-model' })).rejects.toBeInstanceOf(
+      CloudCodeValidationError,
+    );
+    await expect(run({ effort: 'low' })).rejects.toBeInstanceOf(CloudCodeValidationError);
+    const lacking = securityScanModelOptions('pro').find((candidate) =>
+      SECURITY_SCAN_EFFORTS.some((effort) => !candidate.efforts.includes(effort)),
+    );
+    const missing = SECURITY_SCAN_EFFORTS.find((effort) => !lacking!.efforts.includes(effort));
+    await expect(
+      runSecurityScan({ ...context(scriptedModel({ scan: {} })), resolveModel }, null, {
+        model: lacking!.id,
+        effort: missing!,
+      }),
+    ).rejects.toBeInstanceOf(CloudCodeValidationError);
+    const anyModel = securityScanModelOptions('pro')[0]!;
+    await expect(run({ model: anyModel.id }, 'free')).rejects.toBeInstanceOf(
+      CloudCodeValidationError,
+    );
+    expect(resolveModel).not.toHaveBeenCalled();
+  });
+
   it('keeps only findings that are anchored, confirmed and whose fix applies', async () => {
     const workspace = fakeWorkspace();
     const model = scriptedModel({ scan: { findings: [VALID_CANDIDATE, INVENTED_CANDIDATE] } });

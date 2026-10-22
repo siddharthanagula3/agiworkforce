@@ -3,7 +3,12 @@ import 'server-only';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { estimateTokens, resolveAutoRoute } from '@agiworkforce/routing';
-import { modelDisplayNameById } from '@agiworkforce/types';
+import {
+  clampEffortToEntitlement,
+  getModelEffortOptions,
+  modelDisplayNameById,
+  type Effort,
+} from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { logger } from '@/lib/logger';
@@ -64,6 +69,10 @@ export interface SecurityScanModelInput {
   organizationId: string | null;
   planTier: string;
   scanId: string;
+  /** A catalogue model id the account chose, or null for Auto. */
+  selection?: string | null;
+  /** Reasoning effort for the chosen model, or null to leave it at the model's default. */
+  effort?: Effort | null;
   signal?: AbortSignal;
 }
 
@@ -71,7 +80,7 @@ export async function resolveSecurityScanModel(
   input: SecurityScanModelInput,
 ): Promise<SecurityScanModel> {
   const routing = await sideCallRoutingRequest(input.db, input.userId, {
-    selection: 'auto',
+    selection: input.selection ?? 'auto',
     taskType: 'coding',
     subscriptionTier: input.planTier,
     trustMode: 'managed_cloud',
@@ -84,6 +93,10 @@ export async function resolveSecurityScanModel(
     throw new SecurityScanNoRouteError();
   }
   const route = decision;
+  const effort =
+    input.effort && getModelEffortOptions(route.modelKey).includes(input.effort)
+      ? clampEffortToEntitlement(route.modelKey, input.effort, input.planTier)
+      : undefined;
   const dispatchProvider = dispatchProviderForSelectedRoute(route);
   if (!(await sideCallProviderAllowed(input.db, input.userId, dispatchProvider))) {
     throw new SecurityScanNoRouteError();
@@ -133,6 +146,7 @@ export async function resolveSecurityScanModel(
       temperature: 0,
       stream: false,
     });
+    if (effort) request.effort = effort;
     const timeout = AbortSignal.timeout(PROVIDER_TIMEOUT_MS);
     const signal = input.signal ? AbortSignal.any([input.signal, timeout]) : timeout;
     let response;

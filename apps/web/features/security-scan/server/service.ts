@@ -2,6 +2,13 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  canAccessManualModelSelection,
+  canAccessModelForSubscriptionTier,
+  getModelEffortOptions,
+  getSelectableModels,
+  type Effort,
+} from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import {
   CloudCodeConflictError,
@@ -25,6 +32,7 @@ import {
   type SecurityScanDeliveryResult,
   type SecurityScanDropped,
   type SecurityScanFinding,
+  type SecurityScanModelOption,
   type SecurityScanReport,
   type SecurityScanStateResponse,
 } from '@agiworkforce/cloud-contracts';
@@ -63,6 +71,48 @@ const RUNNING_STALE_MS = 6 * 60 * 1000;
 const COMMIT_SUBJECT_PREFIX = 'fix: ';
 const GENERIC_SCAN_FAILURE = 'The scan could not finish. Try again.';
 const STALE_SCAN_FAILURE = 'The scan stopped before it finished. Run it again.';
+
+const SCAN_MODEL_TYPES: ReadonlySet<string> = new Set(['chat', 'code', 'reasoning', 'multimodal']);
+
+export interface SecurityScanChoice {
+  model?: string | undefined;
+  effort?: Effort | undefined;
+}
+
+export function securityScanModelOptions(planTier: string): SecurityScanModelOption[] {
+  if (!canAccessManualModelSelection(planTier)) return [];
+  return getSelectableModels()
+    .filter(
+      (model) =>
+        SCAN_MODEL_TYPES.has(model.modelType) &&
+        canAccessModelForSubscriptionTier(model.id, planTier),
+    )
+    .map((model) => ({
+      id: model.id,
+      name: model.name,
+      efforts: [...getModelEffortOptions(model.id)],
+    }));
+}
+
+function validateScanChoice(
+  choice: SecurityScanChoice,
+  planTier: string,
+): { selection: string | null; effort: Effort | null } {
+  if (choice.model === undefined) {
+    if (choice.effort !== undefined) {
+      throw new CloudCodeValidationError('Choose a model before choosing an effort');
+    }
+    return { selection: null, effort: null };
+  }
+  const option = securityScanModelOptions(planTier).find(
+    (candidate) => candidate.id === choice.model,
+  );
+  if (!option) throw new CloudCodeValidationError('Choose a model from the list');
+  if (choice.effort !== undefined && !option.efforts.includes(choice.effort)) {
+    throw new CloudCodeValidationError(`${option.name} does not offer that effort`);
+  }
+  return { selection: option.id, effort: choice.effort ?? null };
+}
 
 export interface SecurityScanServiceContext {
   db: DatabaseAdapter;
@@ -333,7 +383,9 @@ async function recordFailure(context: SecurityScanServiceContext, report: Securi
 export async function runSecurityScan(
   context: SecurityScanServiceContext,
   scope: string | null,
+  choice: SecurityScanChoice = {},
 ): Promise<SecurityScanCompletedReport> {
+  const { selection, effort } = validateScanChoice(choice, context.planTier);
   const scanId = randomUUID();
   const startedAt = new Date().toISOString();
   const session = await getCloudCodeSession(context.db, context.owner, context.sessionId);
@@ -347,6 +399,8 @@ export async function runSecurityScan(
     organizationId: context.owner.organizationId,
     planTier: context.planTier,
     scanId,
+    selection,
+    effort,
     ...(context.signal ? { signal: context.signal } : {}),
   });
 
@@ -438,8 +492,9 @@ export async function readSecurityScanState(
     workingBranch: session.workingBranch,
     pullRequestUrl: session.pullRequestUrl,
   };
+  const models = securityScanModelOptions(context.planTier);
   if (session.state === 'closed' || !session.repositoryUrl) {
-    return { session: summary, report: null };
+    return { session: summary, report: null, models };
   }
   const report = await withSecurityScanWorkspace(
     context.db,
@@ -455,7 +510,7 @@ export async function readSecurityScanState(
       }
     },
   );
-  return { session: summary, report: presentReport(report, Date.now()) };
+  return { session: summary, report: presentReport(report, Date.now()), models };
 }
 
 const STAGED_CHANGES_COMMAND = 'git diff --cached --name-only -z';

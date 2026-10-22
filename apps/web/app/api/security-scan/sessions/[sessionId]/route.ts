@@ -56,9 +56,12 @@ async function handleScan(request: NextRequest, context: RouteContext) {
       );
     }
     const parsed = SecurityScanRequestSchema.safeParse(body);
-    if (!parsed.success) throw createError.validation('scope must be a folder path');
+    if (!parsed.success) throw createError.validation('The scan request is not valid');
     const scope = parseScanScope(parsed.data.scope);
-    const report = await runSecurityScan(scan, scope);
+    const report = await runSecurityScan(scan, scope, {
+      model: parsed.data.model,
+      effort: parsed.data.effort,
+    });
     await recordAuditEvent({
       userId: scan.owner.userId,
       organizationId: scan.owner.organizationId,

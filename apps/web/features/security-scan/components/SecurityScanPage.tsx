@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink } from '@agiworkforce/icons';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
+import { EFFORT_LABEL, type Effort } from '@agiworkforce/types';
 import { CODE_COPY, codeSessionPath } from '@/features/code/code-surface';
 import { toUserMessage } from '@/lib/user-error-message';
 
@@ -203,11 +204,15 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
   const [scanError, setScanError] = useState<string | null>(null);
   const [consent, setConsent] = useState(false);
   const [scope, setScope] = useState('');
+  const [modelId, setModelId] = useState('');
+  const [effort, setEffort] = useState<Effort | ''>('');
   const [decidingId, setDecidingId] = useState<string | null>(null);
   const [decisionError, setDecisionError] = useState<string | null>(null);
   const [deliveries, setDeliveries] = useState<Record<string, SecurityScanDeliveryResult>>({});
   const { confirm, dialog } = useConfirmAction();
   const scopeId = useId();
+  const modelFieldId = useId();
+  const effortFieldId = useId();
   const consentId = useId();
 
   const load = useCallback(async () => {
@@ -240,7 +245,11 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
     setDecisionError(null);
     try {
       const trimmed = scope.trim();
-      const completed = await api.scan(sessionId, { scope: trimmed ? trimmed : null });
+      const completed = await api.scan(sessionId, {
+        scope: trimmed ? trimmed : null,
+        model: modelId || null,
+        effort: effort || null,
+      });
       setDeliveries({});
       setConsent(false);
       setState((current) => (current ? { ...current, report: completed } : current));
@@ -335,6 +344,7 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
   }
 
   const completed = report?.status === SECURITY_SCAN_STATUS.completed ? report : null;
+  const chosenModel = state.models.find((option) => option.id === modelId) ?? null;
   const failure =
     scanError ?? (report?.status === SECURITY_SCAN_STATUS.failed ? report.error : null);
 
@@ -361,6 +371,47 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
             onChange={(event) => setScope(event.target.value)}
           />
         </label>
+        {state.models.length > 0 && (
+          <label className={styles['field']} htmlFor={modelFieldId}>
+            <span className={styles['label']}>{SECURITY_SCAN_COPY.modelLabel}</span>
+            <select
+              id={modelFieldId}
+              className={styles['input']}
+              value={modelId}
+              disabled={running}
+              onChange={(event) => {
+                setModelId(event.target.value);
+                setEffort('');
+              }}
+            >
+              <option value="">{SECURITY_SCAN_COPY.modelAuto}</option>
+              {state.models.map((option) => (
+                <option key={option.id} value={option.id}>
+                  {option.name}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+        {chosenModel !== null && chosenModel.efforts.length > 0 && (
+          <label className={styles['field']} htmlFor={effortFieldId}>
+            <span className={styles['label']}>{SECURITY_SCAN_COPY.effortLabel}</span>
+            <select
+              id={effortFieldId}
+              className={styles['input']}
+              value={effort}
+              disabled={running}
+              onChange={(event) => setEffort(event.target.value as Effort | '')}
+            >
+              <option value="">{SECURITY_SCAN_COPY.effortDefault}</option>
+              {chosenModel.efforts.map((level) => (
+                <option key={level} value={level}>
+                  {EFFORT_LABEL[level]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         <label className={styles['consent']} htmlFor={consentId}>
           <input
             id={consentId}

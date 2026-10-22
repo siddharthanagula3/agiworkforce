@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import type { LifecycleStatus } from '@agiworkforce/types';
+import { EFFORT_LABEL, type Effort, type LifecycleStatus } from '@agiworkforce/types';
 
 export const SECURITY_SCAN_STATUS = {
   running: 'running',
@@ -17,6 +17,8 @@ export const SECURITY_SCAN_DECISIONS = ['approve', 'dismiss'] as const;
 export type SecurityScanDecision = (typeof SECURITY_SCAN_DECISIONS)[number];
 
 export const SECURITY_SCAN_SCOPE_MAX_LENGTH = 200;
+export const SECURITY_SCAN_MODEL_MAX_LENGTH = 120;
+export const SECURITY_SCAN_EFFORTS = Object.keys(EFFORT_LABEL) as [Effort, ...Effort[]];
 export const SECURITY_SCAN_FINDING_ID_PATTERN = /^[0-9a-f]{16}$/;
 
 const SECURITY_SCAN_API_ROOT = '/api/security-scan/sessions';
@@ -33,6 +35,8 @@ export const SecurityScanRequestSchema = z
   .object({
     consent: z.literal(true),
     scope: z.string().max(SECURITY_SCAN_SCOPE_MAX_LENGTH).optional(),
+    model: z.string().min(1).max(SECURITY_SCAN_MODEL_MAX_LENGTH).optional(),
+    effort: z.enum(SECURITY_SCAN_EFFORTS).optional(),
   })
   .strict();
 export type SecurityScanRequest = z.infer<typeof SecurityScanRequestSchema>;
@@ -135,9 +139,17 @@ export interface SecurityScanSessionSummary {
   pullRequestUrl: string | null;
 }
 
+export interface SecurityScanModelOption {
+  id: string;
+  name: string;
+  efforts: Effort[];
+}
+
 export interface SecurityScanStateResponse {
   session: SecurityScanSessionSummary;
   report: SecurityScanReport | null;
+  /** The models this account may choose for a scan. Empty means Auto only. */
+  models: SecurityScanModelOption[];
 }
 
 export interface SecurityScanResponse {
