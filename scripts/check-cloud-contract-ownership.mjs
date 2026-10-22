@@ -98,6 +98,7 @@ const cloudModules = [
   'artifact-comments',
   'studio-library',
   'google-docs-export',
+  'artifact-cloud-save',
   'security-scan',
 ];
 

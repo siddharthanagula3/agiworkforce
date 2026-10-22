@@ -154,6 +154,7 @@
     "agent-drafts",
     "agent-events",
     "agents",
+    "artifact-cloud-save",
     "artifact-comments",
     "artifact-index",
     "artifact-library",

@@ -24,7 +24,7 @@ import {
 export const GRAPH_ADAPTER_CONNECTOR_IDS = ['outlook', 'onedrive', 'sharepoint', 'teams'] as const;
 export type GraphAdapterConnectorId = (typeof GRAPH_ADAPTER_CONNECTOR_IDS)[number];
 
-const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
+export const GRAPH_API_BASE = 'https://graph.microsoft.com/v1.0';
 const REQUEST_TIMEOUT_MS = 20_000;
 const DOWNLOAD_MAX_REDIRECTS = 3;
 const UNAUTHORIZED_STATUS = 401;

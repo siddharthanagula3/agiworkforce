@@ -248,6 +248,8 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
  */
 export const GOOGLE_DRIVE_FILE_CREATE_SCOPE = 'drive.file';
 
+export const ONEDRIVE_APP_FOLDER_SCOPE = 'Files.ReadWrite.AppFolder';
+
 /**
  * Scopes no enforced ceiling may ever admit, regardless of provider. One
  * place for what "broader than declared" means, read by both the ceiling

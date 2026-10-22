@@ -94,4 +94,5 @@ export * from './connector-trust-copy';
 export * from './artifact-comments';
 export * from './studio-library';
 export * from './google-docs-export';
+export * from './artifact-cloud-save';
 export * from './security-scan';

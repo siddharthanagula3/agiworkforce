@@ -17,6 +17,7 @@ import {
   Eye,
   Download,
   Share2,
+  Cloud,
   Copy,
   Check,
   RefreshCw,
@@ -50,6 +51,14 @@ import {
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import {
+  ARTIFACT_CLOUD_SAVE_MAX_BYTES,
+  ARTIFACT_CLOUD_SAVE_REFUSALS,
+  ARTIFACT_DRIVE_SAVE_PATH,
+  ARTIFACT_ONEDRIVE_SAVE_PATH,
+  artifactCloudFileName,
+  isArtifactCloudSaveRefusalCode,
+  type ArtifactCloudSaveRequest,
+  type ArtifactCloudSaveResponse,
   GOOGLE_DOCS_EXPORT_PATH,
   GOOGLE_DOCS_EXPORT_REFUSALS,
   isGoogleDocsExportRefusalCode,
@@ -436,6 +445,54 @@ function resolveArtifactImageSource(raw: string): string | null {
   }
   return null;
 }
+
+const CLOUD_TEXT_MIME_BY_EXTENSION: Readonly<Record<string, string>> = {
+  html: 'text/html',
+  htm: 'text/html',
+  md: 'text/markdown',
+  svg: 'image/svg+xml',
+  json: 'application/json',
+};
+
+function cloudFileExtension(language: string | null | undefined, fallback: string): string {
+  const cleaned = (language ?? '').toLowerCase().replace(/^\.+/, '');
+  return /^[a-z0-9]{1,12}$/.test(cleaned) ? cleaned : fallback;
+}
+
+function cloudFileName(title: string, extension: string): string {
+  const base = artifactCloudFileName(title);
+  return base.toLowerCase().endsWith(`.${extension}`)
+    ? base
+    : artifactCloudFileName(`${base}.${extension}`);
+}
+
+function blobToBase64(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUrl = String(reader.result);
+      resolve(dataUrl.slice(dataUrl.indexOf(',') + 1));
+    };
+    reader.onerror = () => reject(reader.error);
+    reader.readAsDataURL(blob);
+  });
+}
+
+const CLOUD_SAVE_DESTINATIONS = {
+  drive: {
+    path: ARTIFACT_DRIVE_SAVE_PATH,
+    label: 'Google Drive',
+    failure: 'The file was not saved to Google Drive.',
+    success: 'Saved to Google Drive',
+  },
+  onedrive: {
+    path: ARTIFACT_ONEDRIVE_SAVE_PATH,
+    label: 'OneDrive',
+    failure: 'The file was not saved to OneDrive.',
+    success: 'Saved to the app folder in OneDrive',
+  },
+} as const;
+type CloudSaveDestination = keyof typeof CLOUD_SAVE_DESTINATIONS;
 
 /**
  * Stepping forward from one artifact into the next in its lineage has to land
@@ -1276,6 +1333,112 @@ export function ArtifactPreview({
     }
   };
 
+  const cloudSaveBinaryUri =
+    generatedFileSummary.primaryUri ??
+    (isImage ? imageSrc : null) ??
+    (activeContent.startsWith('data:') ? activeContent : null);
+  const cloudSaveIsBinary = Boolean(cloudSaveBinaryUri) || isPdf || isDocx;
+  const canSaveToCloud = cloudSaveIsBinary || activeContent.trim().length > 0;
+
+  const buildCloudSaveRequest = async (): Promise<ArtifactCloudSaveRequest | 'too-large'> => {
+    const title = artifact.title || 'artifact';
+    if (!cloudSaveIsBinary) {
+      const extension = cloudFileExtension(
+        isMarkdownDoc ? 'md' : artifact.language,
+        artifact.type === 'html' || artifact.type === 'svg' ? artifact.type : 'txt',
+      );
+      const source = spreadsheetSafeExport(activeContent, extension);
+      const content = source.body;
+      if (new TextEncoder().encode(content).byteLength > ARTIFACT_CLOUD_SAVE_MAX_BYTES) {
+        return 'too-large';
+      }
+      return {
+        fileName: cloudFileName(title, extension),
+        mimeType: CLOUD_TEXT_MIME_BY_EXTENSION[extension] ?? source.mimeType.split(';')[0]!.trim(),
+        encoding: 'utf8',
+        content,
+      };
+    }
+    let blob: Blob;
+    if (cloudSaveBinaryUri) {
+      const response = await fetch(cloudSaveBinaryUri);
+      if (!response.ok) throw new Error(`HTTP ${response.status}`);
+      blob = await response.blob();
+    } else {
+      blob = new Blob([activeContent]);
+    }
+    if (blob.size > ARTIFACT_CLOUD_SAVE_MAX_BYTES) return 'too-large';
+    const extension = cloudFileExtension(
+      artifact.language,
+      isPdf ? 'pdf' : isDocx ? 'docx' : isImage ? 'png' : 'bin',
+    );
+    return {
+      fileName: generatedFileSummary.primaryUri
+        ? artifactCloudFileName(generatedFileSummary.fileName)
+        : cloudFileName(title, extension),
+      mimeType: (blob.type || generatedFileSummary.mimeType || 'application/octet-stream')
+        .split(';')[0]!
+        .trim(),
+      encoding: 'base64',
+      content: await blobToBase64(blob),
+    };
+  };
+
+  const [cloudSaving, setCloudSaving] = useState<CloudSaveDestination | null>(null);
+  const handleSaveToCloud = async (destination: CloudSaveDestination) => {
+    if (cloudSaving) return;
+    const { path, label, failure, success } = CLOUD_SAVE_DESTINATIONS[destination];
+    setCloudSaving(destination);
+    try {
+      const request = await buildCloudSaveRequest();
+      if (request === 'too-large') {
+        toast.error(`This file is too large to save to ${label} from here.`);
+        return;
+      }
+      const response = await fetch(path, {
+        method: 'POST',
+        credentials: 'include',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify(request),
+      });
+      const body = (await response
+        .json()
+        .catch(() => ({}))) as Partial<ArtifactCloudSaveResponse> & {
+        error?: { code?: string; message?: string };
+      };
+      if (!response.ok || !body.fileName) {
+        const code = body.error?.code ?? '';
+        const needsConnection = isArtifactCloudSaveRefusalCode(code);
+        toast.error(needsConnection ? ARTIFACT_CLOUD_SAVE_REFUSALS[code] : failure, {
+          ...(needsConnection
+            ? {
+                action: {
+                  label: 'Open connectors',
+                  onClick: () => window.open('/connectors', '_self'),
+                },
+              }
+            : {}),
+        });
+        return;
+      }
+      const url = body.url;
+      toast.success(success, {
+        ...(url
+          ? {
+              action: {
+                label: 'Open',
+                onClick: () => window.open(url, '_blank', 'noopener,noreferrer'),
+              },
+            }
+          : {}),
+      });
+    } catch (error) {
+      toast.error(toUserMessage(error, failure));
+    } finally {
+      setCloudSaving(null);
+    }
+  };
+
   const handleExportDeckPdf = async () => {
     const title = artifact.title || 'Presentation';
     const pending = toast.loading('Preparing the PDF…');
@@ -2038,6 +2201,20 @@ export function ArtifactPreview({
         disabled: savingToGoogleDocs,
         testId: 'artifact-save-google-docs',
         onSelect: () => void handleSaveToGoogleDocs(),
+      });
+    }
+    if (canSaveToCloud) {
+      (['drive', 'onedrive'] as const).forEach((destination) => {
+        const { label } = CLOUD_SAVE_DESTINATIONS[destination];
+        moreMenuItems.push({
+          id: `save-${destination}`,
+          label: cloudSaving === destination ? `Saving to ${label}…` : `Save to ${label}`,
+          icon: Cloud,
+          group: 'Keep',
+          disabled: cloudSaving !== null,
+          testId: `artifact-save-${destination}`,
+          onSelect: () => void handleSaveToCloud(destination),
+        });
       });
     }
     if (isTextDocument && onRequestEdits && isLatestVersion) {
