@@ -51,6 +51,8 @@ const MEMORY_SCOPE_EXPLANATION: ReadonlyArray<{ scope: string; meaning: string }
 
 const SENSITIVE_TOPICS_DESCRIPTION = `Let AGI remember your ${SENSITIVE_MEMORY_SUBJECTS} from chats. While this is off, AGI is designed to keep these only when you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or add them here. Memories saved earlier stay until you delete them.`;
 
+const NEEDS_PERSISTENT_MEMORY_HINT = 'Turn on persistent memory to change this.';
+
 const MEMORY_DISABLED_CONTRACT =
   'Turning persistent memory off stops both halves: nothing new is saved, and the memories you already have are no longer read into any answer. They are kept until you delete them.';
 
@@ -90,27 +92,38 @@ function pillButtonStyle(disabled: boolean): CSSProperties {
   };
 }
 
-function memoryRow(title: string, description: string, control: ReactNode) {
+interface MemoryRowHint {
+  id: string;
+  text: string;
+}
+
+function memoryRow(title: string, description: string, control: ReactNode, hint?: MemoryRowHint) {
   return (
-    <div
+    <li
       style={{
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'space-between',
         gap: 'var(--space-4)',
-        padding: 'var(--space-3) var(--space-4)',
-        border: '1px solid var(--settings-border)',
-        borderRadius: 'var(--radius-md)',
+        padding: 'var(--space-4) 0',
       }}
     >
-      <div>
-        <p style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)', margin: 0 }}>{title}</p>
+      <div style={{ minWidth: 0 }}>
+        <p style={{ fontSize: 16, color: 'var(--text-1)', margin: 0 }}>{title}</p>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 'var(--space-1) 0 0' }}>
           {description}
         </p>
+        {hint ? (
+          <p
+            id={hint.id}
+            style={{ fontSize: 14, color: 'var(--text-2)', margin: 'var(--space-1) 0 0' }}
+          >
+            {hint.text}
+          </p>
+        ) : null}
       </div>
       {control}
-    </div>
+    </li>
   );
 }
 
@@ -118,6 +131,9 @@ export function MemorySection() {
   const { settings, organizationMemoryAllowed, saveError, retrySave, loadError, setBoolean } =
     useCapabilitiesPreferences();
   const togglesDisabled = loadError !== null || !organizationMemoryAllowed;
+  const needsMemory = !togglesDisabled && !settings.memory;
+  const dependentHint = (id: string): MemoryRowHint | undefined =>
+    needsMemory ? { id, text: NEEDS_PERSISTENT_MEMORY_HINT } : undefined;
   const memoryCount = useMemoryStore(selectMemoryCount);
   const isEmpty = memoryCount === 0;
   const clearAllMemories = useMemoryStore((s) => s.clear);
@@ -256,16 +272,18 @@ export function MemorySection() {
           </div>
         ) : null}
 
-        {memoryRow(
-          'Persistent memory',
-          'Allow AGI to remember details across conversations',
-          <Switch
-            aria-label="Persistent memory"
-            checked={settings.memory}
-            disabled={togglesDisabled}
-            onCheckedChange={(value) => setBoolean('memory', value)}
-          />,
-        )}
+        <ul className="divide-y divide-border" style={{ margin: 0, padding: 0 }}>
+          {memoryRow(
+            'Persistent memory',
+            'Allow AGI to remember details across conversations',
+            <Switch
+              aria-label="Persistent memory"
+              checked={settings.memory}
+              disabled={togglesDisabled}
+              onCheckedChange={(value) => setBoolean('memory', value)}
+            />,
+          )}
+        </ul>
 
         <div
           style={{
@@ -273,7 +291,6 @@ export function MemorySection() {
             alignItems: 'center',
             justifyContent: 'space-between',
             gap: 'var(--space-4)',
-            padding: 'var(--space-1) var(--space-4)',
           }}
         >
           <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }} role="status">
@@ -334,16 +351,18 @@ export function MemorySection() {
         ) : null}
       </section>
 
-      <section style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+      <ul className="divide-y divide-border" style={{ margin: 0, padding: 0 }}>
         {memoryRow(
           'Save memories from chats',
           'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
           <Switch
             aria-label="Save memories from chats"
+            aria-describedby={needsMemory ? 'memory-hint-save-from-chats' : undefined}
             checked={settings.generateFromHistory}
             disabled={togglesDisabled || !settings.memory}
             onCheckedChange={(value) => setBoolean('generateFromHistory', value)}
           />,
+          dependentHint('memory-hint-save-from-chats'),
         )}
 
         {memoryRow(
@@ -362,10 +381,12 @@ export function MemorySection() {
           SENSITIVE_TOPICS_DESCRIPTION,
           <Switch
             aria-label="Include sensitive topics in memory"
+            aria-describedby={needsMemory ? 'memory-hint-sensitive-topics' : undefined}
             checked={settings.includeSensitiveTopics}
             disabled={togglesDisabled || !settings.memory}
             onCheckedChange={(value) => setBoolean('includeSensitiveTopics', value)}
           />,
+          dependentHint('memory-hint-sensitive-topics'),
         )}
 
         {memoryRow(
@@ -373,12 +394,14 @@ export function MemorySection() {
           'Create memories from chats that use tools, connectors, code, or web search',
           <Switch
             aria-label="Allow memory generation from tool-assisted chats"
+            aria-describedby={needsMemory ? 'memory-hint-tool-assisted' : undefined}
             checked={settings.allowToolAssistedGeneration}
             disabled={togglesDisabled || !settings.memory}
             onCheckedChange={(value) => setBoolean('allowToolAssistedGeneration', value)}
           />,
+          dependentHint('memory-hint-tool-assisted'),
         )}
-      </section>
+      </ul>
 
       <section
         aria-labelledby="memory-scope-heading"

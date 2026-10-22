@@ -213,3 +213,38 @@ describe('MemorySection controls', () => {
     expect(click).not.toHaveBeenCalled();
   });
 });
+
+describe('MemorySection while persistent memory is off', () => {
+  beforeEach(() => mockCapabilities.mockReset());
+
+  it('says why the tool-assisted toggle is locked and links the reason to it', () => {
+    const value = capabilities(true);
+    mockCapabilities.mockReturnValue({ ...value, settings: { ...value.settings, memory: false } });
+    render(<MemorySection />);
+
+    const toggle = screen.getByRole('switch', {
+      name: 'Allow memory generation from tool-assisted chats',
+    });
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAccessibleDescription('Turn on persistent memory to change this.');
+    expect(screen.getByRole('switch', { name: 'Search past chats' })).not.toHaveAttribute(
+      'aria-describedby',
+    );
+  });
+
+  it('shows no locked hint once persistent memory is on', () => {
+    mockCapabilities.mockReturnValue(capabilities(true));
+    render(<MemorySection />);
+
+    expect(screen.queryByText('Turn on persistent memory to change this.')).toBeNull();
+  });
+
+  it('lists the memory rows as one divided list instead of boxed cards', () => {
+    mockCapabilities.mockReturnValue(capabilities(true));
+    render(<MemorySection />);
+
+    const row = screen.getByRole('switch', { name: 'Search past chats' }).closest('li');
+    expect(row?.parentElement).toHaveClass('divide-y');
+    expect(row).not.toHaveStyle({ borderRadius: 'var(--radius-md)' });
+  });
+});

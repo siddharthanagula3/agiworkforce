@@ -20,13 +20,13 @@ export function CapabilitiesSection() {
     useCapabilitiesPreferences();
 
   const row = (title: string, description: string, control: ReactNode) => (
-    <div className="flex items-center justify-between rounded-lg border border-border/40 p-4">
-      <div>
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground">{description}</p>
+    <li className="flex items-center justify-between gap-4 py-4">
+      <div className="min-w-0 max-w-xl">
+        <p className="text-base text-foreground">{title}</p>
+        <p className="mt-1 text-sm text-muted-foreground">{description}</p>
       </div>
       {control}
-    </div>
+    </li>
   );
 
   return (
@@ -72,19 +72,22 @@ export function CapabilitiesSection() {
         ) : null}
       </div>
 
-      <section className="flex flex-col gap-4">
-        <h3 className="text-h5 uppercase tracking-wider text-muted-foreground">Code execution</h3>
-
-        {row(
-          'Cloud code execution and file creation',
-          'Lets AGI run code and build files in a sandbox to answer you. The sandbox can reach only GitHub, npm and PyPI, and files you attach are copied into it. Turning it off refuses those tools server-side, so a chat can no longer run code even if it asks to.',
-          <Switch
-            aria-label="Cloud code execution and file creation"
-            checked={settings.cloudCodeExecution}
-            disabled={loadError !== null}
-            onCheckedChange={(value) => setBoolean('cloudCodeExecution', value)}
-          />,
-        )}
+      <section aria-labelledby="capabilities-code-execution-heading" className="flex flex-col">
+        <h2 id="capabilities-code-execution-heading" className="text-h3 text-foreground">
+          Code execution and file creation
+        </h2>
+        <ul className="divide-y divide-border">
+          {row(
+            'Cloud code execution and file creation',
+            'Lets AGI run code and create files in a sandbox while it answers you.',
+            <Switch
+              aria-label="Cloud code execution and file creation"
+              checked={settings.cloudCodeExecution}
+              disabled={loadError !== null}
+              onCheckedChange={(value) => setBoolean('cloudCodeExecution', value)}
+            />,
+          )}
+        </ul>
       </section>
 
       <LocalAccessSection />

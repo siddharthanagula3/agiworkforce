@@ -64,6 +64,21 @@ describe('CapabilitiesSection', () => {
     if (CLI_AVAILABILITY_NOTE) expect(note.textContent).not.toMatch(/available in the CLI/);
   });
 
+  it('titles the code execution group as a section and lists its row with a one-line helper', () => {
+    render(<CapabilitiesSection />);
+
+    expect(
+      screen.getByRole('heading', { level: 2, name: 'Code execution and file creation' }),
+    ).toBeVisible();
+    const row = screen
+      .getByRole('switch', { name: 'Cloud code execution and file creation' })
+      .closest('li');
+    expect(row?.parentElement).toHaveClass('divide-y');
+    expect(row).toHaveTextContent(
+      'Lets AGI run code and create files in a sandbox while it answers you.',
+    );
+  });
+
   it('still renders the code execution toggle it kept', () => {
     render(<CapabilitiesSection />);
 
