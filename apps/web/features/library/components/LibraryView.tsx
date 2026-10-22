@@ -261,9 +261,10 @@ export function LibraryView() {
         openConversation: (conversationId) =>
           router.push(`/chat/${encodeURIComponent(conversationId)}`),
       },
-      // 'excel' is deliberately absent: the export service builds PDF and DOCX
-      // and there is no xlsx writer on web, so offering it would be a control
-      // that fails after the user picks it.
+      // 'excel' is deliberately absent: this export converts document text, and
+      // only PDF and DOCX are built from it. Workbooks are made server side by
+      // the office file tool and download as that file, so an Excel choice here
+      // would fail after the user picks it.
       nativeExportFormats: ['pdf', 'word'] as const,
       exportNative: (format, _artifactId, content, title) =>
         exportDocument(content, format === 'word' ? 'docx' : 'pdf', title || 'artifact', {

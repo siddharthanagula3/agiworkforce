@@ -5,6 +5,7 @@ import { Download, Globe2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { cn } from '@shared/lib/utils';
+import { formatBytes } from '@shared/utils/format';
 import { toUserMessage } from '@/lib/user-error-message';
 import { SITE_VISIBILITY_LABELS } from '@features/sites/lib/site-format';
 import { usePublishedSite } from '@features/sites/stores/published-sites-store';
@@ -28,6 +29,7 @@ export const ARTIFACT_DOWNLOAD_ACTION = 'Download';
 export const PUBLISHED_LABEL = 'Published';
 const OPEN_SITE_LABEL = 'Open the published site for';
 const DETAIL_SEPARATOR = ' · ';
+const SIZE_DECIMALS = 1;
 
 export const ARTIFACT_ICON_BUTTON_CLASS = cn(
   ACTION_BUTTON_SIZE,
@@ -77,6 +79,9 @@ function typeLine(artifact: ArtifactData): string {
       : null;
   return [
     `${artifactKindLabel(artifact.type)}${DETAIL_SEPARATOR}${artifactExtensionLabel(artifact)}`,
+    artifact.generatedFile && artifact.generatedFile.byteCount > 0
+      ? formatBytes(artifact.generatedFile.byteCount, SIZE_DECIMALS)
+      : null,
     summary?.privacyShortLabel,
   ]
     .filter(Boolean)

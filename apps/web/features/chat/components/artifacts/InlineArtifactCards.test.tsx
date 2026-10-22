@@ -121,8 +121,8 @@ describe('InlineArtifactCards: the compact artifact card', () => {
       },
     );
 
-    expect(cardDescription(workbook)).toBe('Spreadsheet · XLSX · Managed');
-    expect(cardDescription(deck)).toBe('Slides · PPTX · Managed');
+    expect(cardDescription(workbook)).toBe('Spreadsheet · XLSX · 2.5 KB · Managed');
+    expect(cardDescription(deck)).toBe('Slides · PPTX · 2.5 KB · Managed');
   });
 
   it.each([
@@ -130,19 +130,19 @@ describe('InlineArtifactCards: the compact artifact card', () => {
       'CSV',
       { type: 'csv', language: 'csv' },
       { kind: 'csv', fileName: 'shop.csv', mimeType: 'text/csv' },
-      'Spreadsheet · CSV · Managed',
+      'Spreadsheet · CSV · 2.5 KB · Managed',
     ],
     [
       'Markdown',
       { type: 'document', language: 'markdown' },
       { kind: 'markdown', fileName: 'brief.md', mimeType: 'text/markdown' },
-      'Document · MD · Managed',
+      'Document · MD · 2.5 KB · Managed',
     ],
     [
       'PDF',
       { type: 'document', language: 'pdf' },
       { kind: 'pdf', fileName: 'report.pdf', mimeType: 'application/pdf' },
-      'Document · PDF · Managed',
+      'Document · PDF · 2.5 KB · Managed',
     ],
     [
       'Word',
@@ -152,22 +152,32 @@ describe('InlineArtifactCards: the compact artifact card', () => {
         fileName: 'letter.docx',
         mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       },
-      'Document · DOCX · Managed',
+      'Document · DOCX · 2.5 KB · Managed',
     ],
     [
       'image',
       { type: 'image', language: 'png' },
       { kind: 'image', fileName: 'chart.png', mimeType: 'image/png' },
-      'Image · PNG · Managed',
+      'Image · PNG · 2.5 KB · Managed',
     ],
     [
       'source code',
       { type: 'code', language: 'py' },
       { kind: 'other', fileName: 'totals.py', mimeType: 'text/x-python' },
-      'Code · PY · Managed',
+      'Code · PY · 2.5 KB · Managed',
     ],
   ] as const)('keeps the badge of a generated %s file', (_format, preview, file, badge) => {
     expect(cardDescription(generatedFileArtifact(preview, file))).toBe(badge);
+  });
+
+  it('leaves the size out when the file reports none', () => {
+    const empty = generatedFileArtifact(
+      { type: 'document', language: 'pdf' },
+      { kind: 'pdf', fileName: 'blank.pdf', mimeType: 'application/pdf' },
+    );
+    expect(
+      cardDescription({ ...empty, generatedFile: { ...empty.generatedFile!, byteCount: 0 } }),
+    ).toBe('Document · PDF · Managed');
   });
 
   it('names an unrecognised generated file by what is known about it, never by its preview', () => {
@@ -180,8 +190,8 @@ describe('InlineArtifactCards: the compact artifact card', () => {
       { kind: 'other', fileName: 'export', mimeType: '' },
     );
 
-    expect(cardDescription(unknownExtension)).toBe('Code · SQLITE · Managed');
-    expect(cardDescription(nothingKnown)).toBe('Code · FILE · Managed');
+    expect(cardDescription(unknownExtension)).toBe('Code · SQLITE · 2.5 KB · Managed');
+    expect(cardDescription(nothingKnown)).toBe('Code · FILE · 2.5 KB · Managed');
   });
 
   it('says a published artifact is published, to whom, and links to its site page', () => {
