@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES } from '@agiworkforce/cloud-contracts';
 
 const privacySection = readFileSync(
   join(process.cwd(), 'features/settings/sections/PrivacySection.tsx'),
@@ -162,11 +163,16 @@ describe('the artifact storage notice describes what actually happens', () => {
     expect(pushBatch).toContain('conversationHoldsLocalTurns(');
   });
 
-  it('names a public link and the workspace because those are the two publish audiences', () => {
+  it('names a public link and the workspace because publishing reaches a link or the workspace', () => {
     expect(noticeCopy).toContain('publish an artifact, to a public link or your workspace');
     expect(webSource('features/chat/components/artifacts/publishArtifactClient.ts')).toContain(
-      "'public' | 'organization'",
+      'MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES',
     );
+    expect([...MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES].sort()).toEqual([
+      'invited',
+      'organization',
+      'public',
+    ]);
   });
 
   it('names sharing the chat because a shared chat carries a snapshot of its artifacts', () => {

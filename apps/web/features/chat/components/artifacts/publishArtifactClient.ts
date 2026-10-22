@@ -1,5 +1,9 @@
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import type { CloudPublisher, PublishableArtifact } from '@agiworkforce/artifacts';
+import {
+  MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES,
+  type ManagedCloudPublishedArtifactVisibility,
+} from '@agiworkforce/cloud-contracts';
 import type { PublishedArtifactKind } from './publishedArtifactRender';
 
 interface PublishResponse {
@@ -12,9 +16,18 @@ interface PublishResponse {
 
 export interface WebPublishDetails {
   shareUrl: string;
-  visibility: 'public' | 'organization';
+  visibility: PublishedArtifactAudience;
   /** Null when the publisher belongs to no workspace, so there is nobody to share with. */
   workspace: { memberCount: number } | null;
+}
+
+export type PublishedArtifactAudience = ManagedCloudPublishedArtifactVisibility;
+
+function readVisibility(
+  value: unknown,
+  fallback: PublishedArtifactAudience = 'public',
+): PublishedArtifactAudience {
+  return MANAGED_CLOUD_PUBLISHED_ARTIFACT_VISIBILITIES.find((known) => known === value) ?? fallback;
 }
 
 function readWorkspace(value: unknown): WebPublishDetails['workspace'] {
@@ -112,7 +125,7 @@ export function createWebCloudPublisher(
     options.onPublished?.(
       {
         shareUrl: body.shareUrl,
-        visibility: body.visibility === 'organization' ? 'organization' : 'public',
+        visibility: readVisibility(body.visibility),
         workspace: readWorkspace(body.workspace),
       },
       artifact.id,
@@ -139,12 +152,10 @@ export async function fetchArtifactPublication(
   if (!published || typeof published.shareUrl !== 'string') return null;
   return {
     shareUrl: published.shareUrl,
-    visibility: published.visibility === 'organization' ? 'organization' : 'public',
+    visibility: readVisibility(published.visibility),
     workspace: readWorkspace(body?.workspace),
   };
 }
-
-export type PublishedArtifactAudience = 'public' | 'organization';
 
 export interface ArtifactAudienceChange {
   shareUrl: string;
@@ -157,7 +168,7 @@ export function readPublishedTokenFromUrl(shareUrl: string): string | null {
 }
 
 /**
- * Move a published artifact between its two audiences.
+ * Move a published artifact between its audiences.
  *
  * The token comes out of the share URL the publish already returned, so the
  * panel never has to hold a second identifier for the same page.
@@ -186,6 +197,6 @@ export async function setPublishedArtifactAudience(
   const body = (await response.json()) as { shareUrl?: unknown; visibility?: unknown };
   return {
     shareUrl: typeof body.shareUrl === 'string' ? body.shareUrl : shareUrl,
-    visibility: body.visibility === 'organization' ? 'organization' : 'public',
+    visibility: readVisibility(body.visibility, visibility),
   };
 }

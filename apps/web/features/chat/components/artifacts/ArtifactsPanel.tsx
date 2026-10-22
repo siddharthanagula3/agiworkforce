@@ -392,10 +392,10 @@ export function ArtifactsPanel({
   );
   const artifactAudience = useMemo(
     () =>
-      publishDetails?.workspace
+      publishDetails
         ? {
             current: publishDetails.visibility,
-            memberCount: publishDetails.workspace.memberCount,
+            memberCount: publishDetails.workspace?.memberCount ?? null,
             onChange: changeAudience,
           }
         : undefined,

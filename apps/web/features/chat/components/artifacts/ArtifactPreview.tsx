@@ -43,8 +43,10 @@ import {
   MessageSquare,
   Palette,
   PenTool,
+  Redo2,
   Sparkles,
   TextCursorInput,
+  Undo2,
 } from 'lucide-react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import {
@@ -137,6 +139,9 @@ import { toast } from 'sonner';
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { WORK_ENTRY_POINT_LABELS, startWork } from '@/features/work';
 import { toUserMessage } from '@/lib/user-error-message';
+import { formatRelativeTime } from '@shared/utils/format';
+import { SiteViewersEditor } from '@features/sites/components/SiteViewersEditor';
+import { readPublishedTokenFromUrl, type PublishedArtifactAudience } from './publishArtifactClient';
 
 /**
  * `navigator.clipboard` does not exist in an insecure context and `writeText`
@@ -200,14 +205,14 @@ export interface ArtifactPublishSelection {
 }
 
 /**
- * Who may open the published page. Supplied only when the host knows the
- * publisher belongs to a workspace, so the control is never a choice that would
- * answer 403.
+ * Who may open the published page. `memberCount` is null when the publisher
+ * belongs to no workspace, so the workspace choice, which would answer 403, is
+ * not offered.
  */
 export interface ArtifactAudienceControl {
-  current: 'public' | 'organization';
-  memberCount: number;
-  onChange: (next: 'public' | 'organization') => Promise<void>;
+  current: PublishedArtifactAudience;
+  memberCount: number | null;
+  onChange: (next: PublishedArtifactAudience) => Promise<void>;
 }
 
 /** The project this artifact's conversation belongs to. */
@@ -438,6 +443,9 @@ const pendingVersionIndexByArtifactId = new Map<string, number>();
 
 const REQUEST_EDITS_LABEL = 'Request edits';
 const NARROW_ONLY_ITEM_CLASS = '@[26rem]:hidden';
+const EDIT_STEP_NARROW_ONLY_ITEM_CLASS = '@[24rem]:hidden';
+const UNDO_EDIT_LABEL = 'Undo last change';
+const REDO_EDIT_LABEL = 'Redo change';
 
 export function ArtifactPreview({
   artifact,
@@ -460,6 +468,7 @@ export function ArtifactPreview({
   const [isPublishing, setIsPublishing] = useState(false);
   const [publishedUrl, setPublishedUrl] = useState<string | null>(null);
   const shownPublishedUrl = publishedUrl ?? publishedLink ?? null;
+  const publishedToken = shownPublishedUrl ? readPublishedTokenFromUrl(shownPublishedUrl) : null;
   const [isChangingAudience, setIsChangingAudience] = useState(false);
   const [mermaidSvg, setMermaidSvg] = useState<string | null>(null);
 
@@ -773,6 +782,18 @@ export function ArtifactPreview({
     );
   }, [lineage, lineageVersionCounts, artifact.id, versionCount, shownVersionIndex]);
   const showVersionChip = versionCount > 0 || versionTimeline.total > 1;
+  const shownVersion = versionHistory?.[shownVersionIndex];
+  const shownVersionModifiedAt = shownVersion
+    ? (shownVersion.updatedAt ?? shownVersion.createdAt)
+    : null;
+  const [, setModifiedClock] = useState(0);
+  useEffect(() => {
+    if (variant !== 'panel' || !shownVersionModifiedAt) return;
+    const timer = setInterval(() => setModifiedClock((tick) => tick + 1), 60_000);
+    return () => clearInterval(timer);
+  }, [variant, shownVersionModifiedAt]);
+  const modifiedLabel =
+    mounted && shownVersionModifiedAt ? formatRelativeTime(shownVersionModifiedAt) : '';
 
   const stepVersion = useCallback(
     (step: { artifactId: string; versionIndex: number | null } | null) => {
@@ -837,6 +858,46 @@ export function ArtifactPreview({
   );
   const canEditSource =
     variant === 'panel' && isStoredArtifact && isLatestVersion && !isPdf && !isDocx && !isImage;
+
+  const [editTrail, setEditTrail] = useState<{
+    artifactId: string;
+    versionCount: number;
+    at: number;
+    redo: readonly number[];
+  } | null>(null);
+  const activeEditTrail =
+    editTrail && editTrail.artifactId === artifact.id && editTrail.versionCount === versionCount
+      ? editTrail
+      : null;
+  const editBaseIndex = activeEditTrail ? activeEditTrail.at : versionCount - 1;
+  const canStepEdits = variant === 'panel' && isStoredArtifact && sourceDraft === null;
+  const showEditSteps = canStepEdits && (versionCount > 1 || activeEditTrail !== null);
+  const canUndoEdit = showEditSteps && editBaseIndex > 0;
+  const canRedoEdit = showEditSteps && (activeEditTrail?.redo.length ?? 0) > 0;
+
+  const stepEdit = useCallback(
+    (target: number, redo: readonly number[]) => {
+      const appended = restoreArtifactVersion(artifact.id, target);
+      setEditTrail({
+        artifactId: artifact.id,
+        versionCount: appended ? versionCount + 1 : versionCount,
+        at: target,
+        redo,
+      });
+      setViewedVersionIndex(null);
+    },
+    [artifact.id, restoreArtifactVersion, versionCount],
+  );
+  const undoEdit = useCallback(() => {
+    if (!canUndoEdit) return;
+    stepEdit(editBaseIndex - 1, [...(activeEditTrail?.redo ?? []), editBaseIndex]);
+  }, [activeEditTrail, canUndoEdit, editBaseIndex, stepEdit]);
+  const redoEdit = useCallback(() => {
+    const redo = activeEditTrail?.redo ?? [];
+    const target = redo[redo.length - 1];
+    if (!canRedoEdit || target === undefined) return;
+    stepEdit(target, redo.slice(0, -1));
+  }, [activeEditTrail, canRedoEdit, stepEdit]);
 
   const draftStorageKey = `${ARTIFACT_DRAFT_STORAGE_PREFIX}${artifact.id}`;
   const [draftStatus, setDraftStatus] = useState<'saved' | 'unsaved' | null>(null);
@@ -985,9 +1046,9 @@ export function ArtifactPreview({
   }, [publishArtifact, isPublishing, activeContent, shownVersionIndex]);
 
   const handleChangeAudience = useCallback(
-    (next: 'public' | 'organization') => {
+    (next: PublishedArtifactAudience) => {
       if (!artifactAudience || isChangingAudience || next === artifactAudience.current) return;
-      const members = artifactAudience.memberCount;
+      const members = artifactAudience.memberCount ?? 0;
       const memberLabel = translateUiPlural('settings', 'counts.members', members, {
         one: '{{count}} member',
         other: '{{count}} members',
@@ -999,7 +1060,9 @@ export function ArtifactPreview({
           toast.success(
             next === 'organization'
               ? 'Only your workspace can open this now'
-              : 'Anyone with the link can open this now',
+              : next === 'invited'
+                ? 'Only the people you invite can open this now'
+                : 'Anyone with the link can open this now',
           );
         } catch (error) {
           toast.error(toUserMessage(error, 'Could not change who can open this'));
@@ -1007,18 +1070,37 @@ export function ArtifactPreview({
           setIsChangingAudience(false);
         }
       };
+      if (next === 'invited') {
+        confirmAction({
+          title: 'Limit this to people you invite?',
+          description: `${
+            artifactAudience.current === 'organization'
+              ? `Your ${memberLabel} lose access unless you add them.`
+              : 'Anyone who already has the link loses access unless you add them.'
+          } Only the people you add by email can open it after signing in. You can switch back, and the link stays the same.`,
+          confirmLabel: 'Limit to invited people',
+          onConfirm: apply,
+        });
+        return;
+      }
       confirmAction(
         next === 'organization'
           ? {
               title: 'Limit this to your workspace?',
-              description: `The public link stops opening, so anyone outside your workspace who already has it loses access. Your ${memberLabel} can open it instead. You can switch back, and the link stays the same.`,
+              description: `${
+                artifactAudience.current === 'invited'
+                  ? 'The people you invited from outside your workspace lose access.'
+                  : 'The public link stops opening, so anyone outside your workspace who already has it loses access.'
+              } Your ${memberLabel} can open it instead. You can switch back, and the link stays the same.`,
               confirmLabel: 'Share with workspace',
               onConfirm: apply,
             }
           : {
               title: 'Make this public again?',
               description:
-                'Anyone holding the link can open it, including people outside your workspace and anyone they forward it to. Publishing cannot un-share a copy somebody has already taken.',
+                artifactAudience.memberCount === null
+                  ? 'Anyone holding the link can open it without signing in, including anyone they forward it to. Publishing cannot un-share a copy somebody has already taken.'
+                  : 'Anyone holding the link can open it, including people outside your workspace and anyone they forward it to. Publishing cannot un-share a copy somebody has already taken.',
               confirmLabel: 'Make public',
               onConfirm: apply,
             },
@@ -1770,6 +1852,28 @@ export function ArtifactPreview({
         testId: 'artifact-request-edits-menu',
       });
     }
+    if (showEditSteps) {
+      moreMenuItems.push(
+        {
+          id: 'undo-edit',
+          label: 'Undo',
+          icon: Undo2,
+          disabled: !canUndoEdit,
+          ariaLabel: UNDO_EDIT_LABEL,
+          onSelect: undoEdit,
+          className: EDIT_STEP_NARROW_ONLY_ITEM_CLASS,
+        },
+        {
+          id: 'redo-edit',
+          label: 'Redo',
+          icon: Redo2,
+          disabled: !canRedoEdit,
+          ariaLabel: REDO_EDIT_LABEL,
+          onSelect: redoEdit,
+          className: EDIT_STEP_NARROW_ONLY_ITEM_CLASS,
+        },
+      );
+    }
     if (publishArtifact) {
       moreMenuItems.push({
         id: 'publish',
@@ -2143,6 +2247,19 @@ export function ArtifactPreview({
                     </button>
                   </div>
                 )}
+                {modifiedLabel && shownVersionModifiedAt && (
+                  <time
+                    dateTime={shownVersionModifiedAt}
+                    title={new Date(shownVersionModifiedAt).toLocaleString(undefined, {
+                      dateStyle: 'medium',
+                      timeStyle: 'short',
+                    })}
+                    className="min-w-0 truncate"
+                    data-testid="artifact-last-modified"
+                  >
+                    Last modified {modifiedLabel}
+                  </time>
+                )}
               </div>
             </div>
           </div>
@@ -2244,6 +2361,35 @@ export function ArtifactPreview({
               >
                 <MousePointerClick className="h-3.5 w-3.5" aria-hidden="true" />
               </Button>
+            )}
+
+            {showEditSteps && (
+              <>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={undoEdit}
+                  disabled={!canUndoEdit}
+                  className="hidden h-7 px-2 @[24rem]:inline-flex"
+                  aria-label={UNDO_EDIT_LABEL}
+                  title={UNDO_EDIT_LABEL}
+                  data-testid="artifact-undo"
+                >
+                  <Undo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={redoEdit}
+                  disabled={!canRedoEdit}
+                  className="hidden h-7 px-2 @[24rem]:inline-flex"
+                  aria-label={REDO_EDIT_LABEL}
+                  title={REDO_EDIT_LABEL}
+                  data-testid="artifact-redo"
+                >
+                  <Redo2 className="h-3.5 w-3.5" aria-hidden="true" />
+                </Button>
+              </>
             )}
 
             {/* Copy, not for binary docs (copying a data URI is useless). */}
@@ -2398,16 +2544,26 @@ export function ArtifactPreview({
                   disabled={isChangingAudience}
                   onChange={(event) =>
                     handleChangeAudience(
-                      event.target.value === 'organization' ? 'organization' : 'public',
+                      event.target.value === 'organization' || event.target.value === 'invited'
+                        ? event.target.value
+                        : 'public',
                     )
                   }
                   className="h-7 min-w-0 flex-1 rounded-md border border-border/60 bg-background px-2 text-xs text-foreground"
                 >
                   <option value="public">Anyone with the link</option>
-                  <option value="organization">
-                    Everyone in this workspace ({artifactAudience.memberCount})
-                  </option>
+                  {artifactAudience.memberCount !== null && (
+                    <option value="organization">
+                      Everyone in this workspace ({artifactAudience.memberCount})
+                    </option>
+                  )}
+                  <option value="invited">Only people you invite</option>
                 </select>
+              </div>
+            )}
+            {artifactAudience?.current === 'invited' && publishedToken && (
+              <div className="w-full" data-testid="artifact-invited-viewers">
+                <SiteViewersEditor token={publishedToken} />
               </div>
             )}
           </div>

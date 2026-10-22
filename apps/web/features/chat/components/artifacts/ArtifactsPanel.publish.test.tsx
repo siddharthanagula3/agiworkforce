@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import type { PublishResult } from '@agiworkforce/artifacts';
 import { ArtifactsPanel } from './ArtifactsPanel';
 import { useArtifactsStore } from '../../stores/artifacts-store';
@@ -9,13 +9,18 @@ import { usePublishedSitesStore } from '@features/sites/stores/published-sites-s
 
 type PublishSelection = { content: string; versionIndex: number };
 let capturedPublish: ((selection: PublishSelection) => Promise<PublishResult>) | undefined;
+let capturedAudience:
+  | { current: string; memberCount: number | null; onChange: (next: string) => Promise<void> }
+  | undefined;
 
 vi.mock('./ArtifactPreview', () => ({
   ArtifactPreview: (props: {
     artifact: { title?: string };
     publishArtifact?: (selection: PublishSelection) => Promise<PublishResult>;
+    artifactAudience?: typeof capturedAudience;
   }) => {
     capturedPublish = props.publishArtifact;
+    capturedAudience = props.artifactAudience;
     return (
       <div data-testid="artifact-preview" data-has-publish={String(Boolean(props.publishArtifact))}>
         {props.artifact.title}
@@ -65,6 +70,7 @@ function seedArtifact() {
 describe('ArtifactsPanel · publish wiring', () => {
   beforeEach(() => {
     capturedPublish = undefined;
+    capturedAudience = undefined;
     useArtifactsStore.getState().reset();
     useStreamingArtifactStore.getState().clearStreamingArtifact();
     useChatStore.setState({
@@ -178,6 +184,38 @@ describe('ArtifactsPanel · publish wiring', () => {
       visibility: 'public',
       sitePath: '/chat/sites/cccccccccccccccccccccccc',
     });
+  });
+
+  it('offers the invited audience to a publisher with no workspace', async () => {
+    const fetchMock = vi.fn(async (_url: string, init?: RequestInit) =>
+      init?.method === 'PATCH'
+        ? Response.json({
+            shareUrl: 'https://agiworkforce.com/shared-artifact/eeeeeeeeeeeeeeeeeeeeeeee',
+            visibility: 'invited',
+          })
+        : Response.json({
+            artifacts: [
+              {
+                artifactId: ARTIFACT_ID,
+                shareUrl: 'https://agiworkforce.com/shared-artifact/eeeeeeeeeeeeeeeeeeeeeeee',
+                visibility: 'public',
+              },
+            ],
+            workspace: null,
+          }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<ArtifactsPanel />);
+    await waitFor(() => expect(capturedAudience?.current).toBe('public'));
+    expect(capturedAudience?.memberCount).toBeNull();
+
+    await capturedAudience!.onChange('invited');
+
+    const patch = fetchMock.mock.calls.find(([, init]) => init?.method === 'PATCH')!;
+    expect(patch[0]).toBe('/api/artifacts/publish/eeeeeeeeeeeeeeeeeeeeeeee');
+    expect(JSON.parse(String(patch[1]?.body))).toEqual({ visibility: 'invited' });
+    await waitFor(() => expect(capturedAudience?.current).toBe('invited'));
   });
 
   it('surfaces the server error instead of reporting a fake success', async () => {
