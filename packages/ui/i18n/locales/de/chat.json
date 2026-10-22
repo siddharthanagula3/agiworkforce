@@ -537,5 +537,9 @@
   "quickAsk": {
     "openFullChat": "Vollständigen Chat öffnen",
     "newChat": "Neuer Chat"
+  },
+  "timeDivider": {
+    "today": "Heute",
+    "yesterday": "Gestern"
   }
 }

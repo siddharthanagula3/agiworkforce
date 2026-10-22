@@ -673,5 +673,9 @@
   "quickAsk": {
     "openFullChat": "Открыть весь чат",
     "newChat": "Новый чат"
+  },
+  "timeDivider": {
+    "today": "Сегодня",
+    "yesterday": "Вчера"
   }
 }

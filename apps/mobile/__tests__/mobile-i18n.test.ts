@@ -73,4 +73,30 @@ describe('Mobile i18n follows the device language within the selectable set', ()
     });
     expect(mockI18nManager.forceRTL).toHaveBeenCalledWith(false);
   });
+
+  it('translates the chat time divider day names in every shipped locale', async () => {
+    const { readdirSync, readFileSync } = jest.requireActual('fs') as typeof import('fs');
+    const { join } = jest.requireActual('path') as typeof import('path');
+    const localesDir = join(__dirname, '../../../packages/ui/i18n/locales');
+    const read = (locale: string) =>
+      JSON.parse(readFileSync(join(localesDir, locale, 'chat.json'), 'utf8')) as {
+        timeDivider?: { today?: string; yesterday?: string };
+      };
+    const locales = readdirSync(localesDir);
+    const english = read('en').timeDivider;
+
+    expect(locales).toHaveLength(12);
+    expect(english).toEqual({ today: 'Today', yesterday: 'Yesterday' });
+    for (const locale of locales.filter((entry) => entry !== 'en')) {
+      const divider = read(locale).timeDivider;
+      expect(divider?.today).toBeTruthy();
+      expect(divider?.yesterday).toBeTruthy();
+      expect(divider?.today).not.toBe(english?.today);
+      expect(divider?.yesterday).not.toBe(english?.yesterday);
+    }
+
+    await i18nModule.syncDeviceLanguage();
+    expect(i18nModule.default.t('chat:timeDivider.today')).toBe('Hoy');
+    expect(i18nModule.default.t('chat:timeDivider.yesterday')).toBe('Ayer');
+  });
 });

@@ -537,5 +537,9 @@
   "quickAsk": {
     "openFullChat": "전체 채팅 열기",
     "newChat": "새 채팅"
+  },
+  "timeDivider": {
+    "today": "오늘",
+    "yesterday": "어제"
   }
 }

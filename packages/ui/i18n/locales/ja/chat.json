@@ -537,5 +537,9 @@
   "quickAsk": {
     "openFullChat": "チャット全体を開く",
     "newChat": "新しいチャット"
+  },
+  "timeDivider": {
+    "today": "今日",
+    "yesterday": "昨日"
   }
 }
