@@ -133,9 +133,9 @@ describe('getWebviewContent, structural smoke', () => {
     expect(doc.querySelector('#accountBtn')).toBeNull();
     expect(doc.querySelector('#historyBtn')).toBeNull();
     expect(styles).toContain(
-      '.header-left { gap: 4px; max-width: calc(100% - 64px); overflow: hidden; }',
+      '.header-left { gap: 4px; max-width: calc(100% - 92px); overflow: hidden; }',
     );
-    expect(styles).toContain('.session-identity { max-width: calc(100vw - 108px); }');
+    expect(styles).toContain('.session-identity { max-width: calc(100vw - 136px); }');
     const scriptBody = Array.from(doc.querySelectorAll('script'))
       .map((script) => script.textContent ?? '')
       .join('\n');

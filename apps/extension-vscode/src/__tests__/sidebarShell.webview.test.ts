@@ -75,6 +75,29 @@ describe('the sidebar overflow menu', () => {
     expect(document.getElementById('actionsMenu')?.classList.contains('open')).toBe(false);
   });
 
+  it('orders the header history, settings, new chat, more', () => {
+    boot();
+
+    const ids = Array.from(
+      document.querySelectorAll(
+        '.header-actions > .icon-btn, .header-actions > .header-menu-anchor > .icon-btn',
+      ),
+    ).map((button) => button.id);
+    expect(ids).toEqual(['sessionsBtn', 'settingsBtn', 'newChatBtn', 'actionsBtn']);
+    expect(document.getElementById('settingsBtn')?.getAttribute('aria-label')).toBe('Settings');
+    expect(document.querySelector('#settingsBtn .codicon-settings-gear')).not.toBeNull();
+  });
+
+  it('opens settings from the header in one click and keeps the account rows in More', () => {
+    const postMessage = boot();
+
+    click('#settingsBtn');
+
+    expect(postMessage).toHaveBeenCalledWith({ origin: 'chat', epoch: 0, type: 'openSettings' });
+    expect(document.getElementById('menuAccountAction')).not.toBeNull();
+    expect(document.querySelector('#actionsMenu [data-surface="account"]')).not.toBeNull();
+  });
+
   it('opens the in-webview sheet for Sessions rather than a host pick', () => {
     const postMessage = boot();
 

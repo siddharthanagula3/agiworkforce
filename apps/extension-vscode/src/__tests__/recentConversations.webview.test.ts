@@ -93,7 +93,7 @@ describe('VS Code sidebar recent-chats block', () => {
       '3d ago',
     ]);
     expect(document.querySelector('.recent-chats-title')?.textContent).toBe('Sessions');
-    expect(document.querySelector('.recent-chats-all')?.textContent).toBe('View all');
+    expect(document.querySelector('.recent-chats-all')?.textContent).toBe('View all (9)');
     expect(document.querySelector('.recent-chats-all')?.getAttribute('aria-label')).toBe(
       'View all 9 sessions',
     );

@@ -2456,10 +2456,10 @@ export function getWebviewContent(
     @media (max-width: 340px) {
       .context-usage.visible { display: none; }
       .header { padding-inline: 8px; }
-      .header-left { gap: 4px; max-width: calc(100% - 64px); overflow: hidden; }
+      .header-left { gap: 4px; max-width: calc(100% - 92px); overflow: hidden; }
       .header-actions { gap: 0; }
       .header-title { display: none; }
-      .session-identity { max-width: calc(100vw - 108px); }
+      .session-identity { max-width: calc(100vw - 136px); }
       .controls-summary { max-width: 54px; }
       .empty-state-copy { max-width: 230px; }
     }
@@ -2635,11 +2635,14 @@ export function getWebviewContent(
       </span>
     </div>
     <div class="header-actions">
-      <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
-        <span class="codicon codicon-add" aria-hidden="true"></span>
-      </button>
       <button class="icon-btn" id="sessionsBtn" title="Sessions" aria-label="Sessions">
         <span class="codicon codicon-history" aria-hidden="true"></span>
+      </button>
+      <button class="icon-btn" id="settingsBtn" title="Settings" aria-label="Settings">
+        <span class="codicon codicon-settings-gear" aria-hidden="true"></span>
+      </button>
+      <button class="icon-btn" id="newChatBtn" title="New chat" aria-label="New chat">
+        <span class="codicon codicon-add" aria-hidden="true"></span>
       </button>
       <span class="header-menu-anchor">
         <button
@@ -3137,6 +3140,7 @@ export function getWebviewContent(
     const menuAccountActionLabel = document.getElementById('menuAccountActionLabel');
     const newChatBtn = document.getElementById('newChatBtn');
     const sessionsBtn = document.getElementById('sessionsBtn');
+    const settingsBtn = document.getElementById('settingsBtn');
     const sessionsSheet = document.getElementById('sessionsSheet');
     const sessionsSheetClose = document.getElementById('sessionsSheetClose');
     const sessionsSheetList = document.getElementById('sessionsSheetList');
@@ -5244,6 +5248,11 @@ export function getWebviewContent(
     }
 
     if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
+    if (settingsBtn) {
+      settingsBtn.addEventListener('click', function () {
+        vscode.postMessage({ type: 'openSettings' });
+      });
+    }
 
     // ── Popover keyboard support (VSCX-14) ────────────────────────────────────
     // These containers claim role="menu", which tells a screen-reader user that
@@ -8145,7 +8154,7 @@ export function getWebviewContent(
       var viewAll = document.createElement('button');
       viewAll.type = 'button';
       viewAll.className = 'recent-chats-all';
-      viewAll.textContent = 'View all';
+      viewAll.textContent = 'View all (' + recentChats.total + ')';
       viewAll.setAttribute('aria-label', 'View all ' + recentChats.total + ' sessions');
       viewAll.addEventListener('click', function() {
         openSessionsSheet();
