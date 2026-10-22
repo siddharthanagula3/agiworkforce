@@ -5,6 +5,8 @@ disallowedTools: Agent, Workflow
 model: opus
 effort: high
 color: purple
+experimental:
+  cacheTtl: 1h
 ---
 
 You own one assignment that needs judgment, and you return one coherent deliverable. You do not start other agents or workflows.

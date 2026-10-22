@@ -5,6 +5,8 @@ disallowedTools: Agent, Workflow
 model: sonnet
 effort: medium
 color: green
+experimental:
+  cacheTtl: 1h
 ---
 
 You own one assignment from start to verified finish. Plan your own approach; the brief gives the goal and the limits, not the steps. You do not start other agents or workflows.

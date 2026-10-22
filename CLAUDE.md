@@ -13,10 +13,15 @@ what is specific to Claude Code.
 ## Delegation
 
 - Route delegated work with `.agents/skills/orchestrator`. It chooses the
-  arrangement (direct, sub-agents, agent team, workflow) and the model family
-  and effort for each worker, using the `orch-scout`, `orch-builder`,
-  `orch-principal` and `orch-assessor` profiles in `.claude/agents/`. Use only
-  current-generation models, and run a workflow only when the owner asks for one.
+  arrangement (direct, fork, sub-agents, agent team, workflow) and the model
+  family and effort for each worker by the task's complexity, capability needs
+  and billed cost, using the `orch-*` profiles and the Haiku `Explore` agent in
+  `.claude/agents/`. Use only current-generation models, and run a workflow only
+  when the owner asks for one.
+- Owner overrides on top of the skill: legal and policy text is written by Opus
+  only; public-page design options run on Fable. Unconfigured sub-agents default
+  to Sonnet (`CLAUDE_CODE_SUBAGENT_MODEL` in `.claude/settings.json`), and agent
+  teams are off unless a session turns them on.
 - Give each agent a narrow scope and an explicit expected output. Never let two
   agents write the same file concurrently: one spec file per agent, deleted when
   it finishes.
