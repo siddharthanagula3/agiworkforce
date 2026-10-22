@@ -18,9 +18,7 @@ export {
   formatPercent,
   formatFileName,
   truncate,
-  sleep,
   debounce,
-  throttle,
 } from '@agiworkforce/utils';
 
 export { cn } from '@agiworkforce/ui/cn';
