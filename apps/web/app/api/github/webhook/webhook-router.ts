@@ -74,6 +74,8 @@ const AUTOMATION_EVENT_ACTIONS: Readonly<Record<string, readonly string[] | null
   pull_request: ['opened', 'reopened', 'synchronize', 'ready_for_review', 'closed'],
   check_run: ['completed'],
   workflow_run: ['completed'],
+  issues: ['opened'],
+  release: ['published'],
 };
 
 /**

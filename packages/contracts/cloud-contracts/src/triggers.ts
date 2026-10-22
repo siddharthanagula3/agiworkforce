@@ -23,6 +23,8 @@ export const MANAGED_CLOUD_GITHUB_TRIGGER_EVENT_TYPES = [
   'pull_request.closed',
   'check_run.completed',
   'workflow_run.completed',
+  'issues.opened',
+  'release.published',
 ] as const;
 
 export const MANAGED_CLOUD_GMAIL_TRIGGER_EVENT_TYPES = ['message.received'] as const;
@@ -169,6 +171,9 @@ export const MANAGED_CLOUD_TRIGGER_EVENT_FIELDS: Readonly<
     { label: 'Is merged', path: 'data.merged' },
     { label: 'Conclusion', path: 'data.conclusion' },
     { label: 'Workflow or check name', path: 'data.name' },
+    { label: 'Issue labels', path: 'data.labels' },
+    { label: 'Release tag', path: 'data.tagName' },
+    { label: 'Is prerelease', path: 'data.prerelease' },
   ],
   gmail: [
     { label: 'From', path: 'data.from' },

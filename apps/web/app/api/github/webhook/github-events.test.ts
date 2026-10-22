@@ -82,11 +82,74 @@ describe('toGitHubTriggerEvent', () => {
     expect(JSON.stringify(event?.data)).not.toContain('"id":"1"');
   });
 
+  it('carries a new issue with its labels so a condition can filter on them', () => {
+    const event = toGitHubTriggerEvent({
+      event: 'issues',
+      action: 'opened',
+      deliveryId: 'delivery-4',
+      payload: {
+        repository,
+        installation: { id: 42 },
+        issue: {
+          number: 12,
+          title: 'Login fails on Safari',
+          state: 'open',
+          user: { login: 'octocat' },
+          labels: [{ name: 'bug' }, { name: 'p1' }, { color: 'red' }],
+          html_url: 'https://github.com/agi/workforce/issues/12',
+        },
+      },
+    });
+
+    expect(event).toMatchObject({
+      type: 'issues.opened',
+      account: 'agi/workforce',
+      installationId: 42,
+      data: {
+        number: 12,
+        title: 'Login fails on Safari',
+        author: 'octocat',
+        labels: ['bug', 'p1'],
+      },
+    });
+  });
+
+  it('carries a published release with its tag and prerelease flag', () => {
+    const event = toGitHubTriggerEvent({
+      event: 'release',
+      action: 'published',
+      deliveryId: 'delivery-5',
+      payload: {
+        repository,
+        release: {
+          tag_name: 'v2.4.0',
+          name: 'Spring release',
+          target_commitish: 'main',
+          prerelease: true,
+          draft: false,
+          author: { login: 'octocat' },
+          html_url: 'https://github.com/agi/workforce/releases/tag/v2.4.0',
+        },
+      },
+    });
+
+    expect(event).toMatchObject({
+      type: 'release.published',
+      data: {
+        tagName: 'v2.4.0',
+        title: 'Spring release',
+        branch: 'main',
+        prerelease: true,
+        author: 'octocat',
+      },
+    });
+  });
+
   it('refuses an event it has no projection for', () => {
     expect(
       toGitHubTriggerEvent({
-        event: 'issues',
-        action: 'opened',
+        event: 'deployment_status',
+        action: 'created',
         deliveryId: 'd',
         payload: { repository },
       }),

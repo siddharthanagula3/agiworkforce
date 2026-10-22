@@ -86,6 +86,35 @@ describe('routeGitHubWebhookEvent', () => {
         event: 'check_run',
       },
     );
+    expect(routeGitHubWebhookEvent('issues', { action: 'opened', repository })).toMatchObject({
+      kind: 'automation-event',
+      event: 'issues',
+      action: 'opened',
+      checkFailure: null,
+    });
+    expect(routeGitHubWebhookEvent('release', { action: 'published', repository })).toMatchObject({
+      kind: 'automation-event',
+      event: 'release',
+      action: 'published',
+      checkFailure: null,
+    });
+  });
+
+  it('ignores issue and release actions other than opened and published', () => {
+    const repository = { full_name: 'agi/workforce' };
+    for (const [event, action] of [
+      ['issues', 'edited'],
+      ['issues', 'closed'],
+      ['release', 'created'],
+      ['release', 'deleted'],
+    ] as const) {
+      expect(routeGitHubWebhookEvent(event, { action, repository })).toEqual({
+        kind: 'ignored',
+        event,
+        action,
+        reason: 'unsupported-action',
+      });
+    }
   });
 
   it('ignores an action on those events that nobody can subscribe to', () => {

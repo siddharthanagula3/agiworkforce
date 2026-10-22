@@ -74,6 +74,38 @@ function workflowRunData(payload: Record<string, unknown>): Record<string, unkno
   };
 }
 
+function labelNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((label) => text(record(label)['name']))
+    .filter((name): name is string => name !== null);
+}
+
+function issueData(payload: Record<string, unknown>): Record<string, unknown> {
+  const issue = record(payload['issue']);
+  return {
+    number: number(issue['number']),
+    title: text(issue['title']),
+    state: text(issue['state']),
+    author: text(record(issue['user'])['login']),
+    labels: labelNames(issue['labels']),
+    url: text(issue['html_url']),
+  };
+}
+
+function releaseData(payload: Record<string, unknown>): Record<string, unknown> {
+  const release = record(payload['release']);
+  return {
+    tagName: text(release['tag_name']),
+    title: text(release['name']),
+    branch: text(release['target_commitish']),
+    prerelease: release['prerelease'] === true,
+    draft: release['draft'] === true,
+    author: text(record(release['author'])['login']),
+    url: text(release['html_url']),
+  };
+}
+
 const PROJECTIONS: Readonly<
   Record<string, (payload: Record<string, unknown>) => Record<string, unknown>>
 > = {
@@ -81,6 +113,8 @@ const PROJECTIONS: Readonly<
   pull_request: pullRequestData,
   check_run: checkRunData,
   workflow_run: workflowRunData,
+  issues: issueData,
+  release: releaseData,
 };
 
 export function toGitHubTriggerEvent(input: {

@@ -77,6 +77,27 @@ beforeEach(() => {
 });
 
 describe('validateTriggerInput', () => {
+  it('accepts a GitHub trigger on new issues and published releases', () => {
+    expect(
+      validateTriggerInput({
+        taskId: TASK_ID,
+        name: 'Triage and release notes',
+        source: 'github',
+        eventTypes: ['issues.opened', 'release.published'],
+        sourceAccount: 'agi/workforce',
+      }).eventTypes,
+    ).toEqual(['issues.opened', 'release.published']);
+    expect(() =>
+      validateTriggerInput({
+        taskId: TASK_ID,
+        name: 'Edits',
+        source: 'github',
+        eventTypes: ['issues.edited'],
+        sourceAccount: 'agi/workforce',
+      }),
+    ).toThrow();
+  });
+
   it('normalizes the account each source is addressed by', () => {
     expect(
       validateTriggerInput({
