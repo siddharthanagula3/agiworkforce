@@ -298,6 +298,11 @@ export {
   WINDOW_LAYOUT_COMMANDS,
   hostKeepsSignInInWindow,
   hostShortcutMayBeOff,
+  HOST_NAVIGATION_CHANNELS,
+  HOST_NAVIGATION_DIRECTIONS,
+  NO_HOST_NAVIGATION,
+  isHostNavigationDirection,
+  isHostNavigationState,
 } from './host-bridge';
 export { agentNotificationsWrite, effectiveAgentNotifications } from './agent-notifications';
 export type {
@@ -319,6 +324,9 @@ export type {
   HostAgentNotificationMode,
   HostAgentNotificationPreferences,
   HostRestartOutcome,
+  HostNavigation,
+  HostNavigationDirection,
+  HostNavigationState,
   WindowLayoutCommand,
 } from './host-bridge';
 

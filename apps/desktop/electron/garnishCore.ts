@@ -12,6 +12,7 @@ import {
   defaultHostShortcut,
   describeAccelerator,
   type HostAgentNotificationPreferences,
+  type HostNavigationState,
   type HostPreferences,
   type HostShortcutKey,
   type SessionCompletionAlerts,
@@ -378,6 +379,7 @@ export interface GarnishPreferences {
   windowFrame: WindowFrame | null;
   agentNotifications: HostAgentNotificationPreferences;
   dictateIntoFocusedApp: boolean;
+  preventSleepWhileRunning: boolean;
 }
 
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
@@ -392,6 +394,7 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   windowFrame: null,
   agentNotifications: DEFAULT_HOST_AGENT_NOTIFICATIONS,
   dictateIntoFocusedApp: false,
+  preventSleepWhileRunning: true,
 };
 
 export const ZOOM_LEVEL_STEP = 1;
@@ -444,6 +447,10 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
     windowFrame: normalizeWindowFrame(source['windowFrame']),
     agentNotifications: normalizeAgentNotifications(source['agentNotifications']),
     dictateIntoFocusedApp: source['dictateIntoFocusedApp'] === true,
+    preventSleepWhileRunning:
+      typeof source['preventSleepWhileRunning'] === 'boolean'
+        ? source['preventSleepWhileRunning']
+        : DEFAULT_PREFERENCES.preventSleepWhileRunning,
   };
 }
 
@@ -466,6 +473,7 @@ export function normalizeAgentNotifications(raw: unknown): HostAgentNotification
       typeof source['sound'] === 'boolean'
         ? source['sound']
         : DEFAULT_HOST_AGENT_NOTIFICATIONS.sound,
+    drawAttention: source['drawAttention'] === true,
   };
 }
 
@@ -475,4 +483,38 @@ export function parsePreferencesFile(contents: string): GarnishPreferences {
   } catch {
     return DEFAULT_PREFERENCES;
   }
+}
+
+export interface NavigationHistoryLike {
+  canGoBack(): boolean;
+  canGoForward(): boolean;
+}
+
+export function navigationStateOf(history: NavigationHistoryLike): HostNavigationState {
+  return { canGoBack: history.canGoBack(), canGoForward: history.canGoForward() };
+}
+
+type NavigationEvent = 'did-navigate' | 'did-navigate-in-page';
+
+export interface NavigableContentsLike {
+  readonly navigationHistory: NavigationHistoryLike;
+  isDestroyed(): boolean;
+  on(event: NavigationEvent, listener: () => void): unknown;
+}
+
+/**
+ * Reports the window's back and forward state after every navigation that can
+ * change it, a frame's included: a sign-in frame adds entries to the same
+ * history the window steps through.
+ */
+export function followNavigationState(
+  contents: NavigableContentsLike,
+  publish: (state: HostNavigationState) => void,
+): void {
+  const report = (): void => {
+    if (contents.isDestroyed()) return;
+    publish(navigationStateOf(contents.navigationHistory));
+  };
+  contents.on('did-navigate', report);
+  contents.on('did-navigate-in-page', report);
 }

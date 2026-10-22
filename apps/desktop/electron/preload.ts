@@ -5,12 +5,18 @@
 import { contextBridge, ipcRenderer, webUtils } from 'electron';
 import {
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  HOST_NAVIGATION_CHANNELS,
+  NO_HOST_NAVIGATION,
   isHostCommand,
+  isHostNavigationState,
   type DesktopRuntimeEvent,
   type DesktopRuntimeResponse,
   type HostBridge,
   type HostCommand,
   type HostDictationOutcome,
+  type HostNavigation,
+  type HostNavigationDirection,
+  type HostNavigationState,
   type HostPreferences,
   type HostPreferencesState,
   type HostRestartOutcome,
@@ -46,11 +52,35 @@ ipcRenderer.on(ELECTRON_IPC_CHANNELS.deepLink, (_event: unknown, url: unknown) =
   for (const listener of deepLinkListeners) listener(url);
 });
 
+const navigation: HostNavigation = {
+  async read(): Promise<HostNavigationState> {
+    const state: unknown = await ipcRenderer.invoke(HOST_NAVIGATION_CHANNELS.read);
+    return isHostNavigationState(state) ? state : NO_HOST_NAVIGATION;
+  },
+
+  async go(direction: HostNavigationDirection): Promise<void> {
+    await ipcRenderer.invoke(HOST_NAVIGATION_CHANNELS.go, direction);
+  },
+
+  onChange(callback: (state: HostNavigationState) => void): () => void {
+    const listener = (_event: unknown, state: unknown) => {
+      if (isHostNavigationState(state)) {
+        callback({ canGoBack: state.canGoBack, canGoForward: state.canGoForward });
+      }
+    };
+    ipcRenderer.on(HOST_NAVIGATION_CHANNELS.changed, listener);
+    return () => {
+      ipcRenderer.removeListener(HOST_NAVIGATION_CHANNELS.changed, listener);
+    };
+  },
+};
+
 const hostBridge: HostBridge = {
   platform: `electron-${process.platform}`,
   shell: ELECTRON_HOST_SHELL,
   appVersion: argValue('--agi-app-version='),
   browserSignIn: { cancellation: true },
+  navigation,
 
   async invokeRuntime<T>(command: string, args?: Record<string, unknown>) {
     return (await ipcRenderer.invoke(

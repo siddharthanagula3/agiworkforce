@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_PREFERENCES,
   DEFAULT_SHORTCUTS,
@@ -6,6 +6,7 @@ import {
   centeredUpperPosition,
   duplicateShortcutKeys,
   fillsWorkArea,
+  followNavigationState,
   frameIsOnScreen,
   isShortcutOff,
   isUsableAccelerator,
@@ -355,5 +356,80 @@ describe('the zoom level a window reopens at', () => {
       DEFAULT_PREFERENCES.zoomLevel,
     );
     expect(parsePreferencesFile('{ broken').zoomLevel).toBe(DEFAULT_PREFERENCES.zoomLevel);
+  });
+});
+
+describe('the sleep and attention preferences', () => {
+  it('keeps the computer awake during a turn unless the user turned that off', () => {
+    expect(DEFAULT_PREFERENCES.preventSleepWhileRunning).toBe(true);
+    expect(normalizePreferences({}).preventSleepWhileRunning).toBe(true);
+    expect(normalizePreferences({ preventSleepWhileRunning: 'no' }).preventSleepWhileRunning).toBe(
+      true,
+    );
+    expect(normalizePreferences({ preventSleepWhileRunning: false }).preventSleepWhileRunning).toBe(
+      false,
+    );
+  });
+
+  it('draws attention to the app only once the user asks for it', () => {
+    expect(normalizePreferences({}).agentNotifications.drawAttention).toBe(false);
+    expect(
+      normalizePreferences({ agentNotifications: { drawAttention: 'yes' } }).agentNotifications
+        .drawAttention,
+    ).toBe(false);
+    expect(
+      normalizePreferences({ agentNotifications: { drawAttention: true } }).agentNotifications
+        .drawAttention,
+    ).toBe(true);
+  });
+});
+
+describe('following a window history', () => {
+  function contents(initial: { back: boolean; forward: boolean }) {
+    const listeners = new Map<string, () => void>();
+    const history = { ...initial };
+    let destroyed = false;
+    return {
+      history,
+      destroy: () => {
+        destroyed = true;
+      },
+      fire: (event: string) => listeners.get(event)?.(),
+      target: {
+        navigationHistory: {
+          canGoBack: () => history.back,
+          canGoForward: () => history.forward,
+        },
+        isDestroyed: () => destroyed,
+        on: (event: string, listener: () => void) => listeners.set(event, listener),
+      },
+    };
+  }
+
+  it('reports back and forward after a load and after an in-page route change', () => {
+    const window = contents({ back: false, forward: false });
+    const publish = vi.fn();
+    followNavigationState(window.target, publish);
+
+    window.history.back = true;
+    window.fire('did-navigate');
+    window.history.forward = true;
+    window.fire('did-navigate-in-page');
+
+    expect(publish.mock.calls).toEqual([
+      [{ canGoBack: true, canGoForward: false }],
+      [{ canGoBack: true, canGoForward: true }],
+    ]);
+  });
+
+  it('says nothing for a window that is gone', () => {
+    const window = contents({ back: true, forward: false });
+    const publish = vi.fn();
+    followNavigationState(window.target, publish);
+
+    window.destroy();
+    window.fire('did-navigate');
+
+    expect(publish).not.toHaveBeenCalled();
   });
 });

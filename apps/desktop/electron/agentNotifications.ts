@@ -146,6 +146,8 @@ export interface AgentNotifierDeps {
   ) => Promise<PendingApprovalReview | null>;
   openSession: (rootId: string, threadId: string) => void;
   sessionLabel: (rootId: string) => string;
+  /** Bounces the Dock icon or flashes the taskbar button; called only while no window is in front. */
+  drawAttention: () => void;
   onActivityChanged: (activity: AgentActivity) => void;
   onAnswerFailed: (error: unknown) => void;
 }
@@ -269,9 +271,11 @@ export function createAgentNotifier(deps: AgentNotifierDeps) {
     onAction?: (index: number) => void,
   ): void => {
     if (!remember(key)) return;
-    if (!deps.supported()) return;
     const preferences = deps.preferences();
-    if (!shouldNotify(preferences, kind, deps.appFocused())) return;
+    const focused = deps.appFocused();
+    if (!shouldNotify(preferences, kind, focused)) return;
+    if (preferences.drawAttention === true && !focused) deps.drawAttention();
+    if (!deps.supported()) return;
     const notification = deps.create({ ...options, silent: !preferences.sound });
     notification.onClick(() => {
       shown.delete(key);

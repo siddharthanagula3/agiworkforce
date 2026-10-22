@@ -243,7 +243,11 @@ function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   // navigates is harder to find again than one that is visibly unavailable.
   const onTop = actions.isFrontWindowOnTop();
   const items: MenuItemConstructorOptions[] = [
-    { label: 'New Window', click: actions.newWindow },
+    {
+      label: 'New Window',
+      accelerator: hostAccelerator('host-new-window'),
+      click: actions.newWindow,
+    },
     {
       label: 'Move Conversation to New Window',
       enabled: actions.hasFocusedConversation(),

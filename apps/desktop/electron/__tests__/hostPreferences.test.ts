@@ -2,7 +2,11 @@ import { chmodSync, mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { HOST_SHORTCUT_CHOICES, NO_HOST_SHORTCUT } from '@agiworkforce/local-runtime-contract';
+import {
+  HOST_NAVIGATION_CHANNELS,
+  HOST_SHORTCUT_CHOICES,
+  NO_HOST_SHORTCUT,
+} from '@agiworkforce/local-runtime-contract';
 import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
 
 type Handler = (event: unknown, payload: unknown) => Promise<unknown>;
@@ -114,6 +118,7 @@ vi.mock('../settingsStore', () => ({
       sound: true,
     },
     dictateIntoFocusedApp: storedSettings['dictateIntoFocusedApp'] === true,
+    preventSleepWhileRunning: storedSettings['preventSleepWhileRunning'] !== false,
   }),
   saveSettings: vi.fn((patch: Record<string, unknown>) => {
     storedSettings = { ...storedSettings, ...patch };
@@ -393,7 +398,7 @@ describe('the host preferences channel', () => {
       agentNotifications: { when: 'always', muted: ['approval', 'bogus'], sound: false },
     })) as State;
 
-    const expected = { when: 'always', muted: ['approval'], sound: false };
+    const expected = { when: 'always', muted: ['approval'], sound: false, drawAttention: false };
     expect(storedSettings['agentNotifications']).toEqual(expected);
     expect(state.preferences['agentNotifications']).toEqual(expected);
   });
@@ -529,8 +534,83 @@ describe('the host preferences channel', () => {
     expect(state.preferences['stopShortcut']).toBe(stop);
   });
 
+  it('stores whether the computer is kept awake while an agent turn runs, on by default', async () => {
+    expect(((await invoke(null)) as State).preferences['preventSleepWhileRunning']).toBe(true);
+
+    const state = (await invoke({ preventSleepWhileRunning: false })) as State;
+
+    expect(storedSettings['preventSleepWhileRunning']).toBe(false);
+    expect(state.preferences['preventSleepWhileRunning']).toBe(false);
+  });
+
+  it('stores the attention preference with the other agent notification settings', async () => {
+    const state = (await invoke({
+      agentNotifications: { when: 'unfocused', muted: [], sound: true, drawAttention: true },
+    })) as State;
+
+    expect(state.preferences['agentNotifications']).toMatchObject({ drawAttention: true });
+  });
+
   it('refuses anything that is not a preferences object', async () => {
     await expect(invoke('launchAtLogin')).rejects.toThrow(/object/u);
     await expect(invoke([1, 2])).rejects.toThrow(/object/u);
+  });
+});
+
+describe('the window navigation channels', () => {
+  function navigationSender(history: { back: boolean; forward: boolean }, url?: string) {
+    const frame = { url: url ?? 'https://agiworkforce.com/chat' };
+    const navigationHistory = {
+      canGoBack: () => history.back,
+      canGoForward: () => history.forward,
+      goBack: vi.fn(),
+      goForward: vi.fn(),
+    };
+    return {
+      event: { senderFrame: frame, sender: { mainFrame: frame, navigationHistory } },
+      navigationHistory,
+    };
+  }
+
+  function channel(name: string): Handler {
+    const handler = handlers.get(name);
+    if (!handler) throw new Error(`${name} was never registered`);
+    return handler;
+  }
+
+  it("reads the asking window's own back and forward state", async () => {
+    const { event } = navigationSender({ back: true, forward: false });
+
+    await expect(channel(HOST_NAVIGATION_CHANNELS.read)(event, undefined)).resolves.toEqual({
+      canGoBack: true,
+      canGoForward: false,
+    });
+  });
+
+  it('steps the asking window only in a direction its history has', async () => {
+    const { event, navigationHistory } = navigationSender({ back: true, forward: false });
+    const go = channel(HOST_NAVIGATION_CHANNELS.go);
+
+    await go(event, 'back');
+    await go(event, 'forward');
+
+    expect(navigationHistory.goBack).toHaveBeenCalledOnce();
+    expect(navigationHistory.goForward).not.toHaveBeenCalled();
+  });
+
+  it('refuses an unknown direction and a caller that is not the app page', async () => {
+    const trusted = navigationSender({ back: true, forward: true });
+    await expect(channel(HOST_NAVIGATION_CHANNELS.go)(trusted.event, 'sideways')).rejects.toThrow(
+      /direction/u,
+    );
+
+    const stranger = navigationSender({ back: true, forward: true }, 'https://example.com/');
+    await expect(channel(HOST_NAVIGATION_CHANNELS.go)(stranger.event, 'back')).rejects.toThrow(
+      /Untrusted/u,
+    );
+    await expect(channel(HOST_NAVIGATION_CHANNELS.read)(stranger.event, undefined)).rejects.toThrow(
+      /Untrusted/u,
+    );
+    expect(stranger.navigationHistory.goBack).not.toHaveBeenCalled();
   });
 });

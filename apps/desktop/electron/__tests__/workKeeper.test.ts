@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createWorkKeeper } from '../workKeeper';
+import { createWorkKeeper, needsWakeHold } from '../workKeeper';
 
 function keeper() {
   const released = vi.fn();
@@ -41,5 +41,25 @@ describe('keeping the computer awake while an agent works', () => {
     k.release();
     expect(released).toHaveBeenCalledOnce();
     expect(k.holding()).toBe(false);
+  });
+});
+
+describe('what keeps the computer awake', () => {
+  it('holds for a running turn only while the user wants the computer kept awake', () => {
+    expect(
+      needsWakeHold({ preventSleepWhileRunning: true, runningTurns: 1, phoneConnected: false }),
+    ).toBe(true);
+    expect(
+      needsWakeHold({ preventSleepWhileRunning: false, runningTurns: 2, phoneConnected: false }),
+    ).toBe(false);
+    expect(
+      needsWakeHold({ preventSleepWhileRunning: true, runningTurns: 0, phoneConnected: false }),
+    ).toBe(false);
+  });
+
+  it('holds for a connected phone whatever the preference says', () => {
+    expect(
+      needsWakeHold({ preventSleepWhileRunning: false, runningTurns: 0, phoneConnected: true }),
+    ).toBe(true);
   });
 });

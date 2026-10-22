@@ -63,6 +63,7 @@ function harness(overrides: Partial<AgentNotifierDeps> = {}) {
     })),
     openSession: vi.fn(),
     sessionLabel: () => 'agiworkforce',
+    drawAttention: vi.fn(),
     onActivityChanged: vi.fn(),
     onAnswerFailed: vi.fn(),
     ...overrides,
@@ -531,6 +532,34 @@ describe('agent notifications', () => {
     notifier.handle('root-1', { ...approval, requestId: 'req-9' });
     await settle();
     expect(shown).toHaveLength(1);
+  });
+
+  it('draws attention to the app only when asked, only from the background, and only for what notifies', () => {
+    const { notifier, deps, setPreferences, setFocused } = harness();
+    notifier.handle('root-1', finished('completed', 'turn-a'));
+    expect(deps.drawAttention).not.toHaveBeenCalled();
+
+    setPreferences({ when: 'unfocused', muted: ['turn-failed'], sound: true, drawAttention: true });
+    notifier.handle('root-1', finished('completed', 'turn-b'));
+    expect(deps.drawAttention).toHaveBeenCalledOnce();
+
+    notifier.handle('root-1', finished('failed', 'turn-c'));
+    expect(deps.drawAttention).toHaveBeenCalledOnce();
+
+    setPreferences({ when: 'always', muted: [], sound: true, drawAttention: true });
+    setFocused(true);
+    notifier.handle('root-1', finished('completed', 'turn-d'));
+    expect(deps.drawAttention).toHaveBeenCalledOnce();
+  });
+
+  it('draws attention where the system shows no banner at all', () => {
+    const { notifier, deps, shown, setPreferences } = harness({ supported: () => false });
+    setPreferences({ when: 'unfocused', muted: [], sound: true, drawAttention: true });
+
+    notifier.handle('root-1', finished('completed', 'turn-a'));
+
+    expect(shown).toHaveLength(0);
+    expect(deps.drawAttention).toHaveBeenCalledOnce();
   });
 
   it('says what failed, and stays quiet for a turn the user interrupted', () => {

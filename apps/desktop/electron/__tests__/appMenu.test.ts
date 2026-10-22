@@ -178,6 +178,7 @@ describe('the application menu', () => {
     const { menu } = template();
     const claimed: Array<[string, string, string]> = [
       ['File', 'New Chat', 'host-new-chat'],
+      ['Window', 'New Window', 'host-new-window'],
       [SETTINGS_MENU, SETTINGS_LABEL, 'host-settings'],
       ['View', 'Actual Size', 'host-actual-size'],
       ['View', 'Zoom In', 'host-zoom-in'],

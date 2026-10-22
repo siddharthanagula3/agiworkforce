@@ -220,6 +220,7 @@ export interface HostMenuShortcut {
  */
 export const HOST_MENU_SHORTCUTS: readonly HostMenuShortcut[] = [
   { id: 'host-new-chat', description: 'New chat', accelerator: 'CommandOrControl+N' },
+  { id: 'host-new-window', description: 'New window', accelerator: 'CommandOrControl+Shift+N' },
   { id: 'host-settings', description: 'Settings', accelerator: 'CommandOrControl+,' },
   { id: 'host-close-window', description: 'Close window', accelerator: 'CommandOrControl+W' },
   { id: 'host-back', description: 'Back', accelerator: 'CommandOrControl+[' },
@@ -287,6 +288,12 @@ export interface HostPreferences {
    * types what was said into that app rather than into AGI Cloud.
    */
   dictateIntoFocusedApp?: boolean;
+  /**
+   * Whether the shell holds off system sleep while a local agent turn runs.
+   * A paired phone following this computer holds it regardless, because the
+   * session it drives ends when the computer sleeps.
+   */
+  preventSleepWhileRunning?: boolean;
 }
 
 /**
@@ -327,12 +334,20 @@ export interface HostAgentNotificationPreferences {
   when: HostAgentNotificationMode;
   muted: HostAgentNotificationKind[];
   sound: boolean;
+  /**
+   * Whether a notification raised while no app window is in front also bounces
+   * the Dock icon on macOS or flashes the taskbar button elsewhere. Optional
+   * because a shell that predates it answers without it, and the panel offers
+   * no row that shell would ignore.
+   */
+  drawAttention?: boolean;
 }
 
 export const DEFAULT_HOST_AGENT_NOTIFICATIONS: HostAgentNotificationPreferences = {
   when: 'unfocused',
   muted: [],
   sound: true,
+  drawAttention: false,
 };
 
 export interface HostPreferencesState {
@@ -377,6 +392,56 @@ export interface HostUpdateAvailability {
   downloading?: boolean;
   /** ISO timestamp of the shell's most recent check, scheduled or asked for. */
   checkedAt?: string;
+}
+
+/**
+ * Whether the window hosting the page can step back or forward through its
+ * own history. The shell reads this from the window's session history, which
+ * also holds the sign-in pages a page's `history` object cannot see.
+ */
+export interface HostNavigationState {
+  canGoBack: boolean;
+  canGoForward: boolean;
+}
+
+export const HOST_NAVIGATION_DIRECTIONS = ['back', 'forward'] as const;
+
+export type HostNavigationDirection = (typeof HOST_NAVIGATION_DIRECTIONS)[number];
+
+export function isHostNavigationDirection(value: unknown): value is HostNavigationDirection {
+  return (
+    typeof value === 'string' && (HOST_NAVIGATION_DIRECTIONS as readonly string[]).includes(value)
+  );
+}
+
+export const NO_HOST_NAVIGATION: HostNavigationState = { canGoBack: false, canGoForward: false };
+
+export function isHostNavigationState(value: unknown): value is HostNavigationState {
+  if (!value || typeof value !== 'object') return false;
+  const state = value as Record<string, unknown>;
+  return typeof state['canGoBack'] === 'boolean' && typeof state['canGoForward'] === 'boolean';
+}
+
+/**
+ * The IPC channels behind `HostBridge.navigation`: `read` and `go` are
+ * invoked by the page, `changed` is sent by the shell after every navigation
+ * of the window that hosts it.
+ */
+export const HOST_NAVIGATION_CHANNELS = {
+  read: 'agi:navigation-read',
+  go: 'agi:navigation-go',
+  changed: 'agi:navigation-changed',
+} as const;
+
+/**
+ * Back and forward for the window hosting the page. Each call acts on that
+ * window alone, never on whichever window happens to be in front.
+ */
+export interface HostNavigation {
+  read(): Promise<HostNavigationState>;
+  /** Resolves once the step is asked for; the new state arrives through `onChange`. */
+  go(direction: HostNavigationDirection): Promise<void>;
+  onChange(callback: (state: HostNavigationState) => void): () => void;
 }
 
 /**
@@ -439,6 +504,12 @@ export interface HostBridge {
    */
   finishDictation?(text: string): Promise<HostDictationOutcome>;
   cancelDictation?(): Promise<void>;
+  /**
+   * Present only in a shell that draws its own window history controls in the
+   * page. A browser has its own, and an older shell lacks it, so the page draws
+   * back and forward only when this exists.
+   */
+  readonly navigation?: HostNavigation;
 }
 
 declare global {

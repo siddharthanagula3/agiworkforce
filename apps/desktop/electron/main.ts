@@ -47,6 +47,8 @@ import {
   NO_HOST_SHORTCUT,
   DESKTOP_RUNTIME_CHANNEL,
   DESKTOP_RUNTIME_EVENT_CHANNEL,
+  HOST_NAVIGATION_CHANNELS,
+  isHostNavigationDirection,
   type BrowserPairRequestPrompt,
   effectiveAgentNotifications,
   type HostAgentNotificationPreferences,
@@ -162,8 +164,10 @@ import {
   ZOOM_LEVEL_STEP,
   clampZoomLevel,
   fillsWorkArea,
+  followNavigationState,
   frameIsOnScreen,
   hostShortcutKeyFor,
+  navigationStateOf,
   isAppearance,
   isSessionCompletionAlerts,
   normalizeAgentNotifications,
@@ -226,7 +230,7 @@ import {
   type OpenWindow,
 } from './windowRegistry';
 import { handleWorkspaceDrop } from './workspaceDrop';
-import { createWorkKeeper } from './workKeeper';
+import { createWorkKeeper, needsWakeHold } from './workKeeper';
 import { settleAppIdentity } from './userDataLocation';
 import {
   isTrustedCloudRendererOrigin,
@@ -509,6 +513,19 @@ function registerIpcHandlers(): void {
   ipcMain.handle(ELECTRON_IPC_CHANNELS.restartToUpdate, async (event) => {
     if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
     return restartToUpdate();
+  });
+
+  ipcMain.handle(HOST_NAVIGATION_CHANNELS.read, async (event) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    return navigationStateOf(event.sender.navigationHistory);
+  });
+
+  ipcMain.handle(HOST_NAVIGATION_CHANNELS.go, async (event, direction) => {
+    if (!isTrustedSender(event)) throw new Error('Untrusted bridge caller.');
+    if (!isHostNavigationDirection(direction)) throw new Error('Unknown navigation direction.');
+    const history = event.sender.navigationHistory;
+    if (direction === 'back' && history.canGoBack()) history.goBack();
+    if (direction === 'forward' && history.canGoForward()) history.goForward();
   });
 
   ipcMain.handle(ELECTRON_IPC_CHANNELS.hostPreferences, async (event, patch) => {
@@ -981,6 +998,11 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     }
   };
   win.webContents.on('did-navigate', followRoute);
+  followNavigationState(win.webContents, (state) => {
+    if (showsTrustedPage(win.webContents)) {
+      win.webContents.send(HOST_NAVIGATION_CHANNELS.changed, state);
+    }
+  });
   win.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
     if (isMainFrame) followRoute(_event, url);
   });
@@ -1181,8 +1203,29 @@ const workKeeper = createWorkKeeper({
 
 function syncWorkKeeper(): void {
   workKeeper.update(
-    agentNotifier.activity().runningTurns.length > 0 || remoteControlState().status === 'connected',
+    needsWakeHold({
+      preventSleepWhileRunning: getPreferences().preventSleepWhileRunning,
+      runningTurns: agentNotifier.activity().runningTurns.length,
+      phoneConnected: remoteControlState().status === 'connected',
+    }),
   );
+}
+
+/**
+ * macOS bounces the Dock icon once; elsewhere the taskbar button flashes until
+ * the window is brought forward, so the flash is stopped on that focus.
+ */
+function drawAttention(): void {
+  if (process.platform === 'darwin') {
+    app.dock?.bounce('informational');
+    return;
+  }
+  const target = mainWindow && !mainWindow.isDestroyed() ? mainWindow : null;
+  if (!target) return;
+  target.flashFrame(true);
+  target.once('focus', () => {
+    if (!target.isDestroyed()) target.flashFrame(false);
+  });
 }
 
 const agentNotifier = createAgentNotifier({
@@ -1195,6 +1238,7 @@ const agentNotifier = createAgentNotifier({
   reviewApproval: readPendingApproval,
   openSession: openLocalSession,
   sessionLabel: sessionFolderName,
+  drawAttention,
   onActivityChanged: (activity: AgentActivity) => {
     app.setBadgeCount(activity.pendingApprovals.length);
     syncTray();
@@ -1442,6 +1486,7 @@ function hostPreferencesState(): HostPreferencesState {
       ...(process.platform === 'darwin'
         ? { dictateIntoFocusedApp: preferences.dictateIntoFocusedApp }
         : {}),
+      preventSleepWhileRunning: preferences.preventSleepWhileRunning,
     },
     shortcutStatus: Object.fromEntries(
       SHORTCUT_KEYS.map((key) => [
@@ -1660,6 +1705,11 @@ async function writeHostPreferences(
 
   if (typeof patch.sessionApprovalAlerts === 'boolean') {
     saveSettings({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
+  }
+
+  if (typeof patch.preventSleepWhileRunning === 'boolean') {
+    saveSettings({ preventSleepWhileRunning: patch.preventSleepWhileRunning });
+    syncWorkKeeper();
   }
 
   if (

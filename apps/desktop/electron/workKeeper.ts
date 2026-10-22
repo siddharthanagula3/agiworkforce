@@ -14,6 +14,21 @@ export interface WorkKeeper {
   release(): void;
 }
 
+export interface WakeDemand {
+  preventSleepWhileRunning: boolean;
+  runningTurns: number;
+  phoneConnected: boolean;
+}
+
+/**
+ * A running turn holds the computer awake only while the user wants that. A
+ * connected phone always does: the session it drives ends when the computer
+ * sleeps, and the phone has no way to wake it again.
+ */
+export function needsWakeHold(demand: WakeDemand): boolean {
+  return demand.phoneConnected || (demand.preventSleepWhileRunning && demand.runningTurns > 0);
+}
+
 export function createWorkKeeper(deps: WorkKeeperDeps): WorkKeeper {
   let releaseHold: (() => void) | null = null;
   const release = (): void => {
