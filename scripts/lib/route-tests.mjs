@@ -49,7 +49,49 @@ export function apiRouteIsTested(relPath, { testPaths, testSources }) {
   return testSources.some((source) => source.includes(apiPath));
 }
 
+const DYNAMIC_SEGMENT_ONLY_RE = /^\[\[?(?:\.\.\.)?[^\]]+\]\]?$/;
+const CATCH_ALL_SEGMENT_RE = /^\[\[?\.\.\./;
+const SEGMENT_VALUE = String.raw`(?:\$\{[^}]+\}|[^/'"\x60\s$]+)`;
+const SEGMENTS_VALUE = String.raw`${SEGMENT_VALUE}(?:/${SEGMENT_VALUE})*`;
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Segments with layout groups removed and trailing dynamic segments dropped,
+ * so `/skills/[...path]` keeps counting a spec that names `/skills`.
+ */
+function pageSegments(relPath) {
+  const directory = posix(path.dirname(relPath)).replace(APP_ROOT, '');
+  const segments = `${directory}/`
+    .replace(GROUP_SEGMENT_RE, '')
+    .split('/')
+    .filter((segment) => segment.length > 0);
+  while (segments.length > 0 && DYNAMIC_SEGMENT_ONLY_RE.test(segments.at(-1))) segments.pop();
+  return segments;
+}
+
+/**
+ * A dynamic segment in the middle of a path is visited with a value in its
+ * place, a literal id or a template interpolation such as
+ * `/code/${sessionId}/security`, never by the path with the segment deleted.
+ */
+function innerDynamicRoutePattern(relPath) {
+  const segments = pageSegments(relPath);
+  if (!segments.some((segment) => DYNAMIC_SEGMENT_ONLY_RE.test(segment))) return null;
+  const body = segments
+    .map((segment) => {
+      if (!DYNAMIC_SEGMENT_ONLY_RE.test(segment)) return escapeRegExp(segment);
+      return CATCH_ALL_SEGMENT_RE.test(segment) ? SEGMENTS_VALUE : SEGMENT_VALUE;
+    })
+    .join('/');
+  return new RegExp(`/${body}(?![\\w-])`);
+}
+
 export function pageRouteHasSpec(relPath, specSources) {
+  const pattern = innerDynamicRoutePattern(relPath);
+  if (pattern) return specSources.some((source) => pattern.test(source));
   const route = routePath(relPath);
   return specSources.some((source) => source.includes(route));
 }

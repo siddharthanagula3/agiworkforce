@@ -82,6 +82,21 @@ test('a page counts as specced when a spec names its literal path', () => {
   );
 });
 
+test('a dynamic segment inside the path is matched by the value a spec visits', () => {
+  const page = 'apps/web/app/code/[sessionId]/security/page.tsx';
+  assert.ok(pageRouteHasSpec(page, ['await page.goto(`/code/${SESSION_ID}/security`);']));
+  assert.ok(pageRouteHasSpec(page, ["await page.goto('/code/1111-aaaa/security');"]));
+  assert.equal(pageRouteHasSpec(page, ["page.goto('/code/security');"]), false);
+  assert.equal(pageRouteHasSpec(page, ['page.goto(`/code/${id}/security-settings`);']), false);
+  assert.equal(pageRouteHasSpec(page, ['page.goto(`/code/${id}`);']), false);
+  assert.ok(
+    pageRouteHasSpec('apps/web/app/docs/[...slug]/edit/page.tsx', [
+      "goto('/docs/guides/setup/edit')",
+    ]),
+  );
+  assert.ok(pageRouteHasSpec('apps/web/app/skills/[...path]/page.tsx', ["goto('/skills/x')"]));
+});
+
 test('scan reports each rule and the ratchet fails on growth', () => {
   const findings = scan({
     apiRoutes: ['apps/web/app/api/billing/route.ts'],
