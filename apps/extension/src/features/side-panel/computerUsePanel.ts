@@ -225,6 +225,42 @@ export const COMPUTER_USE_PANEL_CSS = `
     background: var(--agi-ext-hover);
   }
 
+  .sp-cu-steps-toggle {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 8px 14px;
+    background: none;
+    border: none;
+    border-bottom: 1px solid var(--agi-ext-border);
+    font: inherit;
+    font-size: var(--type-label-size);
+    font-weight: 600;
+    color: var(--agi-ext-text);
+    text-align: left;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .sp-cu-steps-toggle:hover {
+    background: var(--agi-ext-hover);
+  }
+
+  .sp-cu-steps-toggle:focus-visible {
+    outline: 2px solid var(--agi-ext-focus);
+    outline-offset: -2px;
+  }
+
+  .sp-cu-steps-chevron {
+    display: inline-block;
+    transition: transform var(--duration-instant);
+  }
+
+  .sp-cu-steps-toggle[aria-expanded='true'] .sp-cu-steps-chevron {
+    transform: rotate(90deg);
+  }
+
   /* Action log */
   #sp-cu-log {
     flex: 1;
@@ -1569,7 +1605,28 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     'sensitive steps. On a Greenhouse, Lever or Ashby job page, Run Autofill fills the application.';
   logEl.appendChild(emptyEl);
 
-  panelEl.appendChild(logEl);
+  const stepsToggle = document.createElement('button');
+  stepsToggle.type = 'button';
+  stepsToggle.className = 'sp-cu-steps-toggle';
+  stepsToggle.setAttribute('aria-controls', logEl.id);
+  const stepsChevron = document.createElement('span');
+  stepsChevron.className = 'sp-cu-steps-chevron';
+  stepsChevron.setAttribute('aria-hidden', 'true');
+  stepsChevron.textContent = '›';
+  const stepsLabel = document.createElement('span');
+  stepsLabel.textContent = 'Assistant steps';
+  stepsToggle.append(stepsChevron, stepsLabel);
+
+  function setStepsOpen(open: boolean): void {
+    stepsToggle.setAttribute('aria-expanded', String(open));
+    logEl.hidden = !open;
+  }
+  setStepsOpen(true);
+  stepsToggle.addEventListener('click', () => {
+    setStepsOpen(logEl.hidden);
+  });
+
+  panelEl.append(stepsToggle, logEl);
 
   function fmtTime(): string {
     const d = new Date();
@@ -1835,6 +1892,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
       resolve,
     });
     pendingApprovals.add(card.dismiss);
+    setStepsOpen(true);
     logEl.insertBefore(card.element, logEl.firstChild);
     logEl.scrollTop = 0;
     card.focus();

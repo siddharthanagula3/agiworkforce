@@ -73,6 +73,19 @@ export function buildPanelStyles(): string {
     }
     .agi-close-btn:hover { background:var(--agi-ext-hover); color:var(--agi-ext-text); }
 
+    .agi-icon-btn {
+      background:transparent; border:none; cursor:pointer;
+      color:var(--agi-ext-text-muted); font-size:20px;
+      width:28px; height:28px;
+      display:flex; align-items:center; justify-content:center;
+      border-radius:50%;
+      transition:background 0.15s;
+      line-height:1;
+      flex-shrink:0;
+      margin-right:2px;
+    }
+    .agi-icon-btn:hover { background:var(--agi-ext-hover); color:var(--agi-ext-text); }
+
     /* ── Quick actions ───────────────────────────────────────────────────── */
     .agi-actions-row {
       display:flex; gap:6px; flex-wrap:wrap;
@@ -153,6 +166,19 @@ export function buildPanelStyles(): string {
       line-height:1.4; flex-shrink:0;
     }
 
+    .agi-context-chip {
+      align-self:flex-start;
+      max-width:calc(100% - 28px);
+      margin:8px 14px 0;
+      padding:4px 11px;
+      background:var(--agi-ext-surface); border:1px solid var(--agi-ext-border-control);
+      border-radius:20px;
+      font-size:14px; font-weight:500; color:var(--agi-ext-text-muted);
+      white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+      flex-shrink:0;
+    }
+    .agi-context-chip:empty { display:none; }
+
     /* ── Composer ────────────────────────────────────────────────────────── */
     .agi-composer {
       display:flex; gap:8px; align-items:flex-end;
@@ -224,7 +250,7 @@ export function buildPanelStyles(): string {
     }
 
     @media (prefers-reduced-motion: reduce) {
-      .agi-panel, .agi-close-btn, .agi-action-chip, .agi-textarea,
+      .agi-panel, .agi-close-btn, .agi-icon-btn, .agi-action-chip, .agi-textarea,
       .agi-submit-btn, .agi-open-side-panel, .agi-state-action { transition:none; }
       .agi-response-area .agi-thinking { animation:none; }
     }

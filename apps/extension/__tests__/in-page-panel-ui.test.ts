@@ -241,7 +241,7 @@ describe('in-page panel host and closed state', () => {
       const panel = shadow.querySelector('.agi-panel')!;
       const controls = shadow.querySelectorAll('button, textarea');
 
-      expect(controls).toHaveLength(8);
+      expect(controls).toHaveLength(9);
       expect(panel.hasAttribute('inert')).toBe(true);
       expect(panel.getAttribute('aria-hidden')).toBe('true');
       expect(panel.classList.contains('agi-panel--hidden')).toBe(true);
@@ -372,5 +372,30 @@ describe('in-page panel UI', () => {
       );
     });
     expect(shadow.querySelector<HTMLButtonElement>('.agi-state-action')?.textContent).toBe('Retry');
+  });
+});
+
+describe('in-page panel header and context chip', () => {
+  it('names the current document in a chip above the composer', () => {
+    document.title = 'Quarterly report';
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    expect(shadow.querySelector('.agi-context-chip')?.textContent).toBe('Quarterly report');
+  });
+
+  it('clears the answer and draft when New is pressed', async () => {
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    const textarea = shadow.querySelector<HTMLTextAreaElement>('.agi-textarea')!;
+    textarea.value = 'Question';
+    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+    shadow.querySelector<HTMLButtonElement>('.agi-submit-btn')!.click();
+    await vi.waitFor(() => {
+      expect(shadow.querySelector('.agi-response-area')?.textContent).toBe('Done');
+    });
+    textarea.value = 'Draft';
+    shadow.querySelector<HTMLButtonElement>('[aria-label="New question"]')!.click();
+    expect(shadow.querySelector('.agi-response-area')?.textContent).toBe('');
+    expect(textarea.value).toBe('');
   });
 });

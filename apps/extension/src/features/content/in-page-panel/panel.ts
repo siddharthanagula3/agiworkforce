@@ -44,6 +44,8 @@ import {
 interface PanelElements {
   panel: HTMLElement;
   closeBtn: HTMLButtonElement;
+  newBtn: HTMLButtonElement;
+  contextChip: HTMLElement;
   actionsRow: HTMLElement;
   textarea: HTMLTextAreaElement;
   submitBtn: HTMLButtonElement;
@@ -74,6 +76,13 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   providerLabel.textContent = 'Managed Cloud · Auto';
   providerLabel.setAttribute('aria-label', 'Provider: Managed Cloud, automatic model selection');
 
+  const newBtn = document.createElement('button');
+  newBtn.className = 'agi-icon-btn';
+  newBtn.setAttribute('aria-label', 'New question');
+  newBtn.setAttribute('title', 'New question');
+  newBtn.setAttribute('type', 'button');
+  newBtn.textContent = '+';
+
   const closeBtn = document.createElement('button');
   closeBtn.className = 'agi-close-btn';
   closeBtn.setAttribute('aria-label', 'Close panel');
@@ -82,6 +91,7 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
 
   header.appendChild(logo);
   header.appendChild(providerLabel);
+  header.appendChild(newBtn);
   header.appendChild(closeBtn);
 
   const actionsRow = document.createElement('div');
@@ -99,6 +109,10 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   disclosure.className = 'agi-disclosure';
   disclosure.setAttribute('role', 'note');
   disclosure.setAttribute('aria-label', 'Page context privacy notice');
+
+  const contextChip = document.createElement('div');
+  contextChip.className = 'agi-context-chip';
+  contextChip.setAttribute('aria-label', 'Current page');
 
   const composer = document.createElement('div');
   composer.className = 'agi-composer';
@@ -134,6 +148,7 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   panel.appendChild(actionsRow);
   panel.appendChild(responseArea);
   panel.appendChild(disclosure);
+  panel.appendChild(contextChip);
   panel.appendChild(composer);
   panel.appendChild(footer);
   shadow.appendChild(panel);
@@ -141,6 +156,8 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   return {
     panel,
     closeBtn,
+    newBtn,
+    contextChip,
     actionsRow,
     textarea,
     submitBtn,
@@ -433,8 +450,17 @@ export function createPanel(): {
     );
   }
 
+  function showContextTitle(): void {
+    const title = sanitizePageText(
+      truncatePageText(document.title || 'Untitled', MAX_PAGE_TITLE_CHARS),
+    );
+    els.contextChip.textContent = title;
+    els.contextChip.title = title;
+  }
+
   function refreshContext(): PageContext {
     const fresh = capturePageContext();
+    showContextTitle();
     updateDisclosure(els.disclosure, fresh.url, fresh.pageText.length);
     return fresh;
   }
@@ -469,6 +495,7 @@ export function createPanel(): {
   function rebuildChips(): void {
     const url = window.location.href;
     updateDisclosure(els.disclosure, url, null);
+    showContextTitle();
     buildActionChips(getPageActions(url), els.actionsRow, (action) => {
       if (action.readsVideoCaptions) {
         void runCaptionAction(action);
@@ -483,6 +510,7 @@ export function createPanel(): {
   }
 
   rebuildChips();
+  showContextTitle();
 
   window.addEventListener('popstate', rebuildChips);
   (window as Window & { navigation?: EventTarget }).navigation?.addEventListener(
@@ -567,6 +595,16 @@ export function createPanel(): {
   }
 
   els.closeBtn.addEventListener('click', close);
+
+  els.newBtn.addEventListener('click', () => {
+    if (requestInFlight) return;
+    els.responseArea.textContent = '';
+    els.textarea.value = '';
+    autoResizeTextarea(els.textarea);
+    syncComposerState();
+    rebuildChips();
+    els.textarea.focus();
+  });
 
   function openSidePanel(): void {
     chrome.runtime.sendMessage({ type: 'OPEN_SIDE_PANEL' }).catch(() => {});

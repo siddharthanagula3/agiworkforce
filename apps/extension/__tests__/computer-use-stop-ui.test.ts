@@ -295,3 +295,19 @@ describe('every way a run can end has words for the user', () => {
     expect(describeCancellationReason(undefined)).toBeNull();
   });
 });
+
+describe('computer-use Assistant steps disclosure', () => {
+  it('collapses and expands the step log from its toggle', () => {
+    const api = buildComputerUsePanel();
+    const toggle = api.panelEl.querySelector<HTMLButtonElement>('.sp-cu-steps-toggle')!;
+    const log = api.panelEl.querySelector<HTMLElement>('#sp-cu-log')!;
+    expect(toggle.textContent).toContain('Assistant steps');
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(log.hidden).toBe(false);
+    toggle.click();
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(log.hidden).toBe(true);
+    toggle.click();
+    expect(log.hidden).toBe(false);
+  });
+});
