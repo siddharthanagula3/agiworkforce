@@ -160,8 +160,14 @@ jest.mock('@/stores/chatStore', () => ({
 }));
 
 jest.mock('@/src/features/auth/store', () => ({
-  useAuthStore: (selector: (s: Record<string, unknown>) => unknown) =>
-    selector({ isClerkSignedIn: mockSignedIn }),
+  useAuthStore: Object.assign(
+    (selector: (s: Record<string, unknown>) => unknown) =>
+      selector({ isClerkSignedIn: mockSignedIn }),
+    {
+      getState: () => ({ isClerkSignedIn: mockSignedIn, clerkUserId: null }),
+      subscribe: () => () => undefined,
+    },
+  ),
 }));
 
 jest.mock('@/src/features/projects/service', () => ({

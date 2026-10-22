@@ -2,11 +2,10 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
+import { FAVOURITE_MODEL_IDS_KEY, MODEL_PICKER_PREFERENCES_NAMESPACE } from '@agiworkforce/types';
 import { getCsrfToken } from '@/lib/client/csrf';
 
 const PREFERENCES_ENDPOINT = '/api/settings/preferences';
-const PREFERENCES_NAMESPACE = 'model-picker';
-const FAVOURITES_KEY = 'favouriteModelIds';
 const DEVICE_STORAGE_KEY = 'agi-model-picker-favourites';
 const SAVE_FAILED_COPY = 'Your favourite models could not be saved. Try again.';
 
@@ -37,8 +36,8 @@ async function persistFavourites(modelIds: readonly string[]): Promise<boolean> 
       credentials: 'same-origin',
       headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
       body: JSON.stringify({
-        namespace: PREFERENCES_NAMESPACE,
-        value: { [FAVOURITES_KEY]: modelIds },
+        namespace: MODEL_PICKER_PREFERENCES_NAMESPACE,
+        value: { [FAVOURITE_MODEL_IDS_KEY]: modelIds },
       }),
     });
     return response.ok;
@@ -63,11 +62,11 @@ export function invalidateModelFavouritesCache(): void {
 function loadStoredFavourites(): Promise<readonly string[] | null> {
   if (storedFavourites) return storedFavourites;
   const requestGeneration = favouritesGeneration;
-  const request = fetch(`${PREFERENCES_ENDPOINT}?namespace=${PREFERENCES_NAMESPACE}`)
+  const request = fetch(`${PREFERENCES_ENDPOINT}?namespace=${MODEL_PICKER_PREFERENCES_NAMESPACE}`)
     .then(async (response) => {
       if (!response.ok) return null;
       const body = (await response.json()) as { settings?: Record<string, unknown> };
-      const stored = body.settings?.[FAVOURITES_KEY];
+      const stored = body.settings?.[FAVOURITE_MODEL_IDS_KEY];
       const ids = Array.isArray(stored)
         ? stored.filter((id): id is string => typeof id === 'string')
         : null;

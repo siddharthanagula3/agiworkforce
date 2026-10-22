@@ -1,12 +1,13 @@
 import { AppState, type AppStateStatus } from 'react-native';
-import { normalizeModelId } from '@agiworkforce/types';
+import {
+  FAVOURITE_MODEL_IDS_KEY,
+  MODEL_PICKER_PREFERENCES_NAMESPACE,
+  normalizeModelId,
+} from '@agiworkforce/types';
 
 import { fetchPreferenceNamespace, patchPreferenceNamespace } from '@/services/preferences';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-
-export const MODEL_PICKER_PREFERENCES_NAMESPACE = 'model-picker';
-export const FAVOURITE_MODEL_IDS_KEY = 'favouriteModelIds';
 
 export type FavouriteChanges = Record<string, boolean>;
 

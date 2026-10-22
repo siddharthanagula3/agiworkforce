@@ -40,6 +40,7 @@ export * from './visual-session';
 export * from './visual-session-capture';
 
 export * from './time-focus';
+export * from './model-favourites';
 export * from './tool-approval-policy';
 export * from './routing-profile-choice';
 export * from './auto-route-explanation';

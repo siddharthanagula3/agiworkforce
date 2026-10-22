@@ -27,10 +27,7 @@ jest.mock('@/src/features/auth/store', () => {
 
 import { useModelStore } from '../src/features/model-picker/store';
 import { LOCAL_MODEL_LIST } from '../src/features/model-picker/service';
-import {
-  FAVOURITE_MODEL_IDS_KEY,
-  MODEL_PICKER_PREFERENCES_NAMESPACE,
-} from '../src/features/model-picker/useFavouritesSync';
+import { FAVOURITE_MODEL_IDS_KEY, MODEL_PICKER_PREFERENCES_NAMESPACE } from '@agiworkforce/types';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';

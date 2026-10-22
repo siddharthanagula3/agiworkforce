@@ -43,7 +43,10 @@ jest.mock('../lib/safeOpenURL', () => ({
 }));
 
 jest.mock('../src/features/auth/store', () => ({
-  useAuthStore: (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
+  useAuthStore: Object.assign(
+    (selector: (state: typeof mockAuthState) => unknown) => selector(mockAuthState),
+    { getState: () => mockAuthState, subscribe: () => () => undefined },
+  ),
 }));
 
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
@@ -52,9 +55,18 @@ jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
 }));
 
 jest.mock('../src/features/chat/store/appModeStore', () => ({
-  useChatAppModeStore: (
-    selector: (state: { appMode: 'local' | 'cloud'; setAppMode: typeof mockSetAppMode }) => unknown,
-  ) => selector({ appMode: mockAppMode, setAppMode: mockSetAppMode }),
+  useChatAppModeStore: Object.assign(
+    (
+      selector: (state: {
+        appMode: 'local' | 'cloud';
+        setAppMode: typeof mockSetAppMode;
+      }) => unknown,
+    ) => selector({ appMode: mockAppMode, setAppMode: mockSetAppMode }),
+    {
+      getState: () => ({ appMode: mockAppMode, setAppMode: mockSetAppMode }),
+      subscribe: () => () => undefined,
+    },
+  ),
 }));
 
 jest.mock('@clerk/expo', () => ({
