@@ -10,6 +10,7 @@ import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import {
   SettingsPageLink,
   SettingsSectionLink,
@@ -581,26 +582,29 @@ function ReasoningEffortRow() {
               : 'Higher effort lets a reply think up to 16x longer, which draws on your usage allowance faster.'
       }
     >
-      <select
-        value={enabled ? effort : 'off'}
-        onChange={(event) => {
-          const next = event.target.value;
-          if (next === 'off') setEnabled(false);
-          else if (!gatedEfforts.has(next)) setEffort(next as EffortLevel);
-        }}
-        aria-label="Reasoning effort"
-        className={SELECT_CLASS}
-      >
-        <option value="off">Off</option>
-        {EFFORT_LEVELS.map((level) => {
-          const gated = gatedEfforts.has(level);
-          return (
-            <option key={level} value={level} disabled={gated}>
-              {gated ? `${EFFORT_LABEL[level]}, not on your plan` : EFFORT_LABEL[level]}
-            </option>
-          );
-        })}
-      </select>
+      <div className="flex flex-col items-stretch gap-1 sm:items-end">
+        <select
+          value={enabled ? effort : 'off'}
+          onChange={(event) => {
+            const next = event.target.value;
+            if (next === 'off') setEnabled(false);
+            else if (!gatedEfforts.has(next)) setEffort(next as EffortLevel);
+          }}
+          aria-label="Reasoning effort"
+          className={SELECT_CLASS}
+        >
+          <option value="off">Off</option>
+          {EFFORT_LEVELS.map((level) => {
+            const gated = gatedEfforts.has(level);
+            return (
+              <option key={level} value={level} disabled={gated}>
+                {gated ? `${EFFORT_LABEL[level]}, not on your plan` : EFFORT_LABEL[level]}
+              </option>
+            );
+          })}
+        </select>
+        <HelpArticleLink docId="models-and-reasoning" label="Choosing a model and effort" />
+      </div>
     </Row>
   );
 }

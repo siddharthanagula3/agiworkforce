@@ -185,3 +185,15 @@ describe('the effort picker describes usage only where the plan has an allowance
     expect(screen.getByText(/manual model selection/i)).toBeVisible();
   });
 });
+
+describe('the effort row links to the model and effort help article', () => {
+  it('opens the models and reasoning article from beside the effort picker', () => {
+    render(<GeneralSection />);
+
+    const link = screen.getByRole('link', { name: 'Choosing a model and effort' });
+    expect(link).toHaveAttribute('href', '/help/models-and-reasoning');
+    expect(link).toHaveAttribute('target', '_blank');
+    const row = screen.getByRole('combobox', { name: 'Reasoning effort' }).parentElement;
+    expect(row).toContainElement(link);
+  });
+});
