@@ -194,56 +194,6 @@ describe('Remote Control in the desktop shell', () => {
     expect(await screen.findByRole('img', { name: 'Pairing QR code' })).toBeVisible();
   });
 
-  it('starts a new pairing when the pairing window asks for a fresh code', async () => {
-    readRemoteControl.mockResolvedValue({
-      ...IDLE_REMOTE_CONTROL_STATE,
-      status: 'waiting',
-      pairingCode: 'OLDC0DE',
-      qrPayload: 'agi-pair://old',
-    });
-    stopRemoteControl.mockResolvedValue({ ...IDLE_REMOTE_CONTROL_STATE });
-    fetchMock.mockResolvedValue({
-      ok: true,
-      json: async () => ({
-        code: 'NEWC0DE',
-        expiresAt: 1_900_000_000_000,
-        signaling: { wsUrl: 'wss://relay/ws' },
-        pairTokens: { desktop: 'desktop-token' },
-      }),
-    });
-    startRemoteControl.mockResolvedValue({
-      ...IDLE_REMOTE_CONTROL_STATE,
-      status: 'waiting',
-      pairingCode: 'NEWC0DE',
-      qrPayload: 'agi-pair://new',
-    });
-
-    render(<RemoteControlSection />);
-    await screen.findByRole('img', { name: 'Pairing QR code' });
-
-    act(() => {
-      runtimeListener?.({ kind: 'remote-control-refresh-requested' });
-    });
-
-    await waitFor(() => expect(startRemoteControl).toHaveBeenCalled());
-    expect(stopRemoteControl.mock.invocationCallOrder[0]).toBeLessThan(
-      startRemoteControl.mock.invocationCallOrder[0] ?? 0,
-    );
-    expect(await screen.findByLabelText('Pairing code')).toHaveTextContent('NEWC0DE');
-  });
-
-  it('ignores a refresh request when no pairing is waiting', async () => {
-    render(<RemoteControlSection />);
-    await screen.findByRole('button', { name: 'Pair a phone' });
-
-    act(() => {
-      runtimeListener?.({ kind: 'remote-control-refresh-requested' });
-    });
-
-    expect(fetchMock).not.toHaveBeenCalled();
-    expect(startRemoteControl).not.toHaveBeenCalled();
-  });
-
   it('renders nothing on a shell that cannot host Remote Control', async () => {
     readRemoteControl.mockRejectedValue(
       new DesktopRuntimeError({ code: 'unknown-command', message: 'no command' }),

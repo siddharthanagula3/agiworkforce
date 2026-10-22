@@ -8,6 +8,7 @@ import { useDesktopDeepLinks } from '../hooks/use-desktop-deep-links';
 import { useDeviceHeartbeat } from '../hooks/use-device-heartbeat';
 import { useDesktopExternalLinks } from '../hooks/use-desktop-external-links';
 import { useHostCommands } from '../hooks/use-host-commands';
+import { useRemotePairingRefresh } from '../hooks/use-remote-pairing-refresh';
 import { useShellLayout } from '../hooks/use-shell-layout';
 import { useWindowZoom } from '../hooks/use-window-zoom';
 import { useDesktopHost } from '../lib/host';
@@ -27,6 +28,7 @@ function DesktopHostBehaviour({ host }: { host: HostBridge }) {
   useDesktopDeepLinks();
   useDesktopExternalLinks(host);
   useHostCommands(host);
+  useRemotePairingRefresh(host);
   useShellLayout(host);
   useWindowZoom(host);
   useComputerUseRunEnd(host);

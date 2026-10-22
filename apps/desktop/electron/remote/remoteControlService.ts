@@ -283,6 +283,7 @@ export function configureRemoteControl(
 
 function requestPairingRefresh(): boolean {
   const parent = pairingParent;
+  if (remoteControlState().status !== 'waiting') return false;
   if (!parent || parent.isDestroyed() || !showsTrustedPage(parent.webContents)) return false;
   parent.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, {
     kind: 'remote-control-refresh-requested',

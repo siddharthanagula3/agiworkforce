@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import QRCode from 'qrcode';
 import { Maximize2, RefreshCw } from 'lucide-react';
 import {
@@ -19,10 +19,10 @@ import {
   translateUiPlural,
 } from '@agiworkforce/ui';
 import { browserPairingLink } from '@/features/remote-dispatch/lib/browser-pairing';
-import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
-import { readRemoteControl, startRemoteControl, stopRemoteControl } from '../lib/runtime-client';
+import { PAIR_FAILED, beginRemotePairing, refreshRemotePairing } from '../lib/remote-pairing';
+import { readRemoteControl, stopRemoteControl } from '../lib/runtime-client';
 
 const HEADING = 'Remote Control';
 const INTRO =
@@ -35,7 +35,6 @@ const PHONE_CAN_RECONNECT =
   'Your phone disconnected. It reconnects on its own while Remote Control is on. To pair a different phone, stop Remote Control and pair again.';
 const BROWSER_PAIRING =
   'To send tasks from a browser instead, copy a link and open it in a browser signed in to this account. The link works once, like the code.';
-const PAIR_FAILED = 'Pairing could not start.';
 const STOP_FAILED = 'Remote Control could not be stopped.';
 const COPY_LINK_FAILED = 'The link could not be copied. Pair from the phone instead, or try again.';
 const RECONNECTING = 'Connection lost. Reconnecting so your phone can pick up where it left off.';
@@ -49,49 +48,9 @@ const ICON_BUTTON_CLASS =
 const CODE_CLASS =
   'inline-flex min-h-[36px] items-center rounded-md border border-border/60 bg-muted/40 px-3 font-mono text-base tracking-[0.2em] text-foreground';
 
-interface PairingResponse {
-  code: string;
-  expiresAt: number;
-  signaling: { wsUrl: string };
-  pairTokens: { desktop: string };
-}
-
-function isPairingResponse(value: unknown): value is PairingResponse {
-  if (typeof value !== 'object' || value === null) return false;
-  const record = value as Record<string, unknown>;
-  const signaling = record['signaling'] as Record<string, unknown> | undefined;
-  const tokens = record['pairTokens'] as Record<string, unknown> | undefined;
-  return (
-    typeof record['code'] === 'string' &&
-    typeof record['expiresAt'] === 'number' &&
-    typeof signaling?.['wsUrl'] === 'string' &&
-    typeof tokens?.['desktop'] === 'string'
-  );
-}
-
 function runtimeMessage(error: unknown, fallback: string): string {
   if (error instanceof DesktopRuntimeError) return `${fallback} ${error.message}`;
   return toUserMessage(error, fallback);
-}
-
-async function requestPairing(): Promise<PairingResponse> {
-  const response = await fetch('/api/pair/initiate', {
-    method: 'POST',
-    credentials: 'same-origin',
-    headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
-    body: JSON.stringify({ initiator: 'desktop' }),
-  });
-  const body: unknown = await response.json().catch(() => null);
-  if (!response.ok || !isPairingResponse(body)) {
-    const message =
-      typeof body === 'object' &&
-      body !== null &&
-      typeof (body as { error?: unknown }).error === 'string'
-        ? (body as { error: string }).error
-        : PAIR_FAILED;
-    throw new Error(message);
-  }
-  return body;
 }
 
 export function RemoteControlSection() {
@@ -104,7 +63,6 @@ export function RemoteControlSection() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [qrEnlarged, setQrEnlarged] = useState(false);
   const { confirm, dialog } = useConfirmAction();
-  const refreshRequested = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     if (!host) return undefined;
@@ -119,7 +77,6 @@ export function RemoteControlSection() {
       });
     return getHostBridge()?.onRuntimeEvent((event) => {
       if (event.kind === 'remote-control-changed') setState(event.state);
-      else if (event.kind === 'remote-control-refresh-requested') refreshRequested.current();
     });
   }, [host]);
 
@@ -145,49 +102,29 @@ export function RemoteControlSection() {
     };
   }, [qrPayload]);
 
-  const beginPairing = useCallback(async () => {
-    const pairing = await requestPairing();
-    setState(
-      await startRemoteControl({
-        code: pairing.code,
-        wsUrl: pairing.signaling.wsUrl,
-        pairToken: pairing.pairTokens.desktop,
-        expiresAt: pairing.expiresAt,
-      }),
-    );
-  }, []);
-
   const onPair = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      await beginPairing();
+      setState(await beginRemotePairing());
     } catch (cause) {
       setError(runtimeMessage(cause, PAIR_FAILED));
     } finally {
       setBusy(false);
     }
-  }, [beginPairing]);
+  }, []);
 
   const onRefreshCode = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      setState(await stopRemoteControl());
-      await beginPairing();
+      setState(await refreshRemotePairing());
     } catch (cause) {
       setError(runtimeMessage(cause, PAIR_FAILED));
     } finally {
       setBusy(false);
     }
-  }, [beginPairing]);
-
-  const waiting = state?.status === 'waiting';
-  useEffect(() => {
-    refreshRequested.current = () => {
-      if (waiting) void onRefreshCode();
-    };
-  }, [waiting, onRefreshCode]);
+  }, []);
 
   const onCopyLink = useCallback(async () => {
     if (!qrPayload) return;

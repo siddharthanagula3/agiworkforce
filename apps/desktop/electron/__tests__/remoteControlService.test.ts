@@ -91,6 +91,7 @@ let presentedWindow: { isDestroyed: () => boolean; id: number } | null = null;
 const presentWindow = vi.fn<() => typeof presentedWindow>(() => presentedWindow);
 let code: Omit<CodeRemoteDependencies, 'send'> | null = null;
 let phoneName: string | null = 'Pixel 9';
+let hostStatus = 'connected';
 const handleSessionEvent = vi.fn();
 let hostOptions: { presentPairing: (pairing: unknown) => void } | null = null;
 vi.mock('@agiworkforce/utils/remote-control', async (importOriginal) => ({
@@ -105,7 +106,7 @@ vi.mock('@agiworkforce/utils/remote-control', async (importOriginal) => ({
       return {
         start: vi.fn(),
         stop: vi.fn(),
-        state: () => ({ status: 'connected', phoneName }),
+        state: () => ({ status: hostStatus, phoneName }),
         handleSessionEvent,
       };
     },
@@ -582,6 +583,14 @@ describe('refreshing the code from the pairing window', () => {
     };
   }
 
+  beforeEach(() => {
+    hostStatus = 'waiting';
+  });
+
+  afterEach(() => {
+    hostStatus = 'connected';
+  });
+
   async function refreshRequest(parent: ReturnType<typeof parentShowing> | null) {
     vi.mocked(showPairingWindow).mockClear();
     startRemoteControl(parent as never, {});
@@ -597,6 +606,14 @@ describe('refreshing the code from the pairing window', () => {
     expect(parent.webContents.send).toHaveBeenCalledWith(expect.any(String), {
       kind: 'remote-control-refresh-requested',
     });
+  });
+
+  it('reports that nothing can be refreshed once no pairing is waiting', async () => {
+    hostStatus = 'connected';
+    const parent = parentShowing(CLOUD_APP_ORIGIN);
+
+    expect(await refreshRequest(parent)).toBe(false);
+    expect(parent.webContents.send).not.toHaveBeenCalled();
   });
 
   it('reports that no app can answer when its window is gone or shows another site', async () => {
