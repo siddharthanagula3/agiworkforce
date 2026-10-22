@@ -149,6 +149,50 @@ describe('Remote Control in the desktop shell', () => {
     expect(startRemoteControl).not.toHaveBeenCalled();
   });
 
+  it('refreshes the QR through a new pairing and opens it larger on request', async () => {
+    readRemoteControl.mockResolvedValue({
+      ...IDLE_REMOTE_CONTROL_STATE,
+      status: 'waiting',
+      pairingCode: 'OLDC0DE',
+      qrPayload: 'agi-pair://old',
+    });
+    stopRemoteControl.mockResolvedValue({ ...IDLE_REMOTE_CONTROL_STATE });
+    fetchMock.mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        code: 'NEWC0DE',
+        expiresAt: 1_900_000_000_000,
+        signaling: { wsUrl: 'wss://relay/ws' },
+        pairTokens: { desktop: 'desktop-token' },
+      }),
+    });
+    startRemoteControl.mockResolvedValue({
+      ...IDLE_REMOTE_CONTROL_STATE,
+      status: 'waiting',
+      pairingCode: 'NEWC0DE',
+      qrPayload: 'agi-pair://new',
+    });
+
+    render(<RemoteControlSection />);
+    await screen.findByRole('img', { name: 'Pairing QR code' });
+
+    await userEvent.click(screen.getByRole('button', { name: 'Enlarge pairing QR code' }));
+    const enlarged = await screen.findByRole('dialog');
+    expect(within(enlarged).getByRole('img', { name: 'Enlarged pairing QR code' })).toBeVisible();
+    await userEvent.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+
+    await userEvent.click(screen.getByRole('button', { name: 'Refresh pairing code' }));
+
+    await waitFor(() => expect(startRemoteControl).toHaveBeenCalled());
+    expect(stopRemoteControl).toHaveBeenCalled();
+    expect(stopRemoteControl.mock.invocationCallOrder[0]).toBeLessThan(
+      startRemoteControl.mock.invocationCallOrder[0] ?? 0,
+    );
+    expect(await screen.findByLabelText('Pairing code')).toHaveTextContent('NEWC0DE');
+    expect(await screen.findByRole('img', { name: 'Pairing QR code' })).toBeVisible();
+  });
+
   it('renders nothing on a shell that cannot host Remote Control', async () => {
     readRemoteControl.mockRejectedValue(
       new DesktopRuntimeError({ code: 'unknown-command', message: 'no command' }),

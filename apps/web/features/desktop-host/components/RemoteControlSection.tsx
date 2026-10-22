@@ -2,12 +2,22 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import QRCode from 'qrcode';
+import { Maximize2, RefreshCw } from 'lucide-react';
 import {
   DesktopRuntimeError,
   getHostBridge,
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
-import { Spinner, useConfirmAction, translateUiPlural } from '@agiworkforce/ui';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  Spinner,
+  useConfirmAction,
+  translateUiPlural,
+} from '@agiworkforce/ui';
 import { browserPairingLink } from '@/features/remote-dispatch/lib/browser-pairing';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
@@ -34,6 +44,8 @@ const DISCONNECT_CONSEQUENCE =
 
 const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
+const ICON_BUTTON_CLASS =
+  'inline-flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-60';
 const CODE_CLASS =
   'inline-flex min-h-[36px] items-center rounded-md border border-border/60 bg-muted/40 px-3 font-mono text-base tracking-[0.2em] text-foreground';
 
@@ -90,6 +102,7 @@ export function RemoteControlSection() {
   const [error, setError] = useState<string | null>(null);
   const [qrImage, setQrImage] = useState<string | null>(null);
   const [linkCopied, setLinkCopied] = useState(false);
+  const [qrEnlarged, setQrEnlarged] = useState(false);
   const { confirm, dialog } = useConfirmAction();
 
   useEffect(() => {
@@ -114,6 +127,7 @@ export function RemoteControlSection() {
     setLinkCopied(false);
     if (!qrPayload) {
       setQrImage(null);
+      setQrEnlarged(false);
       return undefined;
     }
     let cancelled = false;
@@ -129,25 +143,42 @@ export function RemoteControlSection() {
     };
   }, [qrPayload]);
 
+  const beginPairing = useCallback(async () => {
+    const pairing = await requestPairing();
+    setState(
+      await startRemoteControl({
+        code: pairing.code,
+        wsUrl: pairing.signaling.wsUrl,
+        pairToken: pairing.pairTokens.desktop,
+        expiresAt: pairing.expiresAt,
+      }),
+    );
+  }, []);
+
   const onPair = useCallback(async () => {
     setBusy(true);
     setError(null);
     try {
-      const pairing = await requestPairing();
-      setState(
-        await startRemoteControl({
-          code: pairing.code,
-          wsUrl: pairing.signaling.wsUrl,
-          pairToken: pairing.pairTokens.desktop,
-          expiresAt: pairing.expiresAt,
-        }),
-      );
+      await beginPairing();
     } catch (cause) {
       setError(runtimeMessage(cause, PAIR_FAILED));
     } finally {
       setBusy(false);
     }
-  }, []);
+  }, [beginPairing]);
+
+  const onRefreshCode = useCallback(async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      setState(await stopRemoteControl());
+      await beginPairing();
+    } catch (cause) {
+      setError(runtimeMessage(cause, PAIR_FAILED));
+    } finally {
+      setBusy(false);
+    }
+  }, [beginPairing]);
 
   const onCopyLink = useCallback(async () => {
     if (!qrPayload) return;
@@ -196,13 +227,37 @@ export function RemoteControlSection() {
           </p>
           {qrPayload ? (
             qrImage ? (
-              <img
-                src={qrImage}
-                alt="Pairing QR code"
-                width={200}
-                height={200}
-                className="h-[200px] w-[200px] rounded-md border border-border/60 bg-background"
-              />
+              <div className="flex w-fit flex-col items-end gap-1">
+                <img
+                  src={qrImage}
+                  alt="Pairing QR code"
+                  width={200}
+                  height={200}
+                  className="h-[200px] w-[200px] rounded-md border border-border/60 bg-background"
+                />
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    className={ICON_BUTTON_CLASS}
+                    aria-label="Enlarge pairing QR code"
+                    onClick={() => setQrEnlarged(true)}
+                  >
+                    <Maximize2 className="h-4 w-4" aria-hidden="true" />
+                  </button>
+                  <button
+                    type="button"
+                    className={ICON_BUTTON_CLASS}
+                    aria-label="Refresh pairing code"
+                    disabled={busy}
+                    onClick={() => void onRefreshCode()}
+                  >
+                    <RefreshCw
+                      className={`h-4 w-4 ${busy ? 'animate-spin motion-reduce:animate-none' : ''}`}
+                      aria-hidden="true"
+                    />
+                  </button>
+                </div>
+              </div>
             ) : (
               <Spinner aria-label="Drawing the pairing code" />
             )
@@ -284,6 +339,23 @@ export function RemoteControlSection() {
         )}
       </div>
       {dialog}
+      <Dialog open={qrEnlarged && qrImage !== null} onOpenChange={setQrEnlarged}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Pair your phone</DialogTitle>
+            <DialogDescription>{HOW_TO_PAIR}</DialogDescription>
+          </DialogHeader>
+          {qrImage ? (
+            <img
+              src={qrImage}
+              alt="Enlarged pairing QR code"
+              width={360}
+              height={360}
+              className="mx-auto aspect-square w-full max-w-[360px] rounded-md border border-border/60 bg-background"
+            />
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </section>
   );
 }
