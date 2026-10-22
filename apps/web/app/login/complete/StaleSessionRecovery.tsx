@@ -6,6 +6,8 @@ import { AuthProgress } from '@/features/auth/AuthProgress';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
 import { AUTH_PRIMARY_BUTTON_CLASS } from '@/features/auth/authStyles';
 
+export const SIGN_IN_COMPLETION_TIMEOUT_MS = 20_000;
+
 /**
  * A browser session the server rejects makes /login and /login/complete hand
  * off to each other forever. Signing out clears it before the one retry.
@@ -20,6 +22,7 @@ export function StaleSessionRecovery({
   const signOut = useSignOut();
   const started = useRef(false);
   const [failed, setFailed] = useState(false);
+  const [timedOut, setTimedOut] = useState(false);
 
   useEffect(() => {
     // Second time through means signing out did not resolve it. Stop, and say
@@ -30,16 +33,24 @@ export function StaleSessionRecovery({
     void signOut({ redirectUrl: loginUrl }).catch(() => setFailed(true));
   }, [alreadyRetried, loginUrl, signOut]);
 
-  const stuck = alreadyRetried || failed;
+  const stuck = alreadyRetried || failed || timedOut;
+
+  useEffect(() => {
+    if (stuck) return;
+    const timer = window.setTimeout(() => setTimedOut(true), SIGN_IN_COMPLETION_TIMEOUT_MS);
+    return () => window.clearTimeout(timer);
+  }, [stuck]);
 
   return (
     <AuthStepFrame
       heading={stuck ? 'We could not finish signing you in' : 'Finishing signing in'}
       detail={
         <p>
-          {stuck
-            ? 'Your browser is holding a sign-in this server will not accept. Clearing it did not help, so something else is wrong: clearing cookies for this site and signing in again usually fixes it.'
-            : 'Your previous session has expired. Clearing it and returning you to sign-in.'}
+          {timedOut && !alreadyRetried && !failed
+            ? 'This is taking longer than it should. Go back to sign-in and try again.'
+            : stuck
+              ? 'Your browser is holding a sign-in this server will not accept. Clearing it did not help, so something else is wrong: clearing cookies for this site and signing in again usually fixes it.'
+              : 'Your previous session has expired. Clearing it and returning you to sign-in.'}
         </p>
       }
     >
