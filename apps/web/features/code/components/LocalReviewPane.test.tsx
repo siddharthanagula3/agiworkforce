@@ -175,6 +175,26 @@ describe('LocalReviewPane', () => {
     expect(screen.getByText('+new')).toBeInTheDocument();
   });
 
+  it('totals the added and removed lines of the turn in the header', async () => {
+    render(<Harness />);
+
+    const totals = await screen.findByTestId('local-review-totals');
+    expect(totals).toHaveTextContent('+1-1');
+    expect(within(totals).getByText('+1')).toBeInTheDocument();
+    expect(within(totals).getByText('-1')).toBeInTheDocument();
+  });
+
+  it('names the file and line above the comment field being written', async () => {
+    const user = userEvent.setup();
+    render(<Harness onSendComments={vi.fn()} />);
+
+    await user.click(await screen.findByRole('button', { name: /README\.md/u }));
+    await user.click(screen.getByRole('button', { name: 'Comment on line 1 of README.md' }));
+
+    expect(screen.getByText('Comment on line 1 of README.md')).toBeInTheDocument();
+    expect(screen.getByRole('textbox', { name: 'Comment on line 1 of README.md' })).toBeVisible();
+  });
+
   it('sends comments left on lines of the change to the agent as one turn', async () => {
     const user = userEvent.setup();
     const onSendComments = vi.fn();

@@ -21,6 +21,7 @@ import {
   localReviewComment,
   localReviewCommentsMessage,
   localReviewLines,
+  localReviewTotals,
   localSkippedFilesLine,
   type LocalReviewComment,
   type LocalReviewLine,
@@ -48,6 +49,9 @@ function CommentDraft({
   const [text, setText] = useState('');
   return (
     <span className={styles['reviewCommentDraft']}>
+      <span className="text-[14px] text-[var(--chat-text-secondary)]" aria-hidden="true">
+        {label}
+      </span>
       <textarea
         aria-label={label}
         placeholder={LOCAL_REVIEW_COPY.commentPlaceholder}
@@ -375,6 +379,7 @@ export function LocalReviewPane({
 }: LocalReviewPaneProps) {
   const turns = review.checkpoints?.turns ?? [];
   const turn = review.turn;
+  const totals = review.diff === null ? null : localReviewTotals(review.diff.files);
   const [comments, setComments] = useState<LocalReviewComment[]>([]);
   const { confirm, dialog: discardDialog } = useConfirmAction();
 
@@ -398,6 +403,15 @@ export function LocalReviewPane({
         <span className={styles['changesBranch']}>
           <GitBranch size={GLYPH_SIZE} aria-hidden="true" />
           <span>{LOCAL_REVIEW_COPY.heading}</span>
+          {totals !== null && (
+            <span
+              className="inline-flex gap-1.5 font-[family-name:var(--chat-font-mono)] text-[14px]"
+              data-testid="local-review-totals"
+            >
+              <span className="text-[var(--chat-success-text)]">+{totals.added}</span>
+              <span className="text-[var(--chat-destructive-text)]">-{totals.removed}</span>
+            </span>
+          )}
         </span>
         <div className={styles['changesActions']}>
           <button

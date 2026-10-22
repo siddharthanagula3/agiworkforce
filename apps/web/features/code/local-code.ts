@@ -1126,6 +1126,7 @@ export const LOCAL_REVIEW_COPY = {
   revertFile: 'Revert file',
   stageHunk: 'Stage',
   revertHunk: 'Revert',
+  totals: (added: number, removed: number): string => `+${added} -${removed}`,
   commentOnLine: (path: string, line: number, side: LocalReviewCommentSide): string =>
     side === 'old'
       ? `Comment on removed line ${line} of ${path}`
@@ -1502,6 +1503,26 @@ export function localReviewLines(hunk: string): LocalReviewLine[] {
     oldLine += 1;
     return { text, kind: 'context', line: newLine++, side: 'new' };
   });
+}
+
+export interface LocalReviewTotals {
+  added: number;
+  removed: number;
+}
+
+export function localReviewTotals(
+  files: readonly { hunks: readonly { text: string }[] }[],
+): LocalReviewTotals {
+  const totals: LocalReviewTotals = { added: 0, removed: 0 };
+  for (const file of files) {
+    for (const hunk of file.hunks) {
+      for (const line of localReviewLines(hunk.text.replace(/\n$/u, ''))) {
+        if (line.kind === 'added') totals.added += 1;
+        else if (line.kind === 'removed') totals.removed += 1;
+      }
+    }
+  }
+  return totals;
 }
 
 const EXCERPT_LENGTH = 80;

@@ -43,6 +43,7 @@ import {
   localReviewComment,
   localReviewCommentsMessage,
   localReviewLines,
+  localReviewTotals,
   LOCAL_FILES_SHORTCUT,
   LOCAL_REVIEW_SHORTCUT,
   LOCAL_TERMINAL_SHORTCUT,
@@ -909,6 +910,22 @@ describe('review comments on a change', () => {
       ['added', 14, 'new'],
       ['context', 15, 'new'],
     ]);
+  });
+
+  it('totals the added and removed lines over every hunk of every file', () => {
+    expect(
+      localReviewTotals([
+        { hunks: [{ text: '@@ -1,2 +1,3 @@\n keep\n-gone\n+added\n+more\n' }] },
+        {
+          hunks: [
+            { text: '@@ -4 +4 @@\n-old\n+new\n\\ No newline at end of file\n' },
+            { text: '@@ -9 +9 @@\n+tail' },
+          ],
+        },
+        { hunks: [] },
+      ]),
+    ).toEqual({ added: 4, removed: 2 });
+    expect(localReviewTotals([])).toEqual({ added: 0, removed: 0 });
   });
 
   it('writes the comments as one turn in file and line order, quoting each line', () => {
