@@ -50,7 +50,11 @@ import {
 import { ScheduleCard, scheduleCardElementId, type ScheduleOperation } from './ScheduleCard';
 import { ScheduleForm, type ScheduleAgentOption } from './ScheduleForm';
 import { RecentScheduleResults } from './RecentScheduleResults';
-import { SCHEDULE_TEMPLATES, type ScheduleTemplate } from '../lib/schedule-templates';
+import {
+  SCHEDULE_TEMPLATES,
+  scheduleTemplateIcon,
+  type ScheduleTemplate,
+} from '../lib/schedule-templates';
 import type { ScheduleApprovalDecision, ScheduleHistoryState } from './ScheduleRunHistory';
 import {
   deriveScheduleName,
@@ -218,19 +222,31 @@ function ScheduleTemplateGrid({
       aria-label="Schedule templates"
       className={`grid gap-3 sm:grid-cols-2 ${className ?? ''}`}
     >
-      {SCHEDULE_TEMPLATES.map((template) => (
-        <li key={template.id}>
-          <button
-            type="button"
-            onClick={() => onPick(template)}
-            className="flex h-full w-full flex-col gap-1 rounded-xl border border-border bg-background p-4 text-start transition-colors hover:border-foreground/30 hover:bg-muted/40"
-          >
-            <span className="text-sm font-medium text-foreground">{template.name}</span>
-            <span className="text-xs text-muted-foreground">{template.description}</span>
-            <span className="mt-1 text-caption text-muted-foreground">{template.cadenceLabel}</span>
-          </button>
-        </li>
-      ))}
+      {SCHEDULE_TEMPLATES.map((template) => {
+        const Icon = scheduleTemplateIcon(template.id);
+        return (
+          <li key={template.id}>
+            <button
+              type="button"
+              onClick={() => onPick(template)}
+              className="flex h-full w-full items-start gap-3 rounded-xl border border-border bg-background p-4 text-start transition-colors hover:border-foreground/30 hover:bg-muted/40"
+            >
+              <Icon
+                data-testid="schedule-template-icon"
+                className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+              <span className="flex min-w-0 flex-col gap-1">
+                <span className="text-sm font-medium text-foreground">{template.name}</span>
+                <span className="text-xs text-muted-foreground">{template.description}</span>
+                <span className="mt-1 text-caption text-muted-foreground">
+                  {template.cadenceLabel}
+                </span>
+              </span>
+            </button>
+          </li>
+        );
+      })}
     </ul>
   );
 }

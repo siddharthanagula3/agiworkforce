@@ -1037,6 +1037,9 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
       const templates = within(gallery).getByRole('list', { name: 'Schedule templates' });
       await waitFor(() => expect(within(templates).getAllByRole('button')[0]).toHaveFocus());
 
+      expect(within(templates).getAllByTestId('schedule-template-icon')).toHaveLength(
+        within(templates).getAllByRole('button').length,
+      );
       await user.click(within(gallery).getByRole('button', { name: 'Close templates' }));
       expect(screen.queryByRole('region', { name: 'Start from a template' })).toBeNull();
 
@@ -1113,7 +1116,7 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
       expect(
         within(templates)
           .getAllByRole('button')
-          .map((button) => button.querySelector('span')?.textContent),
+          .map((button) => button.querySelector('span > span')?.textContent),
       ).toEqual([
         'Weekly review',
         'Meeting prep',

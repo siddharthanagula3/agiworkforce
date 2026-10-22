@@ -59,6 +59,36 @@ beforeEach(() => {
 });
 
 describe('SitesPage', () => {
+  it('offers refresh and Create in the header and filters sites by title', async () => {
+    mocks.listPublishedSites.mockResolvedValue({
+      sites: [
+        site(),
+        site({
+          token: 'bbbbbbbbbbbbbbbbbbbbbbbb',
+          artifactId: 'artifact-2',
+          title: 'Pricing page',
+        }),
+      ],
+      workspace: null,
+    });
+
+    render(<SitesPage />);
+
+    await screen.findByRole('list', { name: 'Your sites' });
+    expect(screen.getByRole('link', { name: 'Create' })).toHaveAttribute('href', '/chat');
+    fireEvent.click(screen.getByRole('button', { name: 'Refresh sites' }));
+    await waitFor(() => expect(mocks.listPublishedSites).toHaveBeenCalledTimes(2));
+
+    const search = await screen.findByRole('searchbox', { name: 'Search sites' });
+    fireEvent.change(search, { target: { value: 'pricing' } });
+    const list = screen.getByRole('list', { name: 'Your sites' });
+    expect(within(list).queryByText('Team scoreboard')).toBeNull();
+    expect(within(list).getByText('Pricing page')).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: 'zzz' } });
+    expect(screen.getByTestId('sites-no-match')).toBeInTheDocument();
+  });
+
   it('explains how a site is made when the account has none', async () => {
     mocks.listPublishedSites.mockResolvedValue({ sites: [], workspace: null });
 
