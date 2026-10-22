@@ -25,6 +25,8 @@ vi.mock('@features/settings/hooks/use-step-up', () => ({
 
 vi.mock('@/features/auth/step-up-fetch', () => ({
   isStepUpCancelled: () => false,
+  fetchWithStepUp: vi.fn(),
+  requestStepUpGrant: vi.fn(),
   sendAuthorizedJson: vi.fn(async () =>
     Response.json({ identities: [], providers: [], consequence: '' }),
   ),

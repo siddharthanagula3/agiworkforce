@@ -25,7 +25,10 @@ const getTokenMock = vi.fn(async () => 'session-token');
 vi.mock('@clerk/nextjs', () => ({ useAuth: () => ({ getToken: getTokenMock }) }));
 
 vi.mock('../sections/GeneralSection', () => ({ GeneralSection: () => null }));
-vi.mock('../sections/AccountSection', () => ({ AccountSection: () => null }));
+vi.mock('../sections/AccountSection', () => ({
+  AccountSection: () => null,
+  readApiError: (_data: unknown, fallback: string) => fallback,
+}));
 vi.mock('../sections/TeamSection', () => ({ TeamSection: () => <div>Team settings content</div> }));
 vi.mock('../sections/SecuritySection', () => ({ SecuritySection: () => null }));
 vi.mock('../sections/SafetySection', () => ({ SafetySection: () => null }));
