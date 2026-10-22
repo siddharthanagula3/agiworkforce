@@ -8,7 +8,7 @@ import {
 import { RESPONSE_STYLE_GUIDANCE } from '@/lib/preferences/response-style-preferences';
 import { safeLocalStorage } from '@shared/utils/browser-utils';
 
-export type PresetStyle = 'default' | 'concise' | 'explanatory' | 'formal';
+export type PresetStyle = 'default' | 'concise' | 'explanatory' | 'learning' | 'formal';
 
 export const DEFAULT_PRESET_STYLE: PresetStyle = 'default';
 export type ResponseStyle = PresetStyle | 'custom';
@@ -17,7 +17,13 @@ export type ResponseLength = 'brief' | 'standard' | 'thorough';
 
 export const DEFAULT_RESPONSE_LENGTH: ResponseLength = 'standard';
 
-const PRESET_STYLES: readonly PresetStyle[] = ['default', 'concise', 'explanatory', 'formal'];
+const PRESET_STYLES: readonly PresetStyle[] = [
+  'default',
+  'concise',
+  'explanatory',
+  'learning',
+  'formal',
+];
 const RESPONSE_LENGTHS: readonly ResponseLength[] = ['brief', 'standard', 'thorough'];
 const RETIRED_PRESETS: Readonly<Record<string, PresetStyle>> = {
   detailed: 'explanatory',
@@ -305,10 +311,14 @@ function syncToServer(): void {
 const OVERRIDE_PREAMBLE =
   'For this conversation the user chose a response style in the composer. Follow it over any saved response style or length.';
 
+const LEARNING_INSTRUCTION =
+  'Teach step by step. Start from what the user already knows, explain one idea at a time, and end each step with a short question that checks understanding before moving on.';
+
 const STYLE_INSTRUCTIONS: Record<PresetStyle, string> = {
   default: '',
   concise: RESPONSE_STYLE_GUIDANCE.concise,
   explanatory: RESPONSE_STYLE_GUIDANCE.explanatory,
+  learning: LEARNING_INSTRUCTION,
   formal: RESPONSE_STYLE_GUIDANCE.formal,
 };
 

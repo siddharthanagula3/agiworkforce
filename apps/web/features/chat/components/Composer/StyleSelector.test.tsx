@@ -6,6 +6,7 @@ import {
   useStyleStore,
   DEFAULT_PRESET_STYLE,
   DEFAULT_RESPONSE_LENGTH,
+  getStyleInstruction,
 } from '@features/chat/stores/style-store';
 
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
@@ -160,5 +161,35 @@ describe('a custom style can be edited, not only made and deleted', () => {
     for (const field of ['Name', 'Writing sample', 'Style instruction']) {
       expect(screen.getByLabelText(field)).toBeVisible();
     }
+  });
+});
+
+describe('the Learning response style', () => {
+  beforeEach(() => {
+    act(() => {
+      useStyleStore.setState({
+        style: 'default',
+        length: 'standard',
+        activeCustomStyleId: null,
+        customStyles: [],
+      });
+    });
+  });
+
+  it('is listed and selects the learning style', async () => {
+    const user = userEvent.setup();
+    render(<StyleSelector />);
+
+    await user.click(screen.getByRole('button', { name: 'Response style' }));
+    await user.click(await screen.findByRole('button', { name: /Learning/ }));
+
+    expect(useStyleStore.getState().style).toBe('learning');
+  });
+
+  it('sends a teaching instruction with check-in questions for new requests', () => {
+    const instruction = getStyleInstruction('learning');
+
+    expect(instruction).toContain('Teach step by step');
+    expect(instruction).toContain('question');
   });
 });

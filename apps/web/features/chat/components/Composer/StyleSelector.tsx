@@ -6,6 +6,7 @@ import {
   Palette,
   Minus,
   BookOpen,
+  Lightbulb,
   FilePen,
   LayoutList,
   Plus,
@@ -30,6 +31,7 @@ const STYLES: { id: PresetStyle; label: string; desc: string; icon: React.Elemen
   { id: 'default', label: 'Default', desc: 'Your style from Settings', icon: Minus },
   { id: 'concise', label: 'Concise', desc: 'Short and direct', icon: LayoutList },
   { id: 'explanatory', label: 'Explanatory', desc: 'Reasoning and context', icon: BookOpen },
+  { id: 'learning', label: 'Learning', desc: 'Step by step, with check-ins', icon: Lightbulb },
   { id: 'formal', label: 'Formal', desc: 'Formal register', icon: FilePen },
 ];
 
