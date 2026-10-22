@@ -33,6 +33,7 @@ import {
   policyAutoApprovesTool,
   resolveToolMetadata,
   toolRiskTier,
+  type ToolAnnotations,
 } from '@/app/api/llm/v1/chat/completions/lib/tool-metadata';
 import {
   markConversationGoogleUserData,
@@ -50,7 +51,10 @@ import {
   isManagedOfficeFileTool,
 } from '@/lib/services/managed-office-file-service';
 import { executeUrlFetch, fenceFetchedPage, URL_FETCH_TOOL } from '@/lib/url-fetch/url-fetch-tool';
-import { makeUserConnectorExecutor } from '@/lib/user-connector-tools';
+import {
+  loadUserConnectorToolCatalog,
+  makeUserConnectorExecutor,
+} from '@/lib/user-connector-tools';
 
 const VOICE_TOOL_SURFACE = 'voice';
 const MAX_VOICE_TOOL_OUTPUT_CHARS = 32_000;
@@ -284,6 +288,25 @@ async function runSandboxTool(
   };
 }
 
+async function offeredToolAnnotations(
+  input: LiveVoiceToolCallInput,
+  isToolDenied: (connectorId: string, toolName: string) => boolean,
+): Promise<ToolAnnotations | undefined> {
+  const parsed = parseQualifiedToolName(input.call.name);
+  if (!parsed) return undefined;
+  const [operatorTools, connectorCatalog] = await Promise.all([
+    loadMcpToolDefs(),
+    loadUserConnectorToolCatalog(input.userId, {
+      organizationId: input.organizationId,
+      isToolDenied,
+      isConnectorDenied: (connectorId) => connectorId !== parsed.serverId,
+    }).catch(() => ({ tools: [] })),
+  ]);
+  return [...operatorTools, ...connectorCatalog.tools].find(
+    (tool) => tool.qualifiedName === input.call.name,
+  )?.annotations;
+}
+
 async function conversationIsTemporary(input: LiveVoiceToolCallInput): Promise<boolean> {
   const [conversation] = await input.db.query<{ is_temporary: boolean }>(
     `select is_temporary
@@ -329,10 +352,9 @@ export async function handleLiveVoiceToolCall(
   const args = parseArguments(call.arguments);
   if (!args) return { status: 'completed', output: MESSAGE.malformed, isError: true };
 
-  const [toolApprovalPolicy, temporaryChat, operatorTools] = await Promise.all([
+  const [toolApprovalPolicy, temporaryChat] = await Promise.all([
     loadToolApprovalPolicy(input.db, input.userId),
     conversationIsTemporary(input),
-    parseQualifiedToolName(call.name) ? loadMcpToolDefs() : Promise.resolve([]),
   ]);
   const savedPermissions = await loadConnectorToolPermissions(
     input.db,
@@ -341,7 +363,7 @@ export async function handleLiveVoiceToolCall(
     managedConversationGrantScope(input.conversationId, temporaryChat),
   );
   const permissions = temporaryChat ? withoutStandingApprovals(savedPermissions) : savedPermissions;
-  const annotations = operatorTools.find((tool) => tool.qualifiedName === call.name)?.annotations;
+  const annotations = await offeredToolAnnotations(input, permissions.isConnectorToolDenied);
   const riskTier = toolRiskTier(call.name, annotations);
   const approvalMode = input.offeredTools.some(
     (name) =>
