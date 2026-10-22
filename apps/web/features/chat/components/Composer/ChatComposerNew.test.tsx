@@ -2219,7 +2219,7 @@ describe('ChatComposerNew', () => {
     expect(await screen.findByTestId('memory-indicator')).toHaveTextContent('Memory off');
   });
 
-  it('points the disabled Memory row at the Memory settings tab, where its switch lives', async () => {
+  it('points the disabled Memory row at the Personalization settings tab, where its switch lives', async () => {
     chatComposerMocks.memoryCapabilityEnabled = false;
     render(<ChatComposerNew onSend={vi.fn()} conversationId="memory-setup-guidance" />);
     await waitFor(() => {
@@ -2230,13 +2230,16 @@ describe('ChatComposerNew', () => {
 
     const row = screen.getByRole('button', { name: 'Memory' });
     expect(row).toBeDisabled();
-    expect(row).toHaveAttribute('title', 'Turn on Memory in Settings > Memory to use it here.');
+    expect(row).toHaveAttribute(
+      'title',
+      'Turn on Memory in Settings > Personalization to use it here.',
+    );
 
     const namedTab = /Settings > (.+) to use it here\.$/.exec(row.getAttribute('title') ?? '')?.[1];
     const settingsTab = WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find(
       (item) => item.label === namedTab,
     );
-    expect(settingsTab?.key).toBe('memory');
+    expect(settingsTab?.key).toBe('personalization');
   });
 
   it('sends the persistent Office file-creation selection to the server', async () => {
