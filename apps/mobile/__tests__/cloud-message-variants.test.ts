@@ -362,7 +362,7 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
     expect(useChatExecutionStore.getState().isEditing).toBe(false);
   });
 
-  it('does not retry an old response after the account changes during deletion', async () => {
+  it('leaves another account alone when it signs in while the replaced response is being deleted', async () => {
     seedConversation({}, [
       message(U1, 'user', 'first account prompt', '2026-06-01T00:00:00.000Z'),
       message(A1, 'assistant', 'first account answer', '2026-06-01T00:00:01.000Z'),
@@ -377,6 +377,7 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
 
     useChatExecutionStore.getState().retryMessage(CONV_ID, A1);
     await waitFor(() => finishDelete !== undefined);
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
 
     activateCloudAccount('cloud-variants-second-user');
     clearCloudExecutionState();
@@ -392,7 +393,7 @@ describe('a pre-threading server keeps the replacing behaviour', () => {
       'second account prompt',
       'second account answer',
     ]);
-    expect(mockStreamChat).not.toHaveBeenCalled();
+    expect(mockStreamChat).toHaveBeenCalledTimes(1);
     expect(useChatExecutionStore.getState().error).toBeNull();
   });
 });

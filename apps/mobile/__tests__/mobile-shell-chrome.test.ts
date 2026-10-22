@@ -226,7 +226,7 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
       (match) => match[1],
     );
 
-    expect(headerActions).toEqual(['Search', 'New chat', 'Open profile']);
+    expect(headerActions).toEqual(['Search', 'Organize chats', 'New chat', 'Open profile']);
   });
 
   it('leaves the platform back gesture switched on for every pushed screen', () => {

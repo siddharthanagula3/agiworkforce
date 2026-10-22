@@ -7,6 +7,7 @@ jest.mock('../src/features/chat/components/MathBlock', () => ({
 
 import { renderMarkdownContent } from '../src/features/chat/components/MessageContentRenderer';
 import { lightColors } from '../src/ui/theme';
+import { typeScale } from '../src/ui/theme/tokens';
 
 function renderFence(markdown: string) {
   return render(<View>{renderMarkdownContent(markdown, lightColors)}</View>);
@@ -17,7 +18,7 @@ describe('code-card header row', () => {
     const screen = renderFence('```python\nprint("hi")\n```');
 
     expect(screen.getByText('python')).toHaveStyle({
-      fontSize: 12,
+      fontSize: typeScale.caption,
       color: lightColors.textMuted,
     });
     expect(screen.queryByText('Plain text')).toBeNull();
@@ -28,7 +29,7 @@ describe('code-card header row', () => {
     const screen = renderFence('```\nplain block content\n```');
 
     expect(screen.getByText('Plain text')).toHaveStyle({
-      fontSize: 12,
+      fontSize: typeScale.caption,
       color: lightColors.textMuted,
     });
     expect(screen.toJSON()).toMatchSnapshot();

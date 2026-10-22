@@ -29,14 +29,23 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         }
       }
     >
+      <View
+        style={
+          {
+            "width": 40,
+          }
+        }
+      />
       <Text
+        accessibilityRole="header"
+        numberOfLines={1}
         style={
           {
             "color": "#fff",
             "flex": 1,
-            "fontSize": 28,
-            "fontWeight": "700",
-            "lineHeight": 34,
+            "fontSize": 17,
+            "fontWeight": "600",
+            "textAlign": "center",
           }
         }
       >
@@ -102,7 +111,6 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
         "paddingHorizontal": 16,
       }
     }
-    showsVerticalScrollIndicator={false}
   >
     <View>
       <View
@@ -248,6 +256,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           }
         >
           <View
+            accessibilityHint="Opens Email"
             accessibilityLabel="Email. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -330,6 +339,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Account Security"
             accessibilityLabel="Account Security. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -412,6 +422,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Subscription"
             accessibilityLabel="Subscription. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -494,6 +505,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Shared Links"
             accessibilityLabel="Shared Links. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -576,6 +588,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Workspace"
             accessibilityLabel="Workspace. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -690,6 +703,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           }
         >
           <View
+            accessibilityHint="Opens Appearance"
             accessibilityLabel="Appearance. System"
             accessibilityRole="button"
             accessibilityState={
@@ -772,6 +786,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Accent Color"
             accessibilityLabel="Accent Color. Neutral"
             accessibilityRole="button"
             accessibilityState={
@@ -854,6 +869,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens General"
             accessibilityLabel="General"
             accessibilityRole="button"
             accessibilityState={
@@ -922,6 +938,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Notifications"
             accessibilityLabel="Notifications"
             accessibilityRole="button"
             accessibilityState={
@@ -990,6 +1007,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Quick Access"
             accessibilityLabel="Quick Access"
             accessibilityRole="button"
             accessibilityState={
@@ -1058,6 +1076,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Voice"
             accessibilityLabel="Voice"
             accessibilityRole="button"
             accessibilityState={
@@ -1126,6 +1145,76 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Permissions"
+            accessibilityLabel="Permissions"
+            accessibilityRole="button"
+            accessibilityState={
+              {
+                "busy": undefined,
+                "checked": undefined,
+                "disabled": undefined,
+                "expanded": undefined,
+                "selected": undefined,
+              }
+            }
+            accessibilityValue={
+              {
+                "max": undefined,
+                "min": undefined,
+                "now": undefined,
+                "text": undefined,
+              }
+            }
+            accessible={true}
+            collapsable={false}
+            focusable={true}
+            onBlur={[Function]}
+            onClick={[Function]}
+            onFocus={[Function]}
+            onResponderGrant={[Function]}
+            onResponderMove={[Function]}
+            onResponderRelease={[Function]}
+            onResponderTerminate={[Function]}
+            onResponderTerminationRequest={[Function]}
+            onStartShouldSetResponder={[Function]}
+            style={
+              {
+                "alignItems": "center",
+                "borderBottomColor": "#333",
+                "borderBottomWidth": 1,
+                "flexDirection": "row",
+                "gap": 12,
+                "minHeight": 50,
+                "paddingHorizontal": 14,
+              }
+            }
+          >
+            <View
+              color="#aaa"
+              size={19}
+              strokeWidth={1.8}
+              testID="icon-Smartphone"
+            />
+            <Text
+              numberOfLines={1}
+              style={
+                {
+                  "color": "#fff",
+                  "flex": 1,
+                  "fontSize": 15,
+                }
+              }
+            >
+              Permissions
+            </Text>
+            <View
+              color="#777"
+              size={17}
+              testID="icon-ChevronRight"
+            />
+          </View>
+          <View
+            accessibilityHint="Opens Safety & Security"
             accessibilityLabel="Safety & Security"
             accessibilityRole="button"
             accessibilityState={
@@ -1194,6 +1283,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Parental Controls"
             accessibilityLabel="Parental Controls"
             accessibilityRole="button"
             accessibilityState={
@@ -1262,6 +1352,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Storage"
             accessibilityLabel="Storage"
             accessibilityRole="button"
             accessibilityState={
@@ -1362,6 +1453,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           }
         >
           <View
+            accessibilityHint="Opens Personalization"
             accessibilityLabel="Personalization"
             accessibilityRole="button"
             accessibilityState={
@@ -1430,6 +1522,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Memory"
             accessibilityLabel="Memory"
             accessibilityRole="button"
             accessibilityState={
@@ -1498,6 +1591,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Capabilities"
             accessibilityLabel="Capabilities"
             accessibilityRole="button"
             accessibilityState={
@@ -1566,6 +1660,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Data Controls"
             accessibilityLabel="Data Controls"
             accessibilityRole="button"
             accessibilityState={
@@ -1666,6 +1761,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           }
         >
           <View
+            accessibilityHint="Opens Reflect"
             accessibilityLabel="Reflect. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -1758,6 +1854,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Archived Chats"
             accessibilityLabel="Archived Chats. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -1850,6 +1947,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Privacy"
             accessibilityLabel="Privacy. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -1897,7 +1995,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               color="#f59e0b"
               size={19}
               strokeWidth={1.8}
-              testID="icon-Shield"
+              testID="icon-LockKeyhole"
             />
             <Text
               numberOfLines={1}
@@ -1942,6 +2040,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Usage"
             accessibilityLabel="Usage. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -2034,6 +2133,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Connectors"
             accessibilityLabel="Connectors. Sign in"
             accessibilityRole="button"
             accessibilityState={
@@ -2158,6 +2258,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           }
         >
           <View
+            accessibilityHint="Opens Report App Issue"
             accessibilityLabel="Report App Issue"
             accessibilityRole="button"
             accessibilityState={
@@ -2226,6 +2327,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens Help Center"
             accessibilityLabel="Help Center"
             accessibilityRole="button"
             accessibilityState={
@@ -2294,6 +2396,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Asks before sharing a diagnostics summary"
             accessibilityLabel="Export Diagnostics"
             accessibilityRole="button"
             accessibilityState={
@@ -2362,6 +2465,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
             />
           </View>
           <View
+            accessibilityHint="Opens About"
             accessibilityLabel="About. v1.0.0"
             accessibilityRole="button"
             accessibilityState={

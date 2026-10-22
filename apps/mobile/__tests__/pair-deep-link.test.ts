@@ -6,7 +6,9 @@ import { isAgiWorkforceUniversalLinkHost } from '@/src/integrations/universalLin
 const rootLayoutSource = fs.readFileSync(path.join(__dirname, '..', 'app', '_layout.tsx'), 'utf8');
 
 function pairingEffectSource(): string {
-  const start = rootLayoutSource.indexOf('// C1: Deep linking');
+  const guard = 'if (!url || !isClerkSignedIn || !isInitialized) return;';
+  const start = rootLayoutSource.lastIndexOf('useEffect(', rootLayoutSource.indexOf(guard));
+  expect(rootLayoutSource.indexOf(guard)).toBeGreaterThan(-1);
   expect(start).toBeGreaterThan(-1);
   const end = rootLayoutSource.indexOf('isInitialized, router]);', start);
   expect(end).toBeGreaterThan(start);

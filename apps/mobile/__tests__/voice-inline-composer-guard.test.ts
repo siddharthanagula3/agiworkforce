@@ -31,22 +31,26 @@ describe('voice replaces the composer everywhere a voice bar mounts', () => {
     (_label: string, file: string) => {
       const src = readFileSync(file, 'utf8');
 
-      const composerTag = /<(ChatInput|Composer)\b/.exec(src)?.[1];
-      if (!composerTag) return;
+      const composer = /<(ChatInput|Composer)\b/.exec(src);
+      if (!composer) return;
+      const composerAt = composer.index;
 
-      const guard =
-        /(liveVoiceVisible \|\| )?voiceInlineVisible( \|\| liveVoiceVisible)? \? null : \(/.exec(
-          src,
-        );
-      expect(guard).not.toBeNull();
+      const guards = Array.from(
+        src
+          .slice(0, composerAt)
+          .matchAll(
+            /(liveVoiceVisible \|\| )?voiceInlineVisible( \|\| liveVoiceVisible)? \? null : \(/g,
+          ),
+      );
+      const guard = guards[guards.length - 1];
+      expect(guard).toBeDefined();
       // A screen that can open the live bar must hide the composer for it too,
       // otherwise two input rows stack while the session runs.
       if (src.includes('<LiveVoiceComposer')) {
         expect(guard?.[0]).toContain('liveVoiceVisible');
       }
 
-      const guardAt = src.indexOf(guard![0]);
-      const composerAt = src.indexOf(`<${composerTag}`);
+      const guardAt = guard!.index!;
 
       expect(composerAt - guardAt).toBeGreaterThan(0);
       expect(composerAt - guardAt).toBeLessThan(120);

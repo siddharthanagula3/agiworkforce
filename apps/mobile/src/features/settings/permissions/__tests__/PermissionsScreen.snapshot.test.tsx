@@ -196,11 +196,9 @@ describe('PermissionsScreen, index', () => {
     expect(toJSON()).toMatchSnapshot();
   });
 
-  it('says why each permission is asked for, without naming a feature that does not exist', () => {
+  it('states in one line that a permission is asked only when a feature the reader started needs it', () => {
     const { getByText } = render(<PermissionsScreen />);
-    expect(getByText(/AGI asks only when a feature you started needs one/)).toBeTruthy();
-    expect(getByText(/microphone for voice/)).toBeTruthy();
-    expect(getByText(/nothing is read in the background/)).toBeTruthy();
+    expect(getByText('AGI asks only when a feature you started needs access.')).toBeTruthy();
   });
 
   it('offers help without leaving the reader to search for it', () => {

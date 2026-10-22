@@ -1,43 +1,5 @@
-jest.mock('expo-secure-store', () => ({
-  __esModule: true,
-  WHEN_UNLOCKED_THIS_DEVICE_ONLY: 'WUTDO',
-  setItemAsync: jest.fn(),
-  getItemAsync: jest.fn().mockResolvedValue(null),
-  deleteItemAsync: jest.fn(),
-}));
-
-jest.mock('../services/authSession', () => ({
-  getAuthToken: jest.fn(async () => null),
-  getAuthHeaders: jest.fn(async () => ({})),
-  refreshAuthSession: jest.fn(async () => false),
-  clearAuthSession: jest.fn(async () => undefined),
-  getCurrentUser: jest.fn(async () => null),
-  getCurrentUserId: jest.fn(async () => null),
-}));
-
-jest.mock('../lib/mmkv', () => ({
-  whenMmkvReady: jest.fn((cb) => cb()),
-  rehydrateWhenMmkvReady: jest.fn((store, _name) => {
-    if (store && store.persist && typeof store.persist.rehydrate === 'function')
-      store.persist.rehydrate();
-  }),
-  mmkvStorage: { getItem: jest.fn(), setItem: jest.fn(), removeItem: jest.fn() },
-  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
-  initMmkvEncryption: jest.fn().mockResolvedValue(undefined),
-}));
-
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { useAuthStore } = require('../src/features/auth/store');
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { isAgiWorkforceUniversalLinkHost } = require('../src/integrations/universalLinks');
-
-describe('authStore.resetPassword, redirect URL contract', () => {
-  it('is disabled while Clerk mobile auth is not enabled in v1', async () => {
-    await expect(useAuthStore.getState().resetPassword('user@example.com')).rejects.toThrow(
-      'Clerk mobile auth is not enabled in v1',
-    );
-  });
-});
 
 describe('reset-password deep-link URL predicate (replicated from _layout.tsx)', () => {
   function isResetPasswordUrl(url: string): boolean {

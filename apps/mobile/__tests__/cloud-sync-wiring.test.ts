@@ -292,7 +292,7 @@ describe('cloud send → sync write-through', () => {
     expect(branch?.title).toBe('Cloud Source (branch)');
     expect(branch?.parentConversationId).toBe(CONV_ID);
     expect(branch?.forkPointMessageId).toBe('0190a000-0000-7000-8000-000000000002');
-    expect(useChatCloudMessageStore.getState().messages[forkId]).toBeUndefined();
+    expect(useChatCloudMessageStore.getState().messages[forkId]).toEqual([]);
   });
 
   it('writes the finalized turn into the cloud store with UUIDv7 ids and marks it dirty', async () => {

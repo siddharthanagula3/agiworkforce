@@ -1274,7 +1274,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
             }
           }
         >
-          AGI asks only when a feature you started needs one, like the microphone for voice, and nothing is read in the background.
+          AGI asks only when a feature you started needs access.
         </Text>
         <View
           accessibilityLabel="Get help with permissions, opens the help centre"

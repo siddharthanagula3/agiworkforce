@@ -34,11 +34,11 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
             {
               "color": "rgba(17, 17, 17, 0.62)",
               "flexShrink": 1,
-              "fontSize": 12,
+              "fontSize": 14,
               "fontWeight": "500",
             },
             {
-              "lineHeight": 15,
+              "lineHeight": 18,
             },
           ]
         }
@@ -212,7 +212,7 @@ exports[`code-card header row labels a fence that declares its language 1`] = `
             {
               "color": "#111111",
               "fontFamily": "Menlo",
-              "fontSize": 13,
+              "fontSize": 14,
               "lineHeight": 19,
             }
           }
@@ -270,11 +270,11 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
             {
               "color": "rgba(17, 17, 17, 0.62)",
               "flexShrink": 1,
-              "fontSize": 12,
+              "fontSize": 14,
               "fontWeight": "500",
             },
             {
-              "lineHeight": 15,
+              "lineHeight": 18,
             },
           ]
         }
@@ -428,10 +428,7 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
         </RNSVGSvgView>
       </View>
     </View>
-    <RCTScrollView
-      horizontal={true}
-      scrollEventThrottle={16}
-      showsHorizontalScrollIndicator={true}
+    <View
       style={
         {
           "paddingBottom": 10,
@@ -440,23 +437,21 @@ exports[`code-card header row labels an unlabelled fence "Plain text" 1`] = `
         }
       }
     >
-      <View>
-        <Text
-          className="text-sm text-white "
-          selectable={true}
-          style={
-            {
-              "color": "#111111",
-              "fontFamily": "Menlo",
-              "fontSize": 13,
-              "lineHeight": 19,
-            }
+      <Text
+        className="text-sm text-white "
+        selectable={true}
+        style={
+          {
+            "color": "#111111",
+            "fontFamily": "Menlo",
+            "fontSize": 14,
+            "lineHeight": 19,
           }
-        >
-          plain block content
-        </Text>
-      </View>
-    </RCTScrollView>
+        }
+      >
+        plain block content
+      </Text>
+    </View>
   </View>
 </View>
 `;
