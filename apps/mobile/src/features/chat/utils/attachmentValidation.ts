@@ -63,13 +63,13 @@ export function isAcceptableAttachment(
   if (typeof a.fileSize === 'number' && a.fileSize > maxBytes) {
     const mb = Math.floor(maxBytes / (1024 * 1024));
     return destination === 'cloud'
-      ? `“${a.fileName}” is too large to send to AGI Cloud (max ${mb} MB). Switch to Local Mode to use it on this device, or attach a smaller file.`
+      ? `“${a.fileName}” is too large for AGI Cloud (max ${mb} MB).`
       : `“${a.fileName}” is too large (max ${mb} MB).`;
   }
   if (a.mimeType.startsWith('image/')) {
     if (destination === 'cloud' && !isChatImageMimeType(a.mimeType)) {
       return isHeicImage(a.mimeType, a.fileName)
-        ? `“${a.fileName}” is a HEIC photo, which AGI Cloud cannot read. Take the photo again with the in-app camera, or turn on Settings › Camera › Formats › Most Compatible.`
+        ? `“${a.fileName}” is a HEIC photo AGI Cloud can’t read, so retake it with the in-app camera.`
         : `“${a.fileName}” is an image format AGI Cloud cannot read. Attach a JPEG, PNG, GIF, or WebP.`;
     }
     return true;
@@ -78,7 +78,7 @@ export function isAcceptableAttachment(
   if (destination === 'cloud' && isOfficeDocument(a)) return true;
   return destination === 'cloud'
     ? `“${a.fileName}” isn’t a supported file type. Try an image, PDF, Word, Excel, PowerPoint, text, CSV, Markdown, or code file.`
-    : `“${a.fileName}” isn’t a supported file type on this device. Try an image, PDF, text, CSV, Markdown, or code file, or switch to AGI Cloud for Word, Excel and PowerPoint.`;
+    : `“${a.fileName}” isn’t supported on this device; switch to AGI Cloud for Office files.`;
 }
 
 export function validateAttachments<T extends ValidatableAttachment>(

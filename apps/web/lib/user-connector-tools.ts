@@ -2388,7 +2388,11 @@ export async function loadUserConnectorToolCatalog(
       resolveConnectorOrganizationId(userId, options.organizationId),
     ]);
     const grantedOAuthIds = new Set(grantSummaries.map((g) => g.connectorId));
-    if (grantedOAuthIds.has(BANK_ACCOUNTS_CONNECTOR_ID) && isPlaidConfigured()) {
+    if (
+      grantedOAuthIds.has(BANK_ACCOUNTS_CONNECTOR_ID) &&
+      isPlaidConfigured() &&
+      !options.isConnectorDenied?.(BANK_ACCOUNTS_CONNECTOR_ID)
+    ) {
       defs.push(...bankAccountsToolDefs());
     }
     const sharedRows = organizationId

@@ -137,7 +137,7 @@ describe('PAR-M28, DesktopSetupChecklistView', () => {
     const screen = render(<DesktopSetupChecklistView />);
     const texts = textsInOrder(screen.toJSON());
 
-    const firstStep = indexOfMatch(texts, /Install AGI Workforce on your computer/);
+    const firstStep = indexOfMatch(texts, /Install AGI Desktop on your computer/);
     const lastStep = indexOfMatch(
       texts,
       /Settings → Capabilities → Remote Control and choose Pair a phone/,

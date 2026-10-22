@@ -15,9 +15,6 @@ describe('Screenshot 01, local demo chat', () => {
     await waitFor(element(by.id('chat.composer.input')))
       .toBeVisible()
       .withTimeout(10000);
-    await waitFor(element(by.id('chat.mode-toggle.local')))
-      .toBeVisible()
-      .withTimeout(5000);
 
     await device.takeScreenshot('01-local-demo-chat');
     console.log(`Captured to ${capturePath}`);

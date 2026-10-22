@@ -5,7 +5,7 @@ import Foundation
 struct SetReminderIntent: AppIntent {
   static var title: LocalizedStringResource = "Set Reminder via AGI"
   static var description = IntentDescription(
-    "Opens AGI Workforce to review and create an Apple Reminder.",
+    "Opens AGI Mobile to review and create an Apple Reminder.",
     categoryName: "Productivity"
   )
   static var openAppWhenRun: Bool = true

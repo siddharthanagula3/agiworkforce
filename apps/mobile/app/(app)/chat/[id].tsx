@@ -81,7 +81,6 @@ import {
   createMessageIdSet,
   findNewAssistantResponse,
 } from '@/src/features/voice/utils/assistantResponse';
-import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { Text } from '@/components/ui/text';
 import {
   LOCAL_NO_MODEL_MESSAGE,
@@ -453,7 +452,7 @@ export default function ChatScreen() {
       if (conversationExecutionMode === 'cloud' && !FEATURES.cloudChat) {
         Alert.alert(
           'AGI Cloud is unavailable in this build',
-          'This build has Cloud chat turned off. Local Mode remains available and stays on this device.',
+          'Local Mode is still available on this device.',
         );
         return false;
       }
@@ -1197,39 +1196,6 @@ export default function ChatScreen() {
   const keyboard = useKeyboardSafeComposer('screen');
   const [voiceFallbackReason, setVoiceFallbackReason] = useState<string | null>(null);
   const [modelPickerOpenSignal, setModelPickerOpenSignal] = useState(0);
-  const handleTapCloudMode = useCallback(() => {
-    if (!DEFAULT_CLOUD_MODEL_ID) {
-      setAppMode('local');
-      return;
-    }
-    if (!cloudUnlocked) {
-      router.push(beginCloudPostAuthIntent());
-      return;
-    }
-    setAppMode('cloud');
-    useModelStore
-      .getState()
-      .setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
-    if (conversationExecutionMode === 'cloud') {
-      handleOpenModelPicker('cloud');
-      return;
-    }
-    router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
-  }, [
-    cloudUnlocked,
-    conversationExecutionMode,
-    handleOpenModelPicker,
-    router,
-    setAppMode,
-    subscriptionTier,
-  ]);
-
-  const handleTapLocalMode = useCallback(() => {
-    setAppMode('local');
-    useModelStore.getState().setModel(readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID));
-    router.push('/(app)/(tabs)/chat' as Parameters<typeof router.push>[0]);
-  }, [router, setAppMode]);
-
   const handleNewChat = useCallback(() => {
     router.push('/(app)' as Parameters<typeof router.push>[0]);
   }, [router]);
@@ -1592,7 +1558,7 @@ export default function ChatScreen() {
       if (conversation?.temporary) {
         Alert.alert(
           'Save this chat to share it?',
-          'Temporary chats cannot be shared. Saving keeps its messages in your history, and from then on it follows your memory and data settings like any other chat.',
+          'Saving moves it into your history like any other chat.',
           [
             { text: 'Cancel', style: 'cancel' },
             {
@@ -1757,8 +1723,6 @@ export default function ChatScreen() {
     );
   }
 
-  const currentAppMode = conversationExecutionMode;
-
   return (
     <SafeAreaView
       className="flex-1"
@@ -1773,7 +1737,7 @@ export default function ChatScreen() {
         behavior={keyboard.behavior}
         keyboardVerticalOffset={keyboard.keyboardVerticalOffset}
       >
-        {/* Chat header: circular hamburger left, ModeToggle center, circular
+        {/* Chat header: circular hamburger left, circular
             new-chat + menu right -- same pill-chrome language as the home
             tab header (app/(app)/(tabs)/chat.tsx), applied here for the
             in-conversation screen. */}
@@ -1837,15 +1801,7 @@ export default function ChatScreen() {
             </Pressable>
           ) : null}
 
-          <View style={{ flex: 1, alignItems: 'center' }}>
-            <ModeToggle
-              mode={currentAppMode}
-              cloudUnlocked={cloudUnlocked}
-              compact
-              onTapLocal={conversationExecutionMode === 'cloud' ? handleTapLocalMode : undefined}
-              onTapCloud={handleTapCloudMode}
-            />
-          </View>
+          <View style={{ flex: 1 }} />
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <ProjectSourcesButton projectId={conversation?.projectId} />

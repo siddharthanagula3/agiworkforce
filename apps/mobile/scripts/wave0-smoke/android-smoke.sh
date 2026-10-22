@@ -150,7 +150,7 @@ smoke "    3. Tap the download link, then 'Install' (may need to allow 'Install 
 smoke ""
 smoke "  Option B, adb install (faster, requires USB):"
 smoke "    1. Download the .apk from the EAS build URL to your Mac"
-smoke "    2. Run: adb install /path/to/AGIWorkforce-preview.apk"
+smoke "    2. Run: adb install /path/to/AGIMobile-preview.apk"
 smoke "    3. Confirm: adb shell am start -n com.agiworkforce.app/.MainActivity"
 smoke ""
 smoke "  Option C, Expo Go (Metro, no native modules):"

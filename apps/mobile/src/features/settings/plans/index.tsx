@@ -66,7 +66,7 @@ export default function PlansScreen() {
     <SettingsScreenShell title="Compare plans" backHref="/(app)/settings/cloud-billing">
       <SettingsInfo
         title="What each plan includes"
-        body="Usage resets over a rolling 5-hour session, a week and a month. How far it goes depends on the model and the task, so there is no fixed message count."
+        body="Usage resets every 5 hours, week and month, and varies by model and task."
       />
       {COMPARED_PLANS.map((plan) => {
         const isCurrent = plan === current;

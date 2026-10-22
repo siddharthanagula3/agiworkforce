@@ -9,8 +9,8 @@ const DEFAULT_ANDROID_AVD = 'pixel_8_api_34';
 const APP_BUNDLE_ID = 'com.agiworkforce.app';
 
 const IOS_APP_BINARY = {
-  debug: 'ios/build/Build/Products/Debug-iphonesimulator/AGIWorkforce.app',
-  release: 'ios/build/Build/Products/Release-iphonesimulator/AGIWorkforce.app',
+  debug: 'ios/build/Build/Products/Debug-iphonesimulator/AGIMobile.app',
+  release: 'ios/build/Build/Products/Release-iphonesimulator/AGIMobile.app',
 };
 
 const ANDROID_APP_BINARY = {

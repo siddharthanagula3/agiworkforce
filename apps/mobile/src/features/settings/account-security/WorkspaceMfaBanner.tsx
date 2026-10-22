@@ -51,7 +51,7 @@ export function WorkspaceMfaBanner() {
       >
         <ShieldAlert size={18} color={colors.agentWarning} />
         <Text style={[styles.message, { color: colors.textPrimary }]}>
-          Your workspace requires two-factor authentication. Turn it on to keep using AGI Workforce.
+          Your workspace requires two-factor authentication. Turn it on to keep using AGI.
         </Text>
         <Button
           title="Turn on"

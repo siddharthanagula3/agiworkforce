@@ -8,7 +8,10 @@ export {
 
 export {
   DISCLOSURE_LEDGER_KEY,
+  SHORT_DISCLOSURE_DETAILS_LABEL,
+  SHORT_DISCLOSURE_SUMMARY,
   composeFirstRunDisclosure,
+  composeShortFirstRunDisclosure,
   isDisclosureSatisfied,
   hashDisclosureCopy,
   recordDisclosureAcceptance,
@@ -16,6 +19,7 @@ export {
   type DisclosureInputs,
   type DisclosureCopy,
   type DisclosureLedger,
+  type ShortDisclosureCopy,
 } from './article50-disclosure';
 
 export {

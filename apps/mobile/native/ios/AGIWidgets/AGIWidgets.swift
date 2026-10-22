@@ -58,7 +58,7 @@ struct AGIQuickActionsView: View {
                 Spacer()
                 Text("New chat")
                     .font(.headline)
-                Text("AGI Workforce")
+                Text("AGI Mobile")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -80,7 +80,7 @@ struct AGIQuickActionsWidget: Widget {
             AGIQuickActionsView()
                 .containerBackground(.background, for: .widget)
         }
-        .configurationDisplayName("AGI Workforce")
+        .configurationDisplayName("AGI Mobile")
         .description("Start a new chat, open the camera or start voice mode.")
         .supportedFamilies([.systemSmall, .systemMedium])
     }
@@ -88,7 +88,7 @@ struct AGIQuickActionsWidget: Widget {
 
 @available(iOS 18.0, *)
 struct OpenAGIWorkforceIntent: AppIntent {
-    static var title: LocalizedStringResource = "Open AGI Workforce"
+    static var title: LocalizedStringResource = "Open AGI Mobile"
     static var openAppWhenRun: Bool = true
 
     func perform() async throws -> some IntentResult { .result() }
@@ -99,11 +99,11 @@ struct AGIOpenControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
         StaticControlConfiguration(kind: "com.agiworkforce.app.open") {
             ControlWidgetButton(action: OpenAGIWorkforceIntent()) {
-                Label("AGI Workforce", systemImage: "bubble.left.and.bubble.right.fill")
+                Label("AGI Mobile", systemImage: "bubble.left.and.bubble.right.fill")
             }
         }
-        .displayName("Open AGI Workforce")
-        .description("Open AGI Workforce from Control Center, the Lock Screen or the Action Button.")
+        .displayName("Open AGI Mobile")
+        .description("Open AGI Mobile from Control Center, the Lock Screen or the Action Button.")
     }
 }
 

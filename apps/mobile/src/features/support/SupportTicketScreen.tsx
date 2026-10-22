@@ -72,7 +72,7 @@ export function SupportTicketScreen({ ticketId }: { ticketId: string }) {
   const confirmClose = useCallback(() => {
     Alert.alert(
       'Close this ticket?',
-      'A closed ticket cannot be reopened and no further replies can be added to it. The thread stays readable, and carrying on means raising a new ticket that references this one.',
+      'A closed ticket can’t be reopened or replied to, but stays readable.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

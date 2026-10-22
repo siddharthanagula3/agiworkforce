@@ -37,7 +37,7 @@ For CLI local inference and provider-key setup, see
 ## Mobile
 
 Check the [Mobile page](https://agiworkforce.com/mobile) for current availability.
-To use AGI from a phone browser, open [AGI Web](https://agiworkforce.com/chat).
+To use AGI from a phone browser, open [AGI Chat](https://agiworkforce.com/chat).
 
 ## Before choosing a client
 

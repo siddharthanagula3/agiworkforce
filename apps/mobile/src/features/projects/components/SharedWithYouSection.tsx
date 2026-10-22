@@ -12,6 +12,7 @@ import {
   sharedResourcesForMe,
   type SharedWithMeProject,
 } from '@/src/features/projects/projectSharing';
+import { withoutHiddenSharers } from '@/src/features/shared-with-you/hiddenSharers';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
@@ -24,8 +25,9 @@ export function SharedWithYouSection() {
   useEffect(() => {
     const controller = new AbortController();
     void fetchProjectSharing(controller.signal)
-      .then((overview) => {
+      .then((fetched) => {
         if (controller.signal.aborted) return;
+        const overview = fetched ? withoutHiddenSharers(fetched) : null;
         setProjects(overview ? projectsSharedWithMe(overview) : []);
         const resources = overview ? sharedResourcesForMe(overview, API_URL) : null;
         setOtherCount(

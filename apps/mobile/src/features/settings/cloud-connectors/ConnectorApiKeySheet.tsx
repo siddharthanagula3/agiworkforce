@@ -166,8 +166,8 @@ export function ConnectorApiKeySheet({
             <Text
               style={{ fontSize: typeScale.footnote, lineHeight: 19, color: colors.textSecondary }}
             >
-              {spec.name} takes its key in the request {spec.placement}, which AGI Workforce does
-              not send, so it cannot be connected.
+              {spec.name} takes its key in the request {spec.placement}, which AGI does not send, so
+              it cannot be connected.
             </Text>
           ) : (
             <>

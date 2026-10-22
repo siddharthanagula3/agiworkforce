@@ -4,21 +4,21 @@ import Security
 
 @available(iOS 16.0, *)
 struct AskAGIIntent: AppIntent {
-    static var title: LocalizedStringResource = "Ask AGI Workforce"
+    static var title: LocalizedStringResource = "Ask AGI Mobile"
     static var description = IntentDescription(
-        "Ask AGI Workforce a question and hear the answer without opening the app. Turn on Ask from Siri in the app first."
+        "Ask AGI Mobile a question and hear the answer without opening the app. Turn on Ask from Siri in the app first."
     )
     static var openAppWhenRun: Bool = false
 
     @Parameter(
         title: "Question",
-        description: "What do you want to ask AGI Workforce?",
+        description: "What do you want to ask AGI Mobile?",
         requestValueDialog: IntentDialog("What do you want to ask?")
     )
     var prompt: String
 
     static var parameterSummary: some ParameterSummary {
-        Summary("Ask AGI Workforce \(\.$prompt)")
+        Summary("Ask AGI Mobile \(\.$prompt)")
     }
 
     func perform() async throws -> some IntentResult & ProvidesDialog & ReturnsValue<String> {
@@ -28,8 +28,8 @@ struct AskAGIIntent: AppIntent {
 }
 
 enum AGIAskClient {
-    static let signInMessage = "Open AGI Workforce to sign in."
-    static let unavailableMessage = "AGI Workforce could not answer right now. Try again in the app."
+    static let signInMessage = "Open AGI Mobile to sign in."
+    static let unavailableMessage = "AGI Mobile could not answer right now. Try again in the app."
     private static let keychainService = "com.agiworkforce.app.ask-intent:no-auth"
     private static let keychainKey = "ask_intent_token"
     private static let path = "/api/mobile/intent/ask"

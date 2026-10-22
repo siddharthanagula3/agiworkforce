@@ -3,7 +3,9 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { MICROUSD_PER_CREDIT, MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
 import { recordCogsAdjustment } from './cogs-ledger-service';
 import {
+  STORE_PURCHASE_CONSENT_WITHDRAWN,
   STORE_TEST_PURCHASE_REFUSED,
+  STORE_TOP_UP_NOT_SOLD_IN_COUNTRY,
   recordVerifiedMobileIapPurchase,
   storeChargeId,
 } from './mobile-iap-ledger-service';
@@ -167,25 +169,22 @@ describe('verified mobile IAP ledger', () => {
     );
   });
 
-  it('records a Japanese store purchase with the expiry local law sets for it', async () => {
+  it('refuses a Japanese store top-up, grants nothing and files the charge for refund', async () => {
     const h = harness();
-    await recordVerifiedMobileIapPurchase({
-      db: h.db,
-      userId: 'user-1',
-      purchaseToken: 'fixture-token',
-      verified: { ...verified(), purchaseCountry: 'JP' },
-    });
+    await expect(
+      recordVerifiedMobileIapPurchase({
+        db: h.db,
+        userId: 'user-1',
+        purchaseToken: 'fixture-token',
+        verified: { ...verified(), purchaseCountry: 'JP' },
+      }),
+    ).rejects.toMatchObject({ statusCode: 409, message: STORE_TOP_UP_NOT_SOLD_IN_COUNTRY });
 
     const grant = (h.execute.mock.calls as unknown as Array<[string, unknown[]]>).find(([sql]) =>
       sql.includes('add_credits_microusd'),
     );
-    expect(JSON.parse(String(grant?.[1][5]))).toEqual({
-      purchase_country: 'JP',
-      purchase_expires_at: '2027-02-01T00:00:00.000Z',
-      charged_cents: 1_000,
-      charged_currency: 'usd',
-      store_environment: 'production',
-    });
+    expect(grant).toBeUndefined();
+    expect(refundRequests(h)).toHaveLength(1);
   });
 
   it('returns an idempotent result without granting a replay', async () => {
@@ -582,5 +581,77 @@ describe('a store test purchase on a production deployment', () => {
 
     expect(readStoreTestPurchasesAllowed).not.toHaveBeenCalled();
     expect(recordCogsAdjustment).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('store purchases after a guardian withdrew consent', () => {
+  function withdrawnConsentHarness(): Harness {
+    const h = harness({ subscriptionOwner: { apple_original_transaction_id: null } });
+    const original = h.query.getMockImplementation()!;
+    h.query.mockImplementation(async (sql: string, params?: readonly unknown[]) => {
+      if (sql.includes('join public.mobile_app_consent_rescissions')) {
+        return [{ app_transaction_id: 'app-tx-1' }] as unknown as Awaited<
+          ReturnType<typeof original>
+        >;
+      }
+      return original(sql, params);
+    });
+    return h;
+  }
+
+  it.each([
+    ['plan', verifiedSubscription],
+    ['top-up', verified],
+  ])('refuses a %s and files the charge for a store refund', async (_kind, purchase) => {
+    const h = withdrawnConsentHarness();
+
+    await expect(
+      recordVerifiedMobileIapPurchase({
+        db: h.db,
+        userId: 'user-1',
+        purchaseToken: 'fixture-token',
+        verified: purchase(),
+      }),
+    ).rejects.toMatchObject({ statusCode: 409, message: STORE_PURCHASE_CONSENT_WITHDRAWN });
+    expect(planWrites(h)).toEqual([]);
+    expect(creditGrants(h)).toEqual([]);
+    expect(refundRequests(h)).toEqual([
+      expect.arrayContaining([
+        'user-1',
+        storeChargeId('ios', purchase().storeTransactionId),
+        expect.stringContaining(STORE_PURCHASE_CONSENT_WITHDRAWN),
+      ]),
+    ]);
+  });
+});
+
+describe('store purchases while the account deletion is scheduled', () => {
+  it('refuses the plan, grants nothing and files the charge for a store refund', async () => {
+    const h = harness({ subscriptionOwner: { apple_original_transaction_id: null } });
+    const original = h.query.getMockImplementation()!;
+    h.query.mockImplementation(async (sql: string, params?: readonly unknown[]) => {
+      if (sql.includes('select deletion_scheduled_for from public.profiles')) {
+        return [{ deletion_scheduled_for: '2026-10-22T00:00:00.000Z' }] as unknown as Awaited<
+          ReturnType<typeof original>
+        >;
+      }
+      return original(sql, params);
+    });
+
+    await expect(
+      recordVerifiedMobileIapPurchase({
+        db: h.db,
+        userId: 'user-1',
+        purchaseToken: 'fixture-token',
+        verified: verifiedSubscription(),
+      }),
+    ).rejects.toMatchObject({
+      statusCode: 409,
+      message: 'Cancel the account deletion to change your plan.',
+    });
+    expect(planWrites(h)).toEqual([]);
+    expect(refundRequests(h)).toEqual([
+      expect.arrayContaining(['user-1', storeChargeId('ios', 'transaction-sub-1'), 'plan']),
+    ]);
   });
 });

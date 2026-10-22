@@ -161,7 +161,7 @@ function makeSections(input: {
           tone: 'cloud',
           label: 'Web search',
           description: FEATURES.webSearch
-            ? 'Let supported Cloud models search the web automatically when they need current information. Turning this off may produce outdated answers.'
+            ? 'Let Cloud models search the web when they need current information.'
             : 'Web search is not available in this mobile release.',
           value: FEATURES.webSearch ? cloudValue : 'Off',
           ...(FEATURES.webSearch ? { toggle: 'webSearch' as const } : {}),
@@ -229,7 +229,7 @@ export default function CapabilitiesScreen() {
     <SettingsScreenShell title="Capabilities">
       <SettingsInfo
         title="What AGI can use"
-        body="Local and Cloud stay separate. Cloud preferences still require a supported model, plan, and deployment capability at send time."
+        body="Cloud options also depend on your model and plan."
         icon={ShieldCheck}
       />
 

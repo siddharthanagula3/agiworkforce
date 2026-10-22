@@ -38,7 +38,7 @@ import CloudPrivacyScreen from '../src/features/settings/cloud-privacy';
 
 describe('model-training privacy policy', () => {
   const policyLead =
-    'AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats';
+    'AGI doesn’t train its own models on your chats; Free-plan providers may unless you opt out';
 
   it('states the AGI-owned policy and the free-model caveat in Data Controls', () => {
     const { getByText, queryByRole } = render(<DataControlsScreen />);

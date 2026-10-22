@@ -89,6 +89,28 @@ export interface ImageGenerationResponse {
   retryable?: boolean;
 }
 
+const MINOR_SEXUALIZED_RULE_ID = 'managed-image.minor-sexualized';
+const PHOTO_EDIT_SEXUALIZED_RULE_ID = 'managed-image.photo-edit.sexualized-subject';
+
+const IMAGE_MINOR =
+  /\b(?:child|children|kid|kids|minor|minors|underage|under[-\s]?age|teen|teens|teenager|teenagers|teenage|pre[-\s]?teen|tween|schoolgirl|schoolgirls|schoolboy|schoolboys|little\s+(?:girl|boy)|young\s+(?:girl|boy)|toddler|infant|baby|(?:1[0-7]|[1-9])\s*(?:y|yr|yrs|year|years)[\s-]*old|(?:1[0-7]|[1-9])\s*yo)\b/;
+const IMAGE_SEXUALIZING =
+  /\b(?:undress\w*|unclothe\w*|disrob\w*|strip\s+(?:her|him|them|the|this)|(?:remove|take\s+off|without)\s+(?:her|his|their|the)\s+(?:clothes|clothing|shirt|top|dress|bra|underwear|bikini|pants)|naked|nude|nudes|nudity|topless|bottomless|lingerie|see[-\s]?through|nipples?|genitals?|breasts?|sexy|seductive|sensual|erotic\w*|porn\w*|nsfw|lewd|explicit|sexual\w*|xxx|onlyfans)\b/;
+
+function sexualizedImageRuleId(
+  text: string,
+  { editsUploadedPhoto }: { editsUploadedPhoto: boolean },
+): string | null {
+  const normalized = text
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f\u200b-\u200f\u2060\ufeff]/g, '')
+    .toLowerCase()
+    .replace(/\b(?:[a-z][\s._\-*]){2,}[a-z]\b/g, (run) => run.replace(/[\s._\-*]/g, ''));
+  if (!IMAGE_SEXUALIZING.test(normalized)) return null;
+  if (IMAGE_MINOR.test(normalized)) return MINOR_SEXUALIZED_RULE_ID;
+  return editsUploadedPhoto ? PHOTO_EDIT_SEXUALIZED_RULE_ID : null;
+}
+
 function managedUsageErrorResponse(
   headers: Record<string, string>,
   error: ManagedUsageRequestError,
@@ -256,12 +278,27 @@ export async function generateManagedImage(
     surface: 'managed-image',
     segments: negative_prompt ? [prompt, negative_prompt] : [prompt],
   });
-  if (!moderation.allowed) {
+  const imageRuleId = moderation.allowed
+    ? sexualizedImageRuleId(negative_prompt ? `${prompt}\n${negative_prompt}` : prompt, {
+        editsUploadedPhoto: Boolean(source_image),
+      })
+    : null;
+  if (imageRuleId) {
+    recordModerationEvent({
+      surface: 'managed-image',
+      action: 'block',
+      categories: [imageRuleId === MINOR_SEXUALIZED_RULE_ID ? 'csae' : 'likeness'],
+      ruleIds: [imageRuleId],
+      userId,
+      text: prompt,
+    });
+  }
+  if (!moderation.allowed || imageRuleId) {
     recordMediaSafety({ media: 'image', decision: 'blocked', reason: 'prompt_moderation' });
     return NextResponse.json(
       {
         error: {
-          message: moderation.refusal,
+          message: moderation.allowed ? PLATFORM_POLICY_REFUSAL : moderation.refusal,
           type: 'invalid_request_error',
           code: 'content_policy_violation',
         },

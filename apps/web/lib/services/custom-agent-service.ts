@@ -149,6 +149,7 @@ export function toManagedCloudAgent(
     id: row.id,
     isOwner,
     ownerName: isOwner ? null : ownerName,
+    ownerUserId: isOwner ? null : row.user_id,
     organizationId: row.organization_id,
     status: row.status,
     visibility: row.visibility,

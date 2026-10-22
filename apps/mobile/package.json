@@ -81,6 +81,7 @@
     "@shopify/flash-list": "2.0.2",
     "docx": "^9.7.2",
     "expo": "~57.0.25",
+    "expo-age-range": "57.0.5",
     "expo-apple-authentication": "~57.0.2",
     "expo-asset": "~57.0.18",
     "expo-audio": "~57.0.5",

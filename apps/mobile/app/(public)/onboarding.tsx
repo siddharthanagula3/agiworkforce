@@ -25,11 +25,11 @@ import { getInstalledModel, recordInstalledModel } from '@/storage/installedMode
 import { FirstRunDisclosureModal } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
-  composeFirstRunDisclosure,
+  composeShortFirstRunDisclosure,
   isDisclosureSatisfied,
   recordDisclosureAcceptance,
   type ChineseHqProviderId,
-  type DisclosureCopy,
+  type ShortDisclosureCopy,
 } from '@agiworkforce/compliance';
 import { mmkvDisclosureLedger } from '@/services/complianceLedger';
 import { applyChineseHqProviderConsent } from '@/services/providerConsent';
@@ -47,8 +47,6 @@ import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types'
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
-
-const DISCLOSURE_PROVIDERS: string[] = [];
 
 const AGI_MARK_SPOKE_COUNT = 12;
 const AGI_MARK_INNER_R = 4.6;
@@ -140,7 +138,7 @@ export default function OnboardingScreen() {
 
   const [screen, setScreen] = useState<ScreenId>('hero');
   const [disclosureVisible, setDisclosureVisible] = useState(false);
-  const [disclosureCopy, setDisclosureCopy] = useState<DisclosureCopy | null>(null);
+  const [disclosureCopy, setDisclosureCopy] = useState<ShortDisclosureCopy | null>(null);
   const [deviceInfo, setDeviceInfo] = useState<DeviceTierInfo>({
     tier: 2,
     tier1Runtime: null,
@@ -263,10 +261,10 @@ export default function OnboardingScreen() {
       setScreen('about-you');
       return;
     }
-    const copy = composeFirstRunDisclosure({
+    const copy = composeShortFirstRunDisclosure({
       surface: 'mobile',
       offersManagedCloud: false,
-      thirdPartyAiProviders: [...DISCLOSURE_PROVIDERS],
+      thirdPartyAiProviders: [],
     });
     setDisclosureCopy(copy);
     setDisclosureVisible(true);
@@ -280,7 +278,7 @@ export default function OnboardingScreen() {
         ledger: mmkvDisclosureLedger,
         copy: disclosureCopy,
         surface: 'mobile',
-        managedCloudAccepted: true,
+        managedCloudAccepted: false,
         chineseHqProvidersAccepted: acceptedProviderIds,
       });
       applyChineseHqProviderConsent(acceptedProviderIds);
@@ -579,8 +577,7 @@ function AboutYouScreen({
         What should AGI call you?
       </Text>
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.body, lineHeight: 21 }}>
-        Answers use your name and fit your work. You can change both later in Settings,
-        Personalization.
+        You can change this later in Settings.
       </Text>
       <Input
         label="Your name"
@@ -820,7 +817,7 @@ function DownloadScreen({
       </Text>
 
       <Text style={[styles.downloadHint, { color: colors.textMuted }]}>
-        You can leave this screen. The download continues in the background.
+        The download continues if you leave this screen.
       </Text>
 
       {error && (

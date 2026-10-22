@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import type { MobileIapCatalogResponse } from '@agiworkforce/types';
+import { mobileIapStorefrontSellsTopUps, type MobileIapCatalogResponse } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { createError } from '@/lib/errors';
@@ -14,12 +14,6 @@ import {
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
-import {
-  billingUpgradesOpenFor,
-  hasBillingWaitlistAccess,
-  hasPaidBillingHistory,
-} from '@/lib/server/billing-waitlist-access';
-import { WAITLIST_ACCESS_REQUIRED_CODE } from '@/lib/validations/upgrade-waitlist';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
 import {
   resolveSubscriptionOwnerHandoff,
@@ -27,12 +21,17 @@ import {
 } from '@/lib/server/subscription-owner-handoff';
 import { ownsPaidPlanForTopUp } from '@/lib/services/mobile-iap-ledger-service';
 
-const QuerySchema = z.object({ platform: z.enum(['ios', 'android']) });
+const QuerySchema = z.object({
+  platform: z.enum(['ios', 'android']),
+  storefront: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{2,3}$/)
+    .optional(),
+});
 const MOBILE_SURFACE = 'mobile';
 const PURCHASES_SWITCHED_OFF =
   'In-app purchases are temporarily switched off. Nothing was charged.';
-const UPGRADE_ACCESS_REQUIRED =
-  'Paid upgrades are opening in stages. This account needs upgrade access before plans and credits can be bought here.';
 
 async function handleCatalog(
   request: NextRequest,
@@ -41,10 +40,16 @@ async function handleCatalog(
   if (rateLimitResponse) return rateLimitResponse as NextResponse<MobileIapCatalogResponse>;
 
   const userId = await requireCurrentUserId(request);
+  const searchParams = new URL(request.url).searchParams;
   const parsed = QuerySchema.safeParse({
-    platform: new URL(request.url).searchParams.get('platform'),
+    platform: searchParams.get('platform'),
+    storefront: searchParams.get('storefront') ?? undefined,
   });
-  if (!parsed.success) throw createError.badRequest('platform must be ios or android');
+  if (!parsed.success) {
+    throw createError.badRequest(
+      'platform must be ios or android, and storefront a store country code',
+    );
+  }
 
   const catalog = getMobileIapCatalogState(parsed.data.platform);
   const gate = catalog.enabled
@@ -66,18 +71,16 @@ async function handleCatalog(
       appAccountToken: null,
       products: [],
       unavailableReason: PURCHASES_SWITCHED_OFF,
-      unavailableCode: null,
     });
   }
 
-  if (!catalog.enabled && (await billingUpgradesOpenFor(userId))) {
+  if (!catalog.enabled) {
     return NextResponse.json({
       enabled: false,
       platform: parsed.data.platform,
       appAccountToken: null,
       products: [],
       unavailableReason: catalog.unavailableReason,
-      unavailableCode: null,
     });
   }
 
@@ -90,7 +93,6 @@ async function handleCatalog(
     | 'google_purchase_token'
     | 'current_period_end'
   >;
-  let purchaseAllowed: boolean;
   let holdsPaidPlan = false;
   let subscriptionsUnavailableReason: string | null = null;
   try {
@@ -106,41 +108,13 @@ async function handleCatalog(
     if (handoff.blocked) {
       subscriptionsUnavailableReason = subscriptionOwnerHandoffConflictMessage(handoff);
     }
-    purchaseAllowed =
-      hasPaidBillingHistory(subRows[0] ?? null) ||
-      (await hasBillingWaitlistAccess(ownRows, userId));
   } catch (error) {
-    logger.error(
-      { error, userId },
-      'Failed to verify paid upgrade access for the purchase catalogue',
-    );
+    logger.error({ error, userId }, 'Failed to read the plan for the purchase catalogue');
     throw createError.serviceUnavailable(
-      'Upgrade access could not be verified. No purchase was started; please retry.',
+      'Billing details could not be verified. No purchase was started; please retry.',
     );
   }
-  if (!purchaseAllowed) {
-    return NextResponse.json({
-      enabled: false,
-      platform: parsed.data.platform,
-      appAccountToken: null,
-      products: [],
-      unavailableReason: catalog.enabled
-        ? UPGRADE_ACCESS_REQUIRED
-        : `${UPGRADE_ACCESS_REQUIRED} Purchases will open after store products are ready.`,
-      unavailableCode: WAITLIST_ACCESS_REQUIRED_CODE,
-    });
-  }
-
-  if (!catalog.enabled) {
-    return NextResponse.json({
-      enabled: false,
-      platform: parsed.data.platform,
-      appAccountToken: null,
-      products: [],
-      unavailableReason: catalog.unavailableReason,
-      unavailableCode: null,
-    });
-  }
+  const sellsTopUps = holdsPaidPlan && mobileIapStorefrontSellsTopUps(parsed.data.storefront);
 
   const db = getNeonDb();
   const [account] = await db.query<{ app_account_token: string }>(
@@ -161,10 +135,9 @@ async function handleCatalog(
     // The ledger refuses a plan while another channel still bills this account,
     // and by then the store has charged for it, so it is never offered here.
     products: catalog.products.filter((product) =>
-      product.kind === 'subscription' ? subscriptionsUnavailableReason === null : holdsPaidPlan,
+      product.kind === 'subscription' ? subscriptionsUnavailableReason === null : sellsTopUps,
     ),
     unavailableReason: null,
-    unavailableCode: null,
     subscriptionsUnavailableReason,
     consumableProductIds: catalog.products
       .filter((product) => product.kind === 'top_up')

@@ -82,8 +82,7 @@ export function ProviderTrainingOptOutGroup() {
           paddingHorizontal: 2,
         }}
       >
-        Your requests go only to models whose providers do not train on what you send. On the Free
-        plan this replaces the free models, whose providers’ terms may allow training.
+        On the Free plan, this replaces free models whose providers may train on your chats.
       </Text>
       {error ? (
         <Text

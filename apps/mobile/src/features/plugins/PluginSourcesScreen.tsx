@@ -25,6 +25,7 @@ import {
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { cloudActionError } from '@/src/shared/utils/cloudActionError';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { PLUGINS_ROUTE } from './PluginsScreen';
@@ -174,7 +175,7 @@ export function PluginSourcesScreen() {
       <CloudFeatureGate
         title="Plugin sources"
         feature="Plugins"
-        description="Plugin sources belong to your AGI Cloud account. Switching here does not send Local chats or files to the cloud."
+        description="Plugin sources live in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}
@@ -247,42 +248,44 @@ export function PluginSourcesScreen() {
             </SectionCard>
           ) : null}
 
-          <SectionCard
-            title="Add a marketplace"
-            description="Sync a plugin marketplace from a GitHub repository or git URL."
-          >
-            <TextField
-              label="Repository URL"
-              value={repositoryUrl}
-              autoCapitalize="none"
-              keyboardType="url"
-              placeholder="https://github.com/owner/marketplace"
-              onChangeText={setRepositoryUrl}
-            />
-            <TextField
-              label="Branch or tag (optional)"
-              value={ref}
-              autoCapitalize="none"
-              onChangeText={setRef}
-            />
-            <Button
-              title="Sync marketplace"
-              loading={busy === 'add'}
-              disabled={busy !== null || !repositoryUrl.trim()}
-              onPress={() =>
-                void run(
-                  'add',
-                  () => addMarketplace(repositoryUrl, ref),
-                  'That marketplace could not be synced.',
-                ).then((done) => {
-                  if (done) {
-                    setRepositoryUrl('');
-                    setRef('');
-                  }
-                })
-              }
-            />
-          </SectionCard>
+          {FEATURES.pluginMarketplaceAdmin ? (
+            <SectionCard
+              title="Add a marketplace"
+              description="Sync a plugin marketplace from a GitHub repository or git URL."
+            >
+              <TextField
+                label="Repository URL"
+                value={repositoryUrl}
+                autoCapitalize="none"
+                keyboardType="url"
+                placeholder="https://github.com/owner/marketplace"
+                onChangeText={setRepositoryUrl}
+              />
+              <TextField
+                label="Branch or tag (optional)"
+                value={ref}
+                autoCapitalize="none"
+                onChangeText={setRef}
+              />
+              <Button
+                title="Sync marketplace"
+                loading={busy === 'add'}
+                disabled={busy !== null || !repositoryUrl.trim()}
+                onPress={() =>
+                  void run(
+                    'add',
+                    () => addMarketplace(repositoryUrl, ref),
+                    'That marketplace could not be synced.',
+                  ).then((done) => {
+                    if (done) {
+                      setRepositoryUrl('');
+                      setRef('');
+                    }
+                  })
+                }
+              />
+            </SectionCard>
+          ) : null}
 
           {state.marketplaces.map((source) => {
             const sourceEntries = state.entries.filter((entry) => entry.sourceId === source.id);
@@ -342,7 +345,9 @@ export function PluginSourcesScreen() {
                             }
                           />
                         )}
-                        {source.kind === 'repository' || submittedEntries.has(entry.id) ? null : (
+                        {!FEATURES.pluginMarketplaceAdmin ||
+                        source.kind === 'repository' ||
+                        submittedEntries.has(entry.id) ? null : (
                           <Button
                             title="Submit to directory"
                             size="sm"

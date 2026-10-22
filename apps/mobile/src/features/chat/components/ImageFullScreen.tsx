@@ -2,13 +2,14 @@ import { useCallback, useMemo, useState } from 'react';
 import { View, Modal, Alert, useWindowDimensions } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Image } from 'expo-image';
-import { Check, Copy, Download, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
+import { Check, Copy, Download, Flag, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { copyGeneratedImage } from '@/services/fileCreation';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Text } from '@/components/ui/text';
+import { ReportSheet, type ReportTarget } from './ReportFlagButton';
 import { useThemeColors, zIndex } from '@/src/ui/theme';
 import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';
@@ -32,6 +33,7 @@ interface ImageFullScreenProps {
   onEditArea?: (edit: ImageAreaEdit) => void;
   onDelete?: () => void;
   deleteMessage?: string;
+  reportTarget?: ReportTarget;
 }
 
 const DIRECTLY_DISPLAYABLE_URI = /^(file|ph|content|assets-library|data|https?):/i;
@@ -52,8 +54,10 @@ export function ImageFullScreen({
   onEditArea,
   onDelete,
   deleteMessage,
+  reportTarget,
 }: ImageFullScreenProps) {
   const [editing, setEditing] = useState(false);
+  const [reporting, setReporting] = useState(false);
   const settingsCaption = imageSettingsCaption(model, aspectRatio);
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
@@ -245,6 +249,21 @@ export function ImageFullScreen({
               </PressableBox>
             ) : null}
 
+            {reportTarget ? (
+              <PressableBox
+                onPress={() => setReporting(true)}
+                style={{
+                  padding: 10,
+                  borderRadius: 8,
+                  backgroundColor: colors.voiceControlSurface,
+                }}
+                accessibilityLabel="Report this image"
+                accessibilityRole="button"
+              >
+                <Flag size={18} color={colors.cameraOverlayText} />
+              </PressableBox>
+            ) : null}
+
             {onDelete ? (
               <PressableBox
                 onPress={handleDelete}
@@ -407,6 +426,14 @@ export function ImageFullScreen({
             <View style={{ height: insets.bottom + 16 }} />
           )}
         </View>
+        {reportTarget && reporting ? (
+          <ReportSheet
+            visible
+            onClose={() => setReporting(false)}
+            title="Report this image"
+            target={reportTarget}
+          />
+        ) : null}
       </GestureHandlerRootView>
       {onEditArea ? (
         <ImageAreaEditor

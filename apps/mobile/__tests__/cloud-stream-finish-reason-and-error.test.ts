@@ -26,6 +26,9 @@ jest.mock('../services/api', () => {
 });
 
 jest.mock('../services/streaming', () => ({ streamChat: jest.fn() }));
+jest.mock('../services/llmGate', () => ({
+  ensureCloudSendConsent: jest.fn().mockResolvedValue(undefined),
+}));
 
 jest.mock('../services/remoteChatGate', () => {
   class MockRemoteChatDisabledError extends Error {

@@ -295,7 +295,7 @@ export function PluginDetailScreen() {
       <CloudFeatureGate
         title="Plugin"
         feature="Plugins"
-        description="Plugins install into AGI Cloud. Switching here does not send Local chats or files to the cloud."
+        description="Plugins install into AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}

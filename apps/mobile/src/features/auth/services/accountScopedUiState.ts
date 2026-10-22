@@ -5,8 +5,7 @@ import {
 } from './cloudAccountSession';
 
 export type AccountScopedUiState =
-  | { scope: 'local' }
-  | { scope: 'cloud'; account: CloudAccountEpoch };
+  { scope: 'local' } | { scope: 'cloud'; account: CloudAccountEpoch };
 
 export function captureAccountScopedUiState(scope: 'local' | 'cloud'): AccountScopedUiState | null {
   if (scope === 'local') return { scope: 'local' };

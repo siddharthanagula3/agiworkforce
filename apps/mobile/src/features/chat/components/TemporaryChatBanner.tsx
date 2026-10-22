@@ -9,9 +9,9 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 export const TEMPORARY_CHAT_CLOUD_EXPLAINER =
-  "This chat won't appear in your history or search, and it won't use or update memory. Anything kept to run it, including files you attach, is deleted after 30 days.";
+  "Won't appear in history or use memory, and is deleted after 30 days.";
 export const TEMPORARY_CHAT_LOCAL_EXPLAINER =
-  "This chat won't be saved on this device or appear in search, and it won't use or update memory. Files you attach are read on this device and never uploaded.";
+  "Won't be saved or use memory, and attachments never leave this device.";
 
 const PERSONALIZED_LABEL = 'Personalized';
 const UNPERSONALIZED_LABEL = 'Unpersonalized';

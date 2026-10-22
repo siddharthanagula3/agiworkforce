@@ -58,8 +58,7 @@ export function ConnectorCallLog({ connectorId }: { connectorId: string }) {
         Recent calls
       </Text>
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 18 }}>
-        What this connector was asked to do and whether it answered. Arguments and results are never
-        recorded.
+        What this connector was asked to do, without its arguments or results.
       </Text>
       {failed ? (
         <View style={{ gap: 4 }}>

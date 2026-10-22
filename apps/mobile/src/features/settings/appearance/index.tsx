@@ -32,7 +32,7 @@ export default function AppearanceScreen() {
     <SettingsScreenShell title="Appearance">
       <SettingsInfo
         title="Theme"
-        body="AGI follows your system appearance by default. Light and dark modes use the same neutral mobile palette."
+        body="AGI follows your system appearance by default."
         icon={Monitor}
       />
       <SettingsGroup>

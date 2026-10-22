@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import {
   Environment,
   SignedDataVerifier,
+  type AppTransaction,
   type JWSRenewalInfoDecodedPayload,
   type JWSTransactionDecodedPayload,
   type ResponseBodyV2DecodedPayload,
@@ -179,6 +180,7 @@ export interface VerifiedAppleStoreNotification {
   notification: ResponseBodyV2DecodedPayload;
   transaction: JWSTransactionDecodedPayload | null;
   renewalInfo?: JWSRenewalInfoDecodedPayload | null;
+  appTransaction?: AppTransaction | null;
   channel: AppleNotificationChannel;
 }
 
@@ -203,6 +205,7 @@ export async function verifyAppleStoreNotification(
       const notification = await candidate.verifier.verifyAndDecodeNotification(signedPayload);
       const signedTransaction = notification.data?.signedTransactionInfo;
       const signedRenewalInfo = notification.data?.signedRenewalInfo;
+      const signedAppTransaction = notification.appData?.signedAppTransactionInfo;
       return {
         notification,
         transaction: signedTransaction
@@ -210,6 +213,9 @@ export async function verifyAppleStoreNotification(
           : null,
         renewalInfo: signedRenewalInfo
           ? await candidate.verifier.verifyAndDecodeRenewalInfo(signedRenewalInfo)
+          : null,
+        appTransaction: signedAppTransaction
+          ? await candidate.verifier.verifyAndDecodeAppTransaction(signedAppTransaction)
           : null,
         channel: candidate.channel,
       };
@@ -244,6 +250,40 @@ async function decodeAppleTransaction(
     }
   }
   throw createError.badRequest('Apple could not verify this transaction.');
+}
+
+export interface VerifiedAppleAppTransaction {
+  appTransactionId: string;
+  environment: NormalizedEnvironment;
+}
+
+// The app transaction is what Apple names in a RESCIND_CONSENT notification, so
+// only one Apple signed for this app is recorded against an account.
+export async function verifyAppleAppTransaction(
+  signedAppTransaction: string,
+): Promise<VerifiedAppleAppTransaction> {
+  const configured = configuredAppleEnvironment();
+  const environments =
+    configured === Environment.PRODUCTION
+      ? [Environment.PRODUCTION, Environment.SANDBOX]
+      : [configured];
+  for (const environment of environments) {
+    let appTransaction: AppTransaction;
+    try {
+      appTransaction =
+        await createAppleVerifier(environment).verifyAndDecodeAppTransaction(signedAppTransaction);
+    } catch {
+      continue;
+    }
+    if (!appTransaction.appTransactionId) {
+      throw createError.badRequest('App Store app transaction has no identifier.');
+    }
+    return {
+      appTransactionId: appTransaction.appTransactionId,
+      environment: normalizeEnvironment(environment),
+    };
+  }
+  throw createError.badRequest('Apple could not verify this app transaction.');
 }
 
 async function verifyApplePurchase(input: {

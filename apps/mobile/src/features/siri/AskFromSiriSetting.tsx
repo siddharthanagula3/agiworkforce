@@ -36,7 +36,7 @@ export function AskFromSiriSetting() {
     <SettingsGroup>
       <SettingsSwitchRow
         label="Ask from Siri"
-        description="Siri can send a question to AGI Workforce and read the answer without opening the app. Answers use your default model with no tools, and each one is saved as a chat."
+        description="Ask AGI through Siri and hear the answer, saved as a chat."
         icon={Mic}
         value={enabled}
         onValueChange={(next) => void change(next)}

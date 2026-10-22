@@ -29,7 +29,7 @@ const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; descripti
   {
     icon: MessageSquare,
     label: 'Start Chat',
-    description: 'Open AGI Workforce and start a new conversation',
+    description: 'Open AGI Mobile and start a new conversation',
   },
   {
     icon: HelpCircle,
@@ -69,10 +69,10 @@ const SIRI_ACTIONS: Array<{ icon: typeof MessageSquare; label: string; descripti
 ];
 
 const SIRI_EXAMPLES: string[] = [
-  '"Hey Siri, start chat with AGI Workforce"',
-  '"Hey Siri, summarize this with AGI Workforce"',
-  '"Hey Siri, translate with AGI Workforce"',
-  '"Hey Siri, set reminder via AGI Workforce"',
+  '"Hey Siri, start chat with AGI Mobile"',
+  '"Hey Siri, summarize this with AGI Mobile"',
+  '"Hey Siri, translate with AGI Mobile"',
+  '"Hey Siri, set reminder via AGI Mobile"',
 ];
 
 function SectionHeader({
@@ -170,12 +170,12 @@ export default function WidgetSetupScreen() {
             <Zap size={32} color={colors.teal} />
           </View>
           <Text className="text-base font-semibold text-white text-center">
-            Reach AGI Workforce from anywhere
+            Reach AGI Mobile from anywhere
           </Text>
           <Text className="text-sm text-fg-muted text-center px-4">
             {isIOS
-              ? 'Trigger AGI Workforce with Siri, add the widget, share text or links from other apps, and open agiworkforce.com links directly in the app.'
-              : 'Add the widget or app shortcuts, share text from any app, act on selected text, and open agiworkforce.com links directly in the app.'}
+              ? 'Use AGI Mobile from Siri, widgets and other apps.'
+              : 'Use AGI Mobile from widgets, shortcuts and other apps.'}
           </Text>
         </View>
 
@@ -186,8 +186,7 @@ export default function WidgetSetupScreen() {
               <Text className="text-xs text-fg-muted mb-3">
                 These actions register automatically in the{' '}
                 <Text className="text-xs text-fg-secondary font-medium">Shortcuts</Text> app under
-                AGI Workforce, no setup needed. Trigger them by voice or combine them into your own
-                shortcuts.
+                AGI Mobile, no setup needed.
               </Text>
               <View
                 className="rounded-xl p-3 gap-2 mb-3"
@@ -220,7 +219,7 @@ export default function WidgetSetupScreen() {
               <Text className="text-xs text-fg-muted mb-3">
                 Share text or a web link from another app, choose{' '}
                 <Text className="text-xs text-fg-secondary font-medium">Share to AGI</Text>, and
-                review the content twice: once while saving and once after you open AGI Workforce.
+                review the content twice: once while saving and once after you open AGI Mobile.
               </Text>
               <View
                 className="rounded-xl p-3 gap-2"
@@ -240,7 +239,7 @@ export default function WidgetSetupScreen() {
                 <Text className="text-xs text-fg-muted">
                   3. Preview it, tap{' '}
                   <Text className="text-xs text-fg-secondary font-medium">Save for AGI Review</Text>
-                  , then open AGI Workforce and decide whether to send it
+                  , then open AGI Mobile and decide whether to send it
                 </Text>
               </View>
             </Card>
@@ -251,9 +250,7 @@ export default function WidgetSetupScreen() {
                 Touch and hold the Home Screen, tap{' '}
                 <Text className="text-xs text-fg-secondary font-medium">Edit</Text>, then{' '}
                 <Text className="text-xs text-fg-secondary font-medium">Add Widget</Text> and choose
-                AGI Workforce. It starts a new chat, opens the camera or starts voice mode. On iOS
-                18 you can also add Open AGI Workforce to Control Center, the Lock Screen or the
-                Action Button.
+                AGI Mobile, or add Open AGI Mobile to Control Center or the Lock Screen.
               </Text>
             </Card>
           </>
@@ -262,8 +259,7 @@ export default function WidgetSetupScreen() {
             <Card>
               <SectionHeader icon={Share2} title="Share From Any App" step={1} />
               <Text className="text-xs text-fg-muted mb-3">
-                Send text or links to AGI Workforce through the Android share sheet. You always
-                review the content before anything is sent to a model.
+                Share text or links to AGI Mobile, and review them before sending.
               </Text>
               <View
                 className="rounded-xl p-3 gap-2"
@@ -279,8 +275,8 @@ export default function WidgetSetupScreen() {
                 </Text>
                 <Text className="text-xs text-fg-muted">
                   2. Choose{' '}
-                  <Text className="text-xs text-fg-secondary font-medium">AGI Workforce</Text> from
-                  the share sheet
+                  <Text className="text-xs text-fg-secondary font-medium">AGI Mobile</Text> from the
+                  share sheet
                 </Text>
                 <Text className="text-xs text-fg-muted">
                   3. Review the preview, then tap{' '}
@@ -293,8 +289,8 @@ export default function WidgetSetupScreen() {
               <SectionHeader icon={TextCursorInput} title="Act On Selected Text" step={2} />
               <Text className="text-xs text-fg-muted mb-3">
                 Select text anywhere, then pick{' '}
-                <Text className="text-xs text-fg-secondary font-medium">AGI Workforce</Text> from
-                the text-selection menu (it may be under the{' '}
+                <Text className="text-xs text-fg-secondary font-medium">AGI Mobile</Text> from the
+                text-selection menu (it may be under the{' '}
                 <Text className="text-xs text-fg-secondary font-medium">⋮ More</Text> overflow). The
                 selection opens in the same review screen as a share.
               </Text>
@@ -305,14 +301,14 @@ export default function WidgetSetupScreen() {
               <Text className="text-xs text-fg-muted">
                 Touch and hold your home screen, tap{' '}
                 <Text className="text-xs text-fg-secondary font-medium">Widgets</Text> and drag AGI
-                Workforce onto it. It starts a new chat, opens the camera or starts voice mode.
+                Workforce onto it.
               </Text>
             </Card>
 
             <Card>
               <SectionHeader icon={Zap} title="App Shortcuts" step={4} />
               <Text className="text-xs text-fg-muted">
-                Touch and hold the AGI Workforce icon for{' '}
+                Touch and hold the AGI Mobile icon for{' '}
                 <Text className="text-xs text-fg-secondary font-medium">New chat</Text>,{' '}
                 <Text className="text-xs text-fg-secondary font-medium">Voice</Text> and{' '}
                 <Text className="text-xs text-fg-secondary font-medium">Camera</Text>. Drag one to

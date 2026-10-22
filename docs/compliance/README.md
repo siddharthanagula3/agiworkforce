@@ -142,6 +142,7 @@ reappears.
 - Compliance posture and regulatory notes.
 - License review notes for copied or adapted open-source code.
 - Trademark risk notes and naming decisions.
+- App Store and Google Play justification for each mobile feature, option and permission: [mobile-store-feature-justification.md](mobile-store-feature-justification.md).
 
 ## What Does Not Belong Here
 

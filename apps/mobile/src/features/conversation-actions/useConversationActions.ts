@@ -267,8 +267,8 @@ export function useConversationActions(): ConversationActions {
             Alert.alert(
               'Delete chat?',
               isCloudConversation
-                ? 'This chat and its messages are removed from every device on this account. You can restore it from Recently deleted in Settings on the web.'
-                : 'This chat and its messages are deleted from this device. It was never sent to AGI Cloud, so it cannot be restored.',
+                ? 'This chat is removed from every device; restore it from Recently deleted on the web.'
+                : 'This chat is deleted from this device and cannot be restored.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {

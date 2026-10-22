@@ -25,7 +25,6 @@ function withAGIDevEntitlements(config) {
     delete c.modResults['aps-environment'];
     delete c.modResults['com.apple.developer.applesignin'];
     delete c.modResults['com.apple.developer.associated-domains'];
-    delete c.modResults['com.apple.developer.siri'];
     return c;
   });
 }

@@ -19,7 +19,7 @@ export interface MemoryControlsCardProps {
   onIncludeSensitiveTopicsChange: (enabled: boolean) => void;
 }
 
-const SENSITIVE_TOPICS_DESCRIPTION = `Let AGI remember your ${SENSITIVE_MEMORY_SUBJECTS} from chats. While this is off, AGI is designed to keep these only when you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or add them yourself. Memories saved earlier stay until you delete them.`;
+const SENSITIVE_TOPICS_DESCRIPTION = `Let AGI remember your ${SENSITIVE_MEMORY_SUBJECTS} from chats, not only when you say "Remember that" or add them yourself.`;
 
 export function MemoryControlsCard({
   isCloud,
@@ -103,11 +103,11 @@ export function MemoryControlsCard({
       >
         {memoryEnabled
           ? isCloud
-            ? 'Cloud memories are stored on your AGI account and sync across your signed-in devices. Delete an entry below to remove it.'
-            : 'Local memories are stored on this device only and are never sent to our servers. Delete an entry below to remove it.'
+            ? 'Cloud memories are stored on your AGI account and sync across devices.'
+            : 'Memories stay on this device and are never uploaded.'
           : isCloud
-            ? 'Memory is off. This device will not read or add memories, and new account memories are no longer generated from your chats. Existing entries stay on your account until you delete them.'
-            : 'Memory is off. Nothing is read or added while it stays off. Existing entries stay on this device until you delete them.'}
+            ? 'Memory is off. Existing entries stay on your account until you delete them.'
+            : 'Memory is off. Existing entries stay on this device until you delete them.'}
       </Text>
       <View style={{ marginTop: -8, marginBottom: 8 }}>
         <HelpArticleLink docId="memory" label="How memory works" />

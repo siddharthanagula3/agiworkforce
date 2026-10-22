@@ -87,6 +87,11 @@ import {
 } from '../src/features/model-picker/service';
 import { useTierStore } from '../src/features/billing/store';
 import { useCloudUsageStore } from '../src/features/settings/cloud-usage/store';
+import {
+  clearPostAuthIntent,
+  CLOUD_CHAT_POST_AUTH_INTENT,
+  POST_AUTH_INTENT_PARAM,
+} from '../src/features/auth/services/postAuthIntent';
 
 function renderDrawer() {
   return render(<DrawerContent {...({ navigation: { closeDrawer: mockCloseDrawer } } as never)} />);
@@ -182,6 +187,56 @@ describe('DrawerContent', () => {
     } as never);
     useChatAppModeStore.setState({ appMode: 'local' });
     useCloudUsageStore.getState().clear();
+    clearPostAuthIntent();
+  });
+
+  it('carries the Local/Cloud toggle at the top of the sidebar', () => {
+    const { getByTestId } = renderDrawer();
+
+    expect(getByTestId('chat.mode-toggle')).toBeTruthy();
+    expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
+    expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(false);
+  });
+
+  it('switches to Cloud from the sidebar and opens a new Cloud chat', () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useTierStore.setState({ tier: 'pro' });
+    const { getByTestId } = renderDrawer();
+
+    fireEvent.press(getByTestId('chat.mode-toggle.cloud'));
+
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    expect(useModelStore.getState().selectedModel).toBe(
+      getDefaultCloudModelIdForTier('pro') ?? DEFAULT_CLOUD_MODEL_ID,
+    );
+    expect(mockCloseDrawer).toHaveBeenCalled();
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/(tabs)/chat' });
+  });
+
+  it('sends a signed-out Cloud tap to sign-in and stays in Local Mode', () => {
+    const { getByTestId } = renderDrawer();
+
+    fireEvent.press(getByTestId('chat.mode-toggle.cloud'));
+
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
+    });
+    expect(mockPush).not.toHaveBeenCalledWith({ pathname: '/(app)/(tabs)/chat' });
+  });
+
+  it('switches back to Local from the sidebar and drops Work', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useChatStore.getState().setWorkMode('agiwork');
+    const { getByTestId } = renderDrawer();
+
+    fireEvent.press(getByTestId('chat.mode-toggle.local'));
+
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(useChatStore.getState().workMode).toBe('chat');
+    expect(mockPush).toHaveBeenCalledWith({ pathname: '/(app)/(tabs)/chat' });
   });
 
   it('renders the AGI mobile drawer structure', () => {
@@ -214,7 +269,12 @@ describe('DrawerContent', () => {
     expect(ungranted.queryByText('AGI Work')).toBeNull();
     ungranted.unmount();
 
-    useTierStore.setState({ grantedCapabilities: ['canUseAgiWork'] });
+    useTierStore.setState({ tier: 'free', grantedCapabilities: ['canUseAgiWork'] });
+    const freePlan = renderDrawer();
+    expect(freePlan.queryByText('AGI Work')).toBeNull();
+    freePlan.unmount();
+
+    useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
     const cloud = renderDrawer();
 
     expect(cloud.getByLabelText('AGI Work. Cloud')).toBeTruthy();

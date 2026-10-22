@@ -37,6 +37,11 @@ jest.mock('../services/api', () => {
   };
 });
 
+jest.mock('../services/llmGate', () => ({
+  ...jest.requireActual('../services/llmGate'),
+  ensureCloudSendConsent: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('../services/streaming', () => ({
   streamChat: jest.fn(),
   streamToolApprovalResume: jest.fn(),

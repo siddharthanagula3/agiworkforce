@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
+import { useRouter } from 'expo-router';
 import { FileText, Users } from 'lucide-react-native';
 import type {
   ManagedCloudProject,
   ManagedCloudProjectKnowledgeFile,
 } from '@agiworkforce/cloud-contracts';
 import { Text } from '@/components/ui/text';
+import { hiddenSharerIds } from '@/src/features/shared-with-you/hiddenSharers';
+import { SharedItemSafetyActions } from '@/src/features/shared-with-you/SharedItemSafetyActions';
 import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
 import { managedCloudProjects } from '@/services/managedCloudProjects';
 import { cloudProjectSources } from '@/src/features/projects/store';
@@ -22,6 +25,7 @@ import { toUserMessage } from '@/services/userMessage';
 interface SharedProjectView {
   project: ManagedCloudProject;
   ownerName: string | null;
+  accountId: string | null;
   files: ManagedCloudProjectKnowledgeFile[];
 }
 
@@ -29,6 +33,8 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
   const colors = useThemeColors();
   const [view, setView] = useState<SharedProjectView | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [hidden, setHidden] = useState(false);
+  const router = useRouter();
 
   useEffect(() => {
     const controller = new AbortController();
@@ -40,7 +46,9 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
       .then(([project, overview, files]) => {
         if (controller.signal.aborted) return;
         const owner = overview?.members.find((member) => member.userId === project.ownerUserId);
-        setView({ project, ownerName: owner ? memberName(owner) : null, files });
+        const accountId = overview?.currentUserId ?? null;
+        setHidden(accountId ? hiddenSharerIds(accountId).has(project.ownerUserId) : false);
+        setView({ project, ownerName: owner ? memberName(owner) : null, accountId, files });
       })
       .catch((cause: unknown) => {
         if (!controller.signal.aborted) {
@@ -69,9 +77,16 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
     );
   }
 
-  const { project, ownerName, files } = view;
-  const access = project.sharedAccess === 'write' ? ACCESS_LABELS.write : ACCESS_LABELS.read;
+  if (hidden) {
+    return (
+      <SettingsScreenShell title="Shared project" backHref="/(app)/(tabs)/projects">
+        <SettingsInfo testID="shared-project-hidden" title="Hidden" body="You hid this sharer." />
+      </SettingsScreenShell>
+    );
+  }
 
+  const { project, ownerName, accountId, files } = view;
+  const access = project.sharedAccess === 'write' ? ACCESS_LABELS.write : ACCESS_LABELS.read;
   return (
     <SettingsScreenShell
       title="Shared project"
@@ -99,6 +114,20 @@ export function SharedProjectScreen({ projectId }: { projectId: string }) {
       >
         {ownerName ? `Shared with you by ${ownerName} · ${access}` : `Shared with you · ${access}`}
       </Text>
+      {project.ownerUserId === accountId ? null : (
+        <View style={{ marginBottom: 16 }}>
+          <SharedItemSafetyActions
+            item={{ kind: 'project', id: project.id, sharerId: project.ownerUserId }}
+            title={project.name}
+            ownerName={ownerName ?? 'sharer'}
+            accountId={accountId}
+            onHidden={() => {
+              setHidden(true);
+              router.replace('/(app)/(tabs)/projects');
+            }}
+          />
+        </View>
+      )}
 
       <SettingsInfo title="What is shared" body={PROJECT_SHARED_CONTEXT_COPY} />
 

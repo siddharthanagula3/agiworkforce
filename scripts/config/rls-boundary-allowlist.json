@@ -95,7 +95,7 @@
     },
     {
       "path": "apps/web/app/api/mobile/iap/catalog/route.ts",
-      "reason": "the plan and upgrade access reads run on the caller-scoped connection; the owner connection is used only for mobile_iap_accounts, which 0112 makes service-owned under forced RLS with no app policy by design, keyed here by the authenticated user id"
+      "reason": "the subscription reads run on the caller-scoped connection; the owner connection is used only for mobile_iap_accounts, which 0112 makes service-owned under forced RLS with no app policy by design, keyed here by the authenticated user id"
     },
     {
       "path": "apps/web/app/api/mobile/iap/google-notifications/route.ts",

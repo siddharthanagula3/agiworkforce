@@ -15,6 +15,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { BILLING_PLAN_PRICING, PAYWALL_FEATURE_COPY, isBillingPlanTier } from '@agiworkforce/types';
 import type { PaywallRecoveryAction } from '@/src/features/chat/utils/paywallRecovery';
+import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLinks';
 
 const FEATURE_LABELS: Record<string, string> = {
   general_upgrade: 'More features',
@@ -70,16 +71,17 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
     const colors = useThemeColors();
     const router = useRouter();
     const sheetRef = useRef<BottomSheet>(null);
+    const webBillingLinksAllowed = useWebBillingLinksAllowed();
 
     useImperativeHandle(forwardedRef, () => sheetRef.current as BottomSheet);
 
     const featureLabel = FEATURE_LABELS[feature] ?? UNKNOWN_FEATURE_LABEL;
     const tierLabel = tierLabelFor(requiredTier);
 
-    const salesTier =
-      recoveryAction === 'upgrade' && (requiredTier === 'team' || requiredTier === 'enterprise')
-        ? requiredTier
-        : null;
+    const requiresSales =
+      recoveryAction === 'upgrade' && (requiredTier === 'team' || requiredTier === 'enterprise');
+    const salesTier = requiresSales && webBillingLinksAllowed ? requiredTier : null;
+    const salesUnavailableInApp = requiresSales && !webBillingLinksAllowed;
     const title =
       recoveryAction === 'manage_billing'
         ? 'Update billing'
@@ -101,7 +103,9 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
             ? 'Contact Sales'
             : 'View upgrade options';
     const hasPrimaryAction =
-      onPrimaryAction !== undefined || salesTier !== null || !primaryActionUnavailableMessage;
+      onPrimaryAction !== undefined ||
+      salesTier !== null ||
+      (!salesUnavailableInApp && !primaryActionUnavailableMessage);
 
     const handleSheetChange = useCallback(
       (index: number) => {
@@ -277,7 +281,9 @@ export const PaywallBottomSheet = forwardRef<BottomSheet, PaywallSheetProps>(
                 marginBottom: 4,
               }}
             >
-              {primaryActionUnavailableMessage}
+              {salesUnavailableInApp
+                ? `${tierLabel} isn’t available in the app.`
+                : primaryActionUnavailableMessage}
             </Text>
           )}
           {onChooseStandardModel ? (

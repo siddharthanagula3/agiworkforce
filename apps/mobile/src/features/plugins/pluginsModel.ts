@@ -26,7 +26,7 @@ export const PLUGIN_SCAN_NONE_COPY =
   'Not scanned. Scans run on plugins you upload or create and on registry versions.';
 
 export const PLUGIN_CONNECTORS_NEVER_CONNECTED_NOTE =
-  "Installing a plugin never connects a service by itself. Each connector stays off until you connect it, and the plugin's skills load whether or not it is connected.";
+  'Each connector stays off until you connect it yourself.';
 
 export const PLUGIN_PERMISSIONS_COPY =
   'What this plugin says it needs. Installing it agrees to these; you can remove it at any time.';

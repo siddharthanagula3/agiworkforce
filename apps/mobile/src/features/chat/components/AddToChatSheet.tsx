@@ -243,6 +243,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
     grantedCapabilities.includes('canUseImages') &&
     canUseBillingPlanCapability(tier, 'image_generation');
   const showVideoOption =
+    FEATURES.videoGen &&
     appMode === 'cloud' &&
     videoModelId !== null &&
     grantedCapabilities.includes('canUseVideoGeneration') &&
@@ -1029,7 +1030,7 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
                     >
                       {`About ${formatCredits(videoEstimate.credits, {
                         maximumFractionDigits: videoEstimate.credits < 10 ? 1 : 0,
-                      })} for a ${videoEstimate.durationSecs}-second clip. The final cost settles when it is delivered, and a failed video costs nothing.`}
+                      })} for a ${videoEstimate.durationSecs}-second clip; a failed video costs nothing.`}
                     </Text>
                   ) : null}
                 </View>

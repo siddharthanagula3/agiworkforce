@@ -257,6 +257,8 @@ interface RequestOptions {
    */
   baseUrl?: string;
   headers?: Record<string, string>;
+  /** A content report the user chose to send; lets that one POST through in Local mode. */
+  consentedReport?: boolean;
   _skipAuthRetry?: boolean;
 }
 
@@ -333,7 +335,10 @@ async function sendRequest(
             ? combineAbortSignals([...callerSignals, controller.signal])
             : controller.signal,
       },
-      { authControl: path === TERMS_ACCEPTANCE_PATH && options.baseUrl === undefined },
+      {
+        authControl: path === TERMS_ACCEPTANCE_PATH && options.baseUrl === undefined,
+        consentedReport: options.consentedReport === true && options.baseUrl === undefined,
+      },
     );
     assertApiAccountGeneration(accountGeneration);
 

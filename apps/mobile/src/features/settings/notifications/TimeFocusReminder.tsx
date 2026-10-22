@@ -33,11 +33,7 @@ export function TimeFocusReminder() {
       if (!windowKey || focus.quietWindowAcknowledged === windowKey) return;
       showingRef.current = true;
       focus.acknowledgeQuietWindow(windowKey);
-      showReminder(
-        'Quiet hours are active',
-        'You set this time aside. You can continue whenever you choose, this is a reminder, not a lock.',
-        release,
-      );
+      showReminder('Quiet hours are active', 'This is a reminder, not a lock.', release);
     };
     checkQuietHours(AppState.currentState);
     const subscription = AppState.addEventListener('change', checkQuietHours);

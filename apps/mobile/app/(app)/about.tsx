@@ -184,7 +184,7 @@ export default function AboutScreen() {
           </View>
           <View style={{ alignItems: 'center', gap: 4 }}>
             <Text style={{ color: c.textPrimary, fontSize: typeScale.title2, fontWeight: '700' }}>
-              AGI Workforce
+              AGI Mobile
             </Text>
             <Text style={{ color: c.textMuted, fontSize: typeScale.callout }}>v{APP_VERSION}</Text>
           </View>

@@ -18,8 +18,7 @@ import { NamedProviderConsentModal } from './NamedProviderConsentModal';
 export const PROVIDER_CONSENT_TEST_ID_PREFIX = 'settings-provider-consent-';
 
 const SECTION_TITLE = 'China-headquartered providers';
-const SECTION_BODY =
-  'Routing your conversations through these providers is off until you turn it on. Turning one off again stops their models from serving your next message.';
+const SECTION_BODY = 'Each stays off until you turn it on.';
 
 export function ChineseHqProviderConsentGroup() {
   const colors = useThemeColors();

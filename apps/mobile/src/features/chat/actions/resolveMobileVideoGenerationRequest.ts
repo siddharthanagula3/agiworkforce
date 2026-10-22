@@ -9,6 +9,7 @@ import {
   type ManagedMediaVideoAspectRatio,
   type ManagedMediaVideoResolution,
 } from '@agiworkforce/cloud-contracts';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { resolveMediaModelId, resolveVideoOutputSelection } from './mediaMode';
 
 export type MobileVideoGenerationBlockCode =
@@ -93,6 +94,7 @@ const RE_VIDEO_PHRASE =
 export function resolveMobileVideoGenerationRequest(
   input: ResolveMobileVideoGenerationRequestInput,
 ): MobileVideoGenerationRequestDecision {
+  if (!FEATURES.videoGen) return { status: 'not_requested' };
   const text = input.text.trim();
   const slashVideoRequest = /^\/video(?:\s|$)/i.test(text);
   const inferredVideoRequest = input.mediaMode === 'text' && RE_VIDEO_PHRASE.test(text);

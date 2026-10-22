@@ -197,7 +197,7 @@ describe('when the encrypted store will not open', () => {
 
     expect(screen.getByTestId('secure-storage-unavailable')).toBeTruthy();
     expect(screen.getByText(/Nothing has been deleted/)).toBeTruthy();
-    expect(screen.getByText(/Unlock this device and try again/)).toBeTruthy();
+    expect(screen.getByText(/unlock this device and try again/)).toBeTruthy();
 
     fireEvent.press(screen.getByTestId('secure-storage-retry'));
     expect(onRetry).toHaveBeenCalledTimes(1);

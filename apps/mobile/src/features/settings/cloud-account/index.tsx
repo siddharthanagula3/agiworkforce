@@ -221,7 +221,7 @@ export default function CloudAccountScreen() {
     if (appMode !== 'cloud') {
       Alert.alert(
         'Switch to AGI Cloud',
-        'Cloud export needs a managed-cloud connection. Switching modes does not upload your Local Mode chats or files.',
+        'Cloud export needs AGI Cloud. Switching does not upload your Local Mode chats or files.',
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -380,7 +380,7 @@ export default function CloudAccountScreen() {
                 if (!isCloudAccountEpochCurrent(account)) return;
                 Alert.alert(
                   'Could not cancel account deletion',
-                  'Check your connection and try again. The scheduled deletion remains in place until cancellation is confirmed.',
+                  'Deletion is still scheduled; check your connection and try again.',
                 );
                 void refreshDeletionStatus();
               })
@@ -602,7 +602,7 @@ export default function CloudAccountScreen() {
 
       <SettingsInfo
         title="Your AGI Cloud data"
-        body="Download chats, projects, file manifests, memories, artifacts, account details, and billing records as JSON. Local Mode data is exported separately in Data Controls."
+        body="Download everything in your AGI Cloud account as JSON."
         icon={Download}
       />
       <SettingsGroup>

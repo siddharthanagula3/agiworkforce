@@ -15,7 +15,7 @@ const DIAGNOSTICS_DIR = `${cacheDirectory}diagnostics/`;
 
 const CONSENT_TITLE = 'Share diagnostics?';
 const CONSENT_BODY =
-  'The file lists this app version, your device and OS version, language, time zone, screen size, the screen you are on and recent app events such as errors. It holds no messages, files or passwords. It is sent to AGI Workforce to remove personal details, then you choose where to share it.';
+  'Sends app, device and error details to AGI Workforce, never your messages, files or passwords.';
 
 export function confirmMobileDiagnosticsShare(): Promise<boolean> {
   return new Promise((resolve) => {

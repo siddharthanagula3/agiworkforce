@@ -60,13 +60,13 @@ export function PublishedArtifactControls({
         next === 'organization'
           ? await confirm(
               'Limit this to your workspace?',
-              `The public link stops opening, so anyone outside your workspace who already has it loses access. Your ${memberLabel} can open it instead. You can switch back, and the link stays the same.`,
+              `Only your ${memberLabel} can open the link, so anyone outside your workspace loses access.`,
               'Share with workspace',
               false,
             )
           : await confirm(
               'Make this public again?',
-              'Anyone holding the link can open it, including people outside your workspace and anyone they forward it to. Publishing cannot un-share a copy somebody has already taken.',
+              'Anyone with the link can open it, including people outside your workspace.',
               'Make public',
               false,
             );

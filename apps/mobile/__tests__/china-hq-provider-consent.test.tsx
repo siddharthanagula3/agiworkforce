@@ -28,7 +28,7 @@ jest.mock('@/lib/safeOpenURL', () => ({
 import { render, fireEvent } from '@testing-library/react-native';
 import {
   CHINESE_HQ_PROVIDER_IDS,
-  composeFirstRunDisclosure,
+  composeShortFirstRunDisclosure,
   isProviderRoutingAllowed,
   type ChineseHqProviderId,
 } from '@agiworkforce/compliance';
@@ -45,6 +45,7 @@ import {
 } from '@/services/complianceLedger';
 import {
   applyChineseHqProviderConsent,
+  recordCloudProviderConsent,
   setChineseHqProviderConsent,
 } from '@/services/providerConsent';
 import {
@@ -58,7 +59,7 @@ import {
 import { ensureLlmGateOpen } from '@/services/llmGate';
 import { providerConsentErrorStateFromError } from '@/src/features/chat/utils/providerConsentRecovery';
 
-const copy = composeFirstRunDisclosure({
+const copy = composeShortFirstRunDisclosure({
   surface: 'mobile',
   offersManagedCloud: true,
   thirdPartyAiProviders: ['OpenAI'],
@@ -83,6 +84,7 @@ function acceptDisclosureOnly() {
     managedCloudAccepted: true,
     chineseHqProvidersAccepted: [],
   });
+  recordCloudProviderConsent();
 }
 
 describe('first-run disclosure: per-provider China-HQ opt-in', () => {

@@ -29,6 +29,7 @@ import {
   type CloudAccountEpoch,
 } from '@/src/features/auth/services/cloudAccountSession';
 import { ApiHttpError } from '@/services/apiErrors';
+import { canPurchase } from '@/src/features/age-assurance';
 
 type StoreProduct = Product | ProductSubscription;
 type FinishTransaction = (input: { purchase: Purchase; isConsumable?: boolean }) => Promise<void>;
@@ -491,6 +492,15 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
         setError('This native store product is not available in the current build.');
         return;
       }
+      const ageGate = canPurchase();
+      if (!ageGate.allowed) {
+        setError(
+          ageGate.reason === 'guardianConsentRequired'
+            ? 'A parent or guardian needs to approve purchases.'
+            : 'Confirm your age to buy.',
+        );
+        return;
+      }
       purchaseInFlight.current = true;
       pendingPurchaseAccount.current = account;
       setError(null);
@@ -508,11 +518,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
         setCatalog(currentCatalog);
         const product = currentCatalog.products.find((candidate) => candidate.key === key);
         if (!currentCatalog.enabled || !currentCatalog.appAccountToken || !product) {
-          throw new PurchasePreflightError(
-            currentCatalog.unavailableCode === 'waitlist_access_required'
-              ? 'Upgrade access is required.'
-              : 'This purchase is no longer available.',
-          );
+          throw new PurchasePreflightError('This purchase is no longer available.');
         }
         const storeProduct = storeProducts.get(product.productId);
         if (!storeProduct) {

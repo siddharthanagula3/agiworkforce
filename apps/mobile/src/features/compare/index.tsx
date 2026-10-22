@@ -407,8 +407,7 @@ export default function CompareScreen() {
               Compare two models
             </Text>
             <Text className="text-white/50 text-center text-sm leading-5 mt-3">
-              Your current plan has fewer than two models available for comparison. You can use your
-              available model in Chat.
+              Your current plan has fewer than two models available for comparison.
             </Text>
             <PressableBox
               onPress={handleBack}

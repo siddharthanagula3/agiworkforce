@@ -43,7 +43,6 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import {
   browseConnectorListings,
-  connectorListingIconUrl,
   fetchConnectorDirectory,
   linkBankAccountsInApp,
   type ConnectedConnector,
@@ -65,11 +64,9 @@ const CUSTOM_CONNECTOR_DESCRIPTION = 'Your encrypted remote MCP endpoint';
 interface ConnectorRow {
   key: string;
   routeId: string;
-  logoId: string;
   name: string;
   publisher: string | null;
   description: string;
-  iconUrl: string | null;
   connection: ConnectedConnector | null;
 }
 
@@ -80,11 +77,9 @@ function listingRow(
   return {
     key: connection ? `connection:${connection.id}` : `listing:${listing.id}`,
     routeId: connection?.connectorId ?? listing.id,
-    logoId: listing.id,
     name: listing.name,
     publisher: listing.publisher || null,
     description: listing.description,
-    iconUrl: connectorListingIconUrl(listing),
     connection,
   };
 }
@@ -97,11 +92,9 @@ function connectionRow(
   return {
     key: `connection:${connection.id}`,
     routeId: connection.connectorId,
-    logoId: connection.connectorId,
     name: connection.name || formatConnectorName(connection.connectorId),
     publisher: null,
     description: connection.source === 'custom' ? CUSTOM_CONNECTOR_DESCRIPTION : '',
-    iconUrl: null,
     connection,
   };
 }
@@ -149,7 +142,7 @@ function ConnectorCard({ row, onPress }: { row: ConnectorRow; onPress: () => voi
           }}
         >
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: ROW_ICON_GAP }}>
-            <ConnectorLogo id={row.logoId} name={row.name} iconUrl={row.iconUrl} />
+            <ConnectorLogo />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 numberOfLines={1}
@@ -436,8 +429,16 @@ export default function CloudConnectorsScreen({
     void loadListings(null);
   }, [browsesListings, clerkUserId, directoryVisible, loadListings]);
 
-  const connections = directory?.connectors ?? null;
+  const connections = useMemo(
+    () =>
+      directory?.connectors.filter(
+        (connection) =>
+          FEATURES.bankLinking || connection.connectorId !== BANK_ACCOUNTS_CONNECTOR_ID,
+      ) ?? null,
+    [directory],
+  );
   const bankLinkOffered =
+    FEATURES.bankLinking &&
     (directory?.available.includes(BANK_ACCOUNTS_CONNECTOR_ID) ?? false) &&
     !(connections ?? []).some((c) => c.connectorId === BANK_ACCOUNTS_CONNECTOR_ID);
 
@@ -507,7 +508,9 @@ export default function CloudConnectorsScreen({
     if (activeFilter === CUSTOM_FILTER) {
       return connectedRows.filter((row) => row.connection?.source === 'custom');
     }
-    const listedRows = listings.map((listing) => listingRow(listing, connectionFor(listing.id)));
+    const listedRows = listings
+      .filter((listing) => FEATURES.bankLinking || listing.id !== BANK_ACCOUNTS_CONNECTOR_ID)
+      .map((listing) => listingRow(listing, connectionFor(listing.id)));
     return activeFilter === ALL_FILTER
       ? [...connectedRows, ...listedRows.filter((row) => row.connection === null)]
       : listedRows;
@@ -553,7 +556,7 @@ export default function CloudConnectorsScreen({
       >
         <SettingsInfo
           title="Connect your tools to AGI Cloud"
-          body="Open a connector to see what it can do before you connect it. Custom MCP tokens are encrypted and never shown again."
+          body="Open a connector to see what it can do before you connect it."
           icon={Plug}
         />
 

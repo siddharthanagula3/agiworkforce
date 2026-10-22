@@ -119,7 +119,7 @@ export default function GitHubInstallReturnRoute() {
             } to ${accountEmail}?`}
           </Text>
           <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
-            Only link it if you just started this from the AGI Workforce app yourself.
+            Only link it if you just started this from the AGI Mobile app yourself.
           </Text>
           <Button title="Link GitHub" size="lg" onPress={() => void finish('link')} />
           <Button

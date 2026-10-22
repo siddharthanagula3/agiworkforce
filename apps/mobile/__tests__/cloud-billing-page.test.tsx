@@ -113,6 +113,10 @@ jest.mock('@/src/features/settings/common', () => {
 });
 
 jest.mock('@/lib/safeOpenURL', () => ({ openExternalUrl: jest.fn() }));
+let mockWebBillingLinksAllowed = true;
+jest.mock('@/src/features/billing/webBillingLinks', () => ({
+  useWebBillingLinksAllowed: () => mockWebBillingLinksAllowed,
+}));
 jest.mock('@/src/features/billing/service', () => ({
   fetchPortalSessionUrl: jest.fn().mockResolvedValue('https://example.com/portal'),
 }));
@@ -142,7 +146,6 @@ jest.mock('@/src/features/auth/store', () => ({
 
 import CloudBillingScreen from '../src/features/settings/cloud-billing/index';
 import * as mobileIapHook from '../src/features/billing/useMobileIap';
-import * as mobileIapService from '../src/features/billing/mobileIapService';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { openExternalUrl } from '../lib/safeOpenURL';
 import { fetchPortalSessionUrl } from '../src/features/billing/service';
@@ -154,6 +157,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
     jest.clearAllMocks();
     mockRefreshTier.mockResolvedValue(undefined);
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    mockWebBillingLinksAllowed = true;
     Object.assign(mockFeatures, { billing: false });
     Object.assign(mockTierState, {
       tier: 'free',
@@ -593,7 +597,6 @@ function disabledCatalog(): MobileIapCatalogResponse {
     appAccountToken: null,
     products: [],
     unavailableReason: 'App Store products have not been registered for this build.',
-    unavailableCode: null,
   };
 }
 
@@ -606,7 +609,6 @@ function sellingCatalog(
     appAccountToken: APP_ACCOUNT_TOKEN,
     products: catalogProducts,
     unavailableReason: null,
-    unavailableCode: null,
     ...overrides,
   };
 }
@@ -677,6 +679,30 @@ describe('buying and changing plans in the app', () => {
     expect(state.purchase).toHaveBeenCalledWith('subscription_pro_monthly');
   });
 
+  it('states auto-renewal and links Terms and Privacy wherever a plan can be bought', () => {
+    const screen = renderWith(iapState());
+
+    expect(screen.getByText(/Cancel at least 24 hours before renewal/)).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Terms of Use'));
+    expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/terms');
+    fireEvent.press(screen.getByLabelText('Privacy Policy'));
+    expect(openExternalUrl).toHaveBeenCalledWith('https://agiworkforce.com/privacy');
+  });
+
+  it('describes Google Play renewal and cancellation to an Android buyer', () => {
+    const screen = renderWith(iapState({ catalog: sellingCatalog({ platform: 'android' }) }));
+
+    expect(screen.getByText(/Cancel any time in Google Play/)).toBeTruthy();
+    expect(screen.queryByText(/24 hours/)).toBeNull();
+  });
+
+  it('shows no renewal terms when no plan can be bought', () => {
+    const screen = renderWith(iapState({ catalog: disabledCatalog() }));
+
+    expect(screen.queryByText('Auto-renews')).toBeNull();
+    expect(screen.queryByLabelText('Terms of Use')).toBeNull();
+  });
+
   it('never shows a plan price that did not come from the store', () => {
     const screen = renderWith(
       iapState({ priceFor: () => ({ label: null, currency: null, offerToken: null }) }),
@@ -699,7 +725,7 @@ describe('buying and changing plans in the app', () => {
     expect(screen.getByText('Upgrade · price:subscription_max_15x_monthly')).toBeTruthy();
     expect(
       screen.getByText(
-        /An upgrade starts right away, and the store shows the exact charge before you confirm\. A downgrade starts on your next renewal date, and you keep Pro until then\./,
+        'Upgrades start right away; downgrades start at renewal, and you keep Pro until then.',
       ),
     ).toBeTruthy();
 
@@ -796,7 +822,7 @@ describe('buying and changing plans in the app', () => {
     expect(state.purchase).not.toHaveBeenCalled();
     expect(alertSpy).toHaveBeenCalledWith(
       'This purchase is already waiting',
-      expect.stringContaining('The store has not finished the first request yet.'),
+      expect.stringContaining('The store hasn’t confirmed your first request yet'),
       expect.any(Array),
     );
     alertSpy.mockRestore();
@@ -901,73 +927,123 @@ describe('MOBILE-037, the Upgrade row never fails after the tap', () => {
     expect(getByLabelText('Upgrade plan').props.accessibilityState.disabled).toBe(true);
   });
 
-  it('offers the waitlist and keeps upgrade API failures out of the screen', async () => {
-    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(
-      iapState({
-        connected: false,
-        catalog: {
-          ...disabledCatalog(),
-          unavailableReason: 'Paid upgrades are opening in stages.',
-          unavailableCode: 'waitlist_access_required',
-        },
-      }),
-    );
-    const joinSpy = jest
-      .spyOn(mobileIapService, 'joinBillingUpgradeWaitlist')
-      .mockRejectedValue(new Error('Private waitlist route failed at /internal/billing'));
-    const redeemSpy = jest
-      .spyOn(mobileIapService, 'redeemBillingUpgradeCode')
-      .mockRejectedValue(new Error('Private access route failed at /internal/billing'));
+  it('never offers a waitlist or an access code when the store sells nothing', () => {
+    const iapSpy = jest
+      .spyOn(mobileIapHook, 'useMobileIap')
+      .mockReturnValue(iapState({ connected: false, catalog: disabledCatalog() }));
 
     try {
       const screen = render(<CloudBillingScreen />);
 
-      expect(screen.getByLabelText('Join upgrade waitlist').props.accessibilityState.disabled).toBe(
-        false,
-      );
-      expect(screen.getByText('Or enter an access code below')).toBeTruthy();
-      expect(screen.queryByText('Plan changes are not available right now')).toBeNull();
-      await act(async () => fireEvent.press(screen.getByLabelText('Join upgrade waitlist')));
-      expect(joinSpy).toHaveBeenCalledTimes(1);
-      expect(screen.getByText('Could not join the waitlist. Try again.')).toBeTruthy();
-
-      fireEvent.changeText(screen.getByLabelText('Upgrade access code'), 'AGI2026');
-      await act(async () => fireEvent.press(screen.getByLabelText('Unlock upgrades')));
-      expect(redeemSpy).toHaveBeenCalledWith('AGI2026');
-      expect(screen.getByText('Could not redeem this code. Check it and try again.')).toBeTruthy();
+      expect(screen.queryByLabelText('Join upgrade waitlist')).toBeNull();
+      expect(screen.queryByLabelText('Upgrade access code')).toBeNull();
+      expect(screen.queryByText('Paid upgrades are opening in stages')).toBeNull();
+      expect(screen.getByText('Purchases are not available right now')).toBeTruthy();
     } finally {
       iapSpy.mockRestore();
-      joinSpy.mockRestore();
-      redeemSpy.mockRestore();
     }
   });
+});
 
-  it('shows the server reason when an access code is refused', async () => {
-    const iapSpy = jest.spyOn(mobileIapHook, 'useMobileIap').mockReturnValue(
-      iapState({
-        connected: false,
-        catalog: {
-          ...disabledCatalog(),
-          unavailableReason: 'Paid upgrades are opening in stages.',
-          unavailableCode: 'waitlist_access_required',
-        },
-      }),
+describe('web billing links outside the US App Store and on Android', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+    mockWebBillingLinksAllowed = false;
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+  });
+
+  afterAll(() => {
+    mockWebBillingLinksAllowed = true;
+  });
+
+  it('names where a web-billed plan is managed without a link or portal', () => {
+    Object.assign(mockFeatures, { billing: true });
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'stripe',
+    });
+
+    const { getByText, getByLabelText, queryByText } = render(<CloudBillingScreen />);
+
+    expect(getByText('Managed on the web')).toBeTruthy();
+    expect(getByText('On the web')).toBeTruthy();
+    expect(queryByText('View invoices')).toBeNull();
+    expect(queryByText('Manage billing')).toBeNull();
+    expect(queryByText('Manage billing on the web')).toBeNull();
+    expect(queryByText('This plan is billed outside the app')).toBeNull();
+    expect(getByLabelText('Billing').props.accessibilityState.disabled).toBe(true);
+    expect(getByLabelText('Invoices').props.accessibilityState.disabled).toBe(true);
+    expect(fetchPortalSessionUrl).not.toHaveBeenCalled();
+    expect(openExternalUrl).not.toHaveBeenCalled();
+  });
+
+  it('keeps the double-billing warning but drops its web button', () => {
+    Object.assign(mockFeatures, { billing: false });
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'stripe',
+    });
+
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    fireEvent.press(getByLabelText('Adjust plan'));
+
+    const buttons = (Alert.alert as jest.Mock).mock.calls.at(-1)?.[2] as Array<{ text?: string }>;
+    expect(buttons.map((button) => button.text)).toEqual(['OK']);
+  });
+
+  it('shows workspace administration as text, not a link', () => {
+    Object.assign(mockTierState, {
+      tier: 'team',
+      billingTier: 'team',
+      billingStatus: 'active',
+      billingSource: 'none',
+    });
+
+    const { getByLabelText, getByText } = render(<CloudBillingScreen />);
+
+    expect(getByText('Managed on the web')).toBeTruthy();
+    expect(getByLabelText('Workspace administration').props.accessibilityState.disabled).toBe(true);
+  });
+
+  it('sends purchase help to in-app support instead of the website', () => {
+    Object.assign(mockTierState, {
+      tier: 'free',
+      billingTier: 'free',
+      billingStatus: 'none',
+      billingSource: 'none',
+    });
+
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    fireEvent.press(getByLabelText('Help with a purchase'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/support');
+    expect(openExternalUrl).not.toHaveBeenCalled();
+  });
+
+  it('keeps the store subscription link a store subscriber needs', () => {
+    const urlSpy = jest
+      .spyOn(releaseState, 'storeSubscriptionManagementUrl')
+      .mockReturnValue('https://play.google.com/store/account/subscriptions');
+    const nameSpy = jest.spyOn(releaseState, 'storeDisplayName').mockReturnValue('Google Play');
+    Object.assign(mockTierState, {
+      tier: 'pro',
+      billingTier: 'pro',
+      billingStatus: 'active',
+      billingSource: 'google',
+    });
+
+    const { getByLabelText } = render(<CloudBillingScreen />);
+    fireEvent.press(getByLabelText('Manage in Google Play'));
+
+    expect(openExternalUrl).toHaveBeenCalledWith(
+      'https://play.google.com/store/account/subscriptions',
     );
-    const redeemSpy = jest
-      .spyOn(mobileIapService, 'redeemBillingUpgradeCode')
-      .mockRejectedValue(
-        new ApiHttpError('This access code has expired.', 400, 'VALIDATION_ERROR'),
-      );
-
-    try {
-      const screen = render(<CloudBillingScreen />);
-
-      fireEvent.changeText(screen.getByLabelText('Upgrade access code'), 'AGI2026');
-      await act(async () => fireEvent.press(screen.getByLabelText('Unlock upgrades')));
-      expect(screen.getByText('This access code has expired.')).toBeTruthy();
-    } finally {
-      iapSpy.mockRestore();
-      redeemSpy.mockRestore();
-    }
+    urlSpy.mockRestore();
+    nameSpy.mockRestore();
   });
 });

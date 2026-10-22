@@ -120,6 +120,7 @@ import * as Clipboard from 'expo-clipboard';
 import { listMediaModels } from '../src/features/chat/actions/mediaMode';
 import { getModelMetadataById, isModelLive, modelsCatalog } from '@agiworkforce/types';
 import { requireMobileCloudModel } from '../test-utils/modelFixtures';
+import { FEATURES } from '../lib/v1FeatureFlags';
 
 const SEARCH_CAPABLE_MODEL_ID = requireMobileCloudModel(
   (model) => getModelMetadataById(model.id)?.capabilities.search === true,
@@ -441,16 +442,34 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Run code')).toBeNull();
     });
 
-    it('shows the Video row on an entitled plan', () => {
+    it('shows the Video row on an entitled plan in a build with video generation', () => {
+      const features = FEATURES as { videoGen: boolean };
+      features.videoGen = true;
       useChatAppModeStore.setState({ appMode: 'cloud' });
       useTierStore.setState({
         tier: 'max_15x',
         grantedCapabilities: ['canUseImages', 'canUseVideoGeneration'],
       });
 
-      const { getByText } = renderSheet();
+      try {
+        const { getByText } = renderSheet();
+        expect(getByText('Video')).toBeTruthy();
+      } finally {
+        features.videoGen = false;
+      }
+    });
 
-      expect(getByText('Video')).toBeTruthy();
+    it('hides the Video row in the store build even on an entitled plan', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({
+        tier: 'max_15x',
+        grantedCapabilities: ['canUseImages', 'canUseVideoGeneration'],
+      });
+
+      const { queryByText } = renderSheet();
+
+      expect(queryByText('Video')).toBeNull();
+      expect(queryByText('Generate video in this chat')).toBeNull();
     });
 
     it('hides the Video row when only the image capability is granted', () => {

@@ -24,7 +24,7 @@ a command, and review its output before applying a change.
 
 ## Account and provider credentials
 
-**Set API Key** and **Clear API Key** manage the AGI Workforce account API key.
+**Set API Key** and **Clear API Key** manage the AGI account API key.
 For model-provider key setup and storage, see
 [BYOK](https://agiworkforce.com/help/byok-provider-keys). Keep account sign-in
 separate from provider-key setup.

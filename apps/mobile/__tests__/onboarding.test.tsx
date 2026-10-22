@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 
+import { Alert } from 'react-native';
 import { render, fireEvent, waitFor, act } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
@@ -85,13 +86,14 @@ jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => ({
 }));
 
 const mockIsDisclosureSatisfied = jest.fn().mockReturnValue(false);
-const mockComposeFirstRunDisclosure = jest.fn().mockReturnValue({
+const mockComposeShortFirstRunDisclosure = jest.fn().mockReturnValue({
   title: 'Before you continue',
   summary: 'This app processes your data on-device.',
   article50_1: 'Article 50(1) of the EU AI Act...',
   sourceUrl: 'https://eur-lex.europa.eu',
   acceptLabel: 'Continue',
   declineLabel: 'Not now',
+  detailsLabel: 'Why we show this',
   thirdPartyAiProviders: [],
   offersManagedCloud: false,
   chineseHqProviderRows: [
@@ -111,7 +113,8 @@ const mockRecordDisclosureAcceptance = jest.fn().mockImplementation(async (args)
 });
 jest.mock('@agiworkforce/compliance', () => ({
   ...jest.requireActual('@agiworkforce/compliance'),
-  composeFirstRunDisclosure: (...args: unknown[]) => mockComposeFirstRunDisclosure(...args),
+  composeShortFirstRunDisclosure: (...args: unknown[]) =>
+    mockComposeShortFirstRunDisclosure(...args),
   isDisclosureSatisfied: (...args: unknown[]) => mockIsDisclosureSatisfied(...args),
   recordDisclosureAcceptance: (...args: unknown[]) => mockRecordDisclosureAcceptance(...args),
   DISCLOSURE_LEDGER_KEY: 'disclosure_ledger',
@@ -195,6 +198,7 @@ jest.mock('expo-constants', () => ({
 
 import OnboardingScreen from '../app/(public)/onboarding';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { CLOUD_PROVIDER_CONSENT_KEY } from '../services/providerConsent';
 import {
   CLOUD_CHAT_POST_AUTH_INTENT,
   POST_AUTH_INTENT_PARAM,
@@ -352,6 +356,29 @@ describe('Onboarding', () => {
       expect(mockRecordDisclosureAcceptance).toHaveBeenCalledWith(
         expect.objectContaining({ chineseHqProvidersAccepted: [] }),
       );
+    });
+
+    it('records no Cloud acceptance for a notice that never asked about Cloud', async () => {
+      mockIsDisclosureSatisfied.mockReturnValue(false);
+      const alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+      const { getByTestId } = render(<OnboardingScreen />);
+      await act(async () => {
+        fireEvent.press(getByTestId('hero-start-chatting-btn'));
+        await Promise.resolve();
+      });
+      await act(async () => {
+        fireEvent.press(getByTestId('disclosure-accept-btn'));
+        await Promise.resolve();
+      });
+      expect(mockRecordDisclosureAcceptance).toHaveBeenCalledWith(
+        expect.objectContaining({ managedCloudAccepted: false }),
+      );
+      expect(alertSpy).not.toHaveBeenCalled();
+      expect(mockStorageSet).not.toHaveBeenCalledWith(
+        CLOUD_PROVIDER_CONSENT_KEY,
+        expect.anything(),
+      );
+      alertSpy.mockRestore();
     });
 
     it('threads a toggled-on China-HQ provider into the disclosure record', async () => {

@@ -259,7 +259,7 @@ export function ProjectMembersSection({
             style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}
           >
             {
-              'Only you can open this project. Share it with your workspace, or only with the people you give access. Its instructions and files are shared; each person\u2019s chats stay private.'
+              'Only you can open this project; sharing includes its instructions and files, not chats.'
             }
           </Text>
           <View style={{ gap: 8 }}>

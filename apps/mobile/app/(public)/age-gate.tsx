@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import {
   View,
   TextInput,
@@ -17,6 +17,7 @@ import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useAuthStore } from '@/src/features/auth/store';
 import { confirmAgeGate, getAgeThreshold, isMinorMode } from '@/src/features/auth/services/ageGate';
+import { assureAgeWithOs } from '@/src/features/age-assurance';
 import { APP_PATH, CLOUD_SIGN_IN_RETURN_PATH } from '@/src/features/auth/services/rootRouting';
 import {
   clearPostAuthIntent,
@@ -70,6 +71,17 @@ export default function AgeGateScreen() {
     }
     router.replace(returnTo ?? ('/(public)/onboarding' as const));
   }, [returnTo, router]);
+
+  const osCheckStarted = useRef(false);
+  useEffect(() => {
+    if (osCheckStarted.current || refused || returnTo === PARENTAL_CONTROLS_RETURN_PATH) return;
+    osCheckStarted.current = true;
+    void assureAgeWithOs().then((record) => {
+      if (!record) return;
+      if (record.isMinor) setRefused(true);
+      else handleComplete();
+    });
+  }, [handleComplete, refused, returnTo]);
 
   const handleContinue = useCallback(() => {
     const parsed = parseInt(ageText.trim(), 10);
@@ -140,9 +152,7 @@ export default function AgeGateScreen() {
           </Text>
 
           <Text style={[styles.body, { color: colors.textSecondary }]}>
-            This device recorded an age under {threshold}. AGI cannot verify a new age, so the
-            answer stands. An adult can reset it by reinstalling AGI on this device, which clears
-            the stored age record and everything saved with it.
+            This device recorded an age under {threshold}, which only reinstalling AGI can reset.
           </Text>
 
           {isClerkSignedIn ? (
@@ -254,8 +264,7 @@ export default function AgeGateScreen() {
             testID="age-gate-policy-note"
             style={[styles.policyNote, { color: colors.textMuted }]}
           >
-            Required by DPDP Act 2023, EU AI Act, and Google Play policy. Your age is stored only on
-            this device and never shared.
+            Your age stays on this device and is never shared.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

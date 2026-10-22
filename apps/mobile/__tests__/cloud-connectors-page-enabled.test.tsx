@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { Image } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -78,12 +79,10 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 
 const mockFetchDirectory = jest.fn();
 const mockBrowseListings = jest.fn();
-const mockListingIconUrl = jest.fn();
 const mockAddCustom = jest.fn();
 jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: (...args: unknown[]) => mockFetchDirectory(...args),
   browseConnectorListings: (...args: unknown[]) => mockBrowseListings(...args),
-  connectorListingIconUrl: (...args: unknown[]) => mockListingIconUrl(...args),
   addCustomConnector: (...args: unknown[]) => mockAddCustom(...args),
 }));
 
@@ -144,7 +143,6 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     });
     mockFetchDirectory.mockResolvedValue({ connectors: [CUSTOM_CONNECTION], available: [] });
     mockBrowseListings.mockResolvedValue(page([NOTION, SLACK]));
-    mockListingIconUrl.mockReturnValue(null);
   });
 
   it('renders registry listings from the connector directory, with no placeholder', async () => {
@@ -230,6 +228,35 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
     expect(screen.getByLabelText('Slack, Slack Technologies. Not connected')).toBeTruthy();
     expect(screen.queryByLabelText(/^Slack, Slack Technologies\. Connected/)).toBeNull();
     expect(screen.queryByText('Account A Slack')).toBeNull();
+  });
+
+  it('hides bank linking and the bank connector on mobile', async () => {
+    const bankListing = listing('bank-accounts', 'Bank accounts', 'Plaid');
+    mockFetchDirectory.mockResolvedValue({
+      connectors: [
+        CUSTOM_CONNECTION,
+        { ...CUSTOM_CONNECTION, id: 'bank-row', connectorId: 'bank-accounts', source: 'directory' },
+      ],
+      available: ['bank-accounts'],
+    });
+    mockBrowseListings.mockResolvedValue(page([NOTION, bankListing]));
+
+    const { getByLabelText, queryByLabelText, queryByText } = render(<CloudConnectorsScreen />);
+
+    await waitFor(() => expect(getByLabelText('Notion, Notion Labs. Not connected')).toBeTruthy());
+    expect(queryByText('Link a bank account')).toBeNull();
+    expect(queryByText('Bank accounts')).toBeNull();
+    expect(queryByLabelText(/Bank accounts/)).toBeNull();
+  });
+
+  it('draws connector rows with a generic icon instead of fetching brand logos', async () => {
+    mockBrowseListings.mockResolvedValue(
+      page([listing('canva', 'Canva', 'Canva', { iconUrl: 'https://www.canva.com/icon.png' })]),
+    );
+    const screen = render(<CloudConnectorsScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText('Canva, Canva. Not connected')).toBeTruthy());
+    expect(screen.UNSAFE_queryAllByType(Image)).toHaveLength(0);
   });
 
   it('renders connected custom MCP endpoints by their real server name', async () => {

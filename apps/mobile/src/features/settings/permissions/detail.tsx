@@ -283,8 +283,7 @@ export default function PermissionDetailScreen() {
           }}
         >
           <Text style={{ color: c.textMuted, fontSize: typeScale.footnote, lineHeight: 18 }}>
-            This screen shows what your device currently reports. AGI cannot change a device
-            permission on your behalf.
+            AGI can’t change device permissions for you.
           </Text>
         </View>
       </ScrollView>

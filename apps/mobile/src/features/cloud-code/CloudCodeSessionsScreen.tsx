@@ -83,8 +83,7 @@ function EmptyState({ filtered }: { filtered: boolean }) {
         {filtered ? 'No sessions match this filter' : 'No cloud sessions yet'}
       </Text>
       <Text style={{ color: colors.textMuted, textAlign: 'center', lineHeight: 20, marginTop: 7 }}>
-        Start one with the + button, on the web or in the desktop app. It shows up here, where you
-        can follow it, answer its approvals and send the next task.
+        Start one with the + button, on the web or in the desktop app.
       </Text>
     </View>
   );

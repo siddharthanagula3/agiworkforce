@@ -68,6 +68,7 @@ export const ManagedCloudAgentSchema = AgentConfigSchema.extend({
   id: z.string().uuid(),
   isOwner: z.boolean(),
   ownerName: z.string().nullable(),
+  ownerUserId: z.string().nullable().optional(),
   organizationId: z.string().uuid().nullable(),
   status: AgentStatusSchema,
   visibility: AgentVisibilitySchema,

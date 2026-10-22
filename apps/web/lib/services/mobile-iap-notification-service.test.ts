@@ -4,6 +4,8 @@ import { MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
 import {
   grantMobileIapPurchaseFromStore,
   processMobileIapLifecycleEvent,
+  recordAppleConsentRescission,
+  registerAppleAppTransaction,
   type MobileIapLifecycleEvent,
 } from './mobile-iap-notification-service';
 import { SubscriptionService } from './subscription-service';
@@ -722,5 +724,173 @@ describe('a purchase the store reports before the app does', () => {
         verified,
       }),
     ).rejects.toThrow(/connection reset/);
+  });
+});
+
+// developer.apple.com/documentation/appstoreservernotifications/notificationtype:
+// RESCIND_CONSENT "indicates the parent or guardian has withdrawn consent for a
+// child's app usage", and names the install through appData, not an account.
+describe('App Store RESCIND_CONSENT', () => {
+  function consentDb(state: {
+    mapped: Array<{ appTransactionId: string; userId: string }>;
+    appleBilled?: Set<string>;
+  }) {
+    const receipts = new Set<string>();
+    const rescinded = new Set<string>();
+    const ended: string[] = [];
+    const appleBilled = state.appleBilled ?? new Set(state.mapped.map((row) => row.userId));
+    const query = vi.fn(
+      async (sql: string, params: readonly unknown[] = []): Promise<Record<string, unknown>[]> => {
+        if (sql.includes('insert into public.mobile_iap_notification_receipts')) {
+          const id = String(params[0]);
+          if (receipts.has(id)) return [];
+          receipts.add(id);
+          return [{ notification_id: id }];
+        }
+        if (sql.includes('join public.mobile_app_consent_rescissions')) {
+          const userId = String(params[0]);
+          const match = state.mapped.find(
+            (row) => row.userId === userId && rescinded.has(row.appTransactionId),
+          );
+          return match ? [{ app_transaction_id: match.appTransactionId }] : [];
+        }
+        if (sql.includes('from public.mobile_app_transactions')) {
+          return state.mapped
+            .filter((row) => row.appTransactionId === params[0])
+            .map((row) => ({ user_id: row.userId }));
+        }
+        if (sql.includes('from public.subscriptions')) {
+          const userId = String(params[0]);
+          return appleBilled.has(userId) ? [{ apple_original_transaction_id: 'original-1' }] : [];
+        }
+        if (sql.includes('update public.subscriptions')) {
+          const userId = String(params[0]);
+          ended.push(userId);
+          appleBilled.delete(userId);
+          return [{ id: `sub-${userId}` }];
+        }
+        return [];
+      },
+    );
+    const execute = vi.fn(async (sql: string, params: readonly unknown[] = []) => {
+      if (sql.includes('insert into public.mobile_app_consent_rescissions')) {
+        rescinded.add(String(params[0]));
+      }
+      if (sql.includes('insert into public.mobile_app_transactions')) {
+        state.mapped.push({ appTransactionId: String(params[0]), userId: String(params[1]) });
+      }
+      return undefined;
+    });
+    const db = {
+      query,
+      execute,
+      transaction: vi.fn(async (callback: (tx: DatabaseAdapter) => Promise<unknown>) =>
+        callback(db as unknown as DatabaseAdapter),
+      ),
+    } as unknown as DatabaseAdapter;
+    return { db, query, execute, ended, rescinded };
+  }
+
+  const rescission = { notificationId: 'consent-notice-1', environment: 'production' as const };
+
+  it('ends the Apple-billed plan of every account mapped to the install and is a no-op on replay', async () => {
+    const h = consentDb({
+      mapped: [
+        { appTransactionId: 'app-tx-1', userId: 'user-1' },
+        { appTransactionId: 'app-tx-1', userId: 'user-2' },
+      ],
+    });
+
+    await expect(
+      recordAppleConsentRescission({ db: h.db, appTransactionId: 'app-tx-1', ...rescission }),
+    ).resolves.toBe('consent_rescinded');
+    expect(h.ended).toEqual(['user-1', 'user-2']);
+    expect(h.execute).toHaveBeenCalledWith(expect.stringContaining("set status = 'revoked'"), [
+      'user-1',
+      'original-1',
+    ]);
+
+    const writesBeforeReplay = h.execute.mock.calls.length;
+    await expect(
+      recordAppleConsentRescission({ db: h.db, appTransactionId: 'app-tx-1', ...rescission }),
+    ).resolves.toBe('duplicate');
+    expect(h.ended).toEqual(['user-1', 'user-2']);
+    expect(h.execute.mock.calls.length).toBe(writesBeforeReplay);
+  });
+
+  it('records an install no account has registered yet and reports it distinctly', async () => {
+    const h = consentDb({ mapped: [] });
+
+    await expect(
+      recordAppleConsentRescission({ db: h.db, appTransactionId: 'app-tx-9', ...rescission }),
+    ).resolves.toBe('unknown_app_transaction');
+    expect(h.rescinded.has('app-tx-9')).toBe(true);
+    expect(h.ended).toEqual([]);
+  });
+
+  it('ends the plan of an account that registers an install after its consent was withdrawn', async () => {
+    const h = consentDb({ mapped: [], appleBilled: new Set(['user-3']) });
+    await recordAppleConsentRescission({ db: h.db, appTransactionId: 'app-tx-3', ...rescission });
+
+    await expect(
+      registerAppleAppTransaction({
+        db: h.db,
+        userId: 'user-3',
+        appTransactionId: 'app-tx-3',
+        environment: 'production',
+      }),
+    ).resolves.toEqual({ consentWithdrawn: true });
+    expect(h.ended).toEqual(['user-3']);
+  });
+
+  it('registers an install with consent intact without touching the plan', async () => {
+    const h = consentDb({ mapped: [] });
+
+    await expect(
+      registerAppleAppTransaction({
+        db: h.db,
+        userId: 'user-4',
+        appTransactionId: 'app-tx-4',
+        environment: 'sandbox',
+      }),
+    ).resolves.toEqual({ consentWithdrawn: false });
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.mobile_app_transactions'),
+      ['app-tx-4', 'user-4', 'sandbox'],
+    );
+    expect(h.ended).toEqual([]);
+  });
+
+  it('refuses a renewal for an account whose consent was withdrawn and files the charge for refund', async () => {
+    const h = harness();
+    const original = h.query.getMockImplementation()!;
+    h.query.mockImplementation(async (sql: string, params?: readonly unknown[]) => {
+      if (sql.includes('join public.mobile_app_consent_rescissions')) {
+        return [{ app_transaction_id: 'app-tx-1' }];
+      }
+      return original(sql, params);
+    });
+
+    await expect(
+      processMobileIapLifecycleEvent({
+        db: h.db,
+        event: event({
+          product: subscription,
+          entitlementStatus: 'active',
+          expiresAt: new Date('2026-09-01T00:00:00.000Z'),
+        }),
+      }),
+    ).resolves.toBe('stale');
+    expect(
+      h.query.mock.calls.some(([sql]) => String(sql).includes('update public.subscriptions')),
+    ).toBe(false);
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('insert into public.billing_refund_requests'),
+      expect.arrayContaining([
+        'user-1',
+        storeChargeId('ios', 'transaction-1'),
+        expect.stringContaining('withdrew consent'),
+      ]),
+    );
   });
 });

@@ -13,7 +13,7 @@ export function releaseNotesUrl(): string {
 
 export function noticeForVersion(lastSeen: string | undefined, current: string): string | null {
   if (lastSeen === undefined || lastSeen === current) return null;
-  return `AGI Workforce updated to ${current}.`;
+  return `AGI Mobile updated to ${current}.`;
 }
 
 export function useReleaseUpdateNotice(): void {

@@ -550,8 +550,7 @@ export default function PersonalizationScreen() {
           }}
         >
           <Text className="text-xs leading-4" style={{ color: c.textMuted }}>
-            Preferences apply to all conversations. Your name and instructions are included as
-            context when chatting with AGI.
+            Your name, instructions and preferences apply to every chat.
           </Text>
         </View>
       </ScrollView>

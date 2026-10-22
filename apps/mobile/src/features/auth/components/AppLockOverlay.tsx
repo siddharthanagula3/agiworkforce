@@ -40,7 +40,7 @@ export function AppLockOverlay({
       testID="app-lock-overlay"
       style={[StyleSheet.absoluteFill, styles.root, { backgroundColor: colors.background }]}
       accessibilityViewIsModal
-      accessibilityLabel="AGI Workforce is locked"
+      accessibilityLabel="AGI Mobile is locked"
     >
       <Fingerprint size={48} color={colors.teal} />
       <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">

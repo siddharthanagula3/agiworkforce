@@ -1,7 +1,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { FileCode2, MessageSquare, Plug, Users, type LucideIcon } from 'lucide-react-native';
+import {
+  FileCode2,
+  MessageSquare,
+  MoreHorizontal,
+  Plug,
+  Users,
+  type LucideIcon,
+} from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { API_URL } from '@/lib/constants';
@@ -12,9 +19,22 @@ import {
   fetchProjectSharing,
   projectsSharedWithMe,
   sharedResourcesForMe,
+  type ProjectSharingOverview,
   type SharedWithMeProject,
   type SharedWithMeResources,
 } from '@/src/features/projects/projectSharing';
+import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
+import {
+  hiddenSharers,
+  unhideSharer,
+  withoutHiddenSharers,
+  type HiddenSharer,
+} from '@/src/features/shared-with-you/hiddenSharers';
+import {
+  confirmHideSharer,
+  sharedReportTarget,
+} from '@/src/features/shared-with-you/SharedItemSafetyActions';
+import type { SharedReportItem } from '@/services/contentReport';
 import {
   SHARED_CHAT_UNAVAILABLE_COPY,
   SharedChatUnavailableError,
@@ -27,8 +47,47 @@ import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
 interface Loaded {
+  raw: ProjectSharingOverview;
+  overview: ProjectSharingOverview;
+  hidden: HiddenSharer[];
   projects: SharedWithMeProject[];
   resources: SharedWithMeResources;
+}
+
+interface SharedEntry {
+  kind: SharedReportItem['kind'];
+  id: string;
+  title: string;
+  ownerName: string;
+}
+
+function loadedFrom(overview: ProjectSharingOverview): Loaded {
+  const visible = withoutHiddenSharers(overview);
+  return {
+    raw: overview,
+    overview: visible,
+    hidden: hiddenSharers(overview.currentUserId),
+    projects: projectsSharedWithMe(visible),
+    resources: sharedResourcesForMe(visible, API_URL),
+  };
+}
+
+function sharerIdOf(overview: ProjectSharingOverview, entry: SharedEntry): string | undefined {
+  switch (entry.kind) {
+    case 'project':
+      return overview.sharedProjects.find((item) => item.projectId === entry.id)?.ownerUserId;
+    case 'conversation':
+      return overview.sharedConversations.find((item) => item.sharedSessionId === entry.id)
+        ?.ownerUserId;
+    case 'artifact':
+      return overview.sharedArtifacts.find((item) => item.publishedArtifactId === entry.id)
+        ?.ownerUserId;
+    case 'connector':
+      return overview.sharedConnectors.find((item) => item.connectorRowId === entry.id)
+        ?.ownerUserId;
+    default:
+      return undefined;
+  }
 }
 
 function Row({
@@ -36,40 +95,59 @@ function Row({
   title,
   subtitle,
   onPress,
+  onMore,
   isLast,
 }: {
   icon: LucideIcon;
   title: string;
   subtitle: string;
   onPress: () => void;
+  onMore: () => void;
   isLast: boolean;
 }) {
   const colors = useThemeColors();
   return (
-    <Pressable
-      onPress={onPress}
-      accessibilityRole="button"
-      accessibilityLabel={`${title}, ${subtitle}`}
+    <View
       style={{
         minHeight: 56,
-        paddingHorizontal: 14,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 12,
         borderBottomWidth: isLast ? 0 : 1,
         borderBottomColor: colors.border,
       }}
     >
-      <Icon size={18} color={colors.textSecondary} />
-      <View style={{ flex: 1, gap: 2 }}>
-        <Text numberOfLines={1} style={{ color: colors.textPrimary, fontSize: typeScale.body }}>
-          {title}
-        </Text>
-        <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
-          {subtitle}
-        </Text>
-      </View>
-    </Pressable>
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${title}, ${subtitle}`}
+        style={{
+          flex: 1,
+          minHeight: 56,
+          paddingLeft: 14,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 12,
+        }}
+      >
+        <Icon size={18} color={colors.textSecondary} />
+        <View style={{ flex: 1, gap: 2 }}>
+          <Text numberOfLines={1} style={{ color: colors.textPrimary, fontSize: typeScale.body }}>
+            {title}
+          </Text>
+          <Text numberOfLines={1} style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+            {subtitle}
+          </Text>
+        </View>
+      </Pressable>
+      <Pressable
+        onPress={onMore}
+        accessibilityRole="button"
+        accessibilityLabel={`Report or hide ${title}`}
+        style={{ width: 48, minHeight: 56, alignItems: 'center', justifyContent: 'center' }}
+      >
+        <MoreHorizontal size={18} color={colors.textSecondary} />
+      </Pressable>
+    </View>
   );
 }
 
@@ -100,20 +178,14 @@ export function SharedWithYouScreen() {
   const loadMessages = useChatStore((s) => s.loadMessages);
   const deleteConversation = useChatStore((s) => s.deleteConversation);
   const [loaded, setLoaded] = useState<Loaded | null | undefined>(undefined);
+  const [reporting, setReporting] = useState<(SharedReportItem & { title: string }) | null>(null);
 
   useEffect(() => {
     const controller = new AbortController();
     void fetchProjectSharing(controller.signal)
       .then((overview) => {
         if (controller.signal.aborted) return;
-        setLoaded(
-          overview
-            ? {
-                projects: projectsSharedWithMe(overview),
-                resources: sharedResourcesForMe(overview, API_URL),
-              }
-            : null,
-        );
+        setLoaded(overview ? loadedFrom(overview) : null);
       })
       .catch(() => {
         if (!controller.signal.aborted) setLoaded(null);
@@ -144,6 +216,37 @@ export function SharedWithYouScreen() {
             : toUserMessage(error, 'This shared conversation could not be opened.'),
       );
     }
+  };
+
+  const hideFrom = async (raw: ProjectSharingOverview, sharerId: string, name: string) => {
+    if (await confirmHideSharer(raw.currentUserId, sharerId, name)) {
+      setLoaded(loadedFrom(raw));
+    }
+  };
+
+  const unhide = (raw: ProjectSharingOverview, sharerId: string) => {
+    unhideSharer(raw.currentUserId, sharerId);
+    setLoaded(loadedFrom(raw));
+  };
+
+  const chooseSafetyAction = (entry: SharedEntry) => {
+    if (!loaded) return;
+    const { overview, raw } = loaded;
+    const sharerId = sharerIdOf(overview, entry);
+    if (!sharerId) return;
+    Alert.alert(entry.title, undefined, [
+      {
+        text: 'Report',
+        onPress: () =>
+          setReporting({ kind: entry.kind, id: entry.id, sharerId, title: entry.title }),
+      },
+      {
+        text: `Hide ${entry.ownerName}`,
+        style: 'destructive',
+        onPress: () => void hideFrom(raw, sharerId, entry.ownerName),
+      },
+      { text: 'Cancel', style: 'cancel' },
+    ]);
   };
 
   const chooseChatAction = (entry: { token: string; title: string; url: string }) =>
@@ -190,6 +293,14 @@ export function SharedWithYouScreen() {
               title={project.name}
               subtitle={`${project.ownerName} · ${ACCESS_LABELS[project.access]}`}
               isLast={index === list.length - 1}
+              onMore={() =>
+                chooseSafetyAction({
+                  kind: 'project',
+                  id: project.projectId,
+                  title: project.name,
+                  ownerName: project.ownerName,
+                })
+              }
               onPress={() =>
                 router.push({
                   pathname: '/(app)/projects/shared/[id]',
@@ -209,6 +320,7 @@ export function SharedWithYouScreen() {
               title={entry.title}
               subtitle={`Shared by ${entry.ownerName}`}
               isLast={index === list.length - 1}
+              onMore={() => chooseSafetyAction({ kind: 'conversation', ...entry })}
               onPress={() => chooseChatAction(entry)}
             />
           ))}
@@ -223,6 +335,7 @@ export function SharedWithYouScreen() {
               title={entry.title}
               subtitle={`${entry.kind} · shared by ${entry.ownerName}`}
               isLast={index === list.length - 1}
+              onMore={() => chooseSafetyAction({ ...entry, kind: 'artifact' })}
               onPress={() => void openUntrustedUrlInAppBrowser(entry.url)}
             />
           ))}
@@ -237,10 +350,63 @@ export function SharedWithYouScreen() {
               title={entry.name}
               subtitle={`Shared by ${entry.ownerName}`}
               isLast={index === list.length - 1}
+              onMore={() =>
+                chooseSafetyAction({
+                  kind: 'connector',
+                  id: entry.id,
+                  title: entry.name,
+                  ownerName: entry.ownerName,
+                })
+              }
               onPress={() => router.push('/(app)/connectors')}
             />
           ))}
         </Section>
+      ) : null}
+      {loaded && loaded.hidden.length > 0 ? (
+        <Section label="HIDDEN PEOPLE">
+          {loaded.hidden.map((person, index, list) => (
+            <View
+              key={person.id}
+              style={{
+                minHeight: 52,
+                paddingHorizontal: 14,
+                flexDirection: 'row',
+                alignItems: 'center',
+                gap: 12,
+                borderBottomWidth: index === list.length - 1 ? 0 : 1,
+                borderBottomColor: colors.border,
+              }}
+            >
+              <Text
+                numberOfLines={1}
+                style={{ flex: 1, color: colors.textPrimary, fontSize: typeScale.body }}
+              >
+                {person.name}
+              </Text>
+              <Pressable
+                onPress={() => unhide(loaded.raw, person.id)}
+                accessibilityRole="button"
+                accessibilityLabel={`Unhide ${person.name}`}
+                style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: 8 }}
+              >
+                <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
+                  Unhide
+                </Text>
+              </Pressable>
+            </View>
+          ))}
+        </Section>
+      ) : null}
+      {reporting ? (
+        <ReportSheet
+          visible
+          onClose={() => setReporting(null)}
+          target={sharedReportTarget(
+            { kind: reporting.kind, id: reporting.id, sharerId: reporting.sharerId },
+            reporting.title,
+          )}
+        />
       ) : null}
     </SettingsScreenShell>
   );

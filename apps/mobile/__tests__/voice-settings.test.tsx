@@ -87,7 +87,7 @@ describe('Voice settings', () => {
 
     expect(
       getByText(
-        'Voice replies use the current chat model. Cloud Mode sends your transcript to AGI Cloud. Speech plays through voices installed on this device.',
+        'Replies use the current chat model; in Cloud Mode, your transcript goes to AGI Cloud.',
       ),
     ).toBeTruthy();
     expect(queryByText("Cloud voice isn't available on mobile yet.")).toBeNull();
@@ -119,11 +119,7 @@ describe('Voice settings', () => {
     const { getByText, queryByRole } = render(<VoiceSettingsScreen />);
 
     expect(getByText('Foreground conversations only')).toBeTruthy();
-    expect(
-      getByText(
-        'Voice listening and speech stop when AGI moves to the background or the device locks. The microphone does not stay active in other apps.',
-      ),
-    ).toBeTruthy();
+    expect(getByText('Voice stops when AGI leaves the screen or the device locks.')).toBeTruthy();
     expect(queryByRole('switch', { name: /background conversations/i })).toBeNull();
   });
 });

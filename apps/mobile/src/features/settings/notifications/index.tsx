@@ -319,7 +319,7 @@ const PERMISSION_COPY: Record<
   },
   undetermined: {
     title: 'Turn on notifications',
-    body: 'AGI alerts you when an agent needs an approval, finishes a task, or fails. Your device will ask you once.',
+    body: 'Get alerts when an agent needs approval, finishes or fails.',
   },
   denied: {
     title: 'Your device is blocking notifications',
@@ -330,11 +330,11 @@ const PERMISSION_COPY: Record<
 const REGISTRATION_ISSUE_COPY: Record<PushRegistrationIssue, { title: string; body: string }> = {
   device_token: {
     title: 'AGI Cloud alerts cannot reach this device',
-    body: 'Notifications are allowed, but this device could not get a push address, so approvals, finished tasks and failures from AGI Cloud are not delivered here. Alerts this app raises itself still show.',
+    body: 'This device could not get a push address, so AGI Cloud alerts won’t arrive here.',
   },
   server: {
     title: 'AGI Cloud alerts cannot reach this device',
-    body: 'Notifications are allowed, but AGI Cloud could not register this device, so approvals, finished tasks and failures are not delivered here yet.',
+    body: 'AGI Cloud could not register this device, so its alerts won’t arrive here yet.',
   },
 };
 

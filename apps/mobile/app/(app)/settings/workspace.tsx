@@ -20,6 +20,7 @@ import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { getBillingPlanPricing, isOrganizationAdminRole } from '@agiworkforce/types';
 import { openExternalUrl } from '@/lib/safeOpenURL';
+import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLinks';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -59,6 +60,7 @@ function planLabel(plan: string): string {
 
 export default function WorkspaceScreen() {
   const router = useRouter();
+  const webLinksAllowed = useWebBillingLinksAllowed();
   const { colors: c, statusBarStyle } = useTheme();
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
@@ -169,7 +171,7 @@ export default function WorkspaceScreen() {
   const assignableRoles = WORKSPACE_ROLES.filter((role) => role !== 'owner' || isWorkspaceOwner);
   const ownershipConsequence =
     roleTarget && state.kind === 'ready' && state.overview.workspace
-      ? `${roleTarget.name} becomes the owner of ${state.overview.workspace.name}, with billing, workspace deletion and every administrative control. You become an Admin and lose those controls immediately. Only ${roleTarget.name} can transfer ownership back.`
+      ? `${roleTarget.name} takes over billing and every admin control of ${state.overview.workspace.name}, and only they can give ownership back.`
       : null;
 
   const handleChangeRole = useCallback((member: WorkspaceMember) => setRoleTarget(member), []);
@@ -449,15 +451,17 @@ export default function WorkspaceScreen() {
               >
                 Create your workspace on the web, then manage its members from here.
               </Text>
-              <Pressable
-                onPress={() => void openExternalUrl(WEB_TEAM_URL)}
-                accessibilityRole="button"
-                accessibilityLabel="Create a workspace on the web"
-              >
-                <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
-                  Create on web
-                </Text>
-              </Pressable>
+              {webLinksAllowed ? (
+                <Pressable
+                  onPress={() => void openExternalUrl(WEB_TEAM_URL)}
+                  accessibilityRole="button"
+                  accessibilityLabel="Create a workspace on the web"
+                >
+                  <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
+                    Create on web
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </Card>
         )}
@@ -575,16 +579,29 @@ export default function WorkspaceScreen() {
               </View>
             ) : null}
 
-            <Pressable
-              onPress={() => void openExternalUrl(WEB_TEAM_URL)}
-              accessibilityRole="button"
-              accessibilityLabel="Open workspace settings on the web"
-              style={{ alignSelf: 'center', paddingVertical: 16 }}
-            >
-              <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
-                Rename or delete this workspace on the web
+            {webLinksAllowed ? (
+              <Pressable
+                onPress={() => void openExternalUrl(WEB_TEAM_URL)}
+                accessibilityRole="button"
+                accessibilityLabel="Open workspace settings on the web"
+                style={{ alignSelf: 'center', paddingVertical: 16 }}
+              >
+                <Text style={{ color: c.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
+                  Rename or delete this workspace on the web
+                </Text>
+              </Pressable>
+            ) : (
+              <Text
+                style={{
+                  alignSelf: 'center',
+                  paddingVertical: 16,
+                  color: c.textSecondary,
+                  fontSize: typeScale.footnote,
+                }}
+              >
+                Rename or delete on the web
               </Text>
-            </Pressable>
+            )}
           </>
         )}
       </ScrollView>

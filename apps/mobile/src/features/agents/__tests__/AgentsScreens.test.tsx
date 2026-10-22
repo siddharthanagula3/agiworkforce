@@ -1,4 +1,5 @@
 import React from 'react';
+import { Alert } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -10,6 +11,7 @@ const mockCreateAgent = jest.fn();
 const mockUpdateAgent = jest.fn();
 const mockStartConversation = jest.fn();
 const mockPublishAgent = jest.fn();
+const mockStorage = new Map<string, string>();
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -34,7 +36,11 @@ jest.mock('@/lib/mmkv', () => ({
   whenMmkvReady: jest.fn((callback: () => void) => callback()),
   rehydrateWhenMmkvReady: jest.fn(),
   mmkvStorage: { getItem: jest.fn(() => null), setItem: jest.fn(), removeItem: jest.fn() },
-  storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
+  storage: {
+    getString: (key: string) => mockStorage.get(key),
+    set: (key: string, value: string) => mockStorage.set(key, value),
+    delete: (key: string) => mockStorage.delete(key),
+  },
 }));
 jest.mock('expo-document-picker', () => ({ getDocumentAsync: jest.fn() }));
 jest.mock('expo-file-system/legacy', () => ({ readAsStringAsync: jest.fn() }));
@@ -97,12 +103,20 @@ const SHARED: ManagedCloudAgent = {
   name: 'Reviewer',
   isOwner: false,
   ownerName: 'Ana',
+  ownerUserId: 'user-ana',
   publishedVersion: 1,
 };
+
+type AlertButton = { text: string; onPress?: () => void };
+const pressAlertButton = (alert: jest.SpyInstance, text: string) =>
+  (alert.mock.calls.at(-1)?.[2] as AlertButton[])
+    .find((button) => button.text === text)
+    ?.onPress?.();
 
 describe('mobile agents', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockStorage.clear();
     delete mockParams.id;
     __resetCloudAccountSessionForTests();
     activateCloudAccount('user-1');
@@ -190,5 +204,45 @@ describe('mobile agents', () => {
     expect(await findByText('Only the owner can change this agent.')).toBeTruthy();
     expect(queryByText('Save')).toBeNull();
     expect(queryByText('Delete agent')).toBeNull();
+  });
+
+  it('reports a shared agent from its row', async () => {
+    const alert = jest.spyOn(Alert, 'alert');
+    const { findByLabelText, getByText, queryByLabelText } = render(<AgentsScreen />);
+    expect(queryByLabelText('Report or hide Planner')).toBeNull();
+
+    fireEvent.press(await findByLabelText('Report or hide Reviewer'));
+    pressAlertButton(alert, 'Report');
+
+    await waitFor(() => expect(getByText('Report this item')).toBeTruthy());
+  });
+
+  it('hides every agent from a sharer after confirmation', async () => {
+    const alert = jest.spyOn(Alert, 'alert');
+    const { findByLabelText, queryByText, getByText } = render(<AgentsScreen />);
+
+    fireEvent.press(await findByLabelText('Report or hide Reviewer'));
+    pressAlertButton(alert, 'Hide Ana');
+    expect(alert.mock.calls.at(-1)?.[0]).toBe('Hide Ana?');
+    pressAlertButton(alert, 'Hide');
+
+    await waitFor(() => expect(queryByText('Reviewer')).toBeNull());
+    expect(getByText('Planner')).toBeTruthy();
+    expect(JSON.parse(mockStorage.get('shared-with-you:hidden-sharers:v1:user-1') ?? '[]')).toEqual(
+      [{ id: 'user-ana', name: 'Ana' }],
+    );
+  });
+
+  it('offers Report and Hide on a shared agent and hides it once hidden', async () => {
+    mockParams.id = SHARED.id;
+    mockGetAgent.mockResolvedValue(SHARED);
+    const view = render(<AgentEditorScreen />);
+    expect(await view.findByLabelText('Report')).toBeTruthy();
+    expect(view.getByLabelText('Hide Ana')).toBeTruthy();
+
+    mockStorage.set('shared-with-you:hidden-sharers:v1:user-1', JSON.stringify(['user-ana']));
+    view.unmount();
+    const hidden = render(<AgentEditorScreen />);
+    expect(await hidden.findByText('You hid this sharer.')).toBeTruthy();
   });
 });

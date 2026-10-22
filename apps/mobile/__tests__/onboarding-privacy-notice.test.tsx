@@ -11,9 +11,13 @@ import {
   PRIVACY_POLICY_URL,
   INDIA_DPDP_NOTICE_URL,
 } from '@/src/features/onboarding/components/FirstRunDisclosureModal';
-import { composeFirstRunDisclosure } from '@agiworkforce/compliance';
+import {
+  SHORT_DISCLOSURE_DETAILS_LABEL,
+  SHORT_DISCLOSURE_SUMMARY,
+  composeShortFirstRunDisclosure,
+} from '@agiworkforce/compliance';
 
-const copy = composeFirstRunDisclosure({
+const copy = composeShortFirstRunDisclosure({
   surface: 'mobile',
   offersManagedCloud: false,
   thirdPartyAiProviders: [],
@@ -34,6 +38,14 @@ describe('onboarding first-run disclosure shows a privacy notice', () => {
     const { getByTestId } = renderModal();
     expect(getByTestId('disclosure-privacy-card')).toBeTruthy();
     expect(getByTestId('disclosure-accept-btn')).toBeTruthy();
+  });
+
+  it('leads with the one-sentence AI disclosure and keeps the legal text behind its label', () => {
+    const { getByText, queryByText } = renderModal();
+    expect(getByText(SHORT_DISCLOSURE_SUMMARY)).toBeTruthy();
+    expect(queryByText(/Responses can be inaccurate/)).toBeNull();
+    fireEvent.press(getByText(SHORT_DISCLOSURE_DETAILS_LABEL));
+    expect(getByText(copy.article50_1)).toBeTruthy();
   });
 
   it('names what the cloud path uploads, not just email and name', () => {

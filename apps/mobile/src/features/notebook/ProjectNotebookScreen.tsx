@@ -153,7 +153,7 @@ export function ProjectNotebookScreen() {
       <CloudFeatureGate
         title="Notebook"
         feature="Project notebooks"
-        description="Notebook outputs are made from a Cloud project's sources. Switching here does not send Local chats or files to the cloud."
+        description="Notebooks run in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}

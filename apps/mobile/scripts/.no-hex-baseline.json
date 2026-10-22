@@ -2955,12 +2955,6 @@
       "rule": "hex"
     },
     {
-      "file": "apps/mobile/src/features/model-picker/components/ProviderLogo.tsx",
-      "line": 60,
-      "literal": "#888888",
-      "rule": "hex"
-    },
-    {
       "file": "apps/mobile/src/features/model-picker/service.ts",
       "line": 150,
       "literal": "#14b8a6",

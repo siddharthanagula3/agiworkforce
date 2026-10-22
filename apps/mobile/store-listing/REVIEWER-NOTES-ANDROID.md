@@ -49,9 +49,8 @@ an AGI managed-cloud host while Local Mode is active.
 web search, and image generation (`lib/v1FeatureFlags.ts` → `cloudChat`,
 `webSearch`, `imageGen` are all `true`). Sign-in is Clerk's native `AuthView`
 sheet, not a browser (`app/(auth)/login.tsx` → `<AuthView mode="signInOrUp" />`).
-Cloud is a public alpha whose Free plan is open to anyone who signs in, with no
-invite code or waitlist. Paid upgrades are opening in stages and need an access
-code. Play purchases require registered products and an enabled server catalog.
+Its Free plan is open to anyone who signs in. Paid plans and credit top-ups are
+sold only through Google Play Billing.
 
 ## How to review it
 
@@ -60,8 +59,8 @@ local chat. On devices without the supported system model, a local model must
 be downloaded before offline inference.
 
 Cloud features require sign-in. Before submission, provide an active review
-account and any required upgrade access code in Play Console's secure App access
-instructions; do not put credentials in this repository. The Cloud entry path
+account (email and password, no one-time code) in Play Console's secure App
+access instructions; do not put credentials in this repository. The Cloud entry path
 includes age confirmation, and a signed-in account must accept the current
 Terms before Cloud unlocks. If Play products are included, the review account
 must be able to see and test those products through Google Play Billing.
@@ -70,6 +69,7 @@ must be able to see and test those products through Google Play Billing.
 
 Implemented in `src/features/auth/services/ageGate.ts` and
 `app/(public)/age-gate.tsx`.
+That screen first asks Play Age Signals for the age range (`expo-age-range`) and falls back to typed age if none is shared.
 
 **Where it fires.** The gate guards Cloud sign-in, not first launch. The moment a
 signed-out user heads for the auth group, `app/_layout.tsx` redirects to
@@ -291,11 +291,8 @@ four consumable credit top-ups; the product and base plan IDs are listed in
 How to buy during review:
 
 1. Sign in with the review account and open Settings → Billing.
-2. Paid upgrades are opening in stages. The review account must either have
-   upgrade access already or use the access code given in the Play Console
-   review notes, entered under **Have an upgrade access code?**. The code only
-   lets the account see and buy store products; it grants no paid entitlement.
-   An account without access sees **Join upgrade waitlist** instead.
+2. Every signed-in account can buy; there is no waitlist or access code in the
+   app. Credit top-ups need an active plan and are not sold in Japan.
 3. Plans appear with Play's own localized price for the configured base plan.
    The Play purchase sheet shows the exact charge.
 4. The app sends the purchase token to `/api/mobile/iap/verify`. Access is
@@ -328,9 +325,7 @@ Every purchase path is behind one server answer from the server owner
 appear, the screen shows **"Purchases are not available right now"** with one of
 these reasons: "Native purchases are not enabled for this deployment." when the
 flag is off, "Google Play products have not been registered for this build."
-when the flag is on but the Play product map is empty, or "Paid upgrades are
-opening in stages. This account needs upgrade access before plans and credits
-can be bought here." when the account has no upgrade access.
+when the flag is on but the Play product map is empty.
 
 A purchase made with a Play license-tester account is a test purchase and is
 not charged. The production service verifies it with Google Play and grants it
@@ -359,15 +354,16 @@ the signed-in account and plan.
 
 | #   | Control                                               | Opens                                                     | Call site                                                 | Who sees it                                                                                                                                                                                                             |
 | --- | ----------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:777`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
-| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:483`       | Team and Enterprise plans only.                                                                                                                                                                                         |
-| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:236`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For a Google Play-recorded subscription the same button opens Play's own subscription page.                             |
-| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:120` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
-| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:784`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
+| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:708`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
+| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:436`       | Team and Enterprise plans only.                                                                                                                                                                                         |
+| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:243`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For a Google Play-recorded subscription the same button opens Play's own subscription page.                             |
+| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:130` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
+| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:719`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
 | A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
-| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:438`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
-| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:545`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
-| A9  | **Add a member** (Settings → Workspace)               | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:134`                    | **Android only.** The browser branch is taken when `Platform.OS !== 'ios'` (`:132`); on iOS the same tap opens a native prompt instead.                                                                                 |
+| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:456`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
+| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:584`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
+
+Web billing links (A1 to A5) show only on the US App Store storefront and never on Android; elsewhere they are plain text, and purchase help opens in-app support.
 
 **B. Non-billing destinations.** The sign-in and account-creation flows open
 Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
@@ -407,7 +403,7 @@ asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
 `Linking.openURL` targets in the app.
 
 **E. Present in source but unreachable in this binary.** The Stripe
-billing-portal link (`src/features/settings/cloud-billing/index.tsx:273`), dead
+billing-portal link (`src/features/settings/cloud-billing/index.tsx:276`), dead
 behind `FEATURES.billing === false`.
 
 Users who subscribed to AGI on the web see their plan's features unlocked when

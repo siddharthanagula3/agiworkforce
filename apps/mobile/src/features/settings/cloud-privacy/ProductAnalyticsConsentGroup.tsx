@@ -99,9 +99,7 @@ export function ProductAnalyticsConsentGroup() {
           paddingHorizontal: 2,
         }}
       >
-        Product usage events from every AGI app, such as a stopped or regenerated response, recorded
-        against your account. Never your messages or files. The same choice applies on the web, and
-        a workspace administrator can turn it off for every member.
+        Usage events like a stopped response, never your messages or files.
       </Text>
       {error ? (
         <Text

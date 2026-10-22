@@ -34,7 +34,6 @@ import { LinkedBanks } from './LinkedBanks';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   connectConnector,
-  connectorListingIconUrl,
   deleteCustomConnector,
   disconnectConnector,
   fetchConnectorCapabilities,
@@ -110,7 +109,7 @@ function unavailableNotice(
   if (mode === 'desktop-and-cli') {
     return {
       title: 'Desktop and CLI',
-      body: `${name} runs on your computer, so connect it from AGI Workforce Desktop or the CLI.`,
+      body: `${name} runs on your computer, so connect it from AGI Desktop or AGI CLI.`,
     };
   }
   if (mode === 'needs-setup') {
@@ -584,7 +583,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
         if (!isActionCurrent(account) || !refreshed || refreshed.connection) return;
         Alert.alert(
           `${name} is not connected yet`,
-          'The authorization was not completed. If the browser asked you to sign in to AGI Cloud, finish signing in there and try again.',
+          'Finish signing in to AGI Cloud in the browser, then try again.',
         );
       } catch (connectError) {
         if (!isActionCurrent(account)) return;
@@ -1121,7 +1120,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
             </SettingsGroup>
           ) : null}
 
-          {connection.connectorId === BANK_ACCOUNTS_CONNECTOR_ID ? (
+          {FEATURES.bankLinking && connection.connectorId === BANK_ACCOUNTS_CONNECTOR_ID ? (
             <LinkedBanks onChanged={() => void load()} />
           ) : null}
 
@@ -1171,11 +1170,7 @@ export default function ConnectorDetailScreen({ connectorId }: { connectorId: st
       ) : listing ? (
         <>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 14 }}>
-            <ConnectorLogo
-              id={listing.id}
-              name={listing.name}
-              iconUrl={connectorListingIconUrl(listing)}
-            />
+            <ConnectorLogo />
             <View style={{ flex: 1, minWidth: 0 }}>
               <Text
                 style={{

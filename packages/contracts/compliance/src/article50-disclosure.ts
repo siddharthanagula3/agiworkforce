@@ -116,6 +116,21 @@ export function composeFirstRunDisclosure(inputs: DisclosureInputs): DisclosureC
   };
 }
 
+export const SHORT_DISCLOSURE_SUMMARY = 'You are chatting with an AI, and it can make mistakes.';
+export const SHORT_DISCLOSURE_DETAILS_LABEL = 'Why we show this';
+
+export interface ShortDisclosureCopy extends DisclosureCopy {
+  readonly detailsLabel: string;
+}
+
+export function composeShortFirstRunDisclosure(inputs: DisclosureInputs): ShortDisclosureCopy {
+  return {
+    ...composeFirstRunDisclosure(inputs),
+    summary: SHORT_DISCLOSURE_SUMMARY,
+    detailsLabel: SHORT_DISCLOSURE_DETAILS_LABEL,
+  };
+}
+
 export interface DisclosureLedger {
   read(): DisclosureRecord | null;
   write(record: DisclosureRecord): void;

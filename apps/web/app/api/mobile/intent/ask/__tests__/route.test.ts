@@ -19,7 +19,7 @@ vi.mock('@/lib/server/mobile-intent', () => {
     }
   }
   return {
-    MOBILE_INTENT_SIGN_IN_MESSAGE: 'Open AGI Workforce to sign in.',
+    MOBILE_INTENT_SIGN_IN_MESSAGE: 'Open AGI Mobile to sign in.',
     MobileIntentRefusal,
     answerMobileIntentAsk: (...args: unknown[]) => mockAnswer(...args),
   };
@@ -71,7 +71,7 @@ describe('POST /api/mobile/intent/ask', () => {
     const res = await POST(ask('agi_it_revoked', { prompt: 'Hello' }));
     expect(res.status).toBe(401);
     expect(await res.json()).toEqual({
-      error: { code: 'intent_token_invalid', message: 'Open AGI Workforce to sign in.' },
+      error: { code: 'intent_token_invalid', message: 'Open AGI Mobile to sign in.' },
     });
     expect(mockAnswer).not.toHaveBeenCalled();
   });

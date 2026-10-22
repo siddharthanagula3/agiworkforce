@@ -1,4 +1,10 @@
+const mockStorage = new Map<string, string>();
 jest.mock('@/lib/mmkv', () => ({
+  storage: {
+    getString: (key: string) => mockStorage.get(key),
+    set: (key: string, value: string) => mockStorage.set(key, value),
+    delete: (key: string) => mockStorage.delete(key),
+  },
   rehydrateWhenMmkvReady: jest.fn(),
   whenMmkvReady: jest.fn((cb: () => void) => cb()),
   mmkvStorage: {
@@ -112,7 +118,18 @@ function overview(): ProjectSharingOverview {
   };
 }
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockStorage.clear();
+});
+
+type AlertButton = { text: string; style?: string; onPress?: () => void };
+
+function pressAlertButton(alert: jest.SpyInstance, text: string) {
+  (alert.mock.calls.at(-1)?.[2] as AlertButton[])
+    .find((button) => button.text === text)
+    ?.onPress?.();
+}
 
 describe('projects shared with the member', () => {
   it('lists projects others shared with me that I can open, with my access', () => {
@@ -272,5 +289,108 @@ describe('projects shared with the member', () => {
       ),
     );
     expect(mockCreateConversation).not.toHaveBeenCalled();
+  });
+
+  it('reports a shared item with its id and sharer, without leaving the screen', async () => {
+    (api.get as jest.Mock).mockResolvedValue(overview());
+    (api.post as jest.Mock).mockResolvedValue({ success: true });
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Report or hide Brand book'));
+    pressAlertButton(alert, 'Report');
+    fireEvent.press(await screen.findByLabelText('Offensive or hateful'));
+    fireEvent.press(screen.getByLabelText('Save report'));
+
+    await waitFor(() =>
+      expect(api.post).toHaveBeenCalledWith(
+        '/api/mobile/content-report',
+        expect.objectContaining({
+          messageId: 'p-open',
+          category: 'offensive',
+          sharedItem: { kind: 'project', id: 'p-open', sharerId: OWNER },
+        }),
+      ),
+    );
+  });
+
+  it('hides everything from a sharer after confirmation, for this account only', async () => {
+    (api.get as jest.Mock).mockResolvedValue(overview());
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Report or hide Team Notion'));
+    pressAlertButton(alert, 'Hide Dana');
+    expect(alert).toHaveBeenLastCalledWith(
+      'Hide Dana?',
+      expect.any(String),
+      expect.any(Array),
+      expect.anything(),
+    );
+    pressAlertButton(alert, 'Hide');
+
+    expect(await screen.findByTestId('shared-with-you-empty')).toBeTruthy();
+    expect(screen.queryByText('Launch retro')).toBeNull();
+    expect(JSON.parse(mockStorage.get(`shared-with-you:hidden-sharers:v1:${ME}`) ?? '[]')).toEqual([
+      { id: OWNER, name: 'Dana' },
+    ]);
+
+    fireEvent.press(screen.getByLabelText('Unhide Dana'));
+    expect(await screen.findByText('Launch retro')).toBeTruthy();
+    expect(screen.queryByLabelText('Unhide Dana')).toBeNull();
+    expect(mockStorage.get(`shared-with-you:hidden-sharers:v1:${ME}`)).toBe('[]');
+  });
+
+  it('keeps the sharer visible when hiding is cancelled', async () => {
+    (api.get as jest.Mock).mockResolvedValue(overview());
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedWithYouScreen />);
+
+    fireEvent.press(await screen.findByLabelText('Report or hide Launch retro'));
+    pressAlertButton(alert, 'Hide Dana');
+    pressAlertButton(alert, 'Cancel');
+
+    expect(await screen.findByText('Launch retro')).toBeTruthy();
+    expect(mockStorage.size).toBe(0);
+  });
+
+  it('keeps hidden sharers off the Projects tab', async () => {
+    mockStorage.set(`shared-with-you:hidden-sharers:v1:${ME}`, JSON.stringify([OWNER]));
+    (api.get as jest.Mock).mockResolvedValue(overview());
+    render(<SharedWithYouSection />);
+
+    await waitFor(() => expect(api.get).toHaveBeenCalled());
+    await waitFor(() => expect(screen.queryByText('Roadmap')).toBeNull());
+    expect(screen.queryByText('Brand book')).toBeNull();
+  });
+
+  it('offers Report and Hide on a shared project, and shows it hidden after', async () => {
+    (managedCloudProjects.getProject as jest.Mock).mockResolvedValue({
+      id: 'p-open',
+      ownerUserId: OWNER,
+      name: 'Brand book',
+      instructions: '',
+      sharedAccess: 'read',
+      isOrgShared: true,
+      defaultPrivacyMode: 'managed',
+      defaultProviderMode: 'ManagedGateway',
+      allowedSurfaces: ['web'],
+      createdAt: '2026-10-01T00:00:00.000Z',
+      updatedAt: '2026-10-01T00:00:00.000Z',
+    });
+    (api.get as jest.Mock).mockImplementation(async (path: string) =>
+      path.includes('knowledge') ? { files: [] } : overview(),
+    );
+    const alert = jest.spyOn(Alert, 'alert');
+    render(<SharedProjectScreen projectId="p-open" />);
+
+    fireEvent.press(await screen.findByLabelText('Report'));
+    expect(await screen.findByText('Report this item')).toBeTruthy();
+    fireEvent.press(screen.getByTestId('report-cancel-btn'));
+    fireEvent.press(await screen.findByLabelText('Hide Dana'));
+    pressAlertButton(alert, 'Hide');
+
+    expect(await screen.findByTestId('shared-project-hidden')).toBeTruthy();
+    expect(useRouter().replace).toHaveBeenCalledWith('/(app)/(tabs)/projects');
   });
 });

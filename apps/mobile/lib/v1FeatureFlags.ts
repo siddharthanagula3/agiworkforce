@@ -25,6 +25,12 @@ export const FEATURES = {
 
   imageGen: true,
 
+  videoGen: false,
+
+  bankLinking: false,
+
+  pluginMarketplaceAdmin: false,
+
   codeExecution: true,
 } as const;
 

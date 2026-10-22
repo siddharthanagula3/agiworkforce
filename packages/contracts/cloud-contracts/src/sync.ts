@@ -78,8 +78,8 @@ export function syncProtocolRefusalMessage(
     ? `sync protocol ${decision.version}`
     : 'no sync protocol this server can read';
   return decision.compatibility === 'too_new'
-    ? `This version speaks ${spoken} and AGI Workforce ${subject} answers ${SYNC_PROTOCOL_VERSION}. Retry once the deployment catches up.`
-    : `This version speaks ${spoken}, and AGI Workforce ${subject} now needs ${SYNC_PROTOCOL_MIN_VERSION} or newer. Update to continue.`;
+    ? `This version speaks ${spoken} and AGI ${subject} answers ${SYNC_PROTOCOL_VERSION}. Retry once the deployment catches up.`
+    : `This version speaks ${spoken}, and AGI ${subject} now needs ${SYNC_PROTOCOL_MIN_VERSION} or newer. Update to continue.`;
 }
 
 function rejectDuplicateIds(

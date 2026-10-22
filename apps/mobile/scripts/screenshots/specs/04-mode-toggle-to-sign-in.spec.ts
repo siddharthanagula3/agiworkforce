@@ -20,7 +20,8 @@ describe('Mode toggle → cloud sign-in (public alpha)', () => {
       .withTimeout(10000);
   });
 
-  it('ModeToggle is visible in the chat header', async () => {
+  it('ModeToggle is visible in the sidebar', async () => {
+    await element(by.label('Open navigation drawer')).tap();
     await waitFor(element(by.id('chat.mode-toggle')))
       .toBeVisible()
       .withTimeout(10000);

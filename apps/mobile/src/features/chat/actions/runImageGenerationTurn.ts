@@ -225,7 +225,7 @@ export async function runImageGenerationTurn(
       ...(!persisted
         ? {
             persistenceWarning:
-              'This image is available for this session only because AGI Cloud media storage is not configured. Try again after storage is available to save it.',
+              'This image couldn’t be saved and is available for this session only.',
           }
         : {}),
       revisedPrompt: image?.revisedPrompt,

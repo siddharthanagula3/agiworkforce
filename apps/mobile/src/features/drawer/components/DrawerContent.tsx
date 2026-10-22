@@ -29,7 +29,7 @@ import {
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
-import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useNotificationCenter } from '@/services/notifications';
@@ -43,7 +43,8 @@ import {
   executionModeForConversation,
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
-import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
+import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
@@ -308,7 +309,8 @@ export function DrawerContent(props: DrawerContentComponentProps) {
 
   const localProjects = useProjectStore((s) => s.projects);
   const cloudProjects = useCloudProjectStore((s) => s.projects);
-  const appMode = useChatAppModeStore((s) => s.appMode);
+  const { appMode, cloudUnlocked, switchToLocal, switchToCloud } = useAppModeSwitch();
+  const subscriptionTier = useTierStore((s) => s.tier);
   const grantedCapabilities = useTierStore((s) => s.grantedCapabilities);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const clerkUserId = useAuthStore((s) => s.clerkUserId);
@@ -317,9 +319,12 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   const usageLoading = useCloudUsageStore((s) => s.loading);
   const usageError = useCloudUsageStore((s) => s.error);
   const refreshUsage = useCloudUsageStore((s) => s.refresh);
-  // Cloud-only, and only where the capability document grants AGI Work; the
-  // server still decides.
-  const showAgiWork = appMode === 'cloud' && grantedCapabilities.includes('canUseAgiWork');
+  // Cloud-only, and only where both the plan and the capability document grant
+  // AGI Work; the server still decides.
+  const showAgiWork =
+    appMode === 'cloud' &&
+    canUseBillingPlanCapability(subscriptionTier, 'agi_work') &&
+    grantedCapabilities.includes('canUseAgiWork');
 
   const { usesPersistentDrawer } = useTabletLayout();
   const drawerOpen = isDrawerOpen(props.state);
@@ -382,6 +387,16 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     closeDrawer();
     router.push({ pathname: '/(app)/(tabs)/chat' as const });
   }, [closeDrawer, router]);
+
+  const handleSelectMode = useCallback(
+    (mode: 'local' | 'cloud') => {
+      if (mode === appMode) return;
+      const switched = mode === 'cloud' ? switchToCloud() : switchToLocal();
+      closeDrawer();
+      if (switched) router.push({ pathname: '/(app)/(tabs)/chat' as const });
+    },
+    [appMode, closeDrawer, router, switchToCloud, switchToLocal],
+  );
 
   const handleOpenSearch = useCallback(() => {
     navigate('/(app)/search');
@@ -565,6 +580,15 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             label="Open profile"
             icon={UserCircle}
             onPress={() => navigate('/(app)/profile')}
+          />
+        </View>
+
+        <View style={{ marginBottom: 10 }}>
+          <ModeToggle
+            mode={appMode}
+            cloudUnlocked={cloudUnlocked}
+            onTapLocal={() => handleSelectMode('local')}
+            onTapCloud={() => handleSelectMode('cloud')}
           />
         </View>
 

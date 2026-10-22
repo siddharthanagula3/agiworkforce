@@ -52,6 +52,8 @@ import {
   type LocalVideoPlayer,
 } from '@/services/fileCreation';
 import { VideoPlayerModal } from '@/src/features/chat/components/VideoPlayerModal';
+import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
+import { reportAssetFor } from '@/services/contentReportAsset';
 import { API_URL } from '@/lib/constants';
 import {
   MAX_GRID_CONTENT_WIDTH,
@@ -98,6 +100,21 @@ function absoluteAssetUrl(uri: string): string {
   return /^https?:\/\//i.test(uri) ? uri : `${API_URL.replace(/\/+$/, '')}${uri}`;
 }
 
+function libraryReportTarget(asset: LibraryAsset & { kind: 'image' | 'video' }) {
+  return {
+    messageId: asset.id,
+    conversationId: asset.conversationId ?? `library:${asset.id}`,
+    contentExcerpt: asset.prompt ?? '',
+    asset: reportAssetFor(asset.kind, absoluteAssetUrl(asset.uri)),
+  };
+}
+
+function isGeneratedMedia(
+  asset: LibraryAsset,
+): asset is LibraryAsset & { kind: 'image' | 'video' } {
+  return (asset.kind === 'image' || asset.kind === 'video') && Boolean(asset.prompt || asset.model);
+}
+
 export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const c = useThemeColors();
   const insets = useSafeAreaInsets();
@@ -108,10 +125,14 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   const [query, setQuery] = useState('');
   const [search, setSearch] = useState('');
   const [previewImage, setPreviewImage] = useState<LibraryAsset | null>(null);
+  const [reportedAsset, setReportedAsset] = useState<
+    (LibraryAsset & { kind: 'image' | 'video' }) | null
+  >(null);
   const previewImageScopeRef = useRef<AccountScopedUiState | null>(null);
   const [videoPlayer, setVideoPlayer] = useState<{
     player: LocalVideoPlayer;
     label: string;
+    reportTarget?: ReturnType<typeof libraryReportTarget>;
   } | null>(null);
   const videoLoadingRef = useRef(false);
   const selectionScopeRef = useRef<AccountScopedUiState | null>(null);
@@ -322,7 +343,11 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
       videoLoadingRef.current = true;
       try {
         const player = await prepareLocalVideoPlayer(absoluteAssetUrl(asset.uri), c.black);
-        setVideoPlayer({ player, label: asset.prompt ? `Video: ${asset.prompt}` : asset.fileName });
+        setVideoPlayer({
+          player,
+          label: asset.prompt ? `Video: ${asset.prompt}` : asset.fileName,
+          reportTarget: isGeneratedMedia(asset) ? libraryReportTarget(asset) : undefined,
+        });
       } catch {
         Alert.alert('Could not play the video', 'Check your connection and try again.');
       } finally {
@@ -440,6 +465,9 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           ? [{ text: 'Remix', onPress: () => handleRemix(asset) }]
           : []),
         { text: 'Share', onPress: () => void handleShareAsset(asset) },
+        ...(isGeneratedMedia(asset)
+          ? [{ text: 'Report', onPress: () => setReportedAsset(asset) }]
+          : []),
         { text: 'Delete', style: 'destructive', onPress: () => handleDeleteAsset(asset) },
         { text: 'Cancel', style: 'cancel' },
       ]);
@@ -840,6 +868,11 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         onClose={handleCloseImage}
         onEditArea={appMode === 'cloud' && FEATURES.imageGen ? handleEditPreviewArea : undefined}
         onDelete={appMode === 'cloud' ? handleDeletePreview : undefined}
+        reportTarget={
+          previewImage && isGeneratedMedia(previewImage)
+            ? libraryReportTarget(previewImage)
+            : undefined
+        }
         deleteMessage={
           previewImage?.conversationId
             ? 'Deleting this image also deletes the chat it was made in, with all of its messages.'
@@ -847,11 +880,20 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         }
       />
 
+      {reportedAsset ? (
+        <ReportSheet
+          visible
+          onClose={() => setReportedAsset(null)}
+          target={libraryReportTarget(reportedAsset)}
+        />
+      ) : null}
+
       <VideoPlayerModal
         player={videoPlayer?.player ?? null}
         visible={videoPlayer !== null}
         onClose={handleCloseVideo}
         label={videoPlayer?.label ?? 'Video'}
+        reportTarget={videoPlayer?.reportTarget}
         failureHint="Long-press the video and choose Share to open it in another app."
       />
     </SafeAreaView>

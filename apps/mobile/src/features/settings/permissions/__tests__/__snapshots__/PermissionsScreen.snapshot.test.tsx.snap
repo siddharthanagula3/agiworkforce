@@ -288,7 +288,7 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
             }
           }
         >
-          This screen shows what your device currently reports. AGI cannot change a device permission on your behalf.
+          AGI can’t change device permissions for you.
         </Text>
       </View>
     </View>
@@ -1253,7 +1253,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
             }
           }
         >
-          Permissions are managed by your device. Changing a permission may open Settings. AGI asks only when a feature you started needs one: the microphone for voice, the camera and photos for what you attach, notifications for a reply that arrives after you leave. Nothing is read in the background, and denying one disables that feature rather than the app.
+          AGI asks only when a feature you started needs one, like the microphone for voice, and nothing is read in the background.
         </Text>
         <View
           accessibilityLabel="Get help with permissions, opens the help centre"

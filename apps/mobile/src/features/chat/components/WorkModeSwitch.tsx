@@ -1,6 +1,5 @@
 import { View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
-import { useRouter } from 'expo-router';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
@@ -9,12 +8,11 @@ import { useThemeColors } from '@/src/ui/theme';
 
 export function WorkModeSwitch() {
   const colors = useThemeColors();
-  const router = useRouter();
   const workMode = useChatStore((s) => s.workMode);
   const setWorkMode = useChatStore((s) => s.setWorkMode);
   const subscriptionTier = useTierStore((s) => s.tier);
-  const entitled = canUseBillingPlanCapability(subscriptionTier, 'agi_work');
-  const activeMode = entitled ? workMode : 'chat';
+
+  if (!canUseBillingPlanCapability(subscriptionTier, 'agi_work')) return null;
 
   return (
     <View
@@ -29,10 +27,11 @@ export function WorkModeSwitch() {
       }}
     >
       {(['chat', 'agiwork'] as const).map((mode) => {
-        const selected = mode === activeMode;
+        const selected = mode === workMode;
         return (
           <PressableBox
             key={mode}
+            testID={`chat.work-mode.${mode}`}
             accessibilityRole="tab"
             accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
             accessibilityHint={
@@ -41,13 +40,7 @@ export function WorkModeSwitch() {
                 : 'Your next messages get a direct answer'
             }
             accessibilityState={{ selected }}
-            onPress={() => {
-              if (mode === 'agiwork' && !entitled) {
-                router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
-                return;
-              }
-              setWorkMode(mode);
-            }}
+            onPress={() => setWorkMode(mode)}
             style={{
               minWidth: 72,
               minHeight: 44,

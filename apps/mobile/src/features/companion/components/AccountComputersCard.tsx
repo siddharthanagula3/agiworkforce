@@ -105,8 +105,8 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
           )
         ) : computers.length === 0 ? (
           <Text className="text-xs text-white/50">
-            No computer is signed in to this account yet. Install AGI Workforce on a computer and
-            sign in there.
+            No computer is signed in to this account yet. Install AGI Desktop on a computer and sign
+            in there.
           </Text>
         ) : (
           <View className="gap-1">

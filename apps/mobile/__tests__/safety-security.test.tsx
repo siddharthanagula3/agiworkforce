@@ -55,7 +55,6 @@ jest.mock('lucide-react-native', () => {
     Fingerprint: icon,
     Shield: icon,
     Smartphone: icon,
-    UserRound: icon,
   };
 });
 
@@ -132,15 +131,10 @@ describe('Safety & Security settings', () => {
     expect(getByRole('switch', { name: 'App Lock. Off' })).toBeTruthy();
   });
 
-  it('states that no trusted contact or automatic notification is configured', () => {
-    const { getByText } = render(<SafetySecurityScreen />);
+  it('does not name a trusted-contact feature the app does not offer', () => {
+    const { queryByText } = render(<SafetySecurityScreen />);
 
-    expect(getByText('Trusted contact · Not configured')).toBeTruthy();
-    expect(
-      getByText(
-        'AGI does not monitor chats to automatically notify another person. No trusted contact is enrolled, and no contact receives conversation content or safety alerts.',
-      ),
-    ).toBeTruthy();
+    expect(queryByText(/Trusted contact/)).toBeNull();
   });
 
   it('lets an adult enable stricter content filtering', () => {

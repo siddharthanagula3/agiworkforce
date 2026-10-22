@@ -256,6 +256,49 @@ describe('POST /api/mobile/iap/verify', () => {
     expect(h.execute).not.toHaveBeenCalled();
   });
 
+  it.each([['android' as const], ['ios' as const]])(
+    'adds no credits for a %s top-up bought in Japan and files its refund request',
+    async (platform) => {
+      const h = harness({});
+      mockVerifyStorePurchase.mockResolvedValue({
+        ...verifiedTopUp(),
+        platform,
+        purchaseCountry: 'JP',
+      });
+
+      const response = await POST(
+        request({ platform: 'android', productId: PRODUCT_ID, purchaseToken: PURCHASE_TOKEN }),
+      );
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { message: expect.stringMatching(/aren't sold in this store country/i) },
+      });
+      expect(h.execute).not.toHaveBeenCalledWith(
+        expect.stringContaining('add_credits_microusd'),
+        expect.anything(),
+      );
+      expect(
+        h.execute.mock.calls.filter((call: unknown[]) =>
+          String(call[0]).includes('insert into public.billing_refund_requests'),
+        ),
+      ).toHaveLength(1);
+      expect(mockAcknowledge).not.toHaveBeenCalled();
+    },
+  );
+
+  it('credits a top-up bought outside Japan', async () => {
+    harness({});
+    mockVerifyStorePurchase.mockResolvedValue({ ...verifiedTopUp(), purchaseCountry: 'US' });
+
+    const response = await POST(
+      request({ platform: 'android', productId: PRODUCT_ID, purchaseToken: PURCHASE_TOKEN }),
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ status: 'granted', unitsGranted: 500 });
+  });
+
   it('refuses a store subscription while the same account is entitled on the web', async () => {
     const h = harness({
       subscription: { stripe_subscription_id: 'sub_live123', status: 'active' },

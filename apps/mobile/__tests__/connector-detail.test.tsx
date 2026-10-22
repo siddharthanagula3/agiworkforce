@@ -92,7 +92,6 @@ jest.mock('@/src/features/auth/services/cloudAccountSession', () => ({
 
 jest.mock('@/services/connectors', () => ({
   connectConnector: jest.fn(),
-  connectorListingIconUrl: jest.fn(() => null),
   fetchConnectorCalls: jest.fn(async () => []),
   deleteCustomConnector: (...args: unknown[]) => mockDeleteCustom(...args),
   disconnectConnector: (...args: unknown[]) => mockDisconnect(...args),

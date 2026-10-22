@@ -20,25 +20,24 @@ const PRIVACY_ITEMS = [
   {
     key: 'no-training',
     label: 'Model training',
-    body: 'AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats below.',
+    body: 'AGI doesn’t train its own models on your chats; Free-plan providers may unless you opt out below.',
   },
   {
     key: 'telemetry',
     label: 'Telemetry off by default',
-    body: 'Product analytics stay off until you allow them below, and even then carry only event names such as a stopped response, never your messages. No third-party analytics or crash-reporting SDK (such as Sentry or PostHog) is bundled in the app; diagnostics leave the device only when you share them.',
+    body: 'Product analytics stay off until you allow them and never include your messages.',
   },
   {
     key: 'retention',
     label: 'Data retention',
-    body: 'A chat stays in your history until you delete it, and a deleted chat stays in Recently deleted for 30 days, then is deleted for good. A temporary chat and its attachments are removed after 30 days. When you delete your account, erasure starts 24 hours after you confirm, and you can cancel until then.',
+    body: 'Deleted and temporary chats are erased for good after 30 days.',
   },
 ] as const;
 
 const PROCESSING_LOCATIONS = [
   {
     feature: 'Chat in Local Mode',
-    where:
-      'On this device. Chat text reaches AGI Cloud only if you sync local chats yourself, and attached files never do.',
+    where: 'On this device, unless you sync your chats to AGI Cloud.',
   },
   {
     feature: 'Chat in AGI Cloud',
@@ -58,8 +57,7 @@ const PROCESSING_LOCATIONS = [
   },
   {
     feature: 'Image and video generation',
-    where:
-      'AGI Cloud sends your prompt to Google, OpenAI or Stability for images, and to Runway, Google or OpenRouter for video.',
+    where: 'Your prompt goes to the provider of the image or video model.',
   },
   {
     feature: 'Dictation',
@@ -83,7 +81,7 @@ export default function CloudPrivacyScreen() {
     <SettingsScreenShell title="Privacy">
       <SettingsInfo
         title="Cloud privacy controls"
-        body="Local conversations never leave your device unless you trigger a manual sync. Cloud sessions are governed by the AGI privacy policy."
+        body="Local chats stay on this device unless you sync them."
         icon={Shield}
       />
 
@@ -176,8 +174,7 @@ export default function CloudPrivacyScreen() {
             paddingHorizontal: 2,
           }}
         >
-          AGI Cloud runs in the United States. The full list of providers, and what each one
-          receives, is at agiworkforce.com/subprocessors.
+          AGI Cloud runs in the US; every provider is listed at agiworkforce.com/subprocessors.
         </Text>
       </View>
 

@@ -36,7 +36,7 @@ export const MOBILE_DESTINATIONS: readonly MobileDestination[] = [
   { route: '/(app)/tasks', title: 'Tasks', section: 'Go to', keywords: ['work', 'runs'] },
   {
     route: '/(app)/cloud-code',
-    title: 'Cloud code sessions',
+    title: 'AGI Code sessions',
     section: 'Go to',
     keywords: ['code', 'repository', 'agi code'],
   },

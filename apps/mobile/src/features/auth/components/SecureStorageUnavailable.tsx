@@ -21,8 +21,7 @@ export function SecureStorageUnavailable({ onRetry }: { onRetry: () => void }) {
         Secure storage unavailable
       </Text>
       <Text style={[styles.body, { color: colors.textMuted }]}>
-        AGI Workforce keeps your chats encrypted on this device and cannot open that store right
-        now. Nothing has been deleted. Unlock this device and try again.
+        Nothing has been deleted; unlock this device and try again.
       </Text>
       <Pressable
         testID="secure-storage-retry"

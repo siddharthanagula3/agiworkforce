@@ -165,6 +165,63 @@ describe('POST /api/mobile/content-report', () => {
     expect(mockNeonQuery).not.toHaveBeenCalled();
   });
 
+  it('records the image or video asset a report is about', async () => {
+    const res = await POST(
+      makeRequest({
+        ...validBody,
+        contentExcerpt: '',
+        asset: { kind: 'image', url: 'https://cdn.example.com/generated/img-1.png' },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const params = mockNeonQuery.mock.calls[0]?.[1] as unknown[];
+    expect(JSON.parse(params[7] as string)).toEqual({
+      source: 'mobile',
+      category: 'harmful',
+      asset: { kind: 'image', url: 'https://cdn.example.com/generated/img-1.png' },
+    });
+  });
+
+  it('records the shared item and the sharer for a report on shared content', async () => {
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
+
+    const res = await POST(
+      makeRequest({
+        ...validBody,
+        messageId: 'project-9',
+        conversationId: 'shared:project',
+        sharedItem: { kind: 'project', id: 'project-9', sharerId: 'user-2' },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    const params = mockNeonQuery.mock.calls[0]?.[1] as unknown[];
+    expect(params.slice(0, 4)).toEqual([
+      'user-1',
+      validBody.reportId,
+      'project-9',
+      'shared:project',
+    ]);
+    expect(JSON.parse(params[7] as string)).toEqual({
+      source: 'mobile',
+      category: 'harmful',
+      sharedItem: { kind: 'project', id: 'project-9', sharerId: 'user-2' },
+    });
+  });
+
+  it.each([
+    [{ asset: { kind: 'audio', url: 'https://x' } }],
+    [{ asset: { kind: 'image', url: '' } }],
+    [{ sharedItem: { kind: 'project', id: 'p' } }],
+    [{ sharedItem: { kind: 'project', id: 'p', sharerId: 'u', extra: true } }],
+  ])('400s on a malformed asset or shared item: %o', async (extra) => {
+    const res = await POST(makeRequest({ ...validBody, ...extra }));
+
+    expect(res.status).toBe(400);
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
   it('400s on a user note over 2000 characters', async () => {
     mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
 

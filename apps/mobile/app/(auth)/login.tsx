@@ -12,10 +12,8 @@ import { openExternalUrl } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { CLERK_NATIVE_AUTH_OPTIONS } from '@/src/integrations/clerk';
 import {
-  FREE_PLAN_TRAINING_DATA_DISCLOSURE,
-  FREE_PLAN_TRAINING_NOTICE_LEAD,
-  FREE_PLAN_TRAINING_NOTICE_TAIL,
-  FREE_PLAN_TRAINING_NOTICE_TITLE,
+  FREE_PLAN_TRAINING_SIGNUP_NOTICE,
+  FREE_PLAN_TRAINING_SIGNUP_NOTICE_LINK_LABEL,
 } from '@agiworkforce/compliance';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -317,29 +315,22 @@ export default function LoginScreen() {
           style={{ paddingHorizontal: 24, paddingTop: 6, alignItems: 'center', gap: 4 }}
         >
           <Text
-            style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
-          >
-            {FREE_PLAN_TRAINING_NOTICE_TITLE}
-          </Text>
-          <Text
             style={{
               color: colors.textSecondary,
-              fontSize: typeScale.caption,
-              lineHeight: 18,
+              fontSize: typeScale.footnote,
+              lineHeight: 20,
               textAlign: 'center',
             }}
           >
-            {FREE_PLAN_TRAINING_NOTICE_LEAD} {FREE_PLAN_TRAINING_DATA_DISCLOSURE}{' '}
-            {FREE_PLAN_TRAINING_NOTICE_TAIL}
+            {FREE_PLAN_TRAINING_SIGNUP_NOTICE}
           </Text>
           <Pressable
             accessibilityRole="link"
-            accessibilityLabel="Read how Free model providers may use your data"
             onPress={() => void openExternalUrl(new URL('/data-use', API_URL).toString())}
             style={{ minHeight: 44, justifyContent: 'center' }}
           >
-            <Text style={{ color: colors.teal, fontSize: typeScale.caption, fontWeight: '600' }}>
-              How Free model data is used
+            <Text style={{ color: colors.teal, fontSize: typeScale.footnote, fontWeight: '600' }}>
+              {FREE_PLAN_TRAINING_SIGNUP_NOTICE_LINK_LABEL}
             </Text>
           </Pressable>
         </View>

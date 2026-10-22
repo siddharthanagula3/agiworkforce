@@ -15,7 +15,8 @@ describe('Storage scope notice', () => {
 
     expect(screen.getByLabelText('AGI Cloud storage. Not metered')).toBeTruthy();
     expect(screen.getByText('Not metered')).toBeTruthy();
-    expect(screen.getByText(/does not currently publish a file-storage byte quota/)).toBeTruthy();
-    expect(screen.getByText(/only downloaded models and cache stored on this device/)).toBeTruthy();
+    expect(
+      screen.getByText('Totals cover only downloaded models and cache on this device.'),
+    ).toBeTruthy();
   });
 });

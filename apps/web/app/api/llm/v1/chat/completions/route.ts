@@ -38,6 +38,7 @@ import {
   buildSpendLimitGateResponse,
 } from '@/lib/managed-compute-gate';
 import { resolveAuthenticatedSurface } from './lib/request-surface';
+import { connectorUnavailableOnSurface } from '@/lib/connectors/plaid-config';
 import { runAuthGate, type AuthGateSuccess } from './lib/auth-gate';
 import { withManagedTurnSlot } from './lib/turn-slot';
 import { processRequest, type ProcessedRequest } from './lib/request-processor';
@@ -815,7 +816,9 @@ async function dispatchChatCompletions(
               planTier: processed.subscriptionTier,
               organizationId: processed.organizationId,
               isToolDenied: turnConnectorPermissions.isConnectorToolDenied,
-              isConnectorDenied: turnConnectorPermissions.isConnectorDenied,
+              isConnectorDenied: (connectorId) =>
+                turnConnectorPermissions.isConnectorDenied(connectorId) ||
+                connectorUnavailableOnSurface(connectorId, processed.chatSurface),
               ...(processed.healthSpaceProjectId ? { healthSpace: true } : {}),
               googleUserDataRouted: processed.googleUserData === true,
             }),

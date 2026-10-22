@@ -200,7 +200,7 @@ describe('PermissionsScreen, index', () => {
     const { getByText } = render(<PermissionsScreen />);
     expect(getByText(/AGI asks only when a feature you started needs one/)).toBeTruthy();
     expect(getByText(/microphone for voice/)).toBeTruthy();
-    expect(getByText(/Nothing is read in the background/)).toBeTruthy();
+    expect(getByText(/nothing is read in the background/)).toBeTruthy();
   });
 
   it('offers help without leaving the reader to search for it', () => {

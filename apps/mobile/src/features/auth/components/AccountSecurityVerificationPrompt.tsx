@@ -26,7 +26,7 @@ export function AccountSecurityVerificationPrompt() {
         open.current = true;
         Alert.alert(
           "Verify it's you",
-          'Advanced Account Security is on for this account. Continue in your browser with one of your passkeys or security keys.',
+          'Continue in your browser with a passkey or security key.',
           [
             {
               text: 'Not now',

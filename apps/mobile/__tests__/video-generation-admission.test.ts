@@ -8,6 +8,10 @@ import {
   MANAGED_MEDIA_VIDEO_RESOLUTIONS,
 } from '@agiworkforce/cloud-contracts';
 import { resolveMobileVideoGenerationRequest } from '@/src/features/chat/actions/resolveMobileVideoGenerationRequest';
+import { FEATURES } from '@/lib/v1FeatureFlags';
+
+const features = FEATURES as { videoGen: boolean };
+features.videoGen = true;
 
 const ENTITLED = {
   executionMode: 'cloud' as const,
@@ -289,5 +293,33 @@ describe('resolveMobileVideoGenerationRequest, output shape follows the routed m
     if (decision.status !== 'ready') return;
     expect(decision.aspectRatio).toBe(publishedAspects[0]);
     expect(decision.resolution).toBe(publishedQualities[publishedQualities.length - 1]);
+  });
+});
+
+describe('resolveMobileVideoGenerationRequest, store build without video generation', () => {
+  beforeEach(() => {
+    features.videoGen = false;
+  });
+
+  afterEach(() => {
+    features.videoGen = true;
+  });
+
+  it.each([
+    ['video mode', { mediaMode: 'video' as const, text: 'a cat surfing' }],
+    ['the /video command', { mediaMode: 'text' as const, text: '/video a cat surfing' }],
+    [
+      'a typed video request',
+      { mediaMode: 'text' as const, text: 'make a video of a cat surfing' },
+    ],
+  ])('never starts video generation from %s', (_label, request) => {
+    expect(
+      resolveMobileVideoGenerationRequest({
+        ...ENTITLED,
+        aspectRatio: '16:9',
+        resolution: '720p',
+        ...request,
+      }),
+    ).toEqual({ status: 'not_requested' });
   });
 });

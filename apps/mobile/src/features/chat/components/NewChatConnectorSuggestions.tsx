@@ -8,7 +8,6 @@ import { Text } from '@/components/ui/text';
 import { storage } from '@/lib/mmkv';
 import {
   browseConnectorListings,
-  connectorListingIconUrl,
   fetchConnectorDirectory,
   type ConnectorListing,
 } from '@/services/connectors';
@@ -102,12 +101,7 @@ export function NewChatConnectorSuggestions() {
           accessibilityLabel={t('newChat.connectors.open', { name: listing.name })}
           style={chipStyle}
         >
-          <ConnectorLogo
-            id={listing.id}
-            name={listing.name}
-            iconUrl={connectorListingIconUrl(listing)}
-            size={24}
-          />
+          <ConnectorLogo size={24} />
           <Text style={{ color: colors.textSecondary, fontSize: typeScale.subhead }}>
             {listing.name}
           </Text>

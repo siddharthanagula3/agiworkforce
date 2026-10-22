@@ -45,7 +45,7 @@ export default function AutoApproveScreen() {
     >
       <SettingsInfo
         title="Review before AGI acts"
-        body="Local chat stays private. Approvals only apply when a workflow can use tools, files, connected services, or paired desktop sessions."
+        body="Approvals apply only when a workflow uses tools, files, services or a paired desktop."
         icon={SlidersHorizontal}
       />
 
@@ -94,9 +94,7 @@ export default function AutoApproveScreen() {
             marginTop: 4,
           }}
         >
-          {error
-            ? error
-            : `Current setting: ${selectedLabel}. AGI should never perform destructive, external, or expensive actions without a clear review step.`}
+          {error ? error : `Current setting: ${selectedLabel}.`}
         </Text>
       </View>
 

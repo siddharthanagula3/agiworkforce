@@ -29,10 +29,8 @@ SQLCipher; the key lives in the iOS Keychain.
 **AGI Cloud (optional, requires sign-in).** Signing in with an AGI account
 enables server-side chat, web search, and, on paid plans, image generation.
 Requests go to `https://agiworkforce.com` and `https://api.agiworkforce.com`.
-Cloud is in public alpha and its Free plan is open to anyone who signs in, with
-no invite code or waitlist. Paid plans and credit top-ups are sold through
-in-app purchase. Paid upgrades are opening in stages, so the review account has
-upgrade access or an access code; see "Purchases: please read" below.
+Its Free plan is open to anyone who signs in. Paid plans and credit top-ups are
+sold only through in-app purchase; see "Purchases: please read" below.
 
 The two modes never mix silently. Local chats are not uploaded, and switching a
 conversation to Cloud is an explicit user action.
@@ -40,10 +38,11 @@ conversation to Cloud is an explicit user action.
 ## How to review it
 
 Before submission, provide Apple an active AGI Cloud review account through
-App Store Connect's secure demo-account fields. Do not put its credentials in
-this repository. The account must remain accessible throughout review and
+App Store Connect's secure demo-account fields (email and password; sign-in
+needs no one-time code). Do not put its credentials in this repository. The account must remain accessible throughout review and
 must be able to exercise Cloud chat and web search. The Cloud entry path asks
 for age confirmation before sign-in.
+That screen first asks iOS for the age range through Declared Age Range (`expo-age-range`) and falls back to typed age if none is shared.
 
 1. **Local Mode requires no account at all.** Launch the app, tap through
    onboarding, and chat. This exercises the core product. On supported devices, onboarding uses the built-in system model without a
@@ -74,7 +73,7 @@ a Settings → Permissions screen that shows current status for each.
 | Photo Library (`NSPhotoLibraryUsageDescription`)           | Choosing an existing image to attach to a chat.                                                                                                                                                                                                                                              |
 | Face ID (`NSFaceIDUsageDescription`)                       | Optional app lock, opt-in from Settings → Safety & Security (`src/features/auth/hooks/useBiometricGate.ts`). Off by default.                                                                                                                                                                 |
 | Calendar / Reminders                                       | Same optional device-context connector, for "what's on my calendar" style questions. Off by default.                                                                                                                                                                                         |
-| Translation (`NSTranslationUsageDescription`)              | On-device translation through Apple's Translation framework (`native/ios/AGITranslate.swift`). No text is sent to a server.                                                                                                                                                                  |
+| Translation (no permission prompt)                         | On-device translation through Apple's Translation framework (`native/ios/AGITranslate.swift`). No text is sent to a server.                                                                                                                                                                  |
 | Notifications                                              | Optional; used for background task and cloud job completion alerts.                                                                                                                                                                                                                          |
 
 The app does **not** link `expo-location` and requests no location permission.
@@ -100,12 +99,8 @@ How to buy during review:
 
 1. Sign in with the review account supplied in App Store Connect and open
    Settings → Billing.
-2. Paid upgrades are opening in stages. The review account must either have
-   upgrade access already, or use the access code given in the App Store
-   Connect review notes: enter it under **Have an upgrade access code?** and tap
-   **Unlock upgrades**. The code only lets the account see and buy store
-   products; it grants no paid entitlement. An account without access sees
-   **Join upgrade waitlist** instead of products.
+2. Every signed-in account can buy; there is no waitlist or access code in the
+   app. Credit top-ups need an active plan and are not sold in Japan.
 3. The plans appear with the App Store's own localized prices. Tap one; the
    StoreKit sheet shows the exact charge. The app never shows a price of its
    own.
@@ -152,9 +147,6 @@ one of these reasons, quoted exactly:
   flag is off.
 - **"App Store products have not been registered for this build."** The flag is
   on but no product is mapped.
-- **"Paid upgrades are opening in stages. This account needs upgrade access
-  before plans and credits can be bought here."** The account has no upgrade
-  access; see step 2.
 
 Purchases made during review are App Store sandbox purchases and are not
 charged. The production service verifies a sandbox-signed transaction with
@@ -185,14 +177,16 @@ availability depends on the signed-in account and plan.
 
 | #   | Control                                               | Opens                                                     | Call site                                                 | Who sees it                                                                                                                                                                                                             |
 | --- | ----------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:777`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
-| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:483`       | Team and Enterprise plans only.                                                                                                                                                                                         |
-| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:236`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For an Apple- or Google-recorded subscription the same button opens that store's own subscription page instead.         |
-| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:120` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
-| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:784`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
+| A1  | **View invoices** (Settings → Billing)                | `agiworkforce.com/billing`                                | `src/features/settings/cloud-billing/index.tsx:708`       | Only accounts whose plan is billed on our website. Free and store-billed accounts get no invoice row.                                                                                                                   |
+| A2  | **Workspace administration** (Settings → Billing)     | `agiworkforce.com/settings/team`                          | `src/features/settings/cloud-billing/index.tsx:436`       | Team and Enterprise plans only.                                                                                                                                                                                         |
+| A3  | **Manage on web** (subscription-owner alert)          | `agiworkforce.com/settings/billing`                       | `src/features/settings/cloud-billing/index.tsx:243`       | Accounts whose subscription is recorded as bought on our website or provisioned by an employer. For an Apple- or Google-recorded subscription the same button opens that store's own subscription page instead.         |
+| A4  | **Contact Sales** (chat paywall sheet)                | `agiworkforce.com/contact-sales?plan=…`                   | `src/features/chat/components/PaywallBottomSheet.tsx:130` | Only when the gated feature needs Team or Enterprise. Not reachable from the Billing screen: `getNextUpgradeTier` returns only self-serve individual tiers (`packages/contracts/types/src/billing-catalog.ts:362-375`). |
+| A5  | **Help with a purchase** (Settings → Billing)         | `agiworkforce.com/help?q=purchase+billing+credits+refund` | `src/features/settings/cloud-billing/index.tsx:719`       | Any signed-in Cloud account; this opens support guidance for charges, missing credits and refunds.                                                                                                                      |
 | A6  | **Continue** on the "Change your email" alert         | `agiworkforce.com/settings/account`                       | `src/features/settings/cloud-account/index.tsx:98`        | Any signed-in Cloud account. Email change is not implemented in-app; the alert says so before it opens anything.                                                                                                        |
-| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:438`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
-| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:545`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
+| A7  | **Create on web** (Settings → Workspace, empty state) | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:456`                    | An account with **no workspace at all**, not only Team admins.                                                                                                                                                          |
+| A8  | **Rename or delete this workspace on the web**        | `agiworkforce.com/settings/team`                          | `app/(app)/settings/workspace.tsx:584`                    | Any account that has a workspace loaded.                                                                                                                                                                                |
+
+Web billing links (A1 to A5) show only on the US App Store storefront and never on Android; elsewhere they are plain text, and purchase help opens in-app support.
 
 **B. Non-billing destinations.** The sign-in and account-creation flows open
 Terms, Privacy, data-use and acceptable-use pages on `agiworkforce.com`; the
@@ -231,13 +225,9 @@ asks before linking it (`app/(app)/github/installed.tsx`). The legal screen
 `support@agiworkforce.com`, and the iOS/Android device-settings intents, are the
 only other `Linking.openURL` targets in the app.
 
-**E. Present in source but not reachable in this iOS binary.** Two, named so you
-do not read them as omissions: the Stripe billing-portal link
-(`src/features/settings/cloud-billing/index.tsx:273`), dead behind
-`FEATURES.billing === false`; and **Add a member** in Settings → Workspace
-(`app/(app)/settings/workspace.tsx:134`), which takes the browser branch only
-when `Platform.OS !== 'ios'` (`:132`), on iOS the same tap opens a native
-`Alert.prompt` instead.
+**E. Present in source but unreachable in this binary.** The Stripe
+billing-portal link (`src/features/settings/cloud-billing/index.tsx:276`), dead
+behind `FEATURES.billing === false`.
 
 Users who subscribed to AGI on the web see their plan's features unlocked when
 they sign in here (multiplatform service). The app never advertises, prices, or

@@ -43,6 +43,7 @@ async function loadStreamingService() {
     getAuthToken: getAuthTokenMock,
   }));
   jest.doMock('../services/llmGate', () => ({
+    ensureCloudSendConsent: jest.fn().mockResolvedValue(undefined),
     ensureLlmGateOpen: jest.fn(),
   }));
   jest.doMock('../services/remoteChatGate', () => ({

@@ -11,6 +11,9 @@
  *      trust-and-safety queue (MOBILE-CONTENT-REPORT-NO-INTAKE-ENDPOINT-01).
  *   3. Optionally hands the report to the device mail client, addressed to
  *      support, when the user asks for that explicitly.
+ *   4. When the first send fails (offline, Local Mode), asks the user before
+ *      sending that one report, then queues it until a send succeeds. Only that
+ *      consented send may pass the Local Mode egress guard (`consentedReport`).
  *
  * The on-device copy is now an OFFLINE fallback, not the only sink. Reporting
  * still has to work in Local Mode, where the egress guard refuses our-cloud
@@ -27,13 +30,24 @@
  * MMKV key: "content-reports:v1" → JSON array of ContentReport
  */
 
+import NetInfo from '@react-native-community/netinfo';
 import { Linking } from 'react-native';
 import { storage } from '@/lib/mmkv';
+import { CONTENT_REPORT_PATH } from '@/lib/egressGuard';
 import { api } from '@/services/api';
+import type { ReportAsset } from '@/services/contentReportAsset';
 import { SUPPORT_EMAIL } from '@/src/features/support/contact';
 
 export type ReportCategory =
   'harmful' | 'inaccurate' | 'offensive' | 'misinformation' | 'privacy' | 'other';
+
+export type { ReportAsset } from '@/services/contentReportAsset';
+
+export type SharedReportItem = {
+  kind: 'project' | 'conversation' | 'artifact' | 'connector' | 'agent';
+  id: string;
+  sharerId: string;
+};
 
 export type ContentReport = {
   id: string;
@@ -45,6 +59,10 @@ export type ContentReport = {
   createdAt: string;
   emailHandoffOpened: boolean;
   serverAcknowledged: boolean;
+  asset?: ReportAsset;
+  sharedItem?: SharedReportItem;
+  /** The user agreed to send this one report after it could not be sent at once. */
+  uploadConsented?: boolean;
 };
 
 export type ReportDelivery =
@@ -52,6 +70,8 @@ export type ReportDelivery =
   | { kind: 'submitted-to-server' }
   /** Written to this device only. Nothing left the phone (offline / Local Mode). */
   | { kind: 'stored-on-device' }
+  /** The user agreed to send it; it is queued until the send succeeds. */
+  | { kind: 'queued-for-upload' }
   /** Written to this device, and the mail client opened with it filled in. */
   | { kind: 'email-composer-opened' }
   /** Written to this device; no mail client could be opened. */
@@ -101,6 +121,13 @@ export async function openSupportEmail(report: ContentReport): Promise<boolean> 
       `Category: ${report.category}`,
       `Message ID: ${report.messageId}`,
       `Conversation ID: ${report.conversationId}`,
+      ...(report.asset ? [`Asset: ${report.asset.kind} ${report.asset.url}`] : []),
+      ...(report.sharedItem
+        ? [
+            `Shared ${report.sharedItem.kind}: ${report.sharedItem.id}`,
+            `Shared by: ${report.sharedItem.sharerId}`,
+          ]
+        : []),
       `Reported at: ${report.createdAt}`,
       '',
       'Content excerpt:',
@@ -136,15 +163,22 @@ export async function openSupportEmail(report: ContentReport): Promise<boolean> 
  * @returns true only if the server accepted the report.
  */
 async function submitReportToServer(report: ContentReport): Promise<boolean> {
+  const body = {
+    reportId: report.id,
+    messageId: report.messageId,
+    conversationId: report.conversationId,
+    category: report.category,
+    contentExcerpt: report.contentExcerpt,
+    userNote: report.userNote,
+    ...(report.asset ? { asset: report.asset } : {}),
+    ...(report.sharedItem ? { sharedItem: report.sharedItem } : {}),
+  };
   try {
-    await api.post('/api/mobile/content-report', {
-      reportId: report.id,
-      messageId: report.messageId,
-      conversationId: report.conversationId,
-      category: report.category,
-      contentExcerpt: report.contentExcerpt,
-      userNote: report.userNote,
-    });
+    if (report.uploadConsented) {
+      await api.post(CONTENT_REPORT_PATH, body, { consentedReport: true });
+    } else {
+      await api.post(CONTENT_REPORT_PATH, body);
+    }
     return true;
   } catch {
     return false;
@@ -165,6 +199,8 @@ export async function saveContentReport(params: {
   category: ReportCategory;
   userNote: string;
   sendEmail: boolean;
+  asset?: ReportAsset;
+  sharedItem?: SharedReportItem;
 }): Promise<SaveContentReportResult> {
   const report: ContentReport = {
     id: `rpt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
@@ -176,6 +212,8 @@ export async function saveContentReport(params: {
     createdAt: new Date().toISOString(),
     emailHandoffOpened: false,
     serverAcknowledged: false,
+    ...(params.asset ? { asset: params.asset } : {}),
+    ...(params.sharedItem ? { sharedItem: params.sharedItem } : {}),
   };
 
   const existing = readReports();
@@ -213,22 +251,93 @@ export async function saveContentReport(params: {
   };
 }
 
-function markServerAcknowledged(reportId: string): void {
+/**
+ * Records the user's consent to send one report that stayed on the device, then
+ * tries to send it. A report that still cannot be sent stays queued and goes out
+ * on the next {@link flushQueuedContentReports}.
+ */
+export async function sendStoredContentReport(reportId: string): Promise<ReportDelivery> {
+  updateReport(reportId, { uploadConsented: true });
+  const report = readReports().find((entry) => entry.id === reportId);
+  if (!report) throw new Error('Report is no longer stored on this device');
+  if (report.serverAcknowledged) return { kind: 'submitted-to-server' };
+  if (!(await submitReportToServer(report))) {
+    watchForConnectivity();
+    return { kind: 'queued-for-upload' };
+  }
+  try {
+    markServerAcknowledged(reportId);
+  } catch {
+    // Server acceptance remains authoritative if the local status write fails.
+  }
+  return { kind: 'submitted-to-server' };
+}
+
+export function queuedContentReports(): ContentReport[] {
+  return readReports().filter((entry) => entry.uploadConsented && !entry.serverAcknowledged);
+}
+
+let flushing: Promise<number> | null = null;
+
+/** Sends every consented, unsent report. Resolves to how many were accepted. */
+export function flushQueuedContentReports(): Promise<number> {
+  if (flushing) return flushing;
+  flushing = (async () => {
+    let sent = 0;
+    for (const report of queuedContentReports()) {
+      if (!(await submitReportToServer(report))) continue;
+      sent += 1;
+      try {
+        markServerAcknowledged(report.id);
+      } catch {
+        // A later flush re-sends it; the server dedupes on the report id.
+      }
+    }
+    return sent;
+  })().finally(() => {
+    flushing = null;
+  });
+  return flushing;
+}
+
+let unsubscribeConnectivity: (() => void) | null = null;
+
+/** Flushes the queue whenever the device comes online, until it is empty. */
+export function watchForConnectivity(): void {
+  if (unsubscribeConnectivity || queuedContentReports().length === 0) return;
+  unsubscribeConnectivity = NetInfo.addEventListener((state) => {
+    if (!state.isConnected) return;
+    void flushQueuedContentReports().then(() => {
+      if (queuedContentReports().length > 0 || !unsubscribeConnectivity) return;
+      unsubscribeConnectivity();
+      unsubscribeConnectivity = null;
+    });
+  });
+}
+
+let resumed = false;
+
+/** Picks up reports queued in an earlier session; runs once per app process. */
+export function resumeQueuedContentReports(): void {
+  if (resumed) return;
+  resumed = true;
+  watchForConnectivity();
+}
+
+function updateReport(reportId: string, patch: Partial<ContentReport>): void {
   const reports = readReports();
   const index = reports.findIndex((entry) => entry.id === reportId);
   if (index === -1) return;
   const target = reports[index];
   if (!target) return;
-  reports[index] = { ...target, serverAcknowledged: true };
+  reports[index] = { ...target, ...patch };
   writeReports(reports);
 }
 
+function markServerAcknowledged(reportId: string): void {
+  updateReport(reportId, { serverAcknowledged: true });
+}
+
 function markHandoffOpened(reportId: string): void {
-  const reports = readReports();
-  const index = reports.findIndex((entry) => entry.id === reportId);
-  if (index === -1) return;
-  const target = reports[index];
-  if (!target) return;
-  reports[index] = { ...target, emailHandoffOpened: true };
-  writeReports(reports);
+  updateReport(reportId, { emailHandoffOpened: true });
 }

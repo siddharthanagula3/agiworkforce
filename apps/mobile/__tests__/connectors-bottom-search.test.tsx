@@ -76,7 +76,6 @@ const mockBrowseListings = jest.fn();
 jest.mock('@/services/connectors', () => ({
   fetchConnectorDirectory: (...args: unknown[]) => mockFetchDirectory(...args),
   browseConnectorListings: (...args: unknown[]) => mockBrowseListings(...args),
-  connectorListingIconUrl: jest.fn(() => null),
   addCustomConnector: jest.fn(),
 }));
 

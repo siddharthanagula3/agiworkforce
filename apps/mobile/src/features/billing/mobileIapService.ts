@@ -1,4 +1,5 @@
 import { Platform } from 'react-native';
+import { getStorefront } from 'expo-iap';
 import {
   MOBILE_IAP_ANDROID_REPLACEMENT_MODES,
   getMobileIapProductDefinition,
@@ -9,19 +10,11 @@ import {
   type MobileIapPlatform,
   type MobileIapStoreOffer,
   type MobileIapVerifyResponse,
-  type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
 import { api } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
 
-export class BillingUpgradeRequestError extends Error {
-  constructor(readonly userMessage: string) {
-    super(userMessage);
-  }
-}
-
 export function billingRequestMessage(error: unknown, fallback: string): string {
-  if (error instanceof BillingUpgradeRequestError) return error.userMessage;
   if (error instanceof ApiHttpError && error.status >= 400 && error.status < 500) {
     return error.message;
   }
@@ -124,8 +117,6 @@ export function parseMobileIapCatalogResponse(value: unknown): MobileIapCatalogR
     appAccountToken,
     products: products as MobileIapCatalogProduct[],
     unavailableReason: value['unavailableReason'],
-    unavailableCode:
-      value['unavailableCode'] === 'waitlist_access_required' ? 'waitlist_access_required' : null,
     ...(androidReplacementModes ? { androidReplacementModes } : {}),
     ...(typeof subscriptionsUnavailableReason === 'string' && subscriptionsUnavailableReason
       ? { subscriptionsUnavailableReason }
@@ -140,6 +131,14 @@ export function parseMobileIapCatalogResponse(value: unknown): MobileIapCatalogR
   };
 }
 
+export async function readStorefront(): Promise<string | null> {
+  try {
+    return (await getStorefront()).trim() || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchMobileIapCatalog(): Promise<MobileIapCatalogResponse> {
   const platform = currentStorePlatform();
   if (!platform) {
@@ -149,48 +148,14 @@ export async function fetchMobileIapCatalog(): Promise<MobileIapCatalogResponse>
       appAccountToken: null,
       products: [],
       unavailableReason: 'Native purchases require the iOS or Android app.',
-      unavailableCode: null,
     };
   }
+  const query = new URLSearchParams({ platform });
+  const storefront = await readStorefront();
+  if (storefront) query.set('storefront', storefront);
   return parseMobileIapCatalogResponse(
-    await api.get<unknown>(`/api/mobile/iap/catalog?platform=${platform}`),
+    await api.get<unknown>(`/api/mobile/iap/catalog?${query.toString()}`),
   );
-}
-
-export async function redeemBillingUpgradeCode(code: string): Promise<void> {
-  const normalizedCode = code.trim().toUpperCase();
-  if (!normalizedCode || normalizedCode.length > 50 || !/^[A-Z0-9]+$/.test(normalizedCode)) {
-    throw new BillingUpgradeRequestError('Enter a valid access code.');
-  }
-  const { token } = await api.get<{ token?: string }>('/api/csrf');
-  if (!token)
-    throw new BillingUpgradeRequestError('Could not verify this request. Please try again.');
-  const result = await api.post<{ ok?: boolean; accessGranted?: boolean }>(
-    '/api/waitlist/access',
-    { code: normalizedCode },
-    { headers: { 'x-csrf-token': token } },
-  );
-  if (result.ok !== true || result.accessGranted !== true) {
-    throw new BillingUpgradeRequestError('Upgrade access was not confirmed. Please try again.');
-  }
-}
-
-export function billingWaitlistSource(platform: MobileIapPlatform | null): string {
-  return platform ? `mobile-${platform}-billing` : 'mobile-billing';
-}
-
-export async function joinBillingUpgradeWaitlist(plan: SelfServePaidPlanTier): Promise<void> {
-  const { token } = await api.get<{ token?: string }>('/api/csrf');
-  if (!token)
-    throw new BillingUpgradeRequestError('Could not verify this request. Please try again.');
-  const result = await api.post<{ ok?: boolean; joined?: boolean }>(
-    '/api/waitlist',
-    { plan, billingInterval: 'monthly', source: billingWaitlistSource(currentStorePlatform()) },
-    { headers: { 'x-csrf-token': token } },
-  );
-  if (result.ok !== true || result.joined !== true) {
-    throw new BillingUpgradeRequestError('Waitlist signup was not confirmed. Please try again.');
-  }
 }
 
 export async function verifyMobileIapPurchase(input: {

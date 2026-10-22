@@ -10,6 +10,8 @@ const IOS_DEPLOYMENT_TARGET = '17.0';
 const NATIVE_IOS_SRC = __dirname;
 
 const TOP_LEVEL_FILES = [
+  'AGIAppTransaction.m',
+  'AGIAppTransaction.swift',
   'AGIFoundationModels.m',
   'AGIFoundationModels.swift',
   'AGITranslate.m',
@@ -89,7 +91,7 @@ function withXcodeSourceFiles(config) {
   return withXcodeProject(config, (c) => {
     const xcodeProject = c.modResults;
     const targetUuid = xcodeProject.getFirstTarget()?.uuid;
-    const appName = c.modRequest.projectName ?? 'AGIWorkforce';
+    const appName = c.modRequest.projectName ?? 'AGIMobile';
     const appGroupKey =
       xcodeProject.findPBXGroupKey({ name: appName }) ||
       xcodeProject.findPBXGroupKey({ path: appName });

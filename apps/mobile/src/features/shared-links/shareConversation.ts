@@ -13,7 +13,7 @@ export interface ShareConversationInput {
 export function confirmShareConversation(input: ShareConversationInput): void {
   Alert.alert(
     'Share a link to this chat?',
-    'Anyone with the link can read the messages in this chat until the link expires. You can revoke it in Settings, Shared links.',
+    'Anyone with the link can read this chat until it expires or you revoke it.',
     [
       { text: 'Cancel', style: 'cancel' },
       {

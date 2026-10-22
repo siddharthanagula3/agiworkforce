@@ -53,18 +53,17 @@ const PRODUCT_ID = 'com.agiworkforce.pro.monthly';
 const TOP_UP_PRODUCT_ID = 'agi_topup_10';
 const APP_ACCOUNT_TOKEN = '00000000-0000-4000-8000-000000000001';
 
-function request() {
+function request(query = 'platform=android&storefront=US') {
   return new Request(
-    'http://localhost:3000/api/mobile/iap/catalog?platform=android',
+    `http://localhost:3000/api/mobile/iap/catalog?${query}`,
   ) as unknown as Parameters<typeof GET>[0];
 }
 
-function harness(options: { subscription?: Record<string, unknown>; redeemed?: boolean }) {
+function harness(options: { subscription?: Record<string, unknown> }) {
   const query = vi.fn(async (sql: string) => {
     if (sql.includes('from subscriptions')) {
       return options.subscription ? [options.subscription] : [];
     }
-    if (sql.includes('beta_redemptions')) return [{ granted: options.redeemed === true }];
     if (sql.includes('insert into public.mobile_iap_accounts')) {
       return [{ app_account_token: APP_ACCOUNT_TOKEN }];
     }
@@ -73,6 +72,16 @@ function harness(options: { subscription?: Record<string, unknown>; redeemed?: b
   mockDb.current = { query, execute: vi.fn(), transaction: vi.fn() };
   return { query };
 }
+
+function productIds(body: { products: Array<{ productId: string }> }): string[] {
+  return body.products.map((product) => product.productId);
+}
+
+const PAID_PLAY_PLAN = {
+  plan_tier: 'pro',
+  status: 'active',
+  google_purchase_token: 'play-token-1',
+};
 
 describe('GET /api/mobile/iap/catalog', () => {
   beforeEach(() => {
@@ -87,141 +96,69 @@ describe('GET /api/mobile/iap/catalog', () => {
         top_up_10: TOP_UP_PRODUCT_ID,
       }),
     );
+    vi.stubEnv(
+      'MOBILE_IAP_APPLE_PRODUCT_IDS_JSON',
+      JSON.stringify({
+        subscription_pro_monthly: PRODUCT_ID,
+        top_up_10: TOP_UP_PRODUCT_ID,
+      }),
+    );
   });
 
   afterEach(() => vi.unstubAllEnvs());
 
-  it('offers nothing to buy to an account with no paid history and no upgrade access', async () => {
-    harness({ redeemed: false });
+  it('offers store plans to an account with no paid history, with no waitlist or access code', async () => {
+    const h = harness({});
 
     const response = await GET(request());
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({
-      enabled: false,
-      products: [],
-      appAccountToken: null,
-      unavailableCode: 'waitlist_access_required',
-      unavailableReason: expect.stringContaining('Paid upgrades are opening in stages'),
+    const body = await response.json();
+    expect(body).toMatchObject({
+      enabled: true,
+      appAccountToken: APP_ACCOUNT_TOKEN,
+      unavailableReason: null,
     });
-  });
-
-  it('keeps code redemption and the waitlist available before store products are enabled', async () => {
-    vi.stubEnv('MOBILE_IAP_ENABLED', 'false');
-    const h = harness({ redeemed: false });
-
-    const response = await GET(request());
-
-    await expect(response.json()).resolves.toMatchObject({
-      enabled: false,
-      products: [],
-      appAccountToken: null,
-      unavailableCode: 'waitlist_access_required',
-      unavailableReason: expect.stringContaining('store products are ready'),
-    });
+    expect(body).not.toHaveProperty('unavailableCode');
+    expect(productIds(body)).toEqual([PRODUCT_ID]);
     expect(h.query).not.toHaveBeenCalledWith(
-      expect.stringContaining('insert into public.mobile_iap_accounts'),
+      expect.stringContaining('beta_redemptions'),
       expect.anything(),
     );
   });
 
-  it('keeps purchases disabled after a code is redeemed if store products are not enabled', async () => {
+  it('names the deployment, not an access gate, when store products are not enabled', async () => {
     vi.stubEnv('MOBILE_IAP_ENABLED', 'false');
-    harness({ redeemed: true });
+    const h = harness({});
 
-    const response = await GET(request());
+    const body = await (await GET(request())).json();
 
-    await expect(response.json()).resolves.toMatchObject({
+    expect(body).toMatchObject({
       enabled: false,
       products: [],
       appAccountToken: null,
-      unavailableCode: null,
       unavailableReason: expect.stringContaining('not enabled'),
     });
-  });
-
-  it('hides the access gate when the waitlist is turned off and purchases are not configured', async () => {
-    vi.stubEnv('MOBILE_IAP_ENABLED', 'false');
-    vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '1');
-    const h = harness({ redeemed: false });
-
-    const response = await GET(request());
-
-    await expect(response.json()).resolves.toMatchObject({
-      enabled: false,
-      products: [],
-      unavailableCode: null,
-    });
+    expect(body).not.toHaveProperty('unavailableCode');
     expect(h.query).not.toHaveBeenCalled();
   });
 
-  it('offers configured store products without a code after the waitlist is turned off', async () => {
-    vi.stubEnv('AGI_BILLING_WAITLIST_OPEN', '1');
-    const h = harness({ redeemed: false });
-
-    const response = await GET(request());
-
-    await expect(response.json()).resolves.toMatchObject({
-      enabled: true,
-      appAccountToken: APP_ACCOUNT_TOKEN,
-      products: [expect.objectContaining({ productId: PRODUCT_ID })],
-      unavailableCode: null,
-    });
-    expect(h.query).not.toHaveBeenCalledWith(
-      expect.stringContaining('beta_redemptions'),
-      expect.anything(),
-    );
-  });
-
-  it('offers the catalogue once upgrade access is redeemed', async () => {
-    harness({ redeemed: true });
-
-    const response = await GET(request());
-
-    await expect(response.json()).resolves.toMatchObject({
-      enabled: true,
-      appAccountToken: APP_ACCOUNT_TOKEN,
-      products: [expect.objectContaining({ productId: PRODUCT_ID })],
-      unavailableCode: null,
-    });
-  });
-
-  it('offers the catalogue to an account the store already bills', async () => {
-    const h = harness({
-      redeemed: false,
-      subscription: {
-        plan_tier: 'pro',
-        status: 'active',
-        google_purchase_token: 'play-token-1',
-      },
-    });
-
-    const response = await GET(request());
-
-    await expect(response.json()).resolves.toMatchObject({ enabled: true });
-    expect(h.query).not.toHaveBeenCalledWith(
-      expect.stringContaining('beta_redemptions'),
-      expect.anything(),
-    );
-  });
-
-  it('keeps naming the kill switch rather than the gate when purchases are switched off', async () => {
-    harness({ redeemed: false });
+  it('keeps naming the kill switch when purchases are switched off', async () => {
+    harness({});
     mockKillSwitchGate.mockResolvedValue({ capabilityAllowed: () => false });
 
     const response = await GET(request());
 
     await expect(response.json()).resolves.toMatchObject({
       enabled: false,
-      unavailableCode: null,
+      products: [],
       unavailableReason: expect.stringContaining('temporarily switched off'),
     });
   });
 
-  it('starts no purchase when upgrade access cannot be read', async () => {
+  it('starts no purchase when the plan cannot be read', async () => {
     mockDb.current = {
-      query: vi.fn(async (sql: string) => {
-        if (sql.includes('from subscriptions')) return [];
+      query: vi.fn(async () => {
         throw new Error('database unavailable');
       }),
       execute: vi.fn(),
@@ -232,31 +169,66 @@ describe('GET /api/mobile/iap/catalog', () => {
 
     expect(response.status).toBe(503);
   });
+
   it('sells top-ups in the app only to an account that holds a paid plan', async () => {
-    harness({
-      redeemed: false,
-      subscription: { plan_tier: 'pro', status: 'active', google_purchase_token: 'play-token-1' },
-    });
-    const paid = await (await GET(request())).json();
-    expect(paid.products.map((product: { productId: string }) => product.productId)).toEqual([
+    harness({ subscription: PAID_PLAY_PLAN });
+    expect(productIds(await (await GET(request())).json())).toEqual([
       PRODUCT_ID,
       TOP_UP_PRODUCT_ID,
     ]);
 
-    harness({ redeemed: true });
-    const free = await (await GET(request())).json();
-    expect(free.products.map((product: { productId: string }) => product.productId)).toEqual([
-      PRODUCT_ID,
-    ]);
+    harness({});
+    expect(productIds(await (await GET(request())).json())).toEqual([PRODUCT_ID]);
 
+    harness({ subscription: { ...PAID_PLAY_PLAN, status: 'canceled' } });
+    expect(productIds(await (await GET(request())).json())).toEqual([PRODUCT_ID]);
+  });
+
+  it.each([
+    ['an App Store storefront', 'platform=ios&storefront=JPN'],
+    ['a Google Play country', 'platform=android&storefront=JP'],
+  ])('sells plans but no top-up in Japan through %s', async (_store, query) => {
     harness({
-      redeemed: true,
-      subscription: { plan_tier: 'pro', status: 'canceled', google_purchase_token: 'play-token-1' },
+      subscription: {
+        ...PAID_PLAY_PLAN,
+        google_purchase_token: null,
+        apple_original_transaction_id: null,
+        stripe_subscription_id: null,
+      },
     });
-    const lapsed = await (await GET(request())).json();
-    expect(lapsed.products.map((product: { productId: string }) => product.productId)).toEqual([
-      PRODUCT_ID,
-    ]);
+
+    const body = await (await GET(request(query))).json();
+
+    expect(body.enabled).toBe(true);
+    expect(productIds(body)).toEqual([PRODUCT_ID]);
+    expect(body.consumableProductIds).toEqual([TOP_UP_PRODUCT_ID]);
+  });
+
+  it.each([
+    ['an App Store storefront', 'platform=ios&storefront=USA'],
+    ['a Google Play country', 'platform=android&storefront=us'],
+  ])('sells top-ups outside Japan through %s', async (_store, query) => {
+    harness({ subscription: PAID_PLAY_PLAN });
+
+    const body = await (await GET(request(query))).json();
+
+    expect(body.products.map((product: { kind: string }) => product.kind)).toContain('top_up');
+  });
+
+  it('sells no top-up when the app could not read the store country', async () => {
+    harness({ subscription: PAID_PLAY_PLAN });
+
+    const body = await (await GET(request('platform=android'))).json();
+
+    expect(productIds(body)).toEqual([PRODUCT_ID]);
+  });
+
+  it('refuses a storefront that is not a store country code', async () => {
+    harness({ subscription: PAID_PLAY_PLAN });
+
+    const response = await GET(request('platform=android&storefront=J1P'));
+
+    expect(response.status).toBe(400);
   });
 
   it.each([
@@ -274,9 +246,7 @@ describe('GET /api/mobile/iap/catalog', () => {
       const body = await (await GET(request())).json();
 
       expect(body.enabled).toBe(true);
-      expect(body.products.map((product: { productId: string }) => product.productId)).toEqual([
-        TOP_UP_PRODUCT_ID,
-      ]);
+      expect(productIds(body)).toEqual([TOP_UP_PRODUCT_ID]);
       expect(body.subscriptionsUnavailableReason).toMatch(reason);
     },
   );
@@ -288,25 +258,21 @@ describe('GET /api/mobile/iap/catalog', () => {
 
     const body = await (await GET(request())).json();
 
-    expect(body.products.map((product: { productId: string }) => product.productId)).toEqual([
-      PRODUCT_ID,
-    ]);
+    expect(productIds(body)).toEqual([PRODUCT_ID]);
     expect(body.subscriptionsUnavailableReason).toBeNull();
   });
 
   it('names every consumable the device must consume, including ones it is not offering', async () => {
-    harness({ redeemed: true });
+    harness({});
 
     const body = await (await GET(request())).json();
 
-    expect(body.products.map((product: { productId: string }) => product.productId)).toEqual([
-      PRODUCT_ID,
-    ]);
+    expect(productIds(body)).toEqual([PRODUCT_ID]);
     expect(body.consumableProductIds).toEqual([TOP_UP_PRODUCT_ID]);
   });
 
   it('returns the Google Play base plan and the replacement mode for each direction', async () => {
-    harness({ redeemed: true });
+    harness({});
 
     const body = await (await GET(request())).json();
 

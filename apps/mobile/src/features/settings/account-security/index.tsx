@@ -453,7 +453,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Sign-in methods"
-        body="Every way you can sign in to your AGI account. Add or remove one in Security settings on the web."
+        body="Add or remove sign-in methods in Security settings on the web."
         icon={Fingerprint}
       />
       <SettingsGroup>
@@ -516,7 +516,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Sessions"
-        body="Every device signed in to your AGI account, reported by your account provider. Sign out anything you do not recognize."
+        body="Sign out any device you don’t recognize."
         icon={Smartphone}
       />
       <SettingsGroup>
@@ -640,7 +640,7 @@ export default function AccountSecurityScreen() {
         <SettingsGroup>
           <SettingsSwitchRow
             label="Lockdown mode"
-            description="Refuses connector tools, web search, page fetch, code execution and Deep Research in every chat on this account, so a page or document cannot talk the model into calling one."
+            description="Blocks connectors, web access, code execution and Deep Research in every chat."
             icon={Lock}
             value={lockdown}
             onValueChange={changeLockdown}
@@ -652,7 +652,7 @@ export default function AccountSecurityScreen() {
 
       <SettingsInfo
         title="Managed on the web"
-        body="Passkeys and security keys are added and removed in Security settings on the web. SMS MFA is not offered on mobile."
+        body="Manage passkeys and security keys in Security settings on the web."
         icon={ShieldCheck}
       />
     </SettingsScreenShell>

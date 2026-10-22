@@ -75,11 +75,8 @@ describe('MemoryControlsCard', () => {
 
     expect(screen.getByText('Include sensitive topics in memory')).toBeTruthy();
     expect(
-      screen.getByText(
-        /only when you say "Remember that" in a chat on the web, desktop, mobile or Chrome, or add them yourself/,
-      ),
+      screen.getByText(/from chats, not only when you say "Remember that" or add them yourself\.$/),
     ).toBeTruthy();
-    expect(screen.getByText(/Memories saved earlier stay until you delete them/)).toBeTruthy();
     const sensitive = screen.UNSAFE_getAllByType(NativeSwitch)[3];
     expect(sensitive.props).toMatchObject({ value: false, disabled: false });
 

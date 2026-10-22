@@ -32,12 +32,12 @@ module.exports = {
       type: 'ios.app',
       binaryPath: IOS_APP_BINARY.debug,
       build:
-        'xcodebuild -workspace ios/AGIWorkforce.xcworkspace -scheme AGIWorkforce -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
+        'xcodebuild -workspace ios/AGIMobile.xcworkspace -scheme AGIMobile -configuration Debug -sdk iphonesimulator -derivedDataPath ios/build',
     },
     'ios.release': {
       type: 'ios.app',
       binaryPath: IOS_APP_BINARY.release,
-      build: `xcodebuild -workspace ios/AGIWorkforce.xcworkspace -scheme AGIWorkforce -configuration Release -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath ios/build ONLY_ACTIVE_ARCH=YES ARCHS=${simulatorArch}`,
+      build: `xcodebuild -workspace ios/AGIMobile.xcworkspace -scheme AGIMobile -configuration Release -sdk iphonesimulator -destination "generic/platform=iOS Simulator" -derivedDataPath ios/build ONLY_ACTIVE_ARCH=YES ARCHS=${simulatorArch}`,
     },
     'android.debug': {
       type: 'android.apk',

@@ -53,7 +53,7 @@ const NETWORK_OPTIONS: ReadonlyArray<{
 
 const COPY = Object.freeze({
   fullNetworkAcknowledgement:
-    'I understand commands in this session can contact any internet host. The environment stays isolated and receives no AGI Workforce credentials.',
+    'I understand commands in this session can contact any internet host. The environment stays isolated and receives no AGI credentials.',
   extraHostsLabel: 'Extra allowed hosts',
   extraHostsPlaceholder: 'registry.example.com, *.internal.example.com',
   extraHostsHelp: 'Comma separated, one leading wildcard allowed, up to 10 hosts.',

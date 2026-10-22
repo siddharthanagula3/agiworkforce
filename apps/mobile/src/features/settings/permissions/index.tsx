@@ -190,10 +190,8 @@ export default function PermissionsScreen() {
         }}
       >
         <Text style={{ color: c.textMuted, fontSize: typeScale.footnote, lineHeight: 18 }}>
-          Permissions are managed by your device. Changing a permission may open Settings. AGI asks
-          only when a feature you started needs one: the microphone for voice, the camera and photos
-          for what you attach, notifications for a reply that arrives after you leave. Nothing is
-          read in the background, and denying one disables that feature rather than the app.
+          AGI asks only when a feature you started needs one, like the microphone for voice, and
+          nothing is read in the background.
         </Text>
         <Pressable
           onPress={() => void openInAppBrowser(PERMISSIONS_HELP_URL)}

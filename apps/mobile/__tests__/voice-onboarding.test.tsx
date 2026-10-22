@@ -34,7 +34,7 @@ describe('VoiceOnboardingSheet', () => {
   it('renders the intro and the on-device disclosure for turn-based voice', () => {
     const { getByText, queryByText } = renderSheet();
     getByText('Meet Voice');
-    getByText(/Say what's on your mind/);
+    getByText("Talk with AGI the way you'd talk to anyone.");
     getByText(VOICE_DISCLOSURE['on-device']);
     expect(queryByText(VOICE_DISCLOSURE.live)).toBeNull();
   });

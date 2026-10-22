@@ -14,7 +14,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 const OFFLINE_EXPLANATION =
-  'Remote access stops while the computer is asleep, offline, or has AGI Workforce closed. The session stays on the computer, and you can follow it again once it is back.';
+  'Remote access stops while the computer is asleep, offline, or has AGI Desktop closed. The session stays on the computer, and you can follow it again once it is back.';
 const UNPAIRED_EXPLANATION =
   'This phone is no longer paired with a computer. Pair again from the computer to follow its sessions.';
 

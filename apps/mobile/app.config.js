@@ -31,15 +31,14 @@ const SPLASH_BACKGROUND_DARK = '#0f0f0f';
 // PNGs are 4x this, so the same asset is crisp on iOS @3x and Android xxxhdpi.
 const SPLASH_IMAGE_WIDTH = 220;
 
+const CAMERA_PURPOSE =
+  'AGI Mobile uses the camera to scan documents and attach photos to your chats.';
+const PHOTOS_PURPOSE = 'AGI Mobile uses the photos you pick to attach them to your chats.';
+const FACE_ID_PURPOSE = 'AGI Mobile uses Face ID to unlock the app.';
+
 const shouldUseProductionEntitlements =
   envIsTruthy('EXPO_ENABLE_PRODUCTION_IOS_ENTITLEMENTS') ||
   (appEnv !== 'development' && !envIsTruthy('EXPO_DISABLE_PRODUCTION_IOS_ENTITLEMENTS'));
-
-const iosEntitlements = shouldUseProductionEntitlements
-  ? {
-      'com.apple.developer.siri': true,
-    }
-  : {};
 
 const associatedDomains = shouldUseProductionEntitlements
   ? ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com']
@@ -63,7 +62,7 @@ const conditionalPlugins = [
 ];
 
 const config = {
-  name: 'AGI Workforce',
+  name: 'AGI Mobile',
   slug: 'agi-workforce',
   version: '0.0.1',
   orientation: 'portrait',
@@ -77,21 +76,16 @@ const config = {
     buildNumber: '2',
     associatedDomains,
     infoPlist: {
-      NSCameraUsageDescription:
-        'AGI Workforce uses the camera to scan documents and text for AI analysis and to attach photos to your conversations.',
+      NSCameraUsageDescription: CAMERA_PURPOSE,
       NSMicrophoneUsageDescription:
-        'AGI Workforce uses the microphone for voice input and real-time voice conversations with AI.',
-      NSPhotoLibraryUsageDescription:
-        'AGI Workforce accesses your photo library to select images for AI analysis and conversations.',
+        'AGI Mobile uses the microphone for voice input and real-time voice conversations with AI.',
+      NSPhotoLibraryUsageDescription: PHOTOS_PURPOSE,
       NSPhotoLibraryAddUsageDescription:
-        'AGI Workforce saves images you choose to save into your photo library.',
-      NSFaceIDUsageDescription:
-        'AGI Workforce uses Face ID to securely unlock the app and protect your data.',
+        'AGI Mobile saves images you choose to save into your photo library.',
+      NSFaceIDUsageDescription: FACE_ID_PURPOSE,
       NSSpeechRecognitionUsageDescription:
-        'AGI Workforce uses speech recognition to transcribe voice input for AI conversations.',
-      NSTranslationUsageDescription:
-        'AGI Workforce uses on-device translation to translate text between languages privately.',
-      NSUserActivityTypes: ['INSendMessageIntent', 'com.agiworkforce.app.intent'],
+        'AGI Mobile uses speech recognition to transcribe voice input for AI conversations.',
+      NSUserActivityTypes: ['com.agiworkforce.app.intent'],
       AGIApiBaseURL: hostedOrigin || 'https://agiworkforce.com',
       'UISupportedInterfaceOrientations~ipad': [
         'UIInterfaceOrientationPortrait',
@@ -102,7 +96,7 @@ const config = {
       ITSAppUsesNonExemptEncryption: false,
     },
     entitlements: {
-      ...iosEntitlements,
+      'com.apple.developer.declared-age-range': true,
       'com.apple.security.application-groups': [iosShareAppGroupIdentifier],
     },
     privacyManifests: {
@@ -191,6 +185,7 @@ const config = {
       'android.permission.READ_EXTERNAL_STORAGE',
       'android.permission.READ_MEDIA_VISUAL_USER_SELECTED',
       'android.permission.ACCESS_MEDIA_LOCATION',
+      'android.permission.SYSTEM_ALERT_WINDOW',
     ],
     intentFilters: [
       {
@@ -281,9 +276,9 @@ const config = {
       'expo-speech-recognition',
       {
         microphonePermission:
-          'AGI Workforce uses the microphone for voice input and real-time voice conversations with AI.',
+          'AGI Mobile uses the microphone for voice input and real-time voice conversations with AI.',
         speechRecognitionPermission:
-          'AGI Workforce uses speech recognition to transcribe voice input for AI conversations.',
+          'AGI Mobile uses speech recognition to transcribe voice input for AI conversations.',
         androidSpeechServicePackages: ['com.google.android.googlequicksearchbox'],
       },
     ],
@@ -305,22 +300,20 @@ const config = {
     [
       'expo-camera',
       {
-        cameraPermission:
-          'Allow $(DISPLAYNAME) to access your camera for QR scanning and photo features.',
+        cameraPermission: CAMERA_PURPOSE,
       },
     ],
     [
       'expo-image-picker',
       {
-        photosPermission: 'Allow $(DISPLAYNAME) to access your photos.',
-        cameraPermission: 'Allow $(DISPLAYNAME) to access your camera.',
+        photosPermission: PHOTOS_PURPOSE,
+        cameraPermission: CAMERA_PURPOSE,
       },
     ],
     [
       'expo-media-library',
       {
-        savePhotosPermission:
-          'AGI Workforce saves images you choose to save into your photo library.',
+        savePhotosPermission: 'AGI Mobile saves images you choose to save into your photo library.',
         isAccessMediaLocationEnabled: false,
         granularPermissions: [],
       },
@@ -331,7 +324,7 @@ const config = {
     [
       'expo-local-authentication',
       {
-        faceIDPermission: 'Allow $(DISPLAYNAME) to use Face ID to unlock the app.',
+        faceIDPermission: FACE_ID_PURPOSE,
       },
     ],
     'expo-document-picker',
@@ -339,6 +332,7 @@ const config = {
     'llama.rn',
     './native/android/withAGITranslate.cjs',
     './native/android/withAGIVisionOCR.cjs',
+    './native/android/withoutWebRTCScreenCapture.cjs',
     './native/ios/withAGINativeModulesIOS.cjs',
     './native/ios/withAGIShareExtension.cjs',
     './native/ios/withAGIWidgets.cjs',

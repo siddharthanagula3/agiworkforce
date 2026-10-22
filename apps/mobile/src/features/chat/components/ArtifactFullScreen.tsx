@@ -139,7 +139,7 @@ async function confirmPublish(title: string): Promise<boolean> {
   return new Promise<boolean>((resolve) => {
     Alert.alert(
       'Publish to a public link?',
-      `“${title}” will be uploaded to AGI Cloud and served at a URL anyone with the link can open. Do not publish anything you keep on-device only.`,
+      `“${title}” will be uploaded to AGI Cloud, and anyone with the link can open it.`,
       [
         { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
         { text: 'Publish', style: 'default', onPress: () => resolve(true) },
@@ -868,8 +868,7 @@ export function ArtifactFullScreen({
                 lineHeight: 20,
               }}
             >
-              HTML, SVG, and Mermaid render live in a sandbox; JSX/TSX need compilation, which the
-              secure preview intentionally omits. Switch to Source view to read the content.
+              Switch to Source view to read it.
             </Text>
             <PressableBox
               onPress={() => setViewMode('source')}

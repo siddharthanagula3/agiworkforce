@@ -235,10 +235,10 @@ describe('iOS submission config', () => {
       'utf8',
     ).split('\n');
     const cited: Array<[number, string]> = [
-      [777, "openExternalUrl('https://agiworkforce.com/billing')"],
-      [483, "openExternalUrl('https://agiworkforce.com/settings/team')"],
-      [236, 'openExternalUrl(managementUrl)'],
-      [784, 'openExternalUrl(PURCHASE_HELP_URL)'],
+      [708, "openExternalUrl('https://agiworkforce.com/billing')"],
+      [436, "openExternalUrl('https://agiworkforce.com/settings/team')"],
+      [243, 'openExternalUrl(managementUrl)'],
+      [719, 'openExternalUrl(PURCHASE_HELP_URL)'],
     ];
     for (const [line, call] of cited) {
       expect([line, lines[line - 1]?.includes(call)]).toEqual([line, true]);
@@ -289,14 +289,14 @@ describe('iOS submission config', () => {
 
   it('discloses account and billing links reachable from the current app', () => {
     const CALL_SITES: Array<[string, RegExp]> = [
-      ['cloud-billing invoices', /cloud-billing\/index\.tsx:777/],
-      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:483/],
-      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:236/],
-      ['paywall contact sales', /PaywallBottomSheet\.tsx:120/],
-      ['purchase help', /cloud-billing\/index\.tsx:784/],
+      ['cloud-billing invoices', /cloud-billing\/index\.tsx:708/],
+      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:436/],
+      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:243/],
+      ['paywall contact sales', /PaywallBottomSheet\.tsx:130/],
+      ['purchase help', /cloud-billing\/index\.tsx:719/],
       ['cloud-account change email', /cloud-account\/index\.tsx:98/],
-      ['workspace empty state', /workspace\.tsx:438/],
-      ['workspace rename or delete', /workspace\.tsx:545/],
+      ['workspace empty state', /workspace\.tsx:456/],
+      ['workspace rename or delete', /workspace\.tsx:584/],
       ['auth legal links', /app\/\(auth\)\/login\.tsx/],
       ['signup legal links', /MobileSignUp\.tsx/],
     ];
@@ -351,12 +351,20 @@ describe('iOS submission config', () => {
 
 describe('Play data safety declarations', () => {
   it('answers the sharing question the same way in both Android files', () => {
+    const listedShared = new Map(
+      (
+        listingAndroid.data_safety.data_collected_types as Array<{ type: string; shared?: boolean }>
+      ).map((entry) => [entry.type, entry.shared === true]),
+    );
     for (const entry of dataSafety.collectedData) {
       expect([entry.playDataType, entry.sharedWithThirdParties]).toEqual([
         entry.playDataType,
-        listingAndroid.data_safety.data_shared,
+        listedShared.get(entry.playDataType),
       ]);
     }
+    expect(listingAndroid.data_safety.data_shared).toBe(
+      dataSafety.collectedData.some((entry) => entry.sharedWithThirdParties),
+    );
   });
 
   it('declares the same data types in both Android files', () => {

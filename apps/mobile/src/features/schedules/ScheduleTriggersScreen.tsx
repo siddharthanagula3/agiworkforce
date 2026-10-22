@@ -283,7 +283,7 @@ export function ScheduleTriggersScreen() {
     async (trigger: ManagedCloudEventTrigger) => {
       const confirmed = await confirmIrreversible({
         title: `Delete the ${MANAGED_CLOUD_TRIGGER_SOURCE_LABELS[trigger.source]} trigger “${trigger.name}”?`,
-        consequence: `${scheduleName} stops running when these events arrive, and the delivery history for this trigger is deleted with it. A webhook trigger's URL and signing secret stop working and a new trigger gets new ones. This cannot be undone.`,
+        consequence: `${scheduleName} stops running on these events, and the trigger’s URL, secret and history are deleted for good.`,
         actionLabel: 'Delete trigger',
       });
       if (confirmed) {
@@ -315,7 +315,7 @@ export function ScheduleTriggersScreen() {
       <CloudFeatureGate
         title="Triggers"
         feature="Triggers"
-        description="Event triggers start AGI Cloud schedules. Switching here does not send Local chats or files to the cloud."
+        description="Event triggers run in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}

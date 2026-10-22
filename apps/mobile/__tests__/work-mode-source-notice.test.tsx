@@ -17,7 +17,7 @@ describe('Work mode source notice', () => {
     expect(screen.getByLabelText('Work mode connected-source privacy')).toBeTruthy();
     expect(
       screen.getByText(
-        'Work mode uses connected services only after you ask. AGI does not scan repositories or accounts in the background to generate task suggestions.',
+        'Work mode uses connected services only when you ask, never in the background.',
       ),
     ).toBeTruthy();
 

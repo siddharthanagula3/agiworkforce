@@ -66,7 +66,7 @@ export function useBiometricGate(): BiometricGateResult {
 
         if (!hasHardware || !isEnrolled) {
           const fallbackResult = await LocalAuthentication.authenticateAsync({
-            promptMessage: 'Unlock AGI Workforce',
+            promptMessage: 'Unlock AGI Mobile',
             fallbackLabel: 'Use Passcode',
             disableDeviceFallback: false,
           });
@@ -79,7 +79,7 @@ export function useBiometricGate(): BiometricGateResult {
         }
 
         const result = await LocalAuthentication.authenticateAsync({
-          promptMessage: 'Unlock AGI Workforce',
+          promptMessage: 'Unlock AGI Mobile',
           fallbackLabel: 'Use Passcode',
           disableDeviceFallback: false,
         });

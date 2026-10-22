@@ -3290,7 +3290,7 @@
         {
           "kind": "copy",
           "file": "apps/web/app/chrome-extension/page.tsx",
-          "text": "AGI in Chrome · {SURFACE_STATUS.chrome}"
+          "text": "AGI Extension · {SURFACE_STATUS.chrome}"
         },
         {
           "kind": "copy",
@@ -3300,7 +3300,7 @@
         {
           "kind": "copy",
           "file": "apps/extension/manifest.json",
-          "text": "\"name\": \"AGI Workforce\""
+          "text": "\"name\": \"AGI Extension\""
         },
         {
           "kind": "test",
@@ -5615,7 +5615,7 @@
       "doc": "vscode-extension",
       "section": "Account and provider credentials",
       "kind": "prose",
-      "sentence": "**Set API Key** and **Clear API Key** manage the AGI Workforce account API key.",
+      "sentence": "**Set API Key** and **Clear API Key** manage the AGI account API key.",
       "implementation": [
         "apps/extension-vscode/src/core/commandSetup.ts#agi-workforce.setApiKey",
         "apps/extension-vscode/src/core/commandSetup.ts#await clearApiKey(context.secrets)"

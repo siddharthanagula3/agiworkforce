@@ -261,7 +261,7 @@ function revalidateSelectedModelForTier(tier: string): void {
   // (MOBILE-072).
   Alert.alert(
     'Your model changed with your plan',
-    `${getDisplayName(selectedModel)} is not included in your current plan, so new messages will use ${getDisplayName(fallbackId)}. You can pick another model any time.`,
+    `${getDisplayName(selectedModel)} is not included in your current plan, so new messages will use ${getDisplayName(fallbackId)}.`,
   );
 }
 

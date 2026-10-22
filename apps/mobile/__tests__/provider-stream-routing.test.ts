@@ -3,6 +3,7 @@ import { getModelsForTierAndSurface, getProviderOfferings } from '@agiworkforce/
 
 const guardedFetchMock = jest.fn();
 const getAuthTokenMock = jest.fn();
+const ensureCloudSendConsentMock = jest.fn();
 
 const SSE = ['data: {"choices":[{"delta":{"content":"ok"}}]}', '', 'data: [DONE]', ''].join('\n');
 
@@ -17,6 +18,7 @@ async function loadStreamingService() {
     text: async () => SSE,
   } as unknown as Response);
   getAuthTokenMock.mockReset().mockResolvedValue('cloud-token');
+  ensureCloudSendConsentMock.mockReset().mockResolvedValue(undefined);
 
   jest.doMock('@/lib/constants', () => ({
     API_URL: 'https://api.agi.test',
@@ -29,6 +31,7 @@ async function loadStreamingService() {
     getAuthToken: getAuthTokenMock,
   }));
   jest.doMock('../services/llmGate', () => ({
+    ensureCloudSendConsent: ensureCloudSendConsentMock,
     ensureLlmGateOpen: jest.fn(),
   }));
   jest.doMock('../services/remoteChatGate', () => ({
@@ -222,6 +225,55 @@ describe('managed mobile stream routing', () => {
         message: 'Provider-funded Free models require the Free chat route.',
       }),
     );
+  });
+
+  it('sends nothing to billed chat when Cloud provider consent is declined', async () => {
+    const { streamChat } = await loadStreamingService();
+    const declined = new Error('Allow AI providers first.');
+    ensureCloudSendConsentMock.mockRejectedValueOnce(declined);
+    const callbacks = { onDelta: jest.fn(), onDone: jest.fn(), onError: jest.fn() };
+
+    await streamChat(
+      {
+        model: requireMobileCloudModel().id,
+        messages: [{ role: 'user', content: 'hello' }],
+        stream: true,
+        operationId: '0190a000-0000-7000-8000-000000000110',
+      },
+      callbacks,
+    );
+
+    expect(guardedFetchMock).not.toHaveBeenCalled();
+    expect(getAuthTokenMock).not.toHaveBeenCalled();
+    expect(callbacks.onError).toHaveBeenCalledWith(declined);
+    expect(callbacks.onDone).not.toHaveBeenCalled();
+  });
+
+  it('sends nothing to the Free quota endpoint when Cloud provider consent is declined', async () => {
+    const offering = Object.entries(getProviderOfferings()).find(
+      ([, candidate]) => candidate.provider === 'qwen' && candidate.quotaProbeProtocol === 'chat',
+    );
+    if (!offering) throw new Error('Expected a Qwen chat offering in the generated catalog.');
+    const { streamFreeQuotaChat } = await loadStreamingService();
+    const declined = new Error('Allow AI providers first.');
+    ensureCloudSendConsentMock.mockRejectedValueOnce(declined);
+    const callbacks = { onDelta: jest.fn(), onDone: jest.fn(), onError: jest.fn() };
+
+    await streamFreeQuotaChat(
+      {
+        model: offering[0],
+        conversation_id: '0190a000-0000-7000-8000-000000000111',
+        assistant_message_id: '0190a000-0000-7000-8000-000000000112',
+        operationId: '0190a000-0000-7000-8000-000000000112',
+        messages: [{ role: 'user', content: 'hello' }],
+      },
+      callbacks,
+    );
+
+    expect(guardedFetchMock).not.toHaveBeenCalled();
+    expect(getAuthTokenMock).not.toHaveBeenCalled();
+    expect(callbacks.onError).toHaveBeenCalledWith(declined);
+    expect(callbacks.onDone).not.toHaveBeenCalled();
   });
 
   it('refuses to send a billed model through the Free quota endpoint', async () => {

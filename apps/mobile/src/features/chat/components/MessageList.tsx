@@ -18,11 +18,17 @@ import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { motion } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import type { ChatMessage } from '@/types/chat';
 import type { VariantInfoByMessageId } from '@agiworkforce/cloud-contracts';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 
 const NEAR_BOTTOM_THRESHOLD = 150;
+
+function canRetry(message: ChatMessage): boolean {
+  if (FEATURES.videoGen || message.role !== 'assistant') return true;
+  return message.type !== 'video' && message.videoGenStatus === undefined;
+}
 
 interface MessageListProps {
   messages: ChatMessage[];
@@ -141,8 +147,8 @@ export function MessageList({
           <MessageBubble
             message={item}
             onDeleteMessage={onDeleteMessage}
-            onRetryMessage={onRetryMessage}
-            onRetryWithModel={onRetryWithModel}
+            onRetryMessage={canRetry(item) ? onRetryMessage : undefined}
+            onRetryWithModel={canRetry(item) ? onRetryWithModel : undefined}
             onBranch={onBranch}
             onScheduleMessage={onScheduleMessage}
             onEditImageArea={onEditImageArea}

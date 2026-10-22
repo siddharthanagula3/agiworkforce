@@ -20,7 +20,6 @@ import {
   type SendPreviewInput,
 } from '@agiworkforce/types';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
-import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
 import { TemporaryChatToggle } from '@/src/features/chat/components/TemporaryChatToggle';
 import { AgiMark } from '@/components/ui/AgiMark';
 import {
@@ -246,21 +245,16 @@ export default function ChatTabScreen() {
   );
   const cloudChatAvailable = FEATURES.cloudChat && Boolean(DEFAULT_CLOUD_MODEL_ID);
   const modeDescription =
-    activeMode === 'cloud'
-      ? 'Continue with AGI Cloud. Use Chats for full history and global search.'
-      : 'Start privately on this device. Use Chats for full history and global search.';
+    activeMode === 'cloud' ? 'Continue with AGI Cloud.' : 'Start privately on this device.';
+
+  const workSwitchVisible =
+    activeMode === 'cloud' && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
 
   useEffect(() => {
-    if (
-      workMode === 'agiwork' &&
-      (activeMode !== 'cloud' ||
-        !cloudUnlocked ||
-        !isClerkSignedIn ||
-        !canUseBillingPlanCapability(subscriptionTier, 'agi_work'))
-    ) {
+    if (workMode === 'agiwork' && (!workSwitchVisible || !cloudUnlocked || !isClerkSignedIn)) {
       setWorkMode('chat');
     }
-  }, [activeMode, cloudUnlocked, isClerkSignedIn, setWorkMode, subscriptionTier, workMode]);
+  }, [cloudUnlocked, isClerkSignedIn, setWorkMode, workMode, workSwitchVisible]);
 
   const modelForSend = useMemo(() => {
     return resolveNewConversationModel({
@@ -349,7 +343,7 @@ export default function ChatTabScreen() {
         if (activeMode === 'cloud' && !FEATURES.cloudChat) {
           Alert.alert(
             'AGI Cloud is unavailable in this build',
-            'This build has Cloud chat turned off. Local Mode remains available and stays on this device.',
+            'Local Mode is still available on this device.',
           );
           return false;
         }
@@ -608,66 +602,13 @@ export default function ChatTabScreen() {
     router.push(beginCloudPostAuthIntent());
   }, [router]);
 
-  const handleTapLocalMode = useCallback(() => {
-    setWorkMode('chat');
-    setAppMode('local');
-    setModel(readyLocalModelIdOr(DEFAULT_LOCAL_MODEL_ID));
-  }, [setAppMode, setModel, setWorkMode]);
-
-  const handleTapCloudMode = useCallback(() => {
-    if (!cloudChatAvailable || !DEFAULT_CLOUD_MODEL_ID) {
-      setAppMode('local');
-      return;
-    }
-    if (!cloudUnlocked) {
-      router.push(beginCloudPostAuthIntent());
-      return;
-    }
-    if (activeMode !== 'cloud') {
-      setAppMode('cloud');
-      setModel(getDefaultCloudModelIdForTier(subscriptionTier) ?? DEFAULT_CLOUD_MODEL_ID);
-    }
-  }, [
-    activeMode,
-    cloudChatAvailable,
-    cloudUnlocked,
-    router,
-    setAppMode,
-    setModel,
-    subscriptionTier,
-  ]);
-
   const handleTapWorkMode = useCallback(() => {
-    if (!canUseBillingPlanCapability(subscriptionTier, 'agi_work')) {
-      router.push('/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0]);
-      return;
-    }
     if (!cloudUnlocked || !isClerkSignedIn) {
       router.push(beginCloudPostAuthIntent());
       return;
     }
-    if (activeMode !== 'cloud') {
-      const switchToCloud = () => {
-        handleTapCloudMode();
-        if (cloudChatAvailable && cloudUnlocked && isClerkSignedIn) setWorkMode('agiwork');
-      };
-      Alert.alert('Work uses AGI Cloud', 'Switch to Cloud to start work with AGI.', [
-        { text: 'Stay in Local Mode', style: 'cancel' },
-        { text: 'Switch to Cloud', onPress: switchToCloud },
-      ]);
-      return;
-    }
     setWorkMode('agiwork');
-  }, [
-    activeMode,
-    cloudChatAvailable,
-    cloudUnlocked,
-    handleTapCloudMode,
-    isClerkSignedIn,
-    router,
-    setWorkMode,
-    subscriptionTier,
-  ]);
+  }, [cloudUnlocked, isClerkSignedIn, router, setWorkMode]);
 
   const handleOpenConnectors = useCallback(() => {
     if (!FEATURES.connectors) {
@@ -890,59 +831,47 @@ export default function ChatTabScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       <View className="flex-row items-center justify-between px-4 h-12">
         <DrawerButton onPress={handleOpenDrawer} />
-        <View
-          accessibilityRole="tablist"
-          accessibilityLabel="Chat or Work"
-          style={{
-            flexDirection: 'row',
-            borderRadius: 999,
-            backgroundColor: c.surfaceElevated,
-            padding: 3,
-          }}
-        >
-          {(['chat', 'agiwork'] as const).map((mode) => {
-            const eligibleWorkMode =
-              activeMode === 'cloud' &&
-              cloudUnlocked &&
-              isClerkSignedIn &&
-              canUseBillingPlanCapability(subscriptionTier, 'agi_work')
-                ? workMode
-                : 'chat';
-            const selected = mode === eligibleWorkMode;
-            return (
-              <Pressable
-                key={mode}
-                testID={`chat.work-mode.${mode}`}
-                accessibilityRole="tab"
-                accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
-                accessibilityState={{ selected }}
-                onPress={mode === 'chat' ? () => setWorkMode('chat') : handleTapWorkMode}
-                style={{
-                  minWidth: 72,
-                  minHeight: 36,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  borderRadius: 999,
-                  backgroundColor: selected ? c.charcoal700 : c.transparent,
-                }}
-              >
-                <Text style={{ color: selected ? c.textPrimary : c.textMuted, fontWeight: '600' }}>
-                  {mode === 'chat' ? 'Chat' : 'Work'}
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
+        {workSwitchVisible ? (
+          <View
+            accessibilityRole="tablist"
+            accessibilityLabel="Chat or Work"
+            style={{
+              flexDirection: 'row',
+              borderRadius: 999,
+              backgroundColor: c.surfaceElevated,
+              padding: 3,
+            }}
+          >
+            {(['chat', 'agiwork'] as const).map((mode) => {
+              const selected = mode === (cloudUnlocked && isClerkSignedIn ? workMode : 'chat');
+              return (
+                <Pressable
+                  key={mode}
+                  testID={`chat.work-mode.${mode}`}
+                  accessibilityRole="tab"
+                  accessibilityLabel={mode === 'chat' ? 'Chat' : 'Work'}
+                  accessibilityState={{ selected }}
+                  onPress={mode === 'chat' ? () => setWorkMode('chat') : handleTapWorkMode}
+                  style={{
+                    minWidth: 72,
+                    minHeight: 36,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    borderRadius: 999,
+                    backgroundColor: selected ? c.charcoal700 : c.transparent,
+                  }}
+                >
+                  <Text
+                    style={{ color: selected ? c.textPrimary : c.textMuted, fontWeight: '600' }}
+                  >
+                    {mode === 'chat' ? 'Chat' : 'Work'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
+        ) : null}
         <TemporaryChatToggle />
-      </View>
-      <View style={{ alignItems: 'center', paddingBottom: 4 }}>
-        <ModeToggle
-          mode={activeMode}
-          cloudUnlocked={cloudUnlocked}
-          onTapLocal={handleTapLocalMode}
-          onTapCloud={handleTapCloudMode}
-          compact
-        />
       </View>
 
       {/* Android: adjustResize already resizes the window; stacking

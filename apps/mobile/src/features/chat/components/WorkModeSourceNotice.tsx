@@ -31,8 +31,7 @@ export function WorkModeSourceNotice({ onOpenConnectors }: { onOpenConnectors: (
         </Text>
       </View>
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.caption, lineHeight: 18 }}>
-        Work mode uses connected services only after you ask. AGI does not scan repositories or
-        accounts in the background to generate task suggestions.
+        Work mode uses connected services only when you ask, never in the background.
       </Text>
       <Pressable
         onPress={onOpenConnectors}

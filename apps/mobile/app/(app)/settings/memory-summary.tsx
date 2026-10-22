@@ -46,8 +46,8 @@ export default function MemorySummaryScreen() {
         title={isCloud ? 'Cloud account memory' : 'On-device memory'}
         body={
           isCloud
-            ? 'Grouped from the memories stored on your AGI account. Nothing here is sent anywhere to build this view.'
-            : 'Grouped from the memories stored on this device. Nothing here leaves the device to build this view.'
+            ? 'Grouped from your AGI account’s memories without sending anything.'
+            : 'Grouped on this device from the memories stored here.'
         }
         icon={Brain}
       />
@@ -66,8 +66,7 @@ export default function MemorySummaryScreen() {
           <Text
             style={{ color: colors.agentWarning, fontSize: typeScale.footnote, lineHeight: 18 }}
           >
-            Memory is off, so none of these are used in new chats. They stay saved until you delete
-            them.
+            Memory is off, so none of these are used in new chats.
           </Text>
         </View>
       ) : null}

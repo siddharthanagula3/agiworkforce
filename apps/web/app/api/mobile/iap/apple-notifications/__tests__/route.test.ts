@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   hasReceipt: vi.fn(async (..._input: unknown[]) => true),
   grant: vi.fn(async (_input: unknown) => 'granted'),
   unattributed: vi.fn(async (_input: unknown) => undefined),
+  rescind: vi.fn(async (_input: unknown) => 'consent_rescinded'),
 }));
 
 vi.mock('@/lib/logger', () => ({
@@ -43,6 +44,7 @@ vi.mock('@/lib/services/mobile-iap-notification-service', async (importOriginal)
   hasMobileIapReceipt: mocks.hasReceipt,
   grantMobileIapPurchaseFromStore: mocks.grant,
   recordUnattributedStoreCharge: mocks.unattributed,
+  recordAppleConsentRescission: mocks.rescind,
 }));
 
 import { POST } from '../route';
@@ -427,4 +429,78 @@ describe('App Store server notifications', () => {
       expect(mocks.unattributed).not.toHaveBeenCalled();
     },
   );
+});
+
+// developer.apple.com/documentation/appstoreservernotifications/notificationtype:
+// RESCIND_CONSENT carries appData.signedAppTransactionInfo instead of data.
+describe('App Store RESCIND_CONSENT notifications', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  function rescind(appTransaction: Record<string, unknown> | null, channel = 'production') {
+    mocks.verify.mockResolvedValue({
+      channel,
+      notification: {
+        notificationUUID: 'notification-rescind-1',
+        notificationType: NotificationTypeV2.RESCIND_CONSENT,
+        appData: { signedAppTransactionInfo: 'signed-app-transaction-fixture' },
+      },
+      transaction: null,
+      renewalInfo: null,
+      appTransaction,
+    });
+    return POST(
+      new NextRequest('http://localhost/api/mobile/iap/apple-notifications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ signedPayload: 'x'.repeat(40) }),
+      }),
+    );
+  }
+
+  it.each(['consent_rescinded', 'duplicate', 'unknown_app_transaction'])(
+    'records the withdrawal for the install Apple names and answers %s',
+    async (status) => {
+      mocks.rescind.mockResolvedValueOnce(status);
+
+      const response = await rescind({ appTransactionId: 'app-tx-1' }, 'sandbox');
+
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual({ received: true, status });
+      expect(mocks.rescind).toHaveBeenCalledWith(
+        expect.objectContaining({
+          notificationId: 'notification-rescind-1',
+          appTransactionId: 'app-tx-1',
+          environment: 'sandbox',
+        }),
+      );
+      expect(mocks.process).not.toHaveBeenCalled();
+    },
+  );
+
+  it('refuses a consent notification whose app transaction names no install', async () => {
+    const response = await rescind({});
+
+    expect(response.status).toBe(400);
+    expect(mocks.rescind).not.toHaveBeenCalled();
+  });
+
+  it('refuses a payload Apple did not sign', async () => {
+    const { createError } = await import('@/lib/errors');
+    mocks.verify.mockRejectedValue(
+      createError.badRequest('Apple could not verify this server notification.'),
+    );
+
+    const response = await POST(
+      new NextRequest('http://localhost/api/mobile/iap/apple-notifications', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ signedPayload: 'x'.repeat(40) }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    expect(mocks.rescind).not.toHaveBeenCalled();
+  });
 });

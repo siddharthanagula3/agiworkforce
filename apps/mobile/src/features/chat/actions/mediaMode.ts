@@ -7,6 +7,7 @@ import {
   isModelLive,
   modelsCatalog,
 } from '@agiworkforce/types';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatViewStore, type MediaMode } from '@/stores/chat/chatViewStore';
 
 const SLOT_FOR_MODE = {
@@ -107,6 +108,7 @@ export function mediaModelIdForMode(mode: MediaMode): string | null {
 }
 
 export function enterMediaMode(kind: MediaKind): boolean {
+  if (kind === 'video' && !FEATURES.videoGen) return false;
   if (!resolveMediaModelId(kind)) return false;
   useChatViewStore.getState().setMediaMode(kind);
   return true;

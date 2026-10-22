@@ -131,7 +131,7 @@ export function useCapability(capability: PlatformCapability): boolean {
 }
 
 export const CAPABILITY_SWITCHED_OFF_BODY =
-  'It was switched off from the server while an issue is fixed. Nothing else in the app is affected, and it comes back without an update.';
+  'It’s paused while we fix an issue and will come back without an update.';
 
 export function CapabilityUnavailable({
   label,

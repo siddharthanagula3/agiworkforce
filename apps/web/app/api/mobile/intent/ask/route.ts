@@ -53,7 +53,7 @@ async function handleAsk(request: NextRequest) {
     return refusal(
       503,
       'answer_unavailable',
-      'AGI Workforce could not answer right now. Try again in the app.',
+      'AGI could not answer right now. Try again in the app.',
     );
   }
 }

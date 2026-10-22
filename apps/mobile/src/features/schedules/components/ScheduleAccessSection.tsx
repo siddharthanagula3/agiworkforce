@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { View } from 'react-native';
 import {
   agentSelectionIncludes,
@@ -10,6 +10,8 @@ import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforc
 import { Text } from '@/components/ui/text';
 import { fetchConnectorDirectory } from '@/services/connectors';
 import { listAgents } from '@/src/features/agents/service';
+import { useAuthStore } from '@/src/features/auth/store';
+import { hiddenSharerIds } from '@/src/features/shared-with-you/hiddenSharers';
 import { Chip, MetaText, ToggleRow } from '@/src/shared/components/cloud-screen';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -32,6 +34,7 @@ export function ScheduleAccessSection({
 }) {
   const colors = useThemeColors();
   const [agents, setAgents] = useState<ManagedCloudAgent[]>([]);
+  const accountId = useAuthStore((state) => state.clerkUserId);
   const [connected, setConnected] = useState<Choice[] | null>(null);
   const showConnectors = connectorsReleased();
 
@@ -66,6 +69,17 @@ export function ScheduleAccessSection({
     };
   }, [showConnectors]);
 
+  const visibleAgents = useMemo(() => {
+    const hidden = accountId ? hiddenSharerIds(accountId) : new Set<string>();
+    return agents.filter(
+      (agent) =>
+        agent.id === agentId ||
+        agent.isOwner ||
+        !agent.ownerUserId ||
+        !hidden.has(agent.ownerUserId),
+    );
+  }, [accountId, agentId, agents]);
+
   const optionIds = (connected ?? []).map((choice) => choice.id);
 
   return (
@@ -81,7 +95,7 @@ export function ScheduleAccessSection({
         </MetaText>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           <Chip label="No agent" selected={agentId === null} onPress={() => onAgentChange(null)} />
-          {agents.map((agent) => (
+          {visibleAgents.map((agent) => (
             <Chip
               key={agent.id}
               label={agent.name}
@@ -101,10 +115,7 @@ export function ScheduleAccessSection({
           <MetaText>{CONNECTORS_COMING_SOON_MESSAGE}</MetaText>
         ) : (
           <>
-            <MetaText>
-              A run can use tools only from the connectors turned on here. A tool that needs your
-              approval still pauses the run until you approve or deny it.
-            </MetaText>
+            <MetaText>Runs can use tools only from the connectors turned on here.</MetaText>
             <ToggleRow
               label="Every connected connector"
               value={connectors === null}

@@ -25,14 +25,14 @@ export default function ParentalControlsScreen() {
       />
       <SettingsInfo
         title="Device age settings only"
-        body="This release does not link parent and teen accounts or provide remote usage, quiet-hour, model, or content controls. Reviewing age changes only this device."
+        body="Age settings apply only to this device; parent accounts can’t be linked."
         icon={Shield}
       />
       {minorMode ? (
         <SettingsInfo
           testID="parental-controls-minor-lock"
           title="Minor-safe mode cannot be turned off here"
-          body="AGI cannot verify a new age, so entering a higher one would let this device switch its own protection off. An adult can lift it by reinstalling AGI, which clears the stored age record and everything saved with it."
+          body="An adult can lift it only by reinstalling AGI, which erases its data."
           icon={Lock}
         />
       ) : (

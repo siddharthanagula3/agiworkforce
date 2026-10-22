@@ -11,9 +11,11 @@
  * produced (ReportDelivery), it must never read as "submitted" for a report
  * that never left the phone.
  *
- * Usage: rendered inside MessageBubble for assistant turns only.
+ * Usage: rendered inside MessageBubble for assistant turns (text, image or
+ * video) and in the Library viewer. ReportSheet is the same sheet without the
+ * flag trigger, for surfaces that open it from their own control.
  */
-import { useState, useCallback } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -31,10 +33,14 @@ import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {
   openSupportEmail,
+  resumeQueuedContentReports,
   saveContentReport,
+  sendStoredContentReport,
   type ContentReport,
+  type ReportAsset,
   type ReportCategory,
   type ReportDelivery,
+  type SharedReportItem,
 } from '@/services/contentReport';
 
 const CATEGORIES: Array<{ id: ReportCategory; label: string }> = [
@@ -47,36 +53,83 @@ const CATEGORIES: Array<{ id: ReportCategory; label: string }> = [
 ];
 
 const DELIVERY_BODY: Record<ReportDelivery['kind'], string> = {
-  'submitted-to-server':
-    'Your report was sent to the AGI safety team for review. A copy is also kept on this device.',
-  'stored-on-device':
-    'You are offline (or in Local Mode), so it stays on this device for now, nothing was sent. Email it to support if you want someone to review it sooner.',
-  'email-composer-opened':
-    'Your mail app opened with the report filled in. Send that email to reach the support team.',
-  'email-unavailable':
-    'No mail app is set up on this device, so the report could not be handed off. It is still saved here.',
+  'submitted-to-server': 'Your report was sent to the AGI safety team for review.',
+  'stored-on-device': 'Saved on this device. Nothing was sent.',
+  'queued-for-upload': 'It sends as soon as it can.',
+  'email-composer-opened': 'Send the email in your mail app to reach the support team.',
+  'email-unavailable': 'No mail app is set up on this device, but the report is still saved here.',
 };
 
 const DELIVERY_TITLE: Record<ReportDelivery['kind'], string> = {
   'submitted-to-server': 'Report submitted for review',
-  'stored-on-device': 'Report saved on this device',
+  'stored-on-device': 'Send this report to AGI?',
+  'queued-for-upload': 'Report queued',
   'email-composer-opened': 'Report saved on this device',
   'email-unavailable': 'Report saved on this device',
 };
 
-interface ReportFlagButtonProps {
+export interface ReportTarget {
   messageId: string;
   conversationId: string;
   contentExcerpt: string;
+  asset?: ReportAsset;
+  sharedItem?: SharedReportItem;
 }
 
-export function ReportFlagButton({
-  messageId,
-  conversationId,
-  contentExcerpt,
-}: ReportFlagButtonProps) {
+interface ReportFlagButtonProps extends ReportTarget {
+  title?: string;
+}
+
+function reportTitle(target: ReportTarget): string {
+  if (target.sharedItem) return 'Report this item';
+  if (target.asset) return `Report this ${target.asset.kind}`;
+  return 'Report this response';
+}
+
+export function ReportFlagButton({ title, ...target }: ReportFlagButtonProps) {
   const colors = useThemeColors();
-  const [modalVisible, setModalVisible] = useState(false);
+  const [visible, setVisible] = useState(false);
+  const label = title ?? reportTitle(target);
+
+  useEffect(() => {
+    resumeQueuedContentReports();
+  }, []);
+
+  return (
+    <>
+      <PressableBox
+        testID="report-flag-button"
+        onPress={() => setVisible(true)}
+        accessibilityRole="button"
+        accessibilityLabel={label}
+        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        style={styles.flagBtn}
+      >
+        <Flag size={12} color={colors.textMuted} />
+        <Text style={[styles.flagLabel, { color: colors.textMuted }]}>Report</Text>
+      </PressableBox>
+      <ReportSheet
+        visible={visible}
+        onClose={() => setVisible(false)}
+        title={label}
+        target={target}
+      />
+    </>
+  );
+}
+
+export function ReportSheet({
+  visible,
+  onClose,
+  title,
+  target,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  title?: string;
+  target: ReportTarget;
+}) {
+  const colors = useThemeColors();
   const [selectedCategory, setSelectedCategory] = useState<ReportCategory | null>(null);
   const [userNote, setUserNote] = useState('');
   const [sendEmail, setSendEmail] = useState(false);
@@ -86,18 +139,16 @@ export function ReportFlagButton({
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const handleOpen = useCallback(() => {
+  useEffect(() => {
+    if (!visible) return;
     setSaved(null);
     setSelectedCategory(null);
     setUserNote('');
     setSendEmail(false);
     setErrorMessage(null);
-    setModalVisible(true);
-  }, []);
+  }, [visible]);
 
-  const handleClose = useCallback(() => {
-    setModalVisible(false);
-  }, []);
+  const handleClose = onClose;
 
   const handleSubmit = useCallback(async () => {
     if (!selectedCategory) return;
@@ -105,9 +156,7 @@ export function ReportFlagButton({
     setErrorMessage(null);
     try {
       const result = await saveContentReport({
-        messageId,
-        conversationId,
-        contentExcerpt,
+        ...target,
         category: selectedCategory,
         userNote,
         sendEmail,
@@ -118,7 +167,20 @@ export function ReportFlagButton({
     } finally {
       setLoading(false);
     }
-  }, [messageId, conversationId, contentExcerpt, selectedCategory, userNote, sendEmail]);
+  }, [target, selectedCategory, userNote, sendEmail]);
+
+  const handleSendStored = useCallback(async () => {
+    if (!saved) return;
+    setLoading(true);
+    try {
+      const delivery = await sendStoredContentReport(saved.report.id);
+      setSaved({ report: { ...saved.report, uploadConsented: true }, delivery });
+    } catch {
+      setErrorMessage('Report could not be sent. Email it instead.');
+    } finally {
+      setLoading(false);
+    }
+  }, [saved]);
 
   const handleEmailHandoff = useCallback(async () => {
     if (!saved) return;
@@ -132,252 +194,277 @@ export function ReportFlagButton({
   }, [saved]);
 
   return (
-    <>
-      <PressableBox
-        testID="report-flag-button"
-        onPress={handleOpen}
-        accessibilityRole="button"
-        accessibilityLabel="Report this response"
-        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-        style={styles.flagBtn}
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={handleClose}
+      accessibilityViewIsModal
+    >
+      <KeyboardAvoidingView
+        style={{ flex: 1 }}
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
       >
-        <Flag size={12} color={colors.textMuted} />
-        <Text style={[styles.flagLabel, { color: colors.textMuted }]}>Report</Text>
-      </PressableBox>
+        <PressableBox
+          style={[styles.backdrop, { backgroundColor: colors.scrim }]}
+          onPress={handleClose}
+        />
 
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="slide"
-        onRequestClose={handleClose}
-        accessibilityViewIsModal
-      >
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        >
-          <PressableBox
-            style={[styles.backdrop, { backgroundColor: colors.scrim }]}
-            onPress={handleClose}
-          />
-
-          <View style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}>
-            {saved ? (
-              <View style={styles.resultContainer}>
-                <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
-                  {DELIVERY_TITLE[saved.delivery.kind]}
-                </Text>
-                <Text style={[styles.resultBody, { color: colors.textSecondary }]}>
-                  {DELIVERY_BODY[saved.delivery.kind]}
-                </Text>
-                {saved.delivery.kind !== 'email-composer-opened' && (
-                  <PressableBox
-                    testID="report-email-handoff-btn"
-                    onPress={() => void handleEmailHandoff()}
-                    disabled={loading}
-                    accessibilityRole="button"
-                    accessibilityLabel="Email this report to support"
-                    accessibilityState={{ disabled: loading }}
-                    style={[styles.submitBtn, { backgroundColor: colors.teal }]}
-                  >
-                    {loading ? (
-                      <ActivityIndicator size="small" color={colors.accentText} />
-                    ) : (
-                      <Text style={[styles.submitBtnText, { color: colors.accentText }]}>
-                        Email this report to support
-                      </Text>
-                    )}
-                  </PressableBox>
-                )}
-                <PressableBox
-                  testID="report-close-btn"
-                  onPress={handleClose}
-                  accessibilityRole="button"
-                  accessibilityLabel="Done"
-                  style={
-                    saved.delivery.kind === 'email-composer-opened'
-                      ? [styles.submitBtn, { backgroundColor: colors.teal }]
-                      : styles.cancelBtn
-                  }
-                >
-                  <Text
-                    style={
-                      saved.delivery.kind === 'email-composer-opened'
-                        ? [styles.submitBtnText, { color: colors.accentText }]
-                        : [styles.cancelBtnText, { color: colors.textMuted }]
-                    }
-                  >
-                    Done
-                  </Text>
-                </PressableBox>
-              </View>
-            ) : (
-              <ScrollView showsVerticalScrollIndicator={false}>
+        <View style={[styles.sheet, { backgroundColor: colors.surfaceElevated }]}>
+          {saved ? (
+            <View style={styles.resultContainer}>
+              <Text style={[styles.sheetTitle, { color: colors.textPrimary }]}>
+                {DELIVERY_TITLE[saved.delivery.kind]}
+              </Text>
+              <Text style={[styles.resultBody, { color: colors.textSecondary }]}>
+                {DELIVERY_BODY[saved.delivery.kind]}
+              </Text>
+              {errorMessage && (
                 <Text
-                  style={[styles.sheetTitle, { color: colors.textPrimary }]}
-                  accessibilityRole="header"
+                  selectable
+                  accessibilityRole="alert"
+                  style={[styles.resultError, { color: colors.agentError }]}
                 >
-                  Report this response
+                  {errorMessage}
                 </Text>
-                <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
-                  Select the reason that best describes the issue. Your report is saved on this
-                  device and, when you are connected, sent to the AGI safety team for review. You
-                  can also email it to support below.
-                </Text>
-
-                <View style={styles.categoryList}>
-                  {CATEGORIES.map((cat) => (
-                    <PressableBox
-                      key={cat.id}
-                      testID={`report-category-${cat.id}`}
-                      onPress={() => setSelectedCategory(cat.id)}
-                      accessibilityRole="button"
-                      accessibilityLabel={cat.label}
-                      accessibilityState={{ selected: selectedCategory === cat.id }}
-                      style={[
-                        styles.categoryRow,
-                        {
-                          borderColor: selectedCategory === cat.id ? colors.teal : colors.border,
-                          backgroundColor:
-                            selectedCategory === cat.id
-                              ? colors.accentSurface
-                              : colors.surfaceElevated,
-                        },
-                      ]}
-                    >
-                      <View
-                        style={[
-                          styles.radio,
-                          {
-                            borderColor: selectedCategory === cat.id ? colors.teal : colors.border,
-                            backgroundColor:
-                              selectedCategory === cat.id ? colors.teal : colors.transparent,
-                          },
-                        ]}
-                      />
-                      <Text style={[styles.categoryLabel, { color: colors.textPrimary }]}>
-                        {cat.label}
-                      </Text>
-                    </PressableBox>
-                  ))}
-                </View>
-
-                <Text style={[styles.noteLabel, { color: colors.textSecondary }]}>
-                  Additional details (optional)
-                </Text>
-                <TextInput
-                  testID="report-note-input"
-                  value={userNote}
-                  onChangeText={setUserNote}
-                  placeholder="Describe the issue..."
-                  placeholderTextColor={colors.textMuted}
-                  multiline
-                  numberOfLines={3}
-                  maxLength={500}
-                  style={[
-                    styles.noteInput,
-                    {
-                      color: colors.textPrimary,
-                      borderColor: colors.border,
-                      backgroundColor: colors.inputSurface,
-                    },
-                  ]}
-                  accessibilityLabel="Additional details about the issue"
-                />
-
+              )}
+              {saved.delivery.kind === 'stored-on-device' && (
                 <PressableBox
-                  testID="report-email-toggle"
-                  onPress={() => setSendEmail((v) => !v)}
+                  testID="report-send-stored-btn"
+                  onPress={() => void handleSendStored()}
+                  disabled={loading}
+                  accessibilityRole="button"
+                  accessibilityLabel="Send"
+                  accessibilityState={{ disabled: loading }}
+                  style={[styles.submitBtn, { backgroundColor: colors.teal }]}
+                >
+                  {loading ? (
+                    <ActivityIndicator size="small" color={colors.accentText} />
+                  ) : (
+                    <Text style={[styles.submitBtnText, { color: colors.accentText }]}>Send</Text>
+                  )}
+                </PressableBox>
+              )}
+              {saved.delivery.kind === 'stored-on-device' ? (
+                <PressableBox
+                  testID="report-email-handoff-btn"
+                  onPress={() => void handleEmailHandoff()}
+                  disabled={loading}
                   accessibilityRole="button"
                   accessibilityLabel="Email this report to support"
-                  accessibilityHint="Opens your mail app with the report filled in. You still choose to send it."
-                  accessibilityState={{ selected: sendEmail }}
-                  style={styles.emailRow}
+                  accessibilityState={{ disabled: loading }}
+                  style={styles.cancelBtn}
                 >
-                  <View
-                    style={[
-                      styles.checkbox,
-                      {
-                        borderColor: sendEmail ? colors.teal : colors.border,
-                        backgroundColor: sendEmail ? colors.teal : colors.transparent,
-                      },
-                    ]}
-                  >
-                    {sendEmail && (
-                      <Text
-                        style={{
-                          color: colors.accentText,
-                          fontSize: typeScale.caption,
-                          fontWeight: '700',
-                        }}
-                      >
-                        ✓
-                      </Text>
-                    )}
-                  </View>
-                  <View style={styles.emailCopy}>
-                    <Text style={[styles.emailLabel, { color: colors.textSecondary }]}>
-                      Email this report to support
-                    </Text>
-                    <Text style={[styles.emailCaption, { color: colors.textMuted }]}>
-                      Opens your mail app with the report filled in.
-                    </Text>
-                  </View>
-                </PressableBox>
-
-                {errorMessage && (
-                  <Text
-                    selectable
-                    accessibilityRole="alert"
-                    style={{
-                      color: colors.agentError,
-                      fontSize: typeScale.footnote,
-                      lineHeight: 18,
-                      marginBottom: 12,
-                    }}
-                  >
-                    {errorMessage}
+                  <Text style={[styles.cancelBtnText, { color: colors.textSecondary }]}>
+                    Email support instead
                   </Text>
-                )}
-
-                {/* Save, "submit" would name a transmission that does not happen */}
+                </PressableBox>
+              ) : saved.delivery.kind !== 'email-composer-opened' ? (
                 <PressableBox
-                  testID="report-submit-btn"
-                  onPress={handleSubmit}
-                  disabled={!selectedCategory || loading}
+                  testID="report-email-handoff-btn"
+                  onPress={() => void handleEmailHandoff()}
+                  disabled={loading}
                   accessibilityRole="button"
-                  accessibilityLabel={loading ? 'Saving report' : 'Save report'}
-                  accessibilityState={{ disabled: !selectedCategory || loading }}
-                  style={[
-                    styles.submitBtn,
-                    {
-                      backgroundColor: selectedCategory && !loading ? colors.teal : colors.border,
-                    },
-                  ]}
+                  accessibilityLabel="Email this report to support"
+                  accessibilityState={{ disabled: loading }}
+                  style={[styles.submitBtn, { backgroundColor: colors.teal }]}
                 >
                   {loading ? (
                     <ActivityIndicator size="small" color={colors.accentText} />
                   ) : (
                     <Text style={[styles.submitBtnText, { color: colors.accentText }]}>
-                      Save report
+                      Email this report to support
                     </Text>
                   )}
                 </PressableBox>
-
-                <PressableBox
-                  testID="report-cancel-btn"
-                  onPress={handleClose}
-                  accessibilityRole="button"
-                  style={styles.cancelBtn}
+              ) : null}
+              <PressableBox
+                testID="report-close-btn"
+                onPress={handleClose}
+                accessibilityRole="button"
+                accessibilityLabel={saved.delivery.kind === 'stored-on-device' ? 'Cancel' : 'Done'}
+                style={
+                  saved.delivery.kind === 'email-composer-opened'
+                    ? [styles.submitBtn, { backgroundColor: colors.teal }]
+                    : styles.cancelBtn
+                }
+              >
+                <Text
+                  style={
+                    saved.delivery.kind === 'email-composer-opened'
+                      ? [styles.submitBtnText, { color: colors.accentText }]
+                      : [styles.cancelBtnText, { color: colors.textMuted }]
+                  }
                 >
-                  <Text style={[styles.cancelBtnText, { color: colors.textMuted }]}>Cancel</Text>
-                </PressableBox>
-              </ScrollView>
-            )}
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
-    </>
+                  {saved.delivery.kind === 'stored-on-device' ? 'Cancel' : 'Done'}
+                </Text>
+              </PressableBox>
+            </View>
+          ) : (
+            <ScrollView showsVerticalScrollIndicator={false}>
+              <Text
+                style={[styles.sheetTitle, { color: colors.textPrimary }]}
+                accessibilityRole="header"
+              >
+                {title ?? reportTitle(target)}
+              </Text>
+              <Text style={[styles.sheetSubtitle, { color: colors.textSecondary }]}>
+                Reports are saved on this device and sent to the AGI safety team for review when
+                you’re online.
+              </Text>
+
+              <View style={styles.categoryList}>
+                {CATEGORIES.map((cat) => (
+                  <PressableBox
+                    key={cat.id}
+                    testID={`report-category-${cat.id}`}
+                    onPress={() => setSelectedCategory(cat.id)}
+                    accessibilityRole="button"
+                    accessibilityLabel={cat.label}
+                    accessibilityState={{ selected: selectedCategory === cat.id }}
+                    style={[
+                      styles.categoryRow,
+                      {
+                        borderColor: selectedCategory === cat.id ? colors.teal : colors.border,
+                        backgroundColor:
+                          selectedCategory === cat.id
+                            ? colors.accentSurface
+                            : colors.surfaceElevated,
+                      },
+                    ]}
+                  >
+                    <View
+                      style={[
+                        styles.radio,
+                        {
+                          borderColor: selectedCategory === cat.id ? colors.teal : colors.border,
+                          backgroundColor:
+                            selectedCategory === cat.id ? colors.teal : colors.transparent,
+                        },
+                      ]}
+                    />
+                    <Text style={[styles.categoryLabel, { color: colors.textPrimary }]}>
+                      {cat.label}
+                    </Text>
+                  </PressableBox>
+                ))}
+              </View>
+
+              <Text style={[styles.noteLabel, { color: colors.textSecondary }]}>
+                Additional details (optional)
+              </Text>
+              <TextInput
+                testID="report-note-input"
+                value={userNote}
+                onChangeText={setUserNote}
+                placeholder="Describe the issue..."
+                placeholderTextColor={colors.textMuted}
+                multiline
+                numberOfLines={3}
+                maxLength={500}
+                style={[
+                  styles.noteInput,
+                  {
+                    color: colors.textPrimary,
+                    borderColor: colors.border,
+                    backgroundColor: colors.inputSurface,
+                  },
+                ]}
+                accessibilityLabel="Additional details about the issue"
+              />
+
+              <PressableBox
+                testID="report-email-toggle"
+                onPress={() => setSendEmail((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel="Email this report to support"
+                accessibilityHint="Opens your mail app with the report filled in. You still choose to send it."
+                accessibilityState={{ selected: sendEmail }}
+                style={styles.emailRow}
+              >
+                <View
+                  style={[
+                    styles.checkbox,
+                    {
+                      borderColor: sendEmail ? colors.teal : colors.border,
+                      backgroundColor: sendEmail ? colors.teal : colors.transparent,
+                    },
+                  ]}
+                >
+                  {sendEmail && (
+                    <Text
+                      style={{
+                        color: colors.accentText,
+                        fontSize: typeScale.caption,
+                        fontWeight: '700',
+                      }}
+                    >
+                      ✓
+                    </Text>
+                  )}
+                </View>
+                <View style={styles.emailCopy}>
+                  <Text style={[styles.emailLabel, { color: colors.textSecondary }]}>
+                    Email this report to support
+                  </Text>
+                  <Text style={[styles.emailCaption, { color: colors.textMuted }]}>
+                    Opens your mail app with the report filled in.
+                  </Text>
+                </View>
+              </PressableBox>
+
+              {errorMessage && (
+                <Text
+                  selectable
+                  accessibilityRole="alert"
+                  style={{
+                    color: colors.agentError,
+                    fontSize: typeScale.footnote,
+                    lineHeight: 18,
+                    marginBottom: 12,
+                  }}
+                >
+                  {errorMessage}
+                </Text>
+              )}
+
+              {/* Save, "submit" would name a transmission that does not happen */}
+              <PressableBox
+                testID="report-submit-btn"
+                onPress={handleSubmit}
+                disabled={!selectedCategory || loading}
+                accessibilityRole="button"
+                accessibilityLabel={loading ? 'Saving report' : 'Save report'}
+                accessibilityState={{ disabled: !selectedCategory || loading }}
+                style={[
+                  styles.submitBtn,
+                  {
+                    backgroundColor: selectedCategory && !loading ? colors.teal : colors.border,
+                  },
+                ]}
+              >
+                {loading ? (
+                  <ActivityIndicator size="small" color={colors.accentText} />
+                ) : (
+                  <Text style={[styles.submitBtnText, { color: colors.accentText }]}>
+                    Save report
+                  </Text>
+                )}
+              </PressableBox>
+
+              <PressableBox
+                testID="report-cancel-btn"
+                onPress={handleClose}
+                accessibilityRole="button"
+                style={styles.cancelBtn}
+              >
+                <Text style={[styles.cancelBtnText, { color: colors.textMuted }]}>Cancel</Text>
+              </PressableBox>
+            </ScrollView>
+          )}
+        </View>
+      </KeyboardAvoidingView>
+    </Modal>
   );
 }
 
@@ -493,6 +580,12 @@ const styles = StyleSheet.create({
   resultContainer: {
     alignItems: 'center',
     paddingVertical: 16,
+  },
+  resultError: {
+    fontSize: typeScale.footnote,
+    lineHeight: 18,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   resultBody: {
     fontSize: typeScale.body,

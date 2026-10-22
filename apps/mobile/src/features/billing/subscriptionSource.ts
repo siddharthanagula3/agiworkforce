@@ -38,6 +38,10 @@ export function subscriptionSourceLabel(source: MobileBillingSource): string {
   }
 }
 
+function isWebBilledSource(source: MobileBillingSource): boolean {
+  return source === 'stripe' || source === 'manual';
+}
+
 export function subscriptionManagementUrl(source: MobileBillingSource): string | null {
   switch (source) {
     case 'stripe':
@@ -56,51 +60,52 @@ export function subscriptionManagementUrl(source: MobileBillingSource): string |
 export function getSubscriptionOwnerGuard(
   source: MobileBillingSource,
   status: string,
+  webBillingLinksAllowed: boolean,
 ): SubscriptionOwnerGuard {
   const entitled = isEntitledSubscriptionStatus(status);
   const hasRecoverableRecordedOwner =
     source !== 'none' && !TERMINAL_SUBSCRIPTION_STATUSES.has(status.trim().toLowerCase());
-  const managementUrl = subscriptionManagementUrl(source);
+  const managementUrl =
+    isWebBilledSource(source) && !webBillingLinksAllowed ? null : subscriptionManagementUrl(source);
 
   return {
     blocked: entitled || hasRecoverableRecordedOwner,
     sourceLabel: subscriptionSourceLabel(source),
     managementUrl,
-    managementActionLabel:
-      source === 'stripe' || source === 'manual'
+    managementActionLabel: !managementUrl
+      ? 'OK'
+      : isWebBilledSource(source)
         ? 'Manage on web'
-        : managementUrl
-          ? 'Open subscriptions'
-          : 'OK',
+        : 'Open subscriptions',
   };
 }
 
 export type BillingManagementTarget =
-  | { kind: 'portal' }
-  | { kind: 'external'; url: string; label: string }
-  | null;
+  { kind: 'portal' } | { kind: 'external'; url: string; label: string } | null;
 
 /**
  * Where "Manage billing" actually goes. A store-billed subscription can only be
  * changed in the store that owns it, and the hosted portal exists only for a
  * web-billed account on a build that ships it. Anything else has no destination,
- * and the row is not drawn rather than opening something that cannot help.
+ * and the row is not drawn rather than opening something that cannot help. Web
+ * billing is also undrawn wherever the store forbids linking to it.
  */
 export function billingManagementTarget(input: {
   source: MobileBillingSource;
   portalEnabled: boolean;
+  webBillingLinksAllowed: boolean;
 }): BillingManagementTarget {
-  const { source, portalEnabled } = input;
-  if ((source === 'stripe' || source === 'manual') && portalEnabled) return { kind: 'portal' };
+  const { source, portalEnabled, webBillingLinksAllowed } = input;
+  if (isWebBilledSource(source) && !webBillingLinksAllowed) return null;
+  if (isWebBilledSource(source) && portalEnabled) return { kind: 'portal' };
 
   const url = subscriptionManagementUrl(source);
   if (!url) return null;
   return {
     kind: 'external',
     url,
-    label:
-      source === 'stripe' || source === 'manual'
-        ? 'Manage billing on the web'
-        : `Manage in ${subscriptionSourceLabel(source)}`,
+    label: isWebBilledSource(source)
+      ? 'Manage billing on the web'
+      : `Manage in ${subscriptionSourceLabel(source)}`,
   };
 }

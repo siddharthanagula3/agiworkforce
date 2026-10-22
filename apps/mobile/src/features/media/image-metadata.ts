@@ -10,7 +10,7 @@ import { stripImageMetadata, type ImageMetadataFormat } from '@agiworkforce/util
 const BASE64_CHUNK = 0x2000;
 
 export const PICTURE_METADATA_RECOVERY_MESSAGE =
-  'This picture was not attached because its location and camera details could not be removed. Save a copy from Photos and attach that instead.';
+  'This photo’s location data couldn’t be removed, so save a copy from Photos and attach that.';
 
 const FORMAT_EXTENSION: Readonly<Record<ImageMetadataFormat, string>> = {
   jpeg: 'jpg',
@@ -22,7 +22,7 @@ const FORMAT_EXTENSION: Readonly<Record<ImageMetadataFormat, string>> = {
 export class PictureMetadataError extends Error {
   constructor(fileName: string) {
     super(
-      `"${fileName}" was not attached. The location and camera details in a picture are removed before it leaves your device, and this file could not be read well enough to do that. Save a copy from the Photos app and attach that instead.`,
+      `"${fileName}" wasn’t attached because its location data couldn’t be removed; save a copy from Photos instead.`,
     );
     this.name = 'PictureMetadataError';
   }

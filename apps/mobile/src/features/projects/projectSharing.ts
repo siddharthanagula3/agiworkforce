@@ -61,7 +61,7 @@ export type SharedProject = z.infer<typeof SharedProjectSchema>;
 export type SharingMember = z.infer<typeof MemberSchema>;
 
 export const PROJECT_SHARED_CONTEXT_COPY =
-  'Shared with your workspace. Members see this project’s instructions and files. Each person’s chats in it stay private, and project memories stay with the person who saved them.';
+  'Members see its instructions and files, but each person’s chats stay private.';
 
 export const ACCESS_LABELS: Readonly<Record<ProjectMemberAccess, string>> = {
   read: 'Can view',

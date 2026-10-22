@@ -66,7 +66,7 @@ export default function DataControlsScreen() {
 
     Alert.alert(
       'Sync Local Chats to AGI Cloud?',
-      'This will copy your local conversation titles and message text to AGI Cloud. File attachments and memory facts stay on this device. This action is one-time and manual, AGI never syncs automatically.',
+      'Copies your local chat text to AGI Cloud once; files and memory stay on this device.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -116,7 +116,7 @@ export default function DataControlsScreen() {
     if (appMode !== 'cloud') {
       Alert.alert(
         'Chat is set to Local Mode',
-        'Archive all and Delete all act on chats stored in AGI Cloud. Switch chat to AGI Cloud to manage them, chats that only exist on this device are wiped from Settings → Storage.',
+        'Switch chat to AGI Cloud to archive or delete your Cloud chats.',
       );
       return false;
     }
@@ -163,7 +163,7 @@ export default function DataControlsScreen() {
     if (!account) return;
     Alert.alert(
       'Archive all chats?',
-      'Every chat in AGI Cloud moves into Archived chats. Nothing is deleted, and you can restore any of them later.',
+      'Every AGI Cloud chat moves to Archived chats, where you can restore it.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -194,7 +194,7 @@ export default function DataControlsScreen() {
     if (!account) return;
     Alert.alert(
       'Delete all chats?',
-      'Every chat in AGI Cloud, including archived ones, and all of their messages are removed from every device on this account. You can restore them from Recently deleted in Settings on the web for 30 days.',
+      'Deletes every AGI Cloud chat, archived ones too, on all devices; restorable on the web for 30 days.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -203,7 +203,7 @@ export default function DataControlsScreen() {
           onPress: () => {
             Alert.alert(
               'Are you absolutely sure?',
-              'Your entire AGI Cloud chat history will be deleted. Export your data first if you want a copy.',
+              'Your entire AGI Cloud chat history will be deleted.',
               [
                 { text: 'Cancel', style: 'cancel' },
                 {
@@ -228,7 +228,7 @@ export default function DataControlsScreen() {
     >
       <SettingsInfo
         title="Model training"
-        body="AGI does not use your prompts, responses or files to train AGI-owned models. On the Free plan, requests are served by providers’ free models, and those providers’ terms may allow them to train on what you send, unless you turn on Only use models that do not train on your chats in Privacy settings."
+        body="AGI doesn’t train its own models on your chats; Free-plan providers may unless you opt out in Privacy settings."
         icon={ShieldCheck}
       />
       <SettingsInfo
@@ -273,7 +273,7 @@ export default function DataControlsScreen() {
 
       <SettingsInfo
         title="Chat history"
-        body="These act on chats stored in AGI Cloud. Chats that only exist on this device are never sent to AGI and are wiped from Settings → Storage."
+        body="These act only on chats stored in AGI Cloud."
         icon={History}
       />
       <SettingsGroup>
@@ -354,7 +354,7 @@ export default function DataControlsScreen() {
       */}
       <SettingsInfo
         title="Sync to AGI Cloud"
-        body="Manually copy your local chats to AGI Cloud once. File attachments and memory stay on this device. AGI never syncs automatically, this is always your choice."
+        body="Copy your local chats to AGI Cloud once; files and memory stay on this device."
         icon={Cloud}
       />
       <SettingsGroup>
@@ -389,7 +389,7 @@ export default function DataControlsScreen() {
 
       <SettingsInfo
         title="AGI Cloud account"
-        body="Export your Cloud data or request account deletion from your account settings. Deleting your Cloud account does not erase data kept only on this device."
+        body="Deleting your Cloud account doesn’t erase data kept only on this device."
         icon={Cloud}
       />
       <SettingsGroup>

@@ -198,7 +198,7 @@ export default function MemoryImportScreen() {
             </Text>
             <Text className="text-xs leading-5" style={{ color: colors.textSecondary }}>
               {isCloud
-                ? 'Only the memories you choose to import are sent to your AGI Cloud account, where they sync to your other devices.'
+                ? 'Only the memories you import are saved to your AGI Cloud account.'
                 : 'The text is read on this device and the memories stay here. Nothing is uploaded.'}
             </Text>
           </View>
@@ -207,8 +207,8 @@ export default function MemoryImportScreen() {
         {step === 'compose' && (
           <View>
             <Text style={{ fontSize: typeScale.subhead, color: colors.textSecondary }}>
-              Ask your other assistant to list everything it remembers about you, one memory per
-              line, then paste the answer here. A JSON list of strings also works.
+              Ask your other assistant to list what it remembers about you, one per line, and paste
+              it here.
             </Text>
 
             <Text

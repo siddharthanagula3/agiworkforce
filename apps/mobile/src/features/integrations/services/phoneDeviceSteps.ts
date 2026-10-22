@@ -31,13 +31,13 @@ export const PHONE_STEP_DECLINED: PhoneStepOutcome = {
 
 const CALENDAR_OFF: PhoneStepOutcome = {
   content:
-    "Calendar access is off for AGI Workforce on this phone, so nothing was read or added. The user can turn it on for AGI Workforce in the phone's Settings app.",
+    "Calendar access is off for AGI Mobile on this phone, so nothing was read or added. The user can turn it on for AGI Mobile in the phone's Settings app.",
   isError: true,
 };
 
 const REMINDERS_OFF: PhoneStepOutcome = {
   content:
-    "Reminders access is off for AGI Workforce on this phone, so nothing was added. The user can turn it on for AGI Workforce in the phone's Settings app.",
+    "Reminders access is off for AGI Mobile on this phone, so nothing was added. The user can turn it on for AGI Mobile in the phone's Settings app.",
   isError: true,
 };
 

@@ -64,8 +64,7 @@ export function CloudCodeGate({ signedIn, onBack, onContinue }: CloudCodeGatePro
             textAlign: 'center',
           }}
         >
-          Local Mode stays on this device. Switch to AGI Cloud to follow the coding sessions on your
-          account and answer anything waiting on you.
+          Switch to AGI Cloud to follow your coding sessions.
         </Text>
         <Button
           title={signedIn ? 'Switch to AGI Cloud' : 'Sign in to AGI Cloud'}

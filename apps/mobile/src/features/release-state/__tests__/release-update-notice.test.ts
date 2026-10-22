@@ -10,7 +10,7 @@ describe('what changed after an update', () => {
   });
 
   it('announces the new version once it changes', () => {
-    expect(noticeForVersion('1.3.2', '1.4.0')).toBe('AGI Workforce updated to 1.4.0.');
+    expect(noticeForVersion('1.3.2', '1.4.0')).toBe('AGI Mobile updated to 1.4.0.');
   });
 
   it('links to the release notes on the configured origin', () => {

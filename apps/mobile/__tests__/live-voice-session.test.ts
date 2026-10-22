@@ -87,6 +87,17 @@ jest.mock('@/services/api', () => ({ apiFetch: (...args: unknown[]) => mockApiFe
 
 jest.mock('react-native', () => ({ NativeModules: { WebRTCModule: {} } }));
 
+const mockEnsureCloudSendConsent = jest.fn();
+jest.mock('@/services/llmGate', () => {
+  class CloudProviderConsentRequiredError extends Error {
+    readonly code = 'cloud_provider_consent_required' as const;
+  }
+  return {
+    CloudProviderConsentRequiredError,
+    ensureCloudSendConsent: (...args: unknown[]) => mockEnsureCloudSendConsent(...args),
+  };
+});
+
 jest.mock('expo-constants', () => ({
   __esModule: true,
   default: { expoConfig: { version: '1.2.0' } },
@@ -154,10 +165,27 @@ describe('LiveVoiceSession', () => {
     }));
     mockApiFetch.mockReset();
     mockApiFetch.mockResolvedValue(createdResponse());
+    mockEnsureCloudSendConsent.mockReset().mockResolvedValue(undefined);
   });
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it('opens no microphone and sends nothing when Cloud provider consent is declined', async () => {
+    const { CloudProviderConsentRequiredError } = jest.requireMock('@/services/llmGate') as {
+      CloudProviderConsentRequiredError: new (message: string) => Error;
+    };
+    mockEnsureCloudSendConsent.mockRejectedValueOnce(
+      new CloudProviderConsentRequiredError('Allow first.'),
+    );
+
+    const error = await startSession().catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(LiveVoiceSessionError);
+    expect(error).toMatchObject({ code: 'cloud_provider_consent_required' });
+    expect(mockState.getUserMedia).not.toHaveBeenCalled();
+    expect(mockApiFetch).not.toHaveBeenCalled();
   });
 
   it('posts the offer to the app server and applies the answer', async () => {

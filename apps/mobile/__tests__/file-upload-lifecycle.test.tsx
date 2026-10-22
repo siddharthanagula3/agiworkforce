@@ -43,6 +43,11 @@ jest.mock('../src/ui/theme', () => ({
 
 jest.mock('@/services/api', () => ({ api: { uploadFile: jest.fn() } }));
 
+const mockEnsureCloudSendConsent = jest.fn();
+jest.mock('@/services/llmGate', () => ({
+  ensureCloudSendConsent: (...args: unknown[]) => mockEnsureCloudSendConsent(...args),
+}));
+
 let mockAccountCurrent = true;
 jest.mock('../src/features/auth/services/cloudAccountSession', () => ({
   captureCloudAccountEpoch: () => ({ ownerId: 'account-a', epoch: 1 }),
@@ -108,6 +113,7 @@ function entry(id: string) {
 
 beforeEach(() => {
   mockUploadFile.mockReset();
+  mockEnsureCloudSendConsent.mockReset().mockResolvedValue(undefined);
   mockAccountCurrent = true;
   useUploadLifecycleStore.getState().reset();
   jest.useRealTimers();
@@ -155,6 +161,21 @@ describe('upload progress', () => {
     const bar = getByTestId(`attachment-progress-${ROWS_CSV.id}`);
     expect(bar.props.accessibilityValue).toEqual({ min: 0, max: 100, now: 25 });
     expect(bar.props.accessibilityLabel).toBe('rows.csv, Uploading 25%');
+  });
+});
+
+describe('Cloud provider consent', () => {
+  it('uploads nothing and marks the file failed when consent is declined', async () => {
+    mockEnsureCloudSendConsent.mockRejectedValueOnce(new Error('Allow AI providers first.'));
+
+    const result = await uploadWithRetry(fileInputFor(NOTES_TXT), NOTES_TXT.fileName, NOTES_TXT.id);
+
+    expect(result).toBeNull();
+    expect(mockUploadFile).not.toHaveBeenCalled();
+    expect(entry(NOTES_TXT.id)).toMatchObject({
+      phase: 'failed',
+      error: 'Allow AI providers first.',
+    });
   });
 });
 

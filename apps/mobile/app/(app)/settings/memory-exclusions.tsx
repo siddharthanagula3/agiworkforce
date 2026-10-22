@@ -152,7 +152,7 @@ export default function MemoryExclusionsScreen() {
     <SettingsScreenShell title="Never remember" backHref="/(app)/settings/memory">
       <SettingsInfo
         title="Cloud account memory"
-        body="New memories that contain any of these terms are discarded before they are saved. Matching ignores case. This applies to new memories only; anything already saved stays until you delete it."
+        body="New memories containing these terms aren’t saved; existing ones stay until you delete them."
         icon={Ban}
       />
 
@@ -303,8 +303,7 @@ export default function MemoryExclusionsScreen() {
           marginBottom: 24,
         }}
       >
-        Turn a source off to keep its memories out of every answer. They stay saved and listed, and
-        turning off automatic capture also stops new ones being written.
+        Turn a source off to keep its memories out of answers without deleting them.
       </Text>
     </SettingsScreenShell>
   );

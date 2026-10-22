@@ -3,9 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 import {
-  FREE_PLAN_TRAINING_DATA_DISCLOSURE,
-  FREE_PLAN_TRAINING_NOTICE_LEAD,
-  FREE_PLAN_TRAINING_NOTICE_TAIL,
+  FREE_PLAN_TRAINING_SIGNUP_NOTICE,
+  FREE_PLAN_TRAINING_SIGNUP_NOTICE_LINK_LABEL,
 } from '@agiworkforce/compliance';
 
 const mockReplace = jest.fn();
@@ -228,11 +227,8 @@ describe('LoginScreen', () => {
     fireEvent.press(getByTestId('cloud-auth-signUp'));
     expect(getByText('Already have an account?')).toBeTruthy();
     expect(getByTestId('cloud-sign-up-data-use')).toBeTruthy();
-    expect(
-      getByText(
-        `${FREE_PLAN_TRAINING_NOTICE_LEAD} ${FREE_PLAN_TRAINING_DATA_DISCLOSURE} ${FREE_PLAN_TRAINING_NOTICE_TAIL}`,
-      ),
-    ).toBeTruthy();
+    expect(getByText(FREE_PLAN_TRAINING_SIGNUP_NOTICE)).toBeTruthy();
+    expect(getByText(FREE_PLAN_TRAINING_SIGNUP_NOTICE_LINK_LABEL)).toBeTruthy();
     expect(getByTestId('mobile-custom-sign-up')).toBeTruthy();
     expect(getByText('Create an account')).toBeTruthy();
     expect(getByTestId('mobile-sign-up-google')).toBeTruthy();

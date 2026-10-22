@@ -85,7 +85,7 @@ export function SupportTicketsScreen() {
           'Ticket raised',
           opened.staffNotified
             ? 'The support team has been emailed about it. Replies appear here.'
-            : `The ticket is saved, but the email that tells the support team about it was not sent. If this is urgent, also write to ${SUPPORT_EMAIL}.`,
+            : `The ticket is saved, but if it’s urgent, also email ${SUPPORT_EMAIL}.`,
         );
       } catch (error) {
         Alert.alert('That ticket was not raised', toUserMessage(error, 'Please try again.'));

@@ -24,9 +24,12 @@ export const CANONICAL_IDENTITY = Object.freeze({
   easProjectId: '38f0941c-88a7-468a-9750-fcd8b357ff4c',
 });
 
-const PRODUCTION_ENTITLEMENTS = Object.freeze(['com.apple.developer.siri']);
+const PRODUCTION_ENTITLEMENTS = Object.freeze(['com.apple.developer.declared-age-range']);
 
-const PRODUCTION_ASSOCIATED_DOMAINS = Object.freeze(['applinks:agiworkforce.com']);
+const PRODUCTION_ASSOCIATED_DOMAINS = Object.freeze([
+  'applinks:agiworkforce.com',
+  'webcredentials:agiworkforce.com',
+]);
 
 // expo-dev-client stays a dependency: its native launcher is excluded from a
 // Release build, and the profile below is what keeps that true.

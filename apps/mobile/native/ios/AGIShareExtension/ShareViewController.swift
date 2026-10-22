@@ -60,7 +60,7 @@ final class ShareViewController: UIViewController {
     titleLabel.adjustsFontForContentSizeCategory = true
 
     detailLabel.text =
-      "Review this content here, then save it. Open AGI Workforce to review again before sending."
+      "Review this content here, then save it. Open AGI Mobile to review again before sending."
     detailLabel.font = .preferredFont(forTextStyle: .subheadline)
     detailLabel.textColor = .secondaryLabel
     detailLabel.numberOfLines = 0
@@ -84,7 +84,7 @@ final class ShareViewController: UIViewController {
     reviewButton.titleLabel?.font = .preferredFont(forTextStyle: .headline)
     reviewButton.isEnabled = false
     reviewButton.addTarget(self, action: #selector(saveForReview), for: .touchUpInside)
-    reviewButton.accessibilityHint = "Saves this content for review when AGI Workforce opens"
+    reviewButton.accessibilityHint = "Saves this content for review when AGI Mobile opens"
 
     activityIndicator.startAnimating()
     activityIndicator.hidesWhenStopped = true
@@ -436,7 +436,7 @@ final class ShareViewController: UIViewController {
           self.reviewButton.isEnabled = true
           let alert = UIAlertController(
             title: "Could Not Save Share",
-            message: "Try again. AGI Workforce will not receive this content until it is saved.",
+            message: "Try again. AGI Mobile will not receive this content until it is saved.",
             preferredStyle: .alert
           )
           alert.addAction(UIAlertAction(title: "OK", style: .default))

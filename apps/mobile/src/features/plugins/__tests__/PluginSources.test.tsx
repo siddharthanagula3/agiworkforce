@@ -47,6 +47,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 import { PluginSourcesScreen } from '../PluginSourcesScreen';
 
 const T = '2026-10-01T00:00:00.000Z';
@@ -166,30 +167,59 @@ describe('plugin sources on mobile', () => {
     );
   });
 
-  it('syncs a marketplace from a repository and installs from it', async () => {
-    const { findByLabelText, getByLabelText, getByText } = render(<PluginSourcesScreen />);
-    fireEvent.changeText(await findByLabelText('Repository URL'), ' https://github.com/acme/more ');
-    fireEvent.press(getByText('Sync marketplace'));
-    await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith('/api/plugins/marketplaces', {
-        repositoryUrl: 'https://github.com/acme/more',
-      }),
-    );
-    fireEvent.press(getByLabelText('Install Notes helper'));
+  it('hides adding a marketplace and submitting to the directory in the store build', async () => {
+    const { findByLabelText, queryByLabelText, queryByText } = render(<PluginSourcesScreen />);
+    fireEvent.press(await findByLabelText('Install Notes helper'));
+    expect(queryByText('Add a marketplace')).toBeNull();
+    expect(queryByLabelText('Repository URL')).toBeNull();
+    expect(queryByText('Sync marketplace')).toBeNull();
+    expect(queryByLabelText('Submit Notes helper to the directory')).toBeNull();
+    expect(queryByLabelText('Submit Linter to the directory')).toBeNull();
     await waitFor(() =>
       expect(mockPost).toHaveBeenCalledWith('/api/plugins/marketplace-installations', {
         entryId: 'e-2',
       }),
     );
+    expect(mockPost).not.toHaveBeenCalledWith('/api/plugins/marketplaces', expect.anything());
   });
 
-  it('only offers to submit plugins you uploaded or authored', async () => {
-    const { findByLabelText, queryByLabelText } = render(<PluginSourcesScreen />);
-    fireEvent.press(await findByLabelText('Submit Notes helper to the directory'));
-    expect(queryByLabelText('Submit Linter to the directory')).toBeNull();
-    await waitFor(() =>
-      expect(mockPost).toHaveBeenCalledWith('/api/plugins/submissions', { entryId: 'e-2' }),
-    );
+  describe('with marketplace administration enabled', () => {
+    const features = FEATURES as { pluginMarketplaceAdmin: boolean };
+    beforeEach(() => {
+      features.pluginMarketplaceAdmin = true;
+    });
+    afterEach(() => {
+      features.pluginMarketplaceAdmin = false;
+    });
+
+    it('syncs a marketplace from a repository and installs from it', async () => {
+      const { findByLabelText, getByLabelText, getByText } = render(<PluginSourcesScreen />);
+      fireEvent.changeText(
+        await findByLabelText('Repository URL'),
+        ' https://github.com/acme/more ',
+      );
+      fireEvent.press(getByText('Sync marketplace'));
+      await waitFor(() =>
+        expect(mockPost).toHaveBeenCalledWith('/api/plugins/marketplaces', {
+          repositoryUrl: 'https://github.com/acme/more',
+        }),
+      );
+      fireEvent.press(getByLabelText('Install Notes helper'));
+      await waitFor(() =>
+        expect(mockPost).toHaveBeenCalledWith('/api/plugins/marketplace-installations', {
+          entryId: 'e-2',
+        }),
+      );
+    });
+
+    it('only offers to submit plugins you uploaded or authored', async () => {
+      const { findByLabelText, queryByLabelText } = render(<PluginSourcesScreen />);
+      fireEvent.press(await findByLabelText('Submit Notes helper to the directory'));
+      expect(queryByLabelText('Submit Linter to the directory')).toBeNull();
+      await waitFor(() =>
+        expect(mockPost).toHaveBeenCalledWith('/api/plugins/submissions', { entryId: 'e-2' }),
+      );
+    });
   });
 
   it('removes an installed marketplace plugin after confirming', async () => {

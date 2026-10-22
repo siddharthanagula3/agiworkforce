@@ -73,8 +73,7 @@ export function DisconnectedView({
             Pair with Desktop
           </Text>
           <Text className="text-white/50 text-center text-sm mb-6 leading-5">
-            Scan the QR code shown in your AGI Workforce desktop app to connect and control your
-            agents remotely.
+            Scan the QR code shown in AGI Desktop to connect and control your agents remotely.
           </Text>
         </View>
 

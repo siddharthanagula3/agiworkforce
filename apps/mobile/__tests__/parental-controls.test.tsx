@@ -52,9 +52,7 @@ describe('Parental Controls settings', () => {
     expect(getByText('Adult profile')).toBeTruthy();
     expect(getByText('Device age settings only')).toBeTruthy();
     expect(
-      getByText(
-        'This release does not link parent and teen accounts or provide remote usage, quiet-hour, model, or content controls. Reviewing age changes only this device.',
-      ),
+      getByText('Age settings apply only to this device; parent accounts can’t be linked.'),
     ).toBeTruthy();
 
     fireEvent.press(getByRole('button', { name: 'Review Device Age Settings' }));

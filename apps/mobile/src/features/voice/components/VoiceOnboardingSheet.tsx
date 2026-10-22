@@ -64,15 +64,14 @@ export type VoiceOnboardingMode = 'on-device' | 'live';
 export type VoiceOnboardingPurpose = 'voice' | 'dictation';
 
 export const VOICE_DISCLOSURE: Record<VoiceOnboardingMode, string> = {
-  'on-device':
-    'Your voice is transcribed on this device to hear you. Nothing is recorded or stored.',
-  live: 'In live voice your microphone is sent to AGI Cloud while you talk, and the transcript is saved to this chat. Audio is not kept.',
+  'on-device': 'Your voice is transcribed on this device and never recorded.',
+  live: 'Your voice streams to AGI Cloud and only the transcript is saved.',
 };
 
 const INTRO: Record<VoiceOnboardingPurpose, { title: string; body: string }> = {
   voice: {
     title: 'Meet Voice',
-    body: "Say what's on your mind. AGI listens, responds, and keeps the conversation flowing naturally.",
+    body: "Talk with AGI the way you'd talk to anyone.",
   },
   dictation: {
     title: 'Dictation',

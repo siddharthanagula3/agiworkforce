@@ -92,7 +92,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: null,
       products: [],
       unavailableReason: 'New purchases are unavailable.',
-      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
@@ -124,7 +123,6 @@ describe('native mobile IAP hook', () => {
         appAccountToken: accountToken,
         products: [],
         unavailableReason: null,
-        unavailableCode: null,
       });
     });
 
@@ -143,7 +141,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     });
     const { result, rerender } = renderHook(({ enabled }) => useMobileIap({ enabled }), {
       initialProps: { enabled: true },
@@ -171,7 +168,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     };
     let resolvePreflight: ((value: unknown) => void) | undefined;
     mockFetchCatalog.mockResolvedValueOnce(readyCatalog).mockReturnValueOnce(
@@ -210,7 +206,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     };
     let resolvePreflight: ((value: unknown) => void) | undefined;
     mockFetchCatalog
@@ -275,7 +270,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     });
     let resolveVerification: ((value: unknown) => void) | undefined;
     mockVerifyPurchase.mockReturnValue(
@@ -332,7 +326,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     });
     mockVerifyPurchase.mockResolvedValue({
       success: true,
@@ -373,7 +366,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: null,
       products: [],
       unavailableReason: 'New purchases are unavailable.',
-      unavailableCode: null,
     });
     let resolveVerification: ((value: unknown) => void) | undefined;
     mockVerifyPurchase.mockReturnValue(
@@ -418,7 +410,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     };
     Object.assign(mockIapState, {
       subscriptions: [{ id: product.productId, type: 'subs', displayPrice: '$20.00' }],
@@ -472,7 +463,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: null,
       products: [],
       unavailableReason: 'New purchases are unavailable.',
-      unavailableCode: null,
     });
     mockVerifyPurchase.mockResolvedValue({
       success: true,
@@ -513,7 +503,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: null,
       products: [],
       unavailableReason: 'New purchases are unavailable.',
-      unavailableCode: null,
     });
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
     await waitFor(() => expect(result.current.loading).toBe(false));
@@ -551,7 +540,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: null,
       products: [],
       unavailableReason: 'New purchases are unavailable.',
-      unavailableCode: null,
     });
     let resolveVerification: ((value: unknown) => void) | undefined;
     mockVerifyPurchase.mockReturnValue(
@@ -639,7 +627,6 @@ describe('native mobile IAP hook', () => {
         appAccountToken: null,
         products: [],
         unavailableReason: 'New purchases are unavailable.',
-        unavailableCode: null,
       });
       mockVerifyPurchase.mockResolvedValue(verified);
     });
@@ -762,7 +749,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: null,
       products: [],
       unavailableReason: 'New purchases are unavailable.',
-      unavailableCode: null,
     });
     mockVerifyPurchase.mockRejectedValue(new Error('The store receipt could not be verified.'));
 
@@ -808,7 +794,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
@@ -862,7 +847,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
@@ -897,7 +881,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [product],
       unavailableReason: null,
-      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
@@ -910,7 +893,7 @@ describe('native mobile IAP hook', () => {
     });
   });
 
-  it('does not open the store when upgrade access was revoked after the catalog loaded', async () => {
+  it('does not open the store when purchases were switched off after the catalog loaded', async () => {
     const definition = MOBILE_IAP_PRODUCT_DEFINITIONS.find((item) => item.kind === 'subscription')!;
     const product = { ...definition, productId: 'fixture.subscription.gated' };
     Object.assign(mockIapState, {
@@ -923,15 +906,13 @@ describe('native mobile IAP hook', () => {
         appAccountToken: accountToken,
         products: [product],
         unavailableReason: null,
-        unavailableCode: null,
       })
       .mockResolvedValueOnce({
         enabled: false,
         platform: 'ios',
         appAccountToken: null,
         products: [],
-        unavailableReason: 'Upgrade access is required.',
-        unavailableCode: 'waitlist_access_required',
+        unavailableReason: 'In-app purchases are temporarily switched off. Nothing was charged.',
       });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));
@@ -939,8 +920,8 @@ describe('native mobile IAP hook', () => {
     await act(async () => result.current.purchase(product.key));
 
     expect(mockRequestPurchase).not.toHaveBeenCalled();
-    expect(result.current.catalog?.unavailableCode).toBe('waitlist_access_required');
-    expect(result.current.error).toBe('Upgrade access is required.');
+    expect(result.current.catalog?.enabled).toBe(false);
+    expect(result.current.error).toBe('This purchase is no longer available.');
   });
 
   it('uses Google Play charge proration when replacing an active subscription', async () => {
@@ -978,7 +959,6 @@ describe('native mobile IAP hook', () => {
       appAccountToken: accountToken,
       products: [oldProduct, nextProduct],
       unavailableReason: null,
-      unavailableCode: null,
     });
 
     const { result } = renderHook(() => useMobileIap({ enabled: true }));

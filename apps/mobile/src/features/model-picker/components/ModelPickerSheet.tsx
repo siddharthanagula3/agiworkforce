@@ -482,7 +482,7 @@ export function ModelPickerSheet({
       ) {
         Alert.alert(
           'Start a new chat for this model',
-          `This chat uses ${establishedModel.providerLabel}. Switching to ${chosenModel.providerLabel} in the same chat needs the Max plan. You can use it in a new chat.`,
+          `Switching from ${establishedModel.providerLabel} to ${chosenModel.providerLabel} mid-chat needs the Max plan.`,
           [
             { text: 'OK', style: 'cancel' },
             { text: 'See plans', onPress: openUpgrade },

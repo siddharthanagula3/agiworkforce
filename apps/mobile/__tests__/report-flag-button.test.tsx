@@ -33,9 +33,13 @@ const mockSaveContentReport = jest
   .fn()
   .mockResolvedValue({ report: mockReport, delivery: { kind: 'stored-on-device' } });
 const mockOpenSupportEmail = jest.fn().mockResolvedValue(true);
+const mockSendStoredContentReport = jest.fn();
+const mockResumeQueuedContentReports = jest.fn();
 jest.mock('@/services/contentReport', () => ({
   saveContentReport: (...args: unknown[]) => mockSaveContentReport(...args),
   openSupportEmail: (...args: unknown[]) => mockOpenSupportEmail(...args),
+  sendStoredContentReport: (...args: unknown[]) => mockSendStoredContentReport(...args),
+  resumeQueuedContentReports: () => mockResumeQueuedContentReports(),
 }));
 
 import { ReportFlagButton } from '@/src/features/chat/components/ReportFlagButton';
@@ -44,6 +48,7 @@ describe('ReportFlagButton', () => {
   beforeEach(() => {
     mockSaveContentReport.mockClear();
     mockOpenSupportEmail.mockClear();
+    mockSendStoredContentReport.mockReset();
     mockSaveContentReport.mockResolvedValue({
       report: mockReport,
       delivery: { kind: 'stored-on-device' },
@@ -74,7 +79,11 @@ describe('ReportFlagButton', () => {
     ]) {
       expect(getByLabelText(label)).toBeTruthy();
     }
-    expect(getByText(/Select the reason that best describes the issue/)).toBeTruthy();
+    expect(
+      getByText(
+        'Reports are saved on this device and sent to the AGI safety team for review when you’re online.',
+      ),
+    ).toBeTruthy();
   });
 
   it('exposes the email opt-in checkbox with an accessibility label', () => {
@@ -121,7 +130,7 @@ describe('ReportFlagButton', () => {
     fireEvent.press(getByLabelText('Harmful or dangerous'));
     fireEvent.press(getByLabelText('Save report'));
 
-    await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
+    await waitFor(() => expect(getByText('Send this report to AGI?')).toBeTruthy());
     expect(getByText(/nothing was sent/i)).toBeTruthy();
     expect(queryByText('Thank you for your report')).toBeNull();
     expect(queryByText(/we (will )?(review|received)/i)).toBeNull();
@@ -140,7 +149,7 @@ describe('ReportFlagButton', () => {
       ).toBeTruthy(),
     );
     expect(queryByText(/MMKV private/)).toBeNull();
-    expect(queryByText('Report saved on this device')).toBeNull();
+    expect(queryByText('Send this report to AGI?')).toBeNull();
   });
 
   it('offers the email hand-off from the saved state and reports its result', async () => {
@@ -149,11 +158,11 @@ describe('ReportFlagButton', () => {
     fireEvent.press(getByLabelText('Harmful or dangerous'));
     fireEvent.press(getByLabelText('Save report'));
 
-    await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
+    await waitFor(() => expect(getByText('Send this report to AGI?')).toBeTruthy());
     fireEvent.press(getByTestId('report-email-handoff-btn'));
 
     await waitFor(() => expect(mockOpenSupportEmail).toHaveBeenCalledWith(mockReport));
-    await waitFor(() => expect(getByText(/Your mail app opened/i)).toBeTruthy());
+    await waitFor(() => expect(getByText(/Send the email in your mail app/i)).toBeTruthy());
   });
 
   it('does not claim a hand-off when no mail client could be opened', async () => {
@@ -164,9 +173,76 @@ describe('ReportFlagButton', () => {
     fireEvent.press(getByLabelText('Harmful or dangerous'));
     fireEvent.press(getByLabelText('Save report'));
 
-    await waitFor(() => expect(getByText('Report saved on this device')).toBeTruthy());
+    await waitFor(() => expect(getByText('Send this report to AGI?')).toBeTruthy());
     fireEvent.press(getByTestId('report-email-handoff-btn'));
 
     await waitFor(() => expect(getByText(/No mail app is set up/i)).toBeTruthy());
+  });
+
+  it('asks before sending a report that stayed on the device, and sends it on Send', async () => {
+    mockSendStoredContentReport.mockResolvedValue({ kind: 'queued-for-upload' });
+    const { getByLabelText, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Send this report to AGI?')).toBeTruthy());
+    expect(mockSendStoredContentReport).not.toHaveBeenCalled();
+    fireEvent.press(getByLabelText('Send'));
+
+    await waitFor(() => expect(mockSendStoredContentReport).toHaveBeenCalledWith('rpt_1'));
+    await waitFor(() => expect(getByText('Report queued')).toBeTruthy());
+  });
+
+  it('sends nothing when the user cancels the send question', async () => {
+    const { getByLabelText, getByText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Send this report to AGI?')).toBeTruthy());
+    fireEvent.press(getByLabelText('Cancel'));
+
+    expect(mockSendStoredContentReport).not.toHaveBeenCalled();
+  });
+
+  it('does not ask again once the server accepted the report', async () => {
+    mockSaveContentReport.mockResolvedValue({
+      report: mockReport,
+      delivery: { kind: 'submitted-to-server' },
+    });
+    const { getByLabelText, getByText, queryByLabelText } = renderButton();
+    fireEvent.press(getByLabelText('Report this response'));
+    fireEvent.press(getByLabelText('Harmful or dangerous'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() => expect(getByText('Report submitted for review')).toBeTruthy());
+    expect(queryByLabelText('Send')).toBeNull();
+  });
+
+  it('passes the media reference through to the saved report', async () => {
+    const asset = { kind: 'image' as const, url: 'https://cdn.example.com/img.png' };
+    const { getByLabelText } = render(
+      <ReportFlagButton
+        messageId="msg-2"
+        conversationId="conv-2"
+        contentExcerpt=""
+        asset={asset}
+      />,
+    );
+    fireEvent.press(getByLabelText('Report this image'));
+    fireEvent.press(getByLabelText('Offensive or hateful'));
+    fireEvent.press(getByLabelText('Save report'));
+
+    await waitFor(() =>
+      expect(mockSaveContentReport).toHaveBeenCalledWith(
+        expect.objectContaining({ messageId: 'msg-2', asset }),
+      ),
+    );
+  });
+
+  it('resumes queued reports from earlier sessions', () => {
+    renderButton();
+    expect(mockResumeQueuedContentReports).toHaveBeenCalled();
   });
 });

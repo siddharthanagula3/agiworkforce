@@ -1,4 +1,19 @@
-import { parseMobileIapCatalogResponse } from '@/src/features/billing/mobileIapService';
+const mockGet = jest.fn();
+const mockGetStorefront = jest.fn();
+
+jest.mock('@/services/api', () => ({
+  api: { get: (...args: unknown[]) => mockGet(...args) },
+}));
+
+jest.mock('expo-iap', () => ({
+  getStorefront: () => mockGetStorefront(),
+}));
+
+import { Platform } from 'react-native';
+import {
+  fetchMobileIapCatalog,
+  parseMobileIapCatalogResponse,
+} from '@/src/features/billing/mobileIapService';
 
 function disabledCatalog(extra: Record<string, unknown>) {
   return {
@@ -6,29 +21,58 @@ function disabledCatalog(extra: Record<string, unknown>) {
     platform: 'android',
     appAccountToken: null,
     products: [],
-    unavailableReason: 'Paid upgrades are opening in stages.',
+    unavailableReason: 'Native purchases are not enabled for this deployment.',
     ...extra,
   };
 }
 
+describe('native catalog request', () => {
+  const originalOS = Platform.OS;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockGet.mockResolvedValue(disabledCatalog({}));
+  });
+
+  afterEach(() => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: originalOS });
+  });
+
+  it.each([
+    ['ios', 'JPN'],
+    ['android', 'JP'],
+  ])('sends the %s store country so the server can withhold top-ups', async (os, storefront) => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: os });
+    mockGetStorefront.mockResolvedValue(storefront);
+
+    await fetchMobileIapCatalog();
+
+    expect(mockGet).toHaveBeenCalledWith(
+      `/api/mobile/iap/catalog?platform=${os}&storefront=${storefront}`,
+    );
+  });
+
+  it('still loads plans when the store country cannot be read', async () => {
+    Object.defineProperty(Platform, 'OS', { configurable: true, value: 'ios' });
+    mockGetStorefront.mockRejectedValue(new Error('not-prepared'));
+
+    await fetchMobileIapCatalog();
+
+    expect(mockGet).toHaveBeenCalledWith('/api/mobile/iap/catalog?platform=ios');
+  });
+});
+
 describe('native catalog parsing', () => {
-  it('carries the upgrade-gate reason through to the client', () => {
+  it('reads an unavailable catalog without any access gate', () => {
     const catalog = parseMobileIapCatalogResponse(
       disabledCatalog({ unavailableCode: 'waitlist_access_required' }),
     );
 
-    expect(catalog.unavailableCode).toBe('waitlist_access_required');
+    expect(catalog).not.toHaveProperty('unavailableCode');
     expect(catalog.enabled).toBe(false);
     expect(catalog.products).toEqual([]);
   });
 
-  it('reads a server that sends no reason code as an unavailable catalog', () => {
-    expect(parseMobileIapCatalogResponse(disabledCatalog({})).unavailableCode).toBeNull();
-    expect(
-      parseMobileIapCatalogResponse(disabledCatalog({ unavailableCode: 'something_else' }))
-        .unavailableCode,
-    ).toBeNull();
-  });
   const accountToken = '00000000-0000-4000-8000-000000000001';
   const pro = {
     key: 'subscription_pro_monthly',
@@ -46,7 +90,6 @@ describe('native catalog parsing', () => {
       appAccountToken: accountToken,
       products: [pro],
       unavailableReason: null,
-      unavailableCode: null,
       ...extra,
     };
   }

@@ -19,9 +19,9 @@ function productionConfig(overrides = {}) {
     ios: {
       bundleIdentifier: CANONICAL_IDENTITY.iosBundleIdentifier,
       buildNumber: '2',
-      associatedDomains: ['applinks:agiworkforce.com'],
+      associatedDomains: ['applinks:agiworkforce.com', 'webcredentials:agiworkforce.com'],
       entitlements: {
-        'com.apple.developer.siri': true,
+        'com.apple.developer.declared-age-range': true,
         'com.apple.security.application-groups': [CANONICAL_IDENTITY.appGroup],
       },
       ...overrides.ios,

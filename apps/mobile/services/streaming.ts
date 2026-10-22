@@ -21,7 +21,7 @@ import { getAuthToken } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError, recoverStreamSession, streamAuthRefusal } from './api';
 import { ApiHttpError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
-import { ensureLlmGateOpen } from './llmGate';
+import { ensureCloudSendConsent, ensureLlmGateOpen } from './llmGate';
 import { surfaceTermsNotice } from './termsNotice';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
@@ -491,6 +491,7 @@ export async function streamFreeQuotaChat(
     assertRemoteChatAllowed(undefined, {
       cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
     });
+    await ensureCloudSendConsent();
     const timeoutController = new AbortController();
     let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
     const combinedSignal = signal
@@ -567,6 +568,7 @@ export async function streamChat(
     assertRemoteChatAllowed(undefined, {
       cloudUnlocked: useWaitlistStore.getState().cloudUnlocked,
     });
+    await ensureCloudSendConsent();
     ensureLlmGateOpen(resolveProviderFromModel(body.model));
   } catch (err) {
     callbacks.onError(err instanceof Error ? err : new Error(String(err)));

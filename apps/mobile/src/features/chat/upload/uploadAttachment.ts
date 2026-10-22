@@ -1,5 +1,6 @@
 import { api, type UploadFileInput, type UploadFileResult } from '@/services/api';
 import { ApiHttpError } from '@/services/apiErrors';
+import { ensureCloudSendConsent } from '@/services/llmGate';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -43,6 +44,15 @@ export async function uploadWithRetry(
   let lastError: Error | null = null;
   const accountEpoch = captureCloudAccountEpoch();
   if (!isCloudAccountEpochCurrent(accountEpoch)) return null;
+  try {
+    await ensureCloudSendConsent();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    const lifecycle = useUploadLifecycleStore.getState();
+    lifecycle.begin(attachmentId);
+    lifecycle.settle(attachmentId, 'failed', message);
+    return null;
+  }
 
   for (let attempt = 0; attempt <= MAX_UPLOAD_RETRIES; attempt++) {
     if (!isCloudAccountEpochCurrent(accountEpoch)) return null;

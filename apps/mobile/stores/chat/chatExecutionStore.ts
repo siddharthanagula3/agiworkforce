@@ -63,6 +63,7 @@ import {
   toolCallList,
 } from '@/src/features/chat/utils/toolCallAccumulator';
 import { getRemoteChatDisabledReason, RemoteChatDisabledError } from '@/services/remoteChatGate';
+import { CloudProviderConsentRequiredError, ensureCloudSendConsent } from '@/services/llmGate';
 import {
   PHONE_STEP_DECLINED,
   readPhoneDeviceStep,
@@ -1477,6 +1478,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       return false;
     }
     if (executionMode === 'cloud') {
+      try {
+        await ensureCloudSendConsent();
+      } catch (error) {
+        if (!(error instanceof CloudProviderConsentRequiredError)) throw error;
+        set({ error: null, paywallError: null, ...streamingFlags() });
+        return false;
+      }
+      if (!isTurnAccountCurrent()) return false;
       await ensureCloudEntitlementsReadyForRequest();
       if (!isTurnAccountCurrent()) return false;
 

@@ -39,7 +39,7 @@ desktop window.
 ## Phones and tablets
 
 To use AGI on a phone or tablet, open
-[AGI Web](https://agiworkforce.com/chat) in the browser. The
+[AGI Chat](https://agiworkforce.com/chat) in the browser. The
 [Mobile page](https://agiworkforce.com/mobile) shows whether an app has been
 released.
 

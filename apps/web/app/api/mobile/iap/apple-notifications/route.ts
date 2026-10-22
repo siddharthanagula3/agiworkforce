@@ -1,3 +1,4 @@
+import { NotificationTypeV2 } from '@apple/app-store-server-library';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { withErrorHandler } from '@/lib/error-handler';
@@ -14,6 +15,7 @@ import {
   grantMobileIapPurchaseFromStore,
   hasMobileIapReceipt,
   processMobileIapLifecycleEvent,
+  recordAppleConsentRescission,
   recordUnattributedStoreCharge,
 } from '@/lib/services/mobile-iap-notification-service';
 
@@ -29,6 +31,20 @@ async function handleAppleNotification(request: NextRequest): Promise<NextRespon
   const verified = await verifyAppleStoreNotification(parsed.data.signedPayload);
   const notificationId = verified.notification.notificationUUID;
   if (!notificationId) throw createError.badRequest('App Store notification has no identifier.');
+
+  if (verified.notification.notificationType === NotificationTypeV2.RESCIND_CONSENT) {
+    const appTransactionId = verified.appTransaction?.appTransactionId;
+    if (!appTransactionId) {
+      throw createError.badRequest('App Store consent notification names no app transaction.');
+    }
+    const status = await recordAppleConsentRescission({
+      db: getNeonDb(),
+      notificationId,
+      appTransactionId,
+      environment: verified.channel === 'sandbox' ? 'sandbox' : 'production',
+    });
+    return NextResponse.json({ received: true, status });
+  }
 
   const transaction = verified.transaction;
   const signedTransaction = verified.notification.data?.signedTransactionInfo;

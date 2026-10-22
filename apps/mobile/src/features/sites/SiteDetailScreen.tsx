@@ -122,7 +122,7 @@ export function SiteDetailScreen() {
         title: withData ? `Delete ${name} and its data?` : `Unpublish ${name}?`,
         consequence: withData
           ? 'The link stops working for everyone, and the data visitors saved in it is erased. This cannot be undone.'
-          : 'The link stops working for everyone who has it. The artifact stays in its chat, and you can publish it again for a new link.',
+          : 'The link stops working for everyone, but the artifact stays in its chat.',
         actionLabel: withData ? 'Delete' : 'Unpublish',
       });
       if (!confirmed) return;
@@ -163,7 +163,7 @@ export function SiteDetailScreen() {
       <CloudFeatureGate
         title="Site"
         feature="Published sites"
-        description="Published sites live in AGI Cloud. Switching here does not send Local chats or files to the cloud."
+        description="Published sites live in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}

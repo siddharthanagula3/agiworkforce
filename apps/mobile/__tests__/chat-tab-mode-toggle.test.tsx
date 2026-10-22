@@ -1,7 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { Alert } from 'react-native';
 import { requireAutoMode } from '../test-utils/modelFixtures';
 
 const mockPush = jest.fn();
@@ -190,7 +189,6 @@ import { useMobileSkillSelectionStore } from '../src/features/skills/selectionSt
 import {
   clearPostAuthIntent,
   CLOUD_CHAT_POST_AUTH_INTENT,
-  peekPostAuthIntent,
   POST_AUTH_INTENT_PARAM,
 } from '../src/features/auth/services/postAuthIntent';
 
@@ -228,35 +226,14 @@ describe('Chat tab mode toggle', () => {
     });
   });
 
-  it('switches to Cloud and hides project bar when cloud is unlocked', async () => {
-    useWaitlistStore.setState({
-      joined: true,
-      email: 'tester@example.com',
-      country: 'US',
-      rank: 1,
-      joinedAt: new Date().toISOString(),
-      cloudUnlocked: true,
-      inviteId: 'mobile-alpha-tester',
-      inviteCode: 'ALPHATESTER',
-      cloudUnlockedAt: new Date().toISOString(),
-    });
+  it('keeps the Local/Cloud toggle out of the chat header', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
 
-    const { getByTestId, queryByTestId } = render(<ChatTabScreen />);
+    const screen = render(<ChatTabScreen />);
 
-    expect(queryByTestId('project-selector-bar')).toBeTruthy();
-    expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
-    expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(false);
-
-    fireEvent.press(getByTestId('chat.mode-toggle.cloud'));
-
-    await waitFor(() => {
-      expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(true);
-    });
-
-    expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(false);
-    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
-    expect(queryByTestId('project-selector-bar')).toBeTruthy();
-    expect(mockPush).not.toHaveBeenCalledWith('/(auth)/login');
+    expect(screen.queryByTestId('chat.mode-toggle')).toBeNull();
+    expect(screen.queryByTestId('chat.mode-toggle.cloud')).toBeNull();
   });
 
   it('shows Chat and Work in the header and selects Work only for a Cloud Pro session', () => {
@@ -269,15 +246,14 @@ describe('Chat tab mode toggle', () => {
     expect(mockSetWorkMode).toHaveBeenCalledWith('agiwork');
   });
 
-  it('sends an ineligible Work selection to the existing Cloud billing gate', () => {
+  it('hides Chat and Work in Cloud for a plan without Work', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'free' });
 
     const screen = render(<ChatTabScreen />);
-    fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
-    expect(mockSetWorkMode).not.toHaveBeenCalledWith('agiwork');
-    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    expect(screen.queryByTestId('chat.work-mode.chat')).toBeNull();
+    expect(screen.queryByTestId('chat.work-mode.agiwork')).toBeNull();
   });
 
   it('clears a persisted Work selection when the Cloud account no longer has Work access', () => {
@@ -287,28 +263,21 @@ describe('Chat tab mode toggle', () => {
     useTierStore.setState({ tier: 'free' });
 
     const screen = render(<ChatTabScreen />);
-    expect(screen.getByTestId('chat.work-mode.chat').props.accessibilityState.selected).toBe(true);
-    expect(screen.getByTestId('chat.work-mode.agiwork').props.accessibilityState.selected).toBe(
-      false,
-    );
+    expect(screen.queryByTestId('chat.work-mode.agiwork')).toBeNull();
     expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
   });
 
-  it('asks before moving a Local chat to Cloud for Work', () => {
+  it('hides Chat and Work in Local Mode even for a plan with Work', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
-    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+
     const screen = render(<ChatTabScreen />);
-    fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
-    expect(mockSetWorkMode).not.toHaveBeenCalledWith('agiwork');
-    expect(alert).toHaveBeenCalledWith(
-      'Work uses AGI Cloud',
-      'Switch to Cloud to start work with AGI.',
-      expect.any(Array),
-    );
-    alert.mockRestore();
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(screen.queryByTestId('chat.work-mode.chat')).toBeNull();
+    expect(screen.queryByTestId('chat.work-mode.agiwork')).toBeNull();
   });
 
   it('keeps Work behind the signed-in Cloud gate even for an eligible plan', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
     useWaitlistStore.setState({ cloudUnlocked: false });
     const screen = render(<ChatTabScreen />);
     fireEvent.press(screen.getByTestId('chat.work-mode.agiwork'));
@@ -433,39 +402,6 @@ describe('Chat tab mode toggle', () => {
     await waitFor(() => {
       expect(useModelStore.getState().selectedModel).toBe(AUTO_MODEL_ID);
     });
-  });
-
-  it('keeps Local selected and routes to sign-in when cloud is not unlocked (public alpha, no invite/waitlist gate)', async () => {
-    useWaitlistStore.setState({
-      joined: false,
-      email: undefined,
-      country: undefined,
-      rank: undefined,
-      joinedAt: undefined,
-      cloudUnlocked: false,
-      inviteId: undefined,
-      inviteCode: undefined,
-      cloudUnlockedAt: undefined,
-    });
-
-    const { getByTestId, queryByTestId } = render(<ChatTabScreen />);
-    expect(queryByTestId('project-selector-bar')).toBeTruthy();
-
-    fireEvent.press(getByTestId('chat.mode-toggle.cloud'));
-
-    await waitFor(() => {
-      expect(mockPush).toHaveBeenCalledWith({
-        pathname: '/(auth)/login',
-        params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
-      });
-    });
-
-    expect(peekPostAuthIntent()).toBe(CLOUD_CHAT_POST_AUTH_INTENT);
-    expect(getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(true);
-    expect(getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(false);
-    expect(useChatAppModeStore.getState().appMode).toBe('local');
-    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
-    expect(queryByTestId('project-selector-bar')).toBeTruthy();
   });
 
   it('routes /image as the first message of a new chat to image generation, not a normal chat message', async () => {

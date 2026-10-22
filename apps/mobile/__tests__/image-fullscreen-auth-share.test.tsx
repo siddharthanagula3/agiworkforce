@@ -33,6 +33,15 @@ jest.mock('lucide-react-native', () => ({
   Download: jest.fn().mockReturnValue(null),
   Paintbrush: jest.fn().mockReturnValue(null),
   Trash2: jest.fn().mockReturnValue(null),
+  Flag: jest.fn().mockReturnValue(null),
+}));
+
+const mockReportSheet = jest.fn();
+jest.mock('../src/features/chat/components/ReportFlagButton', () => ({
+  ReportSheet: (props: Record<string, unknown>) => {
+    mockReportSheet(props);
+    return null;
+  },
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
@@ -152,5 +161,45 @@ describe('ImageFullScreen on-device attachments', () => {
     render(<ImageFullScreen imageUrl={durablePath} visible onClose={jest.fn()} />);
 
     expect(mockUseGeneratedImageSource).toHaveBeenCalledWith(durablePath, false);
+  });
+});
+
+describe('ImageFullScreen report', () => {
+  const target = {
+    messageId: 'img-1',
+    conversationId: 'conv-1',
+    contentExcerpt: 'a red fox',
+    asset: { kind: 'image' as const, url: 'https://cdn.example.com/fox.png' },
+  };
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockUseGeneratedImageSource.mockReturnValue({ status: 'invalid', source: null });
+  });
+
+  it('reports the viewed image without leaving the viewer', () => {
+    const { getByLabelText } = render(
+      <ImageFullScreen
+        imageUrl="https://cdn.example.com/fox.png"
+        visible
+        onClose={jest.fn()}
+        reportTarget={target}
+      />,
+    );
+
+    expect(mockReportSheet).not.toHaveBeenCalled();
+    fireEvent.press(getByLabelText('Report this image'));
+
+    expect(mockReportSheet).toHaveBeenLastCalledWith(
+      expect.objectContaining({ visible: true, target }),
+    );
+  });
+
+  it('shows no Report control for an image with no report target', () => {
+    const { queryByLabelText } = render(
+      <ImageFullScreen imageUrl="https://cdn.example.com/cat.png" visible onClose={jest.fn()} />,
+    );
+
+    expect(queryByLabelText('Report this image')).toBeNull();
   });
 });

@@ -37,6 +37,7 @@ import {
   detectRegionRule,
   getAgeThreshold,
   confirmAgeGate,
+  confirmAgeGateFromRange,
   isAgeGateConfirmed,
   isMinorMode,
   clearAgeGate,
@@ -247,5 +248,34 @@ describe('clearAgeGate', () => {
     clearAgeGate();
     expect(isAgeGateConfirmed()).toBe(false);
     expect(isMinorMode()).toBe(false);
+  });
+});
+
+describe('confirmAgeGateFromRange', () => {
+  afterEach(() => {
+    mockStorage.clear();
+    setTimezone('America/New_York');
+  });
+
+  it('confirms an OS range at or above the threshold', () => {
+    expect(confirmAgeGateFromRange({ lowerBound: 13, upperBound: 17 })?.isMinor).toBe(false);
+    expect(isAgeGateConfirmed()).toBe(true);
+  });
+
+  it('refuses an OS range below the regional threshold', () => {
+    setTimezone('Europe/Berlin');
+    expect(confirmAgeGateFromRange({ lowerBound: 13, upperBound: 15 })?.isMinor).toBe(true);
+    expect(isMinorMode()).toBe(true);
+  });
+
+  it('records nothing when the range straddles the threshold', () => {
+    setTimezone('Europe/Berlin');
+    expect(confirmAgeGateFromRange({ lowerBound: 13, upperBound: 17 })).toBeNull();
+    expect(isAgeGateConfirmed()).toBe(false);
+  });
+
+  it('keeps a refused device refused when the OS later reports an adult', () => {
+    confirmAgeGate(ACCOUNT_MINIMUM_AGE - 1);
+    expect(confirmAgeGateFromRange({ lowerBound: 18, upperBound: null })?.isMinor).toBe(true);
   });
 });

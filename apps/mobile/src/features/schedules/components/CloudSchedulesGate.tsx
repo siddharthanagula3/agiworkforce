@@ -65,8 +65,7 @@ export function CloudSchedulesGate({ signedIn, onBack, onContinue }: CloudSchedu
             textAlign: 'center',
           }}
         >
-          Local Mode stays on this device. Only schedules you create here are sent to AGI Cloud and
-          run at their selected times.
+          Schedules run in AGI Cloud; only the ones you create here are sent.
         </Text>
         <Button
           title={signedIn ? 'Switch to AGI Cloud' : 'Sign in to AGI Cloud'}

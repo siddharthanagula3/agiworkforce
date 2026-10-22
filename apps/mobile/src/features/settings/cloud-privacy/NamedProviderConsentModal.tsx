@@ -56,9 +56,8 @@ export function NamedProviderConsentModal({ providerId, onConfirm, onCancel }: P
           <Text
             style={{ color: colors.textSecondary, fontSize: typeScale.subhead, lineHeight: 21 }}
           >
-            {displayName} is a China-headquartered AI provider. If you choose its models, the text,
-            images, and files you send with those models will be sent from AGI Cloud to this
-            provider for inference. You can turn it off again in Settings, Privacy.
+            {displayName} is based in China, and what you send its models, including files, goes to
+            it.
           </Text>
           <PressableBox
             onPress={() => void openInAppBrowser(PRIVACY_POLICY_URL)}

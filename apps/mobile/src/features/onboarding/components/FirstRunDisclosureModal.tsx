@@ -6,7 +6,7 @@ import { Switch } from '@/components/ui/switch';
 import { useThemeColors, elevation } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
-import type { ChineseHqProviderId, DisclosureCopy } from '@agiworkforce/compliance';
+import type { ChineseHqProviderId, ShortDisclosureCopy } from '@agiworkforce/compliance';
 
 export const PRIVACY_POLICY_URL = 'https://agiworkforce.com/privacy';
 export const INDIA_DPDP_NOTICE_URL = 'https://agiworkforce.com/privacy/india';
@@ -15,18 +15,18 @@ export const PROVIDER_TOGGLE_TEST_ID_PREFIX = 'disclosure-provider-toggle-';
 
 const PROVIDER_SECTION_TITLE = 'China-headquartered providers';
 const PROVIDER_SECTION_BODY =
-  'Each one is off until you turn it on here. Leaving them off keeps their models out of your chats, you can change this later in Settings, Privacy.';
+  'Each stays off until you turn it on, here or later in Settings, Privacy.';
 
 const PRIVACY_NOTICE_TITLE = 'What we collect';
 const PRIVACY_NOTICE_BODY = [
-  'Local Mode: your chats stay on this device, encrypted at rest. No account, no upload.',
-  'AGI Cloud (only after you sign in): your account email and name, the messages you send, any photos or files you attach, and a device identifier used for push notifications are sent to AGI Cloud and to the model provider serving your request.',
-  'We never use your conversations to track you across other apps or websites.',
+  'Local Mode: your chats stay on this device, encrypted.',
+  'AGI Cloud: your name, email, the messages you send, photos or files you attach and a device identifier go to AGI Cloud and the model provider.',
+  'We never use your chats to track you across other apps or websites.',
 ].join('\n\n');
 
 interface Props {
   visible: boolean;
-  copy: DisclosureCopy;
+  copy: ShortDisclosureCopy;
   onAccept: (acceptedProviderIds: readonly ChineseHqProviderId[]) => void;
   onDecline: () => void;
 }
@@ -154,11 +154,11 @@ export function FirstRunDisclosureModal({ visible, copy, onAccept, onDecline }: 
             <PressableBox
               onPress={() => setLegalExpanded((v) => !v)}
               accessibilityRole="button"
-              accessibilityLabel={legalExpanded ? 'Collapse legal detail' : 'Why we show this'}
+              accessibilityLabel={legalExpanded ? 'Collapse legal detail' : copy.detailsLabel}
               style={styles.legalToggle}
             >
               <Text style={[styles.legalToggleText, { color: colors.teal }]}>
-                {legalExpanded ? 'Hide legal detail' : 'Why we show this'}
+                {legalExpanded ? 'Hide legal detail' : copy.detailsLabel}
               </Text>
             </PressableBox>
 

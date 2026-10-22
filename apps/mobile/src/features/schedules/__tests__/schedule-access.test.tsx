@@ -28,12 +28,56 @@ jest.mock('@/services/api', () => ({
 }));
 jest.mock('@/lib/v1FeatureFlags', () => ({ FEATURES: { schedules: true } }));
 jest.mock('expo-crypto', () => ({ randomUUID: () => 'uuid' }));
+const mockStorage = new Map<string, string>();
+jest.mock('@/lib/mmkv', () => ({
+  storage: {
+    getString: (key: string) => mockStorage.get(key),
+    set: (key: string, value: string) => mockStorage.set(key, value),
+    delete: (key: string) => mockStorage.delete(key),
+  },
+  whenMmkvReady: jest.fn((callback: () => void) => callback()),
+  rehydrateWhenMmkvReady: jest.fn(),
+  mmkvStorage: { getItem: jest.fn(() => null), setItem: jest.fn(), removeItem: jest.fn() },
+}));
 
+import { useAuthStore } from '@/src/features/auth/store';
 import { ScheduleAccessSection } from '../components/ScheduleAccessSection';
 import { fetchSchedules } from '../service';
 
 describe('schedule agent and connector access', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockStorage.clear();
+  });
+
+  it('leaves out agents from people you hid, unless the schedule already uses one', async () => {
+    useAuthStore.setState({ clerkUserId: 'user-1' });
+    mockStorage.set(
+      'shared-with-you:hidden-sharers:v1:user-1',
+      JSON.stringify([{ id: 'user-ana', name: 'Ana' }]),
+    );
+    mockListAgents.mockResolvedValue([
+      { id: 'agent-1', name: 'Planner', status: 'active', isOwner: true },
+      {
+        id: 'agent-3',
+        name: 'Reviewer',
+        status: 'active',
+        isOwner: false,
+        ownerUserId: 'user-ana',
+      },
+    ]);
+    const props = {
+      connectors: null,
+      onAgentChange: jest.fn(),
+      onConnectorsChange: jest.fn(),
+    };
+    const view = render(<ScheduleAccessSection agentId={null} {...props} />);
+    expect(await view.findByText('Planner')).toBeTruthy();
+    expect(view.queryByText('Reviewer')).toBeNull();
+
+    view.rerender(<ScheduleAccessSection agentId="agent-3" {...props} />);
+    expect(await view.findByText('Reviewer')).toBeTruthy();
+  });
 
   it('runs a schedule as a chosen agent and narrows its connectors', async () => {
     mockListAgents.mockResolvedValue([

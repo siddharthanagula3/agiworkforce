@@ -104,7 +104,7 @@ export function UsOnlyRoutingGroup() {
         }}
       >
         {eligible
-          ? 'Auto and the models you pick are served only by providers based in the United States. Models without one are unavailable while this is on.'
+          ? 'Only use models served by US-based providers.'
           : `Available on ${US_ONLY_PLAN_LABELS}.`}
       </Text>
       {error ? (

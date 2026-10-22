@@ -24,15 +24,20 @@ jest.mock('@/services/api', () => ({
   },
 }));
 
+import NetInfo from '@react-native-community/netinfo';
 import { Linking } from 'react-native';
 import {
   saveContentReport,
   getContentReports,
   clearContentReports,
+  flushQueuedContentReports,
   openSupportEmail,
+  queuedContentReports,
+  sendStoredContentReport,
   type ContentReport,
   type ReportCategory,
 } from '../services/contentReport';
+import { reportAssetFor } from '../services/contentReportAsset';
 
 const MAX_EXCERPT_LEN = 500;
 const MAX_STORED_REPORTS = 100;
@@ -319,3 +324,115 @@ describe('openSupportEmail', () => {
     expect(openUrlSpy).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('saveContentReport, media and shared content', () => {
+  it('sends the image reference with a report on an image-only reply', async () => {
+    mockApiPost.mockResolvedValueOnce({ success: true });
+
+    const { report } = await saveContentReport({
+      ...makeParams({ contentExcerpt: '' }),
+      asset: { kind: 'image', url: 'https://cdn.example.com/img.png' },
+    });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/api/mobile/content-report',
+      expect.objectContaining({
+        reportId: report.id,
+        asset: { kind: 'image', url: 'https://cdn.example.com/img.png' },
+      }),
+    );
+  });
+
+  it('sends the shared item and its sharer with a report on shared content', async () => {
+    mockApiPost.mockResolvedValueOnce({ success: true });
+
+    await saveContentReport({
+      ...makeParams({ messageId: 'p-1', conversationId: 'shared:project' }),
+      sharedItem: { kind: 'project', id: 'p-1', sharerId: 'owner-1' },
+    });
+
+    expect(mockApiPost).toHaveBeenCalledWith(
+      '/api/mobile/content-report',
+      expect.objectContaining({
+        messageId: 'p-1',
+        sharedItem: { kind: 'project', id: 'p-1', sharerId: 'owner-1' },
+      }),
+    );
+  });
+
+  it('keeps inline media bytes out of the asset reference', () => {
+    expect(reportAssetFor('image', 'data:image/png;base64,AAAA')).toEqual({
+      kind: 'image',
+      url: 'data:image/png;base64',
+    });
+    expect(reportAssetFor('video', null)).toBeUndefined();
+  });
+});
+
+describe('sendStoredContentReport, consented queue', () => {
+  it('does not queue or resend a report the user has not agreed to send', async () => {
+    await saveContentReport(makeParams());
+    mockApiPost.mockReset();
+    mockApiPost.mockResolvedValue({ success: true });
+
+    expect(queuedContentReports()).toEqual([]);
+    await expect(flushQueuedContentReports()).resolves.toBe(0);
+    expect(mockApiPost).not.toHaveBeenCalled();
+  });
+
+  it('sends a stored report once the user agrees, marked as consented', async () => {
+    const { report } = await saveContentReport(makeParams());
+    expect(mockApiPost).toHaveBeenLastCalledWith(
+      '/api/mobile/content-report',
+      expect.objectContaining({ reportId: report.id }),
+    );
+    mockApiPost.mockResolvedValueOnce({ success: true });
+
+    await expect(sendStoredContentReport(report.id)).resolves.toEqual({
+      kind: 'submitted-to-server',
+    });
+    expect(mockApiPost).toHaveBeenLastCalledWith(
+      '/api/mobile/content-report',
+      expect.objectContaining({ reportId: report.id }),
+      { consentedReport: true },
+    );
+    expect(getContentReports()[0]).toMatchObject({
+      uploadConsented: true,
+      serverAcknowledged: true,
+    });
+  });
+
+  it('queues an agreed report while offline and sends it when the device reconnects', async () => {
+    const addListener = NetInfo.addEventListener as jest.Mock;
+    addListener.mockClear();
+    const { report } = await saveContentReport(makeParams());
+
+    await expect(sendStoredContentReport(report.id)).resolves.toEqual({
+      kind: 'queued-for-upload',
+    });
+    expect(queuedContentReports().map((entry) => entry.id)).toEqual([report.id]);
+    expect(addListener).toHaveBeenCalledTimes(1);
+
+    mockApiPost.mockResolvedValueOnce({ success: true });
+    const onChange = addListener.mock.calls[0]?.[0] as (state: { isConnected: boolean }) => void;
+    onChange({ isConnected: true });
+
+    await waitForQueueToDrain();
+    expect(mockApiPost).toHaveBeenLastCalledWith(
+      '/api/mobile/content-report',
+      expect.objectContaining({ reportId: report.id }),
+      { consentedReport: true },
+    );
+    expect(getContentReports()[0]?.serverAcknowledged).toBe(true);
+  });
+
+  it('rejects when the report is no longer on the device', async () => {
+    await expect(sendStoredContentReport('rpt_missing')).rejects.toThrow();
+  });
+});
+
+async function waitForQueueToDrain(): Promise<void> {
+  for (let attempt = 0; attempt < 20 && queuedContentReports().length > 0; attempt += 1) {
+    await new Promise((resolve) => setImmediate(resolve));
+  }
+}

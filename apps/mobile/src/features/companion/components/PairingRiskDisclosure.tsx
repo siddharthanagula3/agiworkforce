@@ -32,9 +32,8 @@ export function PairingRiskDisclosure({ className }: { className?: string }) {
       <View className="flex-row items-start gap-2">
         <ShieldAlert size={14} color={colors.agentWarning} style={{ marginTop: 2 }} />
         <Text className="text-xs text-white/60 leading-5 flex-1">
-          AGI Workforce will use your desktop to run the tasks you send from this phone. That can
-          read and change files on that computer. Only pair devices you trust and keep them with
-          you.
+          AGI will use your desktop to run the tasks you send from this phone. That can read and
+          change files on that computer. Only pair devices you trust and keep them with you.
         </Text>
       </View>
       <PressableBox

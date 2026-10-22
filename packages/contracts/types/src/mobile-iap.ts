@@ -3,7 +3,12 @@ import {
   getPlanPriceUsd,
   type SelfServeIndividualPlanTier,
 } from './billing-catalog';
-import { topUpUnitsForUsd } from './billing-topups';
+import {
+  normalizePurchaseCountry,
+  purchaseCountryFromAppStoreStorefront,
+  purchasedCreditExpiryRule,
+  topUpUnitsForUsd,
+} from './billing-topups';
 import { EEA_COUNTRY_CODES } from './country-groups';
 
 export type MobileIapPlatform = 'ios' | 'android';
@@ -135,8 +140,6 @@ export type MobileIapCatalogProduct = MobileIapProductDefinition & {
   googleOffer?: MobileIapStoreOffer | null;
 };
 
-export type MobileIapUnavailableCode = 'waitlist_access_required';
-
 export type MobileIapPlanChangeDirection = 'upgrade' | 'downgrade';
 
 export const MOBILE_IAP_ANDROID_REPLACEMENT_MODES = [
@@ -180,12 +183,36 @@ export interface MobileIapCatalogResponse {
   appAccountToken: string | null;
   products: MobileIapCatalogProduct[];
   unavailableReason: string | null;
-  unavailableCode: MobileIapUnavailableCode | null;
   androidReplacementModes?: MobileIapAndroidReplacementModes;
   /** Why plans are withheld from an account another billing channel still charges. */
   subscriptionsUnavailableReason?: string | null;
   /** Every store product the device must consume once granted, offered or not. */
   consumableProductIds?: string[];
+}
+
+const STOREFRONT_CODE = /^[A-Z]{2,3}$/;
+
+/**
+ * App Store Review Guideline 3.1.1 and Google Play's payments policy forbid
+ * purchased credits that expire. Where `PURCHASED_CREDIT_EXPIRY_RULES` expires
+ * them, the stores do not sell top-ups at all; plans still sell there.
+ */
+export function mobileIapCountrySellsTopUps(country: string | null | undefined): boolean {
+  return purchasedCreditExpiryRule(country) === null;
+}
+
+/**
+ * The store country the app reports: an App Store storefront is ISO 3166-1
+ * alpha-3, a Google Play billing country alpha-2. An unreadable code sells no
+ * top-ups, so a buyer is never charged for credits the server would refuse.
+ */
+export function mobileIapStorefrontSellsTopUps(storefront: unknown): boolean {
+  if (typeof storefront !== 'string') return false;
+  const code = storefront.trim().toUpperCase();
+  if (!STOREFRONT_CODE.test(code)) return false;
+  return mobileIapCountrySellsTopUps(
+    purchaseCountryFromAppStoreStorefront(code) ?? normalizePurchaseCountry(code),
+  );
 }
 
 export interface MobileIapVerifyResponse {

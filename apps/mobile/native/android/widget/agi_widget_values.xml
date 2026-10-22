@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-  <string name="agi_widget_label">AGI Workforce</string>
+  <string name="agi_widget_label">AGI Mobile</string>
   <string name="agi_widget_description">Start a new chat, open the camera or start voice mode.</string>
   <string name="agi_widget_new_chat">New chat</string>
   <string name="agi_widget_camera">Camera</string>

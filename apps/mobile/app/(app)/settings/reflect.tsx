@@ -193,8 +193,7 @@ export default function ReflectScreen() {
             marginBottom: 14,
           }}
         >
-          Patterns in how you use AGI, without scores or judgment. Your recap is built only when you
-          open this screen.
+          Patterns in how you use AGI, without scores or judgment.
         </Text>
 
         <View style={{ flexDirection: 'row', gap: 6, marginBottom: 16 }}>
@@ -269,8 +268,7 @@ export default function ReflectScreen() {
                   maxWidth: 300,
                 }}
               >
-                Reflect builds its recap from the same account memory setting. Turn memory on to see
-                your patterns here.
+                Turn on memory to see your patterns here.
               </Text>
               <Pressable
                 onPress={() =>
@@ -627,9 +625,7 @@ export default function ReflectScreen() {
         <Text
           style={{ fontSize: typeScale.caption, lineHeight: 16, color: c.textMuted, marginTop: 18 }}
         >
-          Temporary Chats and AGI Work runs are excluded. Reflect returns activity statistics, broad
-          topic labels and the titles of chats you kept working on, not message text, and viewing it
-          does not use model quota.
+          Excludes temporary chats and AGI Work runs, and never reads message text.
         </Text>
       </ScrollView>
     </SafeAreaView>

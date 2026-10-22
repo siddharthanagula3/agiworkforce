@@ -200,7 +200,7 @@ export function SkillDetailScreen() {
       <CloudFeatureGate
         title="Skill"
         feature="Skills"
-        description="Skills run in AGI Cloud. Switching here does not send Local chats or files to the cloud."
+        description="Skills run in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}

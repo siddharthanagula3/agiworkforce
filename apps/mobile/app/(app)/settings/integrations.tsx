@@ -168,8 +168,7 @@ export default function IntegrationsScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text className="text-sm leading-5 mt-2" style={{ color: colors.textMuted }}>
-          Manage device features that can provide context to AI assistants. Data stays on your
-          device and is only shared when you start a chat.
+          Device features AGI can use, shared only when you start a chat.
         </Text>
 
         <View>
@@ -224,9 +223,7 @@ export default function IntegrationsScreen() {
                 </View>
                 <Separator className="mb-3" />
                 <Text className="text-xs leading-4" style={{ color: colors.textMuted }}>
-                  Calendar is used to provide context about your schedule to AI assistants. Upcoming
-                  events help the AI understand your availability and suggest better times for
-                  tasks.
+                  Lets AGI use your upcoming events to suggest better times for tasks.
                 </Text>
               </Card>
 

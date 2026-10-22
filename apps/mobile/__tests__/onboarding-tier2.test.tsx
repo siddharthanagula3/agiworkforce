@@ -74,13 +74,14 @@ jest.mock('../src/features/model-picker/components/ModelPickerSheet', () => ({
 
 jest.mock('@agiworkforce/compliance', () => ({
   ...jest.requireActual('@agiworkforce/compliance'),
-  composeFirstRunDisclosure: jest.fn().mockReturnValue({
+  composeShortFirstRunDisclosure: jest.fn().mockReturnValue({
     title: 'Before you continue',
     summary: 'This app processes your data on-device.',
     article50_1: 'Article 50(1)',
     sourceUrl: 'https://eur-lex.europa.eu',
     acceptLabel: 'Continue',
     declineLabel: 'Not now',
+    detailsLabel: 'Why we show this',
     thirdPartyAiProviders: [],
     offersManagedCloud: false,
   }),

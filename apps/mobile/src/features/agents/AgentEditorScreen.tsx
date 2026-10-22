@@ -18,6 +18,8 @@ import {
 } from '@/src/shared/components/cloud-screen';
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { hiddenSharerIds } from '@/src/features/shared-with-you/hiddenSharers';
+import { SharedItemSafetyActions } from '@/src/features/shared-with-you/SharedItemSafetyActions';
 import { useThemeColors } from '@/src/ui/theme';
 import { AGENTS_ROUTE, NEW_AGENT_ID } from './AgentsScreen';
 import { AgentConfigSections, useAgentChoices } from './components/AgentConfigSections';
@@ -37,6 +39,7 @@ export function AgentEditorScreen() {
   const modelSheetRef = useRef<BottomSheet>(null);
   const [chatError, setChatError] = useState<string | null>(null);
   const [startingChat, setStartingChat] = useState(false);
+  const [hiddenNow, setHiddenNow] = useState(false);
 
   const save = useCallback(async () => {
     const saved = await editor.save();
@@ -64,7 +67,7 @@ export function AgentEditorScreen() {
       <CloudFeatureGate
         title="Agent"
         feature="Agents"
-        description="Agents run in AGI Cloud. Switching here does not send Local chats or files to the cloud."
+        description="Agents run in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}
@@ -73,6 +76,14 @@ export function AgentEditorScreen() {
   }
 
   const title = agentId ? editor.agent?.name || 'Agent' : 'New agent';
+  const sharedAgent =
+    editor.agent && !editor.agent.isOwner && editor.agent.ownerUserId
+      ? { agent: editor.agent, sharerId: editor.agent.ownerUserId }
+      : null;
+  const sharerHidden =
+    sharedAgent !== null &&
+    (hiddenNow ||
+      (access.ownerId !== null && hiddenSharerIds(access.ownerId).has(sharedAgent.sharerId)));
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
@@ -92,7 +103,9 @@ export function AgentEditorScreen() {
           ) : null
         }
       />
-      {editor.load.status === 'loading' ? (
+      {sharerHidden ? (
+        <EmptyState title="Hidden" body="You hid this sharer." />
+      ) : editor.load.status === 'loading' ? (
         <LoadingRows count={4} />
       ) : editor.load.status === 'error' ? (
         <EmptyState
@@ -120,6 +133,15 @@ export function AgentEditorScreen() {
             {editor.saveError ? <ErrorBanner message={editor.saveError} /> : null}
             {editor.problem && editor.dirty ? <MetaText>{editor.problem}</MetaText> : null}
             {!editor.editable ? <MetaText>Only the owner can change this agent.</MetaText> : null}
+            {sharedAgent ? (
+              <SharedItemSafetyActions
+                item={{ kind: 'agent', id: sharedAgent.agent.id, sharerId: sharedAgent.sharerId }}
+                title={sharedAgent.agent.name}
+                ownerName={sharedAgent.agent.ownerName ?? 'sharer'}
+                accountId={access.ownerId}
+                onHidden={() => setHiddenNow(true)}
+              />
+            ) : null}
             <AgentConfigSections
               draft={editor.draft}
               disabled={!editor.editable || editor.saving}

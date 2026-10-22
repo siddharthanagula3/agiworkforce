@@ -167,8 +167,7 @@ function SkillsGate({
             textAlign: 'center',
           }}
         >
-          Browse and install Skills for AGI Cloud. Switching here does not send Local chats or files
-          to the cloud.
+          Skills run in AGI Cloud; switching won’t upload your local chats.
         </Text>
         <Button
           title={signedIn ? 'Switch to AGI Cloud' : 'Sign in to AGI Cloud'}
@@ -409,8 +408,7 @@ function CatalogIntro({ count }: { count: number }) {
           Managed Cloud catalog
         </Text>
         <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
-          Install a Skill to use it in your AGI Cloud messages, and uninstall it when you no longer
-          need it. Draft entries are marked Coming later.
+          Install a Skill to use it in your AGI Cloud messages.
         </Text>
       </View>
       <Text

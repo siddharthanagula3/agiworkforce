@@ -363,7 +363,7 @@ export default function VoiceSettingsScreen() {
       />
       <SettingsInfo
         title="Foreground conversations only"
-        body="Voice listening and speech stop when AGI moves to the background or the device locks. The microphone does not stay active in other apps."
+        body="Voice stops when AGI leaves the screen or the device locks."
         icon={Lock}
       />
 
@@ -409,8 +409,7 @@ export default function VoiceSettingsScreen() {
             is stated here as a caption instead of offered as a choice. */}
         <View style={{ paddingHorizontal: 14, paddingBottom: 12 }}>
           <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 16 }}>
-            Voice replies use the current chat model. Cloud Mode sends your transcript to AGI Cloud.
-            Speech plays through voices installed on this device.
+            Replies use the current chat model; in Cloud Mode, your transcript goes to AGI Cloud.
           </Text>
         </View>
       </SettingsGroup>

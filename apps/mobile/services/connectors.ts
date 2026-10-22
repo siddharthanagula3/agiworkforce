@@ -46,7 +46,6 @@ import {
   SaveConnectorCredentialResponseSchema,
   connectorCapabilitiesPath,
   connectorDirectoryEntryPath,
-  connectorDirectoryIconPath,
   type ConnectorCapabilityCatalog,
   type ConnectorCredentialStatusResponse,
   type ConnectorDirectoryCategory,
@@ -201,10 +200,6 @@ export async function fetchConnectorListing(id: string): Promise<ConnectorListin
   const parsed = ConnectorDirectoryEntryResponseSchema.safeParse(body);
   if (!parsed.success) throw new ConnectorResponseError(INVALID_LISTING);
   return parsed.data.entry;
-}
-
-export function connectorListingIconUrl(listing: ConnectorListing): string | null {
-  return listing.iconUrl ? `${API_URL}${connectorDirectoryIconPath(listing.id)}` : null;
 }
 
 export async function fetchConnectorCapabilities(

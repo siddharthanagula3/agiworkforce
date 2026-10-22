@@ -10,7 +10,7 @@ const { registerReactPackage } = require('./registerReactPackage.cjs');
 const PLUGIN_NAME = 'agi-visionocr-plugin';
 const PLUGIN_VERSION = '1.0.0';
 
-const VISIONOCR_DEP = "implementation 'com.google.mlkit:text-recognition:16.0.0'";
+const VISIONOCR_DEP = "implementation 'com.google.mlkit:text-recognition:16.0.1'";
 const VISIONOCR_DEP_MARKER = 'com.google.mlkit:text-recognition';
 
 const PACKAGE_IMPORT = 'import com.agiworkforce.app.native.AGIVisionOCRPackage';

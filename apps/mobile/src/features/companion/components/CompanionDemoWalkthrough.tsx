@@ -50,8 +50,7 @@ function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
       iconColor: colors.agentActive,
       stepNumber: 2,
       title: 'Monitor Agents',
-      description:
-        'Once paired, the Agent Dashboard shows all running tasks. You can see progress, current action, step counts, and estimated time remaining for each agent.',
+      description: 'See every running task and its progress on the Agent Dashboard.',
       hint: 'Tap an agent card to expand details. Tap the arrow to see the full run log.',
     },
     {
@@ -61,8 +60,7 @@ function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
       iconColor: colors.agentSuccess,
       stepNumber: 3,
       title: 'Approve Actions',
-      description:
-        'When an agent wants to delete files, run commands, or call APIs, an approval card appears. You can review the risk level and approve or deny directly from your phone.',
+      description: 'Approve or deny risky agent actions right from your phone.',
       hint: 'High-risk actions trigger a push notification so you never miss a critical decision.',
     },
     {
@@ -72,8 +70,7 @@ function demoSteps(colors: ReturnType<typeof useThemeColors>): DemoStep[] {
       iconColor: colors.agentWarning,
       stepNumber: 4,
       title: 'Remote Control',
-      description:
-        'Pause, resume, or cancel any running agent from your phone. In an emergency, the red "Emergency Stop" button cancels ALL running tasks on the desktop instantly.',
+      description: 'Pause, resume or cancel any running agent, or stop them all at once.',
       hint: 'Agent controls appear when you tap a running agent card.',
     },
   ];

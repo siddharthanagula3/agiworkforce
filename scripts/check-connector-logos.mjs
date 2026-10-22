@@ -5,18 +5,16 @@ import { dirname, join } from 'node:path';
 
 const repoRoot = join(dirname(fileURLToPath(import.meta.url)), '..');
 
-const SOURCES = [
-  {
-    label: 'packages/ui/ui (web + desktop)',
-    path: 'packages/ui/ui/src/settings-modal/ConnectorLogo.tsx',
-    marker: 'CONNECTOR_LOGO_URLS: Record',
-  },
-  {
-    label: 'apps/mobile connector logo',
-    path: 'apps/mobile/src/features/settings/cloud-connectors/ConnectorLogo.tsx',
-    marker: 'LOGO_URLS: Record',
-  },
-];
+const REFERENCE = {
+  label: 'packages/ui/ui (web + desktop)',
+  path: 'packages/ui/ui/src/settings-modal/ConnectorLogo.tsx',
+  marker: 'CONNECTOR_LOGO_URLS: Record',
+};
+
+// The store builds draw a generic icon beside the connector name and fetch no
+// third-party logo (App Review 5.2.1), so the mobile component carries no URL.
+const MOBILE_LOGO_PATH = 'apps/mobile/src/features/settings/cloud-connectors/ConnectorLogo.tsx';
+const REMOTE_URL = /https?:\/\//;
 
 function readLogoMap({ path, marker }) {
   const source = readFileSync(join(repoRoot, path), 'utf8');
@@ -50,21 +48,12 @@ function readLogoMap({ path, marker }) {
   return entries;
 }
 
-const [reference, mirror] = SOURCES.map((source) => ({
-  ...source,
-  entries: readLogoMap(source),
-}));
-
-const shared = [...reference.entries.keys()].filter((key) => mirror.entries.has(key));
-const drifted = shared.filter((key) => reference.entries.get(key) !== mirror.entries.get(key));
+const reference = { ...REFERENCE, entries: readLogoMap(REFERENCE) };
 
 const HASHED_COMMONS = /upload\.wikimedia\.org\/wikipedia\/commons\/[0-9a-f]\/[0-9a-f]{2}\//;
-const fragile = SOURCES.flatMap((source, index) => {
-  const entries = index === 0 ? reference.entries : mirror.entries;
-  return [...entries]
-    .filter(([, url]) => HASHED_COMMONS.test(url))
-    .map(([key]) => `${source.label}: ${key}`);
-});
+const fragile = [...reference.entries]
+  .filter(([, url]) => HASHED_COMMONS.test(url))
+  .map(([key]) => `${reference.label}: ${key}`);
 
 for (const entry of fragile) {
   console.warn(
@@ -73,21 +62,16 @@ for (const entry of fragile) {
   );
 }
 
-if (drifted.length === 0) {
-  console.log(
-    `Connector logo check passed: ${shared.length} shared keys agree across ${SOURCES.length} maps` +
-      `${fragile.length > 0 ? ` (${fragile.length} fragile URLs warned)` : ''}.`,
+const mobileSource = readFileSync(join(repoRoot, MOBILE_LOGO_PATH), 'utf8');
+if (REMOTE_URL.test(mobileSource)) {
+  console.error(
+    `check:connector-logos FAILED, ${MOBILE_LOGO_PATH} references a remote URL. The mobile app` +
+      ' shows a generic icon and the connector name, never a fetched third-party logo.',
   );
-  process.exit(0);
+  process.exit(1);
 }
 
-for (const key of drifted) {
-  console.error(`\nDRIFT  ${key}`);
-  console.error(`  ${reference.label}\n    ${reference.entries.get(key)}`);
-  console.error(`  ${mirror.label}\n    ${mirror.entries.get(key)}`);
-}
-console.error(
-  `\ncheck:connector-logos FAILED, ${drifted.length} key(s) disagree between the two maps.` +
-    ` Update both, or delete the duplicate if one surface no longer needs it.`,
+console.log(
+  `Connector logo check passed: ${reference.entries.size} web logos parsed, mobile fetches none` +
+    `${fragile.length > 0 ? ` (${fragile.length} fragile URLs warned)` : ''}.`,
 );
-process.exit(1);

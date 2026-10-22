@@ -61,9 +61,7 @@ export default function ResetPasswordScreen() {
         </Text>
 
         <Text style={{ color: themeColors.textMuted, fontSize: typeScale.body, lineHeight: 22 }}>
-          For account security, password recovery opens in your AGI web account. If you lost the
-          email address or two-factor device on the account, a person can verify it is yours and
-          restore access. Local Mode data on this device stays separate.
+          Password recovery opens in your AGI web account.
         </Text>
 
         <View style={{ gap: 10 }}>

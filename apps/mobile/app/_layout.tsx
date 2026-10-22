@@ -88,6 +88,7 @@ import { ToastHost } from '@/src/shared/components/Toast';
 import { CloudSyncErrorBanner } from '@/src/features/edge-cases/components/CloudSyncErrorBanner';
 import { CapabilityProvider } from '@/src/lib/capabilities';
 import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
+import { registerAppTransactionForAccount } from '@/src/features/age-assurance/appTransaction';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';
 import { TextScaleBoundary } from '@/src/shared/components/TextScaleBoundary';
 import '../global.css';
@@ -175,6 +176,7 @@ function ClerkTokenBridge() {
       setClerkSignedIn(true);
       setClerkLoaded(true);
       void refreshRolloutRings();
+      void registerAppTransactionForAccount(userId);
     } else {
       useRolloutStore.getState().clear();
       clearPostAuthIntent();
@@ -256,7 +258,7 @@ export default function RootLayout() {
   const resetAppLock = useCallback(() => {
     Alert.alert(
       'Reset app lock and sign out?',
-      'App Lock is turned off and you are signed out of AGI Cloud on this device. Local chats stay on this device. Cloud chats are available again after you sign in.',
+      'This turns off App Lock and signs you out; local chats stay on this device.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

@@ -8,6 +8,7 @@ import {
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
   isEntitledSubscriptionStatus,
   isFreeBillingPlanTier,
+  mobileIapCountrySellsTopUps,
   mobileIapStoreCommissionBasisPoints,
   purchasedCreditMetadata,
   topUpBudgetCentsForCredits,
@@ -21,6 +22,7 @@ import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-pu
 import { logger } from '@/lib/logger';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
+import { PLAN_CHANGE_REFUSED_DURING_DELETION } from './billing-plan-change-gate';
 import { recordCogsAdjustment } from './cogs-ledger-service';
 import { SubscriptionService } from './subscription-service';
 import {
@@ -52,6 +54,12 @@ export const STORE_TEST_PURCHASE_REFUSED =
 
 export const STORE_PLAN_HELD_BY_ANOTHER_PURCHASE =
   'This account already has an active plan from a different store purchase. Cancel that one, or wait for it to end, before starting another.';
+
+export const STORE_TOP_UP_NOT_SOLD_IN_COUNTRY =
+  "Credits aren't sold in this store country, so none were added to your account.";
+
+export const STORE_PURCHASE_CONSENT_WITHDRAWN =
+  "A parent or guardian withdrew consent for this account's use of the app, so store purchases can't be added to it.";
 
 const STORE_REQUEST_CLOSED_AS_GRANTED =
   'This purchase was added to the account after the request was filed, so no refund is due.';
@@ -154,6 +162,24 @@ async function findExistingReceipt(
     [input.platform, input.storeTransactionId, input.purchaseTokenHash],
   );
   return row;
+}
+
+// Apple names the install whose consent was withdrawn, not the account, so the
+// refusal holds for every account that signed in from that install.
+export async function hasWithdrawnStoreConsent(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<boolean> {
+  const [row] = await db.query<{ app_transaction_id: string }>(
+    `select app.app_transaction_id
+       from public.mobile_app_transactions app
+       join public.mobile_app_consent_rescissions rescission
+         on rescission.app_transaction_id = app.app_transaction_id
+      where app.user_id = $1
+      limit 1`,
+    [userId],
+  );
+  return row !== undefined;
 }
 
 function intendedAmountCents(product: MobileIapCatalogProduct): number {
@@ -406,6 +432,18 @@ async function grantVerifiedMobileIapPurchase(input: {
       [input.userId],
     );
 
+    if (await hasWithdrawnStoreConsent(tx, input.userId)) {
+      throw createError.conflict(STORE_PURCHASE_CONSENT_WITHDRAWN).asUserSafe();
+    }
+
+    const [deletion] = await tx.query<{ deletion_scheduled_for: string | Date | null }>(
+      'select deletion_scheduled_for from public.profiles where id = $1 limit 1',
+      [input.userId],
+    );
+    if (deletion?.deletion_scheduled_for) {
+      throw createError.conflict(PLAN_CHANGE_REFUSED_DURING_DELETION).asUserSafe();
+    }
+
     if (
       isUnfundedStorePurchase(input.verified) &&
       !(await readStoreTestPurchasesAllowed(input.userId))
@@ -424,6 +462,8 @@ async function grantVerifiedMobileIapPurchase(input: {
       if (heldByAnotherStorePurchase(subscription, input)) {
         throw createError.conflict(STORE_PLAN_HELD_BY_ANOTHER_PURCHASE).asUserSafe();
       }
+    } else if (!mobileIapCountrySellsTopUps(input.verified.purchaseCountry)) {
+      throw createError.conflict(STORE_TOP_UP_NOT_SOLD_IN_COUNTRY).asUserSafe();
     } else if (!ownsPaidPlanForTopUp(subscription)) {
       throw createError.conflict('Start or restore an active paid plan before buying a top-up.');
     }

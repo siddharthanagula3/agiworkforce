@@ -129,8 +129,7 @@ describe('runImageGenerationTurn', () => {
     expect(callbacks.complete).toHaveBeenCalledWith('conversation-1', 'assistant-1', {
       imageUrl: 'https://example.com/generated.png',
       persisted: false,
-      persistenceWarning:
-        'This image is available for this session only because AGI Cloud media storage is not configured. Try again after storage is available to save it.',
+      persistenceWarning: 'This image couldn’t be saved and is available for this session only.',
       revisedPrompt: 'Refined prompt',
       model: 'registry-image-route',
     });

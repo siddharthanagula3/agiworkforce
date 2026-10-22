@@ -2,8 +2,10 @@
  * GenAI content-report intake.
  *
  * POST /api/mobile/content-report, and the web alias /api/content-report,
- * accept trust-and-safety reports of harmful / inaccurate AI-generated content
- * and write them into public.content_reports. The mobile client keeps its
+ * accept trust-and-safety reports of harmful / inaccurate AI-generated content,
+ * including image and video output (`asset`) and content other users shared in
+ * the app (`sharedItem`, with the sharer's id), and write them into
+ * public.content_reports. The mobile client keeps its
  * on-device copy as an OFFLINE fallback only.
  *
  * user_id is intentionally optional: reporting is reachable from both Local and
@@ -31,6 +33,21 @@ const ContentReportSchema = z.object({
   category: z.enum(['harmful', 'inaccurate', 'offensive', 'misinformation', 'privacy', 'other']),
   contentExcerpt: z.string().max(500).default(''),
   userNote: z.string().max(2000).default(''),
+  asset: z
+    .object({
+      kind: z.enum(['image', 'video']),
+      url: z.string().trim().min(1).max(2048),
+    })
+    .strict()
+    .optional(),
+  sharedItem: z
+    .object({
+      kind: z.enum(['project', 'conversation', 'artifact', 'connector', 'agent']),
+      id: z.string().trim().min(1).max(200),
+      sharerId: z.string().trim().min(1).max(200),
+    })
+    .strict()
+    .optional(),
 });
 
 async function handleSubmitContentReport(request: NextRequest) {
@@ -45,7 +62,16 @@ async function handleSubmitContentReport(request: NextRequest) {
   if (!parsed.success) {
     throw createError.badRequest('Invalid content report payload', parsed.error.flatten());
   }
-  const { reportId, messageId, conversationId, category, contentExcerpt, userNote } = parsed.data;
+  const {
+    reportId,
+    messageId,
+    conversationId,
+    category,
+    contentExcerpt,
+    userNote,
+    asset,
+    sharedItem,
+  } = parsed.data;
 
   const userId = (await getOptionalAuthUser(request))?.userId ?? null;
   const source = new URL(request.url).pathname.startsWith(MOBILE_INTAKE_PATH) ? 'mobile' : 'web';
@@ -65,7 +91,12 @@ async function handleSubmitContentReport(request: NextRequest) {
         category,
         contentExcerpt,
         userNote,
-        JSON.stringify({ source, category }),
+        JSON.stringify({
+          source,
+          category,
+          ...(asset ? { asset } : {}),
+          ...(sharedItem ? { sharedItem } : {}),
+        }),
       ],
     );
   } catch (error) {

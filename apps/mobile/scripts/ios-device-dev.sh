@@ -54,10 +54,10 @@ fi
 # regenerates ios/ and BEFORE run:ios starts Xcode, that order is the fix.
 derived_data_dir="${AGI_IOS_DERIVED_DATA_DIR:-$HOME/Library/Developer/Xcode/DerivedData}"
 if [[ "${AGI_IOS_SKIP_DERIVED_DATA_RESET:-0}" != "1" && -d "$derived_data_dir" ]]; then
-  rm -rf "$derived_data_dir"/AGIWorkforce-*
+  rm -rf "$derived_data_dir"/AGIMobile-*
 fi
 
-project_file="ios/AGIWorkforce.xcodeproj/project.pbxproj"
+project_file="ios/AGIMobile.xcodeproj/project.pbxproj"
 if [[ -f "$project_file" ]]; then
   AGI_IOS_DEVELOPMENT_TEAM="$AGI_IOS_DEVELOPMENT_TEAM" perl -0pi -e '
     s/DEVELOPMENT_TEAM = "?[A-Z0-9]+"?;/DEVELOPMENT_TEAM = "$ENV{AGI_IOS_DEVELOPMENT_TEAM}";/g;

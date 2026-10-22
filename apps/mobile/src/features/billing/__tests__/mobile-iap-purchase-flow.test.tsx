@@ -76,7 +76,6 @@ function catalog(platform: 'ios' | 'android', extra: Record<string, unknown> = {
     appAccountToken: accountToken,
     products: ALL_KEYS.map((key) => catalogProduct(key, platform === 'android')),
     unavailableReason: null,
-    unavailableCode: null,
     ...extra,
   };
 }
@@ -435,6 +434,29 @@ describe('buying through the store', () => {
         sku: productId('subscription_max_monthly'),
         appAccountToken: accountToken,
       });
+    });
+
+    it('does not open the store for a minor whose state requires guardian consent', async () => {
+      mockStored.set(
+        'age-assurance:v1',
+        JSON.stringify({
+          checkedAt: '2026-10-19T00:00:00.000Z',
+          platform: 'ios',
+          outcome: 'range',
+          regulated: true,
+          lowerBound: 13,
+          upperBound: 15,
+          guardianManaged: true,
+          installId: null,
+          significantChangeStatus: null,
+        }),
+      );
+      const { result } = await mountHook('ios');
+
+      await act(async () => result.current.purchase('subscription_max_monthly'));
+
+      expect(mockRequestPurchase).not.toHaveBeenCalled();
+      expect(result.current.error).toBe('A parent or guardian needs to approve purchases.');
     });
 
     it('treats Ask to Buy as waiting, not as a failed purchase', async () => {

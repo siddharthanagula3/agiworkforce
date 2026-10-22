@@ -1,10 +1,12 @@
+import { useState } from 'react';
 import { Alert, Modal, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { X } from 'lucide-react-native';
+import { Flag, X } from 'lucide-react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useThemeColors } from '@/src/ui/theme';
 import type { LocalVideoPlayer } from '@/services/fileCreation';
+import { ReportSheet, type ReportTarget } from './ReportFlagButton';
 
 export interface VideoPlayerModalProps {
   player: LocalVideoPlayer | null;
@@ -12,6 +14,7 @@ export interface VideoPlayerModalProps {
   onClose: () => void;
   label: string;
   failureHint: string;
+  reportTarget?: ReportTarget;
 }
 
 export function VideoPlayerModal({
@@ -20,8 +23,10 @@ export function VideoPlayerModal({
   onClose,
   label,
   failureHint,
+  reportTarget,
 }: VideoPlayerModalProps) {
   const colors = useThemeColors();
+  const [reporting, setReporting] = useState(false);
 
   return (
     <Modal
@@ -33,6 +38,16 @@ export function VideoPlayerModal({
     >
       <SafeAreaView style={{ flex: 1, backgroundColor: colors.black }}>
         <View style={{ flexDirection: 'row', justifyContent: 'flex-end', paddingHorizontal: 8 }}>
+          {reportTarget ? (
+            <Pressable
+              onPress={() => setReporting(true)}
+              accessibilityRole="button"
+              accessibilityLabel="Report this video"
+              style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+            >
+              <Flag size={20} color={colors.white} />
+            </Pressable>
+          ) : null}
           <Pressable
             onPress={onClose}
             accessibilityRole="button"
@@ -62,6 +77,14 @@ export function VideoPlayerModal({
               Alert.alert('Could not play the video', failureHint);
             }}
             accessibilityLabel={label}
+          />
+        ) : null}
+        {reportTarget && reporting ? (
+          <ReportSheet
+            visible
+            onClose={() => setReporting(false)}
+            title="Report this video"
+            target={reportTarget}
           />
         ) : null}
       </SafeAreaView>

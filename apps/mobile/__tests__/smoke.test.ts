@@ -7,6 +7,6 @@ describe('Mobile app smoke test', () => {
   });
 
   it('should have correct app name', () => {
-    expect(appConfig.expo.name).toBe('AGI Workforce');
+    expect(appConfig.expo.name).toBe('AGI Mobile');
   });
 });

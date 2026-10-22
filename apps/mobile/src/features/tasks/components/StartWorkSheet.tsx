@@ -232,8 +232,7 @@ export function StartWorkSheet({
             ) : null}
 
             <Text style={{ color: colors.textMuted, fontSize: typeScale.caption, lineHeight: 18 }}>
-              The task runs on your AGI Cloud account with the tools your plan allows, and pauses
-              here for approval when one needs your decision.
+              The task runs in AGI Cloud and pauses here when it needs your approval.
             </Text>
           </ScrollView>
 

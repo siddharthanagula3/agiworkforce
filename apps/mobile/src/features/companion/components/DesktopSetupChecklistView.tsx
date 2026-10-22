@@ -43,10 +43,10 @@ rehydrateWhenMmkvReady(useDispatchSetupStore, 'dispatch-setup-store');
 export const DESKTOP_DOWNLOAD_URL = 'https://agiworkforce.com/download';
 
 export function buildDesktopLinkMailto(accountEmail: string | null): string {
-  const subject = encodeURIComponent('AGI Workforce for desktop');
+  const subject = encodeURIComponent('AGI Desktop');
   const body = encodeURIComponent(
     [
-      'Download AGI Workforce for desktop here:',
+      'Download AGI Desktop here:',
       DESKTOP_DOWNLOAD_URL,
       '',
       'Then open it, sign in, go to Settings → Capabilities → Remote Control, and choose Pair a phone.',
@@ -105,15 +105,14 @@ export function DesktopSetupChecklistView({ onContinue }: DesktopSetupChecklistV
             Set up Dispatch on desktop first
           </Text>
           <Text className="text-white/50 text-center text-sm leading-5">
-            Dispatch sends work from this phone to your computer. Three things have to be true on
-            that computer before it can pair.
+            Check these three things on your computer before pairing.
           </Text>
         </View>
 
         <PairingChecklist
           className="mb-8"
           steps={[
-            'Install AGI Workforce on your computer and open it',
+            'Install AGI Desktop on your computer and open it',
             'Sign in on Desktop; the short-lived pairing code authorizes this phone',
             'Open Settings → Capabilities → Remote Control and choose Pair a phone',
           ]}

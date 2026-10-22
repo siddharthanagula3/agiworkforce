@@ -46,7 +46,7 @@ export const CLOUD_TASK_LIST_POLL_INTERVAL_MS = 15_000;
 
 const SCREEN_TITLE = 'AGI Work';
 const SCREEN_SUBTITLE = 'AGI Cloud';
-const SCOPE_NOTE = `Every agent run on your AGI Cloud account, whichever surface started it. Pairing with a nearby desktop stays in ${MOBILE_REMOTE_SCREEN_LABEL}.`;
+const SCOPE_NOTE = `Every agent run on your AGI Cloud account; paired desktops are in ${MOBILE_REMOTE_SCREEN_LABEL}.`;
 const BACKGROUND_ALERTS_OFF_NOTE =
   'Background approval alerts are off, so a task that pauses while the app is closed will wait silently.';
 
@@ -173,8 +173,7 @@ function CloudTasksGate({
             textAlign: 'center',
           }}
         >
-          Your on-device chats stay Local. Switch explicitly to see the durable runs on your Cloud
-          account and answer anything blocking them.
+          Switch to AGI Cloud to see your runs; on-device chats stay local.
         </Text>
         <Button
           title={signedIn ? 'Switch to AGI Cloud' : 'Sign in to AGI Cloud'}

@@ -54,8 +54,8 @@ describe('Quick Access screen, describes only real integrations', () => {
     setPlatform('ios');
     const { getAllByText, getByText, queryByText } = render(<WidgetSetupScreen />);
 
-    expect(getByText('"Hey Siri, start chat with AGI Workforce"')).toBeTruthy();
-    expect(getByText('"Hey Siri, set reminder via AGI Workforce"')).toBeTruthy();
+    expect(getByText('"Hey Siri, start chat with AGI Mobile"')).toBeTruthy();
+    expect(getByText('"Hey Siri, set reminder via AGI Mobile"')).toBeTruthy();
 
     for (const label of [
       'Start Chat',
@@ -74,11 +74,11 @@ describe('Quick Access screen, describes only real integrations', () => {
     expect(getByText('Review and create a real Apple Reminder')).toBeTruthy();
     expect(getAllByText(/choose Share to AGI/i).length).toBeGreaterThan(0);
     expect(getByText(/Save for AGI Review/)).toBeTruthy();
-    expect(getByText(/then open AGI Workforce/)).toBeTruthy();
+    expect(getByText(/then open AGI Mobile/)).toBeTruthy();
     expect(queryByText(/not yet available on iOS/)).toBeNull();
 
     expect(getByText('Home Screen Widget')).toBeTruthy();
-    expect(getByText(/Open AGI Workforce to Control Center/)).toBeTruthy();
+    expect(getByText(/Open AGI Mobile to Control Center/)).toBeTruthy();
     expect(queryByText('App Shortcuts')).toBeNull();
     expect(queryByText(/Long-press/)).toBeNull();
   });

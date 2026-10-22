@@ -271,8 +271,7 @@ without a deployment:
    names a user admits anyone, so a default, a rule or a workspace override of
    `on` admits nobody.
 3. Do this for the account whose credentials are in App Store Connect's and
-   Play Console's review fields **before submitting the build**. That account
-   also needs upgrade access (section 7).
+   Play Console's review fields **before submitting the build**.
 4. When review or testing ends, open the flag's **Overrides** in the Flags table
    and remove the account. The override has no expiry of its own.
 
@@ -387,6 +386,43 @@ The app consumes a Play top-up after the server grants it. One the server
 acknowledged while the app was closed is consumed the next time Billing opens,
 so the same top-up can be bought again.
 
+### 5.1 A parent or guardian withdraws consent
+
+Texas SB 2420, Utah and Louisiana let a parent or guardian withdraw consent for
+a child's use of the app. Apple reports it with the App Store Server
+Notifications V2 type `RESCIND_CONSENT`, documented at
+developer.apple.com/documentation/appstoreservernotifications/notificationtype.
+It names the install through `appData.signedAppTransactionInfo`, never an AGI
+account, and it reaches the server only through the URLs in section 2.4, so set
+both the production and the sandbox Server URL before the first App Store
+submission.
+
+To find the account, the iOS app sends Apple's signed app transaction to
+`POST /api/mobile/age-assurance/app-transaction` after Cloud sign-in, once per
+account on each install. The server verifies Apple's signature and the bundle
+id, never a raw id from the app, and records the install against the account in
+`mobile_app_transactions`. One install can serve several accounts.
+
+On `RESCIND_CONSENT` the server records the withdrawal in
+`mobile_app_consent_rescissions` by its notification id, so a redelivery
+answers `duplicate` and changes nothing. Every account recorded for that
+install loses its App Store plan at once (Free, and the Apple receipt marked
+`revoked`), and the route answers `consent_rescinded`. An install no account has
+registered yet answers `unknown_app_transaction`; the withdrawal is still kept,
+and an account that registers that install later loses its App Store plan then.
+From then on the ledger refuses every store purchase and renewal for those
+accounts, on both stores, and files a charged one for refund as above. Apple
+keeps billing a subscription until it is cancelled at Apple; send the family to
+reportaproblem.apple.com. Apple sends no notice when consent is given again, so
+lifting the refusal is a support decision made in the database.
+
+Migration `0377` must be applied before the deploy that ships this, or every
+`RESCIND_CONSENT` notice and every purchase verification fails.
+
+Google Play has no consent-withdrawal notification or API. Withdrawn approvals
+appear only as install ids in Play Console, Age signals, **Revoked app
+approvals**, as a CSV. Download it weekly and handle each install by hand.
+
 ## 6. What the store submission has to match
 
 `apps/mobile/store-listing/LISTING-METADATA-IOS.json` and
@@ -396,9 +432,8 @@ submitting a build:
 
 - App Store Connect: attach all eight in-app purchases to the app version, with
   a review screenshot for each.
-- Give App Review and Play review a signed-in test account that can reach the
-  plans: either one with upgrade access already granted, or an access code in
-  the review notes.
+- Give App Review and Play review a signed-in test account (email and password;
+  Clerk production has Device Trust off so sign-in needs no one-time code).
 - `apps/mobile/src/features/release-state/mobileReleaseState.json` records both
   stores as unpublished. While a store is unpublished the app does not name it
   and shows no link to its subscription settings, so a store subscriber is told
@@ -416,11 +451,15 @@ submitting a build:
    code that needs them is deployed: without `0361` every subscription notice
    fails, and without `0362` a Play pause notice fails and a store refund cannot
    be recorded.
-2. Set `MOBILE_IAP_ENABLED` to `true`. Accounts with upgrade access, and
-   accounts a store already bills, can now buy; everyone else sees the waitlist.
-3. To open purchases to everyone, open paid upgrades in the operator dashboard.
-   That gate is owned by `apps/web/lib/server/billing-waitlist-access.ts` and is
-   read on every catalog request, so it takes effect without a deployment.
+2. Set `MOBILE_IAP_ENABLED` to `true`. Every signed-in mobile account can now
+   buy: store purchases have no waitlist or access code (App Review 3.1.1 bans
+   app-run unlock mechanisms). The web upgrade waitlist is separate and owned by
+   `apps/web/lib/server/billing-waitlist-access.ts`.
+3. Credit top-ups are not sold in Japan storefronts (3.1.1: purchased credits may
+   not expire; `PURCHASED_CREDIT_EXPIRY_RULES` expires JP credits). The catalog
+   omits them for a JP storefront and the ledger refuses a JP top-up grant; also
+   remove Japan from each top-up's availability in App Store Connect and Play
+   Console.
 4. To stop new purchases at any time, turn off the `in_app_purchase` kill switch
    or set `MOBILE_IAP_ENABLED` to `false`. Existing subscribers keep their
    plans, and purchases already made still verify and restore.

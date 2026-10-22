@@ -96,7 +96,7 @@ export function ModeSwitchModal({
             }}
           >
             {targetsCloud
-              ? 'Sign in to use AGI Cloud chat. Your local chat stays on this device unless you choose to start a Cloud session.'
+              ? 'Sign in to use AGI Cloud; your local chat stays on this device.'
               : 'This changes the active model path for the conversation.'}
           </Text>
 

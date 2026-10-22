@@ -9,6 +9,7 @@ import {
 } from '@/src/features/chat/actions/mediaMode';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { useModelStore } from '@/src/features/model-picker/store';
+import { FEATURES } from '@/lib/v1FeatureFlags';
 
 const TEXT_MODEL = 'fixture-chat-model';
 
@@ -157,10 +158,22 @@ describe('media mode', () => {
     });
 
     it('enters video mode and surfaces the video model for display', () => {
-      expect(enterMediaMode('video')).toBe(true);
+      const features = FEATURES as { videoGen: boolean };
+      features.videoGen = true;
+      try {
+        expect(enterMediaMode('video')).toBe(true);
+      } finally {
+        features.videoGen = false;
+      }
 
       expect(useChatViewStore.getState().mediaMode).toBe('video');
       expect(mediaModelIdForMode('video')).toBe(resolveMediaModelId('video'));
+    });
+
+    it('refuses video mode in a build without video generation', () => {
+      expect(enterMediaMode('video')).toBe(false);
+
+      expect(useChatViewStore.getState().mediaMode).toBe('text');
     });
 
     it('never overwrites the user chat-model selection', () => {

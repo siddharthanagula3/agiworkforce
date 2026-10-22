@@ -112,8 +112,7 @@ const BLOCKED_ALERTS: Readonly<Record<MobileImageGenerationBlockCode, MobileImag
     },
     requires_cloud: {
       title: 'Image generation uses AGI Cloud',
-      message:
-        'Start an AGI Cloud chat to generate images. Local Mode can attach and inspect images without uploading them.',
+      message: 'Start an AGI Cloud chat to generate images.',
     },
     feature_unavailable: {
       title: 'Image generation uses AGI Cloud',
@@ -152,8 +151,7 @@ const BLOCKED_ALERTS: Readonly<Record<MobileImageGenerationBlockCode, MobileImag
     },
     reference_image_unsupported: {
       title: 'This image model cannot use a reference image',
-      message:
-        'No image model in this build can edit an attached image. Remove the attachment to generate a new image from your prompt.',
+      message: 'Remove the attachment to generate a new image from your prompt.',
     },
   };
 

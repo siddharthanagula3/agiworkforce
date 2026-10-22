@@ -251,8 +251,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
           ) : null}
           {schedule.pausedReason === 'approval_required' ? (
             <Text className="mb-2.5 text-xs leading-4" style={{ color: colors.agentWarning }}>
-              Paused: a run needed your approval. Approve or deny it in History; if the request
-              expired, turn the schedule back on to run it again.
+              Paused for your approval, so approve or deny it in History.
             </Text>
           ) : null}
 

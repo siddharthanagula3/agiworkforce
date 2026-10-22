@@ -158,8 +158,7 @@ export function CloudAccountRequired({
         Sign in to AGI Cloud
       </Text>
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
-        This page contains account-specific subscription and Cloud data. Local Mode remains
-        available without an account.
+        Your plan and Cloud data need an account; Local Mode works without one.
       </Text>
       <Pressable
         onPress={onSignIn}
@@ -211,8 +210,7 @@ export function CloudSyncBlockedBanner({
         </Text>
       </View>
       <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}>
-        {message ??
-          "This can't sync with your real plan and usage while chat is in Local Mode. Switch to AGI Cloud to see up-to-date info."}
+        {message ?? 'Switch to AGI Cloud to see your current plan and usage.'}
       </Text>
       <Pressable
         onPress={onSwitchToCloud}

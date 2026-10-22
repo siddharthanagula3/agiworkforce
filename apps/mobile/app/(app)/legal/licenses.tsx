@@ -53,9 +53,9 @@ export default function LicensesScreen() {
             lineHeight: 19,
             marginTop: 6,
           }}
-          accessibilityLabel={`AGI Workforce is built with ${OSS_PACKAGES.length} open source packages. Their licenses and copyright notices are reproduced below.`}
+          accessibilityLabel={`AGI Mobile is built with ${OSS_PACKAGES.length} open source packages. Their licenses and copyright notices are reproduced below.`}
         >
-          AGI Workforce is built with open source software. Each package below is listed with its
+          AGI Mobile is built with open source software. Each package below is listed with its
           copyright notice and the license it ships under.
           {generatedAt ? ` Generated ${generatedAt} from the installed dependencies.` : ''}
         </Text>

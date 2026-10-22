@@ -86,6 +86,27 @@ function resolveAppMode(): 'local' | 'cloud' {
 
 interface GuardedFetchOptions extends SecureFetchOptions {
   authControl?: boolean;
+  /** Set only for a content report the user chose to send with its own Send tap. */
+  consentedReport?: boolean;
+}
+
+export const CONTENT_REPORT_PATH = '/api/mobile/content-report';
+
+function isConsentedReportRequest(input: RequestInfo | URL, init?: RequestInit): boolean {
+  try {
+    const target = new URL(
+      typeof input === 'string' ? input : input instanceof URL ? input.href : input.url,
+    );
+    const cloud = new URL(API_URL);
+    return (
+      target.origin === cloud.origin &&
+      target.pathname === CONTENT_REPORT_PATH &&
+      target.search === '' &&
+      init?.method === 'POST'
+    );
+  } catch {
+    return false;
+  }
 }
 
 function isSignedInTermsRequest(input: RequestInfo | URL, init?: RequestInit): boolean {
@@ -117,6 +138,8 @@ function isSignedInTermsRequest(input: RequestInfo | URL, init?: RequestInit): b
  * Behaviour:
  *   - Local mode + our-cloud host → throw `EgressBlockedError` BEFORE any
  *     network I/O. Nothing leaves the device.
+ *   - Local mode + a content report the user chose to send (`consentedReport`,
+ *     POST to {@link CONTENT_REPORT_PATH} only) → allowed.
  *   - Local mode + provider/other host (BYOK direct-to-provider) → allowed,
  *     delegated to `secureFetch`.
  *   - Cloud mode → all hosts allowed, delegated to `secureFetch`.
@@ -134,7 +157,10 @@ export async function guardedFetch(
   const mode = resolveAppMode();
   if (mode === 'local') {
     const host = hostnameOf(input);
-    if (isOurCloudHost(host) && !(opts?.authControl && isSignedInTermsRequest(input, init))) {
+    const allowed =
+      (opts?.authControl && isSignedInTermsRequest(input, init)) ||
+      (opts?.consentedReport && isConsentedReportRequest(input, init));
+    if (isOurCloudHost(host) && !allowed) {
       throw new EgressBlockedError(host || '(unparseable)');
     }
   }

@@ -13,20 +13,20 @@
       "whats_new": 4000
     },
     "char_counts": {
-      "name": 13,
+      "name": 10,
       "subtitle": 22,
-      "promotional_text": 134,
+      "promotional_text": 116,
       "keywords": 58,
-      "description": 1929,
-      "whats_new": 560
+      "description": 831,
+      "whats_new": 346
     }
   },
-  "app_name": "AGI Workforce",
+  "app_name": "AGI Mobile",
   "subtitle": "On-device AI assistant",
-  "promotional_text": "Chat with AI on your phone. No Wi-Fi required. Free forever. On-device model runs locally, your conversations never leave your device.",
+  "promotional_text": "Chat with AI on your phone, even offline. Local chats stay on your device; sign in for AGI Cloud when you want more.",
   "keywords": "ai,chat,assistant,local,offline,privacy,llm,dpdp,on-device",
-  "description": "AGI runs on your device first. No cloud required, no account needed, no data leaving your phone for Local Mode.\n\nMost AI apps funnel your conversations through remote servers. AGI is different: responses are generated on your device using a supported system model or a downloaded open-weight model. Airplane mode? Still works. No Wi-Fi? Still works.\n\nWORKS OFFLINE\nOn supported devices, a system model is ready without a download. Other devices download a local model once before offline chat. No Local Mode inference calls hit AGI Cloud. Your local conversations stay on this device and are encrypted at rest.\n\nFREE AT INFERENCE, FOREVER\nLocal on-device inference is free and always will be. There is no usage limit, no per-message charge, no subscription required to use the core chat.\n\nCLOUD WHEN YOU CHOOSE IT\nAGI Cloud is in public alpha: sign in for cloud chat and web search on the free tier, with image generation on Pro and above. Paid plans and credit top-ups are sold as in-app purchases.\n\nPRIVACY FIRST\nWe do not claim full DPDP Act 2023 compliance. Our itemised India DPDP notice is published at https://agiworkforce.com/privacy/india, and the obligations we have not met, verifiable parental consent, notice in Eighth Schedule languages, and India data residency among them, are listed at https://agiworkforce.com/trust. AI output is labelled as AI-generated, and first run names the on-device model and any cloud provider. Local Mode collects no personal data by default. Signing in to AGI Cloud uses your account email (and name, if provided by your sign-in method) to create your account. Export or delete your local data at any time from Settings.\n\nINDIA-FIRST\nAGI is designed to work well on the connections and devices common across India: it runs offline, installs once, and handles Hindi queries.\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy",
-  "whats_new": "AGI 0.0.1, Cloud public alpha.\n\n• Free AGI Cloud chat is open to signed-in users without an invite\n• Paid upgrades require an access code; users can join the waitlist\n• Cloud chat and web search on the free tier; image generation on Pro and above\n• On-device AI chat still works fully offline, no account needed\n• Supported devices can use a built-in model; others download a local model once\n• On-device voice transcription\n• India DPDP notice published, with our open gaps listed at agiworkforce.com/trust\n\nEmail support@agiworkforce.com, we read everything.",
+  "description": "AGI is an AI assistant that runs on your phone first.\n\nLOCAL MODE\n• Chat with an on-device model, even offline or in airplane mode\n• No account needed; local chats stay on this device, encrypted at rest\n• Supported devices use a built-in model; others download one once\n\nAGI CLOUD (optional, sign-in)\n• Cloud chat and web search on the Free plan\n• Image generation on Pro and above\n• Plans and credit top-ups are sold as in-app purchases\n\nPRIVACY\n• Cloud messages go to the AI provider that serves the request\n• Choose which models may be used in Settings > Privacy\n• Export or delete your data any time in Settings\n• India DPDP notice and open items: https://agiworkforce.com/trust\n\nBuilt by AGI Automation LLC, USA.\nSupport: support@agiworkforce.com\nPrivacy: https://agiworkforce.com/privacy\nTerms: https://agiworkforce.com/terms",
+  "whats_new": "AGI 0.0.1, first release.\n\n• On-device AI chat works offline, no account needed\n• Supported devices use a built-in model; others download a local model once\n• Sign in to AGI Cloud for cloud chat and web search on the free tier; image generation on Pro and above\n• On-device voice transcription\n\nEmail support@agiworkforce.com, we read everything.",
   "categories": {
     "primary": "Productivity",
     "secondary": "Utilities"
@@ -34,19 +34,24 @@
   "age_rating": {
     "rating": "13+",
     "questionnaire": {
-      "cartoon_or_fantasy_violence": "None",
-      "realistic_violence": "None",
+      "cartoon_or_fantasy_violence": "Infrequent / mild",
+      "realistic_violence": "Infrequent / mild",
       "profanity_or_crude_humor": "Infrequent / mild",
-      "mature_suggestive_themes": "None",
-      "horror_fear_themes": "None",
-      "medical_treatment_information": "None",
-      "alcohol_tobacco_drugs": "None",
+      "mature_suggestive_themes": "Infrequent / mild",
+      "sexual_content_or_nudity": "Infrequent / mild",
+      "horror_fear_themes": "Infrequent / mild",
+      "medical_treatment_information": "Infrequent / mild",
+      "alcohol_tobacco_drugs": "Infrequent / mild",
       "gambling": "None",
+      "contests": "None",
       "unrestricted_web_access": "No",
-      "user_generated_content": "None",
-      "contests": "None"
+      "user_generated_content": "Yes: projects and agents shared by people you work with; Report and Hide are in the app",
+      "messaging_and_chat_with_other_users": "No",
+      "social_media": "No",
+      "ai_assistant_or_chatbot": "Yes",
+      "parental_controls": "No"
     },
-    "note": "App Store Connect calculated 9+ from the content questionnaire on 2026-09-26. AGI Cloud accounts are for people 13 and older: getAgeThreshold in apps/mobile/src/features/auth/services/ageGate.ts never asks for less than ACCOUNT_MINIMUM_AGE (13, packages/contracts/types/src/account-eligibility.ts) in any region, and asks for 16 in EU member-state zones and North Macedonia and 18 in India and Brazil. Apple requires an app whose terms set a minimum age above the calculated rating to use Override to Higher Age Rating, so the rating is set to 13+ there; the content descriptions still follow the questionnaire answers. Regional ratings may differ."
+    "note": "Answers account for what an AI chatbot and image generator can produce (Apple age-rating notice, 2025: https://developer.apple.com/news/?id=ks775ehf), mirroring ChatGPT's App Store rating (13+, infrequent mature, violence and medical descriptors, checked 2026-10-19). If App Store Connect calculates below 13+, use Override to Higher Age Rating: 13+, because AGI Cloud accounts are 13 and over (ACCOUNT_MINIMUM_AGE, packages/contracts/types/src/account-eligibility.ts; 16 in EU zones and North Macedonia, 18 in India and Brazil via ageGate.ts). Unrestricted web access is No: links open in the system browser, the app has no address bar. Shared chat links are read on the web, not inside the app."
   },
   "privacy_nutrition_labels": {
     "data_not_collected": false,
@@ -56,7 +61,7 @@
         "data_types": ["Email Address", "Name"],
         "purpose": "App Functionality",
         "optional": true,
-        "collected_when": "Only when the user signs in to use AGI Cloud (public alpha). Email is required to create the account; name is collected if provided by the sign-in method."
+        "collected_when": "Only when the user signs in to use AGI Cloud. Email is required to create the account; name is collected if provided by the sign-in method."
       },
       {
         "category": "User Content",
@@ -88,7 +93,7 @@
       }
     ],
     "data_not_linked_to_you": [],
-    "note": "Local Mode collects no personal data by default and uploads nothing. Signing in to AGI Cloud (public alpha, open to any signed-in user) collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends; product interaction events are added only when the user allows product analytics. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors on AGI's behalf; it is never used to track the user across other companies' apps or websites."
+    "note": "Local Mode collects no personal data by default and uploads nothing. Signing in to AGI Cloud collects account email, optional name, account and device identifiers, and the conversation content and attachments the user sends; product interaction events are added only when the user allows product analytics. Conversation content is processed by the model-provider subprocessors listed at https://agiworkforce.com/subprocessors on AGI's behalf; it is never used to track the user across other companies' apps or websites."
   },
   "urls": {
     "privacy_policy": "https://agiworkforce.com/privacy",

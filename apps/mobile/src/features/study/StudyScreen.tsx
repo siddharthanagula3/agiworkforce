@@ -148,7 +148,7 @@ export function StudyScreen() {
       <SettingsScreenShell title="Study and learn" backHref="/(app)/(tabs)/chat">
         <SettingsInfo
           title="Study runs in AGI Cloud"
-          body="The tutor keeps a study session on your account so every reply teaches, quizzes or revises the topic you chose. Switch to Cloud mode to start one."
+          body="Switch to Cloud mode to start a study session."
           icon={BookOpen}
         />
         <Pressable

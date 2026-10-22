@@ -47,7 +47,7 @@ before confirming a continuation.
 2. For a supported provider API key, run `agi login <provider>` and inspect saved
    credentials with `agi auth-status`.
 3. To use your AGI account in the browser, open
-   [AGI Web](https://agiworkforce.com/chat).
+   [AGI Chat](https://agiworkforce.com/chat).
 
 ## Where to go next
 

@@ -196,7 +196,7 @@ export default function ArchivedChatsScreen() {
       if (!isCurrentCloudScope(account)) return;
       Alert.alert(
         'Delete this chat?',
-        `"${conversation.title}" and its messages are removed from every device on this account. You can restore it from Recently deleted in Settings on the web.`,
+        `"${conversation.title}" is removed from every device; restore it from Recently deleted on the web.`,
         [
           { text: 'Cancel', style: 'cancel' },
           {
@@ -230,7 +230,7 @@ export default function ArchivedChatsScreen() {
     if (!isCurrentCloudScope(account)) return;
     Alert.alert(
       'Delete all archived chats?',
-      'Every archived chat and its messages are removed from every device on this account. You can restore them from Recently deleted in Settings on the web.',
+      'Every archived chat is removed from every device; restore them from Recently deleted on the web.',
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -423,8 +423,7 @@ export default function ArchivedChatsScreen() {
                   maxWidth: 280,
                 }}
               >
-                Archive a chat to move it out of your chat list without deleting it. Archived chats
-                appear here and can be restored at any time.
+                Chats you archive appear here, and you can restore them any time.
               </Text>
             </View>
           </Card>

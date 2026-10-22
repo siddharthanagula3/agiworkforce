@@ -2,12 +2,45 @@ import { describe, expect, it } from 'vitest';
 import {
   ARTICLE_50_1_VERBATIM,
   ARTICLE_50_2_VERBATIM,
+  SHORT_DISCLOSURE_DETAILS_LABEL,
   composeFirstRunDisclosure,
+  composeShortFirstRunDisclosure,
   hashDisclosureCopy,
   isDisclosureSatisfied,
   recordDisclosureAcceptance,
 } from '../index';
 import { InMemoryDisclosureLedger } from './test-ledger';
+
+describe('Article50Disclosure, short compose', () => {
+  const inputs = {
+    surface: 'mobile',
+    offersManagedCloud: false,
+    thirdPartyAiProviders: [],
+  } as const;
+
+  it('states the AI disclosure in one sentence with a details label', () => {
+    const copy = composeShortFirstRunDisclosure(inputs);
+    expect(copy.summary).toBe('You are chatting with an AI, and it can make mistakes.');
+    expect(copy.summary.match(/[.!?](\s|$)/g)).toHaveLength(1);
+    expect(copy.detailsLabel).toBe(SHORT_DISCLOSURE_DETAILS_LABEL);
+  });
+
+  it('keeps the long copy and every other field unchanged', () => {
+    const long = composeFirstRunDisclosure(inputs);
+    const { summary, detailsLabel, ...rest } = composeShortFirstRunDisclosure(inputs);
+    const { summary: longSummary, ...longRest } = long;
+    expect(rest).toEqual(longRest);
+    expect(longSummary).toContain('You are interacting with an AI system');
+    expect(summary).not.toBe(longSummary);
+    expect(detailsLabel.length).toBeGreaterThan(0);
+  });
+
+  it('hashes the short copy differently from the long one', async () => {
+    expect(await hashDisclosureCopy(composeShortFirstRunDisclosure(inputs))).not.toBe(
+      await hashDisclosureCopy(composeFirstRunDisclosure(inputs)),
+    );
+  });
+});
 
 describe('Article50Disclosure, compose', () => {
   it('returns one merged summary block, not three separate prompts', () => {

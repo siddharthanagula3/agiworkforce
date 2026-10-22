@@ -23,8 +23,10 @@ import type { NormalizedEnvironment } from '@/lib/server/payments/domain';
 import { resolveEffectiveSubscriptionBillingStatus } from '@/lib/server/subscription-billing-owner';
 import {
   STORE_PLAN_HELD_BY_ANOTHER_PURCHASE,
+  STORE_PURCHASE_CONSENT_WITHDRAWN,
   closeGrantedStoreChargeRequest,
   fileUngrantedStoreCharge,
+  hasWithdrawnStoreConsent,
   recordMobileIapStoreCommission,
   recordVerifiedMobileIapPurchase,
   storePeriodStart,
@@ -397,6 +399,8 @@ async function applyMobileIapLifecycleEvent(input: {
     const { ownership, recorded } = sellsSubscription
       ? await readStoreOwnership(tx, anchor.user_id, input.event)
       : { ownership: 'owner' as const, recorded: null };
+    const consentWithdrawn =
+      sellsSubscription && (await hasWithdrawnStoreConsent(tx, anchor.user_id));
     if (
       sellsSubscription &&
       grantsAccess(input.event.entitlementStatus) &&
@@ -453,24 +457,31 @@ async function applyMobileIapLifecycleEvent(input: {
       if (!input.event.expiresAt) {
         throw createError.badRequest('Active subscription notification has no expiry.');
       }
-      if (ownership === 'foreign') {
-        // The store is still collecting for a purchase that no longer owns the
-        // plan, so this charge buys the customer nothing.
+      // The store is still collecting for a purchase that no longer owns the
+      // plan, or for an account whose guardian withdrew consent, so this charge
+      // buys the customer nothing.
+      const refusal =
+        ownership === 'foreign'
+          ? STORE_PLAN_HELD_BY_ANOTHER_PURCHASE
+          : consentWithdrawn
+            ? STORE_PURCHASE_CONSENT_WITHDRAWN
+            : null;
+      if (refusal) {
         if (input.event.environment !== 'sandbox') {
           await fileUngrantedStoreCharge(tx, {
             userId: anchor.user_id,
             charge: input.event,
-            refusal: STORE_PLAN_HELD_BY_ANOTHER_PURCHASE,
+            refusal,
           });
           logger.error(
             {
               event: 'store_purchase_charged_not_granted',
-              reason: STORE_PLAN_HELD_BY_ANOTHER_PURCHASE,
+              reason: refusal,
               platform: input.event.platform,
               storeTransactionId: input.event.storeTransactionId,
               refundRequestFiled: true,
             },
-            'A store charge arrived for a plan another purchase owns; a refund request was filed',
+            'A store charge arrived for a plan this account cannot be given; a refund request was filed',
           );
         }
         return markStale(tx, input.event);
@@ -576,7 +587,7 @@ async function applyMobileIapLifecycleEvent(input: {
       if (!accessUntil) {
         throw createError.badRequest('Grace period notification has no end date.');
       }
-      if (ownership !== 'owner') return markStale(tx, input.event);
+      if (ownership !== 'owner' || consentWithdrawn) return markStale(tx, input.event);
       const kept = await tx.query<{ id: string }>(
         `update public.subscriptions
             set status = 'active',
@@ -615,17 +626,8 @@ async function applyMobileIapLifecycleEvent(input: {
         await markReceiptEnded(tx, anchor.id, input.event);
         return markStale(tx, input.event);
       }
-      const ended = await tx.query<{ id: string }>(
-        `update public.subscriptions
-            set status = 'canceled', plan_tier = 'free',
-                cancel_at_period_end = true, canceled_at = now(), updated_at = now()
-          where user_id = $1
-            and stripe_subscription_id is null
-            and ($2::timestamptz is null or current_period_start is null or current_period_start <= $2)
-          returning id`,
-        [anchor.user_id, supersededBefore],
-      );
-      if (ended.length === 0) return markStale(tx, input.event);
+      const ended = await endStoreSubscription(tx, anchor.user_id, supersededBefore);
+      if (!ended) return markStale(tx, input.event);
       await markReceiptEnded(tx, anchor.id, input.event);
     }
 
@@ -639,6 +641,24 @@ async function applyMobileIapLifecycleEvent(input: {
       input.event.product.kind === 'subscription' && input.event.entitlementStatus === 'active';
     return { outcome: 'processed', renewedUserId: renewed ? anchor.user_id : null };
   });
+}
+
+async function endStoreSubscription(
+  tx: DatabaseAdapter,
+  userId: string,
+  supersededBefore: string | null,
+): Promise<boolean> {
+  const ended = await tx.query<{ id: string }>(
+    `update public.subscriptions
+        set status = 'canceled', plan_tier = 'free',
+            cancel_at_period_end = true, canceled_at = now(), updated_at = now()
+      where user_id = $1
+        and stripe_subscription_id is null
+        and ($2::timestamptz is null or current_period_start is null or current_period_start <= $2)
+      returning id`,
+    [userId, supersededBefore],
+  );
+  return ended.length > 0;
 }
 
 async function markReceiptEnded(
@@ -680,4 +700,109 @@ async function markStale(
     [event.platform, event.notificationId],
   );
   return { outcome: 'stale', renewedUserId: null };
+}
+
+async function endAppleEntitlementForWithdrawnConsent(
+  tx: DatabaseAdapter,
+  userId: string,
+): Promise<void> {
+  const [appleBilled] = await tx.query<{ apple_original_transaction_id: string }>(
+    `select apple_original_transaction_id
+       from public.subscriptions
+      where user_id = $1
+        and stripe_subscription_id is null
+        and apple_original_transaction_id is not null
+        and status <> 'canceled'
+      limit 1
+      for update`,
+    [userId],
+  );
+  if (!appleBilled) return;
+  await endStoreSubscription(tx, userId, null);
+  await tx.execute(
+    `update public.mobile_iap_transactions
+        set status = 'revoked', updated_at = now()
+      where user_id = $1
+        and platform = 'ios'
+        and product_kind = 'subscription'
+        and original_transaction_id = $2
+        and status in ('pending', 'active')`,
+    [userId, appleBilled.apple_original_transaction_id],
+  );
+}
+
+export type ConsentRescissionOutcome =
+  'consent_rescinded' | 'duplicate' | 'unknown_app_transaction';
+
+// Apple's RESCIND_CONSENT names an install, not an account. The withdrawal is
+// kept even when no account has registered that install yet, so the account
+// that registers it later is refused from then on.
+export async function recordAppleConsentRescission(input: {
+  db: DatabaseAdapter;
+  notificationId: string;
+  appTransactionId: string;
+  environment: NormalizedEnvironment;
+}): Promise<ConsentRescissionOutcome> {
+  return input.db.transaction(async (tx) => {
+    const [notification] = await tx.query<{ notification_id: string }>(
+      `insert into public.mobile_iap_notification_receipts (platform, notification_id)
+       values ('ios', $1)
+       on conflict do nothing
+       returning notification_id`,
+      [input.notificationId],
+    );
+    if (!notification) return 'duplicate';
+
+    await tx.execute(
+      `insert into public.mobile_app_consent_rescissions
+         (app_transaction_id, notification_id, environment)
+       values ($1, $2, $3)
+       on conflict (app_transaction_id) do nothing`,
+      [input.appTransactionId, input.notificationId, input.environment],
+    );
+    const accounts = await tx.query<{ user_id: string }>(
+      `select user_id
+         from public.mobile_app_transactions
+        where app_transaction_id = $1
+        order by user_id`,
+      [input.appTransactionId],
+    );
+    for (const account of accounts) {
+      await endAppleEntitlementForWithdrawnConsent(tx, account.user_id);
+    }
+    await tx.execute(
+      `update public.mobile_iap_notification_receipts
+          set processed_at = now()
+        where platform = 'ios' and notification_id = $1`,
+      [input.notificationId],
+    );
+    logger.warn(
+      {
+        event: 'store_consent_rescinded',
+        accountsAffected: accounts.length,
+        environment: input.environment,
+      },
+      'A parent or guardian withdrew consent for an App Store install',
+    );
+    return accounts.length > 0 ? 'consent_rescinded' : 'unknown_app_transaction';
+  });
+}
+
+export async function registerAppleAppTransaction(input: {
+  db: DatabaseAdapter;
+  userId: string;
+  appTransactionId: string;
+  environment: NormalizedEnvironment;
+}): Promise<{ consentWithdrawn: boolean }> {
+  return input.db.transaction(async (tx) => {
+    await tx.execute(
+      `insert into public.mobile_app_transactions (app_transaction_id, user_id, environment)
+       values ($1, $2, $3)
+       on conflict (app_transaction_id, user_id) do update set updated_at = now()`,
+      [input.appTransactionId, input.userId, input.environment],
+    );
+    const consentWithdrawn = await hasWithdrawnStoreConsent(tx, input.userId);
+    if (consentWithdrawn) await endAppleEntitlementForWithdrawnConsent(tx, input.userId);
+    return { consentWithdrawn };
+  });
 }

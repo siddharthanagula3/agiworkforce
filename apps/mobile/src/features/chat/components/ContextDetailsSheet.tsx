@@ -139,8 +139,7 @@ export function ContextDetailsSheet({
           </View>
 
           <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, lineHeight: 19 }}>
-            Counts are estimated on this device. Instructions, memory and sources added when a
-            message is sent are not included.
+            Estimated on this device, without instructions, memory or sources.
           </Text>
 
           {onStartFreshChat ? (

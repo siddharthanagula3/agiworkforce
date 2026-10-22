@@ -17,6 +17,7 @@ jest.mock('@/src/features/chat/store/appModeStore', () => ({
 }));
 
 import {
+  CONTENT_REPORT_PATH,
   guardedFetch,
   isOurCloudHost,
   OUR_CLOUD_HOSTS,
@@ -138,6 +139,34 @@ describe('guardedFetch, signed-in Terms control during Cloud entry', () => {
     ] as const;
     for (const [url, init] of requests) {
       await expect(guardedFetch(url, init, { authControl: true })).rejects.toBeInstanceOf(
+        EgressBlockedError,
+      );
+    }
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('guardedFetch, a content report the user chose to send from Local mode', () => {
+  const reportUrl = new URL(CONTENT_REPORT_PATH, API_URL).toString();
+  const post = { method: 'POST' };
+
+  it('allows only the consented POST to the content-report route', async () => {
+    await expect(guardedFetch(reportUrl, post)).rejects.toBeInstanceOf(EgressBlockedError);
+    await guardedFetch(reportUrl, post, { consentedReport: true });
+    expect(mockSecureFetch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not turn report consent into a general managed-cloud bypass', async () => {
+    const requests = [
+      [new URL('/api/chat/send', API_URL).toString(), post],
+      [new URL('/api/mobile/feedback', API_URL).toString(), post],
+      [reportUrl, { method: 'GET' }],
+      [reportUrl, { method: 'PUT' }],
+      [`${reportUrl}?next=chat`, post],
+      [reportUrl.replace('https://', 'http://'), post],
+    ] as const;
+    for (const [url, init] of requests) {
+      await expect(guardedFetch(url, init, { consentedReport: true })).rejects.toBeInstanceOf(
         EgressBlockedError,
       );
     }

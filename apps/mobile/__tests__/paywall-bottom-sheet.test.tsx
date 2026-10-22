@@ -75,6 +75,11 @@ jest.mock('../lib/safeOpenURL', () => ({
   openExternalUrl: jest.fn().mockResolvedValue(true),
 }));
 
+let mockWebBillingLinksAllowed = false;
+jest.mock('../src/features/billing/webBillingLinks', () => ({
+  useWebBillingLinksAllowed: () => mockWebBillingLinksAllowed,
+}));
+
 import { PaywallBottomSheet } from '../src/features/chat/components/PaywallBottomSheet';
 import { openExternalUrl } from '../lib/safeOpenURL';
 
@@ -88,6 +93,7 @@ const defaultProps = {
 describe('PaywallBottomSheet rendering', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockWebBillingLinksAllowed = false;
   });
 
   it('renders at least one element with the tier label text', () => {
@@ -150,8 +156,9 @@ describe('PaywallBottomSheet rendering', () => {
   });
 
   it.each(['team', 'enterprise'] as const)(
-    'offers canonical %s prospects a strict Contact Sales handoff',
+    'offers canonical %s prospects a strict Contact Sales handoff on the US App Store',
     (requiredTier) => {
+      mockWebBillingLinksAllowed = true;
       const { getByText, queryByText } = render(
         <PaywallBottomSheet
           {...defaultProps}
@@ -166,6 +173,24 @@ describe('PaywallBottomSheet rendering', () => {
         `https://agiworkforce.com/contact-sales?plan=${requiredTier}`,
       );
       expect(queryByText(/Plan changes aren't available in the app yet/i)).toBeNull();
+    },
+  );
+
+  it.each(['team', 'enterprise'] as const)(
+    'links nowhere for %s outside the US App Store and on Android',
+    (requiredTier) => {
+      mockWebBillingLinksAllowed = false;
+      const { getByText, queryByText } = render(
+        <PaywallBottomSheet
+          {...defaultProps}
+          requiredTier={requiredTier}
+          primaryActionUnavailableMessage="Plan changes aren't available in the app yet."
+        />,
+      );
+
+      expect(queryByText('Contact Sales')).toBeNull();
+      expect(getByText(/isn’t available in the app\./)).toBeTruthy();
+      expect(openExternalUrl).not.toHaveBeenCalled();
     },
   );
 

@@ -47,7 +47,10 @@ async function loadStreamingService() {
   }));
   jest.doMock('@/lib/egressGuard', () => ({ guardedFetch: guardedFetchMock }));
   jest.doMock('../services/authSession', () => ({ getAuthToken: getAuthTokenMock }));
-  jest.doMock('../services/llmGate', () => ({ ensureLlmGateOpen: jest.fn() }));
+  jest.doMock('../services/llmGate', () => ({
+    ensureCloudSendConsent: jest.fn().mockResolvedValue(undefined),
+    ensureLlmGateOpen: jest.fn(),
+  }));
   jest.doMock('../services/remoteChatGate', () => ({ assertRemoteChatAllowed: jest.fn() }));
   jest.doMock('@/src/features/waitlist/store', () => ({
     useWaitlistStore: { getState: () => ({ cloudUnlocked: true }) },

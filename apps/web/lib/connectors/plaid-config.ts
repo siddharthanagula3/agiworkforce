@@ -1,10 +1,22 @@
+import { BANK_ACCOUNTS_CONNECTOR_ID as BANK_ID } from '@agiworkforce/cloud-contracts';
+
 export {
   BANK_ACCOUNTS_CONNECTOR_ID,
   BANK_ACCOUNTS_EXCHANGE_PATH,
   BANK_ACCOUNTS_LINK_PATH,
 } from '@agiworkforce/cloud-contracts';
 
+import type { CloudChatSurface } from '@/lib/free-chat-surface-policy';
+
 type PlaidEnvironment = 'sandbox' | 'production';
+
+// The store builds do not declare financial data, so bank tools never reach a
+// turn that the mobile app started.
+const BANK_ACCOUNTS_UNAVAILABLE_SURFACES: ReadonlySet<CloudChatSurface> = new Set(['mobile']);
+
+export function bankAccountsAvailableOnSurface(surface: CloudChatSurface): boolean {
+  return !BANK_ACCOUNTS_UNAVAILABLE_SURFACES.has(surface);
+}
 
 export interface PlaidCredentials {
   readonly clientId: string;
@@ -57,4 +69,11 @@ export function plaidLinkContentSecurityOrigins(): {
   const origin = plaidApiOrigin();
   if (!origin) return { script: [], frame: [], connect: [] };
   return { script: [PLAID_LINK_SCRIPT_URL], frame: [PLAID_LINK_FRAME_ORIGIN], connect: [origin] };
+}
+
+export function connectorUnavailableOnSurface(
+  connectorId: string,
+  surface: CloudChatSurface,
+): boolean {
+  return connectorId === BANK_ID && !bankAccountsAvailableOnSurface(surface);
 }

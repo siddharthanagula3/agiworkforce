@@ -85,6 +85,7 @@ import { useChatMessageStore } from '@/stores/chat/chatMessageStore';
 import { ProvenanceFooter } from './ProvenanceFooter';
 import { PerformanceChip } from './PerformanceChip';
 import { ReportFlagButton } from './ReportFlagButton';
+import { reportAssetFor } from '@/services/contentReportAsset';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { storage } from '@/lib/mmkv';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -550,6 +551,8 @@ export const MessageBubble = memo(function MessageBubble({
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
   const research = isAssistant ? readResearchRunState(message.metadata?.research) : undefined;
+  const reportAsset =
+    reportAssetFor('video', message.videoUrl) ?? reportAssetFor('image', message.imageUrl);
   const router = useRouter();
   const [arrivedNow] = useState(
     () =>
@@ -1506,6 +1509,12 @@ export const MessageBubble = memo(function MessageBubble({
                 thumbnailUrl={message.videoThumbnailUrl}
                 width={imageWidth}
                 prompt={message.videoGenPrompt}
+                reportTarget={{
+                  messageId: message.id,
+                  conversationId: (message.metadata?.conversationId as string) ?? message.id,
+                  contentExcerpt: message.videoGenPrompt ?? message.content,
+                  asset: reportAssetFor('video', message.videoUrl),
+                }}
               />
             )}
 
@@ -1830,11 +1839,17 @@ export const MessageBubble = memo(function MessageBubble({
                 />
               )}
 
-            {isAssistant && !message.isStreaming && message.content.trim() && (
+            {isAssistant && !message.isStreaming && (message.content.trim() || reportAsset) && (
               <ReportFlagButton
                 messageId={message.id}
                 conversationId={(message.metadata?.conversationId as string) ?? message.id}
-                contentExcerpt={message.content}
+                contentExcerpt={
+                  message.content.trim()
+                    ? message.content
+                    : (message.revisedPrompt ?? message.videoGenPrompt ?? '')
+                }
+                asset={reportAsset}
+                title="Report this response"
               />
             )}
           </View>
@@ -1945,6 +1960,16 @@ export const MessageBubble = memo(function MessageBubble({
         }
         onDelete={onDeleteImageConversation}
         deleteMessage="Deleting this image deletes the chat it was made in, with all of its messages."
+        reportTarget={
+          isAssistant && fullScreenImageUrl
+            ? {
+                messageId: message.id,
+                conversationId: (message.metadata?.conversationId as string) ?? message.id,
+                contentExcerpt: message.revisedPrompt ?? message.content,
+                asset: reportAssetFor('image', fullScreenImageUrl),
+              }
+            : undefined
+        }
       />
 
       {/* VoiceOver rotor actions cannot reach the nested timeline controls while

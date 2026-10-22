@@ -179,7 +179,7 @@ export function TwoFactorSection({
     <>
       <SettingsInfo
         title="Two-factor sign-in"
-        body="Ask for a code from an authenticator app each time you sign in. Backup codes let you in if you lose that app."
+        body="Require a code from an authenticator app each time you sign in."
         icon={ShieldCheck}
       />
       <SettingsGroup>
@@ -258,8 +258,7 @@ export function TwoFactorSection({
                     color: colors.textSecondary,
                   }}
                 >
-                  Add AGI Workforce to your authenticator app, then enter the 6-digit code it shows.
-                  The setup key works for 30 minutes.
+                  Add AGI to your authenticator app, then enter the 6-digit code.
                 </Text>
                 <Text
                   selectable
@@ -338,8 +337,7 @@ export function TwoFactorSection({
                     color: colors.textSecondary,
                   }}
                 >
-                  Each code works once. Keep them somewhere safe: they are shown only now, and any
-                  earlier codes no longer work.
+                  Save these now; each works once and they won’t be shown again.
                 </Text>
                 <Text
                   selectable
@@ -361,7 +359,7 @@ export function TwoFactorSection({
                     label="Save or share"
                     onPress={() => {
                       Share.share({
-                        title: 'AGI Workforce backup codes',
+                        title: 'AGI backup codes',
                         message: codesText,
                       }).catch(() => undefined);
                     }}

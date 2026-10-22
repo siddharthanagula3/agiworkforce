@@ -15,6 +15,9 @@ Confirming requires typing `DELETE` into the dialog. The dialog states what
 happens: your account and all associated data are permanently deleted, you are
 signed out now, and erasure runs 24 hours after you confirm.
 
+In the AGI Mobile app for iPhone and Android, Settings, Cloud Account carries
+**Delete Account**.
+
 After you confirm, the dialog shows the date and time the 24 hours are up, and
 you are signed out when you continue. That is the earliest moment erasure can
 begin, not the moment it finishes: the job that erases accounts runs once a day,

@@ -7,6 +7,7 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { prepareLocalVideoPlayer, shareFile, type LocalVideoPlayer } from '@/services/fileCreation';
+import type { ReportTarget } from './ReportFlagButton';
 import { VideoPlayerModal } from './VideoPlayerModal';
 
 export interface GeneratedVideoProps {
@@ -14,11 +15,18 @@ export interface GeneratedVideoProps {
   thumbnailUrl?: string;
   width: number;
   prompt?: string;
+  reportTarget?: ReportTarget;
 }
 
 type LoadingAction = 'play' | 'save';
 
-export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: GeneratedVideoProps) {
+export function GeneratedVideo({
+  videoUrl,
+  thumbnailUrl,
+  width,
+  prompt,
+  reportTarget,
+}: GeneratedVideoProps) {
   const colors = useThemeColors();
   const height = Math.round(width * (9 / 16));
   const [player, setPlayer] = useState<LocalVideoPlayer | null>(null);
@@ -170,6 +178,7 @@ export function GeneratedVideo({ videoUrl, thumbnailUrl, width, prompt }: Genera
         onClose={closePlayer}
         label={prompt ? `Video: ${prompt}` : 'Generated video'}
         failureHint="Try Save to open it in another app."
+        reportTarget={reportTarget}
       />
     </View>
   );

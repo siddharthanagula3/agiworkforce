@@ -128,17 +128,35 @@ export function isMinorMode(): boolean {
  * @param ageEntered The age the user entered (integer years).
  */
 export function confirmAgeGate(ageEntered: number): AgeGateRecord {
+  return recordAgeVerdict(ageEntered < getAgeThreshold());
+}
+
+/**
+ * Record an age range the OS reported (Declared Age Range, Play Age Signals).
+ * Returns null when the range does not settle which side of the regional
+ * threshold the user is on, so the caller falls back to the typed gate.
+ */
+export function confirmAgeGateFromRange(range: {
+  lowerBound: number | null;
+  upperBound: number | null;
+}): AgeGateRecord | null {
+  const threshold = getAgeThreshold();
+  if (range.upperBound !== null && range.upperBound < threshold) return recordAgeVerdict(true);
+  if (range.lowerBound !== null && range.lowerBound >= threshold) return recordAgeVerdict(false);
+  return null;
+}
+
+function recordAgeVerdict(isMinor: boolean): AgeGateRecord {
   const existing = readRecord();
   if (existing?.confirmed === true && existing.isMinor === true) return existing;
 
   const rule = detectRegionRule();
-  const threshold = Math.max(rule.threshold, ACCOUNT_MINIMUM_AGE);
   const record: AgeGateRecord = {
     confirmed: true,
-    isMinor: ageEntered < threshold,
+    isMinor,
     confirmedAt: new Date().toISOString(),
     regionCode: rule.code,
-    threshold,
+    threshold: Math.max(rule.threshold, ACCOUNT_MINIMUM_AGE),
   };
   writeRecord(record);
   return record;

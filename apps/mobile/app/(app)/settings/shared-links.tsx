@@ -237,8 +237,7 @@ export default function SharedLinksScreen() {
                   maxWidth: 280,
                 }}
               >
-                Share a conversation to publish a read-only link. It will appear here so you can
-                revoke it later.
+                Links you share appear here so you can revoke them.
               </Text>
             </View>
           </Card>

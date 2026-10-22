@@ -35,8 +35,7 @@ export function StorageScopeNotice() {
           marginTop: 9,
         }}
       >
-        Your account does not currently publish a file-storage byte quota. The totals below measure
-        only downloaded models and cache stored on this device.
+        Totals cover only downloaded models and cache on this device.
       </Text>
     </Card>
   );

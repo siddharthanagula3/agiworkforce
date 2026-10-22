@@ -19,7 +19,6 @@ import {
 } from '@/src/features/model-picker/installStore';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { ProviderLogo, usesProviderAppTile } from './ProviderLogo';
 import { useProviderOutage } from '@/src/features/model-picker/providerAvailabilityStore';
 import { upcomingRetirementLabel } from '@/src/features/model-picker/retirement';
 
@@ -85,7 +84,6 @@ export function ModelRow({
   const progressPercent = Math.round(installStatus.progress * 100);
   const unavailableHint =
     installStatus.error ?? 'This model package/system model is unavailable on this device.';
-  const providerLogoSize = usesProviderAppTile(model.provider) ? 28 : 20;
 
   const handlePress = () => {
     if (disabled) return;
@@ -170,9 +168,17 @@ export function ModelRow({
           }}
         >
           {isLocal ? (
-            <Cpu size={17} color={visiblySelected ? colors.teal : colors.textSecondary} />
+            <Cpu
+              testID="model-row-icon-local"
+              size={17}
+              color={visiblySelected ? colors.teal : colors.textSecondary}
+            />
           ) : (
-            <ProviderLogo providerId={model.provider} size={providerLogoSize} />
+            <Cloud
+              testID="model-row-icon-cloud"
+              size={17}
+              color={visiblySelected ? colors.teal : colors.textSecondary}
+            />
           )}
         </View>
 

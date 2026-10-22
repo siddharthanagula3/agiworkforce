@@ -1,5 +1,13 @@
 import { SYNTHETIC_LOCAL_MODEL_ID } from '../test-utils/modelFixtures';
 
+const mockSecureFetch = jest.fn();
+jest.mock('@/services/secureFetch', () => ({
+  secureFetch: (input: unknown, init: unknown) => mockSecureFetch(input, init),
+}));
+
+import { CONTENT_REPORT_PATH, EgressBlockedError, guardedFetch } from '../lib/egressGuard';
+import { API_URL } from '../lib/constants';
+
 type ConversationExecutionMode = 'local' | 'cloud';
 
 const executionModeForModel = (modelId?: string | null): ConversationExecutionMode => {
@@ -132,5 +140,36 @@ describe('cloud model access gate', () => {
   it('CRITICAL: local mode must never see cloud unlocked without auth', () => {
     expect(isCloudUnlocked(null, false)).toBe(false);
     expect(isCloudUnlocked(null, true)).toBe(false);
+  });
+});
+
+describe('Local mode content-report consent', () => {
+  const reportUrl = new URL(CONTENT_REPORT_PATH, API_URL).toString();
+
+  beforeEach(() => mockSecureFetch.mockReset().mockResolvedValue(new Response('ok')));
+
+  it('CRITICAL: a Local mode report never leaves the device without its own Send tap', async () => {
+    await expect(guardedFetch(reportUrl, { method: 'POST' })).rejects.toBeInstanceOf(
+      EgressBlockedError,
+    );
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
+
+  it('CRITICAL: report consent opens no other managed-cloud route', async () => {
+    await expect(
+      guardedFetch(
+        new URL('/api/chat/send', API_URL).toString(),
+        { method: 'POST' },
+        {
+          consentedReport: true,
+        },
+      ),
+    ).rejects.toBeInstanceOf(EgressBlockedError);
+    expect(mockSecureFetch).not.toHaveBeenCalled();
+  });
+
+  it('lets the consented report POST through', async () => {
+    await guardedFetch(reportUrl, { method: 'POST' }, { consentedReport: true });
+    expect(mockSecureFetch).toHaveBeenCalledTimes(1);
   });
 });

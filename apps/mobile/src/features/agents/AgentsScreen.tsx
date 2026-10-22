@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { RefreshControl, SectionList, View } from 'react-native';
+import { Alert, RefreshControl, SectionList, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import { readAsStringAsync } from 'expo-file-system/legacy';
-import { Bot } from 'lucide-react-native';
+import { Bot, MoreHorizontal } from 'lucide-react-native';
 import {
   agentCanChat,
   agentStateLabel,
@@ -27,6 +27,15 @@ import {
 } from '@/src/shared/components/cloud-screen';
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
+import {
+  hiddenSharerIds,
+  withoutHiddenAgentSharers,
+} from '@/src/features/shared-with-you/hiddenSharers';
+import {
+  confirmHideSharer,
+  sharedReportTarget,
+} from '@/src/features/shared-with-you/SharedItemSafetyActions';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { AgentAvatar } from './components/AgentAvatar';
@@ -65,11 +74,13 @@ function AgentRow({
   starting,
   onOpen,
   onChat,
+  onMore,
 }: {
   agent: ManagedCloudAgent;
   starting: boolean;
   onOpen: (agent: ManagedCloudAgent) => void;
   onChat: (agent: ManagedCloudAgent) => void;
+  onMore?: (agent: ManagedCloudAgent) => void;
 }) {
   const colors = useThemeColors();
   const state = agentStateLabel(agent);
@@ -119,6 +130,17 @@ function AgentRow({
           onPress={() => onChat(agent)}
         />
       ) : null}
+      {onMore ? (
+        <PressableBox
+          onPress={() => onMore(agent)}
+          accessibilityRole="button"
+          accessibilityLabel={`Report or hide ${agent.name}`}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          style={{ minWidth: 32, minHeight: 32, alignItems: 'center', justifyContent: 'center' }}
+        >
+          <MoreHorizontal size={18} color={colors.textSecondary} />
+        </PressableBox>
+      ) : null}
     </PressableBox>
   );
 }
@@ -134,6 +156,8 @@ export function AgentsScreen() {
   const [error, setError] = useState<string | null>(null);
   const [startingId, setStartingId] = useState<string | null>(null);
   const [importing, setImporting] = useState(false);
+  const [reporting, setReporting] = useState<ManagedCloudAgent | null>(null);
+  const [hiddenSharers, setHiddenSharers] = useState<ReadonlySet<string>>(new Set());
 
   const load = useCallback(
     async (reason: 'initial' | 'refresh', signal?: AbortSignal) => {
@@ -213,14 +237,43 @@ export function AgentsScreen() {
     }
   }, [openAgent]);
 
-  const sections = useMemo(() => groupAgents(agents), [agents]);
+  useEffect(() => {
+    setHiddenSharers(access.ownerId ? hiddenSharerIds(access.ownerId) : new Set());
+  }, [access.ownerId]);
+
+  const sections = useMemo(
+    () => groupAgents(withoutHiddenAgentSharers(hiddenSharers, agents)),
+    [agents, hiddenSharers],
+  );
+
+  const chooseSafetyAction = useCallback(
+    (agent: ManagedCloudAgent) => {
+      const sharerId = agent.ownerUserId;
+      const accountId = access.ownerId;
+      if (!sharerId || !accountId) return;
+      const ownerName = agent.ownerName ?? 'sharer';
+      Alert.alert(agent.name, undefined, [
+        { text: 'Report', onPress: () => setReporting(agent) },
+        {
+          text: `Hide ${ownerName}`,
+          style: 'destructive',
+          onPress: () =>
+            void confirmHideSharer(accountId, sharerId, ownerName).then((hidden) => {
+              if (hidden) setHiddenSharers(hiddenSharerIds(accountId));
+            }),
+        },
+        { text: 'Cancel', style: 'cancel' },
+      ]);
+    },
+    [access.ownerId],
+  );
 
   if (!access.ready) {
     return (
       <CloudFeatureGate
         title="Agents"
         feature="Agents"
-        description="Build agents with their own instructions, knowledge, tools and sharing. Switching here does not send Local chats or files to the cloud."
+        description="Agents run in AGI Cloud; switching won’t upload your local chats."
         signedIn={access.signedIn}
         onBack={goBack}
         onContinue={access.continueToCloud}
@@ -284,6 +337,7 @@ export function AgentsScreen() {
               starting={startingId === item.id}
               onOpen={openAgent}
               onChat={(agent) => void chatWithAgent(agent)}
+              onMore={!item.isOwner && item.ownerUserId ? chooseSafetyAction : undefined}
             />
           )}
           ListEmptyComponent={
@@ -313,6 +367,16 @@ export function AgentsScreen() {
           }
         />
       )}
+      {reporting?.ownerUserId ? (
+        <ReportSheet
+          visible
+          onClose={() => setReporting(null)}
+          target={sharedReportTarget(
+            { kind: 'agent', id: reporting.id, sharerId: reporting.ownerUserId },
+            reporting.name,
+          )}
+        />
+      ) : null}
     </SafeAreaView>
   );
 }

@@ -22,6 +22,7 @@ import {
 import type { LifecycleStatus } from '@agiworkforce/types';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { apiFetch } from '@/services/api';
+import { CloudProviderConsentRequiredError, ensureCloudSendConsent } from '@/services/llmGate';
 import { LIVE_VOICE_MESSAGE, liveVoiceUnavailableReason } from './liveVoiceAvailability';
 
 export const LIVE_VOICE_SESSION_PATH = '/api/voice/live/sessions';
@@ -252,6 +253,12 @@ export class LiveVoiceSession {
   static async start(options: LiveVoiceSessionOptions): Promise<LiveVoiceSession> {
     const unavailable = liveVoiceUnavailableReason();
     if (unavailable) throw new LiveVoiceSessionError(unavailable, 'unsupported');
+    try {
+      await ensureCloudSendConsent();
+    } catch (error) {
+      if (!(error instanceof CloudProviderConsentRequiredError)) throw error;
+      throw new LiveVoiceSessionError(error.message, error.code);
+    }
 
     let microphone: MediaStream;
     try {

@@ -144,8 +144,7 @@ export function AppLockOffer() {
             Protect AGI with App Lock
           </Text>
           <Text style={{ color: colors.textSecondary, textAlign: 'center', lineHeight: 21 }}>
-            Use Face ID, Touch ID, or your device passcode when opening AGI. You can change this
-            later in Safety &amp; Security.
+            Use Face ID, Touch ID, or your device passcode when opening AGI.
           </Text>
           <PressableBox
             accessibilityRole="button"
