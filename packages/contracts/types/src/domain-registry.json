@@ -179,6 +179,7 @@
         "organization_commercial_agreements",
         "organization_spend_alerts",
         "organization_spend_limits",
+        "personal_spend_limits",
         "processed_stripe_events",
         "token_credits"
       ]
@@ -447,6 +448,7 @@
       "concepts": ["artifact"],
       "tables": [
         "artifact_comments",
+        "live_artifacts",
         "organization_shared_artifacts",
         "published_artifact_storage",
         "published_artifact_versions",
@@ -515,6 +517,7 @@
       "capabilities": ["canUseConnectors"],
       "concepts": ["connector"],
       "tables": [
+        "connector_account_states",
         "connector_call_events",
         "connector_tool_permissions",
         "connector_tool_session_grants",
@@ -545,7 +548,7 @@
       "owner": "apps/web/lib/services/user-skill-service.ts",
       "capabilities": ["canUseSkills"],
       "concepts": ["skill"],
-      "tables": ["user_skills", "user_skill_files"]
+      "tables": ["skill_install_counts", "user_skills", "user_skill_files"]
     },
     {
       "name": "plugins",
