@@ -15,6 +15,10 @@ vi.mock('../lib/runtime-client', () => ({
   startRemoteControl,
   stopRemoteControl,
 }));
+const push = vi.fn();
+const toastError = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
+vi.mock('sonner', () => ({ toast: { error: toastError } }));
 vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => headers),
 }));
@@ -85,14 +89,31 @@ describe('refreshing the pairing code from anywhere in the desktop app', () => {
     expect(stopRemoteControl).not.toHaveBeenCalled();
   });
 
-  it('survives a failed request without an unhandled rejection', async () => {
+  it('says so, with a way to the Remote Control settings, when the refresh fails', async () => {
     readRemoteControl.mockResolvedValue({ ...IDLE_REMOTE_CONTROL_STATE, status: 'waiting' });
     fetchMock.mockResolvedValue({ ok: false, json: async () => ({ error: 'nope' }) });
     render(<Mount />);
 
     act(() => listener?.({ kind: 'remote-control-refresh-requested' }));
 
-    await waitFor(() => expect(stopRemoteControl).toHaveBeenCalled());
+    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1));
     expect(startRemoteControl).not.toHaveBeenCalled();
+    const [message, options] = toastError.mock.calls[0] as [
+      string,
+      { action: { onClick: () => void } },
+    ];
+    expect(message).toContain('Open Settings > Remote Control');
+    options.action.onClick();
+    expect(push).toHaveBeenCalledWith('/settings/capabilities');
+  });
+
+  it('stays quiet when there was nothing to refresh', async () => {
+    readRemoteControl.mockResolvedValue({ ...IDLE_REMOTE_CONTROL_STATE, status: 'idle' });
+    render(<Mount />);
+
+    act(() => listener?.({ kind: 'remote-control-refresh-requested' }));
+
+    await waitFor(() => expect(readRemoteControl).toHaveBeenCalled());
+    expect(toastError).not.toHaveBeenCalled();
   });
 });
