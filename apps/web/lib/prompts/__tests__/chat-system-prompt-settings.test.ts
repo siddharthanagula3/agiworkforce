@@ -40,7 +40,7 @@ type SettingsMenu = 'web' | 'desktop' | 'mobile' | 'chrome';
 
 const SECTION_LABELS: Readonly<Record<string, readonly string[]>> = {
   settings_help_web: [
-    'Memory',
+    'Personalization',
     'General',
     'Connectors',
     'Skills',
@@ -49,7 +49,7 @@ const SECTION_LABELS: Readonly<Record<string, readonly string[]>> = {
     'Privacy',
   ],
   account_help_web: ['Usage', 'Billing', 'Help'],
-  settings_help_account: ['Memory', 'General', 'Connectors', 'Privacy'],
+  settings_help_account: ['Personalization', 'General', 'Connectors', 'Privacy'],
   account_help_account: ['Usage', 'Billing', 'Help'],
   settings_help_mobile: ['Memory', 'Personalization', 'Connectors', 'Capabilities', 'Privacy'],
   account_help_mobile: ['Usage', 'Subscription', 'Help Center'],
@@ -111,8 +111,8 @@ const MENU_LABELS: Readonly<Record<SettingsMenu, readonly string[]>> = {
 };
 
 const KNOWN_LABEL: Readonly<Record<SettingsMenu, string>> = {
-  web: 'Memory',
-  desktop: 'Memory',
+  web: 'Personalization',
+  desktop: 'Personalization',
   mobile: 'Memory',
   chrome: 'Permissions',
 };

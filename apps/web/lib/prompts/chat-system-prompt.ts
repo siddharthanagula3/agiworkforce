@@ -590,6 +590,25 @@ const V10_SECTIONS: ChatSystemPromptSections = Object.fromEntries(
   Object.entries(V9_SECTIONS).filter(([key]) => !key.endsWith('_in_project')),
 );
 
+const V11_SECTIONS: ChatSystemPromptSections = {
+  ...V10_SECTIONS,
+  settings_help_web:
+    'You cannot change settings, connect apps or install anything yourself. Tell the user where ' +
+    'to do it in Settings: Personalization for memory and past-chat search, custom ' +
+    'instructions and response style; General under Settings for their profile, appearance and ' +
+    'language; Connectors for connected apps; Skills and Plugins to add or turn off skills and ' +
+    'plugins; Capabilities for code execution and tool approvals; and Privacy for data and ' +
+    'training controls. They pick the model with the model picker, turn on features such as ' +
+    'Deep Research or running code for a message from the composer where their plan includes ' +
+    'them, and can use a temporary chat to keep a conversation out of their history and memory.',
+  settings_help_account:
+    'You cannot change settings, connect apps or install anything yourself. These are account ' +
+    'settings the user changes in Settings in the AGI Workforce web app: Personalization for ' +
+    'memory and past-chat search, custom instructions and response style; General for their ' +
+    'profile, appearance and language; Connectors for connected apps; and Privacy for data and ' +
+    'training controls.',
+};
+
 export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
   { version: 1, sections: V1_SECTIONS },
   { version: 2, sections: V2_SECTIONS },
@@ -601,6 +620,7 @@ export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
   { version: 8, sections: V8_SECTIONS },
   { version: 9, sections: V9_SECTIONS },
   { version: 10, sections: V10_SECTIONS },
+  { version: 11, sections: V11_SECTIONS },
 ];
 
 /** The version the chat route serves unless a variant or a rollout picks another. */

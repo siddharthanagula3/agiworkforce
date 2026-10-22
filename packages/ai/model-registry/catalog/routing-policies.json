@@ -311,6 +311,14 @@
         "channel": "internal",
         "effectiveOn": "2026-10-14",
         "reason": "names the details memory never keeps, which version 1 never did, so the extraction for accounts with Include sensitive topics in memory on no longer leaves the English content screen as the only filter on its output; enters on internal and takes no traffic until a canary advance carries an eval quality signal"
+      },
+      {
+        "version": 35,
+        "artifact": "prompt",
+        "id": "chat.system@11",
+        "channel": "internal",
+        "effectiveOn": "2026-10-22",
+        "reason": "web, desktop and account Settings guidance sends the user to Personalization for memory, past-chat search, custom instructions and response style, and to General for profile, appearance and language, because memory moved out of its own Settings section into Personalization; otherwise renders as chat.system@10; enters on internal. A prompt release record routes no traffic: the pin and any canary are unchanged and a canary advance carries its eval quality signal"
       }
     ]
   },
