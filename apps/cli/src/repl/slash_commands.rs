@@ -486,6 +486,15 @@ pub(super) async fn handle_slash_command(
         "/worktree" | "/wt" => {
             output::print_block(&registry::handle_worktree(arg).await);
         }
+        "/workflow" | "/workflows" => {
+            if arg.is_empty() {
+                output::print_warn(crate::subagent::WORKFLOW_USAGE);
+            } else if let Some(reason) = crate::subagent::workflow_blocker(session) {
+                output::print_warn(reason);
+            } else {
+                return SlashResult::Prompt(crate::subagent::workflow_prompt(arg));
+            }
+        }
         "/batch" => {
             let batch_parts: Vec<&str> = arg.splitn(2, ' ').collect();
             let glob_pat = batch_parts.first().copied().unwrap_or_default();
@@ -731,6 +740,8 @@ fn repl_runtime_command_names() -> std::collections::BTreeSet<&'static str> {
         "fork",
         "diff",
         "batch",
+        "workflow",
+        "workflows",
         "memory",
         "mem",
         "init",
@@ -895,6 +906,33 @@ mod tests {
                 assert!(prompt.contains("Destination provider: openai"));
             }
             _ => panic!("expected an editable review buffer"),
+        }
+    }
+
+    #[tokio::test]
+    async fn workflow_turns_a_goal_into_a_staged_subagent_prompt() {
+        let mut session = crate::agent::AgentSession::new(
+            crate::model_catalog::default_model(),
+            &crate::context::gather_system_context(),
+            None,
+        );
+        let mut config = crate::config::CliConfig::default();
+
+        let refused =
+            handle_slash_command("/workflow tidy the docs", &mut session, &mut config).await;
+        assert!(matches!(refused, SlashResult::Handled));
+
+        session.set_session_persistence(true);
+        session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+            "repl-workflow",
+            chrono::Utc::now(),
+        ));
+        session.managed_session_path = Some("repl-workflow.jsonl".into());
+        match handle_slash_command("/workflow tidy the docs", &mut session, &mut config).await {
+            SlashResult::Prompt(prompt) => {
+                assert_eq!(prompt, crate::subagent::workflow_prompt("tidy the docs"))
+            }
+            _ => panic!("expected a workflow prompt"),
         }
     }
 }

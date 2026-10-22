@@ -3,5 +3,5 @@ source: apps/cli/src/tui/tui_app.rs
 expression: draw_header(80)
 ---
 ┌──────────────────────────────────────────────────────────────────────────────┐
-│ AGI CLI  v0.0.1  │ fixture-flagship │ anthropic                              │
+│ AGI CLI  v0.0.1  │ fixture-flagship (200K context) │ anthropic               │
 ├──────────────────────────────────────────────────────────────────────────────┤

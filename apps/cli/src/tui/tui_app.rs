@@ -1803,6 +1803,8 @@ struct FrameCtx<'a> {
     model_name: &'a str,
     provider_name: &'a str,
     git_branch: Option<&'a str>,
+    context_window: Option<usize>,
+    working_path: String,
     total_input_tokens: u32,
     total_output_tokens: u32,
     turn_count: u32,
@@ -1841,6 +1843,8 @@ impl<'a> FrameCtx<'a> {
             statusline: &app.statusline_config,
             provider_name: &app.provider_name,
             git_branch: app.git_branch.as_deref(),
+            context_window: model_context_window(&app.model_name),
+            working_path: current_working_path(),
             total_input_tokens: app.session.total_input_tokens,
             total_output_tokens: app.session.total_output_tokens,
             turn_count: app.session.turn_count,
@@ -1878,7 +1882,40 @@ impl TuiApp {
     }
 }
 
-fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
+fn model_context_window(model: &str) -> Option<usize> {
+    crate::model_catalog::find(model)
+        .map(|entry| entry.context_window)
+        .filter(|window| *window > 0)
+}
+
+fn context_window_label(tokens: usize) -> String {
+    const THOUSAND: usize = 1_000;
+    const MILLION: usize = 1_000_000;
+    if tokens >= MILLION {
+        let millions = format!("{:.1}", tokens as f64 / MILLION as f64);
+        format!("{}M context", millions.trim_end_matches(".0"))
+    } else if tokens >= THOUSAND {
+        format!("{}K context", tokens / THOUSAND)
+    } else {
+        format!("{tokens} context")
+    }
+}
+
+fn current_working_path() -> String {
+    std::env::current_dir()
+        .map(|cwd| header_working_path(&cwd, dirs::home_dir().as_deref()))
+        .unwrap_or_default()
+}
+
+fn header_working_path(cwd: &std::path::Path, home: Option<&std::path::Path>) -> String {
+    match home.and_then(|home| cwd.strip_prefix(home).ok()) {
+        Some(relative) if relative.as_os_str().is_empty() => "~".to_string(),
+        Some(relative) => format!("~{}{}", std::path::MAIN_SEPARATOR, relative.display()),
+        None => cwd.display().to_string(),
+    }
+}
+
+fn header_line(ctx: &FrameCtx, with_context: bool, with_path: bool) -> Line<'static> {
     use crate::tui::terminal_palette::{ui_accent, ui_brand, ui_muted};
 
     let mut spans = vec![
@@ -1895,9 +1932,18 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             ctx.model_name.to_string(),
             Style::default().add_modifier(Modifier::BOLD),
         ),
-        Span::raw(" │ "),
-        Span::styled(ctx.provider_name, Style::default().fg(ui_accent())),
     ];
+    if let Some(window) = ctx.context_window.filter(|_| with_context) {
+        spans.push(Span::styled(
+            format!(" ({})", context_window_label(window)),
+            Style::default().fg(ui_muted()),
+        ));
+    }
+    spans.push(Span::raw(" │ "));
+    spans.push(Span::styled(
+        ctx.provider_name.to_string(),
+        Style::default().fg(ui_accent()),
+    ));
 
     if let Some(branch) = ctx.git_branch {
         spans.push(Span::raw(" │ "));
@@ -1907,8 +1953,31 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         ));
     }
 
-    let mut header_text = Line::from(spans);
-    sanitize_terminal_line(&mut header_text);
+    if with_path && !ctx.working_path.is_empty() {
+        spans.push(Span::raw(" │ "));
+        spans.push(Span::styled(
+            ctx.working_path.clone(),
+            Style::default().fg(ui_muted()),
+        ));
+    }
+
+    let mut line = Line::from(spans);
+    sanitize_terminal_line(&mut line);
+    line
+}
+
+fn fitted_header_line(ctx: &FrameCtx, width: usize) -> Line<'static> {
+    [(true, true), (true, false), (false, false)]
+        .into_iter()
+        .map(|(with_context, with_path)| header_line(ctx, with_context, with_path))
+        .find(|line| line.width() <= width)
+        .unwrap_or_else(|| header_line(ctx, false, false))
+}
+
+fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
+    use crate::tui::terminal_palette::ui_muted;
+
+    let header_text = fitted_header_line(ctx, area.width.saturating_sub(2) as usize);
 
     // The header and the transcript are one continuous frame: the header owns
     // the top border, the transcript the sides, and the row between them is a
@@ -3566,6 +3635,10 @@ fn open_command_popup(app: &mut TuiApp) {
         ("diff-review", "Review changed files hunk by hunk"),
         ("dictate", "Dictate into the composer without sending"),
         ("find", "Search this conversation's messages"),
+        (
+            "workflow",
+            "Plan a goal into steps and run them as subagents",
+        ),
     ] {
         if !cmds.iter().any(|c| c.name == name) {
             cmds.push(PopupCmd::new(name, desc));
@@ -5216,6 +5289,16 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 SlashResult::SystemMessage("Usage: /btw <question>, ask a side question".to_string())
             } else {
                 SlashResult::RunBtw(arg.to_string())
+            }
+        }
+
+        "/workflow" | "/workflows" => {
+            if arg.is_empty() {
+                SlashResult::SystemMessage(crate::subagent::WORKFLOW_USAGE.to_string())
+            } else if let Some(reason) = crate::subagent::workflow_blocker(&app.session) {
+                SlashResult::SystemMessage(reason.to_string())
+            } else {
+                SlashResult::SendPrompt(crate::subagent::workflow_prompt(arg))
             }
         }
 
@@ -6873,6 +6956,8 @@ async fn send_message_with_prompt(
                             statusline: &app.statusline_config,
                             provider_name: &app.provider_name,
                             git_branch: app.git_branch.as_deref(),
+                            context_window: model_context_window(&app.model_name),
+                            working_path: current_working_path(),
                             total_input_tokens: turn_input_tokens,
                             total_output_tokens: turn_output_tokens,
                             turn_count,
@@ -7077,6 +7162,8 @@ async fn send_message_with_prompt(
                         statusline: &app.statusline_config,
                         provider_name: &app.provider_name,
                         git_branch: app.git_branch.as_deref(),
+                        context_window: model_context_window(&app.model_name),
+                        working_path: current_working_path(),
                         total_input_tokens: turn_input_tokens,
                         total_output_tokens: turn_output_tokens,
                         turn_count,
@@ -8016,6 +8103,46 @@ mod tests {
         let session = crate::agent::AgentSession::new(&model, &sys_ctx, None);
         let config = crate::config::CliConfig::default();
         TuiApp::new(session, config)
+    }
+
+    #[test]
+    fn workflow_without_a_goal_shows_usage() {
+        let mut app = minimal_app();
+        match handle_slash("/workflow", &mut app) {
+            SlashResult::SystemMessage(text) => {
+                assert_eq!(text, crate::subagent::WORKFLOW_USAGE)
+            }
+            _ => panic!("expected usage"),
+        }
+    }
+
+    #[test]
+    fn workflow_is_refused_without_a_saved_session() {
+        let mut app = minimal_app();
+        match handle_slash("/workflow audit the error paths", &mut app) {
+            SlashResult::SystemMessage(text) => assert!(text.contains("saved session"), "{text}"),
+            _ => panic!("expected the blocker message"),
+        }
+    }
+
+    #[test]
+    fn workflow_sends_a_staged_subagent_prompt() {
+        let mut app = minimal_app();
+        app.session.set_session_persistence(true);
+        app.session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+            "tui-workflow",
+            chrono::Utc::now(),
+        ));
+        app.session.managed_session_path = Some("tui-workflow.jsonl".into());
+        match handle_slash("/workflow audit the error paths", &mut app) {
+            SlashResult::SendPrompt(prompt) => {
+                assert_eq!(
+                    prompt,
+                    crate::subagent::workflow_prompt("audit the error paths")
+                )
+            }
+            _ => panic!("expected a workflow prompt"),
+        }
     }
 
     #[test]
@@ -9006,6 +9133,8 @@ mod tests {
             "remote-env",
             "remote-control",
             "rc",
+            "workflow",
+            "workflows",
         ]);
         names
     }
@@ -9252,6 +9381,8 @@ mod tests {
             statusline: &statusline_cfg,
             provider_name: "ollama",
             git_branch: None,
+            context_window: None,
+            working_path: String::new(),
             total_input_tokens: 10,
             total_output_tokens: 5,
             turn_count: 1,
@@ -9333,6 +9464,8 @@ mod tests {
             statusline,
             provider_name: "anthropic",
             git_branch: None,
+            context_window: Some(200_000),
+            working_path: "~/projects/fixture".to_string(),
             total_input_tokens: 1_234,
             total_output_tokens: 567,
             turn_count: 3,
@@ -9447,6 +9580,68 @@ mod tests {
                 "a `└┘` here closes a box the transcript then continues inside, at {width}"
             );
         }
+    }
+
+    #[test]
+    fn header_shows_the_context_window_and_working_path() {
+        let rendered = draw_header(160);
+        let content = rendered.lines().nth(1).expect("content row");
+        assert!(
+            content.contains("fixture-flagship (200K context)"),
+            "{content}"
+        );
+        assert!(content.contains("~/projects/fixture"), "{content}");
+
+        let narrow = draw_header(80);
+        let content = narrow.lines().nth(1).expect("content row");
+        assert!(content.contains("(200K context)"), "{content}");
+        assert!(!content.contains("~/projects"), "{content}");
+        assert!(content.ends_with('│'), "{content}");
+
+        let tight = draw_header(40);
+        let content = tight.lines().nth(1).expect("content row");
+        assert!(!content.contains("context"), "{content}");
+    }
+
+    #[test]
+    fn context_window_label_reads_in_thousands_and_millions() {
+        assert_eq!(context_window_label(200_000), "200K context");
+        assert_eq!(context_window_label(128_000), "128K context");
+        assert_eq!(context_window_label(1_000_000), "1M context");
+        assert_eq!(context_window_label(1_048_576), "1M context");
+        assert_eq!(context_window_label(2_500_000), "2.5M context");
+        assert_eq!(context_window_label(512), "512 context");
+    }
+
+    #[test]
+    fn header_working_path_abbreviates_the_home_directory() {
+        let home = std::path::Path::new("/home/dev");
+        assert_eq!(
+            header_working_path(std::path::Path::new("/home/dev"), Some(home)),
+            "~"
+        );
+        assert_eq!(
+            header_working_path(std::path::Path::new("/home/dev/code/app"), Some(home)),
+            format!("~{}code/app", std::path::MAIN_SEPARATOR)
+        );
+        assert_eq!(
+            header_working_path(std::path::Path::new("/srv/app"), Some(home)),
+            "/srv/app"
+        );
+        assert_eq!(
+            header_working_path(std::path::Path::new("/srv/app"), None),
+            "/srv/app"
+        );
+    }
+
+    #[test]
+    fn header_context_label_comes_from_the_catalog_only() {
+        let model = crate::model_catalog::default_model();
+        assert_eq!(
+            model_context_window(model),
+            crate::model_catalog::find(model).map(|entry| entry.context_window)
+        );
+        assert_eq!(model_context_window("fixture-unknown-model"), None);
     }
 
     #[test]
@@ -9669,6 +9864,8 @@ mod tests {
             statusline: &statusline_cfg,
             provider_name: "ollama",
             git_branch: None,
+            context_window: None,
+            working_path: String::new(),
             total_input_tokens: 10,
             total_output_tokens: 5,
             turn_count: 1,
@@ -9723,6 +9920,8 @@ mod tests {
             statusline: &statusline_cfg,
             provider_name: "ollama",
             git_branch: None,
+            context_window: None,
+            working_path: String::new(),
             total_input_tokens: 0,
             total_output_tokens: 0,
             turn_count: 0,
@@ -9876,6 +10075,8 @@ mod tests {
             statusline: &statusline_cfg,
             provider_name: "ollama",
             git_branch: Some(&branch),
+            context_window: None,
+            working_path: String::new(),
             total_input_tokens: 0,
             total_output_tokens: 0,
             turn_count: 0,

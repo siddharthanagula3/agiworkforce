@@ -969,6 +969,59 @@ fn extract_modified_files(output: &str) -> Vec<String> {
     files
 }
 
+pub(crate) const WORKFLOW_USAGE: &str =
+    "Usage: /workflow <goal>. Plans the goal into stages and runs each step as a subagent.";
+
+pub(crate) fn workflow_blocker(session: &crate::agent::AgentSession) -> Option<&'static str> {
+    if session.subagent_depth >= MAX_SUBAGENT_DEPTH {
+        return Some(
+            "A workflow cannot start here: this session is at the subagent nesting limit.",
+        );
+    }
+    if matches!(
+        session.governed_permission_mode(),
+        crate::cli_options::PermissionMode::Plan
+    ) && !session.plan_approved
+    {
+        return Some(
+            "Plan mode is on. Approve the plan with /plan accept or turn it off with /plan off, then run /workflow again.",
+        );
+    }
+    if !session.can_own_child_tasks() {
+        return Some(
+            "A workflow needs a saved session to track its steps. Start without --no-session-persistence to use /workflow.",
+        );
+    }
+    if !session
+        .effective_tool_definitions()
+        .iter()
+        .any(|tool| tool.name == "task")
+    {
+        return Some(
+            "The task tool is turned off for this session, so a workflow cannot start subagents.",
+        );
+    }
+    None
+}
+
+pub(crate) fn workflow_prompt(goal: &str) -> String {
+    format!(
+        "Run this goal as a workflow of subagent steps:\n\n{goal}\n\n\
+         1. Plan. Split the goal into the fewest steps that one subagent can finish on its own. \
+         Put steps that do not depend on each other in the same stage, at most \
+         {DEFAULT_MAX_CONCURRENT} steps per stage. Show the stages as a numbered list before \
+         starting.\n\
+         2. Run. Go through the stages in order. Start every step of a stage as its own `task` \
+         call in one reply so they run in parallel. Give each task a short description and a \
+         self-contained prompt that carries what earlier stages found.\n\
+         3. Check. Read each stage's results before the next stage. Retry a failed step once \
+         with a corrected prompt; if it fails again, stop and say what blocked it.\n\
+         4. Report. Summarize what each step did, the files it changed, and anything left \
+         undone.\n\n\
+         Delegate the steps; do not do their work yourself."
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1464,5 +1517,71 @@ mod tests {
         );
 
         release.store(true, std::sync::atomic::Ordering::Release);
+    }
+
+    fn workflow_session(persisted: bool) -> crate::agent::AgentSession {
+        let mut session = crate::agent::AgentSession::new(
+            crate::model_catalog::default_model(),
+            &crate::context::gather_system_context(),
+            None,
+        );
+        if persisted {
+            session.set_session_persistence(true);
+            session.managed_session = Some(crate::runtime::session::ManagedSession::new(
+                "workflow-parent",
+                chrono::Utc::now(),
+            ));
+            session.managed_session_path = Some("workflow-parent.jsonl".into());
+        }
+        session
+    }
+
+    #[test]
+    fn workflow_prompt_carries_the_goal_and_runs_stages_through_task() {
+        let prompt = workflow_prompt("migrate the config loader to the new schema");
+        assert!(prompt.contains("migrate the config loader to the new schema"));
+        assert!(prompt.contains("`task`"));
+        assert!(prompt.contains(&format!("at most {DEFAULT_MAX_CONCURRENT} steps per stage")));
+    }
+
+    #[test]
+    fn workflow_runs_from_a_persisted_root_session() {
+        assert_eq!(workflow_blocker(&workflow_session(true)), None);
+    }
+
+    #[test]
+    fn workflow_needs_a_saved_session_to_own_its_steps() {
+        let reason = workflow_blocker(&workflow_session(false)).expect("blocked");
+        assert!(reason.contains("saved session"), "{reason}");
+    }
+
+    #[test]
+    fn workflow_waits_for_an_approved_plan_in_plan_mode() {
+        let mut session = workflow_session(true);
+        session.permission_mode = crate::cli_options::PermissionMode::Plan;
+        session.plan_mode = true;
+        session.plan_approved = false;
+        let reason = workflow_blocker(&session).expect("blocked");
+        assert!(reason.contains("Plan mode"), "{reason}");
+
+        session.plan_approved = true;
+        session.plan_mode = false;
+        assert_eq!(workflow_blocker(&session), None);
+    }
+
+    #[test]
+    fn workflow_is_refused_at_the_subagent_nesting_limit() {
+        let mut session = workflow_session(true);
+        session.subagent_depth = MAX_SUBAGENT_DEPTH;
+        let reason = workflow_blocker(&session).expect("blocked");
+        assert!(reason.contains("nesting limit"), "{reason}");
+    }
+
+    #[test]
+    fn workflow_is_refused_when_the_task_tool_is_disallowed() {
+        let mut session = workflow_session(true);
+        session.disallowed_tools.push("task".to_string());
+        let reason = workflow_blocker(&session).expect("blocked");
+        assert!(reason.contains("task tool"), "{reason}");
     }
 }
