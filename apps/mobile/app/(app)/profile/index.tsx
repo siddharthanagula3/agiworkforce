@@ -1,11 +1,9 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo } from 'react';
-import { Alert, ScrollView, View } from 'react-native';
+import { Alert, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import {
-  ArrowLeft,
   BarChart3,
   Brain,
   ChevronRight,
@@ -31,6 +29,7 @@ import {
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { SettingsScreenShell } from '@/src/features/settings/common';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -103,11 +102,6 @@ export default function ProfileScreen() {
     }
   }, [isCloudMode, isClerkSignedIn, loadConversations]);
 
-  const goBack = useCallback(() => {
-    if (router.canGoBack()) router.back();
-    else router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0]);
-  }, [router]);
-
   const push = useCallback(
     (path: string) => () => router.push(path as Parameters<typeof router.push>[0]),
     [router],
@@ -125,41 +119,8 @@ export default function ProfileScreen() {
   }, [signOut]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-      <View
-        style={{
-          height: 50,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 8,
-        }}
-      >
-        <PressableBox
-          onPress={goBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ArrowLeft size={21} color={colors.textPrimary} />
-        </PressableBox>
-        <Text
-          style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
-        >
-          Profile
-        </Text>
-      </View>
-
-      <ScrollView
-        style={{ flex: 1 }}
-        contentContainerStyle={{
-          paddingHorizontal: 16,
-          paddingTop: 12,
-          paddingBottom: 36,
-          gap: 18,
-        }}
-        showsVerticalScrollIndicator={false}
-      >
+    <SettingsScreenShell title="Profile">
+      <View style={{ gap: 18 }}>
         <View
           style={{
             borderRadius: 18,
@@ -333,8 +294,8 @@ export default function ProfileScreen() {
             </View>
           </View>
         ) : null}
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+    </SettingsScreenShell>
   );
 }
 

@@ -1,5 +1,5 @@
-import type { ReactNode } from 'react';
-import { Alert, TextInput, View, type TextInputProps } from 'react-native';
+import { useCallback, useState, type ReactNode } from 'react';
+import { Alert, TextInput, View, type LayoutChangeEvent, type TextInputProps } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Cloud, RefreshCw, type LucideIcon } from 'lucide-react-native';
 
@@ -11,6 +11,8 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
+const HEADER_SLOT_MIN_WIDTH = 44;
+
 export function ScreenHeader({
   title,
   onBack,
@@ -21,25 +23,36 @@ export function ScreenHeader({
   trailing?: ReactNode;
 }) {
   const colors = useThemeColors();
+  const [slotWidth, setSlotWidth] = useState(HEADER_SLOT_MIN_WIDTH);
+  const growSlots = useCallback((event: LayoutChangeEvent) => {
+    const measured = Math.ceil(event.nativeEvent.layout.width);
+    setSlotWidth((current) => Math.max(current, measured));
+  }, []);
   return (
     <View
       style={{
         minHeight: 52,
-        paddingHorizontal: 12,
+        paddingHorizontal: 8,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 10,
       }}
     >
-      <PressableBox
-        onPress={onBack}
-        accessibilityRole="button"
-        accessibilityLabel="Go back"
-        hitSlop={8}
-        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-      >
-        <ArrowLeft size={21} color={colors.textSecondary} />
-      </PressableBox>
+      <View style={{ minWidth: slotWidth, alignItems: 'flex-start' }} onLayout={growSlots}>
+        <PressableBox
+          onPress={onBack}
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          hitSlop={8}
+          style={{
+            width: HEADER_SLOT_MIN_WIDTH,
+            height: HEADER_SLOT_MIN_WIDTH,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <ArrowLeft size={21} color={colors.textPrimary} />
+        </PressableBox>
+      </View>
       <Text
         accessibilityRole="header"
         numberOfLines={1}
@@ -47,12 +60,15 @@ export function ScreenHeader({
           flex: 1,
           color: colors.textPrimary,
           fontSize: typeScale.headline,
-          fontWeight: '700',
+          fontWeight: '600',
+          textAlign: 'center',
         }}
       >
         {title}
       </Text>
-      {trailing}
+      <View style={{ minWidth: slotWidth, alignItems: 'flex-end' }} onLayout={growSlots}>
+        {trailing}
+      </View>
     </View>
   );
 }

@@ -1,13 +1,14 @@
 import type React from 'react';
-import { ActivityIndicator, View, ScrollView } from 'react-native';
+import { ActivityIndicator, View, ScrollView, type RefreshControlProps } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { ArrowLeft, ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native';
+import { ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
 import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { HelpArticleLink, type MobileHelpArticleId } from '@/src/features/support/HelpArticleLink';
 
@@ -16,11 +17,15 @@ export function SettingsScreenShell({
   children,
   backHref = '/(app)/(tabs)/settings',
   help,
+  refreshControl,
+  overlay,
 }: {
   title: string;
   children: React.ReactNode;
   backHref?: string;
   help?: { docId: MobileHelpArticleId; label: string };
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+  overlay?: React.ReactNode;
 }) {
   const { colors, statusBarStyle } = useTheme();
   const goBack = useGoBack(backHref);
@@ -28,39 +33,21 @@ export function SettingsScreenShell({
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <StatusBar style={statusBarStyle} />
-      <View
-        style={{
-          minHeight: 50,
-          paddingVertical: 4,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 8,
-        }}
-      >
-        <Pressable
-          onPress={goBack}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          hitSlop={8}
-          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <ArrowLeft size={21} color={colors.textPrimary} />
-        </Pressable>
-        <Text
-          accessibilityRole="header"
-          style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
-        >
-          {title}
-        </Text>
-      </View>
+      <ScreenHeader title={title} onBack={goBack} />
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: 36 }}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 16,
+          paddingTop: 8,
+          paddingBottom: 36,
+        }}
+        refreshControl={refreshControl}
       >
         {children}
         {help ? <HelpArticleLink docId={help.docId} label={help.label} /> : null}
       </ScrollView>
+      {overlay}
     </SafeAreaView>
   );
 }

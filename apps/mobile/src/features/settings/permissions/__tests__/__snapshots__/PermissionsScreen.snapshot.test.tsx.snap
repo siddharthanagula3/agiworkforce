@@ -310,83 +310,104 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
       {
         "alignItems": "center",
         "flexDirection": "row",
-        "minHeight": 50,
+        "minHeight": 52,
         "paddingHorizontal": 8,
-        "paddingVertical": 4,
       }
     }
   >
     <View
-      accessibilityLabel="Go back"
-      accessibilityRole="button"
-      accessibilityState={
-        {
-          "busy": undefined,
-          "checked": undefined,
-          "disabled": undefined,
-          "expanded": undefined,
-          "selected": undefined,
-        }
-      }
-      accessibilityValue={
-        {
-          "max": undefined,
-          "min": undefined,
-          "now": undefined,
-          "text": undefined,
-        }
-      }
-      accessible={true}
-      collapsable={false}
-      focusable={true}
-      hitSlop={8}
-      onBlur={[Function]}
-      onClick={[Function]}
-      onFocus={[Function]}
-      onResponderGrant={[Function]}
-      onResponderMove={[Function]}
-      onResponderRelease={[Function]}
-      onResponderTerminate={[Function]}
-      onResponderTerminationRequest={[Function]}
-      onStartShouldSetResponder={[Function]}
+      onLayout={[Function]}
       style={
         {
-          "alignItems": "center",
-          "height": 40,
-          "justifyContent": "center",
-          "width": 40,
+          "alignItems": "flex-start",
+          "minWidth": 44,
         }
       }
     >
       <View
-        color="#fff"
-        size={21}
-        testID="icon-ArrowLeft"
-      />
+        accessibilityLabel="Go back"
+        accessibilityRole="button"
+        accessibilityState={
+          {
+            "busy": undefined,
+            "checked": undefined,
+            "disabled": undefined,
+            "expanded": undefined,
+            "selected": undefined,
+          }
+        }
+        accessibilityValue={
+          {
+            "max": undefined,
+            "min": undefined,
+            "now": undefined,
+            "text": undefined,
+          }
+        }
+        accessible={true}
+        collapsable={false}
+        focusable={true}
+        hitSlop={8}
+        onBlur={[Function]}
+        onClick={[Function]}
+        onFocus={[Function]}
+        onResponderGrant={[Function]}
+        onResponderMove={[Function]}
+        onResponderRelease={[Function]}
+        onResponderTerminate={[Function]}
+        onResponderTerminationRequest={[Function]}
+        onStartShouldSetResponder={[Function]}
+        style={
+          {
+            "alignItems": "center",
+            "height": 44,
+            "justifyContent": "center",
+            "width": 44,
+          }
+        }
+      >
+        <View
+          color="#fff"
+          size={21}
+          testID="icon-ArrowLeft"
+        />
+      </View>
     </View>
     <Text
       accessibilityRole="header"
+      numberOfLines={1}
       style={
         {
           "color": "#fff",
+          "flex": 1,
           "fontSize": 17,
-          "fontWeight": "700",
+          "fontWeight": "600",
+          "textAlign": "center",
         }
       }
     >
       Permissions
     </Text>
+    <View
+      onLayout={[Function]}
+      style={
+        {
+          "alignItems": "flex-end",
+          "minWidth": 44,
+        }
+      }
+    />
   </View>
   <RCTScrollView
     className="flex-1"
     contentContainerStyle={
       {
+        "flexGrow": 1,
         "paddingBottom": 36,
         "paddingHorizontal": 16,
         "paddingTop": 8,
       }
     }
-    showsVerticalScrollIndicator={false}
   >
     <View>
       <View

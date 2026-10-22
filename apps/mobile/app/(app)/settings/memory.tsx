@@ -13,7 +13,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import {
-  ArrowLeft,
   Ban,
   Brain,
   FileText,
@@ -28,6 +27,8 @@ import { Text } from '@/components/ui/text';
 import { Skeleton } from '@/components/ui/skeleton';
 import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
 import { SettingsGroup, SettingsRow } from '@/src/features/settings/common';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';
 import { MemoryControlsCard } from '@/src/features/memory/components/MemoryControlsCard';
 import {
@@ -75,6 +76,7 @@ type AccountMemoryCapability =
 
 export default function MemoryScreen() {
   const router = useRouter();
+  const goBack = useGoBack('/(app)/(tabs)/settings');
   const colors = useThemeColors();
   const currentIsCloud = useChatAppModeStore((s) => s.appMode) === 'cloud';
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
@@ -485,35 +487,23 @@ export default function MemoryScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
-      <View className="flex-row items-center px-4 h-12">
-        <Pressable
-          onPress={() =>
-            router.replace('/(app)/(tabs)/settings' as Parameters<typeof router.replace>[0])
-          }
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-          className="p-2 -ml-2 rounded-lg"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-          })}
-        >
-          <ArrowLeft size={22} color={colors.textSecondary} />
-        </Pressable>
-        <Text variant="subheading" className="ml-2 flex-1" style={{ color: colors.textPrimary }}>
-          {currentIsCloud ? 'Cloud Memory' : 'Memory'}
-        </Text>
-        <Pressable
-          onPress={handleImportPress}
-          className="p-2 rounded-lg"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
-          })}
-          accessibilityLabel="Import memories"
-          accessibilityRole="button"
-        >
-          <Upload size={18} color={colors.textSecondary} />
-        </Pressable>
-      </View>
+      <ScreenHeader
+        title={currentIsCloud ? 'Cloud Memory' : 'Memory'}
+        onBack={goBack}
+        trailing={
+          <Pressable
+            onPress={handleImportPress}
+            className="p-2 rounded-lg"
+            style={({ pressed }) => ({
+              backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+            })}
+            accessibilityLabel="Import memories"
+            accessibilityRole="button"
+          >
+            <Upload size={18} color={colors.textSecondary} />
+          </Pressable>
+        }
+      />
 
       <MemoryControlsCard
         isCloud={currentIsCloud}

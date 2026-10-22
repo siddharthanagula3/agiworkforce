@@ -1,17 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { View, ScrollView, Alert, ActivityIndicator } from 'react-native';
+import { View, Alert, ActivityIndicator } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import {
-  ArrowLeft,
-  HardDrive,
-  Trash2,
-  Download,
-  FileDown,
-  AlertTriangle,
-  Signal,
-} from 'lucide-react-native';
+import { HardDrive, Trash2, Download, FileDown, AlertTriangle, Signal } from 'lucide-react-native';
 import { cacheDirectory, deleteAsync, getFreeDiskStorageAsync } from 'expo-file-system/legacy';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
@@ -32,8 +23,8 @@ import {
 } from '@/src/features/settings/data-controls/localDataSnapshot';
 import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
 import { StorageScopeNotice } from '@/src/features/settings/StorageScopeNotice';
+import { SettingsScreenShell } from '@/src/features/settings/common';
 import type { InstalledModel } from '@/storage/types';
-import { useGoBack } from '@/src/shared/hooks/useGoBack';
 
 const STORAGE_RETURN_PATHS = [
   '/(app)/(tabs)/settings',
@@ -109,9 +100,9 @@ export default function StorageManagerScreen() {
     loadStorageInfo().catch(() => undefined);
   }, [loadStorageInfo]);
 
-  const handleBack = useGoBack(
-    isStorageReturnPath(params.returnTo) ? params.returnTo : '/(app)/settings/general',
-  );
+  const backHref = isStorageReturnPath(params.returnTo)
+    ? params.returnTo
+    : '/(app)/settings/general';
 
   const handleDeleteModel = useCallback(
     (model: InstalledModel) => {
@@ -213,49 +204,21 @@ export default function StorageManagerScreen() {
   const totalModelBytes = models.reduce((sum, m) => sum + (m.size_bytes ?? 0), 0);
   const displayedModelStorageBytes = Math.max(modelStorageBytes, totalModelBytes);
 
+  const wipeOverlay = isWiping ? (
+    <View
+      className="absolute inset-0 z-50 items-center justify-center"
+      style={{ backgroundColor: c.scrim }}
+    >
+      <ActivityIndicator size="large" color={c.teal} />
+      <Text className="mt-3 text-sm" style={{ color: c.textSecondary }}>
+        Deleting all local data…
+      </Text>
+    </View>
+  ) : null;
+
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }}>
-      <View
-        className="flex-row items-center px-3 h-12"
-        style={{
-          backgroundColor: c.surfaceBase,
-          borderBottomWidth: 1,
-          borderBottomColor: c.border,
-        }}
-      >
-        <Pressable
-          onPress={handleBack}
-          className="p-2 rounded-lg"
-          style={({ pressed }) => ({
-            backgroundColor: pressed ? c.surfaceHover : c.transparent,
-          })}
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
-        >
-          <ArrowLeft size={20} color={c.textSecondary} />
-        </Pressable>
-        <Text variant="subheading" className="ml-2" style={{ color: c.textPrimary }}>
-          Storage
-        </Text>
-      </View>
-
-      {isWiping && (
-        <View
-          className="absolute inset-0 z-50 items-center justify-center"
-          style={{ backgroundColor: c.scrim }}
-        >
-          <ActivityIndicator size="large" color={c.teal} />
-          <Text className="mt-3 text-sm" style={{ color: c.textSecondary }}>
-            Deleting all local data…
-          </Text>
-        </View>
-      )}
-
-      <ScrollView
-        className="flex-1"
-        contentContainerStyle={{ padding: 16, gap: 16, paddingBottom: 48 }}
-        showsVerticalScrollIndicator={false}
-      >
+    <SettingsScreenShell title="Storage" backHref={backHref} overlay={wipeOverlay}>
+      <View style={{ gap: 16 }}>
         <StorageScopeNotice />
 
         <Card>
@@ -449,7 +412,7 @@ export default function StorageManagerScreen() {
             </View>
           </Pressable>
         </Card>
-      </ScrollView>
-    </SafeAreaView>
+      </View>
+    </SettingsScreenShell>
   );
 }
