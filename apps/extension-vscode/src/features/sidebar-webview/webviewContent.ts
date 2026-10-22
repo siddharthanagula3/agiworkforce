@@ -57,6 +57,13 @@ const DEVELOPER_MODE_DESCRIPTIONS: Record<DeveloperAgentMode, string> = {
   bypass: 'Skip all approval prompts (dangerous)',
 };
 
+const DEVELOPER_MODE_ICONS: Record<DeveloperAgentMode, string> = {
+  ask: 'shield',
+  auto: 'zap',
+  plan: 'checklist',
+  bypass: 'warning',
+};
+
 const DEVELOPER_MODE_OPTIONS = DEVELOPER_AGENT_MODES.map((mode) => ({
   value: mode,
   label: DEVELOPER_AGENT_MODE_LABELS[mode],
@@ -121,7 +128,7 @@ export function getWebviewContent(
     })
     .join('');
   const modeLabel = escapeHtml(DEVELOPER_AGENT_MODE_LABELS[initialMode]);
-  const effortLabel = escapeHtml(DEVELOPER_REASONING_EFFORT_LABELS[initialEffort]);
+  const modeIcon = DEVELOPER_MODE_ICONS[initialMode];
   const followUpBehaviorLiteral = initialFollowUpBehavior === 'steer' ? 'steer' : 'queue';
 
   const codiconCssUri = webview.asWebviewUri(
@@ -152,6 +159,7 @@ export function getWebviewContent(
       --bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));
       --bg-elevated: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background, var(--agi-vscode-surface)));
       --bg-overlay: var(--vscode-dropdown-background, var(--agi-vscode-overlay));
+      --bg-popover: var(--bg-elevated);
       --accent-teal: var(--vscode-button-background, var(--agi-vscode-button));
       --accent-terra: var(--agi-vscode-terra);
       --accent-terra-foreground: var(--agi-vscode-button-text);
@@ -998,7 +1006,8 @@ export function getWebviewContent(
       transition: background var(--duration-instant) var(--curve-standard), color var(--duration-instant) var(--curve-standard);
       line-height: 1;
     }
-    .plus-btn:hover { background: var(--hover); color: var(--text-primary); }
+    .plus-btn:hover,
+    .plus-btn[aria-expanded="true"] { background: var(--hover); color: var(--text-primary); }
 
     /* Model picker pill. The model name is the one word a user cannot infer
        from anywhere else in the composer, so it holds its width and the effort
@@ -1028,7 +1037,8 @@ export function getWebviewContent(
       text-overflow: ellipsis;
     }
     .model-pill-effort { flex-shrink: 0; }
-    .model-pill:hover { background: var(--hover); color: var(--text-primary); }
+    .model-pill:hover,
+    .model-pill[aria-expanded="true"] { background: var(--hover); color: var(--text-primary); }
 
     #sendBtn {
       background: var(--accent-terra);
@@ -1049,7 +1059,11 @@ export function getWebviewContent(
                   width var(--duration-quick) var(--curve-standard);
     }
     #sendBtn:hover:not(:disabled) { opacity: 0.88; transform: scale(1.05); }
-    #sendBtn:disabled { opacity: 0.35; cursor: not-allowed; }
+    #sendBtn:disabled {
+      background: color-mix(in srgb, var(--text-secondary) 28%, transparent);
+      color: var(--text-secondary);
+      cursor: not-allowed;
+    }
     #sendBtn::before {
       content: '↑';
       font-size: 14px;
@@ -1120,7 +1134,7 @@ export function getWebviewContent(
       position: absolute;
       bottom: calc(100% + 6px);
       left: 10px;
-      background: var(--bg-elevated);
+      background: var(--bg-popover);
       border: 1px solid var(--border);
       border-radius: var(--corner-menu);
       box-shadow: var(--elevation-2);
@@ -1204,7 +1218,7 @@ export function getWebviewContent(
        */
       max-height: min(360px, calc(100vh - 140px));
       overflow-y: auto;
-      background: var(--bg-elevated);
+      background: var(--bg-popover);
       border: 1px solid var(--border);
       border-radius: var(--corner-menu);
       box-shadow: var(--elevation-3);
@@ -1340,7 +1354,8 @@ export function getWebviewContent(
       overflow: hidden;
       text-overflow: ellipsis;
     }
-    .controls-summary:hover, .model-chip:hover {
+    .controls-summary:hover, .model-chip:hover,
+    .controls-summary[aria-expanded="true"] {
       color: var(--text-primary);
       background: var(--hover);
     }
@@ -1349,6 +1364,15 @@ export function getWebviewContent(
       min-width: 36px;
       max-width: 120px;
       padding: 0 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .controls-summary__icon { flex-shrink: 0; font-size: 14px; }
+    .controls-summary__label {
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
     }
 
     .chip-separator {
@@ -2287,9 +2311,9 @@ export function getWebviewContent(
       max-height: 240px;
       overflow-y: auto;
       padding: 4px;
-      background: var(--bg-overlay);
+      background: var(--bg-popover);
       border: 1px solid var(--border);
-      border-radius: var(--corner-field);
+      border-radius: var(--corner-menu);
       box-shadow: var(--elevation-2);
     }
     .slash-menu.open { display: flex; }
@@ -2947,7 +2971,7 @@ export function getWebviewContent(
         <button class="plus-btn" id="plusBtn" title="Attach or use tools" aria-label="Attach or use tools" aria-haspopup="menu" aria-expanded="false">+</button>
         <button class="plus-btn" id="slashBtn" title="Commands" aria-label="Commands" aria-haspopup="menu" aria-expanded="false">/</button>
         <button class="model-pill" id="modelPill" title="Model" aria-haspopup="menu" aria-expanded="false">Auto</button>
-        <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort">${modeLabel} · ${effortLabel}</button>
+        <button class="controls-summary" id="controlsSummary" title="Mode and reasoning effort" aria-label="Mode and reasoning effort"><span class="codicon codicon-${modeIcon} controls-summary__icon" aria-hidden="true"></span><span class="controls-summary__label">${modeLabel}</span></button>
         <span class="context-usage" id="contextUsage"></span>
         <span class="context-limit-notice" id="contextLimitNotice" role="status" aria-live="polite" hidden></span>
         <span class="follow-up-status" id="followUpStatus" role="status" aria-live="polite"></span>
@@ -3710,13 +3734,18 @@ export function getWebviewContent(
     let lastSendPayload = null;
     let activeQueuedClientMessageId = null;
 
+    function syncSendState() {
+      var hasContent = userInput.value.trim() !== '' || pendingAttachmentCount > 0;
+      sendBtn.disabled = runtimeBlock !== null || !hasContent;
+    }
+
     function syncComposerAvailability() {
       var blocked = runtimeBlock !== null;
       userInput.disabled = blocked;
       if (plusBtn) plusBtn.disabled = blocked;
       if (modelPill) modelPill.disabled = blocked;
       if (controlsSummary) controlsSummary.disabled = blocked;
-      sendBtn.disabled = blocked;
+      syncSendState();
       if (blocked) {
         closeModelPopover();
         if (plusMenu) plusMenu.classList.remove('open');
@@ -3805,9 +3834,13 @@ export function getWebviewContent(
 
     // ── Helpers ───────────────────────────────────────────────────────────────
     var MODE_LABELS = ${serializeForInlineScript(DEVELOPER_AGENT_MODE_LABELS)};
+    var MODE_ICONS = ${serializeForInlineScript(DEVELOPER_MODE_ICONS)};
     var EFFORT_LABELS = ${serializeForInlineScript(DEVELOPER_REASONING_EFFORT_LABELS)};
     function modeLabel(value) {
       return Object.prototype.hasOwnProperty.call(MODE_LABELS, value) ? MODE_LABELS[value] : '';
+    }
+    function modeIcon(value) {
+      return Object.prototype.hasOwnProperty.call(MODE_ICONS, value) ? MODE_ICONS[value] : '';
     }
     function effortLabel(value) {
       return Object.prototype.hasOwnProperty.call(EFFORT_LABELS, value) ? EFFORT_LABELS[value] : '';
@@ -3836,7 +3869,13 @@ export function getWebviewContent(
       if (!controlsSummary) return;
       var mode = modeLabel(activeMode);
       var effort = effortLabel(activeEffort);
-      controlsSummary.textContent = mode;
+      var modeIconEl = document.createElement('span');
+      modeIconEl.className = 'codicon codicon-' + modeIcon(activeMode) + ' controls-summary__icon';
+      modeIconEl.setAttribute('aria-hidden', 'true');
+      var modeLabelEl = document.createElement('span');
+      modeLabelEl.className = 'controls-summary__label';
+      modeLabelEl.textContent = mode;
+      controlsSummary.replaceChildren(modeIconEl, modeLabelEl);
       renderModelPill();
       var fullLabel = 'Controls: ' + mode + ' mode' +
         (activeSupportsEffort ? ', ' + effort + ' effort' : ', effort unavailable for this model');
@@ -4429,7 +4468,7 @@ export function getWebviewContent(
         showFollowUpStatus('', 'queued', false);
       }
       if (composerCard) composerCard.classList.toggle('is-streaming', value);
-      sendBtn.disabled = runtimeBlock !== null;
+      syncSendState();
       sendBtn.classList.toggle('follow-up', value);
       var actionLabel = followUpBehavior === 'steer' ? 'Steer' : 'Queue';
       var keys = composerKeys();
@@ -4934,6 +4973,7 @@ export function getWebviewContent(
       userInput.value = '';
       userInput.style.height = 'auto';
       saveComposerDraft();
+      syncSendState();
       closeSlashMenu();
       vscode.postMessage({
         type: 'sideQuestion',
@@ -4975,6 +5015,7 @@ export function getWebviewContent(
       userInput.value = '';
       userInput.style.height = 'auto';
       saveComposerDraft();
+      syncSendState();
 
       if (!isFollowUp) {
         showTyping();
@@ -5102,6 +5143,7 @@ export function getWebviewContent(
       autoResize();
       detectMention();
       saveComposerDraft();
+      syncSendState();
     });
 
     (function restoreComposerDraft() {
@@ -5110,6 +5152,7 @@ export function getWebviewContent(
         userInput.value = state.composerDraft;
         autoResize();
       }
+      syncSendState();
     })();
 
     function closeActionsMenu() {
@@ -5511,6 +5554,7 @@ export function getWebviewContent(
               userInput.value = '';
               autoResize();
               saveComposerDraft();
+              syncSendState();
             }
             vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
           });
@@ -6182,6 +6226,7 @@ export function getWebviewContent(
     }
 
     function renderAttachmentStrip() {
+      syncSendState();
       if (!attachmentStrip) return;
       attachmentStrip.classList.toggle(
         'visible',
@@ -6206,6 +6251,7 @@ export function getWebviewContent(
         chip.classList.add('queued');
         if (pendingAttachmentCount > 0) pendingAttachmentCount--;
       }
+      syncSendState();
     }
 
     function releaseAttachments(ids) {
@@ -6216,6 +6262,7 @@ export function getWebviewContent(
         chip.classList.remove('queued');
         pendingAttachmentCount++;
       }
+      syncSendState();
     }
 
     function consumeAttachments(ids) {
@@ -6778,6 +6825,7 @@ export function getWebviewContent(
       else if (msg.type === 'composerDraft') {
         userInput.value = msg.payload.text || '';
         saveComposerDraft();
+        syncSendState();
         pendingFileReferences = (msg.payload.references || []).map(function(reference) {
           var range = reference.range;
           var endLine = range && range.endCharacter === 0 && range.endLine > range.startLine
@@ -7094,6 +7142,7 @@ export function getWebviewContent(
         : '';
       var token = '@' + file.path + lineSuffix;
       userInput.value = before + token + ' ' + after;
+      syncSendState();
       pendingFileReferences.push({
         token: token,
         reference: { path: file.path, range: file.range }
@@ -7787,6 +7836,7 @@ export function getWebviewContent(
       userInput.value = text;
       autoResize();
       saveComposerDraft();
+      syncSendState();
       userInput.focus();
       userInput.setSelectionRange(text.length, text.length);
     }
