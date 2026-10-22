@@ -476,7 +476,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
               {
                 "color": "#bbb",
                 "flexShrink": 1,
-                "fontSize": 13,
+                "fontSize": 14,
                 "fontWeight": "500",
                 "includeFontPadding": false,
                 "lineHeight": 16,
@@ -491,7 +491,7 @@ exports[`ChatInput expand to full-screen editor matches the composer snapshot in
             style={
               {
                 "color": "#888",
-                "fontSize": 13,
+                "fontSize": 14,
                 "includeFontPadding": false,
                 "lineHeight": 16,
               }

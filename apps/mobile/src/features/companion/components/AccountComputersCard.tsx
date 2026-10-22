@@ -140,14 +140,14 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
 
         {computers === null ? (
           failed ? (
-            <Text className="text-xs" style={{ color: colors.agentError }}>
+            <Text className="text-sm" style={{ color: colors.agentError }}>
               Your computers could not be loaded.
             </Text>
           ) : (
             <ActivityIndicator color={colors.textSecondary} />
           )
         ) : computers.length === 0 ? (
-          <Text className="text-xs text-white/50">
+          <Text className="text-sm text-white/50">
             No computer is signed in to this account yet. Install AGI Desktop on a computer and sign
             in there.
           </Text>
@@ -182,14 +182,14 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
                   accessibilityLabel={`${displayName}, ${status}`}
                 >
                   <View className="flex-1">
-                    <Text className="text-xs font-medium text-white" numberOfLines={1}>
+                    <Text className="text-sm font-medium text-white" numberOfLines={1}>
                       {computer.name ?? 'Computer'}
                     </Text>
-                    <Text className="text-xs text-white/45" numberOfLines={1}>
+                    <Text className="text-sm text-white/45" numberOfLines={1}>
                       {detailLine(computer)}
                     </Text>
                     {capabilityLine(computer) ? (
-                      <Text className="text-xs text-white/45" numberOfLines={2}>
+                      <Text className="text-sm text-white/45" numberOfLines={2}>
                         {capabilityLine(computer)}
                       </Text>
                     ) : null}
@@ -204,7 +204,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
           </View>
         )}
         {connectedName === null ? (
-          <Text className="mt-2 text-xs text-white/45">
+          <Text className="mt-2 text-sm text-white/45">
             To control one, open Remote on that computer and scan its code.
           </Text>
         ) : null}

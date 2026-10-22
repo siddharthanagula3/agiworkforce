@@ -153,7 +153,7 @@ function NotificationItem({ row, onPress, onMarkRead }: NotificationItemProps) {
             <View className="flex-1">
               <View className="flex-row items-center gap-2 mb-0.5">
                 <Text
-                  className="text-xs font-semibold flex-1"
+                  className="text-sm font-semibold flex-1"
                   style={{ color: item.read ? colors.textSecondary : colors.textPrimary }}
                   numberOfLines={1}
                 >
@@ -167,7 +167,7 @@ function NotificationItem({ row, onPress, onMarkRead }: NotificationItemProps) {
                 )}
               </View>
               <Text
-                className="text-xs leading-4"
+                className="text-sm leading-5"
                 style={{ color: item.read ? colors.textMuted : colors.textSecondary }}
                 numberOfLines={2}
               >
@@ -182,7 +182,7 @@ function NotificationItem({ row, onPress, onMarkRead }: NotificationItemProps) {
               label={getPriorityLabel(item.priority)}
               color={getPriorityBadgeColor(item.priority)}
             />
-            <Text className="text-xs flex-1" style={{ color: colors.textMuted }}>
+            <Text className="text-sm flex-1" style={{ color: colors.textMuted }}>
               {timeLabel}
             </Text>
             {!item.read && (
@@ -195,7 +195,7 @@ function NotificationItem({ row, onPress, onMarkRead }: NotificationItemProps) {
                 accessibilityLabel="Mark as read"
                 accessibilityRole="button"
               >
-                <Text className="text-xs" style={{ color: colors.textSecondary }}>
+                <Text className="text-sm" style={{ color: colors.textSecondary }}>
                   Mark read
                 </Text>
               </Pressable>
@@ -357,7 +357,7 @@ export default function NotificationCenterScreen() {
             className="rounded-full px-2 py-0.5 mr-2"
             style={{ backgroundColor: colors.successSurface }}
           >
-            <Text className="text-xs font-bold" style={{ color: colors.teal }}>
+            <Text className="text-sm font-bold" style={{ color: colors.teal }}>
               {unreadCount}
             </Text>
           </View>
@@ -408,7 +408,7 @@ export default function NotificationCenterScreen() {
           <Text className="text-center text-sm" style={{ color: colors.textSecondary }}>
             No notifications yet.
           </Text>
-          <Text className="text-center text-xs mt-1" style={{ color: colors.textMuted }}>
+          <Text className="text-center text-sm mt-1" style={{ color: colors.textMuted }}>
             Agent alerts, approvals, and task updates will appear here.
           </Text>
           {account.error ? (
@@ -442,7 +442,7 @@ export default function NotificationCenterScreen() {
           ListHeaderComponent={
             rows.length > 0 ? (
               <View className="py-3">
-                <Text className="text-xs" style={{ color: colors.textMuted }}>
+                <Text className="text-sm" style={{ color: colors.textMuted }}>
                   {unreadCount > 0
                     ? translatePlural('common', 'counts.unreadNotifications', unreadCount, {
                         one: '{{count}} unread notification',
@@ -457,7 +457,7 @@ export default function NotificationCenterScreen() {
                     accessibilityLabel={`${account.error} Retry`}
                     style={{ minHeight: 44, justifyContent: 'center' }}
                   >
-                    <Text className="text-xs" style={{ color: colors.textSecondary }}>
+                    <Text className="text-sm" style={{ color: colors.textSecondary }}>
                       {account.error} Tap to retry.
                     </Text>
                   </Pressable>

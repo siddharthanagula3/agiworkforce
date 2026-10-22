@@ -298,7 +298,7 @@ export function QuickSchedule({
         </PressableBox>
       </View>
       {error && !visible ? (
-        <Text className="mx-4 mb-2 text-xs" style={{ color: colors.agentError }}>
+        <Text className="mx-4 mb-2 text-sm" style={{ color: colors.agentError }}>
           {error}
         </Text>
       ) : null}
@@ -332,7 +332,7 @@ export function QuickSchedule({
               </View>
 
               <View className="px-4 pb-8">
-                <Text className="text-[12px] text-white/50 mb-2">When should it run?</Text>
+                <Text className="text-sm text-white/50 mb-2">When should it run?</Text>
                 <View
                   className="rounded-xl px-3 py-3 mb-3 flex-row items-center"
                   style={{ backgroundColor: colors.surfaceElevated }}
@@ -362,7 +362,7 @@ export function QuickSchedule({
                     style={{ backgroundColor: `${colors.teal}12` }}
                   >
                     <Zap size={12} color={colors.teal} />
-                    <Text className="text-[12px]" style={{ color: colors.teal }}>
+                    <Text className="text-sm" style={{ color: colors.teal }}>
                       {parsed.description}
                     </Text>
                   </View>
@@ -381,7 +381,7 @@ export function QuickSchedule({
                       }}
                     >
                       <Text
-                        className="text-[12px]"
+                        className="text-sm"
                         style={{ color: input === s ? colors.teal : colors.textSecondary }}
                       >
                         {s}
@@ -390,7 +390,7 @@ export function QuickSchedule({
                   ))}
                 </View>
 
-                <Text className="text-[12px] text-white/50 mb-2">What should the AI do?</Text>
+                <Text className="text-sm text-white/50 mb-2">What should the AI do?</Text>
                 <View
                   className="rounded-xl px-3 py-3 mb-3"
                   style={{ backgroundColor: colors.surfaceElevated }}
@@ -415,7 +415,7 @@ export function QuickSchedule({
                   />
                 </View>
 
-                {error ? <Text className="text-[12px] text-red-400 mb-3">{error}</Text> : null}
+                {error ? <Text className="text-sm text-red-400 mb-3">{error}</Text> : null}
 
                 <PressableBox
                   onPress={handleCreate}

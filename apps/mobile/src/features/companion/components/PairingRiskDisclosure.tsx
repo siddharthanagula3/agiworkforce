@@ -31,7 +31,7 @@ export function PairingRiskDisclosure({ className }: { className?: string }) {
     <View className={`w-full${className ? ` ${className}` : ''}`}>
       <View className="flex-row items-start gap-2">
         <ShieldAlert size={14} color={colors.agentWarning} style={{ marginTop: 2 }} />
-        <Text className="text-xs text-white/60 leading-5 flex-1">
+        <Text className="text-sm text-white/60 leading-5 flex-1">
           AGI will use your desktop to run the tasks you send from this phone. That can read and
           change files on that computer. Only pair devices you trust and keep them with you.
         </Text>
@@ -42,7 +42,7 @@ export function PairingRiskDisclosure({ className }: { className?: string }) {
         accessibilityRole="link"
         accessibilityLabel="Learn how to use Dispatch safely. Opens agiworkforce.com in your browser."
       >
-        <Text className="text-xs font-medium" style={{ color: colors.teal }}>
+        <Text className="text-sm font-medium" style={{ color: colors.teal }}>
           Learn how to use this safely
         </Text>
       </PressableBox>

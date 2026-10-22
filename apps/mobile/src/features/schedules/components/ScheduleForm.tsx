@@ -231,14 +231,14 @@ export function ScheduleForm({
             />
           </View>
           {errors.prompt ? (
-            <Text className="text-xs text-red-400 mt-1">{errors.prompt}</Text>
+            <Text className="text-sm text-red-400 mt-1">{errors.prompt}</Text>
           ) : null}
           <View
             accessibilityLabel="Schedules use saved prompt text only"
             className="mt-3 rounded-lg border border-white/10 bg-surface-elevated p-3"
           >
-            <Text className="text-xs font-semibold text-white">Prompt-only context</Text>
-            <Text className="mt-1 text-xs leading-4 text-white/50">
+            <Text className="text-sm font-semibold text-white">Prompt-only context</Text>
+            <Text className="mt-1 text-sm leading-5 text-white/50">
               Camera, Photos, Files, and chat attachments are not saved or reused when this schedule
               runs. Put essential context in the prompt.
             </Text>
@@ -271,13 +271,13 @@ export function ScheduleForm({
             onChange={handleRecurrenceChange}
           />
           {errors.recurrence ? (
-            <Text className="text-xs text-red-400 mt-1">{errors.recurrence}</Text>
+            <Text className="text-sm text-red-400 mt-1">{errors.recurrence}</Text>
           ) : null}
           {errors.daysOfWeek ? (
-            <Text className="text-xs text-red-400 mt-1">{errors.daysOfWeek}</Text>
+            <Text className="text-sm text-red-400 mt-1">{errors.daysOfWeek}</Text>
           ) : null}
           {errors.scheduledAt ? (
-            <Text className="text-xs text-red-400 mt-1">{errors.scheduledAt}</Text>
+            <Text className="text-sm text-red-400 mt-1">{errors.scheduledAt}</Text>
           ) : null}
         </View>
 

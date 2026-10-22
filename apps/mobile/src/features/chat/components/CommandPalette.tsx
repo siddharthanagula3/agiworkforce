@@ -88,10 +88,10 @@ export function CommandPalette({
             <Icon size={16} color={colors.teal} />
           </View>
           <View className="flex-1">
-            <Text className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>
+            <Text className="text-sm font-semibold" style={{ color: colors.textPrimary }}>
               {item.command}
             </Text>
-            <Text className="text-xs" style={{ color: colors.textMuted }}>
+            <Text className="text-sm" style={{ color: colors.textMuted }}>
               {item.description}
             </Text>
           </View>

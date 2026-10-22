@@ -67,7 +67,7 @@ function ProjectDropdownItem({ project, isActive, colors, onSelect }: ProjectDro
             style={{
               color: colors.textMuted,
               fontSize: typeScale.caption,
-              lineHeight: 15,
+              lineHeight: 18,
               marginTop: 2,
             }}
             numberOfLines={1}
@@ -188,7 +188,7 @@ export function ProjectSelectorBar({ openSignal, conversation }: ProjectSelector
             >
               <FolderOpen size={12} color={colors.teal} />
               <Text
-                className="text-[12px] font-medium flex-shrink"
+                className="text-sm font-medium flex-shrink"
                 style={{ color: colors.teal }}
                 numberOfLines={1}
               >

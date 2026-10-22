@@ -398,7 +398,7 @@ export default function ProjectsTabScreen() {
           }}
         >
           <FolderOpen size={14} color={colors.teal} />
-          <Text className="text-[12px] flex-1" style={{ color: colors.teal }} numberOfLines={1}>
+          <Text className="text-sm flex-1" style={{ color: colors.teal }} numberOfLines={1}>
             Active: {projects.find((p) => p.id === activeProjectId)?.name}
           </Text>
           <Pressable
@@ -410,7 +410,7 @@ export default function ProjectsTabScreen() {
             accessibilityLabel="Clear active project"
             accessibilityRole="button"
           >
-            <Text className="text-xs" style={{ color: colors.textSecondary }}>
+            <Text className="text-sm" style={{ color: colors.textSecondary }}>
               Clear
             </Text>
           </Pressable>
@@ -543,7 +543,7 @@ export default function ProjectsTabScreen() {
               >
                 No matches
               </Text>
-              <Text className="text-[13px] text-center" style={{ color: colors.textMuted }}>
+              <Text className="text-sm text-center" style={{ color: colors.textMuted }}>
                 No project matches “{query.trim()}”.
               </Text>
             </View>
@@ -626,10 +626,7 @@ export default function ProjectsTabScreen() {
               </Text>
             ) : null}
             <View className="mb-5">
-              <Text
-                className="text-[13px] font-medium mb-2"
-                style={{ color: colors.textSecondary }}
-              >
+              <Text className="text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
                 Name
               </Text>
               <TextInput
@@ -652,10 +649,7 @@ export default function ProjectsTabScreen() {
 
             {!editingProject ? (
               <View className="mb-5">
-                <Text
-                  className="text-[13px] font-medium mb-2"
-                  style={{ color: colors.textSecondary }}
-                >
+                <Text className="text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
                   Start from
                 </Text>
                 <ScrollView horizontal showsHorizontalScrollIndicator={false}>
@@ -709,10 +703,7 @@ export default function ProjectsTabScreen() {
             ) : null}
 
             <View className="mb-5">
-              <Text
-                className="text-[13px] font-medium mb-2"
-                style={{ color: colors.textSecondary }}
-              >
+              <Text className="text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
                 Description
               </Text>
               <TextInput
@@ -735,13 +726,10 @@ export default function ProjectsTabScreen() {
             </View>
 
             <View className="mb-5">
-              <Text
-                className="text-[13px] font-medium mb-2"
-                style={{ color: colors.textSecondary }}
-              >
+              <Text className="text-sm font-medium mb-2" style={{ color: colors.textSecondary }}>
                 Custom Instructions
               </Text>
-              <Text className="text-xs mb-2" style={{ color: colors.textMuted }}>
+              <Text className="text-sm mb-2" style={{ color: colors.textMuted }}>
                 These instructions will be included as system context when this project is active.
               </Text>
               <TextInput

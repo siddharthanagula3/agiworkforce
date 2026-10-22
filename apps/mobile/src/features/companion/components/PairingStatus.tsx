@@ -95,14 +95,14 @@ function ConnectionQualityBadge({
       return (
         <View className="flex-row items-center gap-1">
           <Wifi size={11} color={colors.agentSuccess} />
-          {latencyMs != null && <Text className="text-xs text-emerald-400">{latencyMs}ms</Text>}
+          {latencyMs != null && <Text className="text-sm text-emerald-400">{latencyMs}ms</Text>}
         </View>
       );
     case 'weak':
       return (
         <View className="flex-row items-center gap-1">
           <WifiLow size={11} color={colors.agentWarning} />
-          {latencyMs != null && <Text className="text-xs text-amber-400">{latencyMs}ms</Text>}
+          {latencyMs != null && <Text className="text-sm text-amber-400">{latencyMs}ms</Text>}
         </View>
       );
     case 'disconnected':

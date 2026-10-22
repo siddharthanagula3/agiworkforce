@@ -908,7 +908,7 @@ function LibraryNotice({ text, testID }: { text: string; testID: string }) {
       className="rounded-2xl border px-4 py-3 mb-4"
       style={{ backgroundColor: c.dangerSurface, borderColor: c.dangerBorder }}
     >
-      <Text className="text-[13px] leading-[18px]" style={{ color: c.textPrimary }}>
+      <Text className="text-sm leading-[18px]" style={{ color: c.textPrimary }}>
         {text}
       </Text>
     </View>
@@ -941,7 +941,7 @@ function FilterChip({
       accessibilityRole="button"
       accessibilityState={{ selected: active }}
     >
-      <Text className="text-xs font-medium" style={{ color: active ? c.teal : c.textSecondary }}>
+      <Text className="text-sm font-medium" style={{ color: active ? c.teal : c.textSecondary }}>
         {label}
       </Text>
     </Pressable>
@@ -1218,7 +1218,7 @@ function LibraryImageCard({
           </View>
         )}
       </View>
-      <Text className="text-[13px] mt-2" style={{ color: c.textMuted }} numberOfLines={1}>
+      <Text className="text-sm mt-2" style={{ color: c.textMuted }} numberOfLines={1}>
         {asset.prompt ?? asset.sourceLabel}
       </Text>
     </Pressable>
@@ -1253,7 +1253,7 @@ function LibraryArtifactCard({
         {artifact.previewLines.slice(0, 5).map((line, index) => (
           <Text
             key={`${artifact.id}-${index}`}
-            className="text-xs leading-[14px]"
+            className="text-sm leading-[18px]"
             numberOfLines={1}
             style={{
               color: index === 0 ? artifact.accentColor : c.textSecondary,
@@ -1271,7 +1271,7 @@ function LibraryArtifactCard({
       >
         {artifact.title}
       </Text>
-      <Text className="text-[12px] mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
+      <Text className="text-sm mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
         {artifact.ageLabel}
       </Text>
     </View>

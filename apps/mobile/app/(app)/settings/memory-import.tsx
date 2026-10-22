@@ -193,10 +193,10 @@ export default function MemoryImportScreen() {
               borderWidth: 1,
             }}
           >
-            <Text className="text-xs font-semibold mb-1" style={{ color: colors.teal }}>
+            <Text className="text-sm font-semibold mb-1" style={{ color: colors.teal }}>
               {isCloud ? 'Saved to your AGI Cloud account' : 'On-device only'}
             </Text>
-            <Text className="text-xs leading-5" style={{ color: colors.textSecondary }}>
+            <Text className="text-sm leading-5" style={{ color: colors.textSecondary }}>
               {isCloud
                 ? 'Only the memories you import are saved to your AGI Cloud account.'
                 : 'The text is read on this device and the memories stay here. Nothing is uploaded.'}
@@ -212,7 +212,7 @@ export default function MemoryImportScreen() {
             </Text>
 
             <Text
-              className="text-xs uppercase font-semibold mt-5 mb-2"
+              className="text-sm uppercase font-semibold mt-5 mb-2"
               style={{ color: colors.textMuted, letterSpacing: 0 }}
             >
               From

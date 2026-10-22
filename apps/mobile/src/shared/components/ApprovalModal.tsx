@@ -143,7 +143,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                   <TypeIcon size={28} color={riskColor} />
                 </View>
                 <Text
-                  className="text-xs uppercase tracking-wider font-medium"
+                  className="text-sm uppercase tracking-wider font-medium"
                   style={{ color: colors.textMuted }}
                 >
                   Approval Required
@@ -153,7 +153,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
               <View className="flex-row items-center justify-center gap-3 mb-4">
                 <View className="flex-row items-center gap-1.5">
                   <RiskIcon size={14} color={riskColor} />
-                  <Text className="text-[13px] font-semibold" style={{ color: riskColor }}>
+                  <Text className="text-sm font-semibold" style={{ color: riskColor }}>
                     {riskConfig.label}
                   </Text>
                 </View>
@@ -171,7 +171,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
 
               {showRejectInput && (
                 <Animated.View entering={FadeIn.duration(motion.quick)} className="mb-4">
-                  <Text className="text-xs mb-2" style={{ color: colors.textMuted }}>
+                  <Text className="text-sm mb-2" style={{ color: colors.textMuted }}>
                     Rejection reason (optional)
                   </Text>
                   <TextInput
@@ -181,7 +181,7 @@ export function ApprovalModal({ approval, onApprove, onReject, onDismiss }: Appr
                     placeholderTextColor={colors.textMuted}
                     multiline
                     maxLength={500}
-                    className="rounded-xl px-4 py-3 text-[13px] min-h-[60px]"
+                    className="rounded-xl px-4 py-3 text-sm min-h-[60px]"
                     style={{
                       backgroundColor: colors.inputSurface,
                       borderColor: colors.border,

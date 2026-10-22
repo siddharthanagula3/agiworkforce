@@ -124,7 +124,7 @@ export function ScheduleDateTimeField({
           onValueChange={handleValueChange}
         />
       ) : null}
-      {error ? <Text className="text-xs text-red-400 mt-1">{error}</Text> : null}
+      {error ? <Text className="text-sm text-red-400 mt-1">{error}</Text> : null}
     </View>
   );
 }

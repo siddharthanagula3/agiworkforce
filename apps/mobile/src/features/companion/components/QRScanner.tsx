@@ -189,7 +189,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
             }}
           />
           <Button title="Paste code" variant="outline" onPress={handlePaste} />
-          {manualError && <Text className="text-red-400 text-xs text-center">{manualError}</Text>}
+          {manualError && <Text className="text-red-400 text-sm text-center">{manualError}</Text>}
         </View>
 
         <Button

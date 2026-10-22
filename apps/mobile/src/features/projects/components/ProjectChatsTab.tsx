@@ -32,7 +32,7 @@ function EmptyState({ onNewChat }: { onNewChat: () => void }) {
         No chats yet
       </Text>
       <Text
-        className="text-[13px] text-center leading-[19px] mb-6"
+        className="text-sm text-center leading-[19px] mb-6"
         style={{ color: colors.textSecondary }}
       >
         Start a conversation in this project.
@@ -49,7 +49,7 @@ function EmptyState({ onNewChat }: { onNewChat: () => void }) {
         accessibilityLabel="New chat"
       >
         <SquarePen size={15} color={colors.teal} />
-        <Text className="text-[13px] font-semibold" style={{ color: colors.teal }}>
+        <Text className="text-sm font-semibold" style={{ color: colors.teal }}>
           New chat
         </Text>
       </PressableBox>
@@ -147,7 +147,7 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
                 </Text>
                 {convo.lastMessage ? (
                   <Text
-                    className="text-[12px] mt-0.5 leading-[17px]"
+                    className="text-sm mt-0.5 leading-[18px]"
                     style={{ color: colors.textSecondary }}
                     numberOfLines={2}
                   >
@@ -156,7 +156,7 @@ export function ProjectChatsTab({ projectId }: ProjectChatsTabProps) {
                 ) : null}
                 <View className="flex-row items-center gap-1 mt-1">
                   <Clock size={10} color={colors.textMuted} />
-                  <Text className="text-xs" style={{ color: colors.textMuted }}>
+                  <Text className="text-sm" style={{ color: colors.textMuted }}>
                     {formatRelativeTime(convo.updatedAt)}
                   </Text>
                 </View>

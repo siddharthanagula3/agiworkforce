@@ -49,7 +49,7 @@ interface CodeSessionViewProps {
 }
 
 function SectionTitle({ children }: { children: string }) {
-  return <Text className="mb-2 text-xs uppercase tracking-wider text-white/40">{children}</Text>;
+  return <Text className="mb-2 text-sm uppercase tracking-wider text-white/40">{children}</Text>;
 }
 
 const TOOL_STATE_LABELS: Record<RemoteCodeToolRecord['state'], string> = {
@@ -75,12 +75,12 @@ function ToolRow({ tool }: { tool: RemoteCodeToolRecord }) {
         className="flex-row items-center gap-2"
       >
         <Text
-          className="text-xs"
-          style={{ width: 52, color: failed ? colors.agentError : colors.textMuted }}
+          className="text-sm"
+          style={{ minWidth: 64, color: failed ? colors.agentError : colors.textMuted }}
         >
           {TOOL_STATE_LABELS[tool.state]}
         </Text>
-        <Text variant="mono" className="flex-1 text-xs text-white" numberOfLines={1}>
+        <Text variant="mono" className="flex-1 text-sm text-white" numberOfLines={1}>
           {tool.summary || tool.name}
         </Text>
         {tool.output ? (
@@ -94,7 +94,7 @@ function ToolRow({ tool }: { tool: RemoteCodeToolRecord }) {
           <Text
             variant="mono"
             selectable
-            className="text-xs"
+            className="text-sm"
             style={{ color: failed ? colors.agentError : colors.textSecondary }}
           >
             {tool.output}
@@ -138,7 +138,7 @@ function PlanUsageLine() {
       accessibilityLabel={`Plan usage: ${parts.join(', ')}. See detailed usage`}
       style={{ minHeight: 32, justifyContent: 'center' }}
     >
-      <Text className="text-xs" style={{ color: colors.textMuted }} numberOfLines={1}>
+      <Text className="text-sm" style={{ color: colors.textMuted }} numberOfLines={1}>
         {`Plan usage · ${parts.join(' · ')}`}
       </Text>
     </PressableBox>
@@ -223,7 +223,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
       <PlanUsageLine />
 
       {thread.hostMessage ? (
-        <Text className="text-xs" style={{ color: colors.agentError }} accessibilityRole="alert">
+        <Text className="text-sm" style={{ color: colors.agentError }} accessibilityRole="alert">
           {thread.hostMessage}
         </Text>
       ) : null}
@@ -240,13 +240,13 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
             </Text>
           </View>
           {approval.detail ? (
-            <Text variant="mono" className="mb-3 text-xs text-white/60">
+            <Text variant="mono" className="mb-3 text-sm text-white/60">
               {approval.detail}
             </Text>
           ) : null}
           {thread.approvalHolds[approval.requestId] ? (
             <Text
-              className="mb-3 text-xs"
+              className="mb-3 text-sm"
               style={{
                 color:
                   thread.approvalHolds[approval.requestId]?.status === 'refused'
@@ -274,7 +274,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               accessibilityLabel={`Deny ${approval.summary}`}
             >
               <X size={14} color={colors.agentError} />
-              <Text className="text-xs font-semibold" style={{ color: colors.agentError }}>
+              <Text className="text-sm font-semibold" style={{ color: colors.agentError }}>
                 Deny
               </Text>
             </PressableBox>
@@ -290,7 +290,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               accessibilityLabel={`Approve ${approval.summary}`}
             >
               <Check size={14} color={colors.accentText} />
-              <Text className="text-xs font-semibold" style={{ color: colors.accentText }}>
+              <Text className="text-sm font-semibold" style={{ color: colors.accentText }}>
                 Approve
               </Text>
             </PressableBox>
@@ -304,7 +304,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
             <CircleHelp size={15} color={colors.agentWarning} />
             <Text className="flex-1 text-sm font-medium text-white">{question.question}</Text>
           </View>
-          <Text className="mt-2 text-xs text-white/60">Answer on your computer</Text>
+          <Text className="mt-2 text-sm text-white/60">Answer on your computer</Text>
         </Card>
       ))}
 
@@ -327,7 +327,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           />
           {running ? (
             <View className="flex-row items-center justify-between pt-2">
-              <Text className="flex-1 text-xs text-white/50">Stop the current turn first</Text>
+              <Text className="flex-1 text-sm text-white/50">Stop the current turn first</Text>
               <Switch
                 value={interruptFirst}
                 onValueChange={setInterruptFirst}
@@ -344,7 +344,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                 accessibilityLabel="Stop the current turn"
               >
                 <Square size={12} color={colors.agentError} />
-                <Text className="text-xs font-semibold" style={{ color: colors.agentError }}>
+                <Text className="text-sm font-semibold" style={{ color: colors.agentError }}>
                   Stop
                 </Text>
               </PressableBox>
@@ -365,7 +365,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
             >
               <Send size={13} color={canSend ? colors.accentText : colors.textMuted} />
               <Text
-                className="text-xs font-semibold"
+                className="text-sm font-semibold"
                 style={{ color: canSend ? colors.accentText : colors.textMuted }}
               >
                 {sending ? 'Sending…' : 'Send'}
@@ -374,7 +374,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           </View>
           {sendError ? (
             <Text
-              className="mt-2 text-xs"
+              className="mt-2 text-sm"
               style={{ color: colors.agentError }}
               accessibilityRole="alert"
             >
@@ -383,7 +383,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           ) : null}
         </View>
         {thread.queuedGuidance.length > 0 ? (
-          <Text className="mt-2 text-xs text-white/50">
+          <Text className="mt-2 text-sm text-white/50">
             {`Queued for the next turn: ${thread.queuedGuidance.join(' · ')}`}
           </Text>
         ) : null}
@@ -416,7 +416,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                     size={13}
                     color={run.status === 'passed' ? colors.agentSuccess : colors.agentError}
                   />
-                  <Text variant="mono" className="flex-1 text-xs text-white" numberOfLines={1}>
+                  <Text variant="mono" className="flex-1 text-sm text-white" numberOfLines={1}>
                     {run.command}
                   </Text>
                   <Badge
@@ -424,7 +424,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                     color={run.status === 'passed' ? 'green' : 'red'}
                   />
                 </View>
-                <Text className="mt-1 text-xs text-white/50">
+                <Text className="mt-1 text-sm text-white/50">
                   {[
                     run.passed !== null ? `${run.passed} passed` : null,
                     run.failed !== null ? `${run.failed} failed` : null,
@@ -434,7 +434,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                     .join(' · ') || 'No counts in the output'}
                 </Text>
                 {run.status === 'failed' && run.output ? (
-                  <Text variant="mono" className="mt-1 text-xs text-white/60">
+                  <Text variant="mono" className="mt-1 text-sm text-white/60">
                     {run.output}
                   </Text>
                 ) : null}
@@ -450,16 +450,16 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           {generated.map((change) => (
             <View key={`created:${change.path}`} className="flex-row items-center gap-2 py-0.5">
               <FilePlus size={12} color={colors.agentSuccess} />
-              <Text variant="mono" className="flex-1 text-xs text-white" numberOfLines={1}>
+              <Text variant="mono" className="flex-1 text-sm text-white" numberOfLines={1}>
                 {change.path}
               </Text>
-              <Text className="text-xs text-white/40">New file</Text>
+              <Text className="text-sm text-white/40">New file</Text>
             </View>
           ))}
           {modified.map((change) => (
             <View key={`modified:${change.path}`} className="flex-row items-center gap-2 py-0.5">
               <FileEdit size={12} color={colors.agentActive} />
-              <Text variant="mono" className="flex-1 text-xs text-white" numberOfLines={1}>
+              <Text variant="mono" className="flex-1 text-sm text-white" numberOfLines={1}>
                 {change.path}
               </Text>
             </View>
@@ -476,7 +476,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
                 <Text
                   key={index}
                   variant="mono"
-                  className="text-xs"
+                  className="text-sm"
                   style={{
                     color: line.startsWith('+')
                       ? colors.agentSuccess
@@ -491,7 +491,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
             </View>
           </ScrollView>
           {diff.truncated ? (
-            <Text className="mt-2 text-xs text-white/40">
+            <Text className="mt-2 text-sm text-white/40">
               The diff is longer than a phone view. Open it on Desktop to read the rest.
             </Text>
           ) : null}
@@ -513,7 +513,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
               accessibilityRole="button"
               style={{ minHeight: 44, justifyContent: 'center' }}
             >
-              <Text className="text-xs font-semibold" style={{ color: colors.teal }}>
+              <Text className="text-sm font-semibold" style={{ color: colors.teal }}>
                 {thread.transcript ? 'Load earlier messages' : 'Show the full conversation'}
               </Text>
             </PressableBox>
@@ -521,7 +521,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           <View className="gap-2">
             {(thread.transcript?.messages ?? thread.messages).map((message, index) => (
               <View key={'index' in message ? `m${message.index}` : index}>
-                <Text className="text-xs text-white/40">
+                <Text className="text-sm text-white/40">
                   {message.role === 'user' ? 'You' : 'AGI'}
                 </Text>
                 <Text selectable className="text-sm text-white">

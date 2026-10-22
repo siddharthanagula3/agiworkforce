@@ -241,16 +241,16 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
 
           <View className="flex-row items-center gap-1.5 mb-2.5">
             <Clock size={13} color={colors.textMuted} />
-            <Text className="text-xs text-white/60">{formatRecurrence(schedule)}</Text>
+            <Text className="text-sm text-white/60">{formatRecurrence(schedule)}</Text>
           </View>
           {hasLegacyCadence ? (
-            <Text className="mb-2.5 text-xs leading-4 text-amber-400">
+            <Text className="mb-2.5 text-sm leading-5 text-amber-400">
               Cadence not editable on Mobile, use Once, Daily, Weekly, or Monthly, or edit this
               schedule on Web.
             </Text>
           ) : null}
           {schedule.pausedReason === 'approval_required' ? (
-            <Text className="mb-2.5 text-xs leading-4" style={{ color: colors.agentWarning }}>
+            <Text className="mb-2.5 text-sm leading-5" style={{ color: colors.agentWarning }}>
               Paused for your approval, so approve or deny it in History.
             </Text>
           ) : null}
@@ -259,14 +259,14 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
             <Badge label={getManagedDisplayName(schedule.model)} color="gray" />
             <Badge label={statusBadge.label} color={statusBadge.color} />
             {formatLastRun(schedule.lastRunAt) ? (
-              <Text className="text-xs" style={{ color: colors.textMuted }}>
+              <Text className="text-sm" style={{ color: colors.textMuted }}>
                 Last run {formatLastRun(schedule.lastRunAt)}
               </Text>
             ) : null}
           </View>
 
-          <View className="flex-row items-center justify-between mt-1">
-            <Text className="text-xs text-white/30">
+          <View className="flex-row flex-wrap items-center justify-between mt-1">
+            <Text className="text-sm text-white/30">
               Next run: {formatRelativeTime(schedule.nextRunAt)}
             </Text>
             <View className="flex-row items-center gap-1">
@@ -280,7 +280,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                 accessibilityState={{ disabled: starting, busy: starting }}
               >
                 <Play size={11} color={colors.textMuted} />
-                <Text className="text-xs text-white/40">{starting ? 'Starting…' : 'Run now'}</Text>
+                <Text className="text-sm text-white/40">{starting ? 'Starting…' : 'Run now'}</Text>
               </PressableBox>
               <PressableBox
                 onPress={handleToggleHistory}
@@ -289,7 +289,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
                 accessibilityLabel={historyExpanded ? 'Hide run history' : 'Show run history'}
                 accessibilityRole="button"
               >
-                <Text className="text-xs text-white/40">History</Text>
+                <Text className="text-sm text-white/40">History</Text>
                 {historyExpanded ? (
                   <ChevronUp size={11} color={colors.textMuted} />
                 ) : (
@@ -309,7 +309,7 @@ export function ScheduleCard({ schedule, index, onPress, onToggle, onDelete }: S
           </View>
 
           {runError ? (
-            <Text className="mt-2 text-xs leading-4" style={{ color: colors.agentError }}>
+            <Text className="mt-2 text-sm leading-5" style={{ color: colors.agentError }}>
               {runError}
             </Text>
           ) : null}

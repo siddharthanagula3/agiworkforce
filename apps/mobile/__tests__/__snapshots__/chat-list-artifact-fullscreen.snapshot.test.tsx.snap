@@ -340,7 +340,7 @@ exports[`ArtifactFullScreen snapshots locks the tree with onRegenerate (shows Re
                 {
                   "color": "#fff",
                   "fontFamily": "Menlo",
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "lineHeight": 20,
                 }
               }
@@ -719,7 +719,7 @@ exports[`ArtifactFullScreen snapshots locks the tree without onRegenerate (no Re
                 {
                   "color": "#fff",
                   "fontFamily": "Menlo",
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "lineHeight": 20,
                 }
               }

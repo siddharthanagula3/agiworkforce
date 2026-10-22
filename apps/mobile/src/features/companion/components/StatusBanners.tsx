@@ -24,10 +24,10 @@ export function StaleApprovalBanner({ lastHeartbeatAt }: StaleApprovalBannerProp
       <View className="flex-row items-start gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
         <AlertTriangle size={14} color={colors.agentWarning} style={{ marginTop: 1 }} />
         <View className="flex-1">
-          <Text className="text-xs font-semibold text-amber-400 mb-0.5">
+          <Text className="text-sm font-semibold text-amber-400 mb-0.5">
             Approval may be outdated
           </Text>
-          <Text className="text-xs text-amber-400/70 leading-4">
+          <Text className="text-sm text-amber-400/70 leading-5">
             Last desktop contact {ageLabel}. The desktop may have moved on.
           </Text>
         </View>
@@ -47,8 +47,8 @@ export function DisconnectedDesktopBanner({ onReconnect }: DisconnectedDesktopBa
       <View className="flex-row items-center gap-2.5 p-3 rounded-xl bg-red-500/10 border border-red-500/25">
         <SignalZero size={14} color={colors.agentError} />
         <View className="flex-1">
-          <Text className="text-xs font-semibold text-red-400 mb-0.5">Desktop unreachable</Text>
-          <Text className="text-xs text-red-400/70">Heartbeat missed. Auto-reconnecting.</Text>
+          <Text className="text-sm font-semibold text-red-400 mb-0.5">Desktop unreachable</Text>
+          <Text className="text-sm text-red-400/70">Heartbeat missed. Auto-reconnecting.</Text>
         </View>
         <PressableBox
           onPress={onReconnect}
@@ -56,7 +56,7 @@ export function DisconnectedDesktopBanner({ onReconnect }: DisconnectedDesktopBa
           accessibilityLabel="Reconnect to desktop"
           accessibilityRole="button"
         >
-          <Text className="text-xs text-red-400 font-medium">Reconnect</Text>
+          <Text className="text-sm text-red-400 font-medium">Reconnect</Text>
         </PressableBox>
       </View>
     </Animated.View>
@@ -75,10 +75,10 @@ export function ReconnectingBanner({ countdown, onReconnect }: ReconnectingBanne
       <View className="flex-row items-center gap-2.5 p-3 rounded-xl bg-amber-500/10 border border-amber-500/25">
         <Clock size={14} color={colors.agentWarning} />
         <View className="flex-1">
-          <Text className="text-xs font-semibold text-amber-400 mb-0.5">
+          <Text className="text-sm font-semibold text-amber-400 mb-0.5">
             Reconnecting in {countdown}s
           </Text>
-          <Text className="text-xs text-amber-400/70">Desktop connection lost.</Text>
+          <Text className="text-sm text-amber-400/70">Desktop connection lost.</Text>
         </View>
         <PressableBox
           onPress={onReconnect}

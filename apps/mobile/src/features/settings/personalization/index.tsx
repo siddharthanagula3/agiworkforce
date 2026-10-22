@@ -75,7 +75,7 @@ function ChoiceChips<T extends string>({
               accessibilityState={{ selected }}
             >
               <Text
-                className="text-xs font-medium"
+                className="text-sm font-medium"
                 style={{ color: selected ? c.teal : c.textSecondary }}
               >
                 {option.label}
@@ -142,7 +142,7 @@ function StyleSlider({
   const c = useThemeColors();
   return (
     <View className="gap-1">
-      <Text className="text-[13px] font-medium" style={{ color: c.textPrimary }}>
+      <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
         {config.label}
       </Text>
       <Slider
@@ -157,13 +157,13 @@ function StyleSlider({
         style={{ height: 36 }}
       />
       <View className="flex-row justify-between px-0.5">
-        <Text className="text-xs" style={{ color: c.textMuted }}>
+        <Text className="text-sm" style={{ color: c.textMuted }}>
           {config.leftLabel}
         </Text>
-        <Text className="text-xs" style={{ color: c.textMuted }}>
+        <Text className="text-sm" style={{ color: c.textMuted }}>
           Default
         </Text>
-        <Text className="text-xs" style={{ color: c.textMuted }}>
+        <Text className="text-sm" style={{ color: c.textMuted }}>
           {config.rightLabel}
         </Text>
       </View>
@@ -511,7 +511,7 @@ export default function PersonalizationScreen() {
 
         <View>
           <Text
-            className="text-xs uppercase tracking-wider font-semibold mb-3 px-1"
+            className="text-sm uppercase tracking-wider font-semibold mb-3 px-1"
             style={{ color: c.textMuted }}
           >
             Response Style
@@ -536,7 +536,7 @@ export default function PersonalizationScreen() {
           accessibilityLabel="Reset response style"
           accessibilityHint="Puts style, length, level, language and the style dials back to their defaults. Save to keep it."
         >
-          <Text className="text-xs font-medium" style={{ color: c.textPrimary }}>
+          <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
             Reset response style
           </Text>
         </Pressable>
@@ -549,7 +549,7 @@ export default function PersonalizationScreen() {
             borderColor: c.border,
           }}
         >
-          <Text className="text-xs leading-4" style={{ color: c.textMuted }}>
+          <Text className="text-sm leading-5" style={{ color: c.textMuted }}>
             Your name, instructions and preferences apply to every chat.
           </Text>
         </View>

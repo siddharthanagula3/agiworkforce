@@ -293,7 +293,7 @@ function ArtifactImagePreview({
     >
       <ImageIcon size={30} color={artifact.accentColor} />
       <Text
-        className="text-xs leading-[14px] mt-2"
+        className="text-sm leading-[18px] mt-2"
         numberOfLines={2}
         style={{ color: c.textSecondary, textAlign: 'center' }}
       >
@@ -347,7 +347,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
             {artifact.previewLines.slice(0, 5).map((line, index) => (
               <Text
                 key={`${artifact.id}-${index}`}
-                className="text-xs leading-[14px]"
+                className="text-sm leading-[18px]"
                 numberOfLines={1}
                 style={{
                   color: index === 0 ? artifact.accentColor : c.textSecondary,
@@ -372,7 +372,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
         {artifact.title}
       </Text>
 
-      <Text className="text-[12px] mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
+      <Text className="text-sm mt-1" style={{ color: c.textMuted }} numberOfLines={1}>
         {artifact.ageLabel}
       </Text>
     </Pressable>
@@ -484,7 +484,7 @@ function ArtifactPreviewModal({
             >
               {artifact.title}
             </Text>
-            <Text className="text-[12px] mt-0.5" style={{ color: c.textMuted }} numberOfLines={1}>
+            <Text className="text-sm mt-0.5" style={{ color: c.textMuted }} numberOfLines={1}>
               {artifact.sourceLabel} - {artifact.kind}
             </Text>
           </View>
@@ -555,11 +555,11 @@ function ArtifactPreviewModal({
           >
             <View className="flex-row items-center gap-2 mb-2">
               <FileText size={16} color={artifact.accentColor} />
-              <Text className="text-[12px] font-semibold" style={{ color: artifact.accentColor }}>
+              <Text className="text-sm font-semibold" style={{ color: artifact.accentColor }}>
                 Artifact preview
               </Text>
             </View>
-            <Text className="text-[12px] leading-[18px]" style={{ color: c.textMuted }}>
+            <Text className="text-sm leading-[18px]" style={{ color: c.textMuted }}>
               Mobile previews, copies, and shares artifacts. Regeneration and execution stay on AGI
               Desktop or AGI Cloud environments.
             </Text>
@@ -581,7 +581,7 @@ function ArtifactPreviewModal({
               contentContainerStyle={{ padding: 12 }}
             >
               <Text
-                className="text-[13px] leading-[19px]"
+                className="text-sm leading-[19px]"
                 style={{
                   color: c.textPrimary,
                   fontFamily: Platform.select({

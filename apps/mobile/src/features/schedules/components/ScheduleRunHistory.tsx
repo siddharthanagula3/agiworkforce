@@ -72,15 +72,15 @@ function PendingApproval({ run }: RunRowProps) {
     >
       {pending.toolCalls.map((call) => (
         <View key={call.id} className="mb-1.5">
-          <Text className="text-[12px] font-medium" style={{ color: colors.textPrimary }}>
+          <Text className="text-sm font-medium" style={{ color: colors.textPrimary }}>
             {call.summary}
           </Text>
-          <Text className="text-xs" style={{ color: colors.textMuted }} numberOfLines={1}>
+          <Text className="text-sm" style={{ color: colors.textMuted }} numberOfLines={1}>
             {call.name}
           </Text>
           {call.input ? (
             <Text
-              className="text-xs mt-0.5 leading-4"
+              className="text-sm mt-0.5 leading-5"
               style={{ color: colors.textSecondary }}
               numberOfLines={6}
             >
@@ -104,7 +104,7 @@ function PendingApproval({ run }: RunRowProps) {
           ) : (
             <Check size={14} color={colors.accentText} />
           )}
-          <Text className="text-[13px] font-semibold" style={{ color: colors.accentText }}>
+          <Text className="text-sm font-semibold" style={{ color: colors.accentText }}>
             {TOOL_APPROVAL_ACTION_LABELS.approve}
           </Text>
         </PressableBox>
@@ -118,7 +118,7 @@ function PendingApproval({ run }: RunRowProps) {
           accessibilityState={{ disabled: sending, busy: sending }}
         >
           <X size={14} color={colors.agentError} />
-          <Text className="text-[13px] font-semibold" style={{ color: colors.agentError }}>
+          <Text className="text-sm font-semibold" style={{ color: colors.agentError }}>
             {TOOL_APPROVAL_ACTION_LABELS.deny}
           </Text>
         </PressableBox>
@@ -178,7 +178,7 @@ function RunRow({ run }: RunRowProps) {
       <View className="flex-1">
         <View className="flex-row items-center gap-2">
           <Text
-            className="text-[13px] font-medium"
+            className="text-sm font-medium"
             style={{
               color: isAwaitingApproval
                 ? colors.agentWarning
@@ -191,10 +191,10 @@ function RunRow({ run }: RunRowProps) {
           >
             {statusLabel}
           </Text>
-          {duration ? <Text className="text-xs text-white/30">{duration}</Text> : null}
+          {duration ? <Text className="text-sm text-white/30">{duration}</Text> : null}
         </View>
         {run.timingNote ? (
-          <Text className="text-[12px] mt-1 leading-[18px]" style={{ color: colors.textMuted }}>
+          <Text className="text-sm mt-1 leading-[18px]" style={{ color: colors.textMuted }}>
             {run.timingNote}
           </Text>
         ) : null}
@@ -202,7 +202,7 @@ function RunRow({ run }: RunRowProps) {
         {run.result ? (
           <Text
             selectable
-            className="text-[12px] mt-1 leading-[18px]"
+            className="text-sm mt-1 leading-[18px]"
             style={{ color: colors.textSecondary }}
             numberOfLines={6}
           >
@@ -210,11 +210,11 @@ function RunRow({ run }: RunRowProps) {
           </Text>
         ) : null}
         {run.error ? (
-          <Text className="text-xs text-red-400/70 mt-0.5 leading-4" numberOfLines={2}>
+          <Text className="text-sm text-red-400/70 mt-0.5 leading-5" numberOfLines={2}>
             {run.error}
           </Text>
         ) : null}
-        <Text className="text-xs text-white/30 mt-0.5">{timeLabel}</Text>
+        <Text className="text-sm text-white/30 mt-0.5">{timeLabel}</Text>
       </View>
     </View>
   );
@@ -246,7 +246,7 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
   return (
     <Animated.View entering={FadeIn.duration(motion.quick)}>
       <View className="flex-row items-center justify-between mb-2">
-        <Text className="text-xs text-white/40 uppercase tracking-wider">Run History</Text>
+        <Text className="text-sm text-white/40 uppercase tracking-wider">Run History</Text>
         <Pressable
           onPress={handleRefresh}
           className="p-1 rounded active:opacity-60"
@@ -264,7 +264,7 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
       {loading && runs.length === 0 ? (
         <View className="py-3 items-center">
           <ActivityIndicator size="small" color={colors.textMuted} />
-          <Text className="text-[12px] text-white/30 mt-2">Loading runs…</Text>
+          <Text className="text-sm text-white/30 mt-2">Loading runs…</Text>
         </View>
       ) : error && runs.length === 0 ? (
         <Pressable
@@ -273,11 +273,11 @@ export function ScheduleRunHistory({ scheduleId, maxRuns = 5 }: ScheduleRunHisto
           accessibilityRole="button"
           accessibilityLabel="Retry run history"
         >
-          <Text className="text-[12px] text-red-400">Run history unavailable. Try again.</Text>
+          <Text className="text-sm text-red-400">Run history unavailable. Try again.</Text>
         </Pressable>
       ) : runs.length === 0 ? (
         <View className="py-3 items-center">
-          <Text className="text-[12px] text-white/30">No runs yet</Text>
+          <Text className="text-sm text-white/30">No runs yet</Text>
         </View>
       ) : (
         <View>

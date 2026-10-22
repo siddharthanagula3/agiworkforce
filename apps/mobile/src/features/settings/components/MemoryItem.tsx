@@ -143,7 +143,7 @@ export function MemoryItem({
               </Text>
 
               {!expanded && memory.fact.length > 150 && (
-                <Text className="text-xs mt-1" style={{ color: colors.teal }}>
+                <Text className="text-sm mt-1" style={{ color: colors.teal }}>
                   Tap to expand
                 </Text>
               )}

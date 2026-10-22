@@ -307,7 +307,7 @@ export default function StorageManagerScreen() {
               <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                 Download over cellular
               </Text>
-              <Text className="text-xs mt-0.5" style={{ color: c.textMuted }}>
+              <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
                 Off means model downloads wait for Wi-Fi. Models are several gigabytes.
               </Text>
             </View>
@@ -329,7 +329,7 @@ export default function StorageManagerScreen() {
               </Text>
             </View>
             {models.length > 0 && (
-              <Text className="text-xs" style={{ color: c.textMuted }}>
+              <Text className="text-sm" style={{ color: c.textMuted }}>
                 {formatBytes(totalModelBytes)}
               </Text>
             )}
@@ -348,7 +348,7 @@ export default function StorageManagerScreen() {
                     <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                       {model.display_name}
                     </Text>
-                    <Text className="text-xs mt-0.5" style={{ color: c.textMuted }}>
+                    <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
                       {model.runtime} · {formatBytes(model.size_bytes ?? 0)}
                     </Text>
                   </View>
@@ -371,7 +371,7 @@ export default function StorageManagerScreen() {
 
         <Card>
           <Text
-            className="text-xs uppercase font-semibold mb-3"
+            className="text-sm uppercase font-semibold mb-3"
             style={{ color: c.textMuted, letterSpacing: 0 }}
           >
             Privacy
@@ -391,11 +391,11 @@ export default function StorageManagerScreen() {
                   Export all my data
                 </Text>
                 {isExporting && exportProgress ? (
-                  <Text className="text-xs mt-0.5" style={{ color: c.teal }}>
+                  <Text className="text-sm mt-0.5" style={{ color: c.teal }}>
                     {exportStageLabel(exportProgress.stage)}
                   </Text>
                 ) : (
-                  <Text className="text-xs mt-0.5" style={{ color: c.textMuted }}>
+                  <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
                     GDPR / DPDP Act portable export
                   </Text>
                 )}
@@ -417,7 +417,7 @@ export default function StorageManagerScreen() {
               <Text className="text-[14px]" style={{ color: c.textPrimary }}>
                 Clear cache
               </Text>
-              <Text className="text-xs mt-0.5" style={{ color: c.textMuted }}>
+              <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
                 Removes temp files · {formatBytes(cacheBytes)}
               </Text>
             </View>
@@ -427,7 +427,7 @@ export default function StorageManagerScreen() {
         <Card style={{ borderColor: c.agentError, borderWidth: 1 }}>
           <View className="flex-row items-center gap-2 mb-3">
             <AlertTriangle size={16} color={c.agentError} />
-            <Text className="text-[13px] font-semibold" style={{ color: c.agentError }}>
+            <Text className="text-sm font-semibold" style={{ color: c.agentError }}>
               Danger Zone
             </Text>
           </View>
@@ -443,7 +443,7 @@ export default function StorageManagerScreen() {
               <Text className="text-[14px] font-medium" style={{ color: c.agentError }}>
                 Delete everything
               </Text>
-              <Text className="text-xs mt-0.5" style={{ color: c.textMuted }}>
+              <Text className="text-sm mt-0.5" style={{ color: c.textMuted }}>
                 Wipes all conversations, memory, and models from this device
               </Text>
             </View>

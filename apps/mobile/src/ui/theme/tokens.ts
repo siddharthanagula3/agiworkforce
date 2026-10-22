@@ -64,8 +64,8 @@ export const radii = {
 export const dialogPadding = spacing['2xl'];
 
 export const typeScale = {
-  caption: 12,
-  footnote: 13,
+  caption: 14,
+  footnote: 14,
   subhead: 14,
   body: 15,
   callout: 16,

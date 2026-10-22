@@ -81,7 +81,7 @@ export function TimezonePickerField({
           {zoneOffsetLabel(value)}
         </Text>
       </Pressable>
-      {error ? <Text className="text-xs text-red-400 mt-1">{error}</Text> : null}
+      {error ? <Text className="text-sm text-red-400 mt-1">{error}</Text> : null}
 
       <Modal
         visible={open}

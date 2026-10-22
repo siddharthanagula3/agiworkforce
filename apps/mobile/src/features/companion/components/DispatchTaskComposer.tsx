@@ -61,7 +61,7 @@ export function DispatchTaskComposer() {
           <Activity size={15} color={colors.teal} />
           <Text className="text-sm font-medium text-white">Start on Desktop</Text>
         </View>
-        <Text className="text-xs text-white/40 mb-3">
+        <Text className="text-sm text-white/40 mb-3">
           Send a new task to this computer. Desktop privacy and approval rules still apply.
         </Text>
 
@@ -79,7 +79,7 @@ export function DispatchTaskComposer() {
             editable={!isSending}
           />
           <View className="flex-row items-center justify-between pt-2">
-            <Text className="text-xs text-white/30">{prompt.trim().length}/20,000</Text>
+            <Text className="text-sm text-white/30">{prompt.trim().length}/20,000</Text>
             <PressableBox
               onPress={() => void handleSend()}
               disabled={!canSend}
@@ -98,7 +98,7 @@ export function DispatchTaskComposer() {
             >
               <Send size={13} color={canSend ? colors.accentText : colors.textMuted} />
               <Text
-                className="text-xs font-semibold"
+                className="text-sm font-semibold"
                 style={{ color: canSend ? colors.accentText : colors.textMuted }}
               >
                 {isSending ? 'Sending…' : 'Send'}
@@ -107,7 +107,7 @@ export function DispatchTaskComposer() {
           </View>
           {sendError ? (
             <Text
-              className="mt-2 text-xs"
+              className="mt-2 text-sm"
               style={{ color: colors.agentError }}
               accessibilityRole="alert"
             >
@@ -118,7 +118,7 @@ export function DispatchTaskComposer() {
 
         {visibleTasks.length > 0 && (
           <View className="mt-4 gap-2">
-            <Text className="text-xs uppercase tracking-wider text-white/40">
+            <Text className="text-sm uppercase tracking-wider text-white/40">
               Recent Dispatch tasks
             </Text>
             {visibleTasks.map((task) => {
@@ -137,10 +137,10 @@ export function DispatchTaskComposer() {
                         isError ? 'bg-red-400' : isTerminal ? 'bg-emerald-400' : 'bg-amber-400'
                       }`}
                     />
-                    <Text className="flex-1 text-xs font-medium text-white" numberOfLines={1}>
+                    <Text className="flex-1 text-sm font-medium text-white" numberOfLines={1}>
                       {task.title}
                     </Text>
-                    <Text className="text-xs text-white/45">
+                    <Text className="text-sm text-white/45">
                       {STATUS_LABELS[task.status] ?? task.status}
                     </Text>
                     {!isTerminal && task.status !== 'sending' && (
@@ -163,7 +163,7 @@ export function DispatchTaskComposer() {
                   ) : null}
                   {!pending && (task.error || task.message) && (
                     <Text
-                      className={`mt-1 text-xs ${isError ? 'text-red-300' : 'text-white/40'}`}
+                      className={`mt-1 text-sm ${isError ? 'text-red-300' : 'text-white/40'}`}
                       numberOfLines={2}
                     >
                       {task.error ?? task.message}
@@ -186,7 +186,7 @@ export function DispatchTaskComposer() {
                     >
                       <Text
                         selectable
-                        className="text-xs leading-[18px] text-white/80"
+                        className="text-sm leading-[18px] text-white/80"
                         numberOfLines={expandedResult === task.requestId ? undefined : 4}
                       >
                         {task.result}

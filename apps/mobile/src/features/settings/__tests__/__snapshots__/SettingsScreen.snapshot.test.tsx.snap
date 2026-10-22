@@ -208,7 +208,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
               style={
                 {
                   "color": "#777",
-                  "fontSize": 13,
+                  "fontSize": 14,
                 }
               }
             >
@@ -229,7 +229,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           style={
             {
               "color": "#777",
-              "fontSize": 13,
+              "fontSize": 14,
               "fontWeight": "600",
               "marginBottom": 8,
               "paddingHorizontal": 2,
@@ -316,7 +316,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 {
                   "color": "#777",
                   "flexShrink": 1,
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "textAlign": "right",
                 }
               }
@@ -398,7 +398,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 {
                   "color": "#777",
                   "flexShrink": 1,
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "textAlign": "right",
                 }
               }
@@ -480,7 +480,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 {
                   "color": "#777",
                   "flexShrink": 1,
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "textAlign": "right",
                 }
               }
@@ -562,7 +562,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 {
                   "color": "#777",
                   "flexShrink": 1,
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "textAlign": "right",
                 }
               }
@@ -644,7 +644,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 {
                   "color": "#777",
                   "flexShrink": 1,
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "textAlign": "right",
                 }
               }
@@ -671,7 +671,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           style={
             {
               "color": "#777",
-              "fontSize": 13,
+              "fontSize": 14,
               "fontWeight": "600",
               "marginBottom": 8,
               "paddingHorizontal": 2,
@@ -758,7 +758,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 {
                   "color": "#777",
                   "flexShrink": 1,
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "textAlign": "right",
                 }
               }
@@ -840,7 +840,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 {
                   "color": "#777",
                   "flexShrink": 1,
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "textAlign": "right",
                 }
               }
@@ -1343,7 +1343,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           style={
             {
               "color": "#777",
-              "fontSize": 13,
+              "fontSize": 14,
               "fontWeight": "600",
               "marginBottom": 8,
               "paddingHorizontal": 2,
@@ -1647,7 +1647,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           style={
             {
               "color": "#777",
-              "fontSize": 13,
+              "fontSize": 14,
               "fontWeight": "600",
               "marginBottom": 8,
               "paddingHorizontal": 2,
@@ -1743,7 +1743,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 12,
+                    "fontSize": 14,
                     "fontWeight": "700",
                   }
                 }
@@ -1835,7 +1835,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 12,
+                    "fontSize": 14,
                     "fontWeight": "700",
                   }
                 }
@@ -1927,7 +1927,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 12,
+                    "fontSize": 14,
                     "fontWeight": "700",
                   }
                 }
@@ -2019,7 +2019,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 12,
+                    "fontSize": 14,
                     "fontWeight": "700",
                   }
                 }
@@ -2111,7 +2111,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 style={
                   {
                     "color": "#f59e0b",
-                    "fontSize": 12,
+                    "fontSize": 14,
                     "fontWeight": "700",
                   }
                 }
@@ -2139,7 +2139,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
           style={
             {
               "color": "#777",
-              "fontSize": 13,
+              "fontSize": 14,
               "fontWeight": "600",
               "marginBottom": 8,
               "paddingHorizontal": 2,
@@ -2430,7 +2430,7 @@ exports[`SettingsScreen, inset-grouped card layout locks the full settings scree
                 {
                   "color": "#777",
                   "flexShrink": 1,
-                  "fontSize": 13,
+                  "fontSize": 14,
                   "textAlign": "right",
                 }
               }

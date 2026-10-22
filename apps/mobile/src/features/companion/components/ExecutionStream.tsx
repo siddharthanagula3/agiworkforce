@@ -156,23 +156,23 @@ function ToolCallRow({ call, isLatest }: ToolCallRowProps) {
       <View className="flex-1 pb-1">
         <View className="flex-row items-center gap-1.5 mb-0.5">
           <ToolIcon name={call.name} />
-          <Text className="text-[12px] font-medium text-white/80 flex-1" numberOfLines={1}>
+          <Text className="text-sm font-medium text-white/80 flex-1" numberOfLines={1}>
             {call.name}
             {call.command ? `: ${call.command}` : ''}
           </Text>
           {call.duration != null && (
-            <Text className="text-xs text-white/30">{call.duration}ms</Text>
+            <Text className="text-sm text-white/30">{call.duration}ms</Text>
           )}
         </View>
 
         {call.output && isTerminalToolStatus(call.status) && (
-          <Text className="text-xs text-white/40 leading-4" numberOfLines={2}>
+          <Text className="text-sm text-white/40 leading-5" numberOfLines={2}>
             {call.output}
           </Text>
         )}
 
         {call.filePath && (
-          <Text className="text-xs mt-0.5" style={{ color: colors.teal }} numberOfLines={1}>
+          <Text className="text-sm mt-0.5" style={{ color: colors.teal }} numberOfLines={1}>
             {call.filePath}
           </Text>
         )}
@@ -199,11 +199,7 @@ function CompletionBanner({ status }: { status: 'completed' | 'failed' }) {
       ) : (
         <XCircle size={15} color={iconColor} />
       )}
-      <Text
-        className="text-[12px] font-semibold flex-1"
-        style={{ color: iconColor }}
-        numberOfLines={1}
-      >
+      <Text className="text-sm font-semibold flex-1" style={{ color: iconColor }} numberOfLines={1}>
         {isSuccess ? 'Task completed successfully' : 'Task failed'}
       </Text>
     </Animated.View>
@@ -271,7 +267,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
 
         <View className="flex-row items-center gap-1">
           <Clock size={10} color={colors.textMuted} />
-          <Text className="text-xs text-white/40">{elapsedLabel}</Text>
+          <Text className="text-sm text-white/40">{elapsedLabel}</Text>
         </View>
       </View>
 
@@ -284,7 +280,7 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
           style={{ backgroundColor: 'rgba(59,130,246,0.08)' }}
         >
           <Zap size={10} color={colors.agentActive} />
-          <Text className="text-xs text-blue-400 flex-1" numberOfLines={1}>
+          <Text className="text-sm text-blue-400 flex-1" numberOfLines={1}>
             {agent.currentAction}
           </Text>
         </Animated.View>
@@ -300,13 +296,13 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
               className="flex-row items-center gap-1 mb-2"
             >
               <Text
-                className="text-xs uppercase tracking-wider flex-1"
+                className="text-sm uppercase tracking-wider flex-1"
                 style={{ color: colors.textMuted }}
                 numberOfLines={1}
               >
                 Showing {visibleCalls.length} of {toolCalls.length} tool calls
               </Text>
-              <Text className="text-xs font-medium" style={{ color: colors.agentActive }}>
+              <Text className="text-sm font-medium" style={{ color: colors.agentActive }}>
                 Show {revealCount} earlier
               </Text>
               <ChevronUp size={10} color={colors.agentActive} />
@@ -329,10 +325,10 @@ export function ExecutionStream({ taskId, onComplete }: ExecutionStreamProps) {
           {agent.status === 'running' ? (
             <View className="flex-row items-center gap-2">
               <SpinningLoader size={13} color={colors.agentActive} />
-              <Text className="text-xs text-white/40">Waiting for tool calls...</Text>
+              <Text className="text-sm text-white/40">Waiting for tool calls...</Text>
             </View>
           ) : (
-            <Text className="text-xs text-white/30">No tool calls recorded.</Text>
+            <Text className="text-sm text-white/30">No tool calls recorded.</Text>
           )}
         </View>
       )}

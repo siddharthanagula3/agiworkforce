@@ -87,7 +87,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
           {project.description ? (
             <Text
               variant="caption"
-              className="text-[13px] leading-[18px]"
+              className="text-sm leading-[18px]"
               style={{ color: colors.textSecondary }}
               numberOfLines={2}
             >
@@ -96,7 +96,7 @@ export function ProjectCard({ project, index, isActive, onPress, onLongPress }: 
           ) : null}
 
           <View className="flex-row items-center justify-between pt-1">
-            <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
+            <Text variant="caption" className="text-sm" style={{ color: colors.textMuted }}>
               Updated {formatRelativeTime(project.updatedAt)}
             </Text>
           </View>

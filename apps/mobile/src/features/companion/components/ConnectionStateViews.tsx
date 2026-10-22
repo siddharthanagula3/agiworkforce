@@ -87,7 +87,7 @@ export function DisconnectedView({
             <ShieldCheck size={15} color={colors.teal} />
             <Text className="text-sm font-semibold text-white">Desktop setup required</Text>
           </View>
-          <Text className="text-xs text-white/60 leading-5">
+          <Text className="text-sm text-white/60 leading-5">
             Sign in on Desktop and switch to Managed Cloud before generating a code. The short-lived
             QR or pairing code authorizes this phone; the apps do not compare account identities.
           </Text>
@@ -151,7 +151,7 @@ function StepRow({ number, text }: { number: number; text: string }) {
         className="w-7 h-7 rounded-full items-center justify-center"
         style={{ backgroundColor: colors.accentSurface }}
       >
-        <Text className="text-xs font-bold" style={{ color: colors.teal }}>
+        <Text className="text-sm font-bold" style={{ color: colors.teal }}>
           {number}
         </Text>
       </View>
@@ -235,10 +235,10 @@ export function ErrorView({ error, onRetry }: { error: string | null; onRetry: (
             ) : (
               <ChevronRight size={14} color={colors.textMuted} />
             )}
-            <Text className="text-xs text-white/40">Details</Text>
+            <Text className="text-sm text-white/40">Details</Text>
           </PressableBox>
           {detailsOpen && (
-            <Text className="text-xs text-white/40 text-center leading-5" selectable>
+            <Text className="text-sm text-white/40 text-center leading-5" selectable>
               {error}
             </Text>
           )}

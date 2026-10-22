@@ -43,7 +43,7 @@ export const Input = forwardRef<TextInput, InputProps>(function Input(
         {...props}
       />
       {error && (
-        <Text className="text-xs" style={{ color: colors.agentError }}>
+        <Text className="text-sm" style={{ color: colors.agentError }}>
           {error}
         </Text>
       )}

@@ -174,14 +174,14 @@ function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
 
   return (
     <View className="mt-2.5">
-      <Text className="text-xs text-white/40 uppercase tracking-wider mb-1.5">Artifacts</Text>
+      <Text className="text-sm text-white/40 uppercase tracking-wider mb-1.5">Artifacts</Text>
       {visible.map((artifact) => (
         <View key={artifact.id} className="flex-row items-start gap-1.5 mb-1">
           <View style={{ marginTop: 1 }}>
             <ArtifactIcon type={artifact.type} />
           </View>
           <Text
-            className="text-xs flex-1"
+            className="text-sm flex-1"
             style={{ color: getArtifactTextColor(artifact.type, colors) }}
             numberOfLines={1}
           >
@@ -196,7 +196,7 @@ function RunArtifactsList({ artifacts, maxVisible = 3 }: RunArtifactsProps) {
           accessibilityLabel={expanded ? 'Show fewer artifacts' : 'Show more artifacts'}
           accessibilityRole="button"
         >
-          <Text className="text-xs" style={{ color: colors.teal }}>
+          <Text className="text-sm" style={{ color: colors.teal }}>
             {expanded ? 'Show less' : `+${artifacts.length - maxVisible} more`}
           </Text>
           {expanded ? (
@@ -232,7 +232,7 @@ function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
         accessibilityLabel={expanded ? 'Collapse tool call log' : 'Expand tool call log'}
         accessibilityRole="button"
       >
-        <Text className="text-xs text-white/40 uppercase tracking-wider flex-1">
+        <Text className="text-sm text-white/40 uppercase tracking-wider flex-1">
           Tool Calls ({toolCalls.length})
         </Text>
         {expanded ? (
@@ -251,12 +251,12 @@ function ToolCallLog({ toolCalls, maxVisible = 10 }: ToolCallLogProps) {
             }}
           />
           <View className="flex-1">
-            <Text className="text-xs text-white/70" numberOfLines={1}>
+            <Text className="text-sm text-white/70" numberOfLines={1}>
               {call.name}
               {call.command ? `: ${call.command}` : ''}
             </Text>
             {call.duration != null && (
-              <Text className="text-xs text-white/30">{call.duration}ms</Text>
+              <Text className="text-sm text-white/30">{call.duration}ms</Text>
             )}
           </View>
         </View>
@@ -372,12 +372,12 @@ function ApprovalCard({ request }: ApprovalCardProps) {
           >
             <TypeIcon size={14} color={riskColor} />
           </View>
-          <Text className="text-xs font-semibold text-white flex-1" numberOfLines={1}>
+          <Text className="text-sm font-semibold text-white flex-1" numberOfLines={1}>
             {request.toolName}
           </Text>
           <View className="flex-row items-center gap-1">
             <RiskShieldIcon size={11} color={riskColor} />
-            <Text className="text-xs font-medium" style={{ color: riskColor }}>
+            <Text className="text-sm font-medium" style={{ color: riskColor }}>
               {RISK_LABELS[request.riskLevel]}
             </Text>
           </View>
@@ -386,7 +386,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
         <View style={{ height: 1, backgroundColor: RISK_BORDER_COLORS[request.riskLevel] }} />
 
         <View className="px-3 py-2.5">
-          <Text className="text-xs text-white/70 leading-[16px]" numberOfLines={4}>
+          <Text className="text-sm text-white/70 leading-[18px]" numberOfLines={4}>
             {request.description}
           </Text>
         </View>
@@ -394,7 +394,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
         {secondsLeft !== null && (
           <View className="px-3 pb-2 flex-row items-center gap-1.5">
             <Clock size={10} color={colors.textMuted} />
-            <Text className="text-xs text-white/40">
+            <Text className="text-sm text-white/40">
               {secondsLeft > 0
                 ? `Desktop decision window: ${secondsLeft}s`
                 : 'Desktop decision window reached'}
@@ -411,7 +411,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
             accessibilityRole="button"
           >
             <ShieldCheck size={13} color={colors.accentText} />
-            <Text className="text-xs font-semibold" style={{ color: colors.accentText }}>
+            <Text className="text-sm font-semibold" style={{ color: colors.accentText }}>
               Approve
             </Text>
           </PressableBox>
@@ -423,7 +423,7 @@ function ApprovalCard({ request }: ApprovalCardProps) {
             accessibilityRole="button"
           >
             <ShieldAlert size={13} color={colors.accentText} />
-            <Text className="text-xs font-semibold" style={{ color: colors.accentText }}>
+            <Text className="text-sm font-semibold" style={{ color: colors.accentText }}>
               Deny
             </Text>
           </PressableBox>
@@ -509,12 +509,12 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           </View>
 
           <View className="flex-row items-center gap-3 mb-2">
-            <Text className="text-xs text-white/40">{getDisplayName(agent.model)}</Text>
-            <Text className="text-xs text-white/40">{timeElapsed}</Text>
+            <Text className="text-sm text-white/40">{getDisplayName(agent.model)}</Text>
+            <Text className="text-sm text-white/40">{timeElapsed}</Text>
             {eta && (
               <View className="flex-row items-center gap-1">
                 <Timer size={10} color={colors.textMuted} />
-                <Text className="text-xs text-white/40">{eta}</Text>
+                <Text className="text-sm text-white/40">{eta}</Text>
               </View>
             )}
           </View>
@@ -522,12 +522,12 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           {agent.currentAction ? (
             <View className="flex-row items-center gap-1.5 mb-2 px-2 py-1.5 rounded-lg bg-blue-500/8">
               <Zap size={10} color={colors.agentActive} />
-              <Text className="text-xs text-blue-400 flex-1" numberOfLines={1}>
+              <Text className="text-sm text-blue-400 flex-1" numberOfLines={1}>
                 {agent.currentAction}
               </Text>
             </View>
           ) : agent.currentStep ? (
-            <Text className="text-xs text-white/60 mb-2" numberOfLines={2}>
+            <Text className="text-sm text-white/60 mb-2" numberOfLines={2}>
               {agent.currentStep}
             </Text>
           ) : null}
@@ -537,13 +537,13 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
               <ProgressBar progress={agent.progress} />
               <View className="flex-row items-center justify-between mt-1">
                 {agent.totalSteps != null && agent.stepsCompleted != null ? (
-                  <Text className="text-xs text-white/40">
+                  <Text className="text-sm text-white/40">
                     {agent.stepsCompleted}/{agent.totalSteps} steps
                   </Text>
                 ) : (
                   <View />
                 )}
-                <Text className="text-xs text-white/40">{agent.progress}%</Text>
+                <Text className="text-sm text-white/40">{agent.progress}%</Text>
               </View>
             </View>
           )}
@@ -558,7 +558,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                   accessibilityRole="button"
                 >
                   <Pause size={12} color={colors.agentWarning} />
-                  <Text className="text-xs text-amber-400 font-medium">Pause</Text>
+                  <Text className="text-sm text-amber-400 font-medium">Pause</Text>
                 </PressableBox>
               ) : (
                 <PressableBox
@@ -571,7 +571,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                   accessibilityRole="button"
                 >
                   <Play size={12} color={colors.teal} />
-                  <Text className="text-xs font-medium" style={{ color: colors.teal }}>
+                  <Text className="text-sm font-medium" style={{ color: colors.teal }}>
                     Resume
                   </Text>
                 </PressableBox>
@@ -583,7 +583,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                 accessibilityRole="button"
               >
                 <Square size={12} color={colors.agentError} />
-                <Text className="text-xs text-red-400 font-medium">Cancel</Text>
+                <Text className="text-sm text-red-400 font-medium">Cancel</Text>
               </PressableBox>
             </View>
           )}
@@ -598,7 +598,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           {isSelected && agent.steps && agent.steps.length > 0 && (
             <View className="mt-3">
               <Separator className="mb-3" />
-              <Text className="text-xs text-white/50 mb-2 uppercase tracking-wider">Steps</Text>
+              <Text className="text-sm text-white/50 mb-2 uppercase tracking-wider">Steps</Text>
               {agent.steps.map((step) => (
                 <View key={step.id} className="flex-row items-start gap-2 mb-1.5">
                   <View
@@ -613,11 +613,11 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                     }}
                   />
                   <View className="flex-1">
-                    <Text className="text-xs text-white/70" numberOfLines={1}>
+                    <Text className="text-sm text-white/70" numberOfLines={1}>
                       {step.message}
                     </Text>
                     {step.detail && (
-                      <Text className="text-xs text-white/40" numberOfLines={1}>
+                      <Text className="text-sm text-white/40" numberOfLines={1}>
                         {step.detail}
                       </Text>
                     )}
@@ -637,7 +637,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           {isSelected && agent.status === 'running' && agent.toolCalls.length > 0 && (
             <View className="mt-3">
               <Separator className="mb-3" />
-              <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
+              <Text className="text-sm text-white/40 uppercase tracking-wider mb-2">
                 Live Execution
               </Text>
               <ExecutionStream taskId={agent.id} />
@@ -647,7 +647,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
           {isSelected && (
             <View className="mt-3">
               <Separator className="mb-3" />
-              <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
+              <Text className="text-sm text-white/40 uppercase tracking-wider mb-2">
                 Quick Actions
               </Text>
               <View className="flex-row flex-wrap gap-2">
@@ -658,7 +658,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                   accessibilityRole="button"
                 >
                   <ExternalLink size={12} color={colors.textMuted} />
-                  <Text className="text-xs text-white/60 font-medium">View Thread</Text>
+                  <Text className="text-sm text-white/60 font-medium">View Thread</Text>
                 </PressableBox>
 
                 {agent.status === 'running' && (
@@ -678,7 +678,7 @@ function AgentCard({ agent, isSelected, onPress, onViewDetail }: AgentCardProps)
                     accessibilityRole="button"
                   >
                     <Square size={12} color={colors.agentError} />
-                    <Text className="text-xs text-red-400 font-medium">Stop Agent</Text>
+                    <Text className="text-sm text-red-400 font-medium">Stop Agent</Text>
                   </PressableBox>
                 )}
               </View>
@@ -716,7 +716,7 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
       >
         <View className="flex-row items-center gap-2">
           <Layers size={13} color={colors.textMuted} />
-          <Text className="text-xs text-white/50 uppercase tracking-wider">
+          <Text className="text-sm text-white/50 uppercase tracking-wider">
             File Results ({fileArtifacts.length})
           </Text>
         </View>
@@ -746,13 +746,13 @@ function FileResultsSection({ agents }: FileResultsSectionProps) {
                 </View>
                 <View className="flex-1">
                   <Text
-                    className="text-xs"
+                    className="text-sm"
                     style={{ color: getArtifactTextColor(art.type, colors) }}
                     numberOfLines={1}
                   >
                     {art.label}
                   </Text>
-                  <Text className="text-xs text-white/30" numberOfLines={1}>
+                  <Text className="text-sm text-white/30" numberOfLines={1}>
                     {art.agentName}
                     {art.detail ? `, ${art.detail}` : ''}
                   </Text>
@@ -782,7 +782,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
     <View className="mt-2 mb-2">
       <View className="flex-row items-center gap-2 py-2 mb-1">
         <CheckCircle2 size={13} color={colors.textMuted} />
-        <Text className="text-xs text-white/50 uppercase tracking-wider">
+        <Text className="text-sm text-white/50 uppercase tracking-wider">
           Task Results ({completedAgents.length})
         </Text>
       </View>
@@ -815,7 +815,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                   <Text className="text-sm font-medium text-white flex-1" numberOfLines={1}>
                     {agent.name}
                   </Text>
-                  <Text className="text-xs" style={{ color: statusColor }}>
+                  <Text className="text-sm" style={{ color: statusColor }}>
                     {isSuccess ? 'Done' : 'Failed'}
                   </Text>
                   {isExpanded ? (
@@ -830,22 +830,22 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
                     <View className="flex-row gap-4 mb-2">
                       {agent.totalSteps != null && (
                         <View>
-                          <Text className="text-xs text-white/30">Steps</Text>
-                          <Text className="text-xs text-white/70">
+                          <Text className="text-sm text-white/30">Steps</Text>
+                          <Text className="text-sm text-white/70">
                             {agent.stepsCompleted ?? agent.totalSteps}/{agent.totalSteps}
                           </Text>
                         </View>
                       )}
                       {agent.toolCalls.length > 0 && (
                         <View>
-                          <Text className="text-xs text-white/30">Tool Calls</Text>
-                          <Text className="text-xs text-white/70">{agent.toolCalls.length}</Text>
+                          <Text className="text-sm text-white/30">Tool Calls</Text>
+                          <Text className="text-sm text-white/70">{agent.toolCalls.length}</Text>
                         </View>
                       )}
                       {(agent.artifacts ?? []).length > 0 && (
                         <View>
-                          <Text className="text-xs text-white/30">Artifacts</Text>
-                          <Text className="text-xs text-white/70">
+                          <Text className="text-sm text-white/30">Artifacts</Text>
+                          <Text className="text-sm text-white/70">
                             {(agent.artifacts ?? []).length}
                           </Text>
                         </View>
@@ -854,7 +854,7 @@ function TaskResultsSection({ agents }: TaskResultsSectionProps) {
 
                     {agent.steps && agent.steps.length > 0 && (
                       <View className="px-2 py-1.5 rounded-lg bg-white/4">
-                        <Text className="text-xs text-white/50" numberOfLines={3}>
+                        <Text className="text-sm text-white/50" numberOfLines={3}>
                           {agent.steps[agent.steps.length - 1]?.message ?? ''}
                         </Text>
                       </View>
@@ -937,7 +937,7 @@ export function AgentDashboard() {
           <Bot size={28} color={colors.textMuted} />
         </View>
         <Text className="text-white/60 text-center text-sm">No agents running on the desktop.</Text>
-        <Text className="text-white/40 text-center text-xs mt-1">
+        <Text className="text-white/40 text-center text-sm mt-1">
           Start an agent on your desktop to see it here.
         </Text>
         <Button
@@ -977,7 +977,7 @@ export function AgentDashboard() {
         ListHeaderComponent={
           <View className="pb-3">
             <View className="flex-row items-center justify-between py-3">
-              <Text className="text-xs text-white/50 uppercase tracking-wider">Active Agents</Text>
+              <Text className="text-sm text-white/50 uppercase tracking-wider">Active Agents</Text>
               <Badge
                 label={`${agents.length} running`}
                 color={agents.some((a) => a.status === 'running') ? 'blue' : 'gray'}

@@ -110,7 +110,7 @@ function SourceRow({
         >
           {source.name}
         </Text>
-        <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
+        <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
           {formatBytes(source.size)} · {formatRelativeTime(source.addedAt)}
         </Text>
       </View>
@@ -151,13 +151,13 @@ function UploadProgressRow({
       <ActivityIndicator size="small" color={colors.teal} />
       <View className="flex-1" accessible accessibilityLiveRegion="polite">
         <Text
-          className="text-[13px] font-medium"
+          className="text-sm font-medium"
           style={{ color: colors.textPrimary }}
           numberOfLines={1}
         >
           {label}
         </Text>
-        <Text className="text-[12px]" style={{ color: colors.textSecondary }}>
+        <Text className="text-sm" style={{ color: colors.textSecondary }}>
           {position}
         </Text>
       </View>
@@ -168,7 +168,7 @@ function UploadProgressRow({
         className="min-h-[44px] min-w-[44px] items-center justify-center rounded-lg px-3"
         style={{ backgroundColor: `${colors.textMuted}14` }}
       >
-        <Text className="text-[13px] font-semibold" style={{ color: colors.textPrimary }}>
+        <Text className="text-sm font-semibold" style={{ color: colors.textPrimary }}>
           Cancel
         </Text>
       </PressableBox>
@@ -192,10 +192,7 @@ function Notice({ title, body }: { title: string; body: string }) {
       >
         {title}
       </Text>
-      <Text
-        className="text-[13px] text-center leading-[19px]"
-        style={{ color: colors.textSecondary }}
-      >
+      <Text className="text-sm text-center leading-[19px]" style={{ color: colors.textSecondary }}>
         {body}
       </Text>
     </View>

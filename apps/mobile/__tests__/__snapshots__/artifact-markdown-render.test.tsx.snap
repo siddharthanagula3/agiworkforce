@@ -450,11 +450,11 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                     {
                       "color": "rgba(17, 17, 17, 0.62)",
                       "flexShrink": 1,
-                      "fontSize": 12,
+                      "fontSize": 14,
                       "fontWeight": "500",
                     },
                     {
-                      "lineHeight": 15,
+                      "lineHeight": 18,
                     },
                   ]
                 }
@@ -523,7 +523,7 @@ exports[`ArtifactFullScreen markdown rendering (PAR-M08) locks the rendered docu
                     {
                       "color": "#111111",
                       "fontFamily": "Menlo",
-                      "fontSize": 13,
+                      "fontSize": 14,
                       "lineHeight": 19,
                     }
                   }

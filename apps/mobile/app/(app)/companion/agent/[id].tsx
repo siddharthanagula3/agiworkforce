@@ -205,7 +205,7 @@ export default function AgentDetailScreen() {
                 <Text className="text-sm font-semibold text-white" numberOfLines={1}>
                   {agent.name}
                 </Text>
-                <Text className="text-xs text-white/40">{getDisplayName(agent.model)}</Text>
+                <Text className="text-sm text-white/40">{getDisplayName(agent.model)}</Text>
               </View>
               <Badge label={agent.status} color={getStatusBadgeColor(agent.status)} />
             </View>
@@ -215,12 +215,12 @@ export default function AgentDetailScreen() {
             <View className="flex-row items-center gap-4 mb-3">
               <View className="flex-row items-center gap-1.5">
                 <Clock size={12} color={colors.textMuted} />
-                <Text className="text-xs text-white/50">Elapsed: {timeElapsed}</Text>
+                <Text className="text-sm text-white/50">Elapsed: {timeElapsed}</Text>
               </View>
               {eta && (
                 <View className="flex-row items-center gap-1.5">
                   <Timer size={12} color={colors.textMuted} />
-                  <Text className="text-xs text-white/50">{eta}</Text>
+                  <Text className="text-sm text-white/50">{eta}</Text>
                 </View>
               )}
             </View>
@@ -230,13 +230,13 @@ export default function AgentDetailScreen() {
                 <ProgressBar progress={agent.progress} />
                 <View className="flex-row items-center justify-between mt-1.5">
                   {agent.totalSteps != null && agent.stepsCompleted != null ? (
-                    <Text className="text-xs text-white/40">
+                    <Text className="text-sm text-white/40">
                       Step {agent.stepsCompleted} of {agent.totalSteps}
                     </Text>
                   ) : (
                     <View />
                   )}
-                  <Text className="text-xs text-white/40">{agent.progress}%</Text>
+                  <Text className="text-sm text-white/40">{agent.progress}%</Text>
                 </View>
               </View>
             )}
@@ -244,12 +244,12 @@ export default function AgentDetailScreen() {
             {agent.currentAction ? (
               <View className="flex-row items-center gap-1.5 px-2 py-1.5 rounded-lg bg-blue-500/8">
                 <Zap size={11} color={colors.agentActive} />
-                <Text className="text-xs text-blue-400 flex-1" numberOfLines={2}>
+                <Text className="text-sm text-blue-400 flex-1" numberOfLines={2}>
                   {agent.currentAction}
                 </Text>
               </View>
             ) : agent.currentStep ? (
-              <Text className="text-xs text-white/60" numberOfLines={3}>
+              <Text className="text-sm text-white/60" numberOfLines={3}>
                 {agent.currentStep}
               </Text>
             ) : null}
@@ -258,7 +258,7 @@ export default function AgentDetailScreen() {
 
         {isControllable && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(60)} className="mb-4">
-            <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">Controls</Text>
+            <Text className="text-sm text-white/40 uppercase tracking-wider mb-2">Controls</Text>
             <View className="flex-row gap-3">
               {agent.status === 'running' ? (
                 <PressableBox
@@ -301,7 +301,7 @@ export default function AgentDetailScreen() {
 
         {agent.artifacts && agent.artifacts.length > 0 && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(80)} className="mb-4">
-            <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
+            <Text className="text-sm text-white/40 uppercase tracking-wider mb-2">
               Run Artifacts ({agent.artifacts.length})
             </Text>
             <Card variant="default">
@@ -312,15 +312,15 @@ export default function AgentDetailScreen() {
                     <View className="flex-row items-start gap-2 py-2">
                       <ArtifactTypeIcon type={artifact.type} />
                       <View className="flex-1">
-                        <Text className="text-xs text-white/80" numberOfLines={1}>
+                        <Text className="text-sm text-white/80" numberOfLines={1}>
                           {artifact.label}
                         </Text>
                         {artifact.detail && (
-                          <Text className="text-xs text-white/40 mt-0.5" numberOfLines={2}>
+                          <Text className="text-sm text-white/40 mt-0.5" numberOfLines={2}>
                             {artifact.detail}
                           </Text>
                         )}
-                        <Text className="text-xs text-white/30 mt-0.5">
+                        <Text className="text-sm text-white/30 mt-0.5">
                           {formatArtifactTime(artifact.timestamp)}
                         </Text>
                       </View>
@@ -335,7 +335,7 @@ export default function AgentDetailScreen() {
 
         {agent.toolCalls && agent.toolCalls.length > 0 && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(100)} className="mb-4">
-            <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
+            <Text className="text-sm text-white/40 uppercase tracking-wider mb-2">
               Tool Calls ({agent.toolCalls.length})
             </Text>
             <Card variant="default">
@@ -346,7 +346,7 @@ export default function AgentDetailScreen() {
 
         {agent.steps && agent.steps.length > 0 && (
           <Animated.View entering={FadeIn.duration(motion.quick).delay(120)}>
-            <Text className="text-xs text-white/40 uppercase tracking-wider mb-2">
+            <Text className="text-sm text-white/40 uppercase tracking-wider mb-2">
               Steps ({agent.steps.length})
             </Text>
             <Card variant="default">
@@ -367,9 +367,9 @@ export default function AgentDetailScreen() {
                         }}
                       />
                       <View className="flex-1">
-                        <Text className="text-xs text-white/80">{step.message}</Text>
+                        <Text className="text-sm text-white/80">{step.message}</Text>
                         {step.detail && (
-                          <Text className="text-xs text-white/50 mt-0.5" numberOfLines={2}>
+                          <Text className="text-sm text-white/50 mt-0.5" numberOfLines={2}>
                             {step.detail}
                           </Text>
                         )}
@@ -386,7 +386,7 @@ export default function AgentDetailScreen() {
                         }}
                       >
                         <Text
-                          className="text-xs uppercase"
+                          className="text-sm uppercase"
                           style={{
                             color:
                               step.status === 'completed'

@@ -222,7 +222,7 @@ export default function SchedulesScreen() {
           accessibilityLabel="View plans for scheduled tasks"
         >
           <Text className="text-sm font-medium text-amber-300">Scheduled tasks require Basic</Text>
-          <Text className="mt-1 text-xs leading-4 text-white/50">
+          <Text className="mt-1 text-sm leading-5 text-white/50">
             Upgrade to run unattended Cloud work. Existing tasks remain visible so you can pause or
             delete them.
           </Text>
@@ -233,7 +233,7 @@ export default function SchedulesScreen() {
         <View className="mx-4 mb-3 bg-red-500/10 rounded-lg p-3 flex-row items-center justify-between">
           <Text className="text-sm text-red-400 flex-1">{error}</Text>
           <PressableBox onPress={clearError} className="ml-2 p-1">
-            <Text className="text-xs text-red-400/70">Dismiss</Text>
+            <Text className="text-sm text-red-400/70">Dismiss</Text>
           </PressableBox>
         </View>
       )}
@@ -516,7 +516,7 @@ function TemplateCard({
       <Text className="mr-3 text-2xl">{template.emoji}</Text>
       <View className="flex-1 pr-3">
         <Text className="font-semibold text-white">{template.title}</Text>
-        <Text className="mt-1 text-xs leading-4 text-white/50">{template.description}</Text>
+        <Text className="mt-1 text-sm leading-5 text-white/50">{template.description}</Text>
       </View>
       <View
         className="h-8 w-8 items-center justify-center rounded-full"

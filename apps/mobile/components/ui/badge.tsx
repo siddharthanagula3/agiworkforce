@@ -61,7 +61,11 @@ export function Badge({ label, color = 'gray' }: BadgeProps) {
         borderWidth: 1,
       }}
     >
-      <Text className="text-xs font-medium uppercase tracking-wider" style={{ color: tone.color }}>
+      <Text
+        className="text-sm font-medium uppercase tracking-wide"
+        numberOfLines={1}
+        style={{ color: tone.color }}
+      >
         {label}
       </Text>
     </View>

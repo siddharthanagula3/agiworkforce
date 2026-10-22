@@ -196,8 +196,8 @@ function AttachmentThumbnail({
         <PressableBox
           className="rounded-xl items-center justify-center p-2"
           style={{
-            width: 72,
-            height: 72,
+            width: 96,
+            minHeight: 72,
             backgroundColor: colors.surfaceElevated,
             borderWidth: 1,
             borderColor: colors.border,
@@ -209,11 +209,15 @@ function AttachmentThumbnail({
           accessibilityRole="button"
         >
           <ClipboardList size={24} color={colors.textMuted} />
-          <Text className="text-xs mt-1 text-center" style={{ color: colors.textMuted }}>
+          <Text
+            className="text-sm mt-1 text-center"
+            style={{ color: colors.textMuted }}
+            numberOfLines={1}
+          >
             Pasted text
           </Text>
           {attachment.fileSize ? (
-            <Text className="text-xs" style={{ color: colors.textMuted }}>
+            <Text className="text-sm" style={{ color: colors.textMuted }}>
               {formatFileSize(attachment.fileSize)}
             </Text>
           ) : null}
@@ -222,8 +226,8 @@ function AttachmentThumbnail({
         <View
           className="rounded-xl items-center justify-center p-2"
           style={{
-            width: 72,
-            height: 72,
+            width: 96,
+            minHeight: 72,
             backgroundColor: colors.surfaceElevated,
             borderWidth: 1,
             borderColor: colors.border,
@@ -231,14 +235,14 @@ function AttachmentThumbnail({
         >
           <DocumentIcon size={24} color={colors.textMuted} />
           <Text
-            className="text-xs mt-1 text-center"
+            className="text-sm mt-1 text-center"
             style={{ color: colors.textMuted }}
-            numberOfLines={2}
+            numberOfLines={1}
           >
             {attachment.fileName}
           </Text>
           {attachment.fileSize ? (
-            <Text className="text-xs" style={{ color: colors.textMuted }}>
+            <Text className="text-sm" style={{ color: colors.textMuted }}>
               {formatFileSize(attachment.fileSize)}
             </Text>
           ) : null}
@@ -422,7 +426,7 @@ export function AttachmentPreview({
             className="ml-1 px-2 py-0.5 rounded-full"
             style={{ backgroundColor: colors.surfaceOverlay }}
           >
-            <Text className="text-xs font-medium" style={{ color: colors.textSecondary }}>
+            <Text className="text-sm font-medium" style={{ color: colors.textSecondary }}>
               {attachments.length}
             </Text>
           </View>

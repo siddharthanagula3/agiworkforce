@@ -156,7 +156,7 @@ export function RecurrencePicker({
                 accessibilityState={{ selected }}
               >
                 <Text
-                  className={`text-xs font-medium ${selected ? '' : 'text-white/60'}`}
+                  className={`text-sm font-medium ${selected ? '' : 'text-white/60'}`}
                   style={selected ? { color: colors.teal } : undefined}
                 >
                   {RECURRENCE_LABELS[recurrence]}
@@ -165,9 +165,9 @@ export function RecurrencePicker({
             );
           })}
         </View>
-        <Text className="text-xs text-white/40 mt-2 leading-4">{MOBILE_SCHEDULE_CADENCE_NOTE}</Text>
+        <Text className="text-sm text-white/40 mt-2 leading-5">{MOBILE_SCHEDULE_CADENCE_NOTE}</Text>
         {!isMobileScheduleRecurrenceSupported(value) ? (
-          <Text className="text-xs text-amber-400 mt-2 leading-4">
+          <Text className="text-sm text-amber-400 mt-2 leading-5">
             This cadence cannot be edited on Mobile. Choose Once, Daily, Weekly, or Monthly before
             saving.
           </Text>
@@ -193,7 +193,7 @@ export function RecurrencePicker({
                   accessibilityState={{ selected }}
                 >
                   <Text
-                    className={`text-xs font-semibold ${selected ? '' : 'text-white/50'}`}
+                    className={`text-sm font-semibold ${selected ? '' : 'text-white/50'}`}
                     style={selected ? { color: colors.accentText } : undefined}
                   >
                     {label}
@@ -228,7 +228,7 @@ export function RecurrencePicker({
                   accessibilityState={{ selected }}
                 >
                   <Text
-                    className={`text-xs font-medium ${selected ? '' : 'text-white/50'}`}
+                    className={`text-sm font-medium ${selected ? '' : 'text-white/50'}`}
                     style={selected ? { color: colors.accentText } : undefined}
                   >
                     {day}

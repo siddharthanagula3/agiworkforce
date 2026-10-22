@@ -151,7 +151,7 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
             style={
               {
                 "color": "#777",
-                "fontSize": 13,
+                "fontSize": 14,
                 "lineHeight": 18,
                 "marginTop": 3,
               }
@@ -165,7 +165,7 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
         style={
           {
             "color": "#777",
-            "fontSize": 13,
+            "fontSize": 14,
             "lineHeight": 18,
             "marginTop": 14,
             "paddingHorizontal": 2,
@@ -246,7 +246,7 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
             style={
               {
                 "color": "#777",
-                "fontSize": 13,
+                "fontSize": 14,
                 "lineHeight": 18,
                 "marginTop": 2,
               }
@@ -283,7 +283,7 @@ exports[`PermissionDetailScreen, camera locks the camera detail with native-back
           style={
             {
               "color": "#777",
-              "fontSize": 13,
+              "fontSize": 14,
               "lineHeight": 18,
             }
           }
@@ -402,7 +402,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
           style={
             {
               "color": "#777",
-              "fontSize": 12,
+              "fontSize": 14,
               "fontWeight": "700",
               "textTransform": "uppercase",
             }
@@ -510,7 +510,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "lineHeight": 18,
                     "marginTop": 2,
                   }
@@ -535,7 +535,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "fontWeight": "600",
                   }
                 }
@@ -645,7 +645,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "lineHeight": 18,
                     "marginTop": 2,
                   }
@@ -670,7 +670,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "fontWeight": "600",
                   }
                 }
@@ -780,7 +780,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "lineHeight": 18,
                     "marginTop": 2,
                   }
@@ -805,7 +805,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "fontWeight": "600",
                   }
                 }
@@ -915,7 +915,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "lineHeight": 18,
                     "marginTop": 2,
                   }
@@ -940,7 +940,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "fontWeight": "600",
                   }
                 }
@@ -1050,7 +1050,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "lineHeight": 18,
                     "marginTop": 2,
                   }
@@ -1075,7 +1075,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "fontWeight": "600",
                   }
                 }
@@ -1185,7 +1185,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "lineHeight": 18,
                     "marginTop": 2,
                   }
@@ -1210,7 +1210,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
                 style={
                   {
                     "color": "#777",
-                    "fontSize": 13,
+                    "fontSize": 14,
                     "fontWeight": "600",
                   }
                 }
@@ -1248,7 +1248,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
           style={
             {
               "color": "#777",
-              "fontSize": 13,
+              "fontSize": 14,
               "lineHeight": 18,
             }
           }
@@ -1299,7 +1299,7 @@ exports[`PermissionsScreen, index locks the native-backed permission list card 1
             style={
               {
                 "color": "#2dd4bf",
-                "fontSize": 13,
+                "fontSize": 14,
                 "fontWeight": "600",
               }
             }

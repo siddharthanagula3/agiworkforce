@@ -78,7 +78,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
     return (
       <View className="items-center justify-center py-16 px-6">
         <Text
-          className="text-[13px] text-center leading-[19px] mb-4"
+          className="text-sm text-center leading-[19px] mb-4"
           style={{ color: colors.textSecondary }}
           accessibilityRole="alert"
         >
@@ -95,7 +95,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
           accessibilityRole="button"
           accessibilityLabel="Try again"
         >
-          <Text className="text-[13px] font-semibold" style={{ color: colors.teal }}>
+          <Text className="text-sm font-semibold" style={{ color: colors.teal }}>
             Try again
           </Text>
         </PressableBox>
@@ -119,7 +119,7 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
           No work yet
         </Text>
         <Text
-          className="text-[13px] text-center leading-[19px]"
+          className="text-sm text-center leading-[19px]"
           style={{ color: colors.textSecondary }}
         >
           Switch a chat in {projectName} to AGI Work and its runs will be listed here.
@@ -167,12 +167,12 @@ export function ProjectWorkTab({ projectId, projectName }: ProjectWorkTabProps) 
                 {title}
               </Text>
               {timeLabel ? (
-                <Text className="text-xs mt-0.5" style={{ color: colors.textMuted }}>
+                <Text className="text-sm mt-0.5" style={{ color: colors.textMuted }}>
                   {timeLabel}
                 </Text>
               ) : null}
             </View>
-            <Text className="text-[12px]" style={{ color: cloudRunStateColor(runState, colors) }}>
+            <Text className="text-sm" style={{ color: cloudRunStateColor(runState, colors) }}>
               {CLOUD_RUN_STATE_LABELS[runState]}
             </Text>
           </PressableBox>

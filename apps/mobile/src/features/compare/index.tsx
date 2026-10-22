@@ -430,7 +430,7 @@ export default function CompareScreen() {
                 onPress={handleOpenPickerA}
               />
               <View className="items-center justify-center">
-                <Text className="text-xs text-fg-muted font-medium">vs</Text>
+                <Text className="text-sm text-fg-muted font-medium">vs</Text>
               </View>
               <ModelPill
                 slot="B"
@@ -532,11 +532,11 @@ function ModelPill({ slot, modelId, isActive, winner, onPress }: ModelPillProps)
         </View>
 
         <View className="flex-1">
-          <Text className="text-[12px] text-white font-medium" numberOfLines={1}>
+          <Text className="text-sm text-white font-medium" numberOfLines={1}>
             {displayName}
           </Text>
           {provider && (
-            <Text className="text-xs text-fg-muted" numberOfLines={1}>
+            <Text className="text-sm text-fg-muted" numberOfLines={1}>
               {provider.name}
             </Text>
           )}
@@ -580,7 +580,7 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
             {slot}
           </Text>
         </View>
-        <Text className="flex-1 text-[13px] font-medium text-white" numberOfLines={1}>
+        <Text className="flex-1 text-sm font-medium text-white" numberOfLines={1}>
           {displayName}
         </Text>
 
@@ -597,20 +597,20 @@ function ResponsePanel({ slot, modelId, state, winner }: ResponsePanelProps) {
       {state.isStreaming && (
         <View className="flex-row items-center gap-2 mb-3">
           <ActivityIndicator size="small" color={slotColor} />
-          <Text className="text-[12px] text-fg-muted">Generating...</Text>
+          <Text className="text-sm text-fg-muted">Generating...</Text>
         </View>
       )}
 
       {state.errorMessage ? (
         <View className="bg-red-500/10 rounded-lg px-3 py-2">
-          <Text className="text-[12px] text-red-400">{state.errorMessage}</Text>
+          <Text className="text-sm text-red-400">{state.errorMessage}</Text>
         </View>
       ) : state.content ? (
-        <Text className="text-[13px] text-white leading-5">{state.content}</Text>
+        <Text className="text-sm text-white leading-5">{state.content}</Text>
       ) : state.isQueued ? (
-        <Text className="text-[12px] text-fg-muted">{ONE_ANSWER_AT_A_TIME_NOTE}</Text>
+        <Text className="text-sm text-fg-muted">{ONE_ANSWER_AT_A_TIME_NOTE}</Text>
       ) : !state.isStreaming ? (
-        <Text className="text-[12px] text-fg-muted italic">No response yet.</Text>
+        <Text className="text-sm text-fg-muted italic">No response yet.</Text>
       ) : null}
 
       {(state.isDone || state.tokenCount > 0) && (
@@ -652,7 +652,7 @@ function StatChip({ icon, label, title }: StatChipProps) {
   return (
     <View className="flex-row items-center gap-1" accessibilityLabel={title}>
       {icon}
-      <Text className="text-xs text-fg-muted">{label}</Text>
+      <Text className="text-sm text-fg-muted">{label}</Text>
     </View>
   );
 }

@@ -8,9 +8,8 @@ const MOBILE_ROOT = join(__dirname, '..');
 const ROOT_LAYOUT = readFileSync(join(MOBILE_ROOT, 'app', '_layout.tsx'), 'utf8');
 const APP_CONFIG = readFileSync(join(MOBILE_ROOT, 'app.config.js'), 'utf8');
 
-// iOS reads at 11pt and no smaller; anything under it was an outlier badge
-// rather than a tier of the scale.
-const MINIMUM_TYPE_SIZE = typeScale.caption;
+const MINIMUM_TYPE_SIZE = 14;
+const SUB_FLOOR_TEXT_CLASS = /(?<![\w-])text-(?:xs|\[(\d+(?:\.\d+)?)px\])(?![\w-])/g;
 const LARGEST_BODY_TYPE_SIZE = 34;
 // The three surfaces that are a single piece of display type: the onboarding
 // wordmark, the not-found numeral and the crash screen's mark.
@@ -128,6 +127,22 @@ describe('type sizes sit in the band a phone can read', () => {
     const tooSmall = sizes
       .filter((size) => size.value < MINIMUM_TYPE_SIZE)
       .map((size) => `${size.path}: fontSize ${size.value}`);
+
+    expect(tooSmall).toEqual([]);
+  });
+
+  it('keeps every type token at or above the floor', () => {
+    const below = Object.entries(typeScale).filter(([, value]) => value < MINIMUM_TYPE_SIZE);
+
+    expect(below).toEqual([]);
+  });
+
+  it('sets no text class under the floor', () => {
+    const tooSmall = ALL_FILES.flatMap((file) =>
+      Array.from(file.text.matchAll(SUB_FLOOR_TEXT_CLASS))
+        .filter((match) => match[1] === undefined || Number(match[1]) < MINIMUM_TYPE_SIZE)
+        .map((match) => `${file.path}: ${match[0]}`),
+    );
 
     expect(tooSmall).toEqual([]);
   });

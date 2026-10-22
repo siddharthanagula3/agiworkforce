@@ -65,7 +65,7 @@ function SectionHeader({ title, colors }: { title: string; colors: ColorScheme }
   return (
     <View className="flex-row items-center justify-between mb-3">
       <Text
-        className="text-xs font-semibold uppercase tracking-wider"
+        className="text-sm font-semibold uppercase tracking-wider"
         style={{ color: colors.textMuted }}
       >
         {title}
@@ -179,7 +179,7 @@ export default function IntegrationsScreen() {
         <View>
           <SectionHeader title="Permissions" colors={colors} />
 
-          <Text className="text-xs leading-4 mb-4" style={{ color: colors.textMuted }}>
+          <Text className="text-sm leading-5 mb-4" style={{ color: colors.textMuted }}>
             Fine-grained permission controls for device features used in AI context injection.
           </Text>
 
@@ -222,7 +222,7 @@ export default function IntegrationsScreen() {
                   />
                 </View>
                 <Separator className="mb-3" />
-                <Text className="text-xs leading-4" style={{ color: colors.textMuted }}>
+                <Text className="text-sm leading-5" style={{ color: colors.textMuted }}>
                   Lets AGI use your upcoming events to suggest better times for tasks.
                 </Text>
               </Card>

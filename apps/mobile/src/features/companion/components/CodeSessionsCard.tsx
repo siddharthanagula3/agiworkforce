@@ -63,9 +63,9 @@ export function NewCodeSession({ onStarted }: { onStarted?: () => void }) {
 
   return (
     <View className="mt-3 gap-2 border-t border-white/8 pt-3">
-      <Text className="text-xs font-medium text-white">New session on this computer</Text>
+      <Text className="text-sm font-medium text-white">New session on this computer</Text>
       {available.length === 0 ? (
-        <Text className="text-xs text-white/50">
+        <Text className="text-sm text-white/50">
           No approved folder can run a session right now.
         </Text>
       ) : (
@@ -83,11 +83,11 @@ export function NewCodeSession({ onStarted }: { onStarted?: () => void }) {
                 className="flex-row items-center gap-2 rounded-lg px-2"
               >
                 <View className="flex-1">
-                  <Text className="text-xs text-white" numberOfLines={1}>
+                  <Text className="text-sm text-white" numberOfLines={1}>
                     {root.name}
                   </Text>
                   {root.branch ? (
-                    <Text className="text-xs text-white/45" numberOfLines={1}>
+                    <Text className="text-sm text-white/45" numberOfLines={1}>
                       {root.branch}
                     </Text>
                   ) : null}
@@ -130,14 +130,14 @@ export function NewCodeSession({ onStarted }: { onStarted?: () => void }) {
       >
         <Play size={13} color={canStart ? colors.accentText : colors.textMuted} />
         <Text
-          className="text-xs font-semibold"
+          className="text-sm font-semibold"
           style={{ color: canStart ? colors.accentText : colors.textMuted }}
         >
           {pending ? 'Starting…' : 'Start session'}
         </Text>
       </PressableBox>
       {error ? (
-        <Text className="text-xs" style={{ color: colors.agentError }} accessibilityRole="alert">
+        <Text className="text-sm" style={{ color: colors.agentError }} accessibilityRole="alert">
           {error}
         </Text>
       ) : null}
@@ -207,9 +207,9 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
         </View>
 
         {syncedAt === null ? (
-          <Text className="text-xs text-white/40">Asking Desktop for its sessions…</Text>
+          <Text className="text-sm text-white/40">Asking Desktop for its sessions…</Text>
         ) : sessions.length === 0 ? (
-          <Text className="text-xs text-white/40">
+          <Text className="text-sm text-white/40">
             {canStart
               ? 'No AGI Code sessions on this computer yet.'
               : 'No AGI Code sessions on this computer yet. Start one in the desktop app.'}
@@ -231,10 +231,10 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
                 accessibilityLabel={`Open ${session.title}`}
               >
                 <View className="flex-1">
-                  <Text className="text-xs font-medium text-white" numberOfLines={1}>
+                  <Text className="text-sm font-medium text-white" numberOfLines={1}>
                     {session.title}
                   </Text>
-                  <Text className="text-xs text-white/45" numberOfLines={1}>
+                  <Text className="text-sm text-white/45" numberOfLines={1}>
                     {[
                       session.location === 'cloud' ? CLOUD_SESSION_LABEL : null,
                       session.origin ? REMOTE_SESSION_ORIGIN_LABELS[session.origin] : null,
@@ -256,7 +256,7 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
         )}
 
         {unavailable.map((folder) => (
-          <Text key={folder.folder} className="mt-2 text-xs text-white/40">
+          <Text key={folder.folder} className="mt-2 text-sm text-white/40">
             {`${folder.folder}: ${folder.message}`}
           </Text>
         ))}

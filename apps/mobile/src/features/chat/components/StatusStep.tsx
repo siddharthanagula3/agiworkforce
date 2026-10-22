@@ -120,7 +120,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
           <View className="flex-1">
             <View className="flex-row items-center gap-2">
               <Text
-                className="text-[13px] flex-1 flex-shrink"
+                className="text-sm flex-1 flex-shrink"
                 style={{ color: colors.textSecondary }}
                 numberOfLines={expanded ? undefined : 2}
               >
@@ -132,7 +132,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
             {stepNumber != null && totalSteps != null ? (
               <Text
                 variant="caption"
-                className="text-xs mt-0.5"
+                className="text-sm mt-0.5"
                 style={{ color: colors.textMuted }}
               >
                 Step {stepNumber} of {totalSteps}
@@ -161,7 +161,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
                 ) : (
                   <ChevronRight size={10} color={colors.textMuted} />
                 )}
-                <Text variant="caption" className="text-xs" style={{ color: colors.textMuted }}>
+                <Text variant="caption" className="text-sm" style={{ color: colors.textMuted }}>
                   {expanded ? 'Hide details' : 'Show details'}
                 </Text>
               </View>
@@ -172,7 +172,7 @@ export function StatusStep({ step, stepNumber, totalSteps }: StatusStepProps) {
                 className="mt-1.5 rounded-md px-2 py-1.5"
                 style={{ backgroundColor: colors.inputSurface }}
               >
-                <Text variant="mono" className="text-xs" style={{ color: colors.textSecondary }}>
+                <Text variant="mono" className="text-sm" style={{ color: colors.textSecondary }}>
                   {step.detail}
                 </Text>
               </View>
