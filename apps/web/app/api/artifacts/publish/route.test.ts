@@ -14,7 +14,7 @@ const mocks = vi.hoisted(() => ({
       execute: (...args: unknown[]) => mocks.execute(...args),
     },
     userId: 'user-1',
-    organizationId: null,
+    organizationId: null as string | null,
   })),
   recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
   canShareArtifacts: vi.fn(async (..._args: unknown[]) => true),
