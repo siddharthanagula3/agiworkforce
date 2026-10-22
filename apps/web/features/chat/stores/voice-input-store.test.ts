@@ -64,6 +64,7 @@ function resetStore() {
     transcript: '',
     error: null,
     language: 'en-US',
+    microphoneId: '',
     captureStream: null,
   });
 }
@@ -185,6 +186,24 @@ describe('voiceInputStore', () => {
     it('transitions mode to listening after getUserMedia resolves', async () => {
       await useVoiceInputStore.getState().startListening();
       expect(useVoiceInputStore.getState().mode).toBe('listening');
+    });
+
+    it('asks for the chosen microphone, and for none when the system default is set', async () => {
+      useVoiceInputStore.getState().setMicrophoneId('usb-mic');
+      await useVoiceInputStore.getState().startListening();
+      const chosen = vi.mocked(navigator.mediaDevices.getUserMedia).mock.calls[0]![0] as {
+        audio: MediaTrackConstraints;
+      };
+      expect(chosen.audio.deviceId).toEqual({ ideal: 'usb-mic' });
+
+      useVoiceInputStore.getState().cancelListening();
+      installCapture();
+      useVoiceInputStore.getState().setMicrophoneId('');
+      await useVoiceInputStore.getState().startListening();
+      const fallback = vi.mocked(navigator.mediaDevices.getUserMedia).mock.calls[0]![0] as {
+        audio: MediaTrackConstraints;
+      };
+      expect(fallback.audio.deviceId).toBeUndefined();
     });
 
     it('exposes the capture stream so a level meter can read it', async () => {

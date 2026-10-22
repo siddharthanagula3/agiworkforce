@@ -21,6 +21,7 @@ export interface VoiceInputState {
   transcript: string;
   error: string | null;
   language: string;
+  microphoneId: string;
   captureStream: MediaStream | null;
   canRetryTranscription: boolean;
 }
@@ -31,6 +32,7 @@ interface VoiceInputActions {
   cancelListening: () => void;
   clearTranscript: () => void;
   setLanguage: (lang: string) => void;
+  setMicrophoneId: (deviceId: string) => void;
   clearError: () => void;
   retryTranscription: () => Promise<void>;
 }
@@ -193,12 +195,14 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         typeof navigator !== 'undefined'
           ? (navigator.language ?? DEFAULT_LANGUAGE)
           : DEFAULT_LANGUAGE,
+      microphoneId: '',
       captureStream: null,
       canRetryTranscription: false,
 
       startListening: async () => {
         if (get().mode !== 'idle') return;
         const generation = ++rt.generation;
+        const { microphoneId } = get();
         rt.failedRecording = null;
 
         set({ mode: 'listening', error: null, transcript: '', canRetryTranscription: false });
@@ -206,6 +210,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             audio: {
+              ...(microphoneId ? { deviceId: { ideal: microphoneId } } : {}),
               echoCancellation: true,
               noiseSuppression: true,
               autoGainControl: true,
@@ -323,6 +328,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
 
       clearTranscript: () => set({ transcript: '' }),
       setLanguage: (lang) => set({ language: lang }),
+      setMicrophoneId: (deviceId) => set({ microphoneId: deviceId }),
       clearError: () => set({ error: null, mode: 'idle' }),
     }),
     {
@@ -330,6 +336,7 @@ export const useVoiceInputStore = create<VoiceInputState & VoiceInputActions>()(
       version: STORE_VERSION,
       partialize: (state) => ({
         language: state.language,
+        microphoneId: state.microphoneId,
       }),
     },
   ),

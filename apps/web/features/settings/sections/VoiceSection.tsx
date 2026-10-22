@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { Switch } from '@agiworkforce/ui';
 import { defaultLanguage as DEFAULT_LANGUAGE_CODE, SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
@@ -13,11 +13,38 @@ import {
 } from '@features/chat/components/Voice/VoiceSettingsModal';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
+const SYSTEM_DEFAULT_MICROPHONE = '';
+
+function useMicrophones(): MediaDeviceInfo[] | null {
+  const [devices, setDevices] = useState<MediaDeviceInfo[] | null>(null);
+  const refresh = useCallback(async () => {
+    try {
+      const all = await navigator.mediaDevices.enumerateDevices();
+      setDevices(all.filter((device) => device.kind === 'audioinput' && device.deviceId));
+    } catch {
+      setDevices([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    const media = typeof navigator === 'undefined' ? undefined : navigator.mediaDevices;
+    if (!media || typeof media.enumerateDevices !== 'function') return;
+    void refresh();
+    media.addEventListener?.('devicechange', refresh);
+    return () => media.removeEventListener?.('devicechange', refresh);
+  }, [refresh]);
+
+  return devices;
+}
+
 export function VoiceSection() {
   const dictationEnabled = useSettingsStore((state) => state.dictationEnabled);
   const setDictationEnabled = useSettingsStore((state) => state.setDictationEnabled);
   const dictationLanguage = useVoiceInputStore((state) => state.language);
   const setDictationLanguage = useVoiceInputStore((state) => state.setLanguage);
+  const microphoneId = useVoiceInputStore((state) => state.microphoneId);
+  const setMicrophoneId = useVoiceInputStore((state) => state.setMicrophoneId);
+  const microphones = useMicrophones();
   const voice = useVoiceSessionStore((state) => state.voice);
   const setVoice = useVoiceSessionStore((state) => state.setVoice);
   const voiceLanguage = useVoiceSessionStore((state) => state.language);
@@ -95,6 +122,56 @@ export function VoiceSection() {
             onCheckedChange={setDictationEnabled}
           />
         </div>
+
+        {microphones && (
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 'var(--space-4)',
+              padding: 'var(--space-4) 0',
+              borderBottom: '1px solid var(--settings-border)',
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Microphone</div>
+              <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+                Used for dictation
+              </div>
+            </div>
+            <select
+              value={
+                microphones.some((device) => device.deviceId === microphoneId)
+                  ? microphoneId
+                  : SYSTEM_DEFAULT_MICROPHONE
+              }
+              disabled={!dictationEnabled}
+              onChange={(event) => setMicrophoneId(event.target.value)}
+              aria-label="Microphone"
+              style={{
+                height: 32,
+                maxWidth: 240,
+                borderRadius: 'var(--radius-md)',
+                border: '1px solid var(--settings-border)',
+                background: 'var(--bg-base)',
+                color: 'var(--text-1)',
+                fontSize: 14,
+                padding: '0 var(--space-2)',
+                opacity: dictationEnabled ? 1 : 0.6,
+              }}
+            >
+              <option value={SYSTEM_DEFAULT_MICROPHONE}>System default</option>
+              {microphones
+                .filter((device) => device.deviceId !== 'default')
+                .map((device, index) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label || `Microphone ${index + 1}`}
+                  </option>
+                ))}
+            </select>
+          </div>
+        )}
 
         <div
           style={{

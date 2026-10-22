@@ -1,6 +1,8 @@
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 import { LIVE_VOICES } from '@features/chat/lib/live-voices';
 import { VoiceSection } from './VoiceSection';
@@ -67,5 +69,45 @@ describe('VoiceSection', () => {
     await userEvent.click(toggle);
 
     expect(toggle).toHaveAttribute('aria-checked', 'false');
+  });
+
+  describe('microphone', () => {
+    const devices = [
+      { kind: 'audioinput', deviceId: 'default', label: 'Default - Built-in' },
+      { kind: 'audioinput', deviceId: 'usb-mic', label: 'USB Mic' },
+      { kind: 'videoinput', deviceId: 'cam', label: 'Camera' },
+    ];
+
+    beforeEach(() => {
+      useSettingsStore.getState().setDictationEnabled(true);
+    });
+
+    afterEach(() => {
+      Reflect.deleteProperty(navigator, 'mediaDevices');
+      useVoiceInputStore.getState().setMicrophoneId('');
+    });
+
+    it('lists audio inputs after System default and stores the pick', async () => {
+      Object.defineProperty(navigator, 'mediaDevices', {
+        value: { enumerateDevices: vi.fn().mockResolvedValue(devices) },
+        configurable: true,
+      });
+      render(<VoiceSection />);
+
+      const select = await screen.findByRole('combobox', { name: 'Microphone' });
+      expect(screen.getByText('Used for dictation')).toBeInTheDocument();
+      const options = within(select).getAllByRole('option');
+      expect(options.map((option) => option.textContent)).toEqual(['System default', 'USB Mic']);
+      expect(select).toHaveValue('');
+
+      await userEvent.selectOptions(select, 'usb-mic');
+      expect(useVoiceInputStore.getState().microphoneId).toBe('usb-mic');
+    });
+
+    it('shows no microphone row where the browser cannot list devices', () => {
+      render(<VoiceSection />);
+
+      expect(screen.queryByRole('combobox', { name: 'Microphone' })).toBeNull();
+    });
   });
 });
