@@ -1582,6 +1582,19 @@ const liveArtifactExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const personalSpendLimitExportSchema = z.object({
+  monthly_cap_microusd: numericSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const connectorAccountStateExportSchema = z.object({
+  connector_id: z.string(),
+  enabled: z.boolean(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   section: string;
   table: string;
@@ -2291,6 +2304,23 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: liveArtifactExportSchema,
+  },
+  {
+    section: 'personal_spend_limits',
+    table: 'personal_spend_limits',
+    sql: `select monthly_cap_microusd, created_at, updated_at
+          from personal_spend_limits
+          where user_id = $1`,
+    schema: personalSpendLimitExportSchema,
+  },
+  {
+    section: 'connector_account_states',
+    table: 'connector_account_states',
+    sql: `select connector_id, enabled, created_at, updated_at
+          from connector_account_states
+          where user_id = $1
+          order by connector_id asc`,
+    schema: connectorAccountStateExportSchema,
   },
 ];
 

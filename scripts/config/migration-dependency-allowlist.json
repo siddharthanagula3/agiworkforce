@@ -275,6 +275,21 @@
       "file": "apps/web/lib/services/deletion-manifest.ts",
       "migration": 381,
       "reason": "Reads or writes connector_account_states that 0381 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0381 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 378,
+      "reason": "Exports personal_spend_limits that 0378 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0378 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 380,
+      "reason": "Exports live_artifacts that 0380 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0380 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 381,
+      "reason": "Exports connector_account_states that 0381 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0381 is applied."
     }
   ]
 }
