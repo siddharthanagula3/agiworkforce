@@ -8,6 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
   INLINE_EDIT_ATTRIBUTE,
+  SearchInput,
   Switch,
   keepOpenForMenuEscape,
   useConfirmAction,
@@ -33,11 +34,25 @@ const EMPTY_SHORTCUT_BINDINGS: Readonly<Record<string, ShortcutChord>> = {};
 
 const SHORTCUT_ROW_CLASS = 'flex flex-wrap items-center justify-between gap-x-3 gap-y-2 py-3';
 const GROUP_LABEL_CLASS =
-  'sticky top-0 z-[var(--z-control)] border-b border-border bg-background py-2 text-sm font-normal text-muted-foreground';
+  'sticky top-14 z-[var(--z-control)] border-b border-border bg-background py-2 text-sm font-normal text-muted-foreground';
+const SEARCH_BAR_CLASS =
+  'sticky top-0 z-[var(--z-control)] mt-4 bg-background py-2 after:pointer-events-none after:absolute after:inset-x-0 after:top-full after:h-4 after:bg-gradient-to-b after:from-background after:to-transparent';
 const KEY_GROUP_CLASS = 'flex flex-wrap items-center justify-end gap-1';
 const KEY_BADGE_CLASS = 'min-w-[32px] justify-center font-mono text-sm';
 
 const INSTRUCTION = 'To change a shortcut, select its keys, then press the new combination.';
+
+function compactQuery(value: string): string {
+  return value.toLowerCase().replace(/[\s+]/g, '');
+}
+
+function matchesQuery(description: string, keys: readonly string[], query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return true;
+  if (description.toLowerCase().includes(needle)) return true;
+  const compact = compactQuery(needle);
+  return compact.length > 0 && compactQuery(keys.join('')).includes(compact);
+}
 
 interface ShortcutGroup {
   id: 'app' | 'composer';
@@ -183,6 +198,7 @@ export function KeyboardShortcutsPane({
   const isMac = safePlatform.isMac();
   const hostShortcuts = useHostShortcuts();
   const { confirm, dialog } = useConfirmAction();
+  const [query, setQuery] = useState('');
 
   // Same coalescing as the nav list: an older persisted store has no such key.
   const disabledIds = useSettingsStore((state) => state.disabledShortcutIds) ?? EMPTY_SHORTCUT_IDS;
@@ -194,14 +210,21 @@ export function KeyboardShortcutsPane({
   const changedCount = effective.filter((doc, index) => doc !== shortcuts[index]).length;
   const atDefaults = disabledIds.length === 0 && changedCount === 0;
 
+  const matching = effective.filter((doc) =>
+    matchesQuery(doc.description, formatShortcutKeys(doc, isMac), query),
+  );
   const groups: ShortcutGroup[] = [
-    { id: 'app', label: 'App', shortcuts: effective.filter((doc) => doc.scope === 'app') },
+    { id: 'app', label: 'App', shortcuts: matching.filter((doc) => doc.scope === 'app') },
     {
       id: 'composer',
       label: 'Composer',
-      shortcuts: effective.filter((doc) => doc.scope === 'composer'),
+      shortcuts: matching.filter((doc) => doc.scope === 'composer'),
     },
-  ];
+  ].filter((group): group is ShortcutGroup => group.shortcuts.length > 0);
+  const visibleHostShortcuts = hostShortcuts.filter((shortcut) =>
+    matchesQuery(shortcut.description, [shortcut.chord], query),
+  );
+  const noResults = groups.length === 0 && visibleHostShortcuts.length === 0;
 
   const restore = () => {
     if (changedCount === 0) {
@@ -240,6 +263,22 @@ export function KeyboardShortcutsPane({
       {showHeading ? <h1 className="text-2xl font-medium text-foreground">Keyboard</h1> : null}
       <p className={`text-sm text-muted-foreground ${showHeading ? 'mt-2' : ''}`}>{INSTRUCTION}</p>
 
+      <div className={SEARCH_BAR_CLASS}>
+        <SearchInput
+          aria-label="Search shortcuts"
+          placeholder="Search shortcuts"
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          className="rounded-full"
+        />
+      </div>
+
+      {noResults ? (
+        <p role="status" className="mt-6 text-sm text-muted-foreground">
+          No shortcuts match &ldquo;{query.trim()}&rdquo;.
+        </p>
+      ) : null}
+
       {groups.map((group) => (
         <section key={group.id} aria-labelledby={`shortcut-group-${group.id}`} className="mt-6">
           <h2 id={`shortcut-group-${group.id}`} className={GROUP_LABEL_CLASS}>
@@ -260,7 +299,7 @@ export function KeyboardShortcutsPane({
         </section>
       ))}
 
-      {hostShortcuts.length > 0 ? (
+      {visibleHostShortcuts.length > 0 ? (
         <section aria-labelledby="shortcut-group-desktop" className="mt-6">
           <h2 id="shortcut-group-desktop" className={GROUP_LABEL_CLASS}>
             Desktop app
@@ -270,7 +309,7 @@ export function KeyboardShortcutsPane({
             chord and the page cannot stop it firing.
           */}
           <ul className="divide-y divide-border">
-            {hostShortcuts.map((shortcut) => (
+            {visibleHostShortcuts.map((shortcut) => (
               <li key={shortcut.id} className={SHORTCUT_ROW_CLASS}>
                 <span className="text-sm text-foreground">{shortcut.description}</span>
                 <Badge variant="outline" className={`ms-auto ${KEY_BADGE_CLASS}`}>

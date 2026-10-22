@@ -14,7 +14,7 @@ vi.mock('@shared/utils/browser-utils', async (importOriginal) => {
 });
 
 import { KeyboardShortcutsPane } from '../KeyboardShortcutsDialog';
-import { KEYBOARD_SHORTCUT_DOCS } from '../../../hooks/use-keyboard-shortcuts';
+import { KEYBOARD_SHORTCUT_DOCS, formatShortcutKeys } from '../../../hooks/use-keyboard-shortcuts';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 
 function renderPane() {
@@ -153,5 +153,49 @@ describe('KeyboardShortcutsPane', () => {
       expect(useSettingsStore.getState().shortcutBindings).toEqual({});
     });
     expect(useSettingsStore.getState().disabledShortcutIds).toEqual([]);
+  });
+
+  it('filters rows by description as the user types and hides empty groups', () => {
+    renderPane();
+    const search = screen.getByRole('searchbox', { name: 'Search shortcuts' });
+
+    fireEvent.change(search, { target: { value: 'send message' } });
+    expect(screen.getByText('Send message')).toBeInTheDocument();
+    expect(screen.queryByText('Copy last message')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'App' })).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'Composer' })).toBeInTheDocument();
+  });
+
+  it('filters rows by their keys, ignoring spaces and plus signs', () => {
+    renderPane();
+    const target = KEYBOARD_SHORTCUT_DOCS.find((doc) => doc.description === 'Copy last message');
+    expect(target).toBeDefined();
+    const keys = formatShortcutKeys(target!, false);
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search shortcuts' }), {
+      target: { value: keys.join(' + ') },
+    });
+    expect(screen.getByText('Copy last message')).toBeInTheDocument();
+  });
+
+  it('says so when nothing matches and restores the list when the query is cleared', () => {
+    renderPane();
+    const search = screen.getByRole('searchbox', { name: 'Search shortcuts' });
+
+    fireEvent.change(search, { target: { value: 'zzzz-no-such-shortcut' } });
+    expect(screen.getByRole('status')).toHaveTextContent('No shortcuts match');
+    expect(screen.queryByRole('region', { name: 'App' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Restore defaults' })).toBeInTheDocument();
+
+    fireEvent.change(search, { target: { value: '' } });
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(screen.getByRole('region', { name: 'App' })).toBeInTheDocument();
+  });
+
+  it('pins the search field above sticky group labels', () => {
+    renderPane();
+    const bar = screen.getByRole('searchbox', { name: 'Search shortcuts' }).closest('.sticky');
+    expect(bar).not.toBeNull();
+    expect(bar).toHaveClass('top-0');
   });
 });
