@@ -5,6 +5,7 @@ import {
   buildUnifiedPatch,
   findingId,
   locateEvidence,
+  MAX_FIX_ADDED_LINES,
   parseScanResponse,
   parseVerificationResponse,
   type CandidateFinding,
@@ -161,6 +162,25 @@ describe('anchorCandidate', () => {
       ),
     ).toEqual({ ok: false, reason: 'patch-rejected' });
     expect(anchorCandidate(candidate({ path: "src/it's.ts" }), SOURCE)).toEqual({
+      ok: false,
+      reason: 'patch-rejected',
+    });
+  });
+});
+
+describe('the size of a proposed fix', () => {
+  const original = 'db.query(`select * from users where id = ${id}`)';
+
+  it('accepts a fix that adds up to the line cap', () => {
+    const replacement = Array.from({ length: MAX_FIX_ADDED_LINES }, (_, i) => `q${i}`).join('\n');
+    expect(anchorCandidate(candidate({ fix: { original, replacement } }), SOURCE).ok).toBe(true);
+  });
+
+  it('rejects a fix that adds more lines than the cap', () => {
+    const replacement = Array.from({ length: MAX_FIX_ADDED_LINES + 1 }, (_, i) => `q${i}`).join(
+      '\n',
+    );
+    expect(anchorCandidate(candidate({ fix: { original, replacement } }), SOURCE)).toEqual({
       ok: false,
       reason: 'patch-rejected',
     });

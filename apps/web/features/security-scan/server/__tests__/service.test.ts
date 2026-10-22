@@ -18,7 +18,7 @@ vi.mock('@/lib/services/cloud-code-session-service', async (importOriginal) => {
   return {
     ...actual,
     getCloudCodeSession: mocks.getSession,
-    commitAndPushCloudCodeSession: mocks.commitAndPush,
+    commitFileAndPushCloudCodeSession: mocks.commitAndPush,
     openCloudCodeSessionPullRequest: mocks.openPullRequest,
   };
 });
@@ -88,22 +88,32 @@ interface FakeWorkspace {
   report: SecurityScanReport | null;
   writes: SecurityScanReport[];
   commands: string[];
+  reads: string[];
   applyCheckOk: boolean;
   dirtyPaths: Set<string>;
+  stagedPaths: string[];
+  unpushedCommits: string[];
+  files: Map<string, string>;
+  listedSizes: Map<string, number>;
 }
 
 function fakeWorkspace(): FakeWorkspace {
-  const state: FakeWorkspace = {
-    report: null,
-    writes: [],
-    commands: [],
-    applyCheckOk: true,
-    dirtyPaths: new Set(),
-  };
   const files = new Map([
     ['src/api/users.ts', ROUTE_SOURCE],
     ['src/format.ts', 'export const x = 1;\n'],
   ]);
+  const state: FakeWorkspace = {
+    report: null,
+    writes: [],
+    commands: [],
+    reads: [],
+    applyCheckOk: true,
+    dirtyPaths: new Set(),
+    stagedPaths: [],
+    unpushedCommits: [],
+    files,
+    listedSizes: new Map(),
+  };
   const ok = (stdout = '') => ({ ok: true, output: stdout, stdout, stderr: '', exitCode: 0 });
   const fail = () => ({ ok: false, output: '', stdout: '', stderr: 'error', exitCode: 1 });
   mocks.workspace = {
@@ -116,13 +126,33 @@ function fakeWorkspace(): FakeWorkspace {
       }
       if (command.startsWith('git apply --check')) return state.applyCheckOk ? ok() : fail();
       if (command.startsWith('git apply')) return ok();
+      if (command.startsWith('stat -L ')) {
+        return ok(
+          [...files.entries()]
+            .filter(([path]) => command.includes(`'${path}'`))
+            .map(([path, content]) => {
+              const size = state.listedSizes.get(path) ?? Buffer.byteLength(content, 'utf8');
+              return `${size}\t${path}\0`;
+            })
+            .join(''),
+        );
+      }
+      if (command === 'git diff --cached --name-only -z') {
+        return ok(state.stagedPaths.map((path) => `${path}\0`).join(''));
+      }
+      if (command === 'git rev-list --max-count=1 HEAD --not --remotes') {
+        return ok(state.unpushedCommits.map((sha) => `${sha}\n`).join(''));
+      }
       if (command.startsWith('git status --porcelain')) {
         const path = /'(.+)'$/.exec(command)?.[1] ?? '';
         return ok(state.dirtyPaths.has(path) ? ` M ${path}\n` : '');
       }
       return fail();
     },
-    readText: async (path: string) => files.get(path) ?? null,
+    readText: async (path: string) => {
+      state.reads.push(path);
+      return files.get(path) ?? null;
+    },
     readReport: async () => state.report,
     async writeReport(report: SecurityScanReport) {
       state.report = report;
@@ -265,6 +295,44 @@ describe('runSecurityScan', () => {
     });
   });
 
+  it('shows the verifier the fix it would approve', async () => {
+    fakeWorkspace();
+    const model = scriptedModel({ scan: { findings: [VALID_CANDIDATE] } });
+
+    await runSecurityScan(context(model), null);
+
+    const verify = model.calls.find((call) => call.ref === 'verify');
+    expect(verify?.prompt).toContain('Proposed fix:');
+    expect(verify?.prompt).toContain(
+      "+  const rows = await db.query('select * from users where id = $1', [req.query.id]);",
+    );
+  });
+
+  it('never reads a file whose listed size is over the batch limit', async () => {
+    const workspace = fakeWorkspace();
+    workspace.listedSizes.set('src/api/users.ts', 10 * 1024 * 1024);
+    const model = scriptedModel({ scan: { findings: [] } });
+
+    const report = await runSecurityScan(context(model), null);
+
+    expect(workspace.reads).toEqual(['src/format.ts']);
+    expect(report.coverage).toMatchObject({ candidateFiles: 2, scannedFiles: 1 });
+  });
+
+  it('stops reading once the listed sizes fill the scan budget', async () => {
+    const workspace = fakeWorkspace();
+    for (let index = 0; index < 6; index += 1) {
+      workspace.files.set(`src/api/route${index}.ts`, 'x'.repeat(40 * 1024));
+    }
+    const model = scriptedModel({ scan: { findings: [] } });
+
+    const report = await runSecurityScan(context(model), null);
+
+    const routeReads = workspace.reads.filter((path) => path.startsWith('src/api/route'));
+    expect(routeReads).toHaveLength(4);
+    expect(report.coverage.scannedBytes).toBeLessThanOrEqual(4 * 48 * 1024);
+  });
+
   it('refuses a session with no repository before resolving a model', async () => {
     mocks.getSession.mockResolvedValueOnce({ id: SESSION_ID, repositoryUrl: null });
     const resolveModel = vi.fn();
@@ -301,6 +369,8 @@ describe('decideSecurityScanFinding', () => {
     });
 
     expect(workspace.commands).toEqual([
+      'git diff --cached --name-only -z',
+      'git rev-list --max-count=1 HEAD --not --remotes',
       "git status --porcelain -- 'src/api/users.ts'",
       `git apply --check '/home/user/.agi-security-scan/${finding.id}.patch'`,
       `git apply '/home/user/.agi-security-scan/${finding.id}.patch'`,
@@ -312,7 +382,7 @@ describe('decideSecurityScanFinding', () => {
       SESSION_ID,
       'pro',
       'fix: SQL injection in handler',
-      ['src/api/users.ts'],
+      'src/api/users.ts',
     );
     expect(result.delivery).toEqual({
       status: 'pushed',
@@ -334,6 +404,55 @@ describe('decideSecurityScanFinding', () => {
     ).rejects.toBeInstanceOf(CloudCodeConflictError);
     expect(workspace.commands.some((command) => command.startsWith('git apply '))).toBe(false);
     expect(mocks.commitAndPush).not.toHaveBeenCalled();
+  });
+
+  it('refuses to approve while other changes are staged, so only the fix is committed', async () => {
+    const { workspace, report } = await scannedWorkspace();
+    workspace.stagedPaths.push('src/secrets.ts');
+
+    await expect(
+      decideSecurityScanFinding(context(scriptedModel({ scan: {} })), {
+        scanId: report.scanId,
+        findingId: report.findings[0]!.id,
+        decision: 'approve',
+      }),
+    ).rejects.toThrow('This session has staged changes');
+    expect(workspace.commands.some((command) => command.startsWith('git apply'))).toBe(false);
+    expect(workspace.report).toMatchObject({ findings: [{ state: 'open' }] });
+    expect(mocks.commitAndPush).not.toHaveBeenCalled();
+  });
+
+  it('refuses to approve while the branch has commits GitHub has not seen', async () => {
+    const { workspace, report } = await scannedWorkspace();
+    workspace.unpushedCommits.push('b'.repeat(40));
+
+    await expect(
+      decideSecurityScanFinding(context(scriptedModel({ scan: {} })), {
+        scanId: report.scanId,
+        findingId: report.findings[0]!.id,
+        decision: 'approve',
+      }),
+    ).rejects.toThrow('commits that are not on GitHub yet');
+    expect(workspace.commands.some((command) => command.startsWith('git apply'))).toBe(false);
+    expect(mocks.commitAndPush).not.toHaveBeenCalled();
+  });
+
+  it('tells the user the applied fix is still in the session when delivery fails', async () => {
+    const { report } = await scannedWorkspace();
+    mocks.commitAndPush.mockRejectedValueOnce(new Error('socket hang up'));
+
+    const result = await decideSecurityScanFinding(context(scriptedModel({ scan: {} })), {
+      scanId: report.scanId,
+      findingId: report.findings[0]!.id,
+      decision: 'approve',
+    });
+
+    expect(result.delivery).toEqual({
+      status: 'failed',
+      pullRequestUrl: null,
+      error:
+        'The fix is applied in this session but did not reach GitHub. Push it from the session.',
+    });
   });
 
   it('keeps the approval and reports a push that GitHub refused', async () => {

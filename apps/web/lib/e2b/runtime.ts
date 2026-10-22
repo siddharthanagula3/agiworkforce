@@ -476,6 +476,36 @@ function gitPathCommand(command: string, files: string[]): string {
   return `${command} ${files.map(shellQuote).join(' ')}`;
 }
 
+const GIT_NON_INTERACTIVE_ENV = { GIT_TERMINAL_PROMPT: '0' };
+
+function gitOnlyCommitCommand(
+  path: string,
+  message: string,
+  only: readonly string[],
+  authorName: string | undefined,
+  authorEmail: string | undefined,
+): string {
+  const identity = [
+    ...(authorName ? ['-c', `user.name=${authorName}`] : []),
+    ...(authorEmail ? ['-c', `user.email=${authorEmail}`] : []),
+  ];
+  return [
+    'git',
+    '-C',
+    path,
+    '--literal-pathspecs',
+    ...identity,
+    'commit',
+    '-m',
+    message,
+    '--only',
+    '--',
+    ...only,
+  ]
+    .map(shellQuote)
+    .join(' ');
+}
+
 function commandResult(
   stdoutValue: unknown,
   stderrValue: unknown,
@@ -1309,12 +1339,24 @@ export const getE2BExecutor = tracedCodeAction(
             return commandCatchResult(err);
           }
         },
-        async commit({ path, message, authorName, authorEmail }): Promise<CommandExecutionResult> {
+        async commit({
+          path,
+          message,
+          authorName,
+          authorEmail,
+          only,
+        }): Promise<CommandExecutionResult> {
           try {
-            const result = await sandbox.git.commit(path, message, {
-              ...(authorName ? { authorName } : {}),
-              ...(authorEmail ? { authorEmail } : {}),
-            });
+            const result =
+              only && only.length > 0
+                ? await sandbox.commands.run(
+                    gitOnlyCommitCommand(path, message, only, authorName, authorEmail),
+                    { timeoutMs: E2B_COMMAND_TIMEOUT_MS, envs: GIT_NON_INTERACTIVE_ENV },
+                  )
+                : await sandbox.git.commit(path, message, {
+                    ...(authorName ? { authorName } : {}),
+                    ...(authorEmail ? { authorEmail } : {}),
+                  });
             return commandResult(result.stdout, result.stderr, result.exitCode, result.error);
           } catch (err) {
             return commandCatchResult(err);

@@ -67,6 +67,7 @@ import {
   classifyGitFailure,
   cloudCodeWorkingBranchName,
   commitAndPushCloudCodeSession,
+  commitFileAndPushCloudCodeSession,
   createCloudCodeSession,
   getCloudCodeSession,
   releaseCloudCodeSessionAfterRun,
@@ -1400,6 +1401,131 @@ describe('commitAndPushCloudCodeSession', () => {
       commitAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, '  '),
     ).rejects.toBeInstanceOf(CloudCodeValidationError);
     expect(executor.git.add).not.toHaveBeenCalled();
+  });
+});
+
+describe('commitFileAndPushCloudCodeSession', () => {
+  async function pushableSession(
+    db: FakeDb,
+    executor: ReturnType<typeof gitExecutor>,
+  ): Promise<string> {
+    vi.mocked(getE2BExecutor).mockResolvedValue(
+      executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
+    );
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
+    const { session } = await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
+    return session.id;
+  }
+
+  it('commits only the named file and pushes that commit', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    const sessionId = await pushableSession(db, executor);
+
+    const push = await commitFileAndPushCloudCodeSession(
+      db,
+      OWNER,
+      sessionId,
+      PLAN_TIER,
+      'fix: sql injection',
+      'src/api/users.ts',
+    );
+
+    expect(executor.git.add).not.toHaveBeenCalled();
+    expect(executor.git.commit).toHaveBeenCalledWith({
+      path: expect.any(String),
+      message: 'fix: sql injection',
+      only: ['src/api/users.ts'],
+    });
+    expect(executor.git.push).toHaveBeenCalledWith(
+      expect.objectContaining({ username: 'x-access-token', password: 'push-token' }),
+    );
+    expect(push.stdout).toBe('pushed');
+    expect(db.rows.find((row) => row.id === sessionId)?.state).toBe('ready');
+  });
+
+  it('refuses before committing when the branch already has unpushed commits', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    const sessionId = await pushableSession(db, executor);
+    executor.runCommand.mockImplementation(async (input?: unknown) => {
+      const { command } = input as { command: string };
+      return command.startsWith('git rev-list')
+        ? { ok: true, stdout: `${'c'.repeat(40)}\n`, stderr: '', exitCode: 0 }
+        : { ok: true, stdout: '', stderr: '', exitCode: 0 };
+    });
+
+    await expect(
+      commitFileAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, 'fix', 'src/a.ts'),
+    ).rejects.toBeInstanceOf(CloudCodeConflictError);
+    expect(executor.git.commit).not.toHaveBeenCalled();
+    expect(executor.git.push).not.toHaveBeenCalled();
+    expect(db.rows.find((row) => row.id === sessionId)?.state).toBe('ready');
+  });
+
+  it('keeps the session usable and the commit in place when GitHub rejects the push', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    const sessionId = await pushableSession(db, executor);
+    executor.git.push.mockResolvedValueOnce({
+      ok: false,
+      output: '',
+      stdout: '',
+      stderr: '! [rejected] (non-fast-forward)',
+      exitCode: 1,
+    });
+
+    await expect(
+      commitFileAndPushCloudCodeSession(db, OWNER, sessionId, PLAN_TIER, 'fix', 'src/a.ts'),
+    ).rejects.toThrow('Push failed');
+    expect(executor.git.commit).toHaveBeenCalledTimes(1);
+    const row = db.rows.find((candidate) => candidate.id === sessionId);
+    expect(row?.state).toBe('ready');
+    expect(row?.run_lease_token).toBeNull();
+  });
+});
+
+describe('commitAndPushCloudCodeSession after the shared push checks moved out', () => {
+  it('still commits the whole index and fails the session when GitHub rejects the push', async () => {
+    const db = createFakeDb();
+    const executor = gitExecutor();
+    vi.mocked(getE2BExecutor).mockResolvedValue(
+      executor as unknown as Awaited<ReturnType<typeof getE2BExecutor>>,
+    );
+    vi.mocked(getUserGithubInstallations).mockResolvedValue([
+      { installationId: 7, login: 'acme', verifiedRepositories: ['acme/widgets'] },
+    ]);
+    vi.mocked(getInstallationAccessToken).mockResolvedValue('push-token');
+    const { session } = await createCloudCodeSession(db, OWNER, repoInput(0), PLAN_TIER);
+    executor.git.status.mockResolvedValue({
+      ok: true,
+      output: '',
+      stdout: ' M src/app.ts\n',
+      stderr: '',
+      exitCode: 0,
+    });
+    executor.git.push.mockResolvedValueOnce({
+      ok: false,
+      output: '',
+      stdout: '',
+      stderr: '! [rejected] (non-fast-forward)',
+      exitCode: 1,
+    });
+
+    await expect(
+      commitAndPushCloudCodeSession(db, OWNER, session.id, PLAN_TIER, 'fix things'),
+    ).rejects.toThrow('Push failed');
+    expect(executor.git.commit).toHaveBeenCalledWith({
+      path: expect.any(String),
+      message: 'fix things',
+    });
+    expect(executor.runCommand).not.toHaveBeenCalledWith(
+      expect.objectContaining({ command: expect.stringContaining('rev-list') }),
+    );
+    expect(db.rows.find((row) => row.id === session.id)?.state).toBe('failed');
   });
 });
 

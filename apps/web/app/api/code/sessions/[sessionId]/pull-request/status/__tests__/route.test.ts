@@ -39,6 +39,8 @@ vi.mock('@/lib/server/rls-db', () => ({
 }));
 vi.mock('@/lib/services/cloud-code-session-service', () => ({
   CLOUD_CODE_RUN_LEASE_SECONDS: 420,
+  CLOUD_CODE_UNPUSHED_COMMITS_COMMAND: 'git rev-list --max-count=1 HEAD --not --remotes',
+  CLOUD_CODE_UNPUSHED_COMMITS_MESSAGE: 'unpushed',
   CLOUD_CODE_WORKING_BRANCH_PREFIX: 'agi/',
   CloudCodeConflictError: class CloudCodeConflictError extends Error {},
   CloudCodeLimitError: class CloudCodeLimitError extends Error {},
@@ -50,6 +52,7 @@ vi.mock('@/lib/services/cloud-code-session-service', () => ({
   cloudCodeSessionBaseBranch: vi.fn(),
   cloudCodeWorkingBranchName: vi.fn(),
   commitAndPushCloudCodeSession: vi.fn(),
+  commitFileAndPushCloudCodeSession: vi.fn(),
   createCloudCodeSession: vi.fn(),
   deleteCloudCodeSession: vi.fn(),
   discardCloudCodeSessionChanges: vi.fn(),

@@ -9,7 +9,9 @@ import {
   CloudCodeNotFoundError,
   CloudCodeUnavailableError,
   CloudCodeValidationError,
-  commitAndPushCloudCodeSession,
+  CLOUD_CODE_UNPUSHED_COMMITS_COMMAND,
+  CLOUD_CODE_UNPUSHED_COMMITS_MESSAGE,
+  commitFileAndPushCloudCodeSession,
   getCloudCodeSession,
   openCloudCodeSessionPullRequest,
   type CloudCodeOwner,
@@ -52,6 +54,7 @@ import { shellQuote, withSecurityScanWorkspace, type SecurityScanWorkspace } fro
 
 const MAX_BATCH_BYTES = 48 * 1024;
 const MAX_BATCHES = 4;
+const MAX_SCAN_BYTES = MAX_BATCH_BYTES * MAX_BATCHES;
 const MAX_FILES_READ = 160;
 const SCAN_OUTPUT_TOKENS = 4096;
 const VERIFY_OUTPUT_TOKENS = 4096;
@@ -99,6 +102,17 @@ function presentReport(report: SecurityScanReport | null, now: number): Security
   return report;
 }
 
+function parseFileSizes(output: string): Map<string, number> {
+  const sizes = new Map<string, number>();
+  for (const record of output.split('\0')) {
+    const tab = record.indexOf('\t');
+    if (tab <= 0) continue;
+    const size = Number(record.slice(0, tab));
+    if (Number.isSafeInteger(size) && size >= 0) sizes.set(record.slice(tab + 1), size);
+  }
+  return sizes;
+}
+
 async function collectSources(
   workspace: SecurityScanWorkspace,
   scope: string | null,
@@ -111,15 +125,26 @@ async function collectSources(
     throw new CloudCodeUnavailableError('The repository files could not be listed');
   }
   const ranked = rankCandidateFiles(parseGitLsFilesStage(listing.stdout), scope);
-  const budget = MAX_BATCH_BYTES * MAX_BATCHES;
+  const candidates = ranked.slice(0, MAX_FILES_READ);
   const sources: ReadSource[] = [];
+  if (candidates.length === 0) return { commit, candidateFiles: ranked.length, sources };
+
+  const stat = await workspace.run(
+    `stat -L --printf '%s\\t%n\\0' -- ${candidates.map(shellQuote).join(' ')}`,
+  );
+  const sizes = parseFileSizes(stat.stdout);
+  if (sizes.size === 0 && !stat.ok) {
+    throw new CloudCodeUnavailableError('The repository files could not be measured');
+  }
   let bytes = 0;
-  for (const path of ranked.slice(0, MAX_FILES_READ)) {
-    if (bytes >= budget) break;
+  for (const path of candidates) {
+    const listed = sizes.get(path);
+    if (listed === undefined || listed === 0 || listed > MAX_BATCH_BYTES) continue;
+    if (bytes + listed > MAX_SCAN_BYTES) continue;
     const content = await workspace.readText(path);
     if (content === null || content.trim().length === 0) continue;
     const size = Buffer.byteLength(content, 'utf8');
-    if (size > MAX_BATCH_BYTES) continue;
+    if (size > MAX_BATCH_BYTES || bytes + size > MAX_SCAN_BYTES) continue;
     sources.push({ path, content });
     bytes += size;
   }
@@ -237,6 +262,7 @@ async function detectAndVerify(
         title: entry.candidate.title,
         explanation: entry.candidate.explanation,
         content: entry.content,
+        patch: entry.patch,
       })),
     ),
     maxOutputTokens: VERIFY_OUTPUT_TOKENS,
@@ -404,6 +430,23 @@ export async function readSecurityScanState(
   return { session: summary, report: presentReport(report, Date.now()) };
 }
 
+const STAGED_CHANGES_COMMAND = 'git diff --cached --name-only -z';
+
+async function assertOnlyTheFixWillShip(workspace: SecurityScanWorkspace): Promise<void> {
+  const staged = await workspace.run(STAGED_CHANGES_COMMAND);
+  if (!staged.ok) throw new CloudCodeUnavailableError('Workspace status could not be read');
+  if (staged.stdout.length > 0) {
+    throw new CloudCodeConflictError(
+      'This session has staged changes. Commit or unstage them, then approve the fix.',
+    );
+  }
+  const unpushed = await workspace.run(CLOUD_CODE_UNPUSHED_COMMITS_COMMAND);
+  if (!unpushed.ok) throw new CloudCodeUnavailableError('Workspace status could not be read');
+  if (unpushed.stdout.trim().length > 0) {
+    throw new CloudCodeConflictError(CLOUD_CODE_UNPUSHED_COMMITS_MESSAGE);
+  }
+}
+
 function deliveryError(error: unknown): string {
   if (
     error instanceof CloudCodeConflictError ||
@@ -413,7 +456,7 @@ function deliveryError(error: unknown): string {
   ) {
     return error.message;
   }
-  return 'GitHub did not accept the change. Use the session to push it.';
+  return 'The fix is applied in this session but did not reach GitHub. Push it from the session.';
 }
 
 async function deliverApprovedFix(
@@ -421,13 +464,13 @@ async function deliverApprovedFix(
   finding: SecurityScanFinding,
 ): Promise<SecurityScanDeliveryResult> {
   try {
-    await commitAndPushCloudCodeSession(
+    await commitFileAndPushCloudCodeSession(
       context.db,
       context.owner,
       context.sessionId,
       context.planTier,
       `${COMMIT_SUBJECT_PREFIX}${finding.title}`,
-      [finding.path],
+      finding.path,
     );
   } catch (error) {
     logger.warn({ error, sessionId: context.sessionId }, '[security-scan] fix push failed');
@@ -473,6 +516,7 @@ export async function decideSecurityScanFinding(
       }
 
       if (input.decision === 'approve') {
+        await assertOnlyTheFixWillShip(workspace);
         const status = await workspace.run(`git status --porcelain -- ${shellQuote(finding.path)}`);
         if (!status.ok) throw new CloudCodeUnavailableError('Workspace status could not be read');
         if (status.stdout.trim().length > 0) {

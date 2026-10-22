@@ -74,6 +74,28 @@ describe('security scan report signing', () => {
     expect(openSecurityScanReport(BINDING, 'not json')).toBeNull();
   });
 
+  it('binds the scan id, a fresh nonce and the issue time into what it signs', () => {
+    const payloadOf = (sealed: string) =>
+      JSON.parse((JSON.parse(sealed) as { payload: string }).payload) as {
+        scanId: unknown;
+        issuedAt: unknown;
+        nonce: unknown;
+      };
+    const first = payloadOf(sealSecurityScanReport(BINDING, REPORT));
+    const second = payloadOf(sealSecurityScanReport(BINDING, REPORT));
+
+    expect(first.scanId).toBe(REPORT.scanId);
+    expect(typeof first.issuedAt).toBe('string');
+    expect(Number.isNaN(Date.parse(String(first.issuedAt)))).toBe(false);
+    expect(first.nonce).toMatch(/^[A-Za-z0-9_-]{22}$/);
+    expect(second.nonce).not.toBe(first.nonce);
+  });
+
+  it('refuses an envelope from before scan binding', () => {
+    const envelope = JSON.parse(sealSecurityScanReport(BINDING, REPORT)) as { v: number };
+    expect(openSecurityScanReport(BINDING, JSON.stringify({ ...envelope, v: 1 }))).toBeNull();
+  });
+
   it('fails closed without a signing secret', () => {
     vi.stubEnv('CSRF_SECRET', '');
     expect(() => sealSecurityScanReport(BINDING, REPORT)).toThrow(

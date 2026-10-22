@@ -50,11 +50,13 @@ export interface E2BGitExecutor {
    * nothing, so untracked files are absent here and appear in `status`.
    */
   diff(input: { path: string; baseRef?: string }): Promise<CommandExecutionResult>;
+  /** With `only`, commits just those paths as they are in the working tree and leaves the rest of the index alone. */
   commit(input: {
     path: string;
     message: string;
     authorName?: string;
     authorEmail?: string;
+    only?: readonly string[];
   }): Promise<CommandExecutionResult>;
   push(input: {
     path: string;

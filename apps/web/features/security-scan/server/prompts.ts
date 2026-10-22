@@ -1,7 +1,7 @@
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 
 import { SECURITY_SCAN_SEVERITIES } from '@agiworkforce/cloud-contracts';
-import { MAX_FINDINGS_PER_BATCH } from './findings';
+import { MAX_FINDINGS_PER_BATCH, MAX_FIX_ADDED_LINES } from './findings';
 
 const SOURCE_TAG = 'repository_source';
 const SOURCE_SENTINEL =
@@ -15,13 +15,14 @@ export const SECURITY_SCAN_SYSTEM_PROMPT = [
   `Return at most ${MAX_FINDINGS_PER_BATCH} findings, the most severe first. An empty list is a correct answer when nothing is exploitable.`,
   'Answer with one JSON object and nothing else, in this shape:',
   `{"findings":[{"path":"<file path exactly as given>","line":<1-based line of the vulnerable code>,"severity":"${SECURITY_SCAN_SEVERITIES.join('|')}","category":"<short class, for example sql-injection>","title":"<one line>","explanation":"<how an attacker reaches and exploits it>","evidence":"<the vulnerable lines copied exactly, without line numbers>","fix":{"original":"<a contiguous span copied exactly from the file, without line numbers, that appears once in the file>","replacement":"<the corrected text for that span>"}}]}`,
-  'The fix must be the smallest change that removes the vulnerability and keeps the code compiling. Copy original character for character, including indentation.',
+  `The fix must be the smallest change that removes the vulnerability and keeps the code compiling, adding at most ${MAX_FIX_ADDED_LINES} lines. Copy original character for character, including indentation.`,
 ].join('\n');
 
 export const SECURITY_VERIFY_SYSTEM_PROMPT = [
   'You are reviewing security findings that another reviewer reported. Your job is to refute false positives.',
   'For each finding, read the code excerpt and decide whether an attacker can really reach and exploit the defect as described. Mark it refuted when the input is not attacker-controlled, when the code shown already validates, escapes or authorizes it, when the described sink is not what the code does, or when the claim depends on code that is not shown.',
-  'Mark it confirmed only when the excerpt itself supports the exploit.',
+  'Each finding also carries the proposed fix as a unified diff, which is applied as written when a person approves it. Mark the finding refuted when that fix does not remove the defect, changes behaviour the defect does not need changed, or adds code unrelated to the defect.',
+  'Mark it confirmed only when the excerpt itself supports the exploit and the fix is a correct, minimal repair.',
   'Answer with one JSON object and nothing else: {"verdicts":[{"id":"<finding id>","verdict":"confirmed|refuted","reason":"<one or two sentences>"}]}',
 ].join('\n');
 
@@ -46,6 +47,7 @@ export interface VerificationSubject {
   title: string;
   explanation: string;
   content: string;
+  patch: string;
 }
 
 export function buildVerificationPrompt(subjects: readonly VerificationSubject[]): string {
@@ -61,6 +63,8 @@ export function buildVerificationPrompt(subjects: readonly VerificationSubject[]
       `Reported exploit: ${subject.explanation}`,
       'Code:',
       excerpt,
+      'Proposed fix:',
+      subject.patch.trimEnd(),
     ].join('\n');
   });
   return `${fenceUntrustedContent(sections.join('\n\n'), SOURCE_TAG, SOURCE_SENTINEL)}\n\nGive a verdict for every finding above.`;

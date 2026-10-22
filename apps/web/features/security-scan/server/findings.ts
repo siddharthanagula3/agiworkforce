@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { SECURITY_SCAN_SEVERITIES, type SecurityScanSeverity } from '@agiworkforce/cloud-contracts';
 
 export const MAX_FINDINGS_PER_BATCH = 8;
+export const MAX_FIX_ADDED_LINES = 40;
 const EVIDENCE_LINE_WINDOW = 3;
 const PATCH_CONTEXT_LINES = 3;
 const PATCHABLE_PATH_RE = /^[A-Za-z0-9._@+\-/]+$/;
@@ -185,6 +186,11 @@ export function buildUnifiedPatch(path: string, before: string, after: string): 
   ].join('\n');
 }
 
+export function addedLineCount(patch: string): number {
+  return patch.split('\n').filter((line) => line.startsWith('+') && !line.startsWith('+++ '))
+    .length;
+}
+
 export type AnchorOutcome =
   | { ok: true; patch: string; span: EvidenceSpan }
   | { ok: false; reason: 'unanchored' | 'patch-rejected' };
@@ -223,7 +229,10 @@ export function anchorCandidate(
   }
   const patched = content.slice(0, offset) + replacement + content.slice(offset + original.length);
   const patch = buildUnifiedPatch(candidate.path, content, patched);
-  return patch ? { ok: true, patch, span } : { ok: false, reason: 'patch-rejected' };
+  if (!patch || addedLineCount(patch) > MAX_FIX_ADDED_LINES) {
+    return { ok: false, reason: 'patch-rejected' };
+  }
+  return { ok: true, patch, span };
 }
 
 const SEVERITY_ORDER: Record<SecurityScanSeverity, number> = {

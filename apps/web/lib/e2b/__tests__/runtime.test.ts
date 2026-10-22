@@ -985,6 +985,46 @@ describe('getE2BExecutor, git operations', () => {
     expect(push).toMatchObject({ ok: true, stdout: 'pushed' });
   });
 
+  it('commits only the named paths, leaving the rest of the index out of the commit', async () => {
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-commit-only', 'trusted'));
+
+    const result = await executor!.git!.commit({
+      path: '/home/user/project',
+      message: "fix: don't trust req.query",
+      only: ['src/api/users.ts'],
+    });
+
+    const instance = await create.mock.results[0]!.value;
+    expect(instance.git.commit).not.toHaveBeenCalled();
+    expect(instance.commands.run).toHaveBeenCalledWith(
+      `'git' '-C' '/home/user/project' '--literal-pathspecs' 'commit' '-m' 'fix: don'\\''t trust req.query' '--only' '--' 'src/api/users.ts'`,
+      expect.objectContaining({ envs: { GIT_TERMINAL_PROMPT: '0' } }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it('reports a failed path-limited commit as a command failure', async () => {
+    const broken = makeSandboxInstance('sbx-commit-only-error');
+    broken.commands.run.mockImplementation(async (...args: unknown[]) => {
+      if (String(args[0]).includes("'commit'")) {
+        throw Object.assign(new Error('nothing to commit'), { exitCode: 1, stderr: 'nothing' });
+      }
+      return { stdout: '/home/user\n', stderr: '', exitCode: 0 };
+    });
+    create.mockResolvedValueOnce(broken);
+
+    const { getE2BExecutor } = await import('../runtime');
+    const executor = await getE2BExecutor(codeScope('code-commit-only-error', 'trusted'));
+    const result = await executor!.git!.commit({
+      path: '/home/user/project',
+      message: 'fix',
+      only: ['a.ts'],
+    });
+
+    expect(result).toMatchObject({ ok: false, exitCode: 1 });
+  });
+
   it('reports a failed clone as a normal command failure rather than throwing', async () => {
     const broken = makeSandboxInstance('sbx-git-error');
     broken.git.clone.mockRejectedValueOnce(

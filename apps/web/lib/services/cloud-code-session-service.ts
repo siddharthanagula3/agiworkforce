@@ -1942,6 +1942,49 @@ export async function readCloudCodeNotebookFile(
   }
 }
 
+function validatedCommitMessage(value: unknown): string {
+  const message = typeof value === 'string' ? value.trim() : '';
+  if (!message || message.length > MAX_COMMIT_MESSAGE_LENGTH || message.includes('\0')) {
+    throw new CloudCodeValidationError(
+      `Commit message must be 1–${MAX_COMMIT_MESSAGE_LENGTH} characters and contain no null bytes`,
+    );
+  }
+  return message;
+}
+
+async function resolvePushCredential(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<GitHubCloneCredential> {
+  const session = await getCloudCodeSession(db, owner, sessionId);
+  if (!session.repositoryUrl) {
+    throw new CloudCodeValidationError('Code session has no repository to push to');
+  }
+  if (session.state === 'closed') {
+    throw new CloudCodeConflictError('Closed Code sessions cannot be pushed');
+  }
+  assertSessionIsNotArchived(session, 'commit and push');
+  if (session.state === 'provisioning') {
+    throw new CloudCodeConflictError('Code session is busy; wait and try again');
+  }
+  if (session.state === 'failed') {
+    throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
+  }
+
+  const credential = await resolveGithubCloneCredential(
+    owner.userId,
+    session.repositoryUrl,
+    GITHUB_PUSH_PERMISSIONS,
+  );
+  if (!credential) {
+    throw new CloudCodeValidationError(
+      'No connected GitHub installation can push to this repository',
+    );
+  }
+  return credential;
+}
+
 export const commitAndPushCloudCodeSession = tracedCodeAction(
   'commit_push',
   async function commitAndPushCloudCodeSession(
@@ -1952,39 +1995,9 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
     messageValue: unknown,
     filesValue?: unknown,
   ): Promise<{ session: CloudCodeSession; push: CommandExecutionResult }> {
-    const message = typeof messageValue === 'string' ? messageValue.trim() : '';
-    if (!message || message.length > MAX_COMMIT_MESSAGE_LENGTH || message.includes('\0')) {
-      throw new CloudCodeValidationError(
-        `Commit message must be 1–${MAX_COMMIT_MESSAGE_LENGTH} characters and contain no null bytes`,
-      );
-    }
+    const message = validatedCommitMessage(messageValue);
     const files = parseRequestedChangedFiles(filesValue);
-
-    const session = await getCloudCodeSession(db, owner, sessionId);
-    if (!session.repositoryUrl) {
-      throw new CloudCodeValidationError('Code session has no repository to push to');
-    }
-    if (session.state === 'closed') {
-      throw new CloudCodeConflictError('Closed Code sessions cannot be pushed');
-    }
-    assertSessionIsNotArchived(session, 'commit and push');
-    if (session.state === 'provisioning') {
-      throw new CloudCodeConflictError('Code session is busy; wait and try again');
-    }
-    if (session.state === 'failed') {
-      throw new CloudCodeConflictError('Failed Code sessions must be closed and recreated');
-    }
-
-    const credential = await resolveGithubCloneCredential(
-      owner.userId,
-      session.repositoryUrl,
-      GITHUB_PUSH_PERMISSIONS,
-    );
-    if (!credential) {
-      throw new CloudCodeValidationError(
-        'No connected GitHub installation can push to this repository',
-      );
-    }
+    const credential = await resolvePushCredential(db, owner, sessionId);
 
     const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
     if (!claim) {
@@ -2053,6 +2066,94 @@ export const commitAndPushCloudCodeSession = tracedCodeAction(
     } finally {
       await executor.pause?.();
       await executor.dispose();
+    }
+  },
+);
+
+export const CLOUD_CODE_UNPUSHED_COMMITS_COMMAND =
+  'git rev-list --max-count=1 HEAD --not --remotes';
+
+export const CLOUD_CODE_UNPUSHED_COMMITS_MESSAGE =
+  'This session has commits that are not on GitHub yet. Push or drop them, then try again.';
+
+/**
+ * Commits one file exactly as it stands in the working tree and pushes that
+ * commit alone: the rest of the index stays out of the commit, and a branch
+ * already carrying commits GitHub has not seen is refused rather than pushed
+ * along with it. A failure here leaves the session usable, so a commit that
+ * GitHub refused stays in the session for the next push.
+ */
+export const commitFileAndPushCloudCodeSession = tracedCodeAction(
+  'commit_push',
+  async function commitFileAndPushCloudCodeSession(
+    db: DatabaseAdapter,
+    owner: CloudCodeOwner,
+    sessionId: string,
+    planTier: string,
+    messageValue: unknown,
+    filePath: string,
+  ): Promise<CommandExecutionResult> {
+    const message = validatedCommitMessage(messageValue);
+    const [file] = parseRequestedChangedFiles([filePath]) ?? [];
+    if (!file) throw new CloudCodeValidationError('Choose the file to commit');
+    const credential = await resolvePushCredential(db, owner, sessionId);
+
+    const claim = await claimCloudCodeSessionForRun(db, owner, sessionId);
+    if (!claim) {
+      throw new CloudCodeConflictError('Code session is busy; wait and try again');
+    }
+    const workspacePath = claim.session.workspacePath;
+    const context = { userId: owner.userId, sessionId };
+    let executor: Awaited<ReturnType<typeof getE2BExecutor>> = null;
+    try {
+      executor = await getE2BExecutor(
+        managedCloudCodeSessionScope(
+          owner.userId,
+          sessionId,
+          claim.session.networkAccess,
+          planTier,
+          claim.session.runtimeId,
+          null,
+          claim.session.extraHosts,
+        ),
+      );
+      if (!executor?.git || !executor.runCommand) {
+        throw new CloudCodeUnavailableError('Managed Code environment could not be attached');
+      }
+      const unpushed = await executor.runCommand({
+        command: CLOUD_CODE_UNPUSHED_COMMITS_COMMAND,
+        cwd: workspacePath,
+        timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
+      });
+      if (!unpushed.ok) {
+        throw gitStepFailure('Unpushed commits could not be listed', unpushed, context);
+      }
+      if (unpushed.stdout.trim().length > 0) {
+        throw new CloudCodeConflictError(CLOUD_CODE_UNPUSHED_COMMITS_MESSAGE);
+      }
+      const commit = await executor.git.commit({ path: workspacePath, message, only: [file] });
+      if (!commit.ok) throw gitStepFailure('Commit failed', commit, context);
+      const push = await executor.git.push({
+        path: workspacePath,
+        ...(claim.session.workingBranch ? { branch: claim.session.workingBranch } : {}),
+        username: credential.username,
+        password: credential.password,
+        timeoutMs: CLOUD_CODE_COMMAND_DEADLINE_MS,
+      });
+      if (!push.ok) throw gitStepFailure('Push failed', push, context);
+      return push;
+    } finally {
+      await releaseCloudCodeSessionAfterRun(db, owner, sessionId, claim.leaseToken).catch(
+        (error: unknown) => {
+          logger.error({ error, sessionId }, '[code] session release after commit failed');
+        },
+      );
+      await executor?.pause?.().catch((error: unknown) => {
+        logger.warn({ error, sessionId }, '[code] sandbox pause after commit failed');
+      });
+      await executor?.dispose().catch((error: unknown) => {
+        logger.warn({ error, sessionId }, '[code] sandbox dispose after commit failed');
+      });
     }
   },
 );

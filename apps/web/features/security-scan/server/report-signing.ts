@@ -1,6 +1,6 @@
 import 'server-only';
 
-import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
+import { createHmac, hkdfSync, randomBytes, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
 import { SecurityScanReportSchema, type SecurityScanReport } from '@agiworkforce/cloud-contracts';
@@ -9,7 +9,8 @@ const SIGNING_SECRET_ENV = 'CSRF_SECRET';
 const MIN_SECRET_BYTES = 32;
 const SIGNING_KEY_INFO = 'agi/security-scan-report/v1';
 const SIGNING_KEY_BYTES = 32;
-const ENVELOPE_VERSION = 1;
+const ENVELOPE_VERSION = 2;
+const NONCE_BYTES = 16;
 
 export class SecurityScanSigningUnavailableError extends Error {
   constructor() {
@@ -36,9 +37,13 @@ const PayloadSchema = z
   .object({
     userId: z.string().min(1),
     sessionId: z.string().min(1),
+    scanId: z.uuid(),
+    nonce: z.string().regex(/^[A-Za-z0-9_-]{22}$/),
+    issuedAt: z.iso.datetime(),
     report: SecurityScanReportSchema,
   })
-  .strict();
+  .strict()
+  .refine((payload) => payload.scanId === payload.report.scanId);
 
 const EnvelopeSchema = z
   .object({
@@ -57,7 +62,15 @@ export function sealSecurityScanReport(
   binding: SecurityScanReportBinding,
   report: SecurityScanReport,
 ): string {
-  const payload = JSON.stringify(PayloadSchema.parse({ ...binding, report }));
+  const payload = JSON.stringify(
+    PayloadSchema.parse({
+      ...binding,
+      scanId: report.scanId,
+      nonce: randomBytes(NONCE_BYTES).toString('base64url'),
+      issuedAt: new Date().toISOString(),
+      report,
+    }),
+  );
   return JSON.stringify({ v: ENVELOPE_VERSION, payload, signature: signatureFor(payload) });
 }
 
