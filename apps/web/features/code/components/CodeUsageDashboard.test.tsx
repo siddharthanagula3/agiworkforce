@@ -120,7 +120,9 @@ describe('CodeUsageDashboard', () => {
     respond(history({ requests: 0, byModel: [] }));
     render(<CodeUsageDashboard planTier="pro" />);
 
-    expect(await screen.findByText('No Code usage in this period.')).toBeInTheDocument();
+    expect(
+      await screen.findByRole('status', { name: 'No Code usage in this period.' }),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Requests')).toBeNull();
   });
 

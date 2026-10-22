@@ -82,6 +82,7 @@
     "mobile-iap",
     "model",
     "model-catalog",
+    "model-favourites",
     "model-price-copy",
     "money-format",
     "notifications",
@@ -145,6 +146,7 @@
     "web-hooks",
     "web-offline",
     "web-search-citations",
+    "work-usage",
     "workflow",
     "workspace"
   ],

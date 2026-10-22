@@ -55,12 +55,12 @@ function capabilityLine(computer: AccountComputer): string | null {
   return offered.length > 0 ? offered.join(' · ') : 'Remote control off';
 }
 
-type ComputerAction = 'start' | 'pair';
+type ComputerSheetKind = 'start' | 'pair';
 
 function SessionSheet({ name, onClose }: { name: string; onClose: () => void }) {
   const { colors, isDark } = useTheme();
   return (
-    <Modal visible animationType="slide" onRequestClose={onClose}>
+    <Modal visible animationType="slide" onRequestClose={onClose} accessibilityViewIsModal>
       <SafeAreaView
         className="flex-1"
         style={{ backgroundColor: isDark ? colors.background : colors.surfaceBase }}
@@ -93,7 +93,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
   const [computers, setComputers] = useState<AccountComputer[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [sheet, setSheet] = useState<{ action: ComputerAction; name: string } | null>(null);
+  const [sheet, setSheet] = useState<{ action: ComputerSheetKind; name: string } | null>(null);
   const capabilities = useConnectionStore((state) => state.desktopMetadata?.capabilities);
   const connect = useConnectionStore((state) => state.connect);
   const canStartSession =
@@ -115,7 +115,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
     if (cloudUnlocked) void load();
   }, [cloudUnlocked, clerkUserId, load]);
 
-  const openSheet = (action: ComputerAction, name: string) => {
+  const openSheet = (action: ComputerSheetKind, name: string) => {
     if (action === 'start') void listCodeSessions();
     setSheet({ action, name });
   };
@@ -159,7 +159,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
             {computers.map((computer) => {
               const connected = connectedName !== null && computer.name === connectedName;
               const displayName = computer.name ?? 'Computer';
-              const action: ComputerAction | null = connected
+              const action: ComputerSheetKind | null = connected
                 ? canStartSession
                   ? 'start'
                   : null
@@ -216,7 +216,12 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
         <SessionSheet name={sheet.name} onClose={() => setSheet(null)} />
       ) : null}
       {sheet?.action === 'pair' ? (
-        <Modal visible animationType="slide" onRequestClose={() => setSheet(null)}>
+        <Modal
+          visible
+          animationType="slide"
+          onRequestClose={() => setSheet(null)}
+          accessibilityViewIsModal
+        >
           <QRScanner
             onScan={(code) => {
               setSheet(null);

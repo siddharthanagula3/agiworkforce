@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Spinner, Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
+import { BarChart3 } from 'lucide-react';
+import { EmptyState, Spinner, Tabs, TabsContent, TabsList, TabsTrigger } from '@agiworkforce/ui';
 import {
   formatCredits,
   getModelMetadataById,
@@ -229,7 +230,7 @@ export function CodeUsageDashboard({ planTier }: { planTier: string | null }) {
         )}
 
         {state.status === 'ready' && !history && (
-          <p className="m-0 text-sm text-muted-foreground">{COPY.empty}</p>
+          <EmptyState icon={BarChart3} title={COPY.empty} className="py-6" />
         )}
 
         {history && (
