@@ -514,25 +514,48 @@ describe('artifacts help article follows the implemented publishing controls', (
   const panel = collapsed('features/chat/components/artifacts/ArtifactsPanel.tsx');
   const settings = collapsed('features/settings/sections/PublishedArtifactsSection.tsx');
 
-  it('offers the two publish audiences and confirms the one now in force', () => {
+  it('offers the three publish audiences and confirms the one now in force', () => {
     expect(preview).toContain('<option value="public">Anyone with the link</option>');
     expect(preview).toMatch(
-      /<option value="organization">\s*Everyone in this workspace \(\{artifactAudience\.memberCount\}\)\s*<\/option>/u,
+      /\{artifactAudience\.memberCount !== null && \(\s*<option value="organization">\s*Everyone in this workspace \(\{artifactAudience\.memberCount\}\)\s*<\/option>\s*\)\}/u,
     );
+    expect(preview).toContain('<option value="invited">Only people you invite</option>');
     expect(preview).toContain("'Only your workspace can open this now'");
+    expect(preview).toContain("'Only the people you invite can open this now'");
     expect(preview).toContain("'Anyone with the link can open this now'");
     expect(panel).toContain('current: publishDetails.visibility');
-    expect(article).toContain('anyone with the link, or your workspace only');
+    expect(article).toContain('**Anyone with the link** opens it without signing in.');
+    expect(article).toContain(
+      '**Everyone in this workspace** limits it to your workspace members, and the choice appears only when you belong to a workspace.',
+    );
   });
 
-  it('asks before either audience change and applies it only on confirmation', () => {
+  it('limits the invited audience to people added by email', () => {
+    expect(preview).toMatch(
+      /artifactAudience\?\.current === 'invited' && publishedToken && \(\s*<div[^>]*>\s*<SiteViewersEditor token=\{publishedToken\} \/>/u,
+    );
+    expect(preview).toContain('Only the people you add by email can open it after signing in.');
+    expect(fileText('features/sites/components/SiteViewersEditor.tsx')).toContain(
+      "setError('Enter a full email address')",
+    );
+    expect(article).toContain(
+      '**Only people you invite** limits it to the people you add by email, who sign in to open it.',
+    );
+  });
+
+  it('asks before every audience change and applies it only on confirmation', () => {
+    expect(preview).toMatch(
+      /if \(next === 'invited'\) \{\s*confirmAction\(\{\s*title: 'Limit this to people you invite\?'[\s\S]*?onConfirm: apply,\s*\}\);\s*return;\s*\}/u,
+    );
     expect(preview).toMatch(
       /confirmAction\(\s*next === 'organization'\s*\? \{\s*title: 'Limit this to your workspace\?'[\s\S]*?onConfirm: apply,\s*\}\s*: \{\s*title: 'Make this public again\?'[\s\S]*?onConfirm: apply,\s*\},?\s*\);/u,
     );
     expect(preview).toMatch(
       /const apply = async \(\) => \{[\s\S]*?await artifactAudience\.onChange\(next\);/u,
     );
-    expect(article).toContain('("Make this public again?", "Limit this to your workspace?")');
+    expect(article).toContain(
+      '("Make this public again?", "Limit this to your workspace?", "Limit this to people you invite?")',
+    );
   });
 
   it('unpublishes from the Published artifacts list and tells the owner the link no longer works', () => {

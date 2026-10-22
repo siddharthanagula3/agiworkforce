@@ -6592,10 +6592,10 @@
     },
     {
       "kind": "prose",
-      "id": "artifacts-publish-audience",
+      "id": "artifacts-publish-audience-workspace",
       "doc": "artifacts",
       "section": "Publishing",
-      "sentence": "The audience works like a shared conversation: anyone with the link, or your workspace only, and the panel confirms which is in force.",
+      "sentence": "**Everyone in this workspace** limits it to your workspace members, and the choice appears only when you belong to a workspace.",
       "implementation": [
         "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
         "apps/web/features/chat/components/artifacts/ArtifactsPanel.tsx"
@@ -6604,7 +6604,25 @@
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "offers the two publish audiences and confirms the one now in force"
+          "name": "offers the three publish audiences and confirms the one now in force"
+        }
+      ]
+    },
+    {
+      "kind": "prose",
+      "id": "artifacts-publish-audience-invited",
+      "doc": "artifacts",
+      "section": "Publishing",
+      "sentence": "**Only people you invite** limits it to the people you add by email, who sign in to open it.",
+      "implementation": [
+        "apps/web/features/chat/components/artifacts/ArtifactPreview.tsx",
+        "apps/web/features/sites/components/SiteViewersEditor.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
+          "name": "limits the invited audience to people added by email"
         }
       ]
     },
@@ -6613,13 +6631,13 @@
       "id": "artifacts-audience-change-asks-first",
       "doc": "artifacts",
       "section": "Publishing",
-      "sentence": "Changing it later asks first (\"Make this public again?\", \"Limit this to your workspace?\").",
+      "sentence": "Changing it later asks first (\"Make this public again?\", \"Limit this to your workspace?\", \"Limit this to people you invite?\") and says who loses access.",
       "implementation": ["apps/web/features/chat/components/artifacts/ArtifactPreview.tsx"],
       "proof": [
         {
           "kind": "test",
           "file": "apps/web/features/docs/__tests__/support-article-claims.test.ts",
-          "name": "asks before either audience change and applies it only on confirmation"
+          "name": "asks before every audience change and applies it only on confirmation"
         }
       ]
     },

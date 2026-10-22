@@ -4,7 +4,7 @@ title: Artifacts: documents and code AGI writes for you
 path: /chat/artifacts
 category: chat
 tags: artifact, artifacts, canvas, document, code, preview, publish artifact, unpublish, duplicate, fullscreen, save to project, version conflict
-updated: 2026-09-17
+updated: 2026-10-22
 scope: public
 ---
 
@@ -41,10 +41,18 @@ Word.
 
 ## Publishing
 
-Publishing an artifact gives it a link. The audience works like a shared
-conversation: anyone with the link, or your workspace only, and the panel
-confirms which is in force. Changing it later asks first ("Make this public
-again?", "Limit this to your workspace?").
+Publishing an artifact gives it a link. Under **Who can open this** you choose
+one of three audiences, and the panel confirms which is in force.
+
+- **Anyone with the link** opens it without signing in.
+- **Everyone in this workspace** limits it to your workspace members, and the
+  choice appears only when you belong to a workspace.
+- **Only people you invite** limits it to the people you add by email, who sign
+  in to open it. The invite list sits under the link.
+
+Switching audiences keeps the same link. Changing it later asks first ("Make
+this public again?", "Limit this to your workspace?", "Limit this to people you
+invite?") and says who loses access.
 
 Settings holds a **Published artifacts** list with **Unpublish** on
 each one. Unpublishing stops the link working.
