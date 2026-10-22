@@ -9,6 +9,7 @@ import {
   Link2,
   MoreHorizontal,
   Pencil,
+  ShieldCheck,
   Terminal,
   Trash2,
 } from '@agiworkforce/icons';
@@ -26,6 +27,7 @@ import {
   DropdownMenuTrigger,
 } from '@agiworkforce/ui';
 import { ContinueOnDesktop } from '@/features/desktop-host';
+import { SECURITY_SCAN_COPY } from '@/features/security-scan/copy';
 import { CODE_COPY, CODE_ROUTES } from '../code-surface';
 import styles from '../CloudCodePage.module.css';
 
@@ -37,6 +39,7 @@ export interface CodeSessionMenuProps {
   closed: boolean;
   archived: boolean;
   deletable: boolean;
+  securityScanHref: string | null;
   onOpenTerminal: () => void;
   onSetVerbose: (verbose: boolean) => void;
   onEditEnvironment: () => void;
@@ -52,6 +55,7 @@ export function CodeSessionMenu({
   closed,
   archived,
   deletable,
+  securityScanHref,
   onOpenTerminal,
   onSetVerbose,
   onEditEnvironment,
@@ -132,6 +136,15 @@ export function CodeSessionMenu({
           <Link2 size={MENU_GLYPH_SIZE} aria-hidden="true" />
           <span className={styles['menuRowLabel']}>{CODE_COPY.share}</span>
         </DropdownMenuItem>
+
+        {securityScanHref && (
+          <DropdownMenuItem asChild>
+            <Link href={securityScanHref}>
+              <ShieldCheck size={MENU_GLYPH_SIZE} aria-hidden="true" />
+              <span className={styles['menuRowLabel']}>{SECURITY_SCAN_COPY.title}</span>
+            </Link>
+          </DropdownMenuItem>
+        )}
 
         <DropdownMenuItem onSelect={onEditEnvironment}>
           <span className={styles['menuRowLabel']}>{CODE_COPY.editEnvironment}</span>

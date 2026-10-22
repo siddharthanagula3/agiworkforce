@@ -104,6 +104,7 @@ import {
 } from './components/CodeComposer';
 import { CodeTranscript } from './components/CodeTranscript';
 import { CodeChangesPanel } from './components/CodeChangesPanel';
+import { securityScanPagePath } from '@/features/security-scan/routes';
 import { CodeSessionMenu } from './components/CodeSessionMenu';
 import { CodeShareDialog } from './components/CodeShareDialog';
 import { CodePageFrame, CodePaneTools, type CodePaneControls } from './components/CodePanes';
@@ -1418,6 +1419,11 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                           closed={closed}
                           archived={archived}
                           deletable={closed || archived}
+                          securityScanHref={
+                            selectedSession.repositoryUrl && !closed && !archived
+                              ? securityScanPagePath(selectedSession.id)
+                              : null
+                          }
                           onOpenTerminal={() => setChangesOpen(true)}
                           onSetVerbose={setVerbose}
                           onEditEnvironment={() => setChangesOpen(true)}

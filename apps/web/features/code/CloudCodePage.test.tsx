@@ -1682,6 +1682,51 @@ describe('CloudCodePage', () => {
     ).toBeInTheDocument();
   });
 
+  it('links a repository session to its security scan and hides it otherwise', async () => {
+    const user = userEvent.setup();
+    const repositorySession: CloudCodeSession = {
+      ...session,
+      repositoryUrl: 'https://github.com/acme/app.git',
+    };
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability,
+        sessions: [repositorySession],
+        runtimes: [],
+      })),
+      get: vi.fn(async () => ({ session: repositorySession, terminalEntries: [], turns: [] })),
+      changes: vi.fn(async () => ({
+        session: repositorySession,
+        base: null,
+        workingBranch: null,
+        files: [],
+        diff: '',
+        diffTruncated: false,
+      })),
+    });
+    const { unmount } = render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    expect(await screen.findByRole('menuitem', { name: 'Security scan' })).toHaveAttribute(
+      'href',
+      `/code/${session.id}/security`,
+    );
+    unmount();
+
+    render(
+      <CloudCodePage
+        api={createApi({
+          list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+        })}
+      />,
+    );
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    await screen.findByRole('menuitem', { name: 'Rename' });
+    expect(screen.queryByRole('menuitem', { name: 'Security scan' })).toBeNull();
+  });
+
   it('keeps the rename field open long enough to type in it', async () => {
     const user = userEvent.setup();
     const rename: CloudCodeApi['rename'] = vi.fn(async (_sessionId, title) => ({
