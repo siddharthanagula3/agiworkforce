@@ -89,6 +89,24 @@ const SEARCH_RESULT_TYPES: Readonly<
   developer_session: { icon: SquareTerminal, label: 'Code session' },
 };
 
+type SearchTypeFilterId = 'all' | 'chats' | 'projects' | 'files';
+
+const SEARCH_TYPE_FILTERS: ReadonlyArray<{
+  id: SearchTypeFilterId;
+  label: string;
+  types: ReadonlySet<SearchResult['type']> | null;
+}> = [
+  { id: 'all', label: 'All', types: null },
+  { id: 'chats', label: 'Chats', types: new Set(['session', 'message', 'developer_session']) },
+  { id: 'projects', label: 'Projects', types: new Set(['project']) },
+  {
+    id: 'files',
+    label: 'Files',
+    types: new Set(['file', 'project_knowledge', 'artifact', 'research_report']),
+  },
+];
+
+const MIN_SEARCH_QUERY_LENGTH = 2;
 const COMMAND_PALETTE_LISTBOX_ID = 'command-palette-listbox';
 const RECENTS_LIMIT = 5;
 const EMPTY_HIDDEN_NAV_IDS: string[] = [];
@@ -289,6 +307,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
   const [searchResults, setSearchResults] = useState<SearchResult[]>([]);
   const [isSearching, setIsSearching] = useState(false);
   const [searchError, setSearchError] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<SearchTypeFilterId>('all');
   const inputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
   const { userId } = useSession();
@@ -314,9 +333,15 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   const activeCommands = activeSubMenu === 'model' ? modelCommands : topCommands;
 
+  const searchable = query.trim().length >= MIN_SEARCH_QUERY_LENGTH && Boolean(userId);
+  const showTypeFilters = open && !activeSubMenu && searchable;
+  const activeTypeFilter =
+    SEARCH_TYPE_FILTERS.find((option) => option.id === typeFilter) ?? SEARCH_TYPE_FILTERS[0]!;
+  const typeFilterActive = showTypeFilters && activeTypeFilter.types !== null;
+
   useEffect(() => {
     const normalizedQuery = query.trim();
-    if (!open || activeSubMenu || normalizedQuery.length < 2 || !userId) {
+    if (!open || activeSubMenu || normalizedQuery.length < MIN_SEARCH_QUERY_LENGTH || !userId) {
       setSearchResults([]);
       setIsSearching(false);
       setSearchError(false);
@@ -355,20 +380,23 @@ export function CommandPalette({ open, onOpenChange }: Props) {
 
   const searchCommands = useMemo<CommandOption[]>(
     () =>
-      searchResults.map((result, index) => ({
-        id: `search-${result.type}-${result.sessionId}-${result.messageId ?? index}`,
-        title: result.sessionTitle || 'Untitled chat',
-        subtitle: result.matchedText,
-        group: 'Search results',
-        icon: SEARCH_RESULT_TYPES[result.type].icon,
-        typeLabel: SEARCH_RESULT_TYPES[result.type].label,
-        action: () => router.push(globalSearchResultHref(result, query)),
-      })),
-    [query, router, searchResults],
+      searchResults
+        .filter((result) => !typeFilterActive || activeTypeFilter.types?.has(result.type))
+        .map((result, index) => ({
+          id: `search-${result.type}-${result.sessionId}-${result.messageId ?? index}`,
+          title: result.sessionTitle || 'Untitled chat',
+          subtitle: result.matchedText,
+          group: 'Search results',
+          icon: SEARCH_RESULT_TYPES[result.type].icon,
+          typeLabel: SEARCH_RESULT_TYPES[result.type].label,
+          action: () => router.push(globalSearchResultHref(result, query)),
+        })),
+    [activeTypeFilter, query, router, searchResults, typeFilterActive],
   );
 
   const filtered = useMemo(() => {
     if (!query.trim()) return activeCommands;
+    if (typeFilterActive) return searchCommands;
     const q = query.toLowerCase();
     const localMatches = activeCommands.filter(
       (c) =>
@@ -377,7 +405,7 @@ export function CommandPalette({ open, onOpenChange }: Props) {
         c.group.toLowerCase().includes(q),
     );
     return activeSubMenu ? localMatches : [...searchCommands, ...localMatches];
-  }, [query, activeCommands, activeSubMenu, searchCommands]);
+  }, [query, activeCommands, activeSubMenu, searchCommands, typeFilterActive]);
 
   const groups = useMemo(() => groupCommands(filtered), [filtered]);
 
@@ -421,12 +449,13 @@ export function CommandPalette({ open, onOpenChange }: Props) {
       setQuery('');
       setActiveIndex(0);
       setActiveSubMenu(null);
+      setTypeFilter('all');
     }
   }, [open, setActiveIndex]);
 
   useEffect(() => {
     setActiveIndex(0);
-  }, [query, activeSubMenu, setActiveIndex]);
+  }, [query, activeSubMenu, typeFilter, setActiveIndex]);
 
   const subMenuTitle = activeSubMenu === 'model' ? 'Switch AI Model' : null;
 
@@ -490,6 +519,32 @@ export function CommandPalette({ open, onOpenChange }: Props) {
           </button>
         </div>
 
+        {showTypeFilters && (
+          <div
+            role="group"
+            aria-label="Search result type"
+            className="flex flex-wrap items-center gap-2 border-b border-border px-4 py-2"
+          >
+            {SEARCH_TYPE_FILTERS.map((option) => (
+              <button
+                key={option.id}
+                type="button"
+                aria-pressed={typeFilter === option.id}
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={() => setTypeFilter(option.id)}
+                className={cn(
+                  'rounded-full px-3 py-1 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
+                  typeFilter === option.id
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                )}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Command list */}
         <div
           id={COMMAND_PALETTE_LISTBOX_ID}
@@ -505,7 +560,9 @@ export function CommandPalette({ open, onOpenChange }: Props) {
             <p className="py-8 text-center text-sm text-muted-foreground">
               {searchError
                 ? 'Conversation search is temporarily unavailable.'
-                : 'No commands found.'}
+                : typeFilterActive
+                  ? `No ${activeTypeFilter.label.toLowerCase()} found.`
+                  : 'No commands found.'}
             </p>
           ) : (
             <>

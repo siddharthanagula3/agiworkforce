@@ -221,6 +221,102 @@ describe('CommandPalette', () => {
       await waitFor(() => expect(mockPush).toHaveBeenCalledWith('/chat/older-conversation'));
     });
 
+    describe('result type filters', () => {
+      const AT = new Date('2026-01-01T00:00:00.000Z');
+      const MIXED_RESULTS: SearchResult[] = [
+        {
+          type: 'session',
+          sessionId: 'chat-1',
+          sessionTitle: 'Launch plan chat',
+          content: 'launch',
+          matchedText: 'launch plan',
+          createdAt: AT,
+          updatedAt: AT,
+        },
+        {
+          type: 'project',
+          sessionId: 'project-1',
+          sessionTitle: 'Launch project',
+          content: 'launch',
+          matchedText: 'launch project',
+          createdAt: AT,
+          updatedAt: AT,
+        },
+        {
+          type: 'file',
+          sessionId: 'file-1',
+          sessionTitle: 'launch-brief.pdf',
+          content: 'launch',
+          matchedText: 'launch brief',
+          createdAt: AT,
+          updatedAt: AT,
+        },
+      ];
+
+      async function searchFor(term: string) {
+        globalSearch.mockResolvedValueOnce({
+          results: MIXED_RESULTS,
+          stats: { ...EMPTY_SEARCH_STATS, totalResults: MIXED_RESULTS.length },
+        });
+        renderPalette();
+        fireEvent.change(screen.getByPlaceholderText('Search chats and actions'), {
+          target: { value: term },
+        });
+        await screen.findByText('Launch plan chat');
+      }
+
+      it('offers no type filter until a search is under way', () => {
+        renderPalette();
+        expect(screen.queryByRole('group', { name: 'Search result type' })).toBeNull();
+
+        fireEvent.change(screen.getByPlaceholderText('Search chats and actions'), {
+          target: { value: 's' },
+        });
+        expect(screen.queryByRole('group', { name: 'Search result type' })).toBeNull();
+      });
+
+      it('lists every type under All, with All pressed', async () => {
+        await searchFor('launch');
+
+        expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByText('Launch project')).toBeInTheDocument();
+        expect(screen.getByText('launch-brief.pdf')).toBeInTheDocument();
+      });
+
+      it.each([
+        ['Chats', 'Launch plan chat', ['Launch project', 'launch-brief.pdf']],
+        ['Projects', 'Launch project', ['Launch plan chat', 'launch-brief.pdf']],
+        ['Files', 'launch-brief.pdf', ['Launch plan chat', 'Launch project']],
+      ])('narrows to %s only', async (label, shown, hidden) => {
+        await searchFor('launch');
+
+        fireEvent.click(screen.getByRole('button', { name: label }));
+
+        expect(screen.getByRole('button', { name: label })).toHaveAttribute('aria-pressed', 'true');
+        expect(screen.getByText(shown)).toBeInTheDocument();
+        for (const title of hidden) expect(screen.queryByText(title)).toBeNull();
+        expect(screen.queryByText('New chat')).toBeNull();
+      });
+
+      it('says which type came back empty and returns to All', async () => {
+        globalSearch.mockResolvedValueOnce({
+          results: [MIXED_RESULTS[0]!],
+          stats: { ...EMPTY_SEARCH_STATS, totalResults: 1 },
+        });
+        renderPalette();
+        fireEvent.change(screen.getByPlaceholderText('Search chats and actions'), {
+          target: { value: 'launch' },
+        });
+        await screen.findByText('Launch plan chat');
+
+        fireEvent.click(screen.getByRole('button', { name: 'Projects' }));
+        expect(screen.getByText('No projects found.')).toBeInTheDocument();
+
+        fireEvent.click(screen.getByRole('button', { name: 'All' }));
+        expect(screen.getByText('Launch plan chat')).toBeInTheDocument();
+      });
+    });
+
     it('shows a Close button in the field, not an ESC chip', () => {
       renderPalette();
       expect(screen.getByLabelText('Close')).toBeInTheDocument();
