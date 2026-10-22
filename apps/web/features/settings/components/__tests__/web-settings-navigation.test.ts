@@ -123,6 +123,7 @@ describe('web settings rail order', () => {
       'voice',
       'keyboard',
       'capabilities',
+      'reflect',
       'privacy',
       'safety',
       'security',
@@ -131,7 +132,6 @@ describe('web settings rail order', () => {
       'usage',
       'referrals',
       'team',
-      'reflect',
       'time-focus',
       'help',
     ]);
