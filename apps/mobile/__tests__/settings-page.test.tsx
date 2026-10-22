@@ -1,6 +1,6 @@
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
-import { Alert } from 'react-native';
+import { Alert, ScrollView } from 'react-native';
 
 const mockPush = jest.fn();
 const mockReplace = jest.fn();
@@ -57,11 +57,15 @@ jest.mock('react-native-safe-area-context', () => {
 });
 
 jest.mock('lucide-react-native', () => {
-  const icon = jest.fn().mockReturnValue(null);
+  const icons: Record<string, jest.Mock> = {};
   return new Proxy(
     {},
     {
-      get: (_target, name) => (name === '__esModule' ? true : icon),
+      get: (_target, name) => {
+        if (name === '__esModule') return true;
+        icons[String(name)] ??= jest.fn().mockReturnValue(null);
+        return icons[String(name)];
+      },
     },
   );
 });
@@ -109,6 +113,8 @@ describe('Settings page', () => {
       billingTier: 'free',
       billingStatus: 'none',
       grantedCapabilities: [],
+      isRefreshing: false,
+      lastRefreshedAt: null,
     } as never);
     useWaitlistStore.setState({
       joined: false,
@@ -158,7 +164,7 @@ describe('Settings page', () => {
     expect(screen.getByLabelText('Connections. Studio Mac')).toBeTruthy();
     fireEvent.press(screen.getByLabelText('Connections. Studio Mac'));
 
-    expect(mockPush).toHaveBeenCalledWith('/(app)/companion');
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/remote-control');
   });
 
   it('opens Storage from Settings with a return path to the same screen', () => {
@@ -431,6 +437,68 @@ describe('Settings page', () => {
 
     expect(hostAncestors(getByLabelText('Appearance. System'))).toContain('RCTScrollView');
     expect(hostAncestors(getByLabelText('Close settings'))).not.toContain('RCTScrollView');
+  });
+
+  it('centres the Settings title in semibold as a header', () => {
+    const { getByRole } = render(<SettingsTabScreen />);
+
+    const title = getByRole('header', { name: 'Settings' });
+    const style = Object.assign({}, ...[title.props.style].flat(Infinity).filter(Boolean));
+    expect(style).toMatchObject({ textAlign: 'center', fontWeight: '600' });
+  });
+
+  it('keeps the native scroll indicator on the list', () => {
+    const { UNSAFE_getByType } = render(<SettingsTabScreen />);
+
+    expect(UNSAFE_getByType(ScrollView).props.showsVerticalScrollIndicator).not.toBe(false);
+  });
+
+  it('opens Permissions from the root list', () => {
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    fireEvent.press(getByLabelText('Permissions'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/permissions');
+  });
+
+  it('gives Privacy its own icon rather than the Account Security shield', () => {
+    const { getByLabelText } = render(<SettingsTabScreen />);
+    const lucide = jest.requireMock('lucide-react-native');
+    const usesIcon = (label: string, icon: unknown) =>
+      getByLabelText(label).findAll((node) => node.type === icon).length > 0;
+
+    expect(usesIcon('Account Security. Sign in', lucide.Shield)).toBe(true);
+    expect(usesIcon('Privacy. Sign in', lucide.Shield)).toBe(false);
+    expect(usesIcon('Privacy. Sign in', lucide.LockKeyhole)).toBe(true);
+  });
+
+  it('hints where a navigational row goes and what Log Out does', () => {
+    mockClerkState.user = { primaryEmailAddress: { emailAddress: 'ada@example.com' } };
+    const { getByLabelText } = render(<SettingsTabScreen />);
+
+    expect(getByLabelText('Appearance. System').props.accessibilityHint).toBe('Opens Appearance');
+    expect(getByLabelText('Log Out').props.accessibilityHint).toBe('Signs you out on this device');
+  });
+
+  it('shows a spinner in place of the Subscription value until the first plan refresh lands', () => {
+    useAuthStore.setState({ isClerkSignedIn: true });
+    useTierStore.setState({ isRefreshing: true, lastRefreshedAt: null } as never);
+    const loading = render(<SettingsTabScreen />);
+
+    expect(loading.getByTestId('settings-row-loading-account-subscription')).toBeTruthy();
+    expect(loading.getByLabelText('Subscription').props.accessibilityState).toMatchObject({
+      busy: true,
+    });
+    loading.unmount();
+
+    useTierStore.setState({
+      isRefreshing: false,
+      lastRefreshedAt: '2026-10-22T00:00:00.000Z',
+    } as never);
+    const loaded = render(<SettingsTabScreen />);
+
+    expect(loaded.queryByTestId('settings-row-loading-account-subscription')).toBeNull();
+    expect(loaded.getByLabelText(/^Subscription\. /)).toBeTruthy();
   });
 
   it('renders version in About row', () => {

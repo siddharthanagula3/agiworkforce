@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from 'react';
-import { Alert, View, ScrollView } from 'react-native';
+import { ActivityIndicator, Alert, View, ScrollView } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -19,6 +19,7 @@ import {
   HardDrive,
   Info,
   Link2,
+  LockKeyhole,
   LogOut,
   MessageCircleWarning,
   Mic,
@@ -28,6 +29,7 @@ import {
   Shield,
   Share2,
   SlidersHorizontal,
+  Smartphone,
   Sparkles,
   Stethoscope,
   SunMoon,
@@ -88,6 +90,8 @@ interface SettingsRow {
   label: string;
   icon: LucideIcon;
   value?: string;
+  loading?: boolean;
+  hint?: string;
   tag?: string;
   tone?: RowTone;
   onPress: () => void;
@@ -161,7 +165,11 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
     <Pressable
       onPress={row.onPress}
       accessibilityRole="button"
-      accessibilityLabel={[row.label, row.value, row.tag].filter(Boolean).join('. ')}
+      accessibilityLabel={[row.label, row.loading ? undefined : row.value, row.tag]
+        .filter(Boolean)
+        .join('. ')}
+      accessibilityHint={row.hint ?? `Opens ${row.label}`}
+      accessibilityState={row.loading ? { busy: true } : undefined}
       style={{
         minHeight: 50,
         paddingHorizontal: 14,
@@ -186,7 +194,9 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
       {/* A hard 130pt cut most real email addresses off mid-domain. Let the value
           take the space the label does not need, and cap font scaling so the row
           still fits at accessibility sizes. */}
-      {row.value ? (
+      {row.loading ? (
+        <ActivityIndicator testID={`settings-row-loading-${row.key}`} color={colors.textMuted} />
+      ) : row.value ? (
         <Text
           numberOfLines={1}
           maxFontSizeMultiplier={2}
@@ -219,11 +229,14 @@ function SettingsListRow({ row, isLast }: { row: SettingsRow; isLast: boolean })
       {/* A danger row is terminal, Log Out raises a confirm Alert, it does not
           push a screen. A chevron there advertises navigation that never
           happens, so it is suppressed for the whole tone. */}
-      {row.tone === 'danger' ? null : <ChevronRight size={17} color={colors.textMuted} />}
+      {row.tone === 'danger' || row.loading ? null : (
+        <ChevronRight size={17} color={colors.textMuted} />
+      )}
     </Pressable>
   );
 }
 
+const HEADER_SLOT_SIZE = 40;
 const PROFILE_AVATAR_SIZE = 88;
 const PROFILE_PHOTO_BADGE_SIZE = 30;
 const PROFILE_CARD_PADDING_TOP = 20;
@@ -376,6 +389,7 @@ export default function SettingsTabScreen() {
   const cloudAccentColor = useCloudSettingsStore((s) => s.accentColor);
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const billingTier = useTierStore((s) => s.billingTier);
+  const billingLoading = useTierStore((s) => s.isRefreshing && s.lastRefreshedAt === null);
   const remoteStatus = useConnectionStore((s) => s.status);
   const remoteDesktopName = useConnectionStore((s) => s.desktopName);
   const { user: clerkUser } = useUser();
@@ -461,6 +475,7 @@ export default function SettingsTabScreen() {
             label: 'Subscription',
             icon: CreditCard,
             value: accountValue ?? getBillingPlanPricing(billingTier).label,
+            loading: accountValue === undefined && billingLoading,
             onPress: openCloudRoute('/(app)/settings/cloud-billing'),
           },
           {
@@ -529,6 +544,12 @@ export default function SettingsTabScreen() {
             label: 'Voice',
             icon: Mic,
             onPress: push('/(app)/settings/voice'),
+          },
+          {
+            key: 'permissions',
+            label: 'Permissions',
+            icon: Smartphone,
+            onPress: push('/(app)/settings/permissions'),
           },
           {
             key: 'safety-security',
@@ -624,7 +645,7 @@ export default function SettingsTabScreen() {
           {
             key: 'privacy',
             label: 'Privacy',
-            icon: Shield,
+            icon: LockKeyhole,
             tag: cloudAccessTag,
             tone: 'cloud',
             onPress: openCloudRoute('/(app)/settings/cloud-privacy'),
@@ -672,6 +693,7 @@ export default function SettingsTabScreen() {
             key: 'diagnostics',
             label: 'Export Diagnostics',
             icon: Stethoscope,
+            hint: 'Asks before sharing a diagnostics summary',
             onPress: handleExportDiagnostics,
           },
           {
@@ -692,6 +714,7 @@ export default function SettingsTabScreen() {
                   label: 'Log Out',
                   icon: LogOut,
                   tone: 'danger' as const,
+                  hint: 'Signs you out on this device',
                   onPress: handleSignOut,
                 },
               ],
@@ -716,6 +739,7 @@ export default function SettingsTabScreen() {
       remoteStatus,
       remoteDesktopName,
       themeMode,
+      billingLoading,
       billingTier,
       clerkUser,
     ],
@@ -742,13 +766,16 @@ export default function SettingsTabScreen() {
             gap: 12,
           }}
         >
+          <View style={{ width: HEADER_SLOT_SIZE }} />
           <Text
+            accessibilityRole="header"
+            numberOfLines={1}
             style={{
-              color: colors.textPrimary,
-              fontSize: typeScale.title1,
-              lineHeight: 34,
-              fontWeight: '700',
               flex: 1,
+              color: colors.textPrimary,
+              fontSize: typeScale.headline,
+              fontWeight: '600',
+              textAlign: 'center',
             }}
           >
             Settings
@@ -759,9 +786,9 @@ export default function SettingsTabScreen() {
             accessibilityLabel="Close settings"
             hitSlop={10}
             style={({ pressed }) => ({
-              width: 40,
-              height: 40,
-              borderRadius: 20,
+              width: HEADER_SLOT_SIZE,
+              height: HEADER_SLOT_SIZE,
+              borderRadius: HEADER_SLOT_SIZE / 2,
               alignItems: 'center',
               justifyContent: 'center',
               backgroundColor: pressed ? colors.surfaceHover : colors.surfaceElevated,
@@ -778,7 +805,6 @@ export default function SettingsTabScreen() {
           paddingHorizontal: 16,
           paddingBottom: 36,
         }}
-        showsVerticalScrollIndicator={false}
       >
         <ProfileHeader onPress={push('/(app)/profile')} />
 

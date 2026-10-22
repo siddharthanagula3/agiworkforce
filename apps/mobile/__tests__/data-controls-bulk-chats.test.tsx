@@ -166,6 +166,16 @@ describe('Data controls, Chat history bulk actions', () => {
     expect(alertCalls).toHaveLength(0);
   });
 
+  it('announces Delete account as a button that opens the confirmed deletion flow', () => {
+    const screen = render(<DataControlsScreen />);
+
+    const row = screen.getByTestId('delete-account-row');
+    expect(row.props.accessibilityRole).toBe('button');
+    expect(row.props.accessibilityHint).toBe(
+      'Opens account deletion, which asks you to confirm first',
+    );
+  });
+
   it('does not show the previous account’s sync result after an account switch', async () => {
     activateCloudAccount('account-a');
     let resolveSync!: (result: {

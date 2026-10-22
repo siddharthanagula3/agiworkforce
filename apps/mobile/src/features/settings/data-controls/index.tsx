@@ -4,6 +4,7 @@ import { PressableBox } from '@/components/ui/pressable-box';
 import {
   Archive,
   ArrowUpFromLine,
+  ChevronRight,
   Cloud,
   Database,
   Download,
@@ -399,13 +400,37 @@ export default function DataControlsScreen() {
           value={cloudUnlocked ? undefined : 'Sign in required'}
           onPress={() => router.push('/(app)/settings/cloud-account')}
         />
-        <SettingsRow
-          label="Delete account"
-          icon={Trash2}
-          value={cloudUnlocked ? undefined : 'Sign in required'}
+        <PressableBox
           onPress={() => router.push('/(app)/settings/cloud-account')}
-          isLast
-        />
+          accessibilityRole="button"
+          accessibilityLabel={cloudUnlocked ? 'Delete account' : 'Delete account. Sign in required'}
+          accessibilityHint="Opens account deletion, which asks you to confirm first"
+          testID="delete-account-row"
+          style={{
+            minHeight: 52,
+            paddingHorizontal: 14,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <Trash2 size={19} color={colors.agentError} />
+          <Text
+            numberOfLines={1}
+            style={{ flex: 1, color: colors.agentError, fontSize: typeScale.body }}
+          >
+            Delete account
+          </Text>
+          {cloudUnlocked ? null : (
+            <Text
+              numberOfLines={1}
+              style={{ color: colors.textMuted, fontSize: typeScale.footnote, maxWidth: 140 }}
+            >
+              Sign in required
+            </Text>
+          )}
+          <ChevronRight size={17} color={colors.textMuted} />
+        </PressableBox>
       </SettingsGroup>
     </SettingsScreenShell>
   );
