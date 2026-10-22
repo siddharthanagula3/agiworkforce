@@ -134,19 +134,78 @@ describe('WebSearchCard', () => {
     expect(screen.queryByText('Result 6 Title')).not.toBeNull();
   });
 
-  it('calls window.open with noopener on result row click', () => {
+  it('shows the host line and a two-line snippet under each title', () => {
+    render(
+      <WebSearchCard
+        query="test"
+        resultCount={1}
+        results={[
+          {
+            url: 'https://www.target.com/guide',
+            title: 'Target guide',
+            snippet: 'What the page says about the topic.',
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByText('target.com').className).toContain('truncate');
+    expect(screen.getByText('What the page says about the topic.').className).toContain(
+      'line-clamp-2',
+    );
+  });
+
+  it('falls back to the host when a result has no title', () => {
+    render(
+      <WebSearchCard
+        query="test"
+        resultCount={1}
+        results={[{ url: 'https://untitled.example/page', title: '' }]}
+      />,
+    );
+    expect(screen.getAllByText('untitled.example').length).toBeGreaterThan(0);
+  });
+
+  it('opens an in-app source view on row click instead of leaving the app', () => {
     const openSpy = vi.spyOn(window, 'open').mockImplementation(() => null);
     render(
       <WebSearchCard
         query="test"
         resultCount={1}
-        results={[{ url: 'https://target.com', title: 'Target', domain: 'target.com' }]}
+        results={[
+          {
+            url: 'https://target.com/a/b',
+            title: 'Target',
+            domain: 'target.com',
+            snippet: 'Snippet text.',
+          },
+        ]}
       />,
     );
-    const resultBtn = screen.getByText('Target').closest('button');
-    fireEvent.click(resultBtn as Element);
-    expect(openSpy).toHaveBeenCalledWith('https://target.com', '_blank', 'noopener');
+    const row = screen.getByText('Target').closest('button') as HTMLButtonElement;
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(row);
+
+    expect(openSpy).not.toHaveBeenCalled();
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    const view = screen.getByRole('region', { name: 'Target' });
+    expect(row.getAttribute('aria-controls')).toBe(view.id);
+    expect(view.textContent).toContain('https://target.com/a/b');
+    const link = screen.getByRole('link', { name: /Open in new tab/ });
+    expect(link.getAttribute('href')).toBe('https://target.com/a/b');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
+
+    fireEvent.click(row);
+    expect(screen.queryByRole('region', { name: 'Target' })).toBeNull();
     openSpy.mockRestore();
+  });
+
+  it('keeps one source view open at a time', () => {
+    render(<WebSearchCard query="test" resultCount={2} results={makeResults(2)} />);
+    fireEvent.click(screen.getByText('Result 1 Title').closest('button') as Element);
+    fireEvent.click(screen.getByText('Result 2 Title').closest('button') as Element);
+    expect(screen.queryByRole('region', { name: 'Result 1 Title' })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Result 2 Title' })).not.toBeNull();
   });
 
   it('default showMoreThreshold is 4', () => {
