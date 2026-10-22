@@ -6,6 +6,8 @@ import '@/app/i18n/index';
 import { saveDisplayName, savePreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { GeneralSection } from './GeneralSection';
 import { ACCENT_COLORS } from '@shared/stores/web-settings-store';
+import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, formatShortcutKeys } from '@agiworkforce/unified-chat';
+import { safePlatform } from '@shared/utils/browser-utils';
 type ScanModule0 = typeof import('@shared/stores/web-settings-store');
 
 const mocks = vi.hoisted(() => ({
@@ -14,10 +16,12 @@ const mocks = vi.hoisted(() => ({
   setHighContrast: vi.fn(),
   setCodeTheme: vi.fn(),
   setMotion: vi.fn(),
+  setFollowUpBehavior: vi.fn(),
   settings: {
     accentColor: 'default' as string,
     highContrast: false,
     motion: 'system' as 'system' | 'reduced',
+    followUpBehavior: 'queue' as 'queue' | 'steer',
   },
   tts: {
     isSupported: false,
@@ -83,6 +87,10 @@ vi.mock('@shared/stores/web-settings-store', async (importOriginal) => {
         setAccentColor: mocks.setAccentColor,
         highContrast: mocks.settings.highContrast,
         setHighContrast: mocks.setHighContrast,
+        sendWithEnter: true,
+        setSendWithEnter: vi.fn(),
+        followUpBehavior: mocks.settings.followUpBehavior,
+        setFollowUpBehavior: mocks.setFollowUpBehavior,
       }),
   };
 });
@@ -392,5 +400,74 @@ describe('GeneralSection profile save', () => {
 
     expect(screen.getByRole('button', { name: 'Save profile' })).toBeDisabled();
     expect(vi.mocked(saveDisplayName)).not.toHaveBeenCalled();
+  });
+});
+
+describe('GeneralSection composer and theme captions', () => {
+  beforeEach(() => {
+    mocks.fetchPreferences.mockReset();
+    mocks.fetchPreferences.mockResolvedValue({});
+    mocks.settings.followUpBehavior = 'queue';
+    mocks.setFollowUpBehavior.mockReset();
+  });
+
+  it('captions each theme option with its visible name', () => {
+    render(<GeneralSection />);
+
+    const group = screen.getByRole('group', { name: 'Theme' });
+    for (const name of ['System', 'Light', 'Dark']) {
+      const option = within(group).getByRole('button', { name: `${name} theme` });
+      expect(option).toHaveTextContent(name);
+    }
+  });
+
+  it('groups the send and follow-up controls under a Composer heading', () => {
+    render(<GeneralSection />);
+
+    const composer = screen.getByRole('region', { name: 'Composer' });
+    expect(within(composer).getByRole('switch', { name: 'Send with Enter' })).toBeVisible();
+    expect(within(composer).getByRole('group', { name: 'Follow-up behavior' })).toBeVisible();
+  });
+
+  it('offers follow-up behavior as a Queue or Steer choice that marks the saved one', async () => {
+    render(<GeneralSection />);
+
+    const group = screen.getByRole('group', { name: 'Follow-up behavior' });
+    expect(screen.queryByRole('combobox', { name: 'Follow-up behavior' })).toBeNull();
+    expect(within(group).getByRole('button', { name: 'Queue' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(within(group).getByRole('button', { name: 'Steer' })).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+
+    await userEvent.click(within(group).getByRole('button', { name: 'Steer' }));
+
+    expect(mocks.setFollowUpBehavior).toHaveBeenCalledWith('steer');
+  });
+
+  it('names the shortcut that sends one follow-up the other way', () => {
+    render(<GeneralSection />);
+
+    const keys = formatShortcutKeys(COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, safePlatform.isMac()).join(
+      ' + ',
+    );
+    expect(
+      screen.getByText(
+        `Queue follow-ups while AGI replies or steer the current reply. Press ${keys} to do the opposite for one message.`,
+      ),
+    ).toBeVisible();
+  });
+
+  it('links Open source licenses to the generated notices page in a new tab', () => {
+    render(<GeneralSection />);
+
+    const view = screen.getByRole('link', { name: 'View open source licenses' });
+    expect(view).toHaveTextContent('View');
+    expect(view).toHaveAttribute('href', '/legal/open-source');
+    expect(view).toHaveAttribute('target', '_blank');
+    expect(screen.getByText('Third-party notices for bundled dependencies.')).toBeVisible();
   });
 });

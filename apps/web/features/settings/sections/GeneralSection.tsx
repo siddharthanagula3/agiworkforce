@@ -4,13 +4,16 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
-import { Switch } from '@agiworkforce/ui';
+import { SegmentedControl, Switch, type SegmentedControlOption } from '@agiworkforce/ui';
 import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
 import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
-import { SettingsSectionLink } from '@/features/settings/components/SettingsSectionLink';
+import {
+  SettingsPageLink,
+  SettingsSectionLink,
+} from '@/features/settings/components/SettingsSectionLink';
 import { useTTS } from '@/lib/hooks/useTTS';
 import { clampVoicePace, useVoiceSessionStore } from '@/features/chat/stores/voice-session-store';
 import { useModelStore, type AIModel } from '@shared/stores/model-store';
@@ -313,7 +316,7 @@ export function GeneralSection() {
           <PreferenceSyncNotice />
           {/* Appearance */}
           <Row label="Appearance">
-            <div className="flex gap-1" role="group" aria-label="Theme">
+            <div className="flex gap-3" role="group" aria-label="Theme">
               {THEME_OPTIONS.map((opt) => {
                 const Icon = opt.icon;
                 const isActive = theme === opt.value;
@@ -322,12 +325,21 @@ export function GeneralSection() {
                     key={opt.value}
                     type="button"
                     onClick={() => setNextTheme(opt.value)}
-                    className={`flex h-8 w-8 items-center justify-center rounded-md border transition-colors ${isActive ? 'border-warning-fill bg-warning-fill text-warning-on-fill' : 'border-border bg-transparent text-muted-foreground hover:bg-muted'}`}
-                    title={opt.label}
+                    className="group flex flex-col items-center gap-1.5 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     aria-label={`${opt.label} theme`}
                     aria-pressed={isActive}
                   >
-                    <Icon className="h-4 w-4" />
+                    <span
+                      aria-hidden="true"
+                      className={`flex h-10 w-16 items-center justify-center rounded-lg border bg-muted transition-colors ${isActive ? 'border-foreground text-foreground ring-1 ring-inset ring-foreground' : 'border-border text-muted-foreground group-hover:text-foreground'}`}
+                    >
+                      <Icon className="h-4 w-4" />
+                    </span>
+                    <span
+                      className={`text-sm ${isActive ? 'text-foreground' : 'text-muted-foreground'}`}
+                    >
+                      {opt.label}
+                    </span>
                   </button>
                 );
               })}
@@ -355,11 +367,8 @@ export function GeneralSection() {
           {/* Code block wrapping */}
           <CodeBlockWrapRow />
           <CodeThemeRow />
-          <SendWithEnterRow />
           <DefaultWorkModeRow />
           <FollowUpSuggestionsRow />
-          <FollowUpBehaviorRow />
-          <CodeFollowUpModeRow />
 
           {/* Read-aloud voice */}
           <ReadAloudVoiceRow />
@@ -371,6 +380,17 @@ export function GeneralSection() {
         </div>
       </div>
 
+      <section aria-labelledby="general-composer-heading">
+        <h2 id="general-composer-heading" className="mb-4 text-h4 text-foreground">
+          Composer
+        </h2>
+        <div className="flex flex-col gap-5">
+          <SendWithEnterRow />
+          <FollowUpBehaviorRow />
+          <CodeFollowUpModeRow />
+        </div>
+      </section>
+
       {/* Custom slash commands */}
       <div>
         <h2 className="mb-1 text-h4 text-foreground">Custom commands</h2>
@@ -381,6 +401,8 @@ export function GeneralSection() {
         </p>
         <CustomCommandsSettings />
       </div>
+
+      <OpenSourceLicensesRow />
     </div>
   );
 }
@@ -869,6 +891,15 @@ function FollowUpSuggestionsRow() {
   );
 }
 
+const FOLLOW_UP_BEHAVIOR_OPTIONS: readonly SegmentedControlOption<FollowUpBehavior>[] = [
+  { value: 'queue', label: 'Queue' },
+  { value: 'steer', label: 'Steer' },
+];
+
+function followUpInvertKeys(): string {
+  return formatShortcutKeys(COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, safePlatform.isMac()).join(' + ');
+}
+
 function FollowUpBehaviorRow() {
   const followUpBehavior = useSettingsStore((state) => state.followUpBehavior);
   const setFollowUpBehavior = useSettingsStore((state) => state.setFollowUpBehavior);
@@ -876,17 +907,15 @@ function FollowUpBehaviorRow() {
   return (
     <Row
       label="Follow-up behavior"
-      hint="Whether a message you send while AGI works waits for the next reply or steers the current one at its next step."
+      hint={`Queue follow-ups while AGI replies or steer the current reply. Press ${followUpInvertKeys()} to do the opposite for one message.`}
     >
-      <select
+      <SegmentedControl
+        options={FOLLOW_UP_BEHAVIOR_OPTIONS}
         value={followUpBehavior}
-        onChange={(event) => setFollowUpBehavior(event.target.value as FollowUpBehavior)}
+        onValueChange={setFollowUpBehavior}
         aria-label="Follow-up behavior"
-        className={SELECT_CLASS}
-      >
-        <option value="queue">Queue</option>
-        <option value="steer">Steer</option>
-      </select>
+        className="shrink-0"
+      />
     </Row>
   );
 }
@@ -898,10 +927,7 @@ function CodeFollowUpModeRow() {
   const codeFollowUpQueueMode = useSettingsStore((state) => state.codeFollowUpQueueMode);
   const setCodeFollowUpQueueMode = useSettingsStore((state) => state.setCodeFollowUpQueueMode);
   if (host === null) return null;
-  const invertKeys = formatShortcutKeys(
-    COMPOSER_FOLLOW_UP_INVERT_SHORTCUT,
-    safePlatform.isMac(),
-  ).join(' + ');
+  const invertKeys = followUpInvertKeys();
 
   return (
     <Row
@@ -919,6 +945,24 @@ function CodeFollowUpModeRow() {
         <option value="steer">Steer</option>
         <option value="queue">Queue</option>
       </select>
+    </Row>
+  );
+}
+
+const OPEN_SOURCE_NOTICES_HREF = '/legal/open-source';
+
+function OpenSourceLicensesRow() {
+  return (
+    <Row label="Open source licenses" hint="Third-party notices for bundled dependencies.">
+      <SettingsPageLink
+        href={OPEN_SOURCE_NOTICES_HREF}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="View open source licenses"
+        className="inline-flex h-8 shrink-0 items-center self-start rounded-full border border-border px-4 text-sm font-medium text-foreground transition-colors hover:bg-muted sm:self-auto"
+      >
+        View
+      </SettingsPageLink>
     </Row>
   );
 }
