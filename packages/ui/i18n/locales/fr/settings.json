@@ -205,5 +205,6 @@
     "memoriesFound_other": "{{count}} souvenirs trouvés",
     "memoriesSelected_one": "Importer {{count}} souvenir",
     "memoriesSelected_other": "Importer {{count}} souvenirs"
-  }
+  },
+  "autoCorrectSpelling": "Correction orthographique automatique"
 }

@@ -25,10 +25,6 @@ import type { ResearchPlanDecision } from '@/src/features/chat/components/resear
 import type { ResearchPlanChoices } from '@/src/features/chat/utils/researchPlanChoices';
 import type { ResearchStep } from '@agiworkforce/types';
 import { Composer } from '@/src/features/chat/components/Composer/Composer';
-import {
-  TASK_CHIP_SEND_CONTEXT,
-  type TaskChipType,
-} from '@/src/features/chat/components/TaskChips';
 import { QuotedReplyBar } from '@/src/features/chat/components/QuotedReplyBar';
 import { trackProductEvent } from '@/services/productAnalytics';
 import { ContextWarningChip } from '@/src/features/chat/components/ContextWarningChip';
@@ -104,11 +100,8 @@ import {
   type ProviderMode,
   type SendPreviewInput,
 } from '@agiworkforce/types';
-import {
-  UsageLimitBanner,
-  usageWarningFromSnapshot,
-} from '@/src/features/chat/components/UsageLimitBanner';
-import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
+import { UsageLimitBanner } from '@/src/features/chat/components/UsageLimitBanner';
+import { useWorkUsageLimit } from '@/src/features/chat/hooks/useWorkUsageLimit';
 import {
   DEFAULT_CLOUD_MODEL_ID,
   DEFAULT_LOCAL_MODEL_ID,
@@ -300,11 +293,6 @@ export default function ChatScreen() {
   const clearSelectedSkill = useMobileSkillSelectionStore((s) => s.clearSkill);
   const appMode = useChatAppModeStore((s) => s.appMode);
 
-  const usageSnapshot = useCloudUsageStore((s) =>
-    s.ownerId !== null && s.ownerId === clerkUserId ? s.snapshot : null,
-  );
-  const refreshUsage = useCloudUsageStore((s) => s.refresh);
-  const [dismissedUsageWarning, setDismissedUsageWarning] = useState<string | null>(null);
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
 
   const conversation = conversations.find((c) => c.id === id);
@@ -348,16 +336,13 @@ export default function ChatScreen() {
     [conversationExecutionMode, selectedModel, subscriptionTier],
   );
 
-  const usageMetered = conversationExecutionMode === 'cloud' && isClerkSignedIn;
-  useEffect(() => {
-    if (usageMetered && !isStreaming) void refreshUsage();
-  }, [usageMetered, isStreaming, paywallError, clerkUserId, refreshUsage]);
-
-  const usageWarning = useMemo(
-    () => (usageMetered && usageSnapshot ? usageWarningFromSnapshot(usageSnapshot) : null),
-    [usageMetered, usageSnapshot],
-  );
-  const usageWarningKey = usageWarning ? `${usageWarning.bucket}:${usageWarning.severity}` : null;
+  const usageLimit = useWorkUsageLimit({
+    metered: conversationExecutionMode === 'cloud' && isClerkSignedIn,
+    isStreaming,
+    refreshKey: paywallError,
+  });
+  const usageSnapshot = usageLimit.snapshot;
+  const workUsageCardShown = workMode === 'agiwork' && usageLimit.exhaustedRecovery !== null;
   const paywallPresentation = classifyManagedQuotaErrorCode(paywallError?.code);
   const paywallResetAt =
     paywallPresentation?.showResetTime && usageSnapshot
@@ -447,7 +432,6 @@ export default function ChatScreen() {
     (
       text: string,
       attachments?: Attachment[],
-      mode?: TaskChipType,
       dispatchOptions?: { awaitCompletion?: boolean },
     ): boolean | Promise<boolean> => {
       if (!id) return false;
@@ -649,10 +633,7 @@ export default function ChatScreen() {
         skillSelection?.ownerId === clerkUserId
           ? skillSelection.name
           : undefined;
-      const sendOptions = {
-        ...(mode ? TASK_CHIP_SEND_CONTEXT[mode] : {}),
-        ...(skillNameForTurn ? { skillName: skillNameForTurn } : {}),
-      };
+      const sendOptions = skillNameForTurn ? { skillName: skillNameForTurn } : {};
 
       quotedMessageScopeRef.current = null;
       setQuotedMessage(null);
@@ -1335,7 +1316,7 @@ export default function ChatScreen() {
       if (!id) throw new Error('No conversation');
       stopSpeaking();
       const previousMessageIds = createMessageIdSet(useChatStore.getState().messages[id] ?? []);
-      const accepted = await handleSend(text, undefined, undefined, { awaitCompletion: true });
+      const accepted = await handleSend(text, undefined, { awaitCompletion: true });
       if (!accepted) {
         throw new Error(useChatStore.getState().error ?? 'Message was not sent. Please try again.');
       }
@@ -1970,11 +1951,10 @@ export default function ChatScreen() {
         <ModelTierWarningBanner />
 
         <UsageLimitBanner
-          warning={usageWarningKey !== dismissedUsageWarning ? usageWarning : null}
-          onGetMoreUsage={() =>
-            router.push('/(app)/settings/cloud-usage' as Parameters<typeof router.push>[0])
-          }
-          onDismiss={() => setDismissedUsageWarning(usageWarningKey)}
+          warning={workUsageCardShown ? null : usageLimit.warning}
+          actionLabel={usageLimit.actionLabel}
+          onAction={usageLimit.openRecovery}
+          onDismiss={usageLimit.dismissWarning}
         />
 
         <ProviderConsentBanner
@@ -2004,7 +1984,7 @@ export default function ChatScreen() {
           onDismiss={clearError}
         />
 
-        {/* Composer, shows TaskChips when conversation is empty.
+        {/* Composer.
             Hidden in inline voice mode: VoiceInlineBar IS the composer there,
             and rendering both stacked two input rows on screen at once, which
             is neither reference-03 nor what VoiceInlineBar's own docstring
@@ -2033,7 +2013,8 @@ export default function ChatScreen() {
             attachRef={chatInputAttachRef}
             sendPreview={sendPreviewInput}
             attachmentPrivacyShortLabel={sendPreviewPresentation.privacyShortLabel}
-            showChips={conversationMessages.length === 0}
+            isThreadActive={conversationMessages.length > 0}
+            exhaustedUsageRecovery={usageLimit.exhaustedRecovery}
             initialText={initialPrompt || undefined}
             draftKey={id}
             draftProvenance={

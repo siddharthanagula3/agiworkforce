@@ -1,5 +1,5 @@
 import React from 'react';
-import { render } from '@testing-library/react-native';
+import { fireEvent, render } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockSelectedModel = { id: '' };
@@ -70,6 +70,7 @@ jest.mock('react-i18next', () => ({
         'settings:general': 'General',
         'settings:language': 'Language',
         'settings:storage': 'Storage',
+        'settings:autoCorrectSpelling': 'Auto-correct spelling',
       })[key] ?? key,
     i18n: { language: 'en', resolvedLanguage: 'en' },
   }),
@@ -92,6 +93,7 @@ import {
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useTierStore } from '../src/features/billing/store';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 
 function collectRenderedStrings(node: unknown, out: string[] = []): string[] {
   if (node == null) return out;
@@ -153,6 +155,28 @@ describe('PAR-M21, Settings model value ownership', () => {
 
     expect(getByLabelText(`Models. ${UNKNOWN_MODEL_LABEL}`)).toBeTruthy();
     expect(queryByText('fixture-retired-model')).toBeNull();
+  });
+});
+
+describe('General settings auto-correct', () => {
+  beforeEach(() => {
+    useLocalSettingsStore.setState({ autoCorrectEnabled: true });
+  });
+
+  it('offers Auto-correct spelling, on by default, and saves a change', () => {
+    const { getByTestId } = render(<GeneralSettingsScreen />);
+
+    expect(getByTestId('settings.general.auto-correct').props.value).toBe(true);
+    expect(getByTestId('settings.general.auto-correct').props.accessibilityLabel).toBe(
+      'Auto-correct spelling. On',
+    );
+
+    fireEvent(getByTestId('settings.general.auto-correct'), 'valueChange', false);
+
+    expect(useLocalSettingsStore.getState().autoCorrectEnabled).toBe(false);
+    expect(getByTestId('settings.general.auto-correct').props.accessibilityLabel).toBe(
+      'Auto-correct spelling. Off',
+    );
   });
 });
 

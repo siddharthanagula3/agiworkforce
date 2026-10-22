@@ -205,5 +205,6 @@
     "memoriesFound_other": "메모리 {{count}}개를 찾았습니다",
     "memoriesSelected_one": "메모리 {{count}}개 가져오기",
     "memoriesSelected_other": "메모리 {{count}}개 가져오기"
-  }
+  },
+  "autoCorrectSpelling": "맞춤법 자동 수정"
 }

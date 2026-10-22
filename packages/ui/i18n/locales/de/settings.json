@@ -205,5 +205,6 @@
     "memoriesFound_other": "{{count}} Erinnerungen gefunden",
     "memoriesSelected_one": "{{count}} Erinnerung importieren",
     "memoriesSelected_other": "{{count}} Erinnerungen importieren"
-  }
+  },
+  "autoCorrectSpelling": "Rechtschreibung automatisch korrigieren"
 }

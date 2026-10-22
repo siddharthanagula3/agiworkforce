@@ -52,11 +52,13 @@ export function usageWarningFromSnapshot(snapshot: UsageSnapshot): ManagedUsageW
 
 export function UsageLimitBanner({
   warning,
-  onGetMoreUsage,
+  actionLabel,
+  onAction,
   onDismiss,
 }: {
   warning: ManagedUsageWarning | null;
-  onGetMoreUsage: () => void;
+  actionLabel: string | null;
+  onAction: () => void;
   onDismiss: () => void;
 }) {
   const colors = useThemeColors();
@@ -65,6 +67,7 @@ export function UsageLimitBanner({
 
   return (
     <View
+      testID="chat.usage-limit"
       accessibilityRole="summary"
       style={{
         flexDirection: 'row',
@@ -93,18 +96,21 @@ export function UsageLimitBanner({
           </Text>
         ) : null}
       </View>
-      <PressableBox
-        onPress={onGetMoreUsage}
-        accessibilityRole="button"
-        accessibilityLabel="Get more usage"
-        style={{ minHeight: 44, justifyContent: 'center' }}
-      >
-        <Text
-          style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+      {actionLabel ? (
+        <PressableBox
+          testID="chat.usage-limit.action"
+          onPress={onAction}
+          accessibilityRole="button"
+          accessibilityLabel={actionLabel}
+          style={{ minHeight: 44, justifyContent: 'center' }}
         >
-          Get more usage
-        </Text>
-      </PressableBox>
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.footnote, fontWeight: '600' }}
+          >
+            {actionLabel}
+          </Text>
+        </PressableBox>
+      ) : null}
       <PressableBox
         onPress={onDismiss}
         accessibilityRole="button"

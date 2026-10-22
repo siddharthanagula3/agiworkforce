@@ -39,11 +39,3 @@ describe('recognizeText', () => {
     expect(result.regions).toHaveLength(0);
   });
 });
-
-describe('TaskChipType includes scan', () => {
-  it('exports scan as a valid chip type', () => {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const { TaskChips } = require('../src/features/chat/components/TaskChips');
-    expect(TaskChips).toBeDefined();
-  });
-});

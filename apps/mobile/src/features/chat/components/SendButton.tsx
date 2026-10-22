@@ -6,7 +6,7 @@ import Animated, {
   interpolateColor,
   useSharedValue,
 } from 'react-native-reanimated';
-import { Send, Square, Clock } from 'lucide-react-native';
+import { ArrowUp, Square, Clock } from 'lucide-react-native';
 import { useEffect } from 'react';
 import { useThemeColors, radii, type ColorScheme } from '@/src/ui/theme';
 import { motion } from '@/src/ui/theme/tokens';
@@ -33,7 +33,7 @@ function stateColors(colors: ColorScheme): Record<SendButtonState, string> {
 function iconForState(state: SendButtonState) {
   if (state === 'streaming') return Square;
   if (state === 'queued') return Clock;
-  return Send;
+  return ArrowUp;
 }
 
 function fillForState(state: SendButtonState, color: string) {

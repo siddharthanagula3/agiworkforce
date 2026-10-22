@@ -205,5 +205,6 @@
     "memoriesFound_other": "{{count}} मेमोरी मिलीं",
     "memoriesSelected_one": "{{count}} मेमोरी आयात करें",
     "memoriesSelected_other": "{{count}} मेमोरी आयात करें"
-  }
+  },
+  "autoCorrectSpelling": "स्वतः वर्तनी सुधार"
 }

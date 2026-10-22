@@ -26,6 +26,7 @@ export interface LocalSettingsState {
   referencePastChats: boolean;
   generateMemoryFromHistory: boolean;
   includeSensitiveTopics: boolean;
+  autoCorrectEnabled: boolean;
   personalization: Personalization;
 
   setThemeMode: (mode: ThemeMode) => void;
@@ -38,6 +39,7 @@ export interface LocalSettingsState {
   setReferencePastChats: (enabled: boolean) => void;
   setGenerateMemoryFromHistory: (enabled: boolean) => void;
   setIncludeSensitiveTopics: (enabled: boolean) => void;
+  setAutoCorrectEnabled: (enabled: boolean) => void;
   setPersonalization: (partial: Partial<Personalization>) => void;
 }
 
@@ -70,6 +72,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       referencePastChats: true,
       generateMemoryFromHistory: true,
       includeSensitiveTopics: false,
+      autoCorrectEnabled: true,
       personalization: defaultPersonalization,
 
       setThemeMode: (mode) => set({ themeMode: mode }),
@@ -82,6 +85,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       setReferencePastChats: (enabled) => set({ referencePastChats: enabled }),
       setGenerateMemoryFromHistory: (enabled) => set({ generateMemoryFromHistory: enabled }),
       setIncludeSensitiveTopics: (enabled) => set({ includeSensitiveTopics: enabled }),
+      setAutoCorrectEnabled: (enabled) => set({ autoCorrectEnabled: enabled }),
       setPersonalization: (partial) =>
         set({ personalization: { ...get().personalization, ...partial } }),
     }),

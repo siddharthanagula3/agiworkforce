@@ -205,5 +205,6 @@
     "memoriesFound_other": "{{count}} memórias encontradas",
     "memoriesSelected_one": "Importar {{count}} memória",
     "memoriesSelected_other": "Importar {{count}} memórias"
-  }
+  },
+  "autoCorrectSpelling": "Correção ortográfica automática"
 }

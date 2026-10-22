@@ -307,5 +307,6 @@
     "memoriesSelected_few": "Импортировать {{count}} воспоминания",
     "memoriesSelected_many": "Импортировать {{count}} воспоминаний",
     "memoriesSelected_other": "Импортировать {{count}} воспоминания"
-  }
+  },
+  "autoCorrectSpelling": "Автоисправление орфографии"
 }

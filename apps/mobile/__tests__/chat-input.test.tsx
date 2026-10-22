@@ -8,6 +8,7 @@ import { requireMobileCloudModel } from '../test-utils/modelFixtures';
 import { LARGE_PASTE_THRESHOLD, pastedTextFileName } from '@agiworkforce/utils/composer-paste';
 import { READING_COLUMN_MAX_WIDTH } from '../src/shared/layout/contentColumn';
 import { useChatViewStore } from '../stores/chat/chatViewStore';
+import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
 
 const mockCapabilityModelId = requireMobileCloudModel((model) => {
   const metadata = getModelMetadataById(model.id);
@@ -306,6 +307,7 @@ describe('ChatInput', () => {
       genericWebSearchAvailable: false,
     };
     useChatViewStore.setState({ workMode: 'chat' });
+    useLocalSettingsStore.setState({ autoCorrectEnabled: true });
     mockGetDraft.mockReturnValue('');
   });
 
@@ -360,6 +362,46 @@ describe('ChatInput', () => {
       expect(getByLabelText('Message input').props.value).toBe('');
       expect(() => getByDisplayValue('Local draft')).toThrow();
       expect(mockSetDraft).not.toHaveBeenCalled();
+    });
+
+    it('carries no Local text or attachment into a Cloud new chat', async () => {
+      const attachRef = React.createRef<ChatInputHandle>();
+      const onSend = jest.fn();
+      const { getByLabelText, rerender } = renderInput({
+        onSend,
+        attachRef,
+        draftKey: 'new-chat',
+        draftProvenance: { scope: 'local' },
+      });
+      fireEvent.changeText(getByLabelText('Message input'), 'private local notes');
+      act(() => {
+        attachRef.current?.addAttachments([
+          {
+            id: 'local-file',
+            uri: 'file:///local/notes.txt',
+            mimeType: 'text/plain',
+            fileName: 'notes.txt',
+            fileSize: 12,
+          },
+        ]);
+      });
+      expect(capturedAttachmentPreviewProps?.attachments).toHaveLength(1);
+
+      await act(async () => {
+        rerender(
+          <ChatInput
+            {...defaultProps}
+            onSend={onSend}
+            attachRef={attachRef}
+            draftKey="new-chat"
+            draftProvenance={{ scope: 'cloud', ownerId: 'account-a' }}
+          />,
+        );
+      });
+
+      expect(getByLabelText('Message input').props.value).toBe('');
+      expect(capturedAttachmentPreviewProps?.attachments).toHaveLength(0);
+      expect(onSend).not.toHaveBeenCalled();
     });
 
     it('renders and persists no unowned draft', () => {
@@ -1220,6 +1262,101 @@ describe('ChatInput', () => {
       });
 
       expect(onSend).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  describe('Work usage limit', () => {
+    function enterCloudWork() {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      mockTierState = { ...mockTierState, tier: 'pro' };
+      useChatViewStore.setState({ workMode: 'agiwork' });
+    }
+
+    it('shows the out-of-usage card and blocks send while Work usage is exhausted', async () => {
+      enterCloudWork();
+      const onSend = jest.fn();
+      const { getByLabelText, getByTestId, getByText } = renderInput({
+        onSend,
+        exhaustedUsageRecovery: 'add_credits',
+      });
+
+      expect(getByTestId('chat.composer.work-usage')).toBeTruthy();
+      expect(getByText('Add credits')).toBeTruthy();
+
+      fireEvent.changeText(getByLabelText('Message input'), 'Plan the launch');
+      expect(getByTestId('send-button').props.accessibilityState?.disabled).toBe(true);
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+      expect(onSend).not.toHaveBeenCalled();
+      expect(getByLabelText('Message input').props.value).toBe('Plan the launch');
+    });
+
+    it('sends in Work once usage is no longer exhausted', async () => {
+      enterCloudWork();
+      const onSend = jest.fn();
+      const { getByLabelText, getByTestId, queryByTestId } = renderInput({
+        onSend,
+        exhaustedUsageRecovery: null,
+      });
+
+      expect(queryByTestId('chat.composer.work-usage')).toBeNull();
+      fireEvent.changeText(getByLabelText('Message input'), 'Plan the launch');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+      expect(onSend).toHaveBeenCalledWith('Plan the launch', undefined);
+    });
+
+    it('leaves a Chat-mode send to the server even when the usage reading is exhausted', async () => {
+      mockAppMode = 'cloud';
+      mockIsClerkSignedIn = true;
+      mockTierState = { ...mockTierState, tier: 'pro' };
+      const onSend = jest.fn();
+      const { getByLabelText, getByTestId, queryByTestId } = renderInput({
+        onSend,
+        exhaustedUsageRecovery: 'add_credits',
+      });
+
+      expect(queryByTestId('chat.composer.work-usage')).toBeNull();
+      fireEvent.changeText(getByLabelText('Message input'), 'Hello');
+      await act(async () => {
+        fireEvent.press(getByTestId('send-button'));
+      });
+      expect(onSend).toHaveBeenCalledWith('Hello', undefined);
+    });
+  });
+
+  describe('auto-correct preference', () => {
+    it('keeps the platform auto-correct and spell check on by default', () => {
+      const { getByLabelText } = renderInput();
+      const input = getByLabelText('Message input');
+      expect(input.props.autoCorrect).toBe(true);
+      expect(input.props.spellCheck).toBe(true);
+    });
+
+    it('turns auto-correct and spell check off when the setting is off', () => {
+      useLocalSettingsStore.setState({ autoCorrectEnabled: false });
+      const { getByLabelText } = renderInput();
+      const input = getByLabelText('Message input');
+      expect(input.props.autoCorrect).toBe(false);
+      expect(input.props.spellCheck).toBe(false);
+    });
+  });
+
+  describe('stacked layout signal', () => {
+    it('tells the host when the composer stacks and when it returns to one line', () => {
+      const onStackedChange = jest.fn();
+      const { getByLabelText } = renderInput({ onStackedChange });
+      expect(onStackedChange).toHaveBeenLastCalledWith(false);
+
+      fireEvent.changeText(getByLabelText('Message input'), 'line one\nline two\nline three');
+      stackComposer(getByLabelText);
+      expect(onStackedChange).toHaveBeenLastCalledWith(true);
+
+      fireEvent.changeText(getByLabelText('Message input'), '');
+      expect(onStackedChange).toHaveBeenLastCalledWith(false);
     });
   });
 

@@ -4,9 +4,11 @@ import {
   HardDrive,
   MessageSquareDashed,
   Smartphone,
+  SpellCheck,
   Vibrate,
 } from 'lucide-react-native';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import {
   SettingsGroup,
   SettingsInfo,
@@ -28,6 +30,8 @@ export default function GeneralSettingsScreen() {
   const setHapticsEnabled = useSettingsStore((s) => s.setHapticsEnabled);
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
   const setTemporaryChat = useSettingsStore((s) => s.setTemporaryChat);
+  const autoCorrectEnabled = useLocalSettingsStore((s) => s.autoCorrectEnabled);
+  const setAutoCorrectEnabled = useLocalSettingsStore((s) => s.setAutoCorrectEnabled);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const subscriptionTier = useTierStore((s) => s.tier);
 
@@ -39,6 +43,13 @@ export default function GeneralSettingsScreen() {
         icon={Smartphone}
       />
       <SettingsGroup>
+        <SettingsSwitchRow
+          label={t('settings:autoCorrectSpelling')}
+          icon={SpellCheck}
+          value={autoCorrectEnabled}
+          onValueChange={setAutoCorrectEnabled}
+          testID="settings.general.auto-correct"
+        />
         <SettingsSwitchRow
           label="Haptic Feedback"
           icon={Vibrate}

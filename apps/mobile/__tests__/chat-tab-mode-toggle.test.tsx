@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, waitFor, within } from '@testing-library/react-native';
 import { requireAutoMode } from '../test-utils/modelFixtures';
 
 const mockPush = jest.fn();
@@ -20,6 +20,16 @@ let mockChatInputDraftProvenance:
   { scope: 'local' } | { scope: 'cloud'; ownerId: string } | undefined;
 let mockChatInputOnOpenCompare: (() => void) | undefined;
 let mockChatInputSelectedSkillName: string | undefined;
+let mockChatInputExhaustedUsageRecovery: string | null | undefined;
+let mockChatInputOnStackedChange: ((stacked: boolean) => void) | undefined;
+let mockUsageSnapshot: Record<string, unknown> | null = null;
+
+jest.mock('@/services/usage', () => ({
+  fetchUsageSnapshot: jest.fn(async () => {
+    if (!mockUsageSnapshot) throw new Error('no usage fixture');
+    return mockUsageSnapshot;
+  }),
+}));
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -86,6 +96,8 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
         draftProvenance?: { scope: 'local' } | { scope: 'cloud'; ownerId: string };
         onOpenCompare?: () => void;
         selectedSkillName?: string;
+        exhaustedUsageRecovery?: string | null;
+        onStackedChange?: (stacked: boolean) => void;
       },
       ref: React.Ref<unknown>,
     ) {
@@ -94,6 +106,8 @@ jest.mock('@/src/features/chat/components/ChatInput', () => {
       mockChatInputDraftProvenance = props.draftProvenance;
       mockChatInputOnOpenCompare = props.onOpenCompare;
       mockChatInputSelectedSkillName = props.selectedSkillName;
+      mockChatInputExhaustedUsageRecovery = props.exhaustedUsageRecovery;
+      mockChatInputOnStackedChange = props.onStackedChange;
       return <View testID="chat-input" />;
     }),
   };
@@ -150,6 +164,7 @@ jest.mock('lucide-react-native', () => {
 jest.mock('@/src/features/model-picker/installStore', () => ({
   useModelInstallStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({ installedModelIds: [], readySystemModelIds: [], jobs: {} }),
+  readyLocalModelIdOr: (fallback: string) => fallback,
 }));
 
 jest.mock('@/lib/mmkv', () => ({
@@ -186,6 +201,7 @@ import {
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 import { useMobileSkillSelectionStore } from '../src/features/skills/selectionStore';
+import { useCloudUsageStore } from '../src/features/settings/cloud-usage/store';
 import {
   clearPostAuthIntent,
   CLOUD_CHAT_POST_AUTH_INTENT,
@@ -206,6 +222,10 @@ describe('Chat tab mode toggle', () => {
     mockChatInputDraftProvenance = undefined;
     mockChatInputOnOpenCompare = undefined;
     mockChatInputSelectedSkillName = undefined;
+    mockChatInputExhaustedUsageRecovery = undefined;
+    mockChatInputOnStackedChange = undefined;
+    mockUsageSnapshot = null;
+    useCloudUsageStore.getState().clear();
     mockChatFeatures = { imageGen: true };
     mockWorkMode = 'chat';
     useChatAppModeStore.setState({ appMode: 'local' });
@@ -226,14 +246,90 @@ describe('Chat tab mode toggle', () => {
     });
   });
 
-  it('keeps the Local/Cloud toggle out of the chat header', () => {
-    useChatAppModeStore.setState({ appMode: 'cloud' });
+  it('shows the Local/Cloud toggle in the new-chat header in Local and in Cloud', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
+    const local = render(<ChatTabScreen />);
+    expect(local.getByTestId('chat.mode-toggle.local').props.accessibilityState.selected).toBe(
+      true,
+    );
+    expect(local.getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(
+      false,
+    );
+    local.unmount();
 
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const cloud = render(<ChatTabScreen />);
+    expect(cloud.getByTestId('chat.mode-toggle.cloud').props.accessibilityState.selected).toBe(
+      true,
+    );
+  });
+
+  it('starts the new chat in Cloud and rebinds the draft to the Cloud owner', async () => {
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const screen = render(<ChatTabScreen />);
+    expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
+
+    fireEvent.press(screen.getByTestId('chat.mode-toggle.cloud'));
+
+    await waitFor(() => {
+      expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    });
+    expect(mockChatInputDraftProvenance).toEqual({
+      scope: 'cloud',
+      ownerId: 'mobile-image-test-user',
+    });
+    expect(useModelStore.getState().selectedModel).not.toBe(DEFAULT_LOCAL_MODEL_ID);
+    expect(mockCreateConversation).not.toHaveBeenCalled();
+    expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  it('stays in Local and asks for Cloud access when Cloud is locked', () => {
+    useWaitlistStore.setState({ cloudUnlocked: false });
     const screen = render(<ChatTabScreen />);
 
-    expect(screen.queryByTestId('chat.mode-toggle')).toBeNull();
-    expect(screen.queryByTestId('chat.mode-toggle.cloud')).toBeNull();
+    fireEvent.press(screen.getByTestId('chat.mode-toggle.cloud'));
+
+    expect(useChatAppModeStore.getState().appMode).toBe('local');
+    expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
+    expect(mockPush).toHaveBeenCalledWith({
+      pathname: '/(auth)/login',
+      params: { [POST_AUTH_INTENT_PARAM]: CLOUD_CHAT_POST_AUTH_INTENT },
+    });
+  });
+
+  it('switches a new Cloud chat back to Local and leaves Work', async () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const screen = render(<ChatTabScreen />);
+
+    fireEvent.press(screen.getByTestId('chat.mode-toggle.local'));
+
+    await waitFor(() => {
+      expect(useChatAppModeStore.getState().appMode).toBe('local');
+    });
+    expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
+    expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
+    expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+  });
+
+  it('hides the greeting while the composer is stacked', () => {
+    const screen = render(<ChatTabScreen />);
+    expect(screen.getByTestId('chat.new-chat.greeting')).toBeTruthy();
+
+    act(() => mockChatInputOnStackedChange?.(true));
+    expect(screen.queryByTestId('chat.new-chat.greeting')).toBeNull();
+
+    act(() => mockChatInputOnStackedChange?.(false));
+    expect(screen.getByTestId('chat.new-chat.greeting')).toBeTruthy();
+  });
+
+  it('renders no starter suggestion chips in the empty new chat', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    const screen = render(<ChatTabScreen />);
+    expect(screen.queryByText('Create an image')).toBeNull();
+    expect(screen.queryByText('Write or edit')).toBeNull();
+    expect(screen.queryByText('Search the web')).toBeNull();
   });
 
   it('shows Chat and Work in the header and selects Work only for a Cloud Pro session', () => {
@@ -559,5 +655,84 @@ describe('Chat tab mode toggle', () => {
     expect(mockBeginImageGeneration).not.toHaveBeenCalled();
     expect(mockGenerateImage).not.toHaveBeenCalled();
     expect(mockSendMessage).not.toHaveBeenCalled();
+  });
+
+  describe('new-chat usage limit', () => {
+    function exhaustedSnapshot(planTier: string, purchasedRemaining: number | null = 0) {
+      const window = { allowance: 100, used: 100, remaining: 0, reset_at: null };
+      return {
+        planTier,
+        usagePercentage: 40,
+        usageResetAt: null,
+        hasUsageRemaining: false,
+        periodStart: null,
+        periodEnd: null,
+        subscriptionStatus: 'active',
+        sessionUsagePercentage: 100,
+        sessionResetAt: null,
+        weeklyUsagePercentage: 60,
+        weeklyResetAt: null,
+        flagshipWeeklyUsagePercentage: 0,
+        flagshipWeeklyResetAt: null,
+        credits: {
+          monthly: window,
+          weekly: window,
+          five_hour: window,
+          flagship_weekly: null,
+          purchased: { remaining: purchasedRemaining, overage_enabled: false },
+          bonus: null,
+        },
+      };
+    }
+
+    it('shows a Free account only the limit and Upgrade, which opens billing', async () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      useTierStore.setState({ tier: 'free' });
+      mockUsageSnapshot = exhaustedSnapshot('free');
+
+      const screen = render(<ChatTabScreen />);
+
+      const banner = await screen.findByTestId('chat.usage-limit');
+      expect(within(banner).getByText("You've reached the Free limit for now")).toBeTruthy();
+      expect(within(banner).queryByText(/%|credit/i)).toBeNull();
+      fireEvent.press(within(banner).getByText('Upgrade'));
+      expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    });
+
+    it('hands the exhausted Work state to the composer instead of a second banner', async () => {
+      mockWorkMode = 'agiwork';
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockUsageSnapshot = exhaustedSnapshot('pro');
+
+      const screen = render(<ChatTabScreen />);
+
+      await waitFor(() => {
+        expect(mockChatInputExhaustedUsageRecovery).toBe('add_credits');
+      });
+      expect(screen.queryByTestId('chat.usage-limit')).toBeNull();
+    });
+
+    it('does not treat usage as exhausted while purchased credits remain', async () => {
+      mockWorkMode = 'agiwork';
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useWaitlistStore.setState({ cloudUnlocked: true });
+      mockUsageSnapshot = exhaustedSnapshot('pro', 25);
+
+      const screen = render(<ChatTabScreen />);
+
+      const banner = await screen.findByTestId('chat.usage-limit');
+      expect(mockChatInputExhaustedUsageRecovery).toBeNull();
+      fireEvent.press(within(banner).getByText('Add credits'));
+      expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    });
+
+    it('reads no Cloud usage for a Local new chat', () => {
+      mockUsageSnapshot = exhaustedSnapshot('pro');
+      const screen = render(<ChatTabScreen />);
+      expect(screen.queryByTestId('chat.usage-limit')).toBeNull();
+      expect(mockChatInputExhaustedUsageRecovery).toBeNull();
+    });
   });
 });

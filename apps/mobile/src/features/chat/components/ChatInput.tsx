@@ -7,7 +7,7 @@ import {
   useLayoutEffect,
   useMemo,
 } from 'react';
-import { Alert, View, TextInput, Keyboard } from 'react-native';
+import { ActivityIndicator, Alert, View, TextInput, Keyboard } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -30,6 +30,7 @@ import {
   resolveWorkUsageRecovery,
   summarizeSendPreview,
   type SendPreviewInput,
+  type WorkUsageRecovery,
 } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
@@ -54,6 +55,7 @@ import * as VoiceService from '@/src/features/voice/services/voice';
 import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { WorkUsageCard } from './WorkUsageCard';
 import { useTierStore } from '@/src/features/billing/store';
@@ -139,6 +141,8 @@ interface ChatInputProps {
   draftProvenance?: DraftProvenance;
   selectedSkillName?: string;
   onClearSelectedSkill?: () => void;
+  exhaustedUsageRecovery?: WorkUsageRecovery | null;
+  onStackedChange?: (stacked: boolean) => void;
 }
 
 export function ChatInput({
@@ -161,6 +165,8 @@ export function ChatInput({
   draftProvenance,
   selectedSkillName,
   onClearSelectedSkill,
+  exhaustedUsageRecovery = null,
+  onStackedChange,
 }: ChatInputProps) {
   const voiceAllowed = useCapability('canUseVoice');
   const [text, setText] = useState(() =>
@@ -199,6 +205,7 @@ export function ChatInput({
 
   const selectedModel = useModelStore((s) => s.selectedModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
+  const autoCorrectEnabled = useLocalSettingsStore((s) => s.autoCorrectEnabled);
   const chatFeatures = useChatStore((s) => s.features);
   const failureCode = useChatStore((s) => s.failureCode?.code ?? null);
   const appMode = useChatAppModeStore((s) => s.appMode);
@@ -225,6 +232,14 @@ export function ChatInput({
     exitMediaMode();
   }, []);
   const isSignedInCloudChat = appMode === 'cloud' && isClerkSignedIn;
+  const agiWorkActive =
+    appMode === 'cloud' &&
+    workMode === 'agiwork' &&
+    canUseBillingPlanCapability(subscriptionTier, 'agi_work');
+  const usageBlocked = agiWorkActive && exhaustedUsageRecovery !== null;
+  const workUsageRecovery = agiWorkActive
+    ? (resolveWorkUsageRecovery(failureCode, subscriptionTier) ?? exhaustedUsageRecovery)
+    : null;
   const researchActive =
     isSignedInCloudChat &&
     FEATURES.research &&
@@ -351,7 +366,7 @@ export function ChatInput({
 
   const sendComposerMessage = useCallback(
     (sourceText: string) => {
-      if (sendPendingRef.current) return;
+      if (sendPendingRef.current || usageBlocked) return;
       const trimmed = sourceText.trim();
       if (!trimmed && attachments.length === 0) return;
       if (attachmentUploadPhase === 'uploading') {
@@ -426,6 +441,7 @@ export function ChatInput({
       draftKey,
       draftProvenance,
       isStreaming,
+      usageBlocked,
     ],
   );
 
@@ -713,6 +729,12 @@ ${current}`
   const hasContent = text.trim().length > 0 || attachments.length > 0;
   const stacked = isMultiline && !isRecording && !isTranscribing;
 
+  useEffect(() => {
+    onStackedChange?.(stacked);
+  }, [onStackedChange, stacked]);
+
+  useEffect(() => () => onStackedChange?.(false), [onStackedChange]);
+
   const showCommandPalette = text.startsWith('/') && !isStreaming;
   const mentionQuery = appMode === 'cloud' && isClerkSignedIn ? trailingMention(text) : null;
 
@@ -790,14 +812,6 @@ ${current}`
       })),
     });
   }, [sendPreview, text, attachments]);
-
-  const agiWorkActive =
-    appMode === 'cloud' &&
-    workMode === 'agiwork' &&
-    canUseBillingPlanCapability(subscriptionTier, 'agi_work');
-  const workUsageRecovery = agiWorkActive
-    ? resolveWorkUsageRecovery(failureCode, subscriptionTier)
-    : null;
 
   const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
   const placeholder = isStreaming
@@ -1152,45 +1166,56 @@ ${current}`
             </PressableBox>
           ) : null}
 
-          {/* Dictation state, in place of the input: one live waveform that
-              FREEZES while the recognizer resolves the transcript. It replaces
-              the old spinner-plus-timer pair, the reference row carries
-              neither a clock nor a second moving indicator (IMG_0686/0687), and
-              the frozen bars already say capture has ended. The label stays for
-              a truthful "still working" signal, muted and text-only. */}
-          {isRecording || isTranscribing ? (
+          {/* Dictation state, in place of the input: a live waveform while
+              recording, then a centred "Transcribing" label while the
+              recognizer resolves the transcript (IMG_0686/0687). */}
+          {isRecording ? (
             <View
               style={{
                 flex: 1,
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 10,
                 minHeight: 24,
               }}
               accessibilityRole="alert"
-              accessibilityLabel={isRecording ? 'Recording in progress' : 'Transcribing'}
-              testID={isRecording ? 'chat.composer.recording' : 'chat.composer.transcribing'}
+              accessibilityLabel="Recording in progress"
+              testID="chat.composer.recording"
             >
               <View style={{ flex: 1, alignItems: 'flex-start', overflow: 'hidden' }}>
                 <Waveform
-                  color={isRecording ? themeColors.textSecondary : themeColors.textMuted}
-                  active={isRecording}
+                  color={themeColors.textSecondary}
+                  active
                   audioLevel={audioLevel}
-                  barCount={isRecording ? 18 : 10}
+                  barCount={18}
                   maxHeight={20}
                   minHeight={3}
                   barWidth={2.5}
                   gap={3}
                 />
               </View>
-              {isTranscribing ? (
-                <Text
-                  numberOfLines={1}
-                  style={{ color: themeColors.textMuted, fontSize: typeScale.footnote }}
-                >
-                  Transcribing
-                </Text>
-              ) : null}
+            </View>
+          ) : isTranscribing ? (
+            <View
+              style={{
+                flex: 1,
+                alignItems: 'center',
+                justifyContent: 'center',
+                minHeight: 24,
+              }}
+              accessibilityRole="alert"
+              accessibilityLabel="Transcribing"
+              testID="chat.composer.transcribing"
+            >
+              <Text
+                numberOfLines={1}
+                style={{
+                  color: themeColors.textMuted,
+                  fontSize: typeScale.footnote,
+                  textAlign: 'center',
+                }}
+              >
+                Transcribing
+              </Text>
             </View>
           ) : null}
 
@@ -1216,6 +1241,8 @@ ${current}`
               }
             }}
             multiline
+            autoCorrect={autoCorrectEnabled}
+            spellCheck={autoCorrectEnabled}
             numberOfLines={MAX_INPUT_LINES}
             selectionColor={themeColors.teal}
             returnKeyType="default"
@@ -1306,34 +1333,49 @@ ${current}`
             capture and drops the transcript into the composer for review; the
             outboard arrow stops, transcribes and SENDS in one tap, so a spoken
             message no longer needs a stop-then-review-then-send round trip.
-            Both dim while the transcript resolves; cancel (left) stays live. */}
+            While the transcript resolves the stop slot turns into a spinner and
+            send dims (IMG_0687); cancel (left) stays live. */}
         {isRecording || isTranscribing ? (
           <>
-            <PressableBox
-              onPress={isRecording ? handleDictationStop : undefined}
-              disabled={!isRecording}
-              style={{
-                width: 40,
-                height: 40,
-                borderRadius: radii.full,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: themeColors.inputSurface,
-                opacity: isRecording ? 1 : 0.5,
-              }}
-              hitSlop={6}
-              testID="chat.composer.dictation-stop"
-              accessibilityLabel="Stop recording"
-              accessibilityHint="Stops recording and transcribes it into the message"
-              accessibilityRole="button"
-            >
-              {/* A stop square, not a send arrow. This control ends capture and
-                  drops the transcript into the composer for review, it does not
-                  send. Drawn as an up-arrow it read as "send", so the row looked
-                  like it offered only cancel-or-send and users could not find a
-                  way to stop. ChatGPT shows a stop square in the same slot. */}
-              <Square size={14} color={themeColors.textPrimary} fill={themeColors.textPrimary} />
-            </PressableBox>
+            {isTranscribing ? (
+              <View
+                testID="chat.composer.transcribing-spinner"
+                importantForAccessibility="no-hide-descendants"
+                accessibilityElementsHidden
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: radii.full,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: themeColors.inputSurface,
+                }}
+              >
+                <ActivityIndicator size="small" color={themeColors.textSecondary} />
+              </View>
+            ) : (
+              <PressableBox
+                onPress={handleDictationStop}
+                style={{
+                  width: 40,
+                  height: 40,
+                  borderRadius: radii.full,
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backgroundColor: themeColors.inputSurface,
+                }}
+                hitSlop={6}
+                testID="chat.composer.dictation-stop"
+                accessibilityLabel="Stop recording"
+                accessibilityHint="Stops recording and transcribes it into the message"
+                accessibilityRole="button"
+              >
+                {/* A stop square, not a send arrow. This control ends capture and
+                    drops the transcript into the composer for review, it does not
+                    send. ChatGPT shows a stop square in the same slot. */}
+                <Square size={14} color={themeColors.textPrimary} fill={themeColors.textPrimary} />
+              </PressableBox>
+            )}
             <PressableBox
               onPress={isRecording ? handleDictationSend : undefined}
               disabled={!isRecording}
@@ -1392,7 +1434,7 @@ ${current}`
                 <SendButton
                   state={sendButtonState}
                   onPress={handleSendButtonPress}
-                  disabled={!hasContent && !isStreaming}
+                  disabled={(!hasContent || usageBlocked) && !isStreaming}
                   {...(sendHeld ? { accessibilityLabel: 'Sending when the upload finishes' } : {})}
                 />
               )}
@@ -1410,7 +1452,7 @@ ${current}`
         onChangeText={handleChangeText}
         placeholder={placeholder}
         sendState={canQueueFollowUp ? 'queued' : sendButtonState}
-        canSend={hasContent || isStreaming === true}
+        canSend={(hasContent && !usageBlocked) || isStreaming === true}
         onClose={() => setExpandedEditorVisible(false)}
         onSend={handleExpandedSend}
       />

@@ -22,13 +22,10 @@ import {
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import { TemporaryChatToggle } from '@/src/features/chat/components/TemporaryChatToggle';
 import { AgiMark } from '@/components/ui/AgiMark';
-import {
-  TaskChips,
-  TASK_CHIP_DRAFT_STARTERS,
-  TASK_CHIP_SEND_CONTEXT,
-  type TaskChipType,
-  type TaskSuggestionType,
-} from '@/src/features/chat/components/TaskChips';
+import { ModeToggle } from '@/src/features/chat/components/ModeToggle';
+import { UsageLimitBanner } from '@/src/features/chat/components/UsageLimitBanner';
+import { useAppModeSwitch } from '@/src/features/chat/hooks/useAppModeSwitch';
+import { useWorkUsageLimit } from '@/src/features/chat/hooks/useWorkUsageLimit';
 import { AddToChatSheet } from '@/src/features/chat/components/AddToChatSheet';
 import { useComposerAttachmentHandoff } from '@/src/features/chat/useComposerAttachmentHandoff';
 import { readClipboardImageAttachment } from '@/src/features/media/clipboard-image';
@@ -148,7 +145,6 @@ export default function ChatTabScreen() {
   const recordVideoGenerationTask = useChatStore((s) => s.recordVideoGenerationTask);
   const isVideoGenerationCancelRequested = useChatStore((s) => s.isVideoGenerationCancelRequested);
   const mediaMode = useChatViewStore((s) => s.mediaMode);
-  const setMediaMode = useChatViewStore((s) => s.setMediaMode);
   const videoAspectRatio = useChatViewStore((s) => s.videoAspectRatio);
   const videoResolution = useChatViewStore((s) => s.videoResolution);
   const imageAspectRatio = useChatViewStore((s) => s.imageAspectRatio);
@@ -251,6 +247,22 @@ export default function ChatTabScreen() {
 
   const workSwitchVisible =
     activeMode === 'cloud' && canUseBillingPlanCapability(subscriptionTier, 'agi_work');
+  const { switchToLocal, switchToCloud } = useAppModeSwitch();
+  const [composerStacked, setComposerStacked] = useState(false);
+  const usageLimit = useWorkUsageLimit({
+    metered: activeMode === 'cloud' && isClerkSignedIn,
+  });
+  const workUsageCardShown =
+    workSwitchVisible && workMode === 'agiwork' && usageLimit.exhaustedRecovery !== null;
+
+  const handleSelectMode = useCallback(
+    (mode: 'local' | 'cloud') => {
+      if (mode === activeMode) return;
+      if (mode === 'cloud') switchToCloud();
+      else switchToLocal();
+    },
+    [activeMode, switchToCloud, switchToLocal],
+  );
 
   useEffect(() => {
     if (workMode === 'agiwork' && (!workSwitchVisible || !cloudUnlocked || !isClerkSignedIn)) {
@@ -338,7 +350,6 @@ export default function ChatTabScreen() {
     async (
       text: string,
       attachments?: Attachment[],
-      mode?: TaskChipType,
       dispatchOptions?: { awaitCompletion?: boolean },
     ): Promise<boolean> => {
       try {
@@ -475,10 +486,7 @@ export default function ChatTabScreen() {
           titleSource.length > 40 ? titleSource.slice(0, 40).trim() + '...' : titleSource;
         const conversationId = await createConversation(title);
         router.push(`/(app)/chat/${conversationId}` as Parameters<typeof router.push>[0]);
-        const sendOptions = {
-          ...(mode ? TASK_CHIP_SEND_CONTEXT[mode] : {}),
-          ...(skillNameForTurn ? { skillName: skillNameForTurn } : {}),
-        };
+        const sendOptions = skillNameForTurn ? { skillName: skillNameForTurn } : {};
         if (dispatchOptions?.awaitCompletion) {
           const accepted = await sendMessage(
             conversationId,
@@ -542,28 +550,9 @@ export default function ChatTabScreen() {
     ],
   );
 
-  const [activeTaskChip, setActiveTaskChip] = useState<TaskChipType | null>(null);
-  const handleTaskSuggestion = useCallback(
-    (suggestion: TaskSuggestionType) => {
-      if (suggestion === 'image') {
-        setActiveTaskChip(null);
-        setMediaMode('image');
-      } else {
-        setMediaMode('text');
-        setActiveTaskChip((current) => (current === suggestion ? null : suggestion));
-      }
-      chatInputAttachRef.current?.prefillText?.(TASK_CHIP_DRAFT_STARTERS[suggestion]);
-      chatInputAttachRef.current?.focus?.();
-    },
-    [setMediaMode],
-  );
   const handleComposerSend = useCallback(
-    async (text: string, attachments?: Attachment[]): Promise<boolean> => {
-      const accepted = await handleSend(text, attachments, activeTaskChip ?? undefined);
-      if (accepted) setActiveTaskChip(null);
-      return accepted;
-    },
-    [activeTaskChip, handleSend],
+    (text: string, attachments?: Attachment[]): Promise<boolean> => handleSend(text, attachments),
+    [handleSend],
   );
 
   const handleOpenModelPicker = useCallback(
@@ -791,7 +780,7 @@ export default function ChatTabScreen() {
   const handleVoiceSendMessage = useCallback(
     async (text: string): Promise<string> => {
       try {
-        const accepted = await handleSend(text, undefined, undefined, { awaitCompletion: true });
+        const accepted = await handleSend(text, undefined, { awaitCompletion: true });
         if (!accepted) {
           throw new Error(useChatStore.getState().error ?? 'Message was not sent.');
         }
@@ -833,7 +822,17 @@ export default function ChatTabScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
       <View className="flex-row items-center justify-between px-4 h-12">
         <DrawerButton onPress={handleOpenDrawer} />
-        {workSwitchVisible ? (
+        <ModeToggle
+          mode={activeMode}
+          cloudUnlocked={cloudUnlocked}
+          compact
+          onTapLocal={() => handleSelectMode('local')}
+          onTapCloud={() => handleSelectMode('cloud')}
+        />
+        <TemporaryChatToggle />
+      </View>
+      {workSwitchVisible ? (
+        <View style={{ alignItems: 'center', paddingBottom: 4 }}>
           <View
             accessibilityRole="tablist"
             accessibilityLabel="Chat or Work"
@@ -872,9 +871,8 @@ export default function ChatTabScreen() {
               );
             })}
           </View>
-        ) : null}
-        <TemporaryChatToggle />
-      </View>
+        </View>
+      ) : null}
 
       {/* Android: adjustResize already resizes the window; stacking
           behavior="height" double-handles the keyboard and causes resize
@@ -904,32 +902,39 @@ export default function ChatTabScreen() {
               loader ("users are thinking its still loading"). The wordmark
               disambiguates it instantly. The bare mark stays reserved for
               genuine busy states, where it spins. */}
-          <View style={{ marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-            <AgiMark size={30} />
-            <Text
-              style={{
-                fontSize: typeScale.title1,
-                lineHeight: 30,
-                fontFamily: 'Newsreader_600SemiBold',
-                letterSpacing: 0.5,
-                color: c.textPrimary,
-              }}
-            >
-              AGI
-            </Text>
-          </View>
-          <Text
-            style={{
-              fontSize: typeScale.title1,
-              lineHeight: 34,
-              fontWeight: '500',
-              color: c.textPrimary,
-              textAlign: 'center',
-              marginBottom: 10,
-            }}
-          >
-            {getTimeOfDayGreeting()}
-          </Text>
+          {composerStacked ? null : (
+            <>
+              <View
+                style={{ marginBottom: 14, flexDirection: 'row', alignItems: 'center', gap: 10 }}
+              >
+                <AgiMark size={30} />
+                <Text
+                  style={{
+                    fontSize: typeScale.title1,
+                    lineHeight: 30,
+                    fontFamily: 'Newsreader_600SemiBold',
+                    letterSpacing: 0.5,
+                    color: c.textPrimary,
+                  }}
+                >
+                  AGI
+                </Text>
+              </View>
+              <Text
+                testID="chat.new-chat.greeting"
+                style={{
+                  fontSize: typeScale.title1,
+                  lineHeight: 34,
+                  fontWeight: '500',
+                  color: c.textPrimary,
+                  textAlign: 'center',
+                  marginBottom: 10,
+                }}
+              >
+                {getTimeOfDayGreeting()}
+              </Text>
+            </>
+          )}
           {activeMode === 'cloud' ? (
             <>
               <Text
@@ -969,9 +974,11 @@ export default function ChatTabScreen() {
               {workMode === 'agiwork' ? (
                 <>
                   <WorkModeSourceNotice onOpenConnectors={handleOpenConnectors} />
-                  <AgiWorkExamples
-                    onChoose={(prompt) => chatInputAttachRef.current?.prefillText?.(prompt)}
-                  />
+                  {composerStacked ? null : (
+                    <AgiWorkExamples
+                      onChoose={(prompt) => chatInputAttachRef.current?.prefillText?.(prompt)}
+                    />
+                  )}
                 </>
               ) : null}
             </>
@@ -986,19 +993,18 @@ export default function ChatTabScreen() {
           )}
         </ScrollView>
 
-        <View style={{ paddingHorizontal: 16, paddingBottom: 4 }}>
-          <TaskChips
-            activeChip={activeTaskChip}
-            onChipPress={handleTaskSuggestion}
-            showCloudSuggestions={activeMode === 'cloud'}
-            modelId={modelForSend}
-          />
-        </View>
-
         {/* Mode-aware: shows local projects in Local, cloud projects in Cloud.
             Trigger lives in the "+" sheet; this renders the picker modal only. */}
         <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
 
+        {voiceInlineVisible ? null : (
+          <UsageLimitBanner
+            warning={workUsageCardShown ? null : usageLimit.warning}
+            actionLabel={usageLimit.actionLabel}
+            onAction={usageLimit.openRecovery}
+            onDismiss={usageLimit.dismissWarning}
+          />
+        )}
         {workMode === 'agiwork' && !voiceInlineVisible ? <ComposerApprovalModeControl /> : null}
         {voiceInlineVisible ? null : (
           <ChatInput
@@ -1020,6 +1026,8 @@ export default function ChatTabScreen() {
             }
             selectedSkillName={selectedSkillName}
             onClearSelectedSkill={clearSelectedSkill}
+            exhaustedUsageRecovery={usageLimit.exhaustedRecovery}
+            onStackedChange={setComposerStacked}
           />
         )}
       </KeyboardAvoidingView>

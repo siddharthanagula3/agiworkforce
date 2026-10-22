@@ -205,5 +205,6 @@
     "memoriesFound_other": "{{count}} 件のメモリが見つかりました",
     "memoriesSelected_one": "{{count}} 件のメモリをインポート",
     "memoriesSelected_other": "{{count}} 件のメモリをインポート"
-  }
+  },
+  "autoCorrectSpelling": "スペルの自動修正"
 }

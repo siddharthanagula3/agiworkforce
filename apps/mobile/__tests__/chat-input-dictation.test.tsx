@@ -336,24 +336,27 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
       return { ...utils, releaseStop: () => releaseStop('mock-uri') };
     }
 
-    it('keeps cancel enabled and dims only the two ending controls', () => {
-      const { getByTestId } = renderTranscribing();
+    it('turns the stop slot into a spinner, disables send and keeps cancel live', () => {
+      const { getByTestId, queryByTestId, UNSAFE_getByType } = renderTranscribing();
+      const { ActivityIndicator } = require('react-native');
 
       expect(getByTestId('chat.composer.transcribing')).toBeTruthy();
+      expect(queryByTestId('chat.composer.dictation-stop')).toBeNull();
+      expect(
+        getByTestId('chat.composer.transcribing-spinner', { includeHiddenElements: true }),
+      ).toBeTruthy();
+      expect(UNSAFE_getByType(ActivityIndicator)).toBeTruthy();
 
       expect(
         getByTestId('chat.composer.dictation-cancel').props.accessibilityState?.disabled,
       ).toBeFalsy();
-      expect(getByTestId('chat.composer.dictation-stop').props.accessibilityState?.disabled).toBe(
-        true,
-      );
       expect(getByTestId('chat.composer.dictation-send').props.accessibilityState?.disabled).toBe(
         true,
       );
 
       const stopCallsBefore = VoiceService.stopRecording.mock.calls.length;
       act(() => {
-        fireEvent.press(getByTestId('chat.composer.dictation-stop'));
+        fireEvent.press(getByTestId('chat.composer.dictation-send'));
       });
       expect(VoiceService.stopRecording).toHaveBeenCalledTimes(stopCallsBefore);
 
@@ -363,8 +366,8 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
       expect(VoiceService.cancelRecording).toHaveBeenCalledTimes(1);
     });
 
-    it('freezes the waveform while the transcript resolves', () => {
-      const { getByTestId } = renderInput();
+    it('replaces the waveform with a centred Transcribing label', () => {
+      const { getByTestId, queryByTestId, getByText } = renderInput();
       startRecording();
       expect(lastWaveformProps?.active).toBe(true);
 
@@ -373,8 +376,18 @@ describe('ChatInput dictation controls (PAR-M22)', () => {
         fireEvent.press(getByTestId('chat.composer.dictation-send'));
       });
 
-      expect(getByTestId('chat.composer.transcribing')).toBeTruthy();
-      expect(lastWaveformProps?.active).toBe(false);
+      const transcribing = getByTestId('chat.composer.transcribing');
+      expect(transcribing.props.accessibilityLabel).toBe('Transcribing');
+      expect(transcribing.props.style).toMatchObject({
+        flex: 1,
+        alignItems: 'center',
+        justifyContent: 'center',
+      });
+      const { StyleSheet } = require('react-native');
+      expect(StyleSheet.flatten(getByText('Transcribing').props.style)).toMatchObject({
+        textAlign: 'center',
+      });
+      expect(queryByTestId('dictation-waveform')).toBeNull();
     });
 
     it('aborts the capture session and drops a late transcript', async () => {
