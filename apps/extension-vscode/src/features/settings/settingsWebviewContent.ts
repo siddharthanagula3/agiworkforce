@@ -1,6 +1,8 @@
 import type * as vscode from 'vscode';
 import {
+  BILLING_PLAN_PRICING,
   getSurfaceCapabilityAvailability,
+  isFreeBillingPlanTier,
   type DiscoverableSurfaceCapability,
 } from '@agiworkforce/types';
 import {
@@ -27,6 +29,8 @@ function escapeHtml(value: string): string {
     .replace(/"/gu, '&quot;')
     .replace(/'/gu, '&#39;');
 }
+
+const FREE_PLAN_TIERS = Object.keys(BILLING_PLAN_PRICING).filter(isFreeBillingPlanTier);
 
 function selectOptions<Value extends string>(
   values: readonly Value[],
@@ -58,6 +62,7 @@ export function getSettingsWebviewContent(
 ): string {
   const serializedState = serializeForInlineScript(initialState);
   const serializedSection = serializeForInlineScript(initialSection);
+  const serializedFreePlanTiers = serializeForInlineScript(FREE_PLAN_TIERS);
   const capabilityAvailabilityRows = VSCODE_DISCOVERABLE_CAPABILITIES.map((capability) => {
     const presentation = getSurfaceCapabilityAvailability(capability, 'vscode');
     return `
@@ -768,6 +773,12 @@ export function getSettingsWebviewContent(
         background: var(--vscode-button-hoverBackground);
       }
 
+      .primary-button:disabled {
+        background: var(--vscode-button-secondaryBackground);
+        color: var(--vscode-disabledForeground, var(--vscode-descriptionForeground));
+        cursor: not-allowed;
+      }
+
       .toggle {
         position: relative;
         display: inline-flex;
@@ -1471,10 +1482,7 @@ export function getSettingsWebviewContent(
           <div class="card">
             <div class="card-heading">
               <h3>Custom instructions</h3>
-              <p>
-                Host instructions apply to VS Code developer sessions on this extension host.
-                A non-empty workspace value replaces the host default for this workspace.
-              </p>
+              <p>Extra instructions for developer sessions on this host.</p>
             </div>
             <div class="instruction-editor">
               <label class="setting-name" for="hostCustomInstructions">Host default</label>
@@ -1493,6 +1501,7 @@ export function getSettingsWebviewContent(
                   class="primary-button"
                   type="button"
                   data-instruction-save="host"
+                  disabled
                 >
                   Save host instructions
                 </button>
@@ -1517,6 +1526,7 @@ export function getSettingsWebviewContent(
                   class="primary-button"
                   type="button"
                   data-instruction-save="workspace"
+                  disabled
                 >
                   Save workspace override
                 </button>
@@ -1542,7 +1552,7 @@ export function getSettingsWebviewContent(
           <div class="card">
             <div class="card-heading">
               <h3>Memory</h3>
-              <p>Facts you save stay in this workspace. Turning memory off keeps them listed in the Memory view but stops sending them.</p>
+              <p>Facts you save stay in this workspace.</p>
             </div>
             <div class="setting-row">
               <div>
@@ -1778,7 +1788,7 @@ export function getSettingsWebviewContent(
                 <button class="primary-button" id="planSignInButton" type="button" data-command="signIn">
                   Sign in to AGI Cloud
                 </button>
-                <button class="secondary-button" type="button" data-command="viewPlans">
+                <button class="secondary-button" id="planPlansButton" type="button" data-command="viewPlans">
                   Compare plans
                 </button>
                 <button class="secondary-button" id="planBillingButton" type="button" data-command="manageBilling" hidden>
@@ -1886,10 +1896,8 @@ export function getSettingsWebviewContent(
         <section class="section" id="section-hooks" data-settings-section="hooks" hidden>
           <div class="card">
             <div class="empty-capability">
-              <h3>No extension hooks to configure</h3>
-              <p>
-                This VS Code extension does not currently contribute hook settings. Configure supported hooks through the local AGI CLI so they remain workspace scoped and reviewable.
-              </p>
+              <h3>No hooks found</h3>
+              <p>Configure hooks through the local AGI CLI.</p>
               <div class="action-row">
                 <button class="secondary-button" type="button" data-command="openDocs">
                   Open AGI docs
@@ -1988,6 +1996,7 @@ ${capabilityAvailabilityRows}
         var vscode = acquireVsCodeApi();
         var state = ${serializedState};
         var activeSection = ${serializedSection};
+        var freePlanTiers = ${serializedFreePlanTiers};
         var statusTimer;
         var settingsNav = document.getElementById('settingsNav');
         var navScrollBack = document.getElementById('navScrollBack');
@@ -2253,10 +2262,22 @@ ${capabilityAvailabilityRows}
           var tierInfo = state.tierInfo || null;
           var planUsage = state.planUsage || null;
           var connected = accountAuthStatus === 'signed-in';
-          var usageWindows = (connected && planUsage && planUsage.windows) || [];
+          var planTierKey = tierInfo
+            ? tierInfo.accountPlanTier || tierInfo.tier
+            : identity
+              ? identity.tier
+              : null;
+          var freePlan = connected && freePlanTiers.indexOf(planTierKey) !== -1;
+          var usageWindows = (connected && !freePlan && planUsage && planUsage.windows) || [];
           renderPlanUsageWindows(usageWindows);
-          renderPlanCredits(connected && planUsage ? planUsage.credits : null);
-          renderUsageHistory(connected ? state.usageHistory || null : null);
+          renderPlanCredits(connected && !freePlan && planUsage ? planUsage.credits : null);
+          renderUsageHistory(connected && !freePlan ? state.usageHistory || null : null);
+          var planPlansButton = document.getElementById('planPlansButton');
+          if (planPlansButton) {
+            planPlansButton.textContent = freePlan ? 'Upgrade' : 'Compare plans';
+            planPlansButton.classList.toggle('primary-button', freePlan);
+            planPlansButton.classList.toggle('secondary-button', !freePlan);
+          }
 
           if (tierLabelEl) {
             tierLabelEl.textContent = connected && identity
@@ -2284,7 +2305,7 @@ ${capabilityAvailabilityRows}
           if (planBillingButton) planBillingButton.hidden = !connected;
           if (planUsageRow) {
             planUsageRow.hidden =
-              !connected || !tierInfo || typeof tierInfo.usagePercentage !== 'number' ||
+              !connected || freePlan || !tierInfo || typeof tierInfo.usagePercentage !== 'number' ||
               usageWindows.length > 0;
           }
           if (planUsageCopy && tierInfo && typeof tierInfo.usagePercentage === 'number') {
@@ -2406,14 +2427,18 @@ ${capabilityAvailabilityRows}
           };
           var hostInstructions = document.getElementById('hostCustomInstructions');
           var workspaceInstructions = document.getElementById('workspaceCustomInstructions');
+          savedInstructions.host = instructionContext.host || '';
+          savedInstructions.workspace = instructionContext.workspace || '';
           if (document.activeElement !== hostInstructions) {
-            hostInstructions.value = instructionContext.host || '';
+            hostInstructions.value = savedInstructions.host;
           }
           if (document.activeElement !== workspaceInstructions) {
-            workspaceInstructions.value = instructionContext.workspace || '';
+            workspaceInstructions.value = savedInstructions.workspace;
           }
           updateInstructionCount('host');
           updateInstructionCount('workspace');
+          updateInstructionSaveState('host');
+          updateInstructionSaveState('workspace');
           document.getElementById('instructionPrelude').textContent =
             instructionContext.turnPrelude || 'No custom instructions are active.';
 
@@ -2442,6 +2467,21 @@ ${capabilityAvailabilityRows}
               instructionSources.appendChild(item);
             });
           }
+        }
+
+        var savedInstructions = { host: '', workspace: '' };
+        var pendingInstructions = { host: null, workspace: null };
+
+        function instructionTextarea(scope) {
+          return document.getElementById(
+            scope === 'host' ? 'hostCustomInstructions' : 'workspaceCustomInstructions'
+          );
+        }
+
+        function updateInstructionSaveState(scope) {
+          var button = document.querySelector('[data-instruction-save="' + scope + '"]');
+          if (!button) return;
+          button.disabled = instructionTextarea(scope).value === savedInstructions[scope];
         }
 
         function updateInstructionCount(scope) {
@@ -2513,6 +2553,7 @@ ${capabilityAvailabilityRows}
           );
           textarea.addEventListener('input', function () {
             updateInstructionCount(scope);
+            updateInstructionSaveState(scope);
           });
         });
 
@@ -2523,6 +2564,7 @@ ${capabilityAvailabilityRows}
             var textarea = document.getElementById(
               scope === 'host' ? 'hostCustomInstructions' : 'workspaceCustomInstructions'
             );
+            pendingInstructions[scope] = textarea.value;
             setStatus('Saving ' + (scope === 'host' ? 'host instructions' : 'workspace override') + '…');
             vscode.postMessage({
               type: 'settings.instructions.update',
@@ -2540,6 +2582,14 @@ ${capabilityAvailabilityRows}
           } else if (message.type === 'settings.saved') {
             setStatus((settingLabels[message.key] || message.key) + ' saved.');
           } else if (message.type === 'settings.instructions.saved') {
+            if (
+              (message.scope === 'host' || message.scope === 'workspace') &&
+              pendingInstructions[message.scope] !== null
+            ) {
+              savedInstructions[message.scope] = pendingInstructions[message.scope];
+              pendingInstructions[message.scope] = null;
+              updateInstructionSaveState(message.scope);
+            }
             setStatus(
               message.scope === 'workspace'
                 ? 'Workspace instruction override saved.'
