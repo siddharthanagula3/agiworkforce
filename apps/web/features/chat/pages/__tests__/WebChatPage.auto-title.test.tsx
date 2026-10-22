@@ -61,9 +61,10 @@ vi.mock('@/app/settings/_lib/preferences-client', async (importOriginal) => ({
 
 // The real hook projects the store's conversation map, which is exactly what this
 // suite asserts against: an adopted title must land there without a network write.
-vi.mock('@/lib/hooks/useConversations', async () => {
+vi.mock('@/lib/hooks/useConversations', async (importOriginal) => {
   const { useChatStore } = await import('@shared/stores/web-chat-store');
   return {
+    ...(await importOriginal<Record<string, unknown>>()),
     useConversations: () => ({
       conversations: useChatStore((state) => state.conversations),
       isLoading: false,
@@ -87,7 +88,8 @@ vi.mock('@/features/study/hooks/use-conversation-study-session', async (importOr
     resume: vi.fn(),
   }),
 }));
-vi.mock('@/lib/hooks/useManagedUsageSummary', () => ({
+vi.mock('@/lib/hooks/useManagedUsageSummary', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   getWorstUsagePercent: () => 0,
   readManagedUsageBuckets: () => [],
   useManagedUsageSummary: () => ({ usage: null }),
@@ -106,17 +108,20 @@ vi.mock('@/lib/hooks/useMediaGeneration', async (importOriginal) => {
   };
 });
 
-vi.mock('../../components/Composer/ChatComposerNew', () => ({
+vi.mock('../../components/Composer/ChatComposerNew', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ChatComposerNew: () => null,
   SEND_GUARD_BLOCKED: 'fixture-send-guard-blocked',
 }));
-vi.mock('../../components/messages/ChatMessageList', () => ({
+vi.mock('../../components/messages/ChatMessageList', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ChatMessageList: () => <div data-testid="message-list" />,
 }));
 vi.mock('../../components/GreetingBanner/GreetingBanner', () => ({
   GreetingBanner: () => null,
 }));
-vi.mock('../../components/ChatStreamRuntimeProvider', () => ({
+vi.mock('../../components/ChatStreamRuntimeProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useChatStreamRuntime: () => ({
     sendMessage: vi.fn(),
     stopGeneration: vi.fn(),
@@ -136,7 +141,8 @@ vi.mock('../../hooks/use-conversation-branches', () => ({
     switchBranch: vi.fn(),
   }),
 }));
-vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
+vi.mock('../../hooks/use-keyboard-shortcuts', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   findShortcutDoc: vi.fn(() => undefined),
   formatShortcutKeys: vi.fn(() => []),
   KEYBOARD_SHORTCUT_DOCS: [],
@@ -147,12 +153,14 @@ vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
   withShortcutBindings: vi.fn((docs: unknown) => docs),
 }));
 
-vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
+vi.mock('@/features/settings/components/SettingsModalProvider', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   useSettingsModal: () => ({ openSettings: vi.fn() }),
 }));
-vi.mock('@/features/connectors/stores/tool-permissions-store', () => {
+vi.mock('@/features/connectors/stores/tool-permissions-store', async (importOriginal) => {
   const state = { hydrateFromServer: vi.fn() };
   return {
+    ...(await importOriginal<Record<string, unknown>>()),
     useToolPermissionsStore: Object.assign(
       (selector: (value: typeof state) => unknown) => selector(state),
       { getState: () => state },
@@ -160,7 +168,7 @@ vi.mock('@/features/connectors/stores/tool-permissions-store', () => {
   };
 });
 
-vi.mock('@features/projects', () => {
+vi.mock('@features/projects', async (importOriginal) => {
   const projectState = {
     projects: [],
     activeProjectId: null,
@@ -170,6 +178,7 @@ vi.mock('@features/projects', () => {
     setProjects: vi.fn(),
   };
   return {
+    ...(await importOriginal<Record<string, unknown>>()),
     useManagedCloudProjects: () => ({ projects: [], isReady: true }),
     useProjectStore: (selector: (value: typeof projectState) => unknown) => selector(projectState),
     ProjectSettingsDialog: () => null,
@@ -197,7 +206,8 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 vi.mock('../../components/dialogs/GlobalSearchDialog', () => ({ GlobalSearchDialog: () => null }));
-vi.mock('../../components/dialogs/KeyboardShortcutsDialog', () => ({
+vi.mock('../../components/dialogs/KeyboardShortcutsDialog', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   KeyboardShortcutsDialog: () => null,
 }));
 vi.mock('../../components/dialogs/CreateProjectDialog', () => ({
@@ -209,18 +219,25 @@ vi.mock('../../components/dialogs/UpgradePlanDialog', () => ({
 vi.mock('@features/billing/components/UpgradeConfirmDialog', () => ({
   UpgradeConfirmDialog: () => null,
 }));
-vi.mock('@/features/time-focus/TimeFocusReminder', () => ({ TimeFocusReminder: () => null }));
+vi.mock('@/features/time-focus/TimeFocusReminder', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  TimeFocusReminder: () => null,
+}));
 vi.mock('../../components/ConversationTitleMenu', async (importOriginal) => ({
   ...(await importOriginal<ScanModule5>()),
   ConversationTitleMenu: () => null,
 }));
-vi.mock('../../components/approvals/ApprovalInbox', () => ({ ApprovalInbox: () => null }));
+vi.mock('../../components/approvals/ApprovalInbox', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  ApprovalInbox: () => null,
+}));
 vi.mock('../../components/work-session/WorkSessionPanel', () => ({
   hasWorkSession: () => false,
   WorkSessionPanel: () => null,
   WorkSessionToggleButton: () => null,
 }));
-vi.mock('../../components/artifacts/ArtifactsPanel', () => ({
+vi.mock('../../components/artifacts/ArtifactsPanel', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   ArtifactsPanel: () => null,
   ArtifactsToggleButton: () => null,
 }));

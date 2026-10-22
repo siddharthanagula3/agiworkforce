@@ -165,7 +165,8 @@ vi.mock('../../hooks/use-conversation-branches', () => ({
     switchBranch: vi.fn(),
   }),
 }));
-vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
+vi.mock('../../hooks/use-keyboard-shortcuts', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   findShortcutDoc: vi.fn(() => undefined),
   formatShortcutKeys: vi.fn(() => []),
   KEYBOARD_SHORTCUT_DOCS: [],
@@ -229,7 +230,8 @@ vi.mock('@agiworkforce/unified-chat', async (importOriginal) => {
 });
 
 vi.mock('../../components/dialogs/GlobalSearchDialog', () => ({ GlobalSearchDialog: () => null }));
-vi.mock('../../components/dialogs/KeyboardShortcutsDialog', () => ({
+vi.mock('../../components/dialogs/KeyboardShortcutsDialog', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   KeyboardShortcutsDialog: () => null,
 }));
 vi.mock('../../components/dialogs/CreateProjectDialog', () => ({
