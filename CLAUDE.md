@@ -2,54 +2,61 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-04
+Last updated: 2026-10-21
 
-Claude Code adapter. **Read `AGENTS.md` first and obey it**, it is the canonical
+Claude Code adapter. **Read `AGENTS.md` first and obey it**; it is the canonical
 contract for every agent. Nothing here overrides or weakens it; this file only
 adds what is specific to Claude Code.
 
-## Claude Code specifics
+## Delegation
 
-- Use sub-agents for bounded, parallel work: inventory, reference analysis,
-  dependency tracing, review, and driving a slice of the running product
-  through its own Playwright spec. Give each a narrow scope and an explicit
-  expected output. Never let two agents write the same file concurrently, one
-  spec file per agent, deleted when it finishes. An agent driving the product
-  runs against real data: name the controls it must not click, and require it
-  to reproduce a finding before reporting it. See AGENTS.md §1 on verifying the
-  instrument, which applies to the agent as much as to its harness.
-- Route delegated work with `.agents/skills/model-orchestration`: use only
-  Opus 5.5 and Sonnet 5.5, never Fable or previous-generation models. The Opus
-  5.5 lead plans, arbitrates and does final review; Opus 5.5 agents take
-  difficult implementation and adversarial review of high-risk work; Sonnet 5.5
-  takes exploration, research, browser work, simple edits and cross-checks. Coordinate through
-  named agent teammates and messages, not scripted workflow runs.
+- Route delegated work with `.agents/skills/orchestrator`. It chooses the
+  arrangement (direct, sub-agents, agent team, workflow) and the model family
+  and effort for each worker, using the `orch-scout`, `orch-builder`,
+  `orch-principal` and `orch-assessor` profiles in `.claude/agents/`. Use only
+  current-generation models, and run a workflow only when the owner asks for one.
+- Give each agent a narrow scope and an explicit expected output. Never let two
+  agents write the same file concurrently: one spec file per agent, deleted when
+  it finishes.
+- An agent driving the running product, through its own Playwright spec, works
+  against real data. Name the controls it must not click, and require it to
+  reproduce a finding before reporting it. AGENTS.md §1 on verifying the
+  instrument applies to the agent as much as to its harness.
+
+## Skills and sources
+
 - Load `.agents/skills/agiworkforce-design` before any visible UI work; it
-  carries the design language and names which vendored design skill applies
-  at each stage (direction, gate, critique, guidelines, polish, browser
-  comparison).
-- Use skills in `.agents/skills/` for repeatable procedures rather than
-  re-deriving them. `skills-lock.json` pins their content hashes, so a reformat
-  of any `SKILL.md` fails `scripts/verify-skills-lock.mjs` in CI.
-- Path-scoped Claude behavior belongs in `.claude/rules/`, not in this file.
-  Keep this file short.
-- Reach for current documentation, Context7, provider docs, web search, over
-  recalled API details. `AGENTS.md` §1 applies to every tool you have.
-- Claude memory is for discoveries in flight, not the system of record. When a
-  discovery is durable, promote it into the canonical owner named in
-  `AGENTS.md` §11 and delete the note.
+  carries the design language and names which vendored design skill applies at
+  each stage.
+- Use the skills in `.agents/skills/` for repeatable procedures rather than
+  re-deriving them. `skills-lock.json` pins their content hashes, so any edit,
+  a reformat included, fails CI until you run
+  `node scripts/verify-skills-lock.mjs --regenerate`. Never install a skill with
+  `npx skills add`; it bypasses the lock.
+- Check library, framework and API details in Context7 or the provider's
+  documentation before relying on recall. AGENTS.md §1 applies to every tool.
+
+## Shared configuration
+
+A fresh clone or cloud session gets only tracked files. `.gitignore` tracks
+`.claude/settings.json` (project plugins and hooks), `.claude/agents/`,
+`.claude/hooks/`, `.claude/rules/` and `.claude/skills/`, whose entries are
+symlinks into `.agents/skills/`. To expose a developer skill to Claude Code, add
+its symlink there; never put a skill's files directly in `.claude/skills/`.
+Personal permissions, output style and MCP servers stay in user scope or the
+ignored `.claude/settings.local.json`; never let a rule depend on them.
+
+The hooks are conveniences over rules enforced elsewhere:
+`.claude/hooks/block-lock-files.sh` blocks writes to `pnpm-lock.yaml` and
+`Cargo.lock` (AGENTS.md §12), and `.claude/hooks/prettier-format.sh` formats on
+write (`lint-staged` covers the committed path, so do not hand-format or fight
+the diff).
+
+## Rules and memory
+
+- Path-scoped Claude behavior belongs in `.claude/rules/`, not here. Keep this
+  file short.
+- Claude memory holds discoveries in flight, not the system of record. Promote a
+  durable discovery into the owner named in AGENTS.md §11 and delete the note.
 - When you make the same mistake twice, fix it with a rule, an abstraction, a
-  test, or a guard, not with a longer prompt.
-
-## Local-only tooling
-
-`.gitignore:216` ignores `.claude/*`, then negates `README.md`, `agents/`,
-`commands/` and `rules/`, so scoped rules are tracked and shared, while the two
-hooks below are developer-machine conveniences that a fresh clone, CI, and every
-non-Claude agent run without:
-
-- `.claude/hooks/block-lock-files.sh` blocks writes to `pnpm-lock.yaml` and
-  `Cargo.lock`. The underlying rule is real and stated in `AGENTS.md` §12.
-  change the manifest and run the package manager.
-- `.claude/hooks/prettier-format.sh` formats files on write. `lint-staged`
-  already covers the committed path, so do not hand-format or fight the diff.
+  test or a guard, not a longer prompt.
