@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert, ScrollView } from 'react-native';
+import { Alert, ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 
 jest.mock('expo-router', () => ({
@@ -91,6 +91,13 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => ({
 import { LibraryScreen } from '../src/features/library';
 
 describe('Library filter chips', () => {
+  it('centres a semibold Library title in the header', () => {
+    const screen = render(<LibraryScreen />);
+
+    const title = StyleSheet.flatten(screen.getByText('Library').props.style);
+    expect(title).toMatchObject({ textAlign: 'center', fontWeight: '600' });
+  });
+
   it('renders every chip inside a horizontal ScrollView', () => {
     const screen = render(<LibraryScreen />);
 

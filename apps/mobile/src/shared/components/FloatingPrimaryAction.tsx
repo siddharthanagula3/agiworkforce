@@ -17,21 +17,30 @@ export const FLOATING_PRIMARY_ACTION_LIST_PADDING =
   FLOATING_PRIMARY_ACTION_HEIGHT +
   12;
 
+export const FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING =
+  FLOATING_PRIMARY_ACTION_GAP + FLOATING_PRIMARY_ACTION_HEIGHT + 12;
+
 export function FloatingPrimaryAction({
   label,
   icon: Icon,
   onPress,
   accessibilityLabel,
   testID,
+  tone = 'accent',
+  aboveSearchBar = true,
 }: {
   label: string;
   icon: LucideIcon;
   onPress: () => void;
   accessibilityLabel?: string;
   testID?: string;
+  tone?: 'accent' | 'ink';
+  aboveSearchBar?: boolean;
 }) {
   const colors = useThemeColors();
   const insets = useSafeAreaInsets();
+  const fill = tone === 'ink' ? colors.textPrimary : colors.teal;
+  const searchBarOffset = aboveSearchBar ? BOTTOM_SEARCH_BAR_MARGIN + BOTTOM_SEARCH_BAR_HEIGHT : 0;
 
   return (
     <PressableBox
@@ -42,18 +51,14 @@ export function FloatingPrimaryAction({
       style={({ pressed }) => ({
         position: 'absolute',
         right: 18,
-        bottom:
-          insets.bottom +
-          BOTTOM_SEARCH_BAR_MARGIN +
-          BOTTOM_SEARCH_BAR_HEIGHT +
-          FLOATING_PRIMARY_ACTION_GAP,
+        bottom: insets.bottom + searchBarOffset + FLOATING_PRIMARY_ACTION_GAP,
         minHeight: FLOATING_PRIMARY_ACTION_HEIGHT,
         borderRadius: FLOATING_PRIMARY_ACTION_HEIGHT / 2,
         paddingHorizontal: 18,
         flexDirection: 'row',
         alignItems: 'center',
         gap: 8,
-        backgroundColor: colors.teal,
+        backgroundColor: fill,
         opacity: pressed ? 0.82 : 1,
       })}
     >

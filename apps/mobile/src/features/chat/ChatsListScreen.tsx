@@ -39,7 +39,7 @@ import {
   FLOATING_PRIMARY_ACTION_LIST_PADDING,
 } from '@/src/shared/components/FloatingPrimaryAction';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
@@ -160,7 +160,8 @@ function SearchKindIcon({ kind, color }: { kind: SearchKind; color: string }) {
 }
 
 export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }) {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const router = useRouter();
   const navigation = useNavigation();
   const params = useLocalSearchParams<{ focusSearch?: string | string[] }>();
@@ -470,7 +471,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
   const hasResults = sections.some((section) => section.data.length > 0);
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: pageBackground }}>
       <View
         style={{
           ...contentColumn('reading'),
@@ -565,7 +566,7 @@ export function ChatsListScreen({ searchOnly = false }: { searchOnly?: boolean }
               paddingHorizontal: 18,
               paddingTop: 14,
               paddingBottom: 7,
-              backgroundColor: colors.surfaceBase,
+              backgroundColor: pageBackground,
             }}
           >
             <Text

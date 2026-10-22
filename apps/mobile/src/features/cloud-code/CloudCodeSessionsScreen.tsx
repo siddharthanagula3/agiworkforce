@@ -13,6 +13,10 @@ import {
 } from '@agiworkforce/types';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
+import {
+  FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
+  FloatingPrimaryAction,
+} from '@/src/shared/components/FloatingPrimaryAction';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudCodeGate } from './components/CloudCodeGate';
@@ -25,7 +29,7 @@ import { CLOUD_CODE_SCREEN_TITLE } from './presentation';
 const DEFAULT_FILTER: CloudCodeSessionStatusFilter = 'open';
 const REMOTE_NOTE = `Sessions running on your computer are in ${MOBILE_REMOTE_SCREEN_LABEL}.`;
 
-function Header({ onBack, onNew }: { onBack: () => void; onNew?: () => void }) {
+function Header({ onBack }: { onBack: () => void }) {
   const colors = useThemeColors();
 
   return (
@@ -54,18 +58,6 @@ function Header({ onBack, onNew }: { onBack: () => void; onNew?: () => void }) {
       >
         {CLOUD_CODE_SCREEN_TITLE}
       </Text>
-      {onNew ? (
-        <PressableBox
-          onPress={onNew}
-          accessibilityRole="button"
-          accessibilityLabel="New cloud session"
-          hitSlop={8}
-          testID="cloud-code-new-session"
-          style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
-        >
-          <Plus size={20} color={colors.textSecondary} />
-        </PressableBox>
-      ) : null}
     </View>
   );
 }
@@ -83,7 +75,7 @@ function EmptyState({ filtered }: { filtered: boolean }) {
         {filtered ? 'No sessions match this filter' : 'No cloud sessions yet'}
       </Text>
       <Text style={{ color: colors.textMuted, textAlign: 'center', lineHeight: 20, marginTop: 7 }}>
-        Start one with the + button, on the web or in the desktop app.
+        Start one with New session, on the web or in the desktop app.
       </Text>
     </View>
   );
@@ -161,8 +153,8 @@ function SessionList({ onBack }: { onBack: () => void }) {
   }, [router]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-      <Header onBack={onBack} onNew={() => setNewSessionOpen(true)} />
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+      <Header onBack={onBack} />
       <NewCloudCodeSessionSheet
         visible={newSessionOpen}
         availability={availability}
@@ -222,7 +214,11 @@ function SessionList({ onBack }: { onBack: () => void }) {
           data={sessions}
           keyExtractor={(session) => session.id}
           renderItem={({ item }) => <CloudCodeSessionRow session={item} onOpen={handleOpen} />}
-          contentContainerStyle={{ paddingHorizontal: 4, paddingBottom: 40, flexGrow: 1 }}
+          contentContainerStyle={{
+            paddingHorizontal: 4,
+            paddingBottom: FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
+            flexGrow: 1,
+          }}
           ListHeaderComponent={
             <View style={{ paddingHorizontal: 12, paddingBottom: 8, gap: 8 }}>
               {error ? (
@@ -271,6 +267,16 @@ function SessionList({ onBack }: { onBack: () => void }) {
           }
         />
       )}
+
+      <FloatingPrimaryAction
+        testID="cloud-code-new-session"
+        label="New session"
+        icon={Plus}
+        accessibilityLabel="New cloud session"
+        tone="ink"
+        aboveSearchBar={false}
+        onPress={() => setNewSessionOpen(true)}
+      />
     </SafeAreaView>
   );
 }

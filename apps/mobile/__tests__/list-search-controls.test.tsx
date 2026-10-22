@@ -2,6 +2,7 @@
 import React from 'react';
 import { fireEvent, render } from '@testing-library/react-native';
 import { Plus } from 'lucide-react-native';
+import { lightColors } from '../src/ui/theme/tokens';
 
 const mockInsetBottom = 34;
 
@@ -30,6 +31,7 @@ import {
   FLOATING_PRIMARY_ACTION_GAP,
   FLOATING_PRIMARY_ACTION_HEIGHT,
   FLOATING_PRIMARY_ACTION_LIST_PADDING,
+  FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
 } from '../src/shared/components/FloatingPrimaryAction';
 
 describe('BottomSearchBar', () => {
@@ -115,6 +117,43 @@ describe('FloatingPrimaryAction', () => {
         BOTTOM_SEARCH_BAR_MARGIN +
         BOTTOM_SEARCH_BAR_HEIGHT +
         FLOATING_PRIMARY_ACTION_GAP,
+    );
+  });
+
+  it('fills with the neutral ink tone when asked and keeps the accent by default', () => {
+    const ink = render(
+      <FloatingPrimaryAction
+        testID="ink"
+        label="New task"
+        icon={Plus}
+        tone="ink"
+        onPress={jest.fn()}
+      />,
+    );
+    const accent = render(
+      <FloatingPrimaryAction testID="accent" label="New chat" icon={Plus} onPress={jest.fn()} />,
+    );
+
+    expect(ink.getByTestId('ink').props.style.backgroundColor).toBe(lightColors.textPrimary);
+    expect(accent.getByTestId('accent').props.style.backgroundColor).toBe(lightColors.teal);
+  });
+
+  it('sits at the safe-area bottom when the screen has no search field', () => {
+    const screen = render(
+      <FloatingPrimaryAction
+        testID="fab"
+        label="New session"
+        icon={Plus}
+        aboveSearchBar={false}
+        onPress={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByTestId('fab').props.style.bottom).toBe(
+      mockInsetBottom + FLOATING_PRIMARY_ACTION_GAP,
+    );
+    expect(FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING).toBeGreaterThanOrEqual(
+      FLOATING_PRIMARY_ACTION_GAP + FLOATING_PRIMARY_ACTION_HEIGHT,
     );
   });
 

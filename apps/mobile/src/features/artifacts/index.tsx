@@ -13,7 +13,6 @@ import {
   FileText,
   ImageIcon,
   LibraryBig,
-  Menu,
   Share2,
   Sparkles,
   TriangleAlert,
@@ -25,6 +24,7 @@ import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyActio
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
+import { DrawerButton } from '@/src/shared/components/DrawerButton';
 import { useArtifactStore, accentColorForKind, mergeMobileArtifactsForGallery } from './store';
 import type { MobileArtifact, MobileArtifactKind } from './types';
 import { canSaveArtifactToLibrary, saveArtifactToLibrary } from './libraryService';
@@ -180,34 +180,21 @@ export function ArtifactsGalleryScreen({
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       <View className="h-12 flex-row items-center px-3 gap-2">
-        <Pressable
-          testID="artifacts-open-drawer"
-          onPress={openDrawer}
-          style={({ pressed }) => ({
-            width: 36,
-            height: 36,
-            borderRadius: 12,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: pressed ? c.surfaceHover : c.transparent,
-          })}
-          accessibilityLabel="Open navigation drawer"
-          accessibilityRole="button"
-          hitSlop={8}
-        >
-          <Menu size={20} color={c.textSecondary} />
-        </Pressable>
+        <DrawerButton testID="artifacts-open-drawer" onPress={openDrawer} />
 
         <Text
+          accessibilityRole="header"
           style={{
             flex: 1,
             color: c.textPrimary,
             fontSize: typeScale.headline,
-            fontWeight: '700',
+            fontWeight: '600',
+            textAlign: 'center',
           }}
         >
           Artifacts
         </Text>
+        <View style={{ width: 36, height: 36 }} />
       </View>
 
       {isLoading ? (
@@ -238,8 +225,9 @@ function ArtifactsEmptyState() {
   return (
     <View testID="artifacts-empty-state" className="flex-1 items-center justify-center py-20 px-8">
       <View
+        testID="artifacts-empty-disc"
         className="w-16 h-16 rounded-full items-center justify-center mb-5"
-        style={{ backgroundColor: c.surfaceElevated }}
+        style={{ backgroundColor: c.surfaceHover }}
       >
         <Sparkles size={28} color={c.textSecondary} />
       </View>
@@ -320,7 +308,7 @@ function ArtifactCard({ artifact, width, onPress, style }: ArtifactCardProps) {
       onPress={() => onPress(artifact)}
       className="active:opacity-80"
       style={[{ width, marginBottom: 20 }, style]}
-      accessibilityLabel={`Open artifact ${artifact.title}`}
+      accessibilityLabel={`Open artifact ${artifact.title}, ${artifact.ageLabel}`}
       accessibilityRole="button"
     >
       <View

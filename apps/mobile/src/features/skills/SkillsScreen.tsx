@@ -78,16 +78,31 @@ function SkillsHeader({ onBack }: { onBack: () => void }) {
       >
         <ArrowLeft size={21} color={colors.textSecondary} />
       </PressableBox>
-      <Text
+      <View
+        testID="skills-title-slot"
+        pointerEvents="none"
         style={{
-          flex: 1,
-          color: colors.textPrimary,
-          fontSize: typeScale.headline,
-          fontWeight: '700',
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          alignItems: 'center',
+          justifyContent: 'center',
         }}
       >
-        Skills
-      </Text>
+        <Text
+          accessibilityRole="header"
+          style={{
+            color: colors.textPrimary,
+            fontSize: typeScale.headline,
+            fontWeight: '600',
+          }}
+        >
+          Skills
+        </Text>
+      </View>
+      <View style={{ flex: 1 }} />
       <View
         accessibilityLabel="Managed Cloud catalog"
         style={{
@@ -512,7 +527,7 @@ function CatalogEmptyState({ query, onClear }: { query: string; onClear: () => v
       >
         {isSearching
           ? `No Skills match “${query.trim()}”. Try a different name, description, or source.`
-          : 'When Skills are added to this AGI Cloud deployment, they will appear here and become available to Cloud tasks.'}
+          : 'Skills added to AGI Cloud appear here for your tasks.'}
       </Text>
       {isSearching ? (
         <Button

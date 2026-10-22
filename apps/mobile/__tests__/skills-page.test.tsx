@@ -1,5 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
+import { StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -336,7 +337,18 @@ describe('Mobile Skills screen', () => {
     const screen = render(<SkillsScreen />);
 
     expect(await screen.findByText('No managed Skills yet')).toBeTruthy();
-    expect(screen.getByText(/When Skills are added to this AGI Cloud deployment/)).toBeTruthy();
+    expect(screen.getByText('Skills added to AGI Cloud appear here for your tasks.')).toBeTruthy();
+  });
+
+  it('centres the Skills title on the screen at semibold weight', async () => {
+    mockFetchManagedSkills.mockResolvedValueOnce([]);
+    const screen = render(<SkillsScreen />);
+    await screen.findByText('No managed Skills yet');
+
+    const title = screen.getByText('Skills');
+    expect(StyleSheet.flatten(title.props.style).fontWeight).toBe('600');
+    const slot = StyleSheet.flatten(screen.getByTestId('skills-title-slot').props.style);
+    expect(slot).toMatchObject({ position: 'absolute', left: 0, right: 0, alignItems: 'center' });
   });
 
   it('does not call the Cloud API from Local Mode and requires an explicit switch', () => {

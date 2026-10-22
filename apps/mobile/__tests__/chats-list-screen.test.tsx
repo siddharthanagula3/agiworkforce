@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert, Modal } from 'react-native';
+import { Alert, Modal, StyleSheet } from 'react-native';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
@@ -10,6 +10,7 @@ let mockSearchParams: Record<string, string> = {};
 const mockLoadConversations = jest.fn().mockResolvedValue(undefined);
 const mockLoadMoreConversations = jest.fn().mockResolvedValue(undefined);
 let mockAppMode: 'local' | 'cloud' = 'local';
+let mockIsDark = false;
 const mockSearchConversations = jest.fn();
 const mockPinConversation = jest.fn();
 const mockDeleteConversation = jest.fn();
@@ -113,10 +114,17 @@ jest.mock('../src/navigation/openNearestDrawer', () => ({
   openNearestDrawer: () => mockOpenDrawer(),
 }));
 
-jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
-  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
-}));
+jest.mock('react-native-safe-area-context', () => {
+  const RN = require('react-native');
+  return {
+    SafeAreaView: ({ children, ...props }: Record<string, unknown>) => (
+      <RN.View testID="chats-page-root" {...props}>
+        {children as React.ReactNode}
+      </RN.View>
+    ),
+    useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
+  };
+});
 
 jest.mock('lucide-react-native', () => {
   const RN = require('react-native');
@@ -131,7 +139,13 @@ jest.mock('lucide-react-native', () => {
 
 jest.mock('../src/ui/theme', () => {
   const actual = jest.requireActual('../src/ui/theme/tokens');
-  return { useThemeColors: () => actual.lightColors };
+  return {
+    useThemeColors: () => (mockIsDark ? actual.colors : actual.lightColors),
+    useTheme: () => ({
+      colors: mockIsDark ? actual.colors : actual.lightColors,
+      isDark: mockIsDark,
+    }),
+  };
 });
 
 jest.mock('../lib/v1FeatureFlags', () => ({
@@ -207,11 +221,25 @@ describe('ChatsListScreen', () => {
     jest.clearAllMocks();
     mockSearchParams = {};
     mockAppMode = 'local';
+    mockIsDark = false;
     mockChatState.isLoadingConversations = false;
     mockChatState.isLoadingMoreConversations = false;
     mockChatState.hasMoreCloudConversations = false;
     mockChatState.conversationLoadError = null;
     jest.spyOn(Alert, 'alert').mockImplementation(jest.fn());
+  });
+
+  it('paints the pure black background token on the dark page root and keeps surfaceBase in light', () => {
+    const { colors, lightColors } = jest.requireActual('../src/ui/theme/tokens');
+    const root = (screen: ReturnType<typeof render>) =>
+      StyleSheet.flatten(screen.getByTestId('chats-page-root').props.style).backgroundColor;
+
+    mockIsDark = true;
+    expect(root(render(<ChatsListScreen />))).toBe(colors.background);
+    expect(colors.background).toBe('#000000');
+
+    mockIsDark = false;
+    expect(root(render(<ChatsListScreen />))).toBe(lightColors.surfaceBase);
   });
 
   it('shows a retryable Cloud history error instead of an empty-account message', () => {

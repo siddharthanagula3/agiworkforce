@@ -12,12 +12,16 @@ import {
 import { PressableBox } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, BellOff, Bot, Cloud, Plus, RefreshCw } from 'lucide-react-native';
+import { ArrowLeft, BellOff, Bot, Clock3, Cloud, Plus, RefreshCw } from 'lucide-react-native';
 import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
+import {
+  FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
+  FloatingPrimaryAction,
+} from '@/src/shared/components/FloatingPrimaryAction';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -50,7 +54,7 @@ const SCOPE_NOTE = `Every agent run on your AGI Cloud account; paired desktops a
 const BACKGROUND_ALERTS_OFF_NOTE =
   'Background approval alerts are off, so a task that pauses while the app is closed will wait silently.';
 
-function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () => void }) {
+function Header({ onBack, onOpenSchedules }: { onBack: () => void; onOpenSchedules?: () => void }) {
   const colors = useThemeColors();
 
   return (
@@ -100,24 +104,15 @@ function Header({ onBack, onStartWork }: { onBack: () => void; onStartWork?: () 
           Cloud
         </Text>
       </View>
-      {onStartWork ? (
+      {onOpenSchedules ? (
         <PressableBox
-          onPress={onStartWork}
+          onPress={onOpenSchedules}
           accessibilityRole="button"
-          accessibilityLabel="New task"
+          accessibilityLabel="Scheduled tasks"
           hitSlop={8}
-          style={{
-            width: 40,
-            height: 40,
-            borderRadius: 20,
-            alignItems: 'center',
-            justifyContent: 'center',
-            backgroundColor: colors.surfaceElevated,
-            borderWidth: 1,
-            borderColor: colors.border,
-          }}
+          style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}
         >
-          <Plus size={20} color={colors.textPrimary} />
+          <Clock3 size={20} color={colors.textPrimary} />
         </PressableBox>
       ) : null}
     </View>
@@ -413,6 +408,10 @@ export function CloudTasksScreen() {
     router.push('/(app)/settings/notifications' as Parameters<typeof router.push>[0]);
   }, [router]);
 
+  const handleOpenSchedules = useCallback(() => {
+    router.push('/(app)/schedules' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   const handleOpenStartWork = useCallback(() => {
     setStartWorkError(null);
     setStartWorkVisible(true);
@@ -499,8 +498,8 @@ export function CloudTasksScreen() {
   const canStartWork = grantedCapabilities.includes('canUseAgiWork');
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
-      <Header onBack={handleBack} {...(canStartWork ? { onStartWork: handleOpenStartWork } : {})} />
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+      <Header onBack={handleBack} onOpenSchedules={handleOpenSchedules} />
 
       <ScrollView
         horizontal
@@ -555,7 +554,7 @@ export function CloudTasksScreen() {
           stickySectionHeadersEnabled={false}
           contentContainerStyle={{
             paddingHorizontal: 16,
-            paddingBottom: 40,
+            paddingBottom: FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
             gap: 10,
             flexGrow: 1,
           }}
@@ -619,6 +618,16 @@ export function CloudTasksScreen() {
           }
         />
       )}
+
+      {canStartWork ? (
+        <FloatingPrimaryAction
+          label="New task"
+          icon={Plus}
+          tone="ink"
+          aboveSearchBar={false}
+          onPress={handleOpenStartWork}
+        />
+      ) : null}
 
       <StartWorkSheet
         visible={startWorkVisible}

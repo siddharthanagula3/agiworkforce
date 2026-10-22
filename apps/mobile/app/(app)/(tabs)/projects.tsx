@@ -353,8 +353,24 @@ export default function ProjectsTabScreen() {
       <StatusBar style={statusBarStyle} />
       <View className="flex-row items-center px-3 h-12 gap-2">
         <DrawerButton onPress={handleOpenDrawer} />
-        <View className="flex-row items-center gap-2 flex-1">
-          <Text variant="subheading" style={{ color: colors.textPrimary }}>
+        <View
+          testID="projects-title-group"
+          style={{
+            flex: 1,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'center',
+            gap: 8,
+          }}
+        >
+          <Text
+            variant="subheading"
+            style={{
+              color: colors.textPrimary,
+              fontSize: typeScale.headline,
+              fontWeight: '600',
+            }}
+          >
             Projects
           </Text>
           {projects.length > 0 && (
@@ -560,6 +576,7 @@ export default function ProjectsTabScreen() {
           <FloatingPrimaryAction
             label="New project"
             icon={Plus}
+            tone="ink"
             onPress={openCreateModal}
             accessibilityLabel="Create new project"
           />

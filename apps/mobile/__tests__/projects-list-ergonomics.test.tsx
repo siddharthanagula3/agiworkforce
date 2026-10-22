@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 import type { ReactTestInstance } from 'react-test-renderer';
 
@@ -139,6 +139,7 @@ jest.mock('../stores/projects/cloudProjectStore', () => ({
 }));
 
 import ProjectsTabScreen from '../app/(app)/(tabs)/projects';
+import { lightColors } from '../src/ui/theme/tokens';
 
 type AlertButton = { text?: string; onPress?: () => void };
 
@@ -190,6 +191,25 @@ describe('Projects list ergonomics', () => {
     const screen = render(<ProjectsTabScreen />);
 
     expect(renderedOrder(screen)).toEqual(['Zurich launch', 'Billing rewrite', 'Android polish']);
+  });
+
+  it('centres a semibold title beside the count badge', () => {
+    const screen = render(<ProjectsTabScreen />);
+
+    const title = screen.getByText('Projects');
+    expect(StyleSheet.flatten(title.props.style).fontWeight).toBe('600');
+    expect(
+      StyleSheet.flatten(screen.getByTestId('projects-title-group').props.style),
+    ).toMatchObject({
+      justifyContent: 'center',
+    });
+  });
+
+  it('fills the New project pill with the neutral ink tone', () => {
+    const screen = render(<ProjectsTabScreen />);
+
+    const fill = StyleSheet.flatten(screen.getByLabelText('Create new project').props.style);
+    expect(fill.backgroundColor).toBe(lightColors.textPrimary);
   });
 
   it('sorts by name from the funnel chip', () => {

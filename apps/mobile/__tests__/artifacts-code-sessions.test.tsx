@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { Share } from 'react-native';
+import { Share, StyleSheet } from 'react-native';
 import { act, fireEvent, render } from '@testing-library/react-native';
 import { ArtifactsGalleryScreen } from '@/src/features/artifacts';
 import { useArtifactStore } from '@/src/features/artifacts/store';
@@ -122,6 +122,53 @@ describe('Artifacts gallery', () => {
     expect(getByTestId('artifacts-grid')).toBeTruthy();
     expect(getByTestId('artifacts-empty-state')).toBeTruthy();
     expect(getByText('No artifacts yet')).toBeTruthy();
+  });
+
+  it('centres a semibold title beside the shared drawer button', () => {
+    const { getByText, getByTestId } = render(<ArtifactsGalleryScreen />);
+
+    expect(StyleSheet.flatten(getByText('Artifacts').props.style)).toMatchObject({
+      textAlign: 'center',
+      fontWeight: '600',
+    });
+    const drawer = getByTestId('artifacts-open-drawer');
+    expect(drawer.props.accessibilityLabel).toBe('Open navigation drawer');
+    expect(StyleSheet.flatten(drawer.props.style).borderRadius).toBe(18);
+  });
+
+  it('tints the empty-state disc apart from the page background', () => {
+    const { getByTestId } = render(<ArtifactsGalleryScreen />);
+
+    expect(
+      StyleSheet.flatten(getByTestId('artifacts-empty-disc').props.style).backgroundColor,
+    ).toBe('#30312f');
+  });
+
+  it('announces the age with the artifact title', () => {
+    useArtifactStore.setState({
+      cloudArtifacts: [
+        {
+          id: 'cloud-artifact-age',
+          type: 'research',
+          title: 'Quarterly brief',
+          content: '# Brief',
+          version: 1,
+          createdAt: '2026-07-25T10:00:00.000Z',
+          updatedAt: '2026-07-26T10:00:00.000Z',
+          conversationId: 'conversation-1',
+          messageId: 'message-1',
+          metadata: {},
+          deletedAt: null,
+        },
+      ],
+      cloudArtifactsOwnerId: 'user-a',
+    });
+
+    const { getByTestId } = render(<ArtifactsGalleryScreen />);
+
+    expect(getByTestId('artifact-card-cloud-artifact-age').props.accessibilityLabel).toMatch(
+      /^Open artifact Quarterly brief, \S+/,
+    );
   });
 
   it('renders the gallery skeleton when loading', () => {

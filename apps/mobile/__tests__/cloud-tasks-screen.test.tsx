@@ -1,6 +1,6 @@
 import React from 'react';
 import { act, fireEvent, render, waitFor } from '@testing-library/react-native';
-import { AppState, type AppStateStatus } from 'react-native';
+import { AppState, StyleSheet, type AppStateStatus } from 'react-native';
 
 const mockPush = jest.fn();
 const mockBack = jest.fn();
@@ -28,6 +28,7 @@ jest.mock('expo-router', () => ({
 
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
 jest.mock('lucide-react-native', () => {
@@ -69,6 +70,7 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatStore } from '../stores/chatStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useTierStore } from '../src/features/billing/store';
 import { useAuthStore } from '../src/features/auth/store';
 import {
   __resetCloudAccountSessionForTests,
@@ -214,6 +216,38 @@ describe('Mobile Cloud tasks screen', () => {
 
     await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(2));
     expect(screen.queryByText('Audit the launch checklist')).toBeNull();
+  });
+
+  it('opens the schedules screen from the header clock', async () => {
+    const { getByLabelText } = render(<CloudTasksScreen />);
+    await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(1));
+
+    fireEvent.press(getByLabelText('Scheduled tasks'));
+
+    expect(mockPush).toHaveBeenCalledWith('/(app)/schedules');
+  });
+
+  it('floats a labelled New task pill for entitled accounts and opens the start sheet', async () => {
+    useTierStore.setState({ grantedCapabilities: ['canUseAgiWork'] });
+    const { getByLabelText, getByText, getAllByLabelText } = render(<CloudTasksScreen />);
+    await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(1));
+
+    expect(getAllByLabelText('New task')).toHaveLength(1);
+    expect(getByText('New task')).toBeTruthy();
+    expect(StyleSheet.flatten(getByLabelText('New task').props.style).position).toBe('absolute');
+
+    fireEvent.press(getByLabelText('New task'));
+
+    await waitFor(() => expect(getByLabelText('Task objective')).toBeTruthy());
+    useTierStore.setState({ grantedCapabilities: [] });
+  });
+
+  it('offers no New task pill to accounts without the work entitlement', async () => {
+    useTierStore.setState({ grantedCapabilities: [] });
+    const { queryByLabelText } = render(<CloudTasksScreen />);
+    await waitFor(() => expect(mockListRuns).toHaveBeenCalledTimes(1));
+
+    expect(queryByLabelText('New task')).toBeNull();
   });
 
   it('uses semantic filters backed by the server state query', async () => {

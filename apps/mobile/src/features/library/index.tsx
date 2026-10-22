@@ -62,6 +62,7 @@ import {
 import type { LibraryAsset, LibraryScope } from './libraryClient';
 import { useLibraryAssets } from './useLibraryAssets';
 import { MediaJobsSection } from './MediaJobsSection';
+import { LibraryFeaturePromoSheet } from './LibraryFeaturePromoSheet';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 import { generateImage } from '@/src/features/image/services/imagegen';
 import { showToast } from '@/src/shared/components/Toast';
@@ -72,6 +73,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 const CARD_GAP = 14;
 const HORIZONTAL_PADDING = 16;
 const SEARCH_DEBOUNCE_MS = 350;
+const LIBRARY_HEADER_SLOT_WIDTH = 56;
 const SORT_LABELS: Record<LibrarySort, string> = {
   modified: 'Recently added',
   oldest: 'Oldest first',
@@ -629,9 +631,18 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
       <View className="h-12 flex-row items-center px-3 gap-2">
-        <DrawerButton testID="library-open-drawer" onPress={openDrawer} />
+        <View style={{ width: LIBRARY_HEADER_SLOT_WIDTH, alignItems: 'flex-start' }}>
+          <DrawerButton testID="library-open-drawer" onPress={openDrawer} />
+        </View>
         <Text
-          style={{ flex: 1, color: c.textPrimary, fontSize: typeScale.headline, fontWeight: '700' }}
+          accessibilityRole="header"
+          style={{
+            flex: 1,
+            color: c.textPrimary,
+            fontSize: typeScale.headline,
+            fontWeight: '600',
+            textAlign: 'center',
+          }}
         >
           Library
         </Text>
@@ -640,7 +651,12 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
           accessibilityRole="button"
           accessibilityLabel={selectionActive ? 'Done selecting files' : 'Library options'}
           accessibilityHint={selectionActive ? undefined : 'Select or sort saved files'}
-          style={{ minWidth: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          style={{
+            width: LIBRARY_HEADER_SLOT_WIDTH,
+            height: 44,
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+          }}
         >
           {selectionActive ? (
             <Text style={{ color: c.teal, fontWeight: '600' }}>Done</Text>
@@ -896,6 +912,8 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
         reportTarget={videoPlayer?.reportTarget}
         failureHint="Long-press the video and choose Share to open it in another app."
       />
+
+      <LibraryFeaturePromoSheet />
     </SafeAreaView>
   );
 }
