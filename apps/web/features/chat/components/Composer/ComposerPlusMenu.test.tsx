@@ -163,6 +163,23 @@ describe('ComposerPlusMenu, chat mode', () => {
     ).not.toBeInTheDocument();
   });
 
+  it('opens the study surface from a Study row placed after Deep Research', () => {
+    const { props } = renderMenu();
+
+    const study = screen.getByRole('link', { name: 'Study' });
+    expect(study).toHaveAttribute('href', '/chat/study');
+    const research = screen.getByRole('button', { name: 'Deep Research' });
+    expect(research.compareDocumentPosition(study) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(study);
+    expect(props.closeMenu).toHaveBeenCalled();
+  });
+
+  it('keeps the Study row out of the AGI Work palette', () => {
+    renderMenu({ workPalette: true });
+
+    expect(screen.queryByRole('link', { name: 'Study' })).not.toBeInTheDocument();
+  });
+
   it('toggles per-chat memory from its own row', () => {
     const { props } = renderMenu();
 

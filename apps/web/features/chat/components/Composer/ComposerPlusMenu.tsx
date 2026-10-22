@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import Link from 'next/link';
 import {
   Brain,
+  BookOpen,
   Check,
   ChevronDown,
   ChevronRight,
@@ -175,6 +176,8 @@ const ROW_LABEL_SKILLS = 'Skills';
 const ROW_LABEL_CONNECTORS = 'Connectors';
 const ROW_LABEL_PLUGINS = 'Plugins';
 const ROW_LABEL_RESEARCH = 'Deep Research';
+const ROW_LABEL_STUDY = 'Study';
+const STUDY_PATH = '/chat/study';
 const ROW_LABEL_OUTPUT = 'Output';
 const ROW_LABEL_MEMORY = 'Memory';
 const ROW_LABEL_TEMPORARY = TEMPORARY_CHAT_LABEL;
@@ -832,6 +835,15 @@ function VideoRow({ props, role }: { props: ComposerPlusMenuProps; role?: string
   );
 }
 
+function StudyRow({ props }: { props: ComposerPlusMenuProps }) {
+  return (
+    <Link href={STUDY_PATH} onClick={props.closeMenu} className={cn(ROW_CLASS, ROW_HOVER_CLASS)}>
+      <BookOpen className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+      <span className="flex-1 text-start">{ROW_LABEL_STUDY}</span>
+    </Link>
+  );
+}
+
 function attachmentUnavailableReason(props: ComposerPlusMenuProps): string {
   return (
     props.attachmentUnavailableTitle ??
@@ -1262,6 +1274,8 @@ function ChatMenu(props: MenuProps) {
         disabled={props.researchDisabled}
         title={props.researchTitle}
       />
+
+      <StudyRow props={props} />
 
       <OutputRows props={props} />
 
