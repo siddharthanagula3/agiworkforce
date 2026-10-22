@@ -97,6 +97,18 @@ test('a dynamic segment inside the path is matched by the value a spec visits', 
   assert.ok(pageRouteHasSpec('apps/web/app/skills/[...path]/page.tsx', ["goto('/skills/x')"]));
 });
 
+test('an inner dynamic route counts only as a quoted path that starts a URL', () => {
+  const page = 'apps/web/app/code/[sessionId]/security/page.tsx';
+  assert.ok(pageRouteHasSpec(page, ['await page.goto("/code/abc/security?tab=1");']));
+  assert.ok(pageRouteHasSpec(page, ["expect(page).toHaveURL('/code/abc/security/');"]));
+  assert.equal(pageRouteHasSpec(page, ["await request.get('/api/code/x/security');"]), false);
+  assert.equal(pageRouteHasSpec(page, ['await request.get(`/api/code/${id}/security`);']), false);
+  assert.equal(pageRouteHasSpec(page, ["read('apps/web/app/code/[sessionId]/security');"]), false);
+  assert.equal(pageRouteHasSpec(page, ["const route = '/code/[sessionId]/security';"]), false);
+  assert.equal(pageRouteHasSpec(page, ['// visits /code/abc/security in the browser']), false);
+  assert.equal(pageRouteHasSpec(page, ["page.goto('/code/abc/security.json');"]), false);
+});
+
 test('scan reports each rule and the ratchet fails on growth', () => {
   const findings = scan({
     apiRoutes: ['apps/web/app/api/billing/route.ts'],

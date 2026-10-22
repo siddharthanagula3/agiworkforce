@@ -51,7 +51,9 @@ export function apiRouteIsTested(relPath, { testPaths, testSources }) {
 
 const DYNAMIC_SEGMENT_ONLY_RE = /^\[\[?(?:\.\.\.)?[^\]]+\]\]?$/;
 const CATCH_ALL_SEGMENT_RE = /^\[\[?\.\.\./;
-const SEGMENT_VALUE = String.raw`(?:\$\{[^}]+\}|[^/'"\x60\s$]+)`;
+const SEGMENT_VALUE = String.raw`(?:\$\{[^}]+\}|[^/'"\x60\s$[\]]+)`;
+const URL_OPENING = String.raw`['"\x60]`;
+const URL_CLOSING = String.raw`[/?#'"\x60]`;
 const SEGMENTS_VALUE = String.raw`${SEGMENT_VALUE}(?:/${SEGMENT_VALUE})*`;
 
 function escapeRegExp(value) {
@@ -76,6 +78,8 @@ function pageSegments(relPath) {
  * A dynamic segment in the middle of a path is visited with a value in its
  * place, a literal id or a template interpolation such as
  * `/code/${sessionId}/security`, never by the path with the segment deleted.
+ * The path must open a quoted URL, so `/api/code/x/security` or the file path
+ * `app/code/[sessionId]/security` never stands in for a visit.
  */
 function innerDynamicRoutePattern(relPath) {
   const segments = pageSegments(relPath);
@@ -86,7 +90,7 @@ function innerDynamicRoutePattern(relPath) {
       return CATCH_ALL_SEGMENT_RE.test(segment) ? SEGMENTS_VALUE : SEGMENT_VALUE;
     })
     .join('/');
-  return new RegExp(`/${body}(?![\\w-])`);
+  return new RegExp(`${URL_OPENING}/${body}(?=${URL_CLOSING})`);
 }
 
 export function pageRouteHasSpec(relPath, specSources) {
