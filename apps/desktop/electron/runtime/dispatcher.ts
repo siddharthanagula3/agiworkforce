@@ -128,6 +128,14 @@ import { browserSignInState, cancelBrowserSignIn, startBrowserSignIn } from '../
 import { readBackgroundActivity, stopBackgroundWork } from './backgroundActivity';
 import { openSystemPermission } from './systemPermissions';
 import {
+  SkillCaptureRefused,
+  discardSkillCapture,
+  saveSkillCapture,
+  skillCaptureStatus,
+  startSkillCapture,
+  stopSkillCapture,
+} from './skillCapture';
+import {
   computerUseLoopMessage,
   createComputerUseLoopDetector,
   stepSignature,
@@ -2064,6 +2072,16 @@ async function execute(
       }
       return openSystemPermission(permission);
     }
+    case 'skill_capture_status':
+      return skillCaptureStatus();
+    case 'skill_capture_start':
+      return startSkillCapture(window, args['consentRevision']);
+    case 'skill_capture_stop':
+      return stopSkillCapture('user');
+    case 'skill_capture_discard':
+      return discardSkillCapture();
+    case 'skill_capture_save':
+      return saveSkillCapture(window);
     case BROWSER_STEP_COMMAND:
       return runBrowserStep(window, args);
     case 'browser_activity':
@@ -2495,6 +2513,7 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
           : 'io-error';
     return runtimeFailure(code, error.message);
   }
+  if (error instanceof SkillCaptureRefused) return runtimeFailure(error.code, error.message);
   if (error instanceof ShellCommandRefused) {
     return runtimeFailure(
       error.reason === 'control-characters' || error.reason === 'unparseable'
@@ -2581,6 +2600,11 @@ const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   'shell_cancel',
   'shell_policy_read',
   'shell_policy_write',
+  'skill_capture_discard',
+  'skill_capture_save',
+  'skill_capture_start',
+  'skill_capture_status',
+  'skill_capture_stop',
   'system_permission_open',
   'window_layout_read',
   'window_layout_write',

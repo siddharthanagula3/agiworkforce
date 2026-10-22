@@ -430,6 +430,26 @@ export type {
   DeviceFrontWindow,
 } from './computer-use';
 
+export {
+  SKILL_CAPTURE_CHANNELS,
+  SKILL_CAPTURE_COMMANDS,
+  SKILL_CAPTURE_CONSENT_REVISION,
+  SKILL_CAPTURE_LIMITS,
+  SKILL_CAPTURE_PHASES,
+  SKILL_CAPTURE_STOP_CAUSES,
+  isSkillCaptureConsent,
+} from './skill-capture';
+export type {
+  SkillCaptureChannel,
+  SkillCaptureCommand,
+  SkillCaptureFrame,
+  SkillCapturePhase,
+  SkillCaptureRecording,
+  SkillCaptureStartOutcome,
+  SkillCaptureStatus,
+  SkillCaptureStopCause,
+} from './skill-capture';
+
 export { BACKGROUND_WORK_KINDS, isBackgroundWorkKind } from './background-activity';
 export type {
   BackgroundActivity,

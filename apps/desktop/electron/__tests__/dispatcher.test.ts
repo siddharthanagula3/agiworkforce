@@ -24,6 +24,7 @@ import {
   PERMISSION_COMMANDS,
   REMOTE_CONTROL_COMMANDS,
   SHELL_COMMANDS,
+  SKILL_CAPTURE_COMMANDS,
   WINDOW_LAYOUT_COMMANDS,
   WORKSPACE_COMMANDS,
   deviceStepCommand,
@@ -161,6 +162,25 @@ vi.mock('../runtime/systemPermissions', () => ({
   systemPermissionStatus: vi.fn(() => 'granted'),
   systemPermissionStatuses: vi.fn(() => ({})),
 }));
+
+const skillCapture = vi.hoisted(() => {
+  class SkillCaptureRefused extends Error {
+    readonly code: string;
+    constructor(code: string, message: string) {
+      super(message);
+      this.code = code;
+    }
+  }
+  return {
+    SkillCaptureRefused,
+    discardSkillCapture: vi.fn(() => ({ phase: 'idle' })),
+    saveSkillCapture: vi.fn(() => ({ frames: [] })),
+    skillCaptureStatus: vi.fn(() => ({ phase: 'idle' })),
+    startSkillCapture: vi.fn(async () => ({ started: true })),
+    stopSkillCapture: vi.fn(() => ({ phase: 'stopped' })),
+  };
+});
+vi.mock('../runtime/skillCapture', () => skillCapture);
 
 vi.mock('../runtime/workspaceStore', () => ({
   getRoot: (id: string) => (id === root.id ? root : undefined),
@@ -3098,6 +3118,37 @@ describe('dispatch, developer turns', () => {
   });
 });
 
+describe('skill capture', () => {
+  it('starts from the asking window with the consent revision the page sent', async () => {
+    skillCapture.startSkillCapture.mockClear();
+    const result = await dispatch(window, 'skill_capture_start', { consentRevision: 1 });
+
+    expect(result).toEqual({ ok: true, value: { started: true } });
+    expect(skillCapture.startSkillCapture).toHaveBeenCalledWith(window, 1);
+  });
+
+  it('hands a save to the asking window and stops on request', async () => {
+    await dispatch(window, 'skill_capture_save', {});
+    await dispatch(window, 'skill_capture_stop', {});
+
+    expect(skillCapture.saveSkillCapture).toHaveBeenCalledWith(window);
+    expect(skillCapture.stopSkillCapture).toHaveBeenCalledWith('user');
+  });
+
+  it('reports a refusal with the code the capture service gave', async () => {
+    skillCapture.saveSkillCapture.mockImplementationOnce(() => {
+      throw new skillCapture.SkillCaptureRefused('permission-denied', 'Only the starter saves.');
+    });
+
+    const result = await dispatch(window, 'skill_capture_save', {});
+
+    expect(result).toEqual({
+      ok: false,
+      error: { code: 'permission-denied', message: 'Only the starter saves.' },
+    });
+  });
+});
+
 /**
  * The contract lists are what a page, a guard or another surface reads to know
  * what this shell answers. A name listed there with no case behind it, or a
@@ -3110,6 +3161,7 @@ describe('the commands the contract lists', () => {
     ...SSH_ENVIRONMENT_COMMANDS,
     ...FILESYSTEM_COMMANDS,
     ...SHELL_COMMANDS,
+    ...SKILL_CAPTURE_COMMANDS,
     ...APPLICATION_COMMANDS,
     ...CLIPBOARD_COMMANDS,
     ...BROWSER_PAIRING_COMMANDS,
