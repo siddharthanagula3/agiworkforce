@@ -15,7 +15,7 @@ import {
   Presentation,
   ShieldCheck,
 } from 'lucide-react-native';
-import type { GeneratedFilePresentation } from '@agiworkforce/types';
+import { formatDeliverableFormatLabel, type GeneratedFilePresentation } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -139,8 +139,15 @@ function Chip({
   );
 }
 
+function fileFormatSuffix(presentation: GeneratedFilePresentation): string | undefined {
+  const format = formatDeliverableFormatLabel({ fileName: presentation.fileName });
+  if (!format || presentation.kindLabel.toUpperCase().includes(format)) return undefined;
+  return format;
+}
+
 export function GeneratedFileCard({ presentation, onOpenSourceSession }: GeneratedFileCardProps) {
   const colors = useThemeColors();
+  const formatSuffix = fileFormatSuffix(presentation);
   const showChips = Boolean(
     presentation.privacyShortLabel || presentation.providerLabel || presentation.sourceSurfaceLabel,
   );
@@ -197,6 +204,11 @@ export function GeneratedFileCard({ presentation, onOpenSourceSession }: Generat
             <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
               {presentation.kindLabel}
             </Text>
+            {formatSuffix ? (
+              <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
+                · {formatSuffix}
+              </Text>
+            ) : null}
             {presentation.byteCountLabel ? (
               <Text style={{ fontSize: typeScale.caption, color: colors.textSecondary }}>
                 · {presentation.byteCountLabel}

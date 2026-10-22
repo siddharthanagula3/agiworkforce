@@ -152,6 +152,14 @@ function trailingChipLabel(tool: ToolCall): string | null {
   return null;
 }
 
+const WEB_FETCH_TOOL_NAMES: ReadonlySet<string> = new Set(['web_fetch', 'webfetch']);
+
+function failedFetchUrl(tool: ToolCall, status: ToolStatus): string | null {
+  if (status !== 'failed' || !WEB_FETCH_TOOL_NAMES.has(tool.name.trim().toLowerCase())) return null;
+  const url = parseToolArguments(tool.input)?.['url'];
+  return typeof url === 'string' && url.trim() ? url.trim() : null;
+}
+
 function formatToolDuration(durationMs: number): string {
   const safeMs = Math.max(0, durationMs);
   if (safeMs < 1_000) return `${Math.round(safeMs)}ms`;
@@ -182,8 +190,10 @@ function ToolCallTimelineRow({
   const [expanded, setExpanded] = useState(false);
   const label = getToolDisplayLabel(tool.name);
   const status = effectiveStatus(tool);
-  const nameText =
-    status === 'running'
+  const fetchFailureUrl = failedFetchUrl(tool, status);
+  const nameText = fetchFailureUrl
+    ? `Failed to fetch: ${fetchFailureUrl}`
+    : status === 'running'
       ? label.activeForm
       : status === 'succeeded'
         ? label.completedForm
@@ -191,7 +201,7 @@ function ToolCallTimelineRow({
   const chip = trailingChipLabel(tool);
   const hasBody = Boolean(
     tool.searchResults?.length ||
-    tool.input ||
+    (tool.input && !fetchFailureUrl) ||
     tool.output ||
     tool.command ||
     tool.stderr ||
@@ -240,7 +250,7 @@ function ToolCallTimelineRow({
         >
           <ToolRowIcon tool={tool} />
           <Text
-            numberOfLines={1}
+            numberOfLines={fetchFailureUrl ? 2 : 1}
             style={{
               flex: 1,
               fontSize: typeScale.footnote,
@@ -740,7 +750,12 @@ export function ToolCallTimeline({
         accessibilityLabel={`${summary}${collapsed ? ', collapsed' : ', expanded'}`}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 4 }}
       >
-        <Text style={{ fontSize: typeScale.caption, color: colors.textMuted }}>{summary}</Text>
+        <Text
+          numberOfLines={1}
+          style={{ flexShrink: 1, fontSize: typeScale.caption, color: colors.textMuted }}
+        >
+          {summary}
+        </Text>
         {collapsed ? (
           <ChevronRight size={12} color={colors.textMuted} />
         ) : (

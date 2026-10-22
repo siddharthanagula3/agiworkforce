@@ -314,3 +314,78 @@ describe('WebSearchToolCard inside the timeline', () => {
     expect(getByText('The search stopped early, these sources are incomplete.')).toBeTruthy();
   });
 });
+
+describe('ToolCallTimeline failed web fetch', () => {
+  const fetchUrl = 'https://docs.example.com/guide/map.md';
+
+  it('names the URL that could not be fetched and offers no expand control for it', () => {
+    const tools = [
+      makeTool({
+        name: 'web_fetch',
+        status: 'failed',
+        input: JSON.stringify({ url: fetchUrl }),
+      }),
+    ];
+    const { getByText, queryByTestId } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
+    );
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(getByText(`Failed to fetch: ${fetchUrl}`)).toBeTruthy();
+    expect(queryByTestId('icon-ChevronRight')).toBeNull();
+  });
+
+  it('keeps the expand control when the failure carries an error body', () => {
+    const tools = [
+      makeTool({
+        name: 'web_fetch',
+        status: 'failed',
+        input: JSON.stringify({ url: fetchUrl }),
+        output: 'Web fetch failed: url_not_accessible',
+      }),
+    ];
+    const { getByText, getAllByTestId } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
+    );
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(getByText(`Failed to fetch: ${fetchUrl}`)).toBeTruthy();
+    expect(getAllByTestId('icon-ChevronRight').length).toBeGreaterThan(0);
+  });
+
+  it('falls back to the generic label when the input carries no URL', () => {
+    const tools = [makeTool({ name: 'web_fetch', status: 'failed', output: 'boom' })];
+    const { getByText, queryByText } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
+    );
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(getByText('Web Fetch')).toBeTruthy();
+    expect(queryByText(/Failed to fetch/)).toBeNull();
+  });
+
+  it('keeps the plain label for a fetch that succeeded', () => {
+    const tools = [
+      makeTool({
+        name: 'web_fetch',
+        status: 'succeeded',
+        input: JSON.stringify({ url: fetchUrl }),
+      }),
+    ];
+    const { getByText, queryByText } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Used 1 tool" />,
+    );
+
+    fireEvent.press(getByText('Used 1 tool'));
+    expect(queryByText(/Failed to fetch/)).toBeNull();
+  });
+
+  it('truncates a long group summary to one line', () => {
+    const tools = [makeTool({ output: 'result text' })];
+    const { getByText } = render(
+      <ToolCallTimeline toolCalls={tools} summary="Used 1 tool to look at a very long list" />,
+    );
+
+    expect(getByText('Used 1 tool to look at a very long list').props.numberOfLines).toBe(1);
+  });
+});

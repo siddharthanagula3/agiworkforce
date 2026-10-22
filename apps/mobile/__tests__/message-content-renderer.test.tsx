@@ -1,4 +1,4 @@
-import { Alert, Linking, View } from 'react-native';
+import { Alert, Linking, ScrollView, View } from 'react-native';
 import { fireEvent, render } from '@testing-library/react-native';
 
 jest.mock('../src/features/chat/components/MathBlock', () => ({
@@ -184,6 +184,32 @@ describe('MessageContentRenderer', () => {
       color: lightColors.textPrimary,
       fontFamily: 'Menlo',
     });
+  });
+
+  it('wraps long lines of a plain-text block instead of scrolling them sideways', () => {
+    const longLine = `git clone https://example.com/${'a'.repeat(120)}.git`;
+    const { UNSAFE_queryAllByType, getByText } = render(
+      <View>{renderMarkdownContent(`\`\`\`\n${longLine}\n\`\`\``, lightColors)}</View>,
+    );
+
+    expect(getByText(longLine)).toBeTruthy();
+    expect(UNSAFE_queryAllByType(ScrollView).filter((node) => node.props.horizontal)).toHaveLength(
+      0,
+    );
+  });
+
+  it('wraps a block fenced as text and keeps scrolling for real code', () => {
+    const plain = render(
+      <View>{renderMarkdownContent('```text\nsome notes\n```', lightColors)}</View>,
+    );
+    expect(plain.UNSAFE_queryAllByType(ScrollView)).toHaveLength(0);
+
+    const code = render(
+      <View>{renderMarkdownContent('```js\nconst x = 42;\n```', lightColors)}</View>,
+    );
+    expect(
+      code.UNSAFE_queryAllByType(ScrollView).filter((node) => node.props.horizontal),
+    ).toHaveLength(1);
   });
 
   it('handles failed browser opens without throwing from the press handler', () => {

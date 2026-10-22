@@ -1,6 +1,8 @@
 import { useRef, useEffect, useCallback, useState, type ReactElement } from 'react';
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { AccessibilityInfo, View, RefreshControl, StyleSheet } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { Text } from '@/components/ui/text';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import Animated, {
   useSharedValue,
@@ -16,7 +18,7 @@ import type { ResearchPlanDecision } from './research/ResearchRunCard';
 import { ChatEmptyState } from './ChatEmptyState';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
-import { motion } from '@/src/ui/theme/tokens';
+import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { contentColumn } from '@/src/shared/layout/contentColumn';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import type { ChatMessage } from '@/types/chat';
@@ -24,6 +26,56 @@ import type { VariantInfoByMessageId } from '@agiworkforce/cloud-contracts';
 import type { ImageAreaEdit } from '@/src/features/image/components/ImageAreaEditor';
 
 const NEAR_BOTTOM_THRESHOLD = 150;
+const TIME_DIVIDER_GAP_MS = 3 * 60 * 60 * 1000;
+
+function startOfDay(date: Date): number {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate()).getTime();
+}
+
+export function shouldShowTimeDivider(
+  previousCreatedAt: string | undefined,
+  createdAt: string | undefined,
+): boolean {
+  if (!previousCreatedAt || !createdAt) return false;
+  const previous = Date.parse(previousCreatedAt);
+  const current = Date.parse(createdAt);
+  if (Number.isNaN(previous) || Number.isNaN(current)) return false;
+  return current - previous >= TIME_DIVIDER_GAP_MS;
+}
+
+export function TimeDivider({ createdAt, now }: { createdAt: string; now?: Date }) {
+  const colors = useThemeColors();
+  const { t } = useTranslation('chat');
+  const sent = new Date(createdAt);
+  if (Number.isNaN(sent.getTime())) return null;
+  const reference = now ?? new Date();
+  const daysAgo = Math.round((startOfDay(reference) - startOfDay(sent)) / (24 * 60 * 60 * 1000));
+  const day =
+    daysAgo === 0
+      ? t('timeDivider.today', 'Today')
+      : daysAgo === 1
+        ? t('timeDivider.yesterday', 'Yesterday')
+        : sent.toLocaleDateString([], {
+            weekday: 'short',
+            month: 'short',
+            day: 'numeric',
+            ...(sent.getFullYear() === reference.getFullYear() ? {} : { year: 'numeric' }),
+          });
+  const time = sent.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+
+  return (
+    <View
+      testID="chat.time-divider"
+      accessible
+      accessibilityLabel={`${day} ${time}`}
+      style={styles.timeDivider}
+    >
+      <Text style={{ fontSize: typeScale.subhead, color: colors.textMuted }}>
+        <Text style={{ fontWeight: '600', color: colors.textSecondary }}>{day}</Text> {time}
+      </Text>
+    </View>
+  );
+}
 
 function canRetry(message: ChatMessage): boolean {
   if (FEATURES.videoGen || message.role !== 'assistant') return true;
@@ -139,10 +191,13 @@ export function MessageList({
   );
 
   const renderItem = useCallback(
-    ({ item }: { item: ChatMessage }) => (
+    ({ item, index }: { item: ChatMessage; index: number }) => (
       // The column is on the row, not on the list, so a swipe anywhere in the
       // pane still scrolls the thread on a tablet.
       <View testID="chat.message-row" style={contentColumn('reading')}>
+        {shouldShowTimeDivider(messages[index - 1]?.createdAt, item.createdAt) ? (
+          <TimeDivider createdAt={item.createdAt} />
+        ) : null}
         <SwipeReplyWrapper message={item} onSwipeReply={onQuoteReply} colors={colors}>
           <MessageBubble
             message={item}
@@ -171,6 +226,7 @@ export function MessageList({
     ),
     [
       colors,
+      messages,
       handleQuoteSelection,
       onDeleteMessage,
       onRetryMessage,
@@ -281,6 +337,10 @@ const styles = StyleSheet.create({
     position: 'absolute',
     bottom: 12,
     alignSelf: 'center',
+  },
+  timeDivider: {
+    alignItems: 'center',
+    paddingVertical: 12,
   },
   fabButton: {
     width: 36,

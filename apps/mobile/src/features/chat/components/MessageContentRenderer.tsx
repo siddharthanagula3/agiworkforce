@@ -711,6 +711,8 @@ function renderTextSegment(
   return nodes;
 }
 
+const PLAIN_TEXT_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['text', 'txt', 'plaintext']);
+
 function renderCodeCard(
   key: string,
   codeContent: string,
@@ -722,6 +724,32 @@ function renderCodeCard(
   const codeTokens: SyntaxToken[] = highlightCode
     ? tokenizeCode(codeContent, fenceLanguage)
     : [{ text: codeContent, type: 'plain' }];
+  const wrapsLongLines =
+    !fenceLanguage || PLAIN_TEXT_FENCE_LANGUAGES.has(fenceLanguage.toLowerCase());
+  const codeText = (
+    <Text
+      style={{
+        fontSize: typeScale.footnote,
+        lineHeight: 19,
+        fontFamily: 'Menlo',
+        color: renderColors.textPrimary,
+      }}
+      selectable
+    >
+      {codeTokens.map((token, tokenIdx) =>
+        token.type === 'plain' ? (
+          token.text
+        ) : (
+          <Text
+            key={`${key}-tok-${tokenIdx}`}
+            style={{ color: syntaxTokenColor(token.type, renderColors) }}
+          >
+            {token.text}
+          </Text>
+        ),
+      )}
+    </Text>
+  );
   return (
     <View
       key={key}
@@ -757,39 +785,22 @@ function renderCodeCard(
         </Text>
         <CodeBlockCopyButton code={codeContent} />
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={true}
-        scrollEventThrottle={16}
-        style={{
-          paddingTop: 2,
-          paddingBottom: 10,
-          paddingHorizontal: 12,
-        }}
-      >
-        <Text
+      {wrapsLongLines ? (
+        <View style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}>{codeText}</View>
+      ) : (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          scrollEventThrottle={16}
           style={{
-            fontSize: typeScale.footnote,
-            lineHeight: 19,
-            fontFamily: 'Menlo',
-            color: renderColors.textPrimary,
+            paddingTop: 2,
+            paddingBottom: 10,
+            paddingHorizontal: 12,
           }}
-          selectable
         >
-          {codeTokens.map((token, tokenIdx) =>
-            token.type === 'plain' ? (
-              token.text
-            ) : (
-              <Text
-                key={`${key}-tok-${tokenIdx}`}
-                style={{ color: syntaxTokenColor(token.type, renderColors) }}
-              >
-                {token.text}
-              </Text>
-            ),
-          )}
-        </Text>
-      </ScrollView>
+          {codeText}
+        </ScrollView>
+      )}
     </View>
   );
 }

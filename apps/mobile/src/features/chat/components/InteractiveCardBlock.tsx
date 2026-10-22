@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Pressable, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, Pressable, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { Image } from 'expo-image';
 import { AlertCircle, MapPinned, Navigation, ExternalLink } from 'lucide-react-native';
 import { isAllowedItineraryRouteUrl } from '@agiworkforce/cloud-contracts';
@@ -25,6 +25,9 @@ import { ClarifyCard } from './ClarifyCard';
 
 const TILE_SIZE = 256;
 const FRAME_HEIGHT = 200;
+const CAROUSEL_AREA = 76;
+const CAROUSEL_CARD_MAX_WIDTH = 240;
+const MARKER_SIZE = 24;
 
 type TileAccess =
   | { status: 'blocked' | 'authorizing' | 'signed-out' | 'error' }
@@ -77,16 +80,133 @@ function project(latitude: number, longitude: number, zoom: number) {
   };
 }
 
+function StopMarker({ index }: { index: number }) {
+  const colors = useThemeColors();
+  const filled = index === 0;
+  return (
+    <View
+      style={{
+        width: MARKER_SIZE,
+        height: MARKER_SIZE,
+        borderRadius: MARKER_SIZE / 2,
+        alignItems: 'center',
+        justifyContent: 'center',
+        backgroundColor: filled ? colors.textPrimary : colors.background,
+        borderWidth: 2,
+        borderColor: filled ? colors.background : colors.textPrimary,
+      }}
+    >
+      <Text
+        style={{
+          color: filled ? colors.background : colors.textPrimary,
+          fontSize: typeScale.subhead,
+          fontWeight: '700',
+        }}
+      >
+        {index + 1}
+      </Text>
+    </View>
+  );
+}
+
+function MapOverlayPill({ label, testID }: { label: string; testID: string }) {
+  const colors = useThemeColors();
+  return (
+    <View
+      testID={testID}
+      style={{
+        maxWidth: '100%',
+        paddingHorizontal: 12,
+        paddingVertical: 4,
+        borderRadius: 9999,
+        backgroundColor: colors.scrim,
+      }}
+    >
+      <Text
+        numberOfLines={1}
+        style={{ fontSize: typeScale.subhead, color: colors.cameraOverlayText }}
+      >
+        {label}
+      </Text>
+    </View>
+  );
+}
+
+function PlaceCarousel({
+  places,
+  width,
+}: {
+  places: NonNullable<MapSearchCardBody['places']>;
+  width: number;
+}) {
+  const colors = useThemeColors();
+  const cardWidth = Math.min(CAROUSEL_CARD_MAX_WIDTH, Math.round(width * 0.7));
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={false}
+      contentContainerStyle={{ paddingHorizontal: 12, gap: 8 }}
+    >
+      {places.map((place, index) => {
+        const [name, ...rest] = place.label.split(',');
+        const detail = [place.kind, rest.slice(0, 2).join(',').trim()].filter(Boolean).join(' · ');
+        return (
+          <View
+            key={`${place.latitude},${place.longitude}`}
+            style={{
+              width: cardWidth,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+              padding: 10,
+              borderRadius: 12,
+              borderCurve: 'continuous',
+              borderWidth: 1,
+              borderColor: colors.border,
+              backgroundColor: colors.surfaceElevated,
+            }}
+          >
+            <StopMarker index={index} />
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text
+                selectable
+                style={{
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                  color: colors.textPrimary,
+                }}
+                numberOfLines={1}
+              >
+                {name}
+              </Text>
+              {detail ? (
+                <Text
+                  style={{ fontSize: typeScale.subhead, color: colors.textMuted }}
+                  numberOfLines={1}
+                >
+                  {detail}
+                </Text>
+              ) : null}
+            </View>
+          </View>
+        );
+      })}
+    </ScrollView>
+  );
+}
+
 function MapTiles({
   view,
   places,
   width,
+  frameHeight,
   tileBaseUrl,
   tileAccess,
 }: {
   view: MapSearchView;
   places: MapSearchCardBody['places'];
   width: number;
+  frameHeight: number;
   tileBaseUrl: string;
   tileAccess: TileAccess;
 }) {
@@ -97,7 +217,7 @@ function MapTiles({
   const centreTileX = Math.floor(centre.pixelX / TILE_SIZE);
   const centreTileY = Math.floor(centre.pixelY / TILE_SIZE);
   const acrossHalf = Math.ceil(width / 2 / TILE_SIZE) + 1;
-  const downHalf = Math.ceil(FRAME_HEIGHT / 2 / TILE_SIZE) + 1;
+  const downHalf = Math.ceil(frameHeight / TILE_SIZE) + 1;
 
   const tiles: Array<{ key: string; uri: string; left: number; top: number }> = [];
   const normalizedBaseUrl = tileBaseUrl.replace(/\/$/, '');
@@ -135,11 +255,12 @@ function MapTiles({
       <View
         accessibilityRole="summary"
         style={{
-          height: FRAME_HEIGHT,
+          height: frameHeight,
           alignItems: 'center',
           justifyContent: 'center',
           gap: 10,
           paddingHorizontal: 24,
+          paddingBottom: frameHeight - FRAME_HEIGHT,
           backgroundColor: colors.surfaceOverlay,
         }}
       >
@@ -169,9 +290,11 @@ function MapTiles({
         one: 'Map preview with {{count}} place',
         other: 'Map preview with {{count}} places',
       })}
-      style={{ height: FRAME_HEIGHT, overflow: 'hidden', backgroundColor: colors.surfaceOverlay }}
+      style={{ height: frameHeight, overflow: 'hidden', backgroundColor: colors.surfaceOverlay }}
     >
-      <View style={{ position: 'absolute', left: '50%', top: '50%', width: 0, height: 0 }}>
+      <View
+        style={{ position: 'absolute', left: '50%', top: FRAME_HEIGHT / 2, width: 0, height: 0 }}
+      >
         {tiles.map((tile) => (
           <Image
             key={tile.key}
@@ -201,23 +324,11 @@ function MapTiles({
               key={`${place.latitude},${place.longitude}`}
               style={{
                 position: 'absolute',
-                left: point.pixelX - centre.pixelX - 12,
-                top: point.pixelY - centre.pixelY - 24,
-                width: 24,
-                height: 24,
-                borderRadius: 12,
-                alignItems: 'center',
-                justifyContent: 'center',
-                backgroundColor: colors.agentError,
-                borderWidth: 2,
-                borderColor: colors.cameraOverlayText,
+                left: point.pixelX - centre.pixelX - MARKER_SIZE / 2,
+                top: point.pixelY - centre.pixelY - MARKER_SIZE,
               }}
             >
-              <Text
-                style={{ color: colors.accentText, fontSize: typeScale.caption, fontWeight: '700' }}
-              >
-                {index + 1}
-              </Text>
+              <StopMarker index={index} />
             </View>
           );
         })}
@@ -240,6 +351,8 @@ function MapSearchCard({
   const colors = useThemeColors();
   const places = body.places ?? [];
   const primary = body.actions.find((a) => a.provider === 'google_maps') ?? body.actions[0];
+  const carouselArea = places.length > 0 ? CAROUSEL_AREA : 0;
+  const frameHeight = FRAME_HEIGHT + carouselArea;
 
   return (
     <View
@@ -254,13 +367,43 @@ function MapSearchCard({
       }}
     >
       {body.view ? (
-        <MapTiles
-          view={body.view}
-          places={places}
-          width={width}
-          tileBaseUrl={tileBaseUrl}
-          tileAccess={tileAccess}
-        />
+        <View style={{ height: frameHeight }}>
+          <MapTiles
+            view={body.view}
+            places={places}
+            width={width}
+            frameHeight={frameHeight}
+            tileBaseUrl={tileBaseUrl}
+            tileAccess={tileAccess}
+          />
+          {tileAccess.status === 'ready' ? (
+            <>
+              <View
+                pointerEvents="none"
+                style={{
+                  position: 'absolute',
+                  top: 12,
+                  left: 12,
+                  right: 12,
+                  alignItems: 'flex-start',
+                }}
+              >
+                <MapOverlayPill testID="map-route-pill" label={body.title} />
+              </View>
+              <View
+                pointerEvents="none"
+                style={{ position: 'absolute', left: 12, bottom: carouselArea + 8 }}
+              >
+                <MapOverlayPill testID="map-attribution" label={body.view.attribution} />
+              </View>
+            </>
+          ) : null}
+          {places.length > 0 ? (
+            <View style={{ position: 'absolute', left: 0, right: 0, bottom: 8 }}>
+              <PlaceCarousel places={places} width={width} />
+            </View>
+          ) : null}
+        </View>
       ) : null}
 
       <View style={{ padding: 12, gap: 8 }}>
@@ -280,45 +423,11 @@ function MapSearchCard({
           </Text>
         </View>
 
-        {places.map((place, index) => (
-          <View
-            key={`${place.latitude},${place.longitude}`}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
-          >
-            <View
-              style={{
-                width: 20,
-                height: 20,
-                borderRadius: 10,
-                backgroundColor: colors.teal,
-                alignItems: 'center',
-                justifyContent: 'center',
-              }}
-            >
-              <Text
-                style={{ color: colors.accentText, fontSize: typeScale.caption, fontWeight: '700' }}
-              >
-                {index + 1}
-              </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <Text
-                selectable
-                style={{ fontSize: typeScale.footnote, color: colors.textPrimary }}
-                numberOfLines={1}
-              >
-                {place.label.split(',')[0]}
-              </Text>
-              <Text
-                style={{ fontSize: typeScale.caption, color: colors.textMuted }}
-                numberOfLines={1}
-              >
-                {place.kind ? `${place.kind} · ` : ''}
-                {place.label.split(',').slice(1, 3).join(',').trim()}
-              </Text>
-            </View>
+        {!body.view && places.length > 0 ? (
+          <View style={{ marginHorizontal: -12 }}>
+            <PlaceCarousel places={places} width={width} />
           </View>
-        ))}
+        ) : null}
 
         {primary ? (
           <Pressable
@@ -354,8 +463,7 @@ function MapSearchCard({
         ) : null}
 
         <Text selectable style={{ fontSize: typeScale.caption, color: colors.textMuted }}>
-          {body.view ? `${body.view.attribution} · ` : ''}Opens a provider search. Confirm the place
-          before navigating.
+          Opens a provider search. Confirm the place before navigating.
         </Text>
       </View>
     </View>
