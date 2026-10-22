@@ -225,6 +225,8 @@
 
     --stroke-hairline: 1px;
 
+    --scrim: rgb(0 0 0 / 0.7);
+
     --space-1: 4px;
     --space-2: 8px;
     --space-3: 12px;

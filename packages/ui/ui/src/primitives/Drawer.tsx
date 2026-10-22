@@ -31,7 +31,7 @@ function DrawerOverlay({ className, ref, ...props }: DrawerOverlayProps) {
   return (
     <DrawerPrimitive.Overlay
       ref={ref}
-      className={cn('fixed inset-0 z-[var(--z-modal)] bg-black/80', className)}
+      className={cn('fixed inset-0 z-[var(--z-modal)] bg-[var(--scrim)]', className)}
       {...props}
     />
   );
