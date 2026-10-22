@@ -5,8 +5,15 @@ import { cn } from '../../lib/utils';
 import { numericValue, parseTabular } from '../../lib/tabular';
 import type { Artifact } from '../../lib/types';
 
+export interface SpreadsheetSheet {
+  name: string;
+  content: string;
+}
+
 export interface SpreadsheetArtifactProps {
   artifact: Artifact;
+  /** Worksheets of a workbook, in tab order. Fewer than two shows the artifact's own content. */
+  sheets?: readonly SpreadsheetSheet[];
   className?: string;
   /** @deprecated The renderer is always read-only; kept for API compatibility. */
   readOnly?: boolean;
@@ -23,12 +30,60 @@ const ARROW_STEPS: Record<string, [number, number] | undefined> = {
 
 type SortState = { column: number; direction: 'asc' | 'desc' } | null;
 
-export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifactProps) {
-  const data = useMemo(() => parseTabular(artifact.content), [artifact.content]);
+function SheetTabs({
+  sheets,
+  activeIndex,
+  onSelect,
+}: {
+  sheets: readonly SpreadsheetSheet[];
+  activeIndex: number;
+  onSelect: (index: number) => void;
+}) {
+  return (
+    <div
+      role="tablist"
+      aria-label="Worksheets"
+      className="flex shrink-0 items-center gap-1 overflow-x-auto border-t bg-muted/30 px-2 py-1"
+      data-testid="spreadsheet-sheet-tabs"
+    >
+      {sheets.map((sheet, index) => (
+        <button
+          key={`${sheet.name}-${index}`}
+          type="button"
+          role="tab"
+          aria-selected={index === activeIndex}
+          onClick={() => onSelect(index)}
+          className={cn(
+            'min-h-11 shrink-0 rounded-md px-3 text-sm transition-colors sm:min-h-8',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            index === activeIndex
+              ? 'bg-background font-medium text-foreground shadow-sm'
+              : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+          )}
+        >
+          {sheet.name}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+export function SpreadsheetArtifact({ artifact, sheets, className }: SpreadsheetArtifactProps) {
+  const [sheetIndex, setSheetIndex] = useState(0);
+  const tabbedSheets = sheets && sheets.length > 1 ? sheets : null;
+  const activeIndex = tabbedSheets ? Math.min(sheetIndex, tabbedSheets.length - 1) : 0;
+  const content = tabbedSheets ? (tabbedSheets[activeIndex]?.content ?? '') : artifact.content;
+  const data = useMemo(() => parseTabular(content), [content]);
 
   const [sort, setSort] = useState<SortState>(null);
   const [selected, setSelected] = useState<{ r: number; c: number } | null>(null);
   const [copiedCell, setCopiedCell] = useState(false);
+
+  const selectSheet = useCallback((index: number) => {
+    setSheetIndex(index);
+    setSort(null);
+    setSelected(null);
+  }, []);
 
   const sortedRows = useMemo(() => {
     if (!data) return [];
@@ -134,8 +189,11 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
           </span>
         </div>
         <pre className="p-3 text-xs text-foreground whitespace-pre-wrap break-words overflow-auto max-h-[400px]">
-          {artifact.content}
+          {content}
         </pre>
+        {tabbedSheets && (
+          <SheetTabs sheets={tabbedSheets} activeIndex={activeIndex} onSelect={selectSheet} />
+        )}
       </div>
     );
   }
@@ -153,7 +211,9 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
         <div className="flex items-center gap-2">
           <div className="flex items-center gap-1.5 px-2 py-1 bg-success-fill/10 text-success-text rounded-compact text-xs font-medium">
             <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden="true" />
-            <span>Sheet</span>
+            <span className="max-w-[12rem] truncate">
+              {tabbedSheets?.[activeIndex]?.name ?? 'Sheet'}
+            </span>
           </div>
           <span className="text-xs text-muted-foreground">
             {translateUiPlural('chat', 'counts.tableRows', data.rows.length, {
@@ -291,6 +351,10 @@ export function SpreadsheetArtifact({ artifact, className }: SpreadsheetArtifact
           Showing first {SPREADSHEET_ROW_CAP} of {sortedRows.length} rows. Download the CSV for the
           full data.
         </div>
+      )}
+
+      {tabbedSheets && (
+        <SheetTabs sheets={tabbedSheets} activeIndex={activeIndex} onSelect={selectSheet} />
       )}
     </div>
   );

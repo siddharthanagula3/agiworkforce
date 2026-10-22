@@ -74,28 +74,82 @@ afterEach(() => {
 });
 
 describe('artifact panel header', () => {
-  it('keeps copy, expand, more and close in the bar and the rest in the More menu', () => {
+  it('keeps download, copy, expand, more and close in the bar and the rest in the More menu', () => {
     seed();
     renderPanel();
 
+    expect(screen.getByRole('button', { name: 'Download artifact' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Copy artifact' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Enter fullscreen' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Close artifact viewer' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Refresh preview' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Open in new tab' })).toBeNull();
-    expect(screen.queryByRole('button', { name: 'Download artifact' })).toBeNull();
 
     openMore();
     const menu = screen.getByRole('menu', { name: 'More artifact actions' });
     for (const name of [
       'Refresh preview',
       'Open in new tab',
-      'Download as HTML',
       'Duplicate this artifact',
       'Save this artifact to your Library',
     ]) {
       expect(within(menu).getByRole('menuitem', { name })).toBeInTheDocument();
     }
+    expect(within(menu).queryByRole('menuitem', { name: 'Download as HTML' })).toBeNull();
+  });
+
+  it('orders the bar as Preview and Source, then share, download, more and close', () => {
+    seed();
+    const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
+    render(
+      <ArtifactPreview
+        artifact={artifact}
+        variant="panel"
+        onClose={vi.fn()}
+        onShare={vi.fn()}
+        versionHistory={useArtifactsStore.getState().getArtifactVersions(ARTIFACT_ID)}
+      />,
+    );
+
+    const names = [
+      'Preview',
+      'Source',
+      'Share artifact',
+      'Download artifact',
+      'More artifact actions',
+      'Close artifact viewer',
+    ];
+    const positions = names.map((name) => screen.getByRole('button', { name }));
+    positions.slice(1).forEach((button, index) => {
+      expect(
+        positions[index]!.compareDocumentPosition(button) & Node.DOCUMENT_POSITION_FOLLOWING,
+      ).toBeTruthy();
+    });
+  });
+
+  it('offers the download formats from the Download button, not the More menu', () => {
+    seed();
+    renderPanel();
+
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Download artifact' }), { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: 'Download as HTML' })).toBeInTheDocument();
+  });
+
+  it('offers Share only when there is something to share', () => {
+    seed();
+    renderPanel();
+
+    expect(screen.queryByRole('button', { name: 'Share artifact' })).toBeNull();
+  });
+
+  it('shares through the handler it was given', () => {
+    seed();
+    const onShare = vi.fn();
+    const artifact = useArtifactsStore.getState().artifacts.find((a) => a.id === ARTIFACT_ID)!;
+    render(<ArtifactPreview artifact={artifact} variant="panel" onShare={onShare} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Share artifact' }));
+    expect(onShare).toHaveBeenCalledTimes(1);
   });
 
   it('does not wrap, so a narrow panel cannot push controls onto a second row', () => {

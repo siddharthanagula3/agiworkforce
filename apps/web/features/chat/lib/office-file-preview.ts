@@ -10,7 +10,11 @@ const IMAGE_TYPES: Record<string, string> = {
   webp: 'image/webp',
 };
 const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-const SHEET_PATH = 'xl/worksheets/sheet1.xml';
+const DEFAULT_SHEET_PATH = 'xl/worksheets/sheet1.xml';
+const WORKBOOK_PATH = 'xl/workbook.xml';
+const WORKBOOK_RELS_PATH = 'xl/_rels/workbook.xml.rels';
+const MAX_SHEETS = 50;
+const MAX_CACHED_WORKBOOKS = 16;
 
 function parseXml(source: string): Document {
   return new DOMParser().parseFromString(source, 'application/xml');
@@ -137,19 +141,12 @@ function csvCell(value: string): string {
 
 export const XLSX_NOT_CALCULATED = 'not calculated';
 
-export async function xlsxFirstSheetToCsv(data: ArrayBuffer): Promise<string> {
-  const zip = await JSZip.loadAsync(data);
-  const sharedXml = await zip.file('xl/sharedStrings.xml')?.async('string');
-  const shared = sharedXml
-    ? elementsByLocalName(parseXml(sharedXml), 'si').map((item) =>
-        elementsByLocalName(item, 't')
-          .map((node) => node.textContent ?? '')
-          .join(''),
-      )
-    : [];
-  const sheetXml = await zip.file(SHEET_PATH)?.async('string');
-  if (!sheetXml) return '';
+export interface WorkbookSheet {
+  name: string;
+  csv: string;
+}
 
+function sheetCsv(sheetXml: string, shared: readonly string[]): string {
   const rows: string[][] = [];
   for (const row of elementsByLocalName(parseXml(sheetXml), 'row')) {
     const cells: string[] = [];
@@ -177,4 +174,69 @@ export async function xlsxFirstSheetToCsv(data: ArrayBuffer): Promise<string> {
   return rows
     .map((row) => Array.from({ length: width }, (_, index) => csvCell(row[index] ?? '')).join(','))
     .join('\n');
+}
+
+async function sheetEntries(zip: JSZip): Promise<{ name: string; path: string }[]> {
+  const workbookXml = await zip.file(WORKBOOK_PATH)?.async('string');
+  const relsXml = await zip.file(WORKBOOK_RELS_PATH)?.async('string');
+  if (!workbookXml || !relsXml) return [{ name: 'Sheet1', path: DEFAULT_SHEET_PATH }];
+  const targets = new Map(
+    elementsByLocalName(parseXml(relsXml), 'Relationship').map((relation) => [
+      relation.getAttribute('Id') ?? '',
+      relation.getAttribute('Target') ?? '',
+    ]),
+  );
+  const entries: { name: string; path: string }[] = [];
+  for (const sheet of elementsByLocalName(parseXml(workbookXml), 'sheet').slice(0, MAX_SHEETS)) {
+    const id = sheet.getAttributeNS(RELATIONSHIP_NS, 'id') ?? sheet.getAttribute('r:id') ?? '';
+    const target = targets.get(id);
+    const name = sheet.getAttribute('name')?.trim();
+    if (!target || !name) continue;
+    entries.push({
+      name,
+      path: target.startsWith('/') ? target.slice(1) : resolveTarget(WORKBOOK_PATH, target),
+    });
+  }
+  return entries;
+}
+
+export async function xlsxSheets(data: ArrayBuffer): Promise<WorkbookSheet[]> {
+  const zip = await JSZip.loadAsync(data);
+  const sharedXml = await zip.file('xl/sharedStrings.xml')?.async('string');
+  const shared = sharedXml
+    ? elementsByLocalName(parseXml(sharedXml), 'si').map((item) =>
+        elementsByLocalName(item, 't')
+          .map((node) => node.textContent ?? '')
+          .join(''),
+      )
+    : [];
+  const sheets: WorkbookSheet[] = [];
+  for (const entry of await sheetEntries(zip)) {
+    const sheetXml = await zip.file(entry.path)?.async('string');
+    if (sheetXml !== undefined) sheets.push({ name: entry.name, csv: sheetCsv(sheetXml, shared) });
+  }
+  return sheets;
+}
+
+const workbookSheetsByUri = new Map<string, Promise<WorkbookSheet[]>>();
+
+export function clearWorkbookSheetCache(): void {
+  workbookSheetsByUri.clear();
+}
+
+export function loadWorkbookSheets(uri: string): Promise<WorkbookSheet[]> {
+  const cached = workbookSheetsByUri.get(uri);
+  if (cached) return cached;
+  const pending = fetch(uri, { credentials: 'same-origin' })
+    .then((response) =>
+      response.ok ? response.arrayBuffer() : Promise.reject(new Error(`HTTP ${response.status}`)),
+    )
+    .then(xlsxSheets);
+  workbookSheetsByUri.set(uri, pending);
+  pending.catch(() => workbookSheetsByUri.delete(uri));
+  if (workbookSheetsByUri.size > MAX_CACHED_WORKBOOKS) {
+    const oldest = workbookSheetsByUri.keys().next().value;
+    if (oldest !== undefined) workbookSheetsByUri.delete(oldest);
+  }
+  return pending;
 }

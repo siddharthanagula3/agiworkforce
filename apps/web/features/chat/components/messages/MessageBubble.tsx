@@ -201,7 +201,7 @@ import { hasVisibleContent } from '../../lib/continue-generation';
 import type { GeneratedDocument } from '../../types/message-metadata';
 import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
-import { pptxToSlidesMarkdown, xlsxFirstSheetToCsv } from '../../lib/office-file-preview';
+import { loadWorkbookSheets, pptxToSlidesMarkdown } from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
 import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
@@ -1453,13 +1453,14 @@ const MessageBubbleComponent = function MessageBubble({
     if (pending.length === 0) return;
     let cancelled = false;
     for (const file of pending) {
-      fetch(file.uri, { credentials: 'same-origin' })
-        .then((res) =>
-          res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`)),
-        )
-        .then((buffer) =>
-          file.kind === 'pptx' ? pptxToSlidesMarkdown(buffer) : xlsxFirstSheetToCsv(buffer),
-        )
+      (file.kind === 'pptx'
+        ? fetch(file.uri, { credentials: 'same-origin' })
+            .then((res) =>
+              res.ok ? res.arrayBuffer() : Promise.reject(new Error(`HTTP ${res.status}`)),
+            )
+            .then(pptxToSlidesMarkdown)
+        : loadWorkbookSheets(file.uri).then((sheets) => sheets[0]?.csv ?? '')
+      )
         .then((preview) => {
           if (!cancelled) setOfficePreviews((prev) => ({ ...prev, [file.id]: preview }));
         })

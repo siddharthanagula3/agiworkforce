@@ -93,6 +93,7 @@ import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';
 import { PresentationWorkspace } from './presentation/PresentationWorkspace';
+import { loadWorkbookSheets } from '../../lib/office-file-preview';
 import { StudyDocument } from './study/StudyDocument';
 import { replaceImageInHtml } from './design/design-edits';
 import { ArtifactChangesReview } from './review/ArtifactChangesReview';
@@ -852,7 +853,7 @@ export function ArtifactPreview({
   const shownVersion = versionHistory?.[shownVersionIndex];
   const shownVersionModifiedAt = shownVersion
     ? (shownVersion.updatedAt ?? shownVersion.createdAt)
-    : null;
+    : (artifact.generatedFile?.createdAt ?? null);
   const [, setModifiedClock] = useState(0);
   useEffect(() => {
     if (variant !== 'panel' || !shownVersionModifiedAt) return;
@@ -1629,6 +1630,37 @@ export function ArtifactPreview({
     [artifact.id, artifact.type, artifact.title, artifact.language, activeContent],
   );
 
+  const workbookUri =
+    isTabular && artifact.generatedFile?.kind === 'xlsx' ? artifact.generatedFile.uri : null;
+  const [workbookSheets, setWorkbookSheets] = useState<{
+    uri: string;
+    sheets: { name: string; content: string }[];
+  } | null>(null);
+  useEffect(() => {
+    if (!workbookUri) return;
+    let cancelled = false;
+    loadWorkbookSheets(workbookUri)
+      .then((sheets) => {
+        if (!cancelled)
+          setWorkbookSheets({
+            uri: workbookUri,
+            sheets: sheets.map((sheet) => ({ name: sheet.name, content: sheet.csv })),
+          });
+      })
+      .catch(() => {
+        if (!cancelled) setWorkbookSheets(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workbookUri]);
+  const shownSheets =
+    workbookUri &&
+    workbookSheets?.uri === workbookUri &&
+    workbookSheets.sheets[0]?.content === activeContent
+      ? workbookSheets.sheets
+      : undefined;
+
   const handleDownloadCsv = () => {
     const sheet = spreadsheetSafeExport(activeContent, 'csv');
     const blob = new Blob([sheet.body], { type: sheet.mimeType });
@@ -1693,6 +1725,7 @@ export function ArtifactPreview({
       {isTabular ? (
         <SpreadsheetArtifact
           artifact={sharedArtifactView}
+          {...(shownSheets ? { sheets: shownSheets } : {})}
           className="h-full rounded-none border-0"
         />
       ) : isPresentation && variant === 'panel' ? (
@@ -2013,8 +2046,10 @@ export function ArtifactPreview({
         ? (artifact.language ?? artifact.type).toUpperCase()
         : artifact.type.toUpperCase();
 
+    const canShareArtifact = Boolean(onShare) || hasGeneratedFileManifest;
     const isBinaryDownload = isPdf || isDocx || isImage;
     const moreMenuItems: ArtifactMenuItem[] = [];
+    const downloadItems: ArtifactMenuItem[] = [];
     if (canRequestEdits) {
       moreMenuItems.push({
         id: 'request-edits',
@@ -2111,11 +2146,10 @@ export function ArtifactPreview({
       });
     }
     if (isBinaryDownload) {
-      moreMenuItems.push({
+      downloadItems.push({
         id: 'download-file',
         label: isImage ? 'Download image' : 'Download file',
         icon: Download,
-        group: 'Download',
         disabled: isImage && !imageSrc,
         onSelect: isImage
           ? () => void handleDownloadImage()
@@ -2164,11 +2198,10 @@ export function ArtifactPreview({
         });
       }
       downloads.forEach((download) =>
-        moreMenuItems.push({
+        downloadItems.push({
           id: `download-${download.id}`,
           label: download.label,
           icon: Download,
-          group: 'Download',
           onSelect: download.run,
         }),
       );
@@ -2508,6 +2541,64 @@ export function ArtifactPreview({
                 <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
                 <span className="ms-1 hidden text-xs @[30rem]:inline">Edit</span>
               </Button>
+            )}
+
+            {canShareArtifact && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() =>
+                  hasGeneratedFileManifest ? void handleShareGeneratedFile() : onShare?.()
+                }
+                className="h-7 px-2"
+                aria-label="Share artifact"
+                title="Share"
+                data-testid="artifact-share"
+              >
+                <Share2 className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            )}
+
+            {downloadItems.length === 1 && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={downloadItems[0]!.onSelect}
+                disabled={downloadItems[0]!.disabled}
+                className="h-7 px-2"
+                aria-label="Download artifact"
+                title="Download"
+                data-testid="artifact-download"
+              >
+                <Download className="h-3.5 w-3.5" aria-hidden="true" />
+              </Button>
+            )}
+            {downloadItems.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-7 px-2"
+                    aria-label="Download artifact"
+                    title="Download"
+                    data-testid="artifact-download"
+                  >
+                    <Download className="h-3.5 w-3.5" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  {downloadItems.map((item) => (
+                    <DropdownMenuItem
+                      key={item.id}
+                      disabled={item.disabled}
+                      onClick={item.onSelect}
+                    >
+                      {item.label}
+                    </DropdownMenuItem>
+                  ))}
+                </DropdownMenuContent>
+              </DropdownMenu>
             )}
 
             {canComment && (

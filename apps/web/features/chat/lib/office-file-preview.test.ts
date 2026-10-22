@@ -1,10 +1,15 @@
 import JSZip from 'jszip';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   XLSX_NOT_CALCULATED,
+  loadWorkbookSheets,
   pptxToSlidesMarkdown,
-  xlsxFirstSheetToCsv,
+  xlsxSheets,
 } from './office-file-preview';
+
+async function xlsxFirstSheetToCsv(data: ArrayBuffer): Promise<string> {
+  return (await xlsxSheets(data))[0]?.csv ?? '';
+}
 
 async function workbook(sheetData: string): Promise<ArrayBuffer> {
   const zip = new JSZip();
@@ -88,5 +93,92 @@ describe('pptxToSlidesMarkdown tables and pictures', () => {
     expect(markdown).toContain('# Numbers');
     expect(markdown).toContain('| Region | Sales |\n| --- | --- |\n| EU | 12 |');
     expect(markdown).toContain('![Logo](data:image/png;base64,');
+  });
+});
+
+const MAIN_NS = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
+const REL_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+
+function worksheet(rows: string): string {
+  return `<worksheet xmlns="${MAIN_NS}"><sheetData>${rows}</sheetData></worksheet>`;
+}
+
+async function multiSheetWorkbook(): Promise<ArrayBuffer> {
+  const zip = new JSZip();
+  zip.file(
+    'xl/workbook.xml',
+    `<workbook xmlns="${MAIN_NS}" xmlns:r="${REL_NS}"><sheets>` +
+      '<sheet name="Instructions" sheetId="1" r:id="rId1"/>' +
+      '<sheet name="Budget" sheetId="2" r:id="rId2"/>' +
+      '<sheet name="Review" sheetId="3" r:id="rId3"/>' +
+      '</sheets></workbook>',
+  );
+  zip.file(
+    'xl/_rels/workbook.xml.rels',
+    '<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">' +
+      '<Relationship Id="rId1" Type="worksheet" Target="worksheets/sheet1.xml"/>' +
+      '<Relationship Id="rId2" Type="worksheet" Target="/xl/worksheets/sheet2.xml"/>' +
+      '<Relationship Id="rId3" Type="worksheet" Target="worksheets/sheet3.xml"/>' +
+      '</Relationships>',
+  );
+  zip.file(
+    'xl/sharedStrings.xml',
+    `<sst xmlns="${MAIN_NS}"><si><t>Read me</t></si><si><t>Rent</t></si></sst>`,
+  );
+  zip.file('xl/worksheets/sheet1.xml', worksheet('<row r="1"><c r="A1" t="s"><v>0</v></c></row>'));
+  zip.file(
+    'xl/worksheets/sheet2.xml',
+    worksheet('<row r="1"><c r="A1" t="s"><v>1</v></c><c r="B1"><v>900</v></c></row>'),
+  );
+  zip.file('xl/worksheets/sheet3.xml', worksheet('<row r="1"><c r="A1"><v>ok</v></c></row>'));
+  return zip.generateAsync({ type: 'arraybuffer' });
+}
+
+describe('xlsxSheets', () => {
+  it('returns every worksheet by name in tab order', async () => {
+    expect(await xlsxSheets(await multiSheetWorkbook())).toEqual([
+      { name: 'Instructions', csv: 'Read me' },
+      { name: 'Budget', csv: 'Rent,900' },
+      { name: 'Review', csv: 'ok' },
+    ]);
+  });
+
+  it('names a workbook without a sheet list Sheet1', async () => {
+    const sheets = await xlsxSheets(await workbook('<row r="1"><c r="A1"><v>1</v></c></row>'));
+    expect(sheets).toEqual([{ name: 'Sheet1', csv: '1' }]);
+  });
+
+  it('returns nothing for an archive with no worksheet', async () => {
+    expect(await xlsxSheets(await new JSZip().generateAsync({ type: 'arraybuffer' }))).toEqual([]);
+  });
+});
+
+describe('loadWorkbookSheets', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('fetches a workbook once for the preview and the panel', async () => {
+    const bytes = await multiSheetWorkbook();
+    const fetchMock = vi.fn(async () => new Response(bytes));
+    vi.stubGlobal('fetch', fetchMock);
+
+    const first = await loadWorkbookSheets('/api/files/once');
+    const second = await loadWorkbookSheets('/api/files/once');
+
+    expect(first.map((sheet) => sheet.name)).toEqual(['Instructions', 'Budget', 'Review']);
+    expect(second).toBe(first);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).toHaveBeenCalledWith('/api/files/once', { credentials: 'same-origin' });
+  });
+
+  it('forgets a failed load so the next attempt asks again', async () => {
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(new Response('nope', { status: 500 }))
+      .mockResolvedValueOnce(new Response(await multiSheetWorkbook()));
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(loadWorkbookSheets('/api/files/retry')).rejects.toThrow('HTTP 500');
+    await expect(loadWorkbookSheets('/api/files/retry')).resolves.toHaveLength(3);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 });

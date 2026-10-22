@@ -53,7 +53,9 @@ describe('ArtifactPreview · presentation workspace', () => {
         versionHistory={useArtifactsStore.getState().getArtifactVersions(ARTIFACT_ID)}
       />,
     );
-    fireEvent.click(screen.getByRole('button', { name: 'More artifact actions' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Download artifact' }), {
+      key: 'Enter',
+    });
     expect(screen.getByRole('menuitem', { name: 'Download as PDF' })).toBeInTheDocument();
   });
 

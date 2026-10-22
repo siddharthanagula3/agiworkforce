@@ -31,7 +31,7 @@ describe('ArtifactPreview · Markdown export', () => {
     vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => {});
 
     render(<ArtifactPreview variant="panel" artifact={markdownDocument} />);
-    fireEvent.click(screen.getByRole('button', { name: 'More artifact actions' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'Download artifact' }), { key: 'Enter' });
     fireEvent.click(screen.getByRole('menuitem', { name: 'Download as Markdown' }));
 
     expect(blobs).toHaveLength(1);

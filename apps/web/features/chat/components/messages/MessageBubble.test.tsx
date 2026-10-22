@@ -21,6 +21,7 @@ import {
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { clearWorkbookSheetCache } from '../../lib/office-file-preview';
 type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
 const IMAGE_MODEL_ID = getModels({
@@ -1977,6 +1978,8 @@ describe('MessageBubble', () => {
 
     const WORKBOOK_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     const DECK_MIME = 'application/vnd.openxmlformats-officedocument.presentationml.presentation';
+    beforeEach(() => clearWorkbookSheetCache());
+
     const workbookFile = genFile({
       id: 'gf-xlsx',
       fileName: 'budget.xlsx',
