@@ -185,6 +185,7 @@ const capabilitiesSchema = z.object({
   mcpApproval: z.boolean().optional(),
   managedWorktrees: z.boolean().optional(),
   threadRename: z.boolean().optional(),
+  reasoningEffortLadder: z.boolean().optional(),
 });
 
 const worktreeSummarySchema = z.object({

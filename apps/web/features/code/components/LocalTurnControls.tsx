@@ -26,7 +26,7 @@ const CHIP_GLYPH_SIZE = 13;
 export interface LocalTurnControlsProps {
   agentMode: DeveloperAgentMode;
   reasoningEffort: DeveloperReasoningEffort | undefined;
-  effortLevels: readonly DeveloperReasoningEffort[] | null;
+  effortLevels: readonly DeveloperReasoningEffort[];
   showMode: boolean;
   showEffort: boolean;
   disabled: boolean;
@@ -101,7 +101,7 @@ export function LocalTurnControls({
         </DropdownMenu>
       )}
 
-      {showEffort && effortLevels?.length !== 0 && (
+      {showEffort && effortLevels.length > 0 && (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <button
@@ -130,7 +130,7 @@ export function LocalTurnControls({
                 if (isEffort(value)) onEffortChange(value);
               }}
             >
-              {(effortLevels ?? DEVELOPER_REASONING_EFFORTS).map((effort) => (
+              {effortLevels.map((effort) => (
                 <DropdownMenuRadioItem key={effort} value={effort}>
                   {DEVELOPER_REASONING_EFFORT_LABELS[effort]}
                 </DropdownMenuRadioItem>

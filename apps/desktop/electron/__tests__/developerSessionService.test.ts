@@ -2188,6 +2188,59 @@ describe('developer session runtime', () => {
     });
   });
 
+  it('keeps a CLI without the full effort ladder to the four levels it accepts', async () => {
+    const { service, children } = await loadService();
+
+    await service.startDeveloperTurn({
+      rootId: root.id,
+      threadId: thread.id,
+      text: 'go',
+      reasoningEffort: 'xhigh',
+    });
+    await service.startDeveloperTurn({
+      rootId: root.id,
+      threadId: thread.id,
+      text: 'again',
+      reasoningEffort: 'none',
+    });
+
+    expect(
+      children[0]?.written
+        .filter((entry) => entry.method === 'turn/start')
+        .map((entry) => entry.params['reasoningEffort']),
+    ).toEqual(['high', 'low']);
+    expect((await service.readDeveloperRuntimeStatus()).capabilities).not.toContain(
+      'reasoning_effort_ladder',
+    );
+  });
+
+  it('sends every level to a CLI that advertises the full effort ladder', async () => {
+    const { service, children } = await loadService((method) =>
+      method === 'initialize'
+        ? {
+            ...HANDSHAKE,
+            capabilities: { ...HANDSHAKE.capabilities, reasoningEffortLadder: true },
+          }
+        : defaultResponder(method),
+    );
+
+    await service.startDeveloperTurn({
+      rootId: root.id,
+      threadId: thread.id,
+      text: 'go',
+      reasoningEffort: 'xhigh',
+    });
+
+    expect(
+      children[0]?.written.find((entry) => entry.method === 'turn/start')?.params[
+        'reasoningEffort'
+      ],
+    ).toBe('xhigh');
+    expect((await service.readDeveloperRuntimeStatus()).capabilities).toContain(
+      'reasoning_effort_ladder',
+    );
+  });
+
   it('relays a question the agent asked and sends the answer or a cancel back', async () => {
     const { service, children, events } = await loadService();
     const ids = { threadId: thread.id, turnId: 'turn-1', requestId: 'q-1' };

@@ -57,7 +57,9 @@ import {
 import {
   DEVELOPER_AGENT_MODE_LABELS,
   DEVELOPER_REASONING_EFFORT_LABELS,
+  developerEffortLadder,
   developerEffortLevels,
+  nearestDeveloperEffort,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperChildTask } from '@agiworkforce/types/protocol';
 import {
@@ -876,6 +878,7 @@ export class ChatStateManager {
   private _lastUserTurn?: ChatTurn;
   private _mode: AgentMode | undefined;
   private _effort: DeveloperReasoningEffort | undefined;
+  private _effortLadder: readonly DeveloperReasoningEffort[] = developerEffortLadder(false);
   private _meterCollapsed = false;
   private _activeModel: string;
   private _accountPresentationSeq = 0;
@@ -979,7 +982,7 @@ export class ChatStateManager {
     this._post({
       type: 'effortChanged',
       payload: {
-        effort: this._effort ?? Config.agentEffort(),
+        effort: this._shownEffort(),
         supportsEffort: this.modelSupportsEffort(model),
         efforts: this.modelEffortLevels(model),
       },
@@ -1001,9 +1004,32 @@ export class ChatStateManager {
     return this._effort;
   }
 
-  modelEffortLevels(modelId: string): DeveloperReasoningEffort[] | null {
-    if (this._localModelProviders.has(modelId)) return null;
-    return developerEffortLevels(modelId);
+  modelEffortLevels(modelId: string): DeveloperReasoningEffort[] {
+    if (this._localModelProviders.has(modelId)) return [...this._effortLadder];
+    return developerEffortLevels(modelId, this._effortLadder) ?? [...this._effortLadder];
+  }
+
+  private _shownEffort(): DeveloperReasoningEffort {
+    return nearestDeveloperEffort(this._effort ?? Config.agentEffort(), this._effortLadder);
+  }
+
+  private async _syncEffortLadder(
+    runtime: LocalRuntimeClient,
+  ): Promise<readonly DeveloperReasoningEffort[]> {
+    const ladder = developerEffortLadder(await runtime.offers('reasoningEffortLadder'));
+    if (ladder !== this._effortLadder) {
+      this._effortLadder = ladder;
+      const model = this._activeModel;
+      this._post({
+        type: 'effortChanged',
+        payload: {
+          effort: this._shownEffort(),
+          supportsEffort: this.modelSupportsEffort(model),
+          efforts: this.modelEffortLevels(model),
+        },
+      });
+    }
+    return ladder;
   }
 
   modelSupportsEffort(modelId: string): boolean {
@@ -1038,7 +1064,7 @@ export class ChatStateManager {
         this._post({
           type: 'effortChanged',
           payload: {
-            effort: this._effort ?? Config.agentEffort(),
+            effort: this._shownEffort(),
             supportsEffort: this.modelSupportsEffort(model),
             efforts: this.modelEffortLevels(model),
           },
@@ -1437,7 +1463,7 @@ export class ChatStateManager {
         this._post({
           type: 'effortChanged',
           payload: {
-            effort: this._effort ?? Config.agentEffort(),
+            effort: this._shownEffort(),
             supportsEffort: this.modelSupportsEffort(model),
             efforts: this.modelEffortLevels(model),
           },
@@ -2277,6 +2303,9 @@ export class ChatStateManager {
         runtime: resolved.runtime,
         updatedAt: resolved.response.thread.updatedAt,
       };
+      void this._syncEffortLadder(resolved.runtime).catch((error: unknown) => {
+        console.warn(`[${PRODUCT_NAMES.code}] could not read the CLI's effort levels`, error);
+      });
 
       this._loadedConversation = this._conversationPayload(
         resumed,
@@ -2290,7 +2319,7 @@ export class ChatStateManager {
       this._post({
         type: 'effortChanged',
         payload: {
-          effort: this._effort ?? Config.agentEffort(),
+          effort: this._shownEffort(),
           supportsEffort: this.modelSupportsEffort(model),
           efforts: this.modelEffortLevels(model),
         },
@@ -4033,7 +4062,11 @@ export class ChatStateManager {
             ...attachmentInputs,
           ],
           agentMode: enforceAgentModeConsent(this._mode ?? Config.agentMode()),
-          reasoningEffort: supportedEffort(requestedModel, this._effort ?? Config.agentEffort()),
+          reasoningEffort: supportedEffort(
+            requestedModel,
+            this._effort ?? Config.agentEffort(),
+            await this._syncEffortLadder(thread.runtime),
+          ),
           ...(contextFiles.length === 0 ? {} : { contextFiles }),
           ...(filtersTools ? { disallowedTools: [...disallowedTools] } : {}),
           ...(activeProject === undefined ? {} : { cloudProjectId: activeProject.id }),

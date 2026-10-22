@@ -85,6 +85,8 @@ import {
   DEVELOPER_REASONING_EFFORTS,
   DEVELOPER_RUNTIME_CAPABILITIES,
   developerApprovalAllows,
+  developerEffortLadder,
+  nearestDeveloperEffort,
   developerReviewDecision,
   normalizeDeveloperAgentMode,
   parseWorktreeRootId,
@@ -248,6 +250,7 @@ interface AdvertisedCapabilities {
   bypassPerTurn: boolean;
   writerLease: boolean;
   mcpApproval: boolean;
+  reasoningEffortLadder: boolean;
 }
 
 /**
@@ -434,6 +437,7 @@ const CAPABILITY_FROM_HANDSHAKE: Record<
   rewind_choice: (cli) => cli.revertRestore,
   thread_archive: () => true,
   thread_takeover: (cli) => cli.writerLease,
+  reasoning_effort_ladder: (cli) => cli.reasoningEffortLadder,
 };
 
 /**
@@ -1164,6 +1168,7 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
     bypassPerTurn: capabilities['bypassPerTurn'] === true,
     revertRestore: capabilities['revertRestore'] === true,
     mcpApproval: capabilities['mcpApproval'] === true,
+    reasoningEffortLadder: capabilities['reasoningEffortLadder'] === true,
   };
   lastAdvertised = server.advertised;
 }
@@ -2491,7 +2496,14 @@ async function sendTurn(
     ...(input.model ? { model: input.model } : {}),
     ...(agentMode ? { agentMode } : {}),
     ...(input.maxTurns ? { maxTurns: input.maxTurns } : {}),
-    ...(input.reasoningEffort ? { reasoningEffort: input.reasoningEffort } : {}),
+    ...(input.reasoningEffort
+      ? {
+          reasoningEffort: nearestDeveloperEffort(
+            input.reasoningEffort,
+            developerEffortLadder(server.advertised?.reasoningEffortLadder === true),
+          ),
+        }
+      : {}),
     ...(input.contextFiles && input.contextFiles.length > 0
       ? { contextFiles: input.contextFiles }
       : {}),

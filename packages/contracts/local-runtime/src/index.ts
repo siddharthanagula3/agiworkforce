@@ -147,6 +147,9 @@ export {
   DEVELOPER_REASONING_EFFORT_LABELS,
   DEVELOPER_CHILD_TASK_STATE_LABELS,
   developerEffortLevels,
+  developerEffortLadder,
+  nearestDeveloperEffort,
+  LEGACY_DEVELOPER_REASONING_EFFORTS,
   THREAD_WRITER_CONFLICT_ERROR_CODE,
   MCP_APPROVAL_STALE_ERROR_CODE,
 } from './developer-session';

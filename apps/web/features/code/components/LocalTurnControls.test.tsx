@@ -9,7 +9,7 @@ import {
 import { LOCAL_CODE_COPY } from '../local-code';
 import { LocalTurnControls } from './LocalTurnControls';
 
-function renderControls(effortLevels: readonly DeveloperReasoningEffort[] | null) {
+function renderControls(effortLevels: readonly DeveloperReasoningEffort[]) {
   const onEffortChange = vi.fn();
   render(
     <LocalTurnControls
@@ -36,8 +36,8 @@ async function openEffortMenu() {
 }
 
 describe('local turn effort levels', () => {
-  it('offers the whole shared ladder when the catalog names no levels for the model', async () => {
-    renderControls(null);
+  it('offers every level it is given, labelled from the shared ladder', async () => {
+    renderControls(DEVELOPER_REASONING_EFFORTS);
     expect(await openEffortMenu()).toEqual(
       DEVELOPER_REASONING_EFFORTS.map((effort) => DEVELOPER_REASONING_EFFORT_LABELS[effort]),
     );

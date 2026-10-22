@@ -476,6 +476,12 @@ pub struct AppServerCapabilities {
     pub side_question: bool,
     #[serde(default, skip_serializing_if = "is_false")]
     pub thread_rename: bool,
+    /// `reasoningEffort` takes every [`DeveloperReasoningEffort`] level. A
+    /// host without it accepts only low, medium, high and max, and answers
+    /// invalid params for the others, so a client offers none, minimal and
+    /// xhigh only when this is true.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub reasoning_effort_ladder: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -4268,6 +4274,30 @@ mod tests {
             Some(DeveloperReasoningEffort::Xhigh)
         );
         assert_eq!(DeveloperReasoningEffort::parse("ultra"), None);
+    }
+
+    #[test]
+    fn a_host_that_predates_the_effort_ladder_reads_as_not_taking_it() {
+        let older: AppServerCapabilities = serde_json::from_value(serde_json::json!({
+            "threads": true, "turns": true, "streaming": true, "approvals": true,
+            "tools": true, "mcp": true, "checkpoints": true, "worktrees": true,
+            "models": true, "threadRename": true
+        }))
+        .unwrap();
+        assert!(!older.reasoning_effort_ladder);
+
+        let current = AppServerCapabilities {
+            reasoning_effort_ladder: true,
+            ..older
+        };
+        let wire = serde_json::to_value(&current).unwrap();
+        assert_eq!(wire["reasoningEffortLadder"], serde_json::json!(true));
+        assert!(
+            serde_json::to_value(&older)
+                .unwrap()
+                .get("reasoningEffortLadder")
+                .is_none()
+        );
     }
 
     #[test]

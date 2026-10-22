@@ -954,6 +954,7 @@ impl CliDeveloperSessionHost {
             managed_worktrees: true,
             side_question: true,
             thread_rename: true,
+            reasoning_effort_ladder: true,
         }
     }
 
@@ -8344,6 +8345,14 @@ mod tests {
             .expect("authorized controls");
         let max = agent.effort.expect("effort retained");
         assert_eq!(max.openai_effort_str(), "high");
+    }
+
+    #[test]
+    fn the_host_advertises_every_effort_level_it_accepts() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        assert!(host.capabilities().reasoning_effort_ladder);
     }
 
     #[test]

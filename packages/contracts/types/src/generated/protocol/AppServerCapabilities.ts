@@ -96,4 +96,11 @@ export type AppServerCapabilities = {
    */
   sideQuestion?: boolean;
   threadRename?: boolean;
+  /**
+   * `reasoningEffort` takes every [`DeveloperReasoningEffort`] level. A
+   * host without it accepts only low, medium, high and max, and answers
+   * invalid params for the others, so a client offers none, minimal and
+   * xhigh only when this is true.
+   */
+  reasoningEffortLadder?: boolean;
 };

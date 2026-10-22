@@ -13,6 +13,9 @@ import {
   normalizeDeveloperAgentMode,
   remoteTurnAgentMode,
   developerEffortLevels,
+  developerEffortLadder,
+  nearestDeveloperEffort,
+  LEGACY_DEVELOPER_REASONING_EFFORTS,
   DEVELOPER_CHILD_TASK_STATE_LABELS,
 } from '../developer-session';
 import { getModelMetadataById, listCanonicalModels } from '@agiworkforce/types';
@@ -155,5 +158,37 @@ describe('developer effort levels per model', () => {
       .filter((line) => /^[A-Z][A-Za-z]*$/u.test(line))
       .map((variant) => variant.replace(/(?<!^)([A-Z])/gu, '_$1').toLowerCase());
     expect(Object.keys(DEVELOPER_CHILD_TASK_STATE_LABELS).sort()).toEqual(variants.sort());
+  });
+});
+
+describe('the effort ladder a host takes', () => {
+  it('is the four older levels unless the host advertises the full ladder', () => {
+    expect(developerEffortLadder(false)).toEqual(['low', 'medium', 'high', 'max']);
+    expect(developerEffortLadder(true)).toEqual([...DEVELOPER_REASONING_EFFORTS]);
+    for (const effort of LEGACY_DEVELOPER_REASONING_EFFORTS) {
+      expect(DEVELOPER_REASONING_EFFORTS).toContain(effort);
+    }
+  });
+
+  it('maps a level an older host refuses onto the nearest one it takes', () => {
+    const legacy = developerEffortLadder(false);
+    expect(nearestDeveloperEffort('xhigh', legacy)).toBe('high');
+    expect(nearestDeveloperEffort('none', legacy)).toBe('low');
+    expect(nearestDeveloperEffort('minimal', legacy)).toBe('low');
+    expect(nearestDeveloperEffort('max', legacy)).toBe('max');
+    expect(nearestDeveloperEffort('xhigh', developerEffortLadder(true))).toBe('xhigh');
+  });
+
+  it('keeps a model to its catalog levels within the host ladder', () => {
+    const listed = listCanonicalModels().find((row) =>
+      row.reasoning?.supportedEfforts?.some((effort) => effort === 'xhigh' || effort === 'none'),
+    );
+    expect(listed, 'the catalog has a model with a level outside the older four').toBeDefined();
+    const levels = developerEffortLevels(listed!.id, developerEffortLadder(false)) ?? [];
+    expect(
+      levels.every((effort) =>
+        (LEGACY_DEVELOPER_REASONING_EFFORTS as readonly string[]).includes(effort),
+      ),
+    ).toBe(true);
   });
 });

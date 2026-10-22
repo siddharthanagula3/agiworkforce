@@ -45,7 +45,9 @@ import {
   DEVELOPER_AGENT_MODE_LABELS,
   DEVELOPER_CHILD_TASK_STATE_LABELS,
   DEVELOPER_TURN_LIMITS,
+  developerEffortLadder,
   developerEffortLevels,
+  nearestDeveloperEffort,
   type DeveloperChildTaskState,
   type DeveloperRuntimeModels,
   type LocalDeveloperSession,
@@ -430,12 +432,15 @@ export function LocalSessionPanel({
   const boundedTurns = runtimeModels?.features?.maxTurns === true;
   const memoryAvailable = !remoteSsh && runtimeModels?.features?.memory === true;
   const options = useLocalTurnOptions(session.id, runtimeModels);
+  const effortLadder = developerEffortLadder(capabilities.has('reasoning_effort_ladder'));
+  const turnEffort =
+    options.reasoningEffort === undefined
+      ? undefined
+      : nearestDeveloperEffort(options.reasoningEffort, effortLadder);
   const state = useLocalSession(session, {
     ...(model === '' || model === session.model ? {} : { model }),
     ...(canChooseMode ? { agentMode: options.agentMode } : {}),
-    ...(canChooseEffort && options.reasoningEffort
-      ? { reasoningEffort: options.reasoningEffort }
-      : {}),
+    ...(canChooseEffort && turnEffort ? { reasoningEffort: turnEffort } : {}),
     ...(boundedTurns ? { maxTurns: turnSteps } : {}),
   });
   useEffect(() => {
@@ -1529,8 +1534,8 @@ export function LocalSessionPanel({
                   )}
                   <LocalTurnControls
                     agentMode={options.agentMode}
-                    reasoningEffort={options.reasoningEffort}
-                    effortLevels={developerEffortLevels(activeModel)}
+                    reasoningEffort={turnEffort}
+                    effortLevels={developerEffortLevels(activeModel, effortLadder) ?? effortLadder}
                     showMode={canChooseMode}
                     showEffort={canChooseEffort}
                     disabled={state.sending}

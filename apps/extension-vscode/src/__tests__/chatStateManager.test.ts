@@ -2040,6 +2040,63 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
   });
 
+  it('sends an older CLI only a level it accepts, and offers it only those four', async () => {
+    const harness = makeHarness();
+    await realContextWorkspace(harness);
+    await harness.manager.handleMessage({ type: 'setEffort', payload: { effort: 'xhigh' } });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Think hard' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'high' }),
+    );
+    const shown = harness.posted.filter((message) => message.type === 'effortChanged').at(-1);
+    expect(
+      shown?.payload.efforts?.every((effort) => ['low', 'medium', 'high', 'max'].includes(effort)),
+    ).toBe(true);
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
+  it('sends every level to a CLI that advertises the full effort ladder', async () => {
+    const harness = makeHarness();
+    harness.runtime.offers.mockImplementation(
+      async (capability: string) => capability === 'reasoningEffortLadder',
+    );
+    await realContextWorkspace(harness);
+    await harness.manager.handleMessage({ type: 'setEffort', payload: { effort: 'xhigh' } });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Think hard' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(harness.runtime.startTurn).toHaveBeenCalledWith(
+      expect.objectContaining({ reasoningEffort: 'xhigh' }),
+    );
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+  });
+
   it('sends the active editor file, its selection and its problems with the turn', async () => {
     const root = await realContextWorkspace();
     Object.defineProperty(vscode.window, 'activeTextEditor', {

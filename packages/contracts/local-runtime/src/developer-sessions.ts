@@ -212,6 +212,7 @@ export const DEVELOPER_RUNTIME_CAPABILITIES = [
   'rewind_choice',
   'thread_archive',
   'thread_takeover',
+  'reasoning_effort_ladder',
 ] as const;
 
 export type DeveloperRuntimeCapability = (typeof DEVELOPER_RUNTIME_CAPABILITIES)[number];

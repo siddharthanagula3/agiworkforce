@@ -1328,3 +1328,52 @@ describe('local session subagents', () => {
     expect(screen.queryByTestId('local-subagents')).toBeNull();
   });
 });
+
+describe('local session effort levels', () => {
+  async function openEffort(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(
+      composer().getByRole('button', {
+        name: new RegExp(`^${LOCAL_CODE_COPY.reasoningEffort}`, 'u'),
+      }),
+    );
+    return screen.getAllByRole('menuitemradio').map((item) => item.textContent);
+  }
+
+  it('offers only the four levels an older CLI accepts, and sends a level it accepts', async () => {
+    capabilities = new Set(
+      DEVELOPER_RUNTIME_CAPABILITIES.filter(
+        (capability) => capability !== 'reasoning_effort_ladder',
+      ),
+    );
+    const user = userEvent.setup();
+    render(
+      <LocalSessionPanel
+        session={session}
+        group={{ name: 'qa-project', branch: 'main', sessions: [session] }}
+        runtimeModels={{ ...runtime, defaultReasoningEffort: 'xhigh' }}
+        verbose={false}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(await openEffort(user)).toEqual(['Low', 'Medium', 'High', 'Max']);
+    await user.keyboard('{Escape}');
+    await user.type(composer().getByRole('textbox'), 'go{Enter}');
+    await waitFor(() => expect(startDeveloperTurn).toHaveBeenCalled());
+    expect(startDeveloperTurn.mock.calls.at(-1)?.[0]).toMatchObject({ reasoningEffort: 'high' });
+  });
+
+  it('offers the full ladder to a CLI that advertises it', async () => {
+    const user = userEvent.setup();
+    renderPanel();
+    expect(await openEffort(user)).toEqual([
+      'None',
+      'Minimal',
+      'Low',
+      'Medium',
+      'High',
+      'xHigh',
+      'Max',
+    ]);
+  });
+});

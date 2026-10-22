@@ -103,13 +103,31 @@ export const DEVELOPER_REASONING_EFFORT_LABELS: Record<DeveloperReasoningEffort,
 };
 
 /**
- * The levels a model's catalog row says it takes, in ladder order. Null when
- * the catalog does not know the model or names no list, so every level is
- * offered and the runtime maps it to the nearest one the model takes; empty
- * when the model takes no reasoning effort.
+ * The levels a host that does not advertise `reasoningEffortLadder` accepts.
+ * It answers invalid params for any other level.
+ */
+export const LEGACY_DEVELOPER_REASONING_EFFORTS = [
+  'low',
+  'medium',
+  'high',
+  'max',
+] as const satisfies readonly DeveloperReasoningEffort[];
+
+export function developerEffortLadder(
+  hostTakesFullLadder: boolean,
+): readonly DeveloperReasoningEffort[] {
+  return hostTakesFullLadder ? DEVELOPER_REASONING_EFFORTS : LEGACY_DEVELOPER_REASONING_EFFORTS;
+}
+
+/**
+ * The levels of `ladder` a model's catalog row says it takes, in ladder
+ * order. Null when the catalog does not know the model or names no list, so
+ * the whole ladder is offered and the runtime maps a level to the nearest one
+ * the model takes; empty when the model takes no reasoning effort.
  */
 export function developerEffortLevels(
   modelId: string | null | undefined,
+  ladder: readonly DeveloperReasoningEffort[] = DEVELOPER_REASONING_EFFORTS,
 ): DeveloperReasoningEffort[] | null {
   if (!modelId) return null;
   const reasoning = getModelMetadataById(modelId)?.reasoning;
@@ -117,7 +135,20 @@ export function developerEffortLevels(
   if (!reasoning.capable) return [];
   const supported = reasoning.supportedEfforts;
   if (supported === undefined) return null;
-  return DEVELOPER_REASONING_EFFORTS.filter((effort) => supported.includes(effort));
+  return ladder.filter((effort) => supported.includes(effort));
+}
+
+/** The level of `levels` closest to `effort` on the ladder, the lower one on a tie. */
+export function nearestDeveloperEffort(
+  effort: DeveloperReasoningEffort,
+  levels: readonly DeveloperReasoningEffort[],
+): DeveloperReasoningEffort {
+  if (levels.length === 0 || levels.includes(effort)) return effort;
+  const rank = (level: DeveloperReasoningEffort) => DEVELOPER_REASONING_EFFORTS.indexOf(level);
+  const wanted = rank(effort);
+  return levels.reduce((best, level) =>
+    Math.abs(rank(level) - wanted) < Math.abs(rank(best) - wanted) ? level : best,
+  );
 }
 
 export const DEVELOPER_CHILD_TASK_STATE_LABELS: Record<DeveloperChildTaskState, string> = {

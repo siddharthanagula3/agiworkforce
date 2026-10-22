@@ -431,6 +431,7 @@ fn capabilities() -> AppServerCapabilities {
         managed_worktrees: true,
         side_question: true,
         thread_rename: true,
+        reasoning_effort_ladder: false,
     }
 }
 

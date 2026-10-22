@@ -29,6 +29,7 @@ import { getAutoCapabilityEnvelope } from '@agiworkforce/routing';
 import {
   DEVELOPER_REASONING_EFFORTS,
   developerEffortLevels,
+  nearestDeveloperEffort,
 } from '@agiworkforce/local-runtime-contract';
 
 export interface ModelPickerOption {
@@ -361,16 +362,10 @@ export function describeModelSwitchLosses(fromModelId: string, toModelId: string
 export function supportedEffort(
   modelId: string,
   effort: DeveloperReasoningEffort,
+  ladder: readonly DeveloperReasoningEffort[] = DEVELOPER_REASONING_EFFORTS,
 ): DeveloperReasoningEffort {
-  const levels = developerEffortLevels(modelId);
-  if (levels === null || levels.length === 0 || levels.includes(effort)) return effort;
-  const wanted = DEVELOPER_REASONING_EFFORTS.indexOf(effort);
-  return levels.reduce((best, level) =>
-    Math.abs(DEVELOPER_REASONING_EFFORTS.indexOf(level) - wanted) <
-    Math.abs(DEVELOPER_REASONING_EFFORTS.indexOf(best) - wanted)
-      ? level
-      : best,
-  );
+  const levels = developerEffortLevels(modelId, ladder);
+  return nearestDeveloperEffort(effort, levels === null || levels.length === 0 ? ladder : levels);
 }
 
 export interface ModelProviderInfo {

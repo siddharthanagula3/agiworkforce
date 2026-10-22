@@ -54,6 +54,7 @@ function makeHarness(localModels: Array<{ id: string; provider: 'ollama' | 'lmst
       return { dispose: () => listeners.delete(listener) };
     }),
     onNotification: vi.fn(() => ({ dispose: () => undefined })),
+    offers: vi.fn().mockResolvedValue(false),
   };
   const pool = {
     forWorkspace: vi.fn(() => runtime as unknown as LocalRuntimeClient),
