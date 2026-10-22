@@ -8,9 +8,8 @@ import {
   ChevronRight,
   RefreshCw,
   AlertTriangle,
-  ShieldCheck,
+  Compass,
 } from 'lucide-react-native';
-import { toolApprovalPolicyOption } from '@agiworkforce/types';
 import { useRouter } from 'expo-router';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
 import { Text } from '@/components/ui/text';
@@ -22,19 +21,20 @@ import {
   CloudSyncBlockedBanner,
   SettingsGroup,
   SettingsInfo,
-  SettingsRow,
   SettingsScreenShell,
+  SettingsSwitchRow,
 } from '@/src/features/settings/common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { toUserMessage } from '@/services/userMessage';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
+import { ApprovalPolicySummary } from './ApprovalPolicySummary';
 import { ConnectorLogo } from './ConnectorLogo';
 import { connectionStatus, formatConnectorName } from './connectorStatus';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
 import { useAuthStore } from '@/src/features/auth/store';
-import { useSettingsStore } from '@/stores/settingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import {
   captureCloudAccountEpoch,
@@ -271,7 +271,8 @@ export default function CloudConnectorsScreen({
   const isTierRefreshing = useTierStore((s) => s.isRefreshing);
   const lastTierRefreshAt = useTierStore((s) => s.lastRefreshedAt);
   const refreshTier = useTierStore((s) => s.refreshTier);
-  const toolApprovalPolicy = useSettingsStore((s) => s.toolApprovalPolicy);
+  const connectorDiscoveryEnabled = useCloudSettingsStore((s) => s.connectorDiscoveryEnabled);
+  const setConnectorDiscoveryEnabled = useCloudSettingsStore((s) => s.setConnectorDiscoveryEnabled);
   const capabilityRefreshOwnerRef = useRef<string | null>(null);
   const capabilityHandshakePending =
     isClerkSignedIn && isCloudModeActive && (isTierRefreshing || lastTierRefreshAt === null);
@@ -561,20 +562,23 @@ export default function CloudConnectorsScreen({
         />
 
         {FEATURES.connectors && (
-          <SettingsGroup>
-            <SettingsRow
+          <>
+            <ApprovalPolicySummary
               label="Action approvals"
-              value={toolApprovalPolicyOption(toolApprovalPolicy).shortLabel}
-              icon={ShieldCheck}
-              onPress={() => router.push('/(app)/settings/auto-approve')}
-              isLast
+              helper="Choose when AGI asks before a connected tool acts."
             />
-            <View style={{ paddingHorizontal: 14, paddingBottom: 14 }}>
-              <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}>
-                Choose when AGI asks before a connected tool acts.
-              </Text>
-            </View>
-          </SettingsGroup>
+            <SettingsGroup>
+              <SettingsSwitchRow
+                label="Connector discovery"
+                description="Suggest connectors you have not connected on a new chat."
+                icon={Compass}
+                value={connectorDiscoveryEnabled}
+                onValueChange={setConnectorDiscoveryEnabled}
+                testID="connector-discovery-switch"
+                isLast
+              />
+            </SettingsGroup>
+          </>
         )}
 
         {!FEATURES.connectors && <WaitlistPlaceholder />}

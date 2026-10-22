@@ -44,8 +44,13 @@ export function ChatEmptyState({ showPairingBanner, onPairDesktop }: ChatEmptySt
 
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const canUseConnectors = useTierStore((s) => s.grantedCapabilities.includes('canUseConnectors'));
+  const connectorDiscoveryEnabled = useCloudSettingsStore((s) => s.connectorDiscoveryEnabled);
   const showConnectorSuggestions =
-    isCloud && isClerkSignedIn && FEATURES.connectors && canUseConnectors;
+    isCloud &&
+    isClerkSignedIn &&
+    FEATURES.connectors &&
+    canUseConnectors &&
+    connectorDiscoveryEnabled;
 
   const reducedMotion = useReducedMotion();
   const [bannerVisible, setBannerVisible] = useState(false);

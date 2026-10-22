@@ -88,6 +88,7 @@ jest.mock('@/services/connectors', () => ({
 
 import CloudConnectorsScreen from '../app/(app)/settings/cloud-connectors';
 import { useSettingsStore } from '@/stores/settingsStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 
 function listing(id: string, name: string, publisher: string, overrides = {}) {
   return {
@@ -167,6 +168,24 @@ describe('Cloud Connectors screen, shipped-feature state', () => {
       await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(1));
     } finally {
       act(() => useSettingsStore.getState().setToolApprovalPolicy(originalPolicy));
+    }
+  });
+
+  it('turns connector discovery off and back on from its switch', async () => {
+    act(() => useCloudSettingsStore.getState().setConnectorDiscoveryEnabled(true));
+    const screen = render(<CloudConnectorsScreen />);
+
+    try {
+      const toggle = screen.getByTestId('connector-discovery-switch');
+      expect(screen.getByText('Connector discovery')).toBeTruthy();
+      expect(toggle.props.value).toBe(true);
+      fireEvent(toggle, 'valueChange', false);
+      expect(useCloudSettingsStore.getState().connectorDiscoveryEnabled).toBe(false);
+      fireEvent(screen.getByTestId('connector-discovery-switch'), 'valueChange', true);
+      expect(useCloudSettingsStore.getState().connectorDiscoveryEnabled).toBe(true);
+      await waitFor(() => expect(mockFetchDirectory).toHaveBeenCalledTimes(1));
+    } finally {
+      act(() => useCloudSettingsStore.getState().setConnectorDiscoveryEnabled(true));
     }
   });
 

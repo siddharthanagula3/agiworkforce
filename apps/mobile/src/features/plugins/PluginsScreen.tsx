@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { RefreshControl, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import { BadgeCheck, Blocks, Search } from 'lucide-react-native';
+import { BadgeCheck, Blocks, ChevronRight, Search } from 'lucide-react-native';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import type {
   PluginDirectoryEntryWire,
   PluginDirectorySortKey,
@@ -14,6 +15,7 @@ import { Button } from '@/components/ui/button';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { fetchConnectorDirectory } from '@/services/connectors';
+import { ApprovalPolicySummary } from '@/src/features/settings/cloud-connectors/ApprovalPolicySummary';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,
@@ -29,7 +31,7 @@ import {
 } from '@/src/shared/components/cloud-screen';
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
-import { useThemeColors } from '@/src/ui/theme';
+import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
   featuredPlugins,
@@ -60,6 +62,11 @@ const SORTS: { id: PluginDirectorySortKey; label: string }[] = [
   { id: 'name', label: 'Name' },
 ];
 
+const ROW_PADDING = 14;
+const ROW_ICON_SIZE = 40;
+const ROW_GAP = 12;
+const ROW_DIVIDER_INSET = ROW_PADDING + ROW_ICON_SIZE + ROW_GAP;
+
 function PluginRow({
   entry,
   installed,
@@ -76,21 +83,18 @@ function PluginRow({
       onPress={() => onOpen(entry)}
       accessibilityRole="button"
       accessibilityLabel={`${entry.name} by ${entry.publisher.name}. ${state}`}
-      style={{
-        borderRadius: 16,
-        borderCurve: 'continuous',
-        padding: 14,
+      style={({ pressed }) => ({
+        padding: ROW_PADDING,
         flexDirection: 'row',
-        gap: 12,
-        backgroundColor: colors.surfaceElevated,
-        borderWidth: 1,
-        borderColor: colors.border,
-      }}
+        alignItems: 'center',
+        gap: ROW_GAP,
+        backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+      })}
     >
       <View
         style={{
-          width: 40,
-          height: 40,
+          width: ROW_ICON_SIZE,
+          height: ROW_ICON_SIZE,
           borderRadius: 12,
           alignItems: 'center',
           justifyContent: 'center',
@@ -124,7 +128,41 @@ function PluginRow({
         </Text>
         <MetaText>{`${entry.publisher.name} · ${state}`}</MetaText>
       </View>
+      <ChevronRight size={17} color={colors.textMuted} />
     </PressableBox>
+  );
+}
+
+function PluginGroup({
+  entries,
+  installed,
+  onOpen,
+}: {
+  entries: PluginDirectoryEntryWire[];
+  installed: PluginInstallIndex;
+  onOpen: (entry: PluginDirectoryEntryWire) => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={{
+        borderRadius: cardRadius,
+        borderCurve: 'continuous',
+        backgroundColor: colors.surfaceElevated,
+        overflow: 'hidden',
+      }}
+    >
+      {entries.map((entry, index) => (
+        <View key={entry.id}>
+          {index > 0 ? (
+            <View
+              style={{ height: 1, backgroundColor: colors.border, marginLeft: ROW_DIVIDER_INSET }}
+            />
+          ) : null}
+          <PluginRow entry={entry} installed={installed} onOpen={onOpen} />
+        </View>
+      ))}
+    </View>
   );
 }
 
@@ -134,9 +172,9 @@ function SectionTitle({ title, note }: { title: string; note?: string }) {
     <View style={{ paddingTop: 14, gap: 2 }}>
       <Text
         accessibilityRole="header"
-        style={{ color: colors.textSecondary, fontSize: typeScale.caption, fontWeight: '700' }}
+        style={{ color: colors.textPrimary, fontSize: typeScale.headline, fontWeight: '600' }}
       >
-        {title.toUpperCase()}
+        {title}
       </Text>
       {note ? <MetaText>{note}</MetaText> : null}
     </View>
@@ -278,10 +316,9 @@ export function PluginsScreen() {
     );
   }
 
-  const renderRows = (list: PluginDirectoryEntryWire[]) =>
-    list.map((entry) => (
-      <PluginRow key={entry.id} entry={entry} installed={installed} onOpen={openPlugin} />
-    ));
+  const renderRows = (list: PluginDirectoryEntryWire[]) => (
+    <PluginGroup entries={list} installed={installed} onOpen={openPlugin} />
+  );
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
@@ -311,6 +348,10 @@ export function PluginsScreen() {
           />
         }
       >
+        <ApprovalPolicySummary
+          label="Permissions"
+          helper={`Choose when ${PRODUCT_BRAND} asks before a plugin acts.`}
+        />
         <View
           style={{
             height: 44,

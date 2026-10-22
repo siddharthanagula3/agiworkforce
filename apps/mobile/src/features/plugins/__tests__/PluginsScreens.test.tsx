@@ -98,6 +98,7 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { PluginDetailScreen } from '../PluginDetailScreen';
 import { PluginsScreen } from '../PluginsScreen';
 
@@ -150,8 +151,8 @@ describe('mobile plugins', () => {
 
   it('shows featured and recommended sections and filters by category', async () => {
     const { findByText, getByText, getAllByLabelText } = render(<PluginsScreen />);
-    expect(await findByText('FEATURED')).toBeTruthy();
-    expect(getByText('RECOMMENDED FOR YOU')).toBeTruthy();
+    expect(await findByText('Featured')).toBeTruthy();
+    expect(getByText('Recommended for you')).toBeTruthy();
     expect(getAllByLabelText(/^Docs kit by AGI Workforce/).length).toBeGreaterThan(0);
 
     fireEvent.press(getByText('Productivity'));
@@ -161,6 +162,35 @@ describe('mobile plugins', () => {
         expect.anything(),
       ),
     );
+  });
+
+  it('titles sections in title case and lists installed plugins once under Installed', async () => {
+    mockInstallations.mockResolvedValue([
+      {
+        pluginId: 'docs',
+        installedVersion: '1.0.0',
+        enabled: true,
+        installedAt: '2026-10-01T00:00:00.000Z',
+        updatedAt: '2026-10-01T00:00:00.000Z',
+      },
+    ]);
+    const { findByRole, queryByText } = render(<PluginsScreen />);
+    expect(await findByRole('header', { name: 'Installed' })).toBeTruthy();
+    expect(queryByText('INSTALLED')).toBeNull();
+  });
+
+  it('shows the approval policy as Permissions and opens Action approvals', async () => {
+    const originalPolicy = useSettingsStore.getState().toolApprovalPolicy;
+    try {
+      useSettingsStore.getState().setToolApprovalPolicy('ask_every_time');
+      const { findByRole, getByText } = render(<PluginsScreen />);
+      const row = await findByRole('button', { name: 'Permissions. Ask' });
+      expect(getByText('Choose when AGI asks before a plugin acts.')).toBeTruthy();
+      fireEvent.press(row);
+      expect(mockPush).toHaveBeenCalledWith('/(app)/settings/auto-approve');
+    } finally {
+      useSettingsStore.getState().setToolApprovalPolicy(originalPolicy);
+    }
   });
 
   it('installs from the detail screen and lists what it needs', async () => {
