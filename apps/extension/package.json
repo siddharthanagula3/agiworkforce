@@ -54,7 +54,7 @@
     "@clerk/chrome-extension": "^3.1.87",
     "dompurify": "^3.4.16",
     "katex": "^0.18.9",
-    "markdown-it": "^15.0.2",
+    "markdown-it": "^15.0.3",
     "markdown-it-footnote": "^4.0.0",
     "qrcode": "^1.5.4"
   },
