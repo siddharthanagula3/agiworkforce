@@ -88,6 +88,9 @@ interface SkillMeta {
 const REQUIREMENT_SEPARATOR = ' · ';
 const BUNDLED_SKILL_SOURCE = 'bundled';
 const BUNDLED_GROUP_LABEL = 'Skills';
+const COMMANDS_GROUP_LABEL = 'Commands';
+const OWN_SKILLS_GROUP_LABEL = 'Your skills';
+const PLUGIN_SOURCE_SUFFIX = 'plugin';
 
 function skillRequirementNote(tools: readonly string[] | undefined): string {
   return tools?.length ? `Needs ${tools.join(', ')}` : '';
@@ -212,14 +215,15 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
         icon: <Terminal className="h-4 w-4 text-muted-foreground" />,
       }));
 
-      const toSuggestion = (skill: SkillMeta): CommandSuggestion => {
-        const note = skillRequirementNote(skill.requiredTools);
+      const toSuggestion = (skill: SkillMeta, pluginName?: string): CommandSuggestion => {
+        const notes = [
+          skillRequirementNote(skill.requiredTools),
+          pluginName ? `${pluginName} ${PLUGIN_SOURCE_SUFFIX}` : '',
+        ].filter(Boolean);
         return {
           id: `skill:${skill.name}`,
           command: `/${skill.name}`,
-          description: note
-            ? [skill.description, note].filter(Boolean).join(REQUIREMENT_SEPARATOR)
-            : skill.description,
+          description: [skill.description, ...notes].filter(Boolean).join(REQUIREMENT_SEPARATOR),
           icon: <Sparkles className="h-4 w-4 text-accent-text" />,
           isSkill: true,
         };
@@ -242,7 +246,7 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
           const skill = byName.get(name);
           if (!skill) continue;
           claimed.add(name);
-          suggestions.push(toSuggestion(skill));
+          suggestions.push(toSuggestion(skill, plugin.name));
         }
         if (suggestions.length > 0) {
           pluginGroups.push({ label: plugin.name, suggestions: suggestions.sort(byCommand) });
@@ -251,12 +255,12 @@ export const SlashCommandMenu = forwardRef<SlashCommandMenuHandle, SlashCommandM
 
       const bundled = skills
         .filter((skill) => !claimed.has(skill.name))
-        .map(toSuggestion)
+        .map((skill) => toSuggestion(skill))
         .sort(byCommand);
 
       const groups: SuggestionGroup[] = [
-        { suggestions: [...builtIns, ...chat, ...custom] },
-        { suggestions: own.sort(byCommand) },
+        { label: COMMANDS_GROUP_LABEL, suggestions: [...builtIns, ...chat, ...custom] },
+        { label: OWN_SKILLS_GROUP_LABEL, suggestions: own.sort(byCommand) },
         ...pluginGroups,
         { label: BUNDLED_GROUP_LABEL, suggestions: bundled },
       ];

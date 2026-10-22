@@ -165,7 +165,7 @@ describe('SlashCommandMenu grouping', () => {
     await screen.findByRole('group', { name: 'GitHub Automation' });
 
     const groups = screen.getAllByRole('group').map((node) => node.getAttribute('aria-label'));
-    expect(groups).toEqual(['GitHub Automation', 'Skills']);
+    expect(groups).toEqual(['Commands', 'Your skills', 'GitHub Automation', 'Skills']);
 
     const names = optionNames();
     expect(names.indexOf('/brand-voice')).toBeLessThan(names.indexOf('/pr-review'));
@@ -180,6 +180,27 @@ describe('SlashCommandMenu grouping', () => {
     const bundled = screen.getByRole('group', { name: 'Skills' });
     expect(within(bundled).queryByRole('option', { name: /pr-review/ })).toBeNull();
     expect(optionNames().filter((name) => name === '/pr-review')).toHaveLength(1);
+  });
+
+  it('puts the built-in commands under a Commands heading, ahead of every skill', async () => {
+    renderGrouped();
+    const commands = await screen.findByRole('group', { name: 'Commands' });
+
+    expect(within(commands).getByRole('option', { name: /\/search/ })).toBeInTheDocument();
+    expect(within(commands).queryByRole('option', { name: /brand-voice/ })).toBeNull();
+    const own = screen.getByRole('group', { name: 'Your skills' });
+    expect(within(own).getByRole('option', { name: /brand-voice/ })).toBeInTheDocument();
+  });
+
+  it('names the source plugin in the title of a plugin skill and of no other', async () => {
+    renderGrouped();
+    const pluginGroup = await screen.findByRole('group', { name: 'GitHub Automation' });
+
+    expect(
+      within(pluginGroup).getByTitle('Review a pull request. · GitHub Automation plugin'),
+    ).toBeInTheDocument();
+    expect(screen.getByTitle('Tidy a messy spreadsheet.')).toBeInTheDocument();
+    expect(screen.getByTitle('Your own voice guide.')).toBeInTheDocument();
   });
 
   it('leaves a skill the user owns out of the plugin that also declares it', async () => {
