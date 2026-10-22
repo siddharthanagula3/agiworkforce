@@ -24,6 +24,9 @@ Already known: [verified findings, so you do not repeat them]
 Reply with: the answer; each finding with path:line, command output, or URL and quote;
 what you covered and what you did not; what you could not establish.
 Stop and say so if the question needs a judgment call rather than a lookup.
+Budget (Haiku): read excerpts, not whole files; at most [N] files or [N] pages. If the
+search area is bigger than that, stop and report what you covered so far rather than
+reading on: past 100K tokens of context every turn costs five times as much.
 Read-only. Do not start other agents.
 ```
 

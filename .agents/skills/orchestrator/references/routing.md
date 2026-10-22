@@ -49,6 +49,8 @@ Move **down** when:
 - the result is cheap to check, so a miss costs little;
 - there are many similar bounded items (then also consider running them in parallel).
 
+Split a **Haiku** assignment into batches, before any move up, when its material would take the worker's context past 100K tokens. Each request is priced on its whole prompt, so a long-running Haiku worker pays five times the rate on every turn after it crosses the line. Rough sizing: one Haiku batch reads up to about 20 source files or 15 fetched pages in excerpts, or about 4,000 lines in total, and returns before it starts summarising work it has not read. Run the batches in parallel with disjoint search areas and merge their evidence yourself. Move the work to Sonnet at medium instead when it cannot be partitioned (one large file that must be read whole, one trace that crosses every batch) or when the answer needs judgment across all of it; on price alone Haiku over 100K is still about a quarter of Sonnet.
+
 Move **sideways** (same family, different setup) before moving up when the failure was a thin brief, missing context, the wrong scope, or a tool the worker lacked. Changing the model does not fix any of these.
 
 Never route the same task through each family in turn as a matter of course. One well-chosen worker plus a check costs less and tells you more.
