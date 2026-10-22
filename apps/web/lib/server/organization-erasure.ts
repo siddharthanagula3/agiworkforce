@@ -3,6 +3,7 @@ import 'server-only';
 import { lockdownTenantForErasure } from '@/lib/feature-flags/tenant-lockdown';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { logger } from '@/lib/logger';
+import { cancelLiveStripeSubscriptionsNow } from '@/lib/server/payments/stripe-provider';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
 import { countActiveLegalHolds } from '@/lib/services/legal-hold-gate';
@@ -26,6 +27,7 @@ import {
  * `ORGANIZATION_UNDELETED_TABLES`, so a new tenant table cannot be forgotten.
  */
 export const ORGANIZATION_SCOPED_TABLES: ReadonlyArray<{ table: string; column: string }> = [
+  { table: 'user_agents', column: 'organization_id' },
   { table: 'organization_members', column: 'organization_id' },
   { table: 'organization_invitations', column: 'organization_id' },
   { table: 'organization_model_policies', column: 'organization_id' },
@@ -177,6 +179,7 @@ export interface OrganizationErasureReport {
   complete: boolean;
   organizationRetained: boolean;
   blockedByLegalHold: boolean;
+  blockedByBilling: boolean;
 }
 
 export interface EraseOrganizationDataOptions {
@@ -256,7 +259,60 @@ function heldReport(
     complete: false,
     organizationRetained: true,
     blockedByLegalHold: true,
+    blockedByBilling: false,
   };
+}
+
+function billingRetainedReport(organizationId: string, error: string): OrganizationErasureReport {
+  return {
+    organizationId,
+    mediaObjectsDeleted: 0,
+    mediaObjectsFailed: 0,
+    mediaRowsDeleted: 0,
+    tables: {
+      organizations: {
+        deleted: false,
+        retainedForRetry: true,
+        error: `The seat subscription could not be canceled in Stripe, so nothing was erased: ${error}`,
+      },
+    },
+    anonymized: {},
+    complete: false,
+    organizationRetained: true,
+    blockedByLegalHold: false,
+    blockedByBilling: true,
+  };
+}
+
+/**
+ * The workspace row is the only record of which subscription bills its seats,
+ * so the subscription ends before anything is erased and a refusal keeps the
+ * row for the next purge run.
+ */
+async function endSeatBilling(
+  organizationId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const [organization] = await getNeonDb().query<{ stripe_subscription_id: string | null }>(
+      `select stripe_subscription_id from public.organizations where id = $1`,
+      [organizationId],
+    );
+    const subscriptionReference = organization?.stripe_subscription_id ?? null;
+    if (!subscriptionReference) return { ok: true };
+    const canceled = await cancelLiveStripeSubscriptionsNow({
+      subscriptionReference,
+      customerReference: null,
+    });
+    if (canceled.length > 0) {
+      logger.warn(
+        { organizationId, canceledSubscriptions: canceled },
+        'Canceled the seat subscription of a workspace whose deletion came due',
+      );
+    }
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /**
@@ -294,6 +350,15 @@ export async function eraseOrganizationData(
       'Organization erasure declined: workspace is under an active legal hold',
     );
     return heldReport(organizationId, legalHold.count, legalHold.error);
+  }
+
+  const billing = await endSeatBilling(organizationId);
+  if (!billing.ok) {
+    logger.error(
+      { organizationId, error: billing.error },
+      'Organization erasure halted: the seat subscription could not be canceled in Stripe',
+    );
+    return billingRetainedReport(organizationId, billing.error);
   }
 
   // Isolate before deleting: from here the workspace reaches no route, agent or
@@ -395,5 +460,6 @@ export async function eraseOrganizationData(
     complete,
     organizationRetained,
     blockedByLegalHold: false,
+    blockedByBilling: false,
   };
 }

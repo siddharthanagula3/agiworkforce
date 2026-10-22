@@ -140,6 +140,86 @@
       "file": "apps/web/lib/slack/slack-channel-policies.ts",
       "migration": 374,
       "reason": "Reads or writes the slack_channel_policies table that 0374 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0374 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/mobile-iap-ledger-service.ts",
+      "migration": 377,
+      "reason": "Reads or writes the mobile_app_transactions and mobile_app_consent_rescissions tables that 0377 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0377 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/mobile-iap-notification-service.ts",
+      "migration": 377,
+      "reason": "Reads or writes the mobile_app_transactions and mobile_app_consent_rescissions tables that 0377 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0377 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 370,
+      "reason": "Classifies the user_agents, user_agent_access and user_agent_files tables that 0370 adds in the deletion matrix. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0370 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 371,
+      "reason": "Classifies the developer_prompts, developer_prompt_versions, developer_eval_cases, developer_eval_runs and developer_eval_results tables that 0371 adds in the deletion matrix. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0371 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 373,
+      "reason": "Classifies the studio_library_items table that 0373 adds in the deletion matrix. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0373 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 377,
+      "reason": "Classifies the mobile_app_transactions table that 0377 adds in the deletion matrix. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0377 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 369,
+      "reason": "Exports the artifact_comments table(s) that 0369 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0369 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 371,
+      "reason": "Exports the developer_eval_cases, developer_eval_results, developer_eval_runs, developer_prompt_versions, developer_prompts table(s) that 0371 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0371 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 373,
+      "reason": "Exports the studio_library_items table(s) that 0373 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0373 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 374,
+      "reason": "Exports the user_agents.monthly_credit_limit table(s) that 0374 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0374 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 370,
+      "reason": "Reads or writes the user_agent_access, user_agent_files, user_agents table(s) that 0370 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0370 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 371,
+      "reason": "Reads or writes the developer_eval_cases, developer_eval_results, developer_eval_runs, developer_prompt_versions, developer_prompts table(s) that 0371 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0371 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 377,
+      "reason": "Reads or writes the mobile_app_transactions table(s) that 0377 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0377 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/organization-erasure.ts",
+      "migration": 370,
+      "reason": "Reads or writes the user_agents table(s) that 0370 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0370 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/restricted-user-export-reader.ts",
+      "migration": 377,
+      "reason": "Exports the mobile_app_transactions table(s) that 0377 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0377 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 369,
+      "reason": "Classifies the artifact_comments table(s) that 0369 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0369 is applied."
     }
   ]
 }

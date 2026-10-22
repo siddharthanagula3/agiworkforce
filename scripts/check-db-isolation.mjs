@@ -687,13 +687,22 @@ const ALLOWLIST = [
   },
   {
     match: /lib\/services\/mobile-iap-notification-service\.ts$/,
-    tables: ['mobile_iap_transactions', 'mobile_iap_notification_receipts'],
+    tables: [
+      'mobile_iap_transactions',
+      'mobile_iap_notification_receipts',
+      'mobile_app_transactions',
+      'mobile_app_consent_rescissions',
+    ],
     reason:
       'reached only from api/mobile/iap/apple-notifications and .../google-notifications, both of ' +
       'which verify the provider signature (Apple JWS, or Pub/Sub OIDC plus Play server ' +
       'verification) before calling in; every statement targets the row already resolved by the ' +
       "provider's own transaction identifiers and checked against app_account_token. " +
-      'mobile_iap_notification_receipts has no owner column at all, a global webhook-dedup ledger.',
+      'mobile_iap_notification_receipts has no owner column at all, a global webhook-dedup ledger. ' +
+      'mobile_app_consent_rescissions has no owner column either: Apple names an install, never an ' +
+      'account, in a signed RESCIND_CONSENT; mobile_app_transactions is read by that Apple-signed ' +
+      'install id to find its accounts, and written only by api/mobile/age-assurance/app-transaction ' +
+      'with userId from requireCurrentUserId and an install id from an Apple-signed app transaction.',
   },
   {
     match: /lib\/services\/mobile-iap-ledger-service\.ts$/,
@@ -917,8 +926,10 @@ const ALLOWLIST = [
   {
     match: /lib\/server\/organization-erasure\.ts$/,
     tables: ['organizations'],
-    functions: ['eraseOrganizationData'],
+    functions: ['eraseOrganizationData', 'endSeatBilling'],
     reason:
+      "endSeatBilling reads only this organizationId's stripe_subscription_id to cancel its seat " +
+      'plan before erasure, and is called only from eraseOrganizationData; ' +
       'the final row delete runs only after every scoped child table above it (including the ' +
       'legal-hold gate) has been cleared for this exact organizationId; the sole caller today is ' +
       'api/cron/purge-deleted-organizations, gated by verifyCronRequest against CRON_SECRET, ' +

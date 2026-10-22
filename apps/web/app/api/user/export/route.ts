@@ -1317,33 +1317,6 @@ const usageEventExportSchema = z.object({
   created_at: timestampSchema,
 });
 
-const mobileIapTransactionExportSchema = z.object({
-  id: z.string(),
-  platform: z.string(),
-  product_key: z.string(),
-  product_id: z.string(),
-  product_kind: z.string(),
-  store_transaction_id: z.string(),
-  original_transaction_id: z.string().nullable(),
-  plan_tier: z.string().nullable(),
-  units_granted: z.number().int(),
-  intended_amount_cents: z.number().int(),
-  refunded_amount_cents: z.number().int(),
-  status: z.string(),
-  environment: z.string().nullable(),
-  purchased_at: nullableTimestampSchema,
-  expires_at: nullableTimestampSchema,
-  processed_at: nullableTimestampSchema,
-  created_at: timestampSchema,
-  updated_at: timestampSchema,
-});
-
-const mobileIapAccountExportSchema = z.object({
-  user_id: z.string(),
-  created_at: timestampSchema,
-  updated_at: timestampSchema,
-});
-
 const billingRefundRequestExportSchema = z.object({
   id: z.string(),
   charge_id: z.string(),
@@ -1478,6 +1451,120 @@ const accountCompromiseResponseExportSchema = z.object({
   sessions_failed: z.number(),
   opened_at: timestampSchema,
   resolved_at: nullableTimestampSchema,
+});
+
+const artifactCommentExportSchema = z.object({
+  id: z.string(),
+  artifact_id: z.string(),
+  parent_id: z.string().nullable(),
+  anchor: z.unknown(),
+  body: z.string(),
+  author: z.string(),
+  resolved_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const studioLibraryItemExportSchema = z.object({
+  id: z.string(),
+  kind: z.string(),
+  name: z.string(),
+  payload: z.unknown(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const userAgentExportSchema = z.object({
+  id: z.string(),
+  organization_id: z.string().nullable(),
+  name: z.string(),
+  description: z.string(),
+  icon: z.string(),
+  accent_color: z.string(),
+  instructions: z.string(),
+  output_examples: z.string(),
+  conversation_starters: z.array(z.string()),
+  model: z.string().nullable(),
+  web_search: z.boolean(),
+  code_execution: z.boolean(),
+  image_generation: z.boolean(),
+  connector_ids: z.array(z.string()).nullable(),
+  skill_names: z.array(z.string()).nullable(),
+  daily_turn_limit: z.number().int().nullable(),
+  status: z.string(),
+  visibility: z.string(),
+  published_version: z.number().int().nullable(),
+  paused_at: nullableTimestampSchema,
+  retired_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const userAgentFileExportSchema = z.object({
+  id: z.string(),
+  agent_id: z.string(),
+  name: z.string(),
+  mime_type: z.string(),
+  content: z.string(),
+  byte_size: z.number().int().nonnegative(),
+  created_at: timestampSchema,
+});
+
+const agentSharedWithYouExportSchema = z.object({
+  agent_id: z.string(),
+  created_at: timestampSchema,
+});
+
+const developerPromptExportSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const developerPromptVersionExportSchema = z.object({
+  id: z.string(),
+  prompt_id: z.string(),
+  version: z.number().int(),
+  system_prompt: z.string(),
+  template: z.string(),
+  model: z.string(),
+  temperature: nullableNumericSchema,
+  note: z.string().nullable(),
+  created_at: timestampSchema,
+});
+
+const developerEvalCaseExportSchema = z.object({
+  id: z.string(),
+  prompt_id: z.string(),
+  variables: z.unknown(),
+  expected_output: z.string().nullable(),
+  position: z.number().int(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const developerEvalRunExportSchema = z.object({
+  id: z.string(),
+  prompt_id: z.string(),
+  version: z.number().int(),
+  check_kind: z.string(),
+  case_count: z.number().int(),
+  created_at: timestampSchema,
+});
+
+const developerEvalResultExportSchema = z.object({
+  id: z.string(),
+  run_id: z.string(),
+  case_id: z.string().nullable(),
+  rendered_input: z.string(),
+  output: z.string().nullable(),
+  error: z.string().nullable(),
+  latency_ms: z.number().int().nullable(),
+  passed: z.boolean().nullable(),
+  grade: z.number().int().nullable(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
 });
 
 const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
@@ -1969,26 +2056,6 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     acrossWorkspaces: true,
   },
   {
-    section: 'mobile_iap_transactions',
-    table: 'mobile_iap_transactions',
-    sql: `select id, platform, product_key, product_id, product_kind, store_transaction_id,
-                 original_transaction_id, plan_tier, units_granted, intended_amount_cents,
-                 refunded_amount_cents, status, environment, purchased_at, expires_at,
-                 processed_at, created_at, updated_at
-          from mobile_iap_transactions
-          where user_id = $1
-          order by created_at asc`,
-    schema: mobileIapTransactionExportSchema,
-  },
-  {
-    section: 'mobile_iap_accounts',
-    table: 'mobile_iap_accounts',
-    sql: `select user_id, created_at, updated_at
-          from mobile_iap_accounts
-          where user_id = $1`,
-    schema: mobileIapAccountExportSchema,
-  },
-  {
     section: 'billing_refund_requests',
     table: 'billing_refund_requests',
     sql: `select id, charge_id, charge_kind, charge_amount_cents, charge_currency,
@@ -2085,6 +2152,119 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           order by opened_at desc`,
     schema: accountCompromiseResponseExportSchema,
     acrossWorkspaces: true,
+  },
+  {
+    section: 'artifact_comments',
+    table: 'artifact_comments',
+    sql: `select id, artifact_id, parent_id, anchor, body, author, resolved_at, created_at,
+                 updated_at
+          from artifact_comments
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: artifactCommentExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'studio_library_items',
+    table: 'studio_library_items',
+    sql: `select id, kind, name, payload, created_at, updated_at
+          from studio_library_items
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: studioLibraryItemExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'user_agents',
+    table: 'user_agents',
+    sql: `select id, organization_id, name, description, icon, accent_color, instructions,
+                 output_examples, conversation_starters, model, web_search, code_execution,
+                 image_generation, connector_ids, skill_names, daily_turn_limit, status,
+                 visibility, published_version, paused_at, retired_at, created_at, updated_at
+          from user_agents
+          where user_id = $1
+          order by created_at asc`,
+    schema: userAgentExportSchema,
+  },
+  {
+    section: 'user_agent_files',
+    table: 'user_agent_files',
+    sql: `select id, agent_id, name, mime_type, content, byte_size, created_at
+          from user_agent_files
+          where user_id = $1
+          order by agent_id asc, name asc
+          limit 1000`,
+    schema: userAgentFileExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  // A grant row names the person it was granted to and the owner who granted
+  // it. Only the subject's own grants are exported, without the granter's
+  // account id; the people an owner shared with are other accounts.
+  {
+    section: 'agents_shared_with_you',
+    table: 'user_agent_access',
+    sql: `select agent_id, created_at
+          from user_agent_access
+          where user_id = $1
+          order by created_at asc`,
+    schema: agentSharedWithYouExportSchema,
+  },
+  {
+    section: 'developer_prompts',
+    table: 'developer_prompts',
+    sql: `select id, name, created_at, updated_at
+          from developer_prompts
+          where user_id = $1
+          order by created_at asc`,
+    schema: developerPromptExportSchema,
+  },
+  {
+    section: 'developer_prompt_versions',
+    table: 'developer_prompt_versions',
+    sql: `select id, prompt_id, version, system_prompt, template, model, temperature, note,
+                 created_at
+          from developer_prompt_versions
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: developerPromptVersionExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'developer_eval_cases',
+    table: 'developer_eval_cases',
+    sql: `select id, prompt_id, variables, expected_output, position, created_at, updated_at
+          from developer_eval_cases
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: developerEvalCaseExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'developer_eval_runs',
+    table: 'developer_eval_runs',
+    sql: `select id, prompt_id, version, check_kind, case_count, created_at
+          from developer_eval_runs
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: developerEvalRunExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'developer_eval_results',
+    table: 'developer_eval_results',
+    sql: `select id, run_id, case_id, rendered_input, output, error, latency_ms, passed, grade,
+                 created_at, updated_at
+          from developer_eval_results
+          where user_id = $1
+          order by created_at desc
+          limit 1000`,
+    schema: developerEvalResultExportSchema,
+    rowLimit: EXPORT_ROW_LIMIT,
   },
 ];
 

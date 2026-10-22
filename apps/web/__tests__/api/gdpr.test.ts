@@ -298,6 +298,7 @@ describe('GDPR Data Export API (GET /api/user/export)', () => {
               pinned: true,
               draft: null,
               draft_updated_at: null,
+              instructions: null,
               created_at: mockUser.created_at,
               updated_at: mockUser.updated_at,
               deleted_at: null,

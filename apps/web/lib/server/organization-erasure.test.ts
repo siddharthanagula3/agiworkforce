@@ -9,6 +9,7 @@ const mocks = vi.hoisted(() => ({
   execute: vi.fn(),
   deleteStoredMediaObjects: vi.fn(),
   invalidateActiveOrganizationCache: vi.fn(async (..._args: unknown[]) => undefined),
+  cancelLiveStripeSubscriptionsNow: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -23,6 +24,10 @@ vi.mock('@/lib/server/neon-db', () => ({
 }));
 vi.mock('@/lib/server/media-storage', () => ({
   deleteStoredMediaObjects: (...args: unknown[]) => mocks.deleteStoredMediaObjects(...args),
+}));
+vi.mock('@/lib/server/payments/stripe-provider', () => ({
+  cancelLiveStripeSubscriptionsNow: (...args: unknown[]) =>
+    mocks.cancelLiveStripeSubscriptionsNow(...args),
 }));
 vi.mock('@/lib/server/request-context-cache', () => ({
   invalidateActiveOrganizationCache: (...args: unknown[]) =>
@@ -89,6 +94,7 @@ interface ErasureFixture {
   activeLegalHolds?: number;
   legalHoldError?: Error;
   members?: Array<{ user_id: string }>;
+  seatSubscriptionId?: string;
 }
 
 function primeDb(fixture: ErasureFixture = {}): void {
@@ -101,6 +107,9 @@ function primeDb(fixture: ErasureFixture = {}): void {
       return fixture.members ?? [];
     }
     if (sql.includes('media_assets')) return fixture.mediaRows ?? [];
+    if (sql.includes('select stripe_subscription_id from public.organizations')) {
+      return [{ stripe_subscription_id: fixture.seatSubscriptionId ?? null }];
+    }
     return [];
   });
   mocks.execute.mockImplementation(async (sql: string) => {
@@ -110,6 +119,9 @@ function primeDb(fixture: ErasureFixture = {}): void {
     return 1;
   });
   mocks.deleteStoredMediaObjects.mockResolvedValue({ deleted: 0, failedPathnames: [] });
+  mocks.cancelLiveStripeSubscriptionsNow.mockResolvedValue(
+    fixture.seatSubscriptionId ? [fixture.seatSubscriptionId] : [],
+  );
 }
 
 function executedStatements(): string[] {
@@ -349,5 +361,57 @@ describe('eraseOrganizationData', () => {
         sql.includes('delete from public.organizations where id = $1'),
       ),
     ).toBe(false);
+  });
+
+  it('cancels the seat subscription in Stripe before erasing anything', async () => {
+    primeDb({ seatSubscriptionId: 'sub_seats1' });
+    const order: string[] = [];
+    mocks.cancelLiveStripeSubscriptionsNow.mockImplementation(async () => {
+      order.push('stripe');
+      return ['sub_seats1'];
+    });
+    mocks.execute.mockImplementation(async () => {
+      order.push('erase');
+      return 1;
+    });
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(mocks.cancelLiveStripeSubscriptionsNow).toHaveBeenCalledWith({
+      subscriptionReference: 'sub_seats1',
+      customerReference: null,
+    });
+    expect(order[0]).toBe('stripe');
+    expect(report.complete).toBe(true);
+    expect(report.blockedByBilling).toBe(false);
+  });
+
+  it('keeps every row, including the billing linkage, when Stripe refuses the cancel', async () => {
+    primeDb({ seatSubscriptionId: 'sub_seats1' });
+    mocks.cancelLiveStripeSubscriptionsNow.mockRejectedValue(new Error('stripe unavailable'));
+
+    const report = await eraseOrganizationData('org-1');
+
+    expect(report.complete).toBe(false);
+    expect(report.blockedByBilling).toBe(true);
+    expect(report.organizationRetained).toBe(true);
+    expect(mocks.execute).not.toHaveBeenCalled();
+    expect(mocks.deleteStoredMediaObjects).not.toHaveBeenCalled();
+  });
+
+  it('does not call Stripe for a workspace without a seat subscription', async () => {
+    primeDb();
+
+    await eraseOrganizationData('org-1');
+
+    expect(mocks.cancelLiveStripeSubscriptionsNow).not.toHaveBeenCalled();
+  });
+
+  it('does not cancel billing for a workspace under a legal hold', async () => {
+    primeDb({ underLegalHold: true, seatSubscriptionId: 'sub_seats1' });
+
+    await eraseOrganizationData('org-1');
+
+    expect(mocks.cancelLiveStripeSubscriptionsNow).not.toHaveBeenCalled();
   });
 });

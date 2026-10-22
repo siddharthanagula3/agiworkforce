@@ -49,6 +49,39 @@ const authenticationAttemptExportSchema = z.object({
   occurred_at: timestampSchema,
 });
 
+const mobileIapTransactionExportSchema = z.object({
+  id: z.string(),
+  platform: z.string(),
+  product_key: z.string(),
+  product_id: z.string(),
+  product_kind: z.string(),
+  store_transaction_id: z.string(),
+  original_transaction_id: z.string().nullable(),
+  plan_tier: z.string().nullable(),
+  units_granted: z.number().int(),
+  intended_amount_cents: z.number().int(),
+  refunded_amount_cents: z.number().int(),
+  status: z.string(),
+  environment: z.string().nullable(),
+  purchased_at: nullableTimestampSchema,
+  expires_at: nullableTimestampSchema,
+  processed_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const mobileIapAccountExportSchema = z.object({
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
+const mobileAppTransactionExportSchema = z.object({
+  app_transaction_id: z.string(),
+  environment: z.string(),
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const RESTRICTED_USER_EXPORT_SPECS = [
   {
     section: 'product_analytics_events',
@@ -80,6 +113,34 @@ const RESTRICTED_USER_EXPORT_SPECS = [
           limit 1000`,
     schema: authenticationAttemptExportSchema,
     rowLimit: 1000,
+  },
+  // purchase_token_hash and app_account_token are withheld: one proves a store
+  // purchase and the other binds new purchases to this account.
+  {
+    section: 'mobile_iap_transactions',
+    sql: `select id, platform, product_key, product_id, product_kind, store_transaction_id,
+                 original_transaction_id, plan_tier, units_granted, intended_amount_cents,
+                 refunded_amount_cents, status, environment, purchased_at, expires_at,
+                 processed_at, created_at, updated_at
+          from public.mobile_iap_transactions
+          where user_id = $1
+          order by created_at asc`,
+    schema: mobileIapTransactionExportSchema,
+  },
+  {
+    section: 'mobile_iap_accounts',
+    sql: `select created_at, updated_at
+          from public.mobile_iap_accounts
+          where user_id = $1`,
+    schema: mobileIapAccountExportSchema,
+  },
+  {
+    section: 'mobile_app_transactions',
+    sql: `select app_transaction_id, environment, created_at, updated_at
+          from public.mobile_app_transactions
+          where user_id = $1
+          order by created_at asc`,
+    schema: mobileAppTransactionExportSchema,
   },
 ] as const;
 

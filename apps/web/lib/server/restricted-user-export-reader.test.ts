@@ -29,9 +29,12 @@ describe('restricted user export reader', () => {
       'product_analytics_events',
       'support_handoff_sessions',
       'authentication_attempts',
+      'mobile_iap_transactions',
+      'mobile_iap_accounts',
+      'mobile_app_transactions',
     ]);
     expect(results.map(({ section }) => section)).toEqual(RESTRICTED_USER_EXPORT_SECTIONS);
-    expect(calls).toHaveLength(3);
+    expect(calls).toHaveLength(6);
     for (const [sql, values] of calls) {
       expect(values).toEqual([USER_ID]);
       expect(sql).toMatch(/where (?:user_id|owner_user_id) = \$1/);
@@ -106,6 +109,9 @@ describe('restricted user export reader', () => {
       'product_analytics_events',
       'support_handoff_sessions',
       'authentication_attempts',
+      'mobile_iap_transactions',
+      'mobile_iap_accounts',
+      'mobile_app_transactions',
     ]);
     expect(
       readFileSync(join(process.cwd(), 'db/neon/0089_support_live_handoff.sql'), 'utf8'),
@@ -119,5 +125,84 @@ describe('restricted user export reader', () => {
         'utf8',
       ),
     ).toMatch(/revoke all on public\.authentication_attempts from app_rls/i);
+    for (const migration of [
+      '0112_mobile_native_iap.sql',
+      '0377_mobile_app_transactions_and_consent.sql',
+    ]) {
+      const sql = readFileSync(join(process.cwd(), 'db/neon', migration), 'utf8');
+      expect(sql).not.toMatch(/create policy[^;]*\bon public\.mobile_(?:iap|app)_/i);
+    }
+  });
+
+  it("returns only the owner's store purchases and app transactions", async () => {
+    const stamp = new Date('2026-10-01T00:00:00.000Z');
+    const stored: Record<string, Array<Record<string, unknown>>> = {
+      mobile_iap_transactions: [USER_ID, 'user_other'].map((userId) => ({
+        user_id: userId,
+        id: `txn_${userId}`,
+        platform: 'ios',
+        product_key: 'pro_monthly',
+        product_id: 'com.example.pro.monthly',
+        product_kind: 'subscription',
+        store_transaction_id: `store_${userId}`,
+        original_transaction_id: null,
+        plan_tier: 'pro',
+        units_granted: 0,
+        intended_amount_cents: 2000,
+        refunded_amount_cents: 0,
+        status: 'active',
+        environment: 'production',
+        purchased_at: stamp,
+        expires_at: null,
+        processed_at: stamp,
+        created_at: stamp,
+        updated_at: stamp,
+      })),
+      mobile_iap_accounts: [USER_ID, 'user_other'].map((userId) => ({
+        user_id: userId,
+        created_at: stamp,
+        updated_at: stamp,
+      })),
+      mobile_app_transactions: [USER_ID, 'user_other'].map((userId) => ({
+        user_id: userId,
+        app_transaction_id: `app_${userId}`,
+        environment: 'production',
+        created_at: stamp,
+        updated_at: stamp,
+      })),
+    };
+    const results = await readRestrictedUserExportSections(
+      createDatabaseAdapterFake({
+        query: (async <T>(sql: string, values?: unknown[]) => {
+          const table = /from public\.([a-z_]+)/.exec(sql)?.[1] ?? '';
+          const columns = (/select([\s\S]*?)from/.exec(sql)?.[1] ?? '')
+            .split(',')
+            .map((column) => column.trim());
+          return (stored[table] ?? [])
+            .filter((row) => row['user_id'] === values?.[0])
+            .map((row) =>
+              Object.fromEntries(columns.map((column) => [column, row[column]])),
+            ) as T[];
+        }) as DatabaseAdapter['query'],
+      }),
+      USER_ID,
+    );
+    const rowsOf = (section: string) =>
+      results.find((result) => result.section === section)?.rows ?? [];
+
+    expect(rowsOf('mobile_iap_transactions')).toEqual([
+      expect.objectContaining({ id: `txn_${USER_ID}`, store_transaction_id: `store_${USER_ID}` }),
+    ]);
+    expect(rowsOf('mobile_iap_accounts')).toHaveLength(1);
+    expect(rowsOf('mobile_app_transactions')).toEqual([
+      {
+        app_transaction_id: `app_${USER_ID}`,
+        environment: 'production',
+        created_at: stamp.toISOString(),
+        updated_at: stamp.toISOString(),
+      },
+    ]);
+    expect(JSON.stringify(results)).not.toContain('user_other');
+    expect(JSON.stringify(results)).not.toMatch(/purchase_token_hash|app_account_token/);
   });
 });

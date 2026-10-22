@@ -45,6 +45,14 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'web_artifact_index', column: 'user_id' },
   { table: 'artifact_comments', column: 'user_id' },
   { table: 'studio_library_items', column: 'user_id' },
+  { table: 'developer_eval_results', column: 'user_id' },
+  { table: 'developer_eval_runs', column: 'user_id' },
+  { table: 'developer_eval_cases', column: 'user_id' },
+  { table: 'developer_prompt_versions', column: 'user_id' },
+  { table: 'developer_prompts', column: 'user_id' },
+  { table: 'user_agent_files', column: 'user_id' },
+  { table: 'user_agent_access', column: 'user_id' },
+  { table: 'user_agents', column: 'user_id' },
   { table: 'research_reports', column: 'user_id' },
   { table: 'published_artifact_storage', column: 'owner_user_id' },
   { table: 'published_artifacts', column: 'user_id' },
@@ -136,6 +144,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'usage_events', column: 'user_id' },
   { table: 'mobile_iap_transactions', column: 'user_id' },
   { table: 'mobile_iap_accounts', column: 'user_id' },
+  { table: 'mobile_app_transactions', column: 'user_id' },
   { table: 'video_generation_jobs', column: 'user_id' },
   { table: 'image_generation_jobs', column: 'user_id' },
   { table: 'billing_refund_requests', column: 'user_id' },
@@ -1035,6 +1044,30 @@ export async function eraseUserAccountData(
       await releaseDataVideoErasureFence(userId, mediaGate.dataFenceToken);
     }
   }
+}
+
+export interface StripeBillingOwner {
+  subscriptionReference: string | null;
+  customerReference: string | null;
+}
+
+export async function readStripeBillingOwner(userId: string): Promise<StripeBillingOwner> {
+  const [owner] = await getNeonDb().query<{
+    stripe_subscription_id: string | null;
+    stripe_customer_id: string | null;
+  }>(
+    `select subscription.stripe_subscription_id,
+            coalesce(subscription.stripe_customer_id, profile.stripe_customer_id) as stripe_customer_id
+       from public.${PROFILE_TABLE} profile
+       left join public.subscriptions subscription on subscription.user_id = profile.id
+      where profile.id = $1
+      limit 1`,
+    [userId],
+  );
+  return {
+    subscriptionReference: owner?.stripe_subscription_id ?? null,
+    customerReference: owner?.stripe_customer_id ?? null,
+  };
 }
 
 export async function eraseProfileRow(userId: string): Promise<void> {
