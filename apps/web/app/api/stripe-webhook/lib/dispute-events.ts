@@ -4,13 +4,73 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
-import { isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { isStripeResourceMissing, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
 import type { Stripe } from '@/lib/stripe-types';
 import { recordNotification } from '@/lib/services/notification-service';
 import { stripeIdOf } from './stripe-ref';
 import { toStoredSubscriptionStatus } from './subscription-status';
 
 const MERCHANT_KEPT_FUNDS: ReadonlySet<string> = new Set(['won', 'warning_closed', 'prevented']);
+
+const DISPUTE_HOLD_METADATA_KEY = 'dispute_hold';
+
+const ENDED_STRIPE_SUBSCRIPTION_STATUSES: ReadonlySet<string> = new Set([
+  'canceled',
+  'incomplete_expired',
+]);
+
+/**
+ * The hold lives in Stripe as well as here: a later renewal, plan change or
+ * invoice event must not hand back the plan the dispute took away.
+ */
+export async function hasOpenDisputeHold(
+  db: DatabaseAdapter,
+  stripeCustomerId: string | null,
+): Promise<boolean> {
+  if (!stripeCustomerId) return false;
+  const [open] = await db.query<{ id: string }>(
+    `select id from public.billing_disputes
+      where stripe_customer_id = $1 and outcome = 'open'
+      limit 1`,
+    [stripeCustomerId],
+  );
+  return Boolean(open);
+}
+
+async function retrieveLiveSubscription(
+  stripe: Stripe,
+  subscriptionId: string | null,
+): Promise<Stripe.Subscription | null> {
+  if (!isStripeSubscriptionId(subscriptionId)) return null;
+  try {
+    const live = await stripe.subscriptions.retrieve(subscriptionId);
+    return ENDED_STRIPE_SUBSCRIPTION_STATUSES.has(live.status) ? null : live;
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return null;
+    throw error;
+  }
+}
+
+/**
+ * Voiding rather than cancelling keeps the subscription exactly as it was, so a
+ * dispute closed in our favour restores it without a new purchase.
+ */
+async function pauseCollectionForDispute(
+  stripe: Stripe,
+  subscriptionId: string | null,
+  disputeId: string,
+): Promise<void> {
+  const live = await retrieveLiveSubscription(stripe, subscriptionId);
+  if (!live || live.pause_collection) return;
+  await stripe.subscriptions.update(
+    live.id,
+    {
+      pause_collection: { behavior: 'void' },
+      metadata: { [DISPUTE_HOLD_METADATA_KEY]: disputeId },
+    },
+    { idempotencyKey: `dispute-hold:${disputeId}` },
+  );
+}
 
 interface DisputeRow {
   id: string;
@@ -105,6 +165,7 @@ async function recordDispute(
 
 export async function handleDisputeCreated(
   db: DatabaseAdapter,
+  stripe: Stripe,
   dispute: Stripe.Dispute,
   charge: Stripe.Charge,
 ): Promise<void> {
@@ -136,13 +197,15 @@ export async function handleDisputeCreated(
   }
 
   const [subscription] = await db.query<{
+    stripe_subscription_id: string | null;
     status: string | null;
     cancel_at_period_end: boolean | null;
   }>(
-    `select status, cancel_at_period_end from subscriptions
+    `select stripe_subscription_id, status, cancel_at_period_end from subscriptions
       where stripe_customer_id = $1 limit 1 for update`,
     [parties.stripeCustomerId],
   );
+  await pauseCollectionForDispute(stripe, subscription?.stripe_subscription_id ?? null, dispute.id);
   await db.execute(
     "update subscriptions set status = 'past_due', cancel_at_period_end = true where stripe_customer_id = $1",
     [parties.stripeCustomerId],
@@ -284,6 +347,14 @@ async function liftDisputeHold(
       where stripe_customer_id = $1 limit 1 for update`,
     [dispute.stripe_customer_id],
   );
+  let live = await retrieveLiveSubscription(stripe, subscription?.stripe_subscription_id ?? null);
+  if (live?.metadata?.[DISPUTE_HOLD_METADATA_KEY]) {
+    live = await stripe.subscriptions.update(
+      live.id,
+      { pause_collection: '', metadata: { [DISPUTE_HOLD_METADATA_KEY]: '' } },
+      { idempotencyKey: `dispute-release:${dispute.id}` },
+    );
+  }
   if (!subscription || subscription.status !== 'past_due' || !subscription.cancel_at_period_end) {
     return false;
   }
@@ -291,9 +362,10 @@ async function liftDisputeHold(
   let status = dispute.prior_subscription_status;
   let cancelAtPeriodEnd = dispute.prior_cancel_at_period_end ?? false;
   if (isStripeSubscriptionId(subscription.stripe_subscription_id)) {
-    const live = await stripe.subscriptions.retrieve(subscription.stripe_subscription_id);
-    status = toStoredSubscriptionStatus(live.status);
-    cancelAtPeriodEnd = live.cancel_at_period_end;
+    const current =
+      live ?? (await stripe.subscriptions.retrieve(subscription.stripe_subscription_id));
+    status = toStoredSubscriptionStatus(current.status);
+    cancelAtPeriodEnd = current.cancel_at_period_end;
   }
   if (!status) return false;
 
@@ -380,8 +452,37 @@ async function restoreWonDispute(
   );
 }
 
+async function endHeldPlan(
+  db: DatabaseAdapter,
+  stripe: Stripe,
+  dispute: DisputeRow,
+): Promise<void> {
+  if (!dispute.stripe_customer_id) return;
+  const [subscription] = await db.query<{ stripe_subscription_id: string | null }>(
+    `select stripe_subscription_id from subscriptions
+      where stripe_customer_id = $1 limit 1 for update`,
+    [dispute.stripe_customer_id],
+  );
+  const live = await retrieveLiveSubscription(stripe, subscription?.stripe_subscription_id ?? null);
+  if (live) {
+    await stripe.subscriptions.cancel(
+      live.id,
+      { prorate: false, invoice_now: false },
+      { idempotencyKey: `dispute-lost:${dispute.id}` },
+    );
+  }
+  await db.execute(
+    `update subscriptions
+        set status = 'canceled', plan_tier = 'free', cancel_at_period_end = false,
+            canceled_at = coalesce(canceled_at, now())
+      where stripe_customer_id = $1 and status = 'past_due' and cancel_at_period_end = true`,
+    [dispute.stripe_customer_id],
+  );
+}
+
 async function closeLostDispute(
   db: DatabaseAdapter,
+  stripe: Stripe,
   dispute: DisputeRow,
   stripeStatus: string,
   closedAtSeconds: number,
@@ -402,7 +503,9 @@ async function closeLostDispute(
       returning id`,
     [dispute.id, stripeStatus, closedAtSeconds],
   );
-  if (closed.length === 0 || !dispute.user_id) return;
+  if (closed.length === 0) return;
+  if (!dispute.restored_at) await endHeldPlan(db, stripe, dispute);
+  if (!dispute.user_id) return;
 
   await recordAuditEvent({
     userId: dispute.user_id,
@@ -438,7 +541,7 @@ export async function handleDisputeOutcome(
   if (MERCHANT_KEPT_FUNDS.has(dispute.status)) {
     await restoreWonDispute(db, stripe, row, dispute.status, eventCreatedSeconds);
   } else if (dispute.status === 'lost') {
-    await closeLostDispute(db, row, dispute.status, eventCreatedSeconds);
+    await closeLostDispute(db, stripe, row, dispute.status, eventCreatedSeconds);
   } else {
     await db.execute(
       'update public.billing_disputes set stripe_status = $2, updated_at = now() where id = $1',

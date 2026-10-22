@@ -8,12 +8,14 @@ import {
   eraseProfileRow,
   eraseUserAccountData,
   openErasureTombstone,
+  readStripeBillingOwner,
 } from './account-erasure';
 import { getIdentityProvider } from './identity';
 import { getNeonDb } from './neon-db';
+import { cancelLiveStripeSubscriptionsNow } from './payments/stripe-provider';
 import { invalidateAccountStatusCache } from './request-context-cache';
 
-export type ScheduledErasureStage = 'tombstone' | 'erasure' | 'identity';
+export type ScheduledErasureStage = 'billing' | 'tombstone' | 'erasure' | 'identity';
 
 export type ScheduledErasureResult =
   | { status: 'purged'; resurrected: boolean }
@@ -86,10 +88,36 @@ async function profileExists(userId: string): Promise<boolean> {
 }
 
 /**
+ * Billing ends before any row goes: the rows are the only record of which
+ * Stripe customer to stop, so a refusal here leaves them for the next run.
+ */
+async function endStripeBilling(userId: string): Promise<void> {
+  try {
+    const owner = await readStripeBillingOwner(userId);
+    if (!owner.subscriptionReference && !owner.customerReference) return;
+    const canceled = await cancelLiveStripeSubscriptionsNow(owner);
+    if (canceled.length > 0) {
+      logger.warn(
+        { userId, canceledSubscriptions: canceled },
+        'Canceled Stripe billing that was still live when the account deletion came due',
+      );
+    }
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    logger.error(
+      { userId, error: message },
+      'Account erasure halted: Stripe billing could not be canceled, so the billing linkage is kept for a retry',
+    );
+    throw new ScheduledErasureError('billing', `Stripe billing could not be canceled: ${message}`);
+  }
+}
+
+/**
  * The tombstone is opened before anything is deleted and settled after, so an
  * erasure interrupted halfway is visible as an open tombstone and swept again.
  */
 async function erase(userId: string): Promise<void> {
+  await endStripeBilling(userId);
   const tombstone = await openErasureTombstone(userId);
   // The gate caches the effective status for five minutes; an erased account must stop at once.
   await invalidateAccountStatusCache(userId);

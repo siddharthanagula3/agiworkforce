@@ -332,4 +332,22 @@ describe('POST /api/billing/top-up', () => {
     expect(response.status).toBe(400);
     expect(mocks.createSession).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [{ deletion_scheduled: true }, 'Cancel the account deletion to buy credits.'],
+    [{ dispute_open: true }, 'Your plan is on hold while a payment dispute is open.'],
+  ])('refuses a top-up while the account is held (%o)', async (state, message) => {
+    const ledgerRows = mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async (sql: string, ...rest: unknown[]) =>
+      sql.includes('as deletion_scheduled')
+        ? [{ deletion_scheduled: false, dispute_open: false, ...state }]
+        : ledgerRows(sql, ...rest),
+    );
+
+    const response = await POST(request(20));
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { message } });
+    expect(mocks.createSession).not.toHaveBeenCalled();
+  });
 });

@@ -41,11 +41,13 @@ function bind({
   deletionRequestedAtIsMissingColumn = false,
   existingScheduledFor = null as string | null,
   activeLegalHolds = 0,
+  seatSubscriptionId = null as string | null,
 }: {
   role?: 'owner' | 'admin' | 'member' | 'viewer' | null;
   deletionRequestedAtIsMissingColumn?: boolean;
   existingScheduledFor?: string | null;
   activeLegalHolds?: number;
+  seatSubscriptionId?: string | null;
 } = {}) {
   mockQuery.mockImplementation(async (sql: string) => {
     const text = String(sql);
@@ -55,8 +57,8 @@ function bind({
     if (/from public\.organization_members/i.test(text)) {
       return role ? [{ organization_id: ORG, role }] : [];
     }
-    if (/select id, name, slug from public\.organizations/i.test(text)) {
-      return [organizationRow()];
+    if (/select id, name, slug(, stripe_subscription_id)? from public\.organizations/i.test(text)) {
+      return [organizationRow({ stripe_subscription_id: seatSubscriptionId })];
     }
     if (/count\(\*\)::int as count\s+from public\.legal_holds/i.test(text)) {
       return [{ count: activeLegalHolds }];
@@ -205,5 +207,16 @@ describe('DELETE /api/settings/organization', () => {
       expect.stringContaining('deletion_scheduled_for'),
       expect.arrayContaining([ORG, expect.any(String), 'user-1']),
     );
+  });
+
+  it('refuses to schedule deletion while the workspace seat plan is still billing', async () => {
+    bind({ role: 'owner', seatSubscriptionId: 'sub_seats1' });
+    const res = await DELETE(req({ confirm: 'acme' }) as never);
+
+    expect(res.status).toBe(409);
+    const body = (await res.json()) as { error: { message: string } };
+    expect(body.error.message).toBe('Cancel the workspace plan before deleting the workspace.');
+    expect(mockExecute).not.toHaveBeenCalled();
+    expect(mockRecordAuditEvent).not.toHaveBeenCalled();
   });
 });

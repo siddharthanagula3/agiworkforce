@@ -43,6 +43,7 @@ import {
   retrieveStripePayment,
 } from '@/lib/server/payments/stripe-provider';
 import { isStripeCustomerId, isStripeSubscriptionId } from '@/lib/server/stripe-resource-ids';
+import { readAccountBillingHold } from '@/lib/services/billing-plan-change-gate';
 import { getPrepaidCreditBalances } from '@/lib/services/bonus-credit-service';
 import {
   isNotificationEmailConfigured,
@@ -85,6 +86,7 @@ export type AutoReloadOutcome =
   | 'unavailable'
   | 'above_threshold'
   | 'daily_limit'
+  | 'held'
   | 'ineligible'
   | 'deferred'
   | 'charged'
@@ -382,8 +384,7 @@ async function emailReloadConsent(
     return;
   }
 
-  const intro =
-    'Auto-reload is now on for your AGI Workforce account. These are the terms you agreed to:';
+  const intro = 'Auto-reload is now on for your AGI account. These are the terms you agreed to:';
   const action = `Turn auto-reload off at any time in Settings > Billing: ${BILLING_SETTINGS_URL}`;
 
   const result = await sendTransactionalEmail({
@@ -499,6 +500,11 @@ async function planReload(
 ): Promise<ReloadPlan | AutoReloadOutcome> {
   const balance = await readReloadBalanceCredits(db, userId);
   if (balance >= row.threshold_credits) return 'above_threshold';
+  const hold = await readAccountBillingHold(db, userId);
+  if (hold) {
+    logger.info({ userId, hold }, 'Auto-reload skipped: the account is on a billing hold');
+    return 'held';
+  }
   const quote = quoteTopUp(row.amount_usd, { autoReload: true });
   if (!quote) {
     logger.error(
@@ -649,7 +655,7 @@ async function failReload(db: DatabaseAdapter, failure: ReloadFailure): Promise<
 
   const credits = failure.credits ?? topUpUnitsForUsd(row.amount_usd);
   const attempted = credits === null ? 'credits' : formatCredits(credits);
-  const headline = `We tried to add ${attempted} to your AGI Workforce balance, and the payment did not go through. ${FAILURE_MESSAGES[failure.reason]}`;
+  const headline = `We tried to add ${attempted} to your AGI balance, and the payment did not go through. ${FAILURE_MESSAGES[failure.reason]}`;
 
   await recordNotification(db, {
     userId: failure.userId,

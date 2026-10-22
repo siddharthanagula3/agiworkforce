@@ -778,4 +778,46 @@ describe('POST /api/checkout', () => {
       expect(new Set(keys).size).toBe(2);
     });
   });
+
+  describe('while the account is held', () => {
+    function heldBy(state: { deletion_scheduled?: boolean; dispute_open?: boolean }) {
+      dbMocks.query.mockImplementation(async (sql: string) => {
+        if (sql.includes('as deletion_scheduled')) {
+          return [{ deletion_scheduled: false, dispute_open: false, ...state }];
+        }
+        return [];
+      });
+    }
+
+    it('refuses checkout while account deletion is scheduled', async () => {
+      heldBy({ deletion_scheduled: true });
+
+      const response = await POST(makeRequest('pro'));
+
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({
+        error: { message: 'Cancel the account deletion to change your plan.' },
+      });
+      expect(stripeMocks.createCustomer).not.toHaveBeenCalled();
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('refuses checkout while a payment dispute is open', async () => {
+      heldBy({ dispute_open: true });
+
+      const response = await POST(makeRequest('pro'));
+
+      expect(response.status).toBe(409);
+      expect(stripeMocks.createCheckoutSession).not.toHaveBeenCalled();
+    });
+
+    it('opens checkout again once the deletion is cancelled', async () => {
+      heldBy({ deletion_scheduled: false });
+
+      const response = await POST(makeRequest('pro'));
+
+      expect(response.status).toBe(200);
+      expect(stripeMocks.createCheckoutSession).toHaveBeenCalledTimes(1);
+    });
+  });
 });

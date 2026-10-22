@@ -50,6 +50,7 @@ import {
 import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { absoluteUrl } from '@/lib/seo/site';
 import { referralTrialDays } from '@/lib/services/referral-service';
+import { assertPlanChangeAllowed } from '@/lib/services/billing-plan-change-gate';
 import { TRIAL_REMINDER_DAYS, formatChargeAmount } from '@/lib/services/trial-reminder-service';
 
 const CHECKOUT_SCOPE = { resolveOrganization: false } as const;
@@ -184,6 +185,8 @@ async function handleCheckout(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) {
     return rateLimitResponse;
   }
+
+  await assertPlanChangeAllowed(db, userId);
 
   let userEmail = '';
   try {

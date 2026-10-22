@@ -8,6 +8,7 @@ import { requireEnv } from '@shared/utils/env';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError, isAppError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
+import { assertPlanChangeAllowed } from '@/lib/services/billing-plan-change-gate';
 import { logger } from '@/lib/logger';
 import { resolvePlanTier } from '@/lib/price-tier-mapping';
 import { UpgradeApplyRequestSchema, resolveCheckoutQuantity } from '@/lib/validations/checkout';
@@ -49,6 +50,8 @@ async function handleUpgrade(request: NextRequest): Promise<NextResponse> {
 
   const rateLimitResponse = await withRateLimit(request, 'upgrade');
   if (rateLimitResponse) return rateLimitResponse;
+
+  await assertPlanChangeAllowed(db, userId);
 
   let rawBody: unknown;
   try {

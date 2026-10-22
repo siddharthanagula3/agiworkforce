@@ -29,6 +29,7 @@ import { BILLING_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
+import { assertPlanChangeAllowed } from '@/lib/services/billing-plan-change-gate';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { evaluateActiveWorkspacePolicy } from '@/lib/services/organization-policy-gate';
 import { isPolicyUnavailable } from '@/lib/services/organization-policy-evaluator';
@@ -114,6 +115,8 @@ async function handleTopUp(request: NextRequest): Promise<NextResponse> {
 
   const rateLimitResponse = await withRateLimit(request, 'checkout');
   if (rateLimitResponse) return rateLimitResponse;
+
+  await assertPlanChangeAllowed(db, userId, 'credits');
 
   const billingGate = await evaluateActiveWorkspacePolicy(
     getNeonDb(),

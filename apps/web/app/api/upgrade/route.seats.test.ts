@@ -368,4 +368,24 @@ describe('POST /api/upgrade, Team seat quantity', () => {
     expect(response.status).toBe(400);
     expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
   });
+
+  it.each([
+    [{ deletion_scheduled: true }, 'Cancel the account deletion to change your plan.'],
+    [{ dispute_open: true }, 'Your plan is on hold while a payment dispute is open.'],
+  ])('refuses a plan change while the account is held (%o)', async (state, message) => {
+    const subscriptionRows = dbMocks.query.getMockImplementation()!;
+    dbMocks.query.mockImplementation(async (sql: string, params?: unknown[]) =>
+      sql.includes('as deletion_scheduled')
+        ? [{ deletion_scheduled: false, dispute_open: false, ...state }]
+        : subscriptionRows(sql, params),
+    );
+
+    const response = await POST(
+      request({ plan: 'team', billingInterval: 'monthly', seats: 20, previewToken: tokenFor(20) }),
+    );
+
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { message } });
+    expect(stripeMocks.updateSubscription).not.toHaveBeenCalled();
+  });
 });

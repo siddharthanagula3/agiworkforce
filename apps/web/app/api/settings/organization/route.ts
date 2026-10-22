@@ -495,10 +495,14 @@ async function handleDelete(request: NextRequest) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
 
-  const [org] = await db.query<{ id: string; name: string; slug: string }>(
-    `select id, name, slug from public.organizations where id = $1`,
-    [activeOrganizationId],
-  );
+  const [org] = await db.query<{
+    id: string;
+    name: string;
+    slug: string;
+    stripe_subscription_id: string | null;
+  }>(`select id, name, slug, stripe_subscription_id from public.organizations where id = $1`, [
+    activeOrganizationId,
+  ]);
   if (!org) {
     throw createError.notFound('Workspace not found');
   }
@@ -514,6 +518,10 @@ async function handleDelete(request: NextRequest) {
     throw createError.conflict(
       `This workspace has ${activeHolds} active legal hold${activeHolds === 1 ? '' : 's'}. Release ${activeHolds === 1 ? 'it' : 'every hold'} before deletion can be scheduled.`,
     );
+  }
+
+  if (org.stripe_subscription_id) {
+    throw createError.conflict('Cancel the workspace plan before deleting the workspace.');
   }
 
   const existing = await fetchOrganizationDeletionStatus(db, org.id);

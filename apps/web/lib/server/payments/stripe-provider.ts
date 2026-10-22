@@ -17,6 +17,7 @@ import { logger } from '@/lib/logger';
 import { getStripeClient, getStripeClientOrNull } from '@/lib/server/stripe-client';
 import {
   isStripeCheckoutSessionId,
+  isStripeCustomerId,
   isStripeResourceMissing,
   isStripeSubscriptionId,
 } from '@/lib/server/stripe-resource-ids';
@@ -611,10 +612,55 @@ export async function refundStripeCharge(input: ChargeRefundInput): Promise<Char
 
 export async function cancelStripeSubscriptionNow(subscriptionReference: string): Promise<boolean> {
   const stripe = getStripeClient();
-  const subscription = await stripe.subscriptions.retrieve(subscriptionReference);
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe.subscriptions.retrieve(subscriptionReference);
+  } catch (error) {
+    if (isStripeResourceMissing(error)) return false;
+    throw error;
+  }
   if (ENDED_SUBSCRIPTION_STATUSES.has(subscription.status)) return false;
   await stripe.subscriptions.cancel(subscriptionReference, { prorate: false, invoice_now: false });
   return true;
+}
+
+const CUSTOMER_SUBSCRIPTION_PAGE_SIZE = 100;
+
+/**
+ * Ends every Stripe subscription that can still charge this billing owner:
+ * the tracked one and any other the customer holds. Throws when Stripe cannot
+ * confirm the outcome, so a caller erasing the owner keeps the linkage and
+ * retries instead of leaving a subscription billing nobody.
+ */
+export async function cancelLiveStripeSubscriptionsNow(owner: {
+  subscriptionReference: string | null;
+  customerReference: string | null;
+}): Promise<string[]> {
+  const references = new Set<string>();
+  if (isStripeSubscriptionId(owner.subscriptionReference)) {
+    references.add(owner.subscriptionReference);
+  }
+  if (isStripeCustomerId(owner.customerReference)) {
+    const stripe = getStripeClient();
+    try {
+      for await (const subscription of stripe.subscriptions.list({
+        customer: owner.customerReference,
+        status: 'all',
+        limit: CUSTOMER_SUBSCRIPTION_PAGE_SIZE,
+      })) {
+        if (!ENDED_SUBSCRIPTION_STATUSES.has(subscription.status)) {
+          references.add(subscription.id);
+        }
+      }
+    } catch (error) {
+      if (!isStripeResourceMissing(error)) throw error;
+    }
+  }
+  const canceled: string[] = [];
+  for (const reference of references) {
+    if (await cancelStripeSubscriptionNow(reference)) canceled.push(reference);
+  }
+  return canceled;
 }
 
 export const stripePaymentProvider: PollablePaymentProvider = {

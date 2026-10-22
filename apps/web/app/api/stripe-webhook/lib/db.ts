@@ -46,6 +46,9 @@ import {
   resolveSubscriptionSeats,
 } from './seats';
 import { toStoredSubscriptionStatus } from './subscription-status';
+import { hasOpenDisputeHold } from './dispute-events';
+import { stripeIdOf } from './stripe-ref';
+import { subscriptionAccessRank } from '@/lib/services/subscription-access-policy';
 import {
   cancelDuplicateSubscription,
   duplicateCollectionSnapshot,
@@ -481,6 +484,13 @@ export async function upsertSubscriptionFromSession(
   }
 
   const stripeSubId = session.subscription as string | null;
+  if (await hasOpenDisputeHold(db, stripeIdOf(session.customer))) {
+    logger.error(
+      { sessionId: session.id, userId: resolvedUserId, stripeSubId },
+      'Checkout completed while a payment dispute holds the account; no plan was provisioned',
+    );
+    return;
+  }
   if (
     isStripeSubscriptionId(stripeSubId) &&
     (await settleDuplicateStripeSubscription(db, stripe, resolvedUserId, stripeSubId))
@@ -951,6 +961,17 @@ export async function updateSubscriptionFromStripeSubscription(
 
   const stripeSubId = subscription.id;
   const stripeCustomerId = subscription.customer as string | null;
+
+  if (
+    subscriptionAccessRank(toStoredSubscriptionStatus(subscription.status)) > 0 &&
+    (await hasOpenDisputeHold(db, stripeIdOf(subscription.customer)))
+  ) {
+    logger.warn(
+      { subscriptionId: stripeSubId, incomingStatus: subscription.status, eventSequence },
+      'Ignoring a subscription update that would lift an open dispute hold',
+    );
+    return;
+  }
 
   let stripePriceId: string | null = null;
   const firstSubItem = primarySeatLineItem(subscription.items.data);

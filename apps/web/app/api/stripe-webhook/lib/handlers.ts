@@ -14,7 +14,7 @@ import {
 import { toStoredSubscriptionStatus } from './subscription-status';
 import { readPreDebitWindow, readUnrecoverableMandateCode } from './india-mandate';
 import { handleAutoReloadEvent } from './auto-reload-events';
-import { handleDisputeCreated, handleDisputeOutcome } from './dispute-events';
+import { handleDisputeCreated, handleDisputeOutcome, hasOpenDisputeHold } from './dispute-events';
 import { handleReferralChargeReversal, handleReferralInvoicePaid } from './referral-events';
 import { handleChargeRefunded } from './refund-events';
 import { recordWithdrawalConsent } from './withdrawal-consent-events';
@@ -225,7 +225,12 @@ export async function dispatchStripeEvent(
       const stripeSubId = getInvoiceSubscriptionId(invoice);
       logger.warn({ invoiceId: invoice.id, stripeSubId }, 'Payment failed for invoice');
 
-      if (stripeSubId) {
+      if (await hasOpenDisputeHold(db, stripeCustomerId)) {
+        logger.warn(
+          { invoiceId: invoice.id, stripeSubId },
+          'Payment failure left the disputed plan on hold; the dispute decides its status',
+        );
+      } else if (stripeSubId) {
         const stripeSubscription = await stripe.subscriptions.retrieve(stripeSubId);
         const actualStatus = toStoredSubscriptionStatus(stripeSubscription.status);
 
@@ -309,7 +314,7 @@ export async function dispatchStripeEvent(
         typeof dispute.charge === 'string' ? dispute.charge : dispute.charge.id,
       );
       await handleReferralChargeReversal(db, stripe, charge, 'dispute');
-      await handleDisputeCreated(db, dispute, charge);
+      await handleDisputeCreated(db, stripe, dispute, charge);
       break;
     }
     case 'charge.dispute.updated':
