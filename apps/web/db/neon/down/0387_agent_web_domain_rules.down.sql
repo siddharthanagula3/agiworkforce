@@ -1,4 +1,4 @@
--- Reversal of 0383: forget each agent's website rules.
+-- Reversal of 0387: forget each agent's website rules.
 --
 -- WHAT THIS COSTS: every agent's allowed and blocked sites are destroyed, and
 -- chats with an agent read whatever the workspace and the request allow.
@@ -16,6 +16,6 @@ alter table public.user_agents
   drop column if exists allowed_web_domains;
 
 delete from public.schema_migrations
- where filename = '0383_agent_web_domain_rules.sql';
+ where filename = '0387_agent_web_domain_rules.sql';
 
 commit;
