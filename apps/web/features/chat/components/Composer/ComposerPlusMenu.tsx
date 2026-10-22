@@ -68,6 +68,15 @@ import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capab
 import { ConnectorsComingSoonMenuItem } from '@/features/connectors/components/ConnectorsComingSoonMenuItem';
 import { OfficialConnectorLogo } from '@/features/connectors/components/OfficialConnectorLogo';
 import { buildSettingsBrowseHash, buildSettingsCustomConnectorHash } from '@/features/directory';
+import { SKILL_CREATOR_SKILL_NAME } from '@/features/directory/constants';
+import {
+  RECORD_SKILL_TITLE,
+  SkillRecorder,
+  useSkillRecorderEntry,
+  type SkillRecorderEntry,
+} from '@/features/skill-recorder';
+import { findShortcut, formatShortcutKeys } from '@agiworkforce/unified-chat';
+import { safePlatform } from '@shared/utils/browser-utils';
 import type { LibraryItem } from '@agiworkforce/cloud-contracts';
 import {
   CHAT_OUTPUT_FORMATS,
@@ -131,6 +140,10 @@ export const COMPOSER_PALETTE_SEARCH_TESTID = 'composer-palette-search';
 
 const MENU_LABEL = 'More composer options';
 const ROW_LABEL_ATTACH = 'Add photos & files';
+const ATTACH_SHORTCUT = findShortcut('composer-add-files');
+const ROW_LABEL_RECORD_SKILL = RECORD_SKILL_TITLE;
+const BADGE_RECORDING = 'Recording';
+const RECORDING_ATTACHED_TOAST = 'Screenshots attached. Say what the skill should do, then send.';
 const ATTACH_RETENTION_NOTE = `Files you attach are saved to your Library and kept until you delete them. A deleted file can be restored for ${RESOURCE_RECOVERY_WINDOW_DAYS} days.`;
 const TEMPORARY_ATTACH_RETENTION_NOTE =
   'Files you attach in a temporary chat stay out of your Library and are deleted along with the chat.';
@@ -672,22 +685,72 @@ export interface ComposerPlusMenuProps {
   onSelectFolder: (folderId: string) => void;
 }
 
+type MenuProps = ComposerPlusMenuProps & { recordSkill: SkillRecorderEntry };
+
 export function ComposerPlusMenu(props: ComposerPlusMenuProps) {
   const { anchorRef, contentRef, open, onRequestClose, workPalette } = props;
+  const recordSkill = useSkillRecorderEntry();
+  const { onAttachLibraryFile, onSelectSkill, skills } = props;
+
+  const draftSkillFromRecording = useCallback(
+    (files: File[]) => {
+      for (const file of files) onAttachLibraryFile(file);
+      if (skills.some((skill) => skill.name === SKILL_CREATOR_SKILL_NAME)) {
+        onSelectSkill(SKILL_CREATOR_SKILL_NAME);
+      }
+      toast.success(RECORDING_ATTACHED_TOAST);
+    },
+    [onAttachLibraryFile, onSelectSkill, skills],
+  );
 
   return (
-    <AnchoredComposerMenu
-      anchorRef={anchorRef}
-      open={open}
-      label={MENU_LABEL}
-      onRequestClose={onRequestClose}
-      align="start"
-      contentRef={contentRef}
-      autoFocusFirstItem={!workPalette}
-      className={workPalette ? PALETTE_PANEL_CLASS : CHAT_PANEL_CLASS}
+    <>
+      <AnchoredComposerMenu
+        anchorRef={anchorRef}
+        open={open}
+        label={MENU_LABEL}
+        onRequestClose={onRequestClose}
+        align="start"
+        contentRef={contentRef}
+        autoFocusFirstItem={!workPalette}
+        className={workPalette ? PALETTE_PANEL_CLASS : CHAT_PANEL_CLASS}
+      >
+        {workPalette ? (
+          <WorkPalette {...props} recordSkill={recordSkill} />
+        ) : (
+          <ChatMenu {...props} recordSkill={recordSkill} />
+        )}
+      </AnchoredComposerMenu>
+      {recordSkill.hosted && (
+        <SkillRecorder
+          id={recordSkill.recorderId}
+          onDraftSkill={draftSkillFromRecording}
+          draftBlockedReason={
+            props.attachmentsUnavailable ? attachmentUnavailableReason(props) : null
+          }
+        />
+      )}
+    </>
+  );
+}
+
+function RecordSkillRow({ props, role }: { props: MenuProps; role?: string }) {
+  const { recordSkill } = props;
+  return (
+    <button
+      type="button"
+      role={role}
+      onClick={() => {
+        props.closeMenu();
+        recordSkill.open();
+      }}
+      disabled={recordSkill.recording}
+      className={cn(ROW_CLASS, recordSkill.recording ? ROW_DISABLED_CLASS : ROW_HOVER_CLASS)}
     >
-      {workPalette ? <WorkPalette {...props} /> : <ChatMenu {...props} />}
-    </AnchoredComposerMenu>
+      <Video className={cn(GLYPH_CLASS, 'text-muted-foreground')} />
+      <span className="flex-1 text-start">{ROW_LABEL_RECORD_SKILL}</span>
+      {recordSkill.recording && <RowBadge badge={{ label: BADGE_RECORDING, upgrade: false }} />}
+    </button>
   );
 }
 
@@ -783,6 +846,7 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
       role={role}
       onClick={props.onAddFiles}
       disabled={props.attachmentsUnavailable}
+      aria-keyshortcuts={attachShortcutAria()}
       title={
         props.attachmentsUnavailable
           ? attachmentUnavailableReason(props)
@@ -801,15 +865,40 @@ function AttachRow({ props, role }: { props: ComposerPlusMenuProps; role?: strin
           </span>
         )}
       </span>
-      {props.attachmentsUnavailable && (
+      {props.attachmentsUnavailable ? (
         <RowBadge
           badge={{
             label: props.attachmentUnavailableTitle ? BADGE_NOT_SUPPORTED : BADGE_NOT_USED_HERE,
             upgrade: false,
           }}
         />
+      ) : (
+        <AttachShortcutHint />
       )}
     </button>
+  );
+}
+
+function attachShortcutAria(): string | undefined {
+  if (!ATTACH_SHORTCUT) return undefined;
+  const platformKey = safePlatform.isMac() ? 'Meta' : 'Control';
+  return [platformKey, ATTACH_SHORTCUT.shift && 'Shift', ATTACH_SHORTCUT.key]
+    .filter(Boolean)
+    .join('+');
+}
+
+function AttachShortcutHint() {
+  if (!ATTACH_SHORTCUT) return null;
+  const isMac = safePlatform.isMac();
+  const keys = formatShortcutKeys(ATTACH_SHORTCUT, isMac);
+  return (
+    <kbd
+      aria-hidden="true"
+      data-testid="composer-attach-shortcut"
+      className="shrink-0 font-sans text-sm text-muted-foreground"
+    >
+      {keys.join(isMac ? '' : '+')}
+    </kbd>
   );
 }
 
@@ -1095,7 +1184,7 @@ function WorkingFolderRow({ props, role }: { props: ComposerPlusMenuProps; role?
   );
 }
 
-function ChatMenu(props: ComposerPlusMenuProps) {
+function ChatMenu(props: MenuProps) {
   const { t } = useTranslation('v3');
   const enabledConnector = (connector: ComposerPlusMenuConnector) =>
     !props.disabledConnectorIds.includes(connectorToggleId(connector));
@@ -1144,6 +1233,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
   return (
     <>
       <AttachRow props={props} />
+      {props.recordSkill.available && <RecordSkillRow props={props} />}
       <LibraryRows props={props} />
       {props.showLocalFolderRow && <LocalFolderRow props={props} />}
       {props.showDesktopActionRows && <ClipboardRow props={props} />}
@@ -1432,7 +1522,7 @@ function ChatMenu(props: ComposerPlusMenuProps) {
   );
 }
 
-function WorkPalette(props: ComposerPlusMenuProps) {
+function WorkPalette(props: MenuProps) {
   const { t } = useTranslation('v3');
   const panelRef = useRef<HTMLDivElement>(null);
   const [query, setQuery] = useState('');
@@ -1527,6 +1617,9 @@ function WorkPalette(props: ComposerPlusMenuProps) {
 
   const actionRows = [
     matches(ROW_LABEL_ATTACH) && <AttachRow key="attach" props={props} role="menuitem" />,
+    props.recordSkill.available && matches(ROW_LABEL_RECORD_SKILL) && (
+      <RecordSkillRow key="record-skill" props={props} role="menuitem" />
+    ),
     props.showLocalFolderRow && matches(ROW_LABEL_LOCAL_FOLDER) && (
       <LocalFolderRow key="local-folder" props={props} role="menuitem" />
     ),
