@@ -300,9 +300,6 @@ export function MemorySection() {
             })}
           </p>
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-            <button type="button" onClick={importDialog.open} style={pillButtonStyle(false)}>
-              Import memories
-            </button>
             <button
               type="button"
               onClick={() => void onExport()}
@@ -400,6 +397,14 @@ export function MemorySection() {
             onCheckedChange={(value) => setBoolean('allowToolAssistedGeneration', value)}
           />,
           dependentHint('memory-hint-tool-assisted'),
+        )}
+
+        {memoryRow(
+          'Import memory from other AI providers',
+          'Bring what another assistant knows about you into your saved memories.',
+          <button type="button" onClick={importDialog.open} style={pillButtonStyle(false)}>
+            Start import
+          </button>,
         )}
       </ul>
 

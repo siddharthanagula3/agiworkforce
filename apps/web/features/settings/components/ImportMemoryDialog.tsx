@@ -24,6 +24,8 @@ import {
   type ManagedMemoryRecord,
 } from '@agiworkforce/types';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import { safeClipboard } from '@shared/utils/browser-utils';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const IMPORT_ENDPOINT = '/api/memory/import';
@@ -31,7 +33,12 @@ const IMPORT_FILE_ACCEPT = '.txt,.json,text/plain,application/json';
 const IMPORT_SOURCE_PRESETS = ['ChatGPT', 'Claude', 'Gemini', 'Copilot', 'Other'] as const;
 type ImportSourcePreset = (typeof IMPORT_SOURCE_PRESETS)[number];
 
+const EXPORT_PROMPT =
+  'List every memory you have stored about me and the lasting context you have learned from our past conversations: my preferences, details about me, my work and projects, and instructions I have given you. Write one fact per line, starting each line with a dash, and add nothing else.';
+const COPY_FAILED_MESSAGE = 'The prompt was not copied. Select it and copy it yourself.';
+
 type DialogStep = 'compose' | 'preview' | 'done';
+type PromptCopyState = 'idle' | 'copied' | 'failed';
 
 export interface ImportMemoryDialogProps {
   open: boolean;
@@ -80,6 +87,7 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
   const [sourcePreset, setSourcePreset] = useState<ImportSourcePreset>('ChatGPT');
   const [customSourceName, setCustomSourceName] = useState('');
   const [fileError, setFileError] = useState<string | null>(null);
+  const [promptCopy, setPromptCopy] = useState<PromptCopyState>('idle');
   const [previewing, setPreviewing] = useState(false);
   const [previewError, setPreviewError] = useState<string | null>(null);
   const [preview, setPreview] = useState<ManagedMemoryImportPreviewResponse | null>(null);
@@ -97,6 +105,7 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
     setSourcePreset('ChatGPT');
     setCustomSourceName('');
     setFileError(null);
+    setPromptCopy('idle');
     setPreviewing(false);
     setPreviewError(null);
     setPreview(null);
@@ -130,6 +139,10 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
     };
     reader.onerror = () => setFileError('Could not read that file.');
     reader.readAsText(file);
+  }, []);
+
+  const handleCopyPrompt = useCallback(async () => {
+    setPromptCopy((await safeClipboard.writeText(EXPORT_PROMPT)) ? 'copied' : 'failed');
   }, []);
 
   const resolvedSourceName = sourcePreset === 'Other' ? customSourceName : sourcePreset;
@@ -242,13 +255,45 @@ export function ImportMemoryDialog({ open, onOpenChange, onImported }: ImportMem
         <DialogHeader>
           <DialogTitle>Import memory from other AI providers</DialogTitle>
           <DialogDescription>
-            Paste memories exported from another assistant, or upload a text or JSON file. Review
-            what was found before anything is saved.
+            Send the prompt below to your other assistant, then paste its reply here to review
+            before anything is saved.
           </DialogDescription>
+          <div>
+            <HelpArticleLink docId="memory" label="Learn more" />
+          </div>
         </DialogHeader>
 
         {step === 'compose' && (
           <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <span id="import-memory-prompt" className="text-sm font-medium text-foreground">
+                  Prompt for your other assistant
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void handleCopyPrompt()}
+                  className="rounded-full border border-border px-3 py-1 text-sm font-medium text-foreground transition-colors hover:bg-muted"
+                >
+                  {promptCopy === 'copied' ? 'Copied' : 'Copy prompt'}
+                </button>
+              </div>
+              <p
+                aria-labelledby="import-memory-prompt"
+                className="select-all rounded-md border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground"
+              >
+                {EXPORT_PROMPT}
+              </p>
+              <span className="sr-only" aria-live="polite">
+                {promptCopy === 'copied' ? 'Prompt copied' : ''}
+              </span>
+              {promptCopy === 'failed' && (
+                <p role="alert" className="text-sm text-danger">
+                  {COPY_FAILED_MESSAGE}
+                </p>
+              )}
+            </div>
+
             <div className="flex flex-col gap-2">
               <label htmlFor="import-memory-source" className="text-sm font-medium text-foreground">
                 Source

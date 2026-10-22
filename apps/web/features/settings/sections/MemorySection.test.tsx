@@ -2,9 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
-const { mockCapabilities, memoryState } = vi.hoisted(() => ({
+const { mockCapabilities, memoryState, openImport } = vi.hoisted(() => ({
   mockCapabilities: vi.fn(),
   memoryState: { count: 0 },
+  openImport: vi.fn(),
 }));
 
 vi.mock('../hooks/use-capabilities-preferences', () => ({
@@ -20,7 +21,7 @@ vi.mock('@/features/settings/components/MemoryExclusions', () => ({
 
 vi.mock('@/features/settings/components/ImportMemoryDialog', () => ({
   ImportMemoryDialog: () => null,
-  useImportMemoryDialog: () => ({ isOpen: false, open: vi.fn(), close: vi.fn() }),
+  useImportMemoryDialog: () => ({ isOpen: false, open: openImport, close: vi.fn() }),
 }));
 
 vi.mock('@agiworkforce/unified-chat', () => ({
@@ -148,7 +149,7 @@ describe('MemorySection controls', () => {
     render(<MemorySection />);
 
     for (const name of [
-      'Import memories',
+      'Start import',
       'Export memories',
       'Manage memories',
       'Clear all memories',
@@ -157,6 +158,17 @@ describe('MemorySection controls', () => {
       expect(button.style.borderRadius).toBe('var(--corner-pill)');
       expect(button.style.fontSize).toBe('14px');
     }
+  });
+
+  it('starts an import from its own row, even before any memory exists', async () => {
+    memoryState.count = 0;
+    render(<MemorySection />);
+
+    const start = screen.getByRole('button', { name: 'Start import' });
+    expect(start.closest('li')).toHaveTextContent('Import memory from other AI providers');
+    expect(start).toBeEnabled();
+    await userEvent.click(start);
+    expect(openImport).toHaveBeenCalledTimes(1);
   });
 
   it('offers no export while there is nothing to export', () => {
