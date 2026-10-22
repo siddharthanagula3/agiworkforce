@@ -25,7 +25,12 @@ vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
 }));
 
 import { GET } from '../route';
-import { rankConnectorsByConnections, resetConnectorPopularityCache } from '../ranking';
+import {
+  DIRECTORY_COUNT_MINIMUM,
+  rankConnectorsByConnections,
+  resetConnectorPopularityCache,
+} from '../ranking';
+import { logger } from '@/lib/logger';
 
 function request(): NextRequest {
   return new NextRequest('http://localhost:3000/api/connectors/directory/popularity');
@@ -43,12 +48,26 @@ describe('rankConnectorsByConnections', () => {
   it('maps server ids to directory ids, drops unknown ids and zero counts, and ranks by count', async () => {
     const ranked = await rankConnectorsByConnections([
       { connector_id: 'gmail', connections: '12' },
-      { connector_id: 'srv-canva', connections: 5 },
+      { connector_id: 'srv-canva', connections: 6 },
       { connector_id: 'private-server', connections: 99 },
       { connector_id: 'slack', connections: 0 },
       { connector_id: 'google-drive', connections: 30 },
     ]);
     expect(ranked).toEqual(['google-drive', 'gmail', 'canva']);
+  });
+
+  it('ranks no connector held by fewer accounts than the minimum, after merging its ids', async () => {
+    expect(DIRECTORY_COUNT_MINIMUM).toBe(5);
+    mocks.resolveDirectoryTarget.mockImplementation(async (id: string) =>
+      id.startsWith('srv-gmail') ? { connectorId: 'gmail' } : null,
+    );
+    const ranked = await rankConnectorsByConnections([
+      { connector_id: 'slack', connections: DIRECTORY_COUNT_MINIMUM - 1 },
+      { connector_id: 'google-drive', connections: DIRECTORY_COUNT_MINIMUM },
+      { connector_id: 'srv-gmail-a', connections: 2 },
+      { connector_id: 'srv-gmail-b', connections: 3 },
+    ]);
+    expect(ranked).toEqual(['gmail', 'google-drive']);
   });
 
   it('returns at most the contract limit', async () => {
@@ -64,7 +83,7 @@ describe('rankConnectorsByConnections', () => {
 describe('GET /api/connectors/directory/popularity', () => {
   it('returns only the ranked ids, with no counts or account data', async () => {
     mocks.query.mockResolvedValue([
-      { connector_id: 'gmail', connections: 3 },
+      { connector_id: 'gmail', connections: 6 },
       { connector_id: 'slack', connections: 7 },
     ]);
     const response = await GET(request());
@@ -73,15 +92,32 @@ describe('GET /api/connectors/directory/popularity', () => {
     expect(response.headers.get('Cache-Control')).toContain('public');
   });
 
-  it('answers with no ranking and no cache when the counts cannot be read', async () => {
-    mocks.query.mockRejectedValue(new Error('function does not exist'));
-    const response = await GET(request());
-    expect(await response.json()).toEqual({ ranked: [] });
-    expect(response.headers.get('Cache-Control')).toBe('no-store');
+  it('caches an empty ranking for a minute when the counts cannot be read, logging once', async () => {
+    vi.useFakeTimers();
+    try {
+      mocks.query.mockRejectedValue(new Error('function does not exist'));
+      const first = await GET(request());
+      expect(await first.json()).toEqual({ ranked: [] });
+      expect(first.headers.get('Cache-Control')).toBe('public, max-age=60');
+
+      const second = await GET(request());
+      expect(await second.json()).toEqual({ ranked: [] });
+      expect(mocks.query).toHaveBeenCalledTimes(1);
+      expect(logger.warn).toHaveBeenCalledTimes(1);
+
+      vi.advanceTimersByTime(61_000);
+      mocks.query.mockResolvedValue([{ connector_id: 'gmail', connections: 9 }]);
+      const recovered = await GET(request());
+      expect(await recovered.json()).toEqual({ ranked: ['gmail'] });
+      expect(recovered.headers.get('Cache-Control')).toContain('max-age=300');
+      expect(mocks.query).toHaveBeenCalledTimes(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reuses a fresh ranking instead of querying again', async () => {
-    mocks.query.mockResolvedValue([{ connector_id: 'gmail', connections: 1 }]);
+    mocks.query.mockResolvedValue([{ connector_id: 'gmail', connections: 8 }]);
     await GET(request());
     await GET(request());
     expect(mocks.query).toHaveBeenCalledTimes(1);

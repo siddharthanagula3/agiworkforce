@@ -14,6 +14,7 @@ import {
 } from '@/lib/services/active-workspace-service';
 import { organizationMemoryGate } from '@/lib/services/managed-memory-context-service';
 import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-cache';
+import { SKILL_SETTINGS_NAMESPACE } from '@/lib/services/skill-install-service';
 import { autonomousToolApprovalsAvailable } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { TOOL_APPROVAL_PREFERENCE_NAMESPACE } from '@shared/types/toolApprovalPolicy';
 
@@ -46,6 +47,7 @@ function namespaceObject(settings: Record<string, unknown>, namespace: string) {
 }
 
 const CAPABILITIES_NAMESPACE = 'capabilities';
+const SERVICE_OWNED_NAMESPACES: readonly string[] = [SKILL_SETTINGS_NAMESPACE];
 
 type ScopedDb = Awaited<ReturnType<typeof getUserScopedDb>>['db'];
 
@@ -116,6 +118,18 @@ async function handlePut(request: NextRequest) {
   }
   if (parsed.patch && !parsed.namespace) {
     throw createError.validation('patch requires a namespace');
+  }
+
+  const targetNamespaces = parsed.namespace
+    ? [parsed.namespace]
+    : Object.keys(parsed.settings ?? {});
+  const serviceOwned = targetNamespaces.find((namespace) =>
+    SERVICE_OWNED_NAMESPACES.includes(namespace),
+  );
+  if (serviceOwned) {
+    throw createError.validation(
+      `The ${serviceOwned} settings change only through their own endpoint, not preferences.`,
+    );
   }
 
   const current = await readSettings(db, userId);

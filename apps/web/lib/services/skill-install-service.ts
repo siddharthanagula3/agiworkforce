@@ -5,7 +5,7 @@ import type { Skill } from '@agiworkforce/skills';
 
 import { filterSkillsByInstallOverrides } from './skill-catalog-service';
 
-const SKILL_SETTINGS_NAMESPACE = 'skills';
+export const SKILL_SETTINGS_NAMESPACE = 'skills';
 const SKILL_INSTALLS_KEY = 'installs';
 
 interface UserSettingsRow {

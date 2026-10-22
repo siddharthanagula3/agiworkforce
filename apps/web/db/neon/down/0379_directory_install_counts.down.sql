@@ -10,6 +10,7 @@ drop function if exists public.directory_connector_connection_counts();
 drop function if exists public.skill_install_totals(text[]);
 drop function if exists public.sync_skill_install_counts();
 drop function if exists public.installed_skill_names(jsonb);
+drop function if exists public.directory_count_minimum();
 alter table if exists public.skill_install_counts disable row level security;
 alter table if exists public.skill_install_counts no force row level security;
 drop table if exists public.skill_install_counts;
