@@ -63,7 +63,10 @@ import {
   useDirectoryAdapter,
 } from '@/features/directory';
 import { announceBankConnected } from '@features/finance/lib/announce-bank-connected';
-import { openConnectorAuthorization } from '../lib/open-connector-authorization';
+import {
+  openConnectorAuthorization,
+  requestConnectorConsent,
+} from '../lib/open-connector-authorization';
 import { lockConnectorDirectory } from '../lib/connector-release-lock';
 
 export const CONNECTOR_DETAIL_FOOTER_TESTID = 'connector-detail-footer';
@@ -638,11 +641,14 @@ export function useConnectorsSettingsAdapter({
 
   const startCustomConnectorSignIn = useCallback(
     async (shortId: string, name: string) => {
+      const connectorId = `${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`;
       const target = withConnectorReturnPath(
-        `${CONNECTOR_OAUTH_START_PATH}?connectorId=${encodeURIComponent(`${CUSTOM_CONNECTOR_ID_PREFIX}${shortId}`)}`,
+        `${CONNECTOR_OAUTH_START_PATH}?connectorId=${encodeURIComponent(connectorId)}`,
         currentConnectorReturnPath(),
       );
       if (!target) throw new Error(`Could not connect ${name}.`);
+      const consent = await requestConnectorConsent({ id: connectorId, name });
+      if (!consent) return;
       const res = await fetch(`${target}${target.includes('?') ? '&' : '?'}mode=json`, {
         headers: await authedHeaders(),
         credentials: 'include',
@@ -650,7 +656,7 @@ export function useConnectorsSettingsAdapter({
       const parsed = OAuthStartSchema.safeParse(await res.json().catch(() => null));
       const body = parsed.success ? parsed.data : null;
       if (res.ok && body?.authorizeUrl) {
-        openConnectorAuthorization(body.authorizeUrl, () => void loadConnectors());
+        openConnectorAuthorization(consent, body.authorizeUrl, () => void loadConnectors());
         return;
       }
       throw new Error(
@@ -729,6 +735,8 @@ export function useConnectorsSettingsAdapter({
               currentConnectorReturnPath(),
             );
             if (target) {
+              const consent = await requestConnectorConsent({ id, name });
+              if (!consent) return;
               const probeUrl = `${target}${target.includes('?') ? '&' : '?'}mode=json`;
               const probeRes = await fetch(probeUrl, {
                 headers: await authedHeaders(),
@@ -739,7 +747,11 @@ export function useConnectorsSettingsAdapter({
               );
               const probeBody = probeParsed.success ? probeParsed.data : null;
               if (probeRes.ok && probeBody?.authorizeUrl) {
-                openConnectorAuthorization(probeBody.authorizeUrl, () => void loadConnectors());
+                openConnectorAuthorization(
+                  consent,
+                  probeBody.authorizeUrl,
+                  () => void loadConnectors(),
+                );
                 return;
               }
               throw new Error(
@@ -750,7 +762,9 @@ export function useConnectorsSettingsAdapter({
             }
           }
           if (body?.installStartPath) {
-            openConnectorAuthorization(body.installStartPath, () => void loadConnectors());
+            const consent = await requestConnectorConsent({ id, name });
+            if (!consent) return;
+            openConnectorAuthorization(consent, body.installStartPath, () => void loadConnectors());
             return;
           }
         }

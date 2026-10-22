@@ -29,7 +29,10 @@ import {
 } from '@/features/connectors/lib/plaid-link';
 import { toUserMessage } from '@/lib/user-error-message';
 import { announceBankConnected } from '@features/finance/lib/announce-bank-connected';
-import { openConnectorAuthorization } from '../lib/open-connector-authorization';
+import {
+  openConnectorAuthorization,
+  requestConnectorConsent,
+} from '../lib/open-connector-authorization';
 
 export interface ConnectorStatus {
   connectedIds: Set<string>;
@@ -468,17 +471,15 @@ export function useConnectors(): ConnectorStatus {
             return;
           }
           if (res.status === 409 && body && typeof window !== 'undefined') {
-            if (body.oauthStartPath) {
-              const target = withConnectorReturnPath(
-                body.oauthStartPath,
-                currentConnectorReturnPath(),
-              );
-              if (target) {
-                openConnectorAuthorization(target, retry);
-                return;
-              }
-            } else if (body.installStartPath) {
-              openConnectorAuthorization(body.installStartPath, retry);
+            const start = body.oauthStartPath
+              ? withConnectorReturnPath(body.oauthStartPath, currentConnectorReturnPath())
+              : body.installStartPath;
+            if (start) {
+              const consent = await requestConnectorConsent({
+                id,
+                name: customNames[id] ?? connectorDisplayName(id),
+              });
+              if (consent) openConnectorAuthorization(consent, start, retry);
               return;
             }
           }
@@ -505,7 +506,7 @@ export function useConnectors(): ConnectorStatus {
         });
       }
     },
-    [isSignedIn, retry, router],
+    [customNames, isSignedIn, retry, router],
   );
 
   const connect = useCallback(

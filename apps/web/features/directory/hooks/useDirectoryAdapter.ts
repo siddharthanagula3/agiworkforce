@@ -228,7 +228,11 @@ import {
   toSkillSection,
   uninstallSkill,
 } from '../services/skills-directory';
-import { openConnectorAuthorization } from '@/features/connectors/lib/open-connector-authorization';
+import { connectorDisplayName } from '@/features/connectors/hooks/use-connectors';
+import {
+  openConnectorAuthorization,
+  requestConnectorConsent,
+} from '@/features/connectors/lib/open-connector-authorization';
 import { isDesktopHost } from '@/features/desktop-host/lib/host';
 import { downloadInWindow } from '@/features/desktop-host/lib/in-window-download';
 
@@ -1265,7 +1269,13 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         ? withConnectorReturnPath(body.oauthStartPath, currentConnectorReturnPath())
         : body?.installStartPath;
       if (start && typeof window !== 'undefined') {
-        openConnectorAuthorization(start, () => void loadConnectors());
+        const consent = await requestConnectorConsent({
+          id,
+          name:
+            connectorPageRef.current.records.find((record) => record.id === id)?.name ??
+            connectorDisplayName(id),
+        });
+        if (consent) openConnectorAuthorization(consent, start, () => void loadConnectors());
         return;
       }
       const failure = ConnectorErrorResponseSchema.safeParse(raw);

@@ -17,6 +17,12 @@ vi.mock('@/features/directory', () => ({
 }));
 
 const toastWarning = vi.hoisted(() => vi.fn());
+const askConnectorConsent = vi.hoisted(() =>
+  vi.fn<(connector: { id: string; name: string }) => Promise<boolean>>(),
+);
+vi.mock('@/features/connectors/components/ConnectorConsentDialog', () => ({
+  askConnectorConsent,
+}));
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), success: vi.fn(), info: vi.fn(), warning: toastWarning },
 }));
@@ -677,5 +683,47 @@ describe('account-wide connector switch', () => {
 
     expect(screen.getByRole('switch', { name: /Notion/ })).toBeDisabled();
     expect(screen.getByRole('button', { name: 'Retry' })).toBeVisible();
+  });
+});
+
+describe('connecting through a provider sign-in', () => {
+  it('asks for consent first and starts no sign-in when the user denies', async () => {
+    askConnectorConsent.mockResolvedValue(false);
+    const fetchMock = vi.fn(async (input: unknown, init?: RequestInit) => {
+      const url = String(input);
+      if (url === '/api/connectors' && init?.method === 'POST') {
+        return {
+          ok: false,
+          status: 409,
+          clone() {
+            return this;
+          },
+          json: async () => ({
+            error: 'This connector connects through OAuth authorization.',
+            connectorId: 'linear',
+            oauthStartPath: '/api/connectors/oauth/start?connectorId=linear',
+          }),
+        };
+      }
+      const body = url.includes('/api/connectors/custom')
+        ? { connectors: [] }
+        : url.includes('/api/github/installations')
+          ? { installations: [] }
+          : { connectors: [], available: [] };
+      return { ok: true, status: 200, json: async () => body };
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    renderAdapter();
+    await waitFor(() => expect(directoryOptions.current).not.toBeNull());
+
+    const connect = directoryOptions.current?.['onConnectConnector'] as (
+      id: string,
+    ) => Promise<void>;
+    await connect('linear');
+
+    expect(askConnectorConsent).toHaveBeenCalledWith(expect.objectContaining({ id: 'linear' }));
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes('oauth/start'))).toBe(
+      false,
+    );
   });
 });

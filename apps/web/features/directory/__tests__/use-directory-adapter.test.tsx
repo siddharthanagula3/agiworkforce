@@ -34,6 +34,13 @@ vi.mock('@/lib/client/csrf', () => ({
   getCsrfToken: vi.fn().mockResolvedValue('token'),
 }));
 
+const askConnectorConsent = vi.hoisted(() =>
+  vi.fn<(connector: { id: string; name: string }) => Promise<boolean>>(),
+);
+vi.mock('@/features/connectors/components/ConnectorConsentDialog', () => ({
+  askConnectorConsent,
+}));
+
 afterEach(() => {
   vi.unstubAllGlobals();
 });
@@ -511,6 +518,40 @@ describe('useDirectoryAdapter connector credentials', () => {
       await result.current.install?.('connectors', 'a');
     });
     expect(isValidElement(result.current.renderCredentialForm?.('connectors', 'a'))).toBe(true);
+  });
+
+  it('names the server in the consent request and starts no sign-in when denied', async () => {
+    askConnectorConsent.mockResolvedValue(false);
+    const before = window.location.href;
+    const fetchMock = vi.fn((input: string, init?: RequestInit) => {
+      if (input === '/api/connectors' && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: false,
+          status: 409,
+          json: () =>
+            Promise.resolve({
+              error: 'Needs a sign-in',
+              connectorId: 'a',
+              oauthStartPath: '/api/connectors/oauth/start?connectorId=a',
+            }),
+        });
+      }
+      if (input.startsWith('/api/connectors/directory')) {
+        return Promise.resolve(page([record('a', { name: 'Acme Data' })], 1, null));
+      }
+      return Promise.resolve(connectedResponse([]));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('connectors', DEFAULT_DIRECTORY_QUERY);
+    });
+    await act(async () => {
+      await result.current.install?.('connectors', 'a');
+    });
+    expect(askConnectorConsent).toHaveBeenCalledWith({ id: 'a', name: 'Acme Data' });
+    expect(window.location.href).toBe(before);
+    expect(fetchMock.mock.calls.some(([input]) => input.includes('oauth/start'))).toBe(false);
   });
 
   it('keeps Top connectors to the first page even when later pages are featured', async () => {

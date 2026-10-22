@@ -7,6 +7,9 @@ const toastInfo = vi.fn();
 const toastWarning = vi.fn();
 const routerPush = vi.hoisted(() => vi.fn());
 const clerkUserState = vi.hoisted(() => ({ isLoaded: true, isSignedIn: true }));
+const askConnectorConsent = vi.hoisted(() =>
+  vi.fn<(connector: { id: string; name: string }) => Promise<boolean>>(),
+);
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: routerPush }),
@@ -23,6 +26,10 @@ vi.mock('sonner', () => ({
 
 vi.mock('@clerk/nextjs', () => ({
   useUser: () => clerkUserState,
+}));
+
+vi.mock('@/features/connectors/components/ConnectorConsentDialog', () => ({
+  askConnectorConsent,
 }));
 
 vi.mock('@/lib/client/csrf', () => ({
@@ -68,6 +75,10 @@ function jsonResponse(status: number, body: unknown) {
 }
 
 const originalLocation = Object.getOwnPropertyDescriptor(window, 'location');
+
+beforeEach(() => {
+  askConnectorConsent.mockResolvedValue(true);
+});
 
 describe('useConnectors, OAuth grants', () => {
   beforeEach(() => {
@@ -216,6 +227,35 @@ describe('useConnectors, OAuth grants', () => {
     expect(target.pathname).toBe('/api/connectors/oauth/start');
     expect(target.searchParams.get('connectorId')).toBe('linear');
     expect(target.searchParams.get('returnPath')).toBe('/connectors?category=Developer');
+    expect(toastError).not.toHaveBeenCalled();
+    expect(askConnectorConsent).toHaveBeenCalledWith({ id: 'linear', name: 'Linear' });
+  });
+
+  it('stays on the page and lists nothing as connected when the user denies consent', async () => {
+    const location = stubLocation('https://app.example.com/connectors');
+    askConnectorConsent.mockResolvedValue(false);
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValueOnce(jsonResponse(200, { connectors: [], available: ['linear'] }))
+      .mockResolvedValueOnce(
+        jsonResponse(409, {
+          error: 'This connector connects through OAuth authorization, not a directory toggle.',
+          connectorId: 'linear',
+          oauthStartPath: '/api/connectors/oauth/start?connectorId=linear',
+        }),
+      );
+    vi.stubGlobal('fetch', fetchMock);
+
+    const { result } = renderHook(() => useConnectors());
+    await waitFor(() => expect(result.current.loading).toBe(false));
+
+    await act(async () => {
+      await result.current.connect('linear', 'oauth');
+    });
+
+    expect(location.current).toBe('https://app.example.com/connectors');
+    expect(result.current.connectedIds.has('linear')).toBe(false);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
     expect(toastError).not.toHaveBeenCalled();
   });
 
