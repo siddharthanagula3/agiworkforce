@@ -281,11 +281,8 @@ export function MemoryEditor({
                   'Not saved to your account. Delete it or add it again.'
                 ) : (
                   <>
-                    <FactOrigin fact={fact} conversationHref={conversationHref} />{' '}
-                    {formatRelativeDate(fact.createdAt)}
-                    {fact.updatedAt !== fact.createdAt
-                      ? ` · edited ${formatRelativeDate(fact.updatedAt)}`
-                      : ''}
+                    <FactOrigin fact={fact} conversationHref={conversationHref} />
+                    {updatedLabel(fact)}
                   </>
                 )}
               </span>
@@ -518,16 +515,12 @@ function syncStatusLabel(status: MemoryEditorSyncStatus, isAccountScoped: boolea
   }
 }
 
-function formatRelativeDate(iso: string): string {
-  const then = new Date(iso).getTime();
-  if (Number.isNaN(then)) return 'just now';
-  const diff = Date.now() - then;
-  const minutes = Math.round(diff / 60000);
-  if (minutes < 1) return 'just now';
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return new Date(iso).toLocaleDateString();
+function updatedLabel(fact: MemoryFact): string {
+  const date = new Date(fact.updatedAt || fact.createdAt);
+  if (Number.isNaN(date.getTime())) return '';
+  const options: Intl.DateTimeFormatOptions =
+    date.getFullYear() === new Date().getFullYear()
+      ? { month: 'short', day: 'numeric' }
+      : { month: 'short', day: 'numeric', year: 'numeric' };
+  return ` · Updated ${new Intl.DateTimeFormat(undefined, options).format(date)}`;
 }
