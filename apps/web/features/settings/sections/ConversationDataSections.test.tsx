@@ -138,7 +138,11 @@ describe('Web conversation data settings', () => {
     mocks.revokeShare.mockResolvedValue(undefined);
     mocks.listPublished.mockResolvedValue([]);
     mocks.unpublish.mockResolvedValue(undefined);
-    mocks.historyStats.mockResolvedValue({ conversationCount: 1, messageCount: 1 });
+    mocks.historyStats.mockResolvedValue({
+      conversationCount: 1,
+      activeConversationCount: 1,
+      messageCount: 1,
+    });
     useChatStore.setState({
       conversations: [storeConversation],
       activeConversationId: null,
@@ -344,7 +348,11 @@ describe('Web conversation data settings', () => {
   });
 
   it('scopes delete-all by the current-workspace total, not the pages the sidebar holds', async () => {
-    mocks.historyStats.mockResolvedValue({ conversationCount: 812, messageCount: 9001 });
+    mocks.historyStats.mockResolvedValue({
+      conversationCount: 812,
+      activeConversationCount: 800,
+      messageCount: 9001,
+    });
 
     render(<PrivacySection />);
     fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));
@@ -357,8 +365,40 @@ describe('Web conversation data settings', () => {
     expect(description).not.toContain(`${useChatStore.getState().conversations.length} chat`);
   });
 
+  it('states the number of active chats before archiving all of them', async () => {
+    mocks.historyStats.mockResolvedValue({
+      conversationCount: 812,
+      activeConversationCount: 640,
+      messageCount: 9001,
+    });
+
+    render(<PrivacySection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
+
+    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
+    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
+    expect(description).toContain('640');
+    expect(description).not.toContain('812');
+  });
+
+  it('falls back to the unnumbered archive text when the count cannot be read', async () => {
+    mocks.historyStats.mockRejectedValue(new Error('offline'));
+
+    render(<PrivacySection />);
+    fireEvent.click(screen.getByRole('button', { name: 'Archive all' }));
+
+    await waitFor(() => expect(mocks.bulkAction).toHaveBeenCalledWith('archive_all'));
+    const description = confirmStub.confirm.mock.lastCall?.[0].description ?? '';
+    expect(description).toContain('Every chat in the current workspace');
+    expect(description).not.toMatch(/\d/);
+  });
+
   it('does not claim a soft delete is irreversible', async () => {
-    mocks.historyStats.mockResolvedValue({ conversationCount: 3, messageCount: 9 });
+    mocks.historyStats.mockResolvedValue({
+      conversationCount: 3,
+      activeConversationCount: 3,
+      messageCount: 9,
+    });
 
     render(<PrivacySection />);
     fireEvent.click(screen.getByRole('button', { name: 'Delete all' }));

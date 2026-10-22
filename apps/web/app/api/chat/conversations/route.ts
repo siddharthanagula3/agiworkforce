@@ -126,10 +126,15 @@ async function handleGetConversations(request: NextRequest) {
             params,
           ),
       includeHistoryStats
-        ? db.query<{ conversation_count: string; message_count: string }>(
+        ? db.query<{
+            conversation_count: string;
+            active_conversation_count: string;
+            message_count: string;
+          }>(
             `
               select
                 count(*)::text as conversation_count,
+                (count(*) filter (where archived = false))::text as active_conversation_count,
                 coalesce(
                   sum(
                     (select count(*)
@@ -159,6 +164,7 @@ async function handleGetConversations(request: NextRequest) {
     const historyStats = historyStatsRow
       ? {
           conversationCount: Number(historyStatsRow.conversation_count),
+          activeConversationCount: Number(historyStatsRow.active_conversation_count),
           messageCount: Number(historyStatsRow.message_count),
         }
       : undefined;

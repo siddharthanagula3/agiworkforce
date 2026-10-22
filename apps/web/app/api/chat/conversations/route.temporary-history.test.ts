@@ -76,6 +76,16 @@ describe('the conversation history listing', () => {
     }
   });
 
+  it('counts only unarchived chats for the active total, in the same excluded set', async () => {
+    await GET(new NextRequest(url('?includeHistoryStats=1&statsOnly=1')));
+
+    const stats = statementsAgainstConversations().find((sql) =>
+      sql.includes('active_conversation_count'),
+    );
+    expect(stats).toMatch(/filter \(where archived = false\)/);
+    expect(stats).toMatch(/is_temporary = false/);
+  });
+
   it('keeps the exclusion on the title search, so a temporary chat is unfindable', async () => {
     await GET(new NextRequest(url('?q=quarterly%20numbers')));
 

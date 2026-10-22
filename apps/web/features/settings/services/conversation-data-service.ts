@@ -143,12 +143,14 @@ export async function deleteManagedConversation(id: string): Promise<void> {
 const ConversationHistoryStatsSchema = z.object({
   historyStats: z.object({
     conversationCount: z.number().int().nonnegative(),
+    activeConversationCount: z.number().int().nonnegative(),
     messageCount: z.number().int().nonnegative(),
   }),
 });
 
 export interface ConversationHistoryStats {
   conversationCount: number;
+  activeConversationCount: number;
   messageCount: number;
 }
 

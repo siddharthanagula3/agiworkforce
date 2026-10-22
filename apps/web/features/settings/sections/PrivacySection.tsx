@@ -295,10 +295,22 @@ export function PrivacySection() {
   }
 
   async function handleArchiveAllChats() {
+    let activeCount: number | null = null;
+    try {
+      activeCount = (await fetchConversationHistoryStats()).activeConversationCount;
+    } catch {
+      activeCount = null;
+    }
+    const scope =
+      activeCount === null
+        ? 'Every chat in the current workspace will move out of the sidebar'
+        : translateUiPlural('settings', 'counts.chatsToArchive', activeCount, {
+            one: '{{count}} chat in the current workspace will move out of the sidebar',
+            other: 'All {{count}} chats in the current workspace will move out of the sidebar',
+          });
     const confirmed = await confirmDestructive({
       title: 'Archive all chats in this workspace?',
-      description:
-        'Every chat in the current workspace will move out of the sidebar. You can restore them from Archived chats at any time; this does not delete anything.',
+      description: `${scope}. You can restore them from Archived chats at any time; this does not delete anything.`,
       confirmText: 'Archive all',
       variant: 'default',
     });
