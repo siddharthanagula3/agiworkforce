@@ -198,7 +198,7 @@ export const DESKTOP_SETTINGS_SEARCH_INDEX: DesktopSettingSearchEntry[] = [
   {
     id: 'chrome-bridge',
     tab: 'agi-in-chrome',
-    label: 'AGI in Chrome',
+    label: 'AGI Extension',
     description: 'Review the browser extension and native bridge.',
     keywords: ['browser extension', 'native messaging'],
   },

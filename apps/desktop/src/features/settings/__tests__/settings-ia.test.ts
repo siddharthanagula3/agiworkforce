@@ -28,7 +28,7 @@ describe('desktop settings IA · nav ↔ render consistency', () => {
       'Capabilities',
       'Connectors',
       'AGI Code',
-      'AGI in Chrome',
+      'AGI Extension',
       'Extensions',
       'Developer',
     ];

@@ -13,7 +13,7 @@ const NAV_LABELS = [
   'Cowork',
   'Connectors',
   'AGI Code',
-  'AGI in Chrome',
+  'AGI Extension',
   'Plugins',
   'Agents',
   'Memory',

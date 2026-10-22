@@ -170,7 +170,7 @@ const SETTINGS_TABS = [
   'Agents',
   'Connectors',
   'AGI Code',
-  'AGI in Chrome',
+  'AGI Extension',
   'Plugins',
   'Memory',
   'Notifications',
