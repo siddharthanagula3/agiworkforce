@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { buildArtifactEditRequest, normalizeEditInstruction } from './artifact-edit-request';
+import {
+  artifactReplyFormat,
+  buildArtifactEditRequest,
+  normalizeEditInstruction,
+} from './artifact-edit-request';
+import { MAX_INSIGHTS, MAX_KPI_TILES } from './presentation/deck-insights';
 
 const SELECTION = {
   selector: 'main > button#go',
@@ -51,5 +56,22 @@ describe('normalizeEditInstruction', () => {
   it('trims and bounds the instruction', () => {
     expect(normalizeEditInstruction('  hi  ')).toBe('hi');
     expect(normalizeEditInstruction('x'.repeat(5_000))).toHaveLength(2_000);
+  });
+});
+
+describe('artifactReplyFormat', () => {
+  it('tells a deck reply about the kpi and insights fences and their limits', () => {
+    const format = artifactReplyFormat('presentation');
+
+    expect(format).toContain('```kpi');
+    expect(format).toContain('Label | Value | optional note');
+    expect(format).toContain(`at most ${MAX_KPI_TILES}`);
+    expect(format).toContain('```insights');
+    expect(format).toContain(`at most ${MAX_INSIGHTS}`);
+  });
+
+  it('keeps the deck fences out of document and generic replies', () => {
+    expect(artifactReplyFormat('document')).not.toContain('kpi');
+    expect(artifactReplyFormat(undefined)).not.toContain('kpi');
   });
 });
