@@ -1634,6 +1634,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       ...(resetAt && !isDesktopHost()
         ? { onRemindAtReset: () => requestUsageResetReminder(resetAt) }
         : {}),
+      ...(recoveryAction === 'top_up' &&
+      subscription?.tier &&
+      !isFreeBillingPlanTier(subscription.tier)
+        ? { creditTopUpTier: subscription.tier }
+        : {}),
       ...(accountUsageBlock.showUpgradeCta === false
         ? {}
         : {
@@ -1645,7 +1650,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               ),
           }),
     };
-  }, [accountUsageBlock, handleOpenUpgradeDialog, openSettings]);
+  }, [accountUsageBlock, handleOpenUpgradeDialog, openSettings, subscription?.tier]);
 
   const { usage: managedUsageSummary, refresh: refreshManagedUsageSummary } =
     useManagedUsageSummary();

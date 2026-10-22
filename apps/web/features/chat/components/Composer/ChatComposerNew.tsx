@@ -43,6 +43,7 @@ import { SendButton } from './SendButton';
 import { ComposerInput } from './ComposerInput';
 import { ImageMaskDialog, type ImageMaskResult } from './ImageMaskDialog';
 import { ComposerFooter } from './ComposerFooter';
+import { WorkUsageCard } from '../WorkUsageCard';
 import { freeQuotaSelection, promotionalChatToolConflict } from '../../lib/free-quota-selection';
 import { useFreeModelPromotion } from '@features/chat/hooks/use-free-model-promotion';
 import {
@@ -542,6 +543,7 @@ interface ChatComposerProps {
     actionLabel?: string;
     onRecover?: () => void;
     onRemindAtReset?: () => Promise<UsageResetReminderOutcome>;
+    creditTopUpTier?: string;
   };
   onSetTemporaryChat?: (isTemporary: boolean) => Promise<boolean>;
   /**
@@ -2638,7 +2640,8 @@ const ChatComposerNewComponent = ({
   const pickerHasSelection = Boolean(activePickerProject || pickerFolderName);
   const pickerPlaceholder = canUseAgiWork ? 'Project or folder' : 'Project';
   const pickerLabel = activePickerProject?.name ?? pickerFolderName ?? pickerPlaceholder;
-  const workScopeBarVisible = canUseAgiWork && workMode === 'agiwork';
+  const agiWorkActive = canUseAgiWork && workMode === 'agiwork';
+  const workScopeBarVisible = agiWorkActive;
   const filteredPickerProjects = projectPicker
     ? projectPicker.projects.filter((p) =>
         p.name.toLowerCase().includes(projectQuery.trim().toLowerCase()),
@@ -4785,7 +4788,39 @@ const ChatComposerNewComponent = ({
         </div>
       )}
 
-      {!trialExhausted && usageBlock && (
+      {!trialExhausted && usageBlock && agiWorkActive && (
+        <WorkUsageCard
+          creditTopUpTier={usageBlock.creditTopUpTier}
+          action={
+            usageBlock.onRecover && usageBlock.actionLabel
+              ? { label: usageBlock.actionLabel, onSelect: usageBlock.onRecover }
+              : undefined
+          }
+          resetLabel={usageBlockResetLabel}
+          footer={
+            onRemindAtReset ? (
+              usageResetReminder && usageResetReminder !== 'pending' ? (
+                <span role="status" data-testid="composer-usage-reminder-status">
+                  {USAGE_RESET_REMINDER_COPY[usageResetReminder]}
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={handleRemindAtReset}
+                  disabled={usageResetReminder === 'pending'}
+                  aria-busy={usageResetReminder === 'pending'}
+                  className="inline-flex min-h-6 items-center gap-1.5 rounded-sm font-semibold text-[var(--chat-text-primary)] underline underline-offset-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)] disabled:cursor-wait"
+                >
+                  {usageResetReminder === 'pending' ? <Spinner size="sm" aria-hidden /> : null}
+                  Notify me when it resets
+                </button>
+              )
+            ) : undefined
+          }
+        />
+      )}
+
+      {!trialExhausted && usageBlock && !agiWorkActive && (
         <div
           role="alert"
           data-testid="composer-usage-block"

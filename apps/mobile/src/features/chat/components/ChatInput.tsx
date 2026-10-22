@@ -54,6 +54,7 @@ import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
+import { WorkUsageCard, resolveWorkUsageRecovery } from './WorkUsageCard';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
@@ -198,6 +199,7 @@ export function ChatInput({
   const selectedModel = useModelStore((s) => s.selectedModel);
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const chatFeatures = useChatStore((s) => s.features);
+  const failureCode = useChatStore((s) => s.failureCode?.code ?? null);
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isClerkSignedIn = useAuthStore((s) => s.isClerkSignedIn);
   const subscriptionTier = useTierStore((s) => s.tier);
@@ -788,6 +790,14 @@ ${current}`
     });
   }, [sendPreview, text, attachments]);
 
+  const agiWorkActive =
+    appMode === 'cloud' &&
+    workMode === 'agiwork' &&
+    canUseBillingPlanCapability(subscriptionTier, 'agi_work');
+  const workUsageRecovery = agiWorkActive
+    ? resolveWorkUsageRecovery(failureCode, subscriptionTier)
+    : null;
+
   const queueLabel = queueSize > 0 ? ` (${queueSize} queued)` : '';
   const placeholder = isStreaming
     ? `Reply to ${modelName}...`
@@ -799,9 +809,7 @@ ${current}`
           ? 'Describe the video to create'
           : isThreadActive
             ? 'Reply to AGI'
-            : appMode === 'cloud' &&
-                workMode === 'agiwork' &&
-                canUseBillingPlanCapability(subscriptionTier, 'agi_work')
+            : agiWorkActive
               ? 'Work with AGI'
               : "What's on your mind?";
 
@@ -827,6 +835,10 @@ ${current}`
           explicit exit, otherwise the next text question silently goes to an
           image/video model. Hidden during capture for the same reason as the
           disclosure above. */}
+      {workUsageRecovery && !isRecording && !isTranscribing ? (
+        <WorkUsageCard recovery={workUsageRecovery} />
+      ) : null}
+
       {mediaMode !== 'text' && !isRecording && !isTranscribing ? (
         <MediaModeChip mode={mediaMode} modelName={mediaModelName} onExit={handleExitMediaMode} />
       ) : null}
