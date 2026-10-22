@@ -69,7 +69,11 @@ import {
   useManagedUsageSummary,
 } from '@/lib/hooks/useManagedUsageSummary';
 import { paywallLimitHeadline, selectUsageWarning } from '@agiworkforce/types';
-import { UsageWarningBanner } from '@agiworkforce/unified-chat';
+import {
+  UsageWarningBanner,
+  isVoiceSessionActive,
+  useCapability,
+} from '@agiworkforce/unified-chat';
 import {
   isTemporaryConversationById,
   persistImageGenerationUserMessage,
@@ -191,6 +195,8 @@ import { useExplicitMemoryCommands } from '../hooks/use-explicit-memory-commands
 import { uploadChatAttachments } from '../services/chat-attachment-upload';
 import { useKeyboardShortcuts } from '../hooks/use-keyboard-shortcuts';
 import { KEYBOARD_SHORTCUT_DOCS } from '../hooks/use-keyboard-shortcuts';
+import { openModelPicker } from '../lib/model-picker-trigger';
+import { extractCodeBlocks } from '../utils/artifact-detector';
 import { useStreamStallReport } from '../hooks/use-stream-stall-report';
 import { useSearchJumpHighlight } from '../hooks/use-text-match-highlight';
 import {
@@ -245,6 +251,7 @@ import { APP_NAV_DESTINATIONS, buildAppNavItems } from '@shared/components/layou
 import { CODE_ROUTES } from '@/features/code/code-surface';
 import { VoiceModeSurface, VOICE_SURFACE_VARIANT } from '../components/Voice/VoiceModeSurface';
 import {
+  exitVoiceSession,
   keepVoiceSessionAcrossNavigation,
   releaseVoiceSessionOnPageExit,
   type VoiceTranscriptTurn,
@@ -5414,6 +5421,41 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     void handleRegenerateMessage(lastAssistantMessage.id);
   }, [lastAssistantMessage, handleRegenerateMessage]);
 
+  const canUseVoice = useCapability('canUseVoice');
+
+  const handleSelectModel = useCallback(() => {
+    openModelPicker();
+  }, []);
+
+  const handleToggleVoice = useCallback(() => {
+    if (isVoiceSessionActive(useVoiceSessionStore.getState().session.status)) {
+      exitVoiceSession();
+      return;
+    }
+    if (canUseVoice && !isStreaming) enterVoiceSession();
+  }, [canUseVoice, isStreaming]);
+
+  const handleSetCustomInstructions = useCallback(() => {
+    openSettings('personalization');
+  }, [openSettings]);
+
+  const handleCopyLastCodeBlock = useCallback(async () => {
+    for (const message of [...displayedMessages].reverse()) {
+      if (message.role !== 'assistant') continue;
+      const block = extractCodeBlocks(message.content ?? '').at(-1);
+      if (!block) continue;
+      const copied = await safeClipboard.writeText(block.content);
+      if (copied) toast.success('Copied to clipboard');
+      else toast.error('Could not copy to clipboard');
+      return;
+    }
+    toast.error('No code block to copy');
+  }, [displayedMessages]);
+
+  const handleDeleteCurrentConversation = useCallback(() => {
+    if (displayedConversationId) handleDeleteSession(displayedConversationId);
+  }, [displayedConversationId, handleDeleteSession]);
+
   // Every binding the shortcuts dialog documents is claimed here; an omitted
   // handler leaves the key unclaimed and the browser default fires instead
   // (⌘⇧C opens the DevTools inspector).
@@ -5426,6 +5468,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     onCopyLastMessage: handleCopyLastMessage,
     onRegenerateLastMessage: handleRegenerateLastMessage,
     onToggleArtifacts: () => toggleSecondaryPanel('artifacts'),
+    onSelectModel: handleSelectModel,
+    onToggleVoice: handleToggleVoice,
+    onSetCustomInstructions: handleSetCustomInstructions,
+    onCopyLastCodeBlock: handleCopyLastCodeBlock,
+    onDeleteConversation: handleDeleteCurrentConversation,
   });
 
   const [retryingResearchMessageId, setRetryingResearchMessageId] = useState<string | null>(null);

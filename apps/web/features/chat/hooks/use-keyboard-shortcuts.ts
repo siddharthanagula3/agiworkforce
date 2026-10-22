@@ -292,6 +292,11 @@ interface UseKeyboardShortcutsOptions {
   onCopyLastMessage?: () => void;
   onRegenerateLastMessage?: () => void;
   onToggleArtifacts?: () => void;
+  onSelectModel?: () => void;
+  onToggleVoice?: () => void;
+  onSetCustomInstructions?: () => void;
+  onCopyLastCodeBlock?: () => void;
+  onDeleteConversation?: () => void;
   enabled?: boolean;
 }
 
@@ -305,6 +310,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     onCopyLastMessage,
     onRegenerateLastMessage,
     onToggleArtifacts,
+    onSelectModel,
+    onToggleVoice,
+    onSetCustomInstructions,
+    onCopyLastCodeBlock,
+    onDeleteConversation,
     enabled = true,
   } = options;
 
@@ -329,6 +339,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
         'copy-last-message': onCopyLastMessage,
         'regenerate-last-message': onRegenerateLastMessage,
         'toggle-artifacts': onToggleArtifacts,
+        'select-model': onSelectModel,
+        'toggle-voice': onToggleVoice,
+        'set-custom-instructions': onSetCustomInstructions,
+        'copy-last-code-block': onCopyLastCodeBlock,
+        'delete-conversation': onDeleteConversation,
       };
 
       const matched = appShortcuts.find(
@@ -357,6 +372,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
       onCopyLastMessage,
       onRegenerateLastMessage,
       onToggleArtifacts,
+      onSelectModel,
+      onToggleVoice,
+      onSetCustomInstructions,
+      onCopyLastCodeBlock,
+      onDeleteConversation,
     ],
   );
 
@@ -376,6 +396,11 @@ export function useKeyboardShortcuts(options: UseKeyboardShortcutsOptions = {}) 
     'copy-last-message': onCopyLastMessage,
     'regenerate-last-message': onRegenerateLastMessage,
     'toggle-artifacts': onToggleArtifacts,
+    'select-model': onSelectModel,
+    'toggle-voice': onToggleVoice,
+    'set-custom-instructions': onSetCustomInstructions,
+    'copy-last-code-block': onCopyLastCodeBlock,
+    'delete-conversation': onDeleteConversation,
   };
   const shortcuts: KeyboardShortcut[] = appShortcuts.map((doc) => ({
     ...doc,

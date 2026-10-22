@@ -163,6 +163,7 @@ import {
   BUILT_IN_SLASH_COMMANDS,
   COMPOSER_FOLLOW_UP_INVERT_SHORTCUT,
   decideComposerPaste,
+  findShortcut,
   matchMentionQuery,
   matchesShortcut,
   pastedCodeFence,
@@ -619,6 +620,11 @@ const KEY_ENTER = 'Enter';
 const KEY_TAB = 'Tab';
 /** Focus after the commit that caused it has been painted, not during it. */
 const FOCUS_AFTER_COMMIT_MS = 0;
+function matchesComposerShortcut(event: React.KeyboardEvent, id: string): boolean {
+  const shortcut = findShortcut(id);
+  return shortcut !== undefined && matchesShortcut(event, shortcut, safePlatform.isMac());
+}
+
 /** Dictation settles its own transcript before the caret is moved. */
 const FOCUS_AFTER_TRANSCRIPT_MS = 50;
 
@@ -1942,6 +1948,8 @@ const ChatComposerNewComponent = ({
   });
 
   const startDictation = dictation.start;
+  const stopDictation = dictation.stop;
+  const dictationActive = dictation.isActive;
   const canUseVoice = useCapability('canUseVoice');
   const enterVoiceMode = useCallback(() => {
     onEnterVoiceMode?.();
@@ -4223,6 +4231,20 @@ const ChatComposerNewComponent = ({
         return;
       }
 
+      if (!composing && !showSlashMenu) {
+        if (matchesComposerShortcut(e, 'composer-add-files')) {
+          e.preventDefault();
+          if (!attachmentsUnavailable) fileInputRef.current?.click();
+          return;
+        }
+        if (matchesComposerShortcut(e, 'composer-toggle-dictation')) {
+          e.preventDefault();
+          if (dictationActive) stopDictation();
+          else startDictation();
+          return;
+        }
+      }
+
       if (
         !composing &&
         !showSlashMenu &&
@@ -4280,6 +4302,10 @@ const ChatComposerNewComponent = ({
       mentionItems.length,
       commitActiveMention,
       composerExpanded,
+      attachmentsUnavailable,
+      dictationActive,
+      stopDictation,
+      startDictation,
     ],
   );
 

@@ -54,6 +54,11 @@ const HANDLER_KEYS = [
   'onCopyLastMessage',
   'onRegenerateLastMessage',
   'onToggleArtifacts',
+  'onSelectModel',
+  'onToggleVoice',
+  'onSetCustomInstructions',
+  'onCopyLastCodeBlock',
+  'onDeleteConversation',
 ] as const;
 
 type HandlerKey = (typeof HANDLER_KEYS)[number];
@@ -76,6 +81,11 @@ describe('KEYBOARD_SHORTCUT_DOCS', () => {
       'Copy last message',
       'Regenerate last message',
       'Toggle artifacts panel',
+      'Select model',
+      'Toggle voice',
+      'Set custom instructions',
+      'Copy last code block',
+      'Delete chat',
     ]);
   });
 
@@ -127,6 +137,8 @@ describe('KEYBOARD_SHORTCUT_DOCS', () => {
       'composer-follow-up-invert',
       'composer-stop',
       'composer-edit-last',
+      'composer-add-files',
+      'composer-toggle-dictation',
     ]);
   });
 });
@@ -141,6 +153,11 @@ describe('useKeyboardShortcuts bindings', () => {
     ['c', { meta: true, shift: true }, 'onCopyLastMessage'],
     ['r', { meta: true, shift: true }, 'onRegenerateLastMessage'],
     ['a', { meta: true, shift: true }, 'onToggleArtifacts'],
+    ['k', { meta: true, shift: true }, 'onSelectModel'],
+    ['y', { meta: true, shift: true }, 'onToggleVoice'],
+    ['h', { meta: true, shift: true }, 'onSetCustomInstructions'],
+    ['x', { meta: true, shift: true }, 'onCopyLastCodeBlock'],
+    ['Backspace', { meta: true, shift: true }, 'onDeleteConversation'],
   ] as const)('fires %s for %s', (key, modifiers, handlerKey) => {
     const { handlers } = renderWithSpies();
 

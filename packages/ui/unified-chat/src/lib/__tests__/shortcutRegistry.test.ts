@@ -44,6 +44,31 @@ describe('CHAT_SHORTCUTS', () => {
     ).toEqual([]);
   });
 
+  it('registers the model, voice, instructions, code block, delete, files and dictation keys', () => {
+    const chordOf = (id: string) =>
+      formatShortcutKeys(
+        CHAT_SHORTCUTS.find((shortcut) => shortcut.id === id)!,
+        false,
+      ).join('+');
+    expect({
+      model: chordOf('select-model'),
+      voice: chordOf('toggle-voice'),
+      instructions: chordOf('set-custom-instructions'),
+      codeBlock: chordOf('copy-last-code-block'),
+      remove: chordOf('delete-conversation'),
+      files: chordOf('composer-add-files'),
+      dictation: chordOf('composer-toggle-dictation'),
+    }).toEqual({
+      model: 'Ctrl+Shift+K',
+      voice: 'Ctrl+Shift+Y',
+      instructions: 'Ctrl+Shift+H',
+      codeBlock: 'Ctrl+Shift+X',
+      remove: 'Ctrl+Shift+Backspace',
+      files: 'Ctrl+Shift+U',
+      dictation: 'Ctrl+Shift+S',
+    });
+  });
+
   it('gives every binding an id of its own', () => {
     const ids = CHAT_SHORTCUTS.map((shortcut) => shortcut.id);
     expect(new Set(ids).size).toBe(ids.length);
