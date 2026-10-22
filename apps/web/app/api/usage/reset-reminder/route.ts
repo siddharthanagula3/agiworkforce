@@ -15,7 +15,7 @@ import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getKeyValueStore } from '@/lib/server/key-value';
 import { getUserScopedDb } from '@/lib/server/rls-db';
-import { usageResetReminderEnabled } from '@/lib/workflows/steps/send-usage-reset-reminder';
+import { usageResetReminderEnabled } from '@/lib/workflows/usage-reset-reminder-preference';
 import { usageResetReminderWorkflow } from '@/lib/workflows/usage-reset-reminder-workflow';
 
 function reminderKey(userId: string, resetAt: string): string {

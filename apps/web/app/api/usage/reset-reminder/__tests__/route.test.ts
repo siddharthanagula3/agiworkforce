@@ -12,7 +12,7 @@ vi.mock('workflow/api', () => ({ start: mocks.start }));
 vi.mock('@/lib/workflows/usage-reset-reminder-workflow', () => ({
   usageResetReminderWorkflow: vi.fn(),
 }));
-vi.mock('@/lib/workflows/steps/send-usage-reset-reminder', () => ({
+vi.mock('@/lib/workflows/usage-reset-reminder-preference', () => ({
   usageResetReminderEnabled: vi.fn(async () => mocks.enabled),
 }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn(async () => null) }));

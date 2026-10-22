@@ -1,9 +1,10 @@
 import 'server-only';
 
-import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import { sendPushToUser } from '@/lib/services/push-notification-service';
 import { logger } from '@/lib/logger';
+import { createClaimedUserScopedDb } from '@/lib/server/claimed-user-scope-db';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { usageResetReminderEnabled } from '@/lib/workflows/usage-reset-reminder-preference';
 
 export const USAGE_RESET_REMINDER_NOTICE = {
   title: 'Your AGI usage limit has reset',
@@ -12,26 +13,11 @@ export const USAGE_RESET_REMINDER_NOTICE = {
 
 export const USAGE_RESET_REMINDER_TYPE = 'usage_limit_reset';
 
-export const USAGE_RESET_PREFERENCE_KEY = 'pushUsageReset';
-
-export async function usageResetReminderEnabled(
-  db: Pick<DatabaseAdapter, 'query'>,
-  userId: string,
-): Promise<boolean> {
-  const [row] = await db.query<{ enabled: boolean | null }>(
-    `select (settings -> 'notifications' ->> $2) is distinct from 'false' as enabled
-       from public.user_settings
-      where user_id = $1
-      limit 1`,
-    [userId, USAGE_RESET_PREFERENCE_KEY],
-  );
-  return row?.enabled ?? true;
-}
-
 export async function sendUsageResetReminderStep(userId: string): Promise<number> {
   'use step';
 
-  if (!(await usageResetReminderEnabled(getNeonDb(), userId))) return 0;
+  const db = createClaimedUserScopedDb(getNeonDb(), { userId, organizationId: null });
+  if (!(await usageResetReminderEnabled(db, userId))) return 0;
 
   const result = await sendPushToUser(userId, {
     ...USAGE_RESET_REMINDER_NOTICE,

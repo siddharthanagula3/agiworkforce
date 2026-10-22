@@ -1,27 +1,35 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ sendPushToUser: vi.fn(), query: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  sendPushToUser: vi.fn(),
+  query: vi.fn(),
+  claimedScope: vi.fn(),
+}));
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/push-notification-service', () => ({
   sendPushToUser: mocks.sendPushToUser,
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mocks.query }) }));
+vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ transaction: vi.fn() }) }));
+vi.mock('@/lib/server/claimed-user-scope-db', () => ({
+  createClaimedUserScopedDb: (_serviceDb: unknown, scope: unknown) => {
+    mocks.claimedScope(scope);
+    return { query: mocks.query };
+  },
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
-const {
-  sendUsageResetReminderStep,
-  usageResetReminderEnabled,
-  USAGE_RESET_REMINDER_NOTICE,
-  USAGE_RESET_REMINDER_TYPE,
-} = await import('../steps/send-usage-reset-reminder');
+const { sendUsageResetReminderStep, USAGE_RESET_REMINDER_NOTICE, USAGE_RESET_REMINDER_TYPE } =
+  await import('../steps/send-usage-reset-reminder');
+const { usageResetReminderEnabled } = await import('../usage-reset-reminder-preference');
 
 describe('sendUsageResetReminderStep', () => {
   beforeEach(() => {
     mocks.sendPushToUser.mockReset();
     mocks.query.mockReset();
+    mocks.claimedScope.mockReset();
     mocks.query.mockResolvedValue([{ enabled: true }]);
   });
 
@@ -34,6 +42,14 @@ describe('sendUsageResetReminderStep', () => {
       ...USAGE_RESET_REMINDER_NOTICE,
       data: { type: USAGE_RESET_REMINDER_TYPE, url: '/chat' },
     });
+  });
+
+  it('reads the preference as the account being notified', async () => {
+    mocks.sendPushToUser.mockResolvedValue({ sent: 1, invalidated: 0 });
+
+    await sendUsageResetReminderStep('user-1');
+
+    expect(mocks.claimedScope).toHaveBeenCalledWith({ userId: 'user-1', organizationId: null });
   });
 
   it('sends nothing when the account turned usage notifications off', async () => {
