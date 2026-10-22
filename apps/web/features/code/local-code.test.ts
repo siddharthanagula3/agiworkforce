@@ -43,6 +43,15 @@ import {
   localReviewComment,
   localReviewCommentsMessage,
   localReviewLines,
+  LOCAL_FILES_SHORTCUT,
+  LOCAL_REVIEW_SHORTCUT,
+  LOCAL_TERMINAL_SHORTCUT,
+  isLocalFilesShortcut,
+  isLocalReviewShortcut,
+  isLocalTerminalShortcut,
+  localFolderName,
+  localShortcutBadge,
+  localTerminalTabLabel,
 } from './local-code';
 
 const session: LocalDeveloperSession = {
@@ -918,5 +927,41 @@ describe('review comments on a change', () => {
         "2. b.ts, line 1 (`keep 'this'`): Rename it",
       ].join('\n'),
     );
+  });
+});
+
+describe('the workspace panel helpers', () => {
+  it('names the terminal after the folder, as a shell prompt does', () => {
+    expect(localFolderName('/Users/qa/agiworkforce', 'fallback')).toBe('agiworkforce');
+    expect(localFolderName('C:\\work\\qa-project\\', 'fallback')).toBe('qa-project');
+    expect(localFolderName('', 'qa-project')).toBe('qa-project');
+  });
+
+  it('numbers the second and later terminal tabs so each close button names one tab', () => {
+    expect(localTerminalTabLabel('app', 1)).toBe('app');
+    expect(localTerminalTabLabel('app', 2)).toBe('app (2)');
+  });
+
+  it('prints the review and files chords per platform', () => {
+    expect(localShortcutBadge(LOCAL_REVIEW_SHORTCUT, true)).toBe('⌘⇧G');
+    expect(localShortcutBadge(LOCAL_REVIEW_SHORTCUT, false)).toBe('Ctrl+Shift+G');
+    expect(localShortcutBadge(LOCAL_FILES_SHORTCUT, true)).toBe('⌘P');
+    expect(localShortcutBadge(LOCAL_TERMINAL_SHORTCUT, true)).toBe('⌃`');
+    expect(localShortcutBadge(LOCAL_TERMINAL_SHORTCUT, false)).toBe('Ctrl+`');
+  });
+
+  it('opens the terminal on Control+` on a Mac, not on Cmd+`, which switches windows', () => {
+    const event = { key: '`', shiftKey: false, metaKey: false, ctrlKey: true, altKey: false };
+    expect(isLocalTerminalShortcut(event, true)).toBe(true);
+    expect(isLocalTerminalShortcut(event, false)).toBe(true);
+    expect(isLocalTerminalShortcut({ ...event, metaKey: true, ctrlKey: false }, true)).toBe(false);
+  });
+
+  it('matches the chords the badges print', () => {
+    const event = { key: 'g', shiftKey: true, metaKey: true, ctrlKey: false, altKey: false };
+    expect(isLocalReviewShortcut(event)).toBe(true);
+    expect(isLocalReviewShortcut({ ...event, shiftKey: false })).toBe(false);
+    expect(isLocalFilesShortcut({ ...event, key: 'p', shiftKey: false })).toBe(true);
+    expect(isLocalFilesShortcut({ ...event, key: 'p' })).toBe(false);
   });
 });

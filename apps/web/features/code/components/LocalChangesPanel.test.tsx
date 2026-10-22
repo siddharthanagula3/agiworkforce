@@ -4,7 +4,6 @@ import { describe, expect, it, vi } from 'vitest';
 import type { FileTextContent, WorkingTreeChanges } from '@agiworkforce/local-runtime-contract';
 type ScanModule0 = typeof import('@/features/desktop-host');
 type ScanModule1 = typeof import('./LocalPullRequest');
-type ScanModule2 = typeof import('./LocalTerminal');
 
 const readDeveloperSessionChanges = vi.fn();
 const discardDeveloperSessionChanges = vi.fn();
@@ -23,14 +22,6 @@ vi.mock('./LocalPullRequest', async (importOriginal) => ({
   LocalPullRequest: () => null,
 }));
 vi.mock('./LocalRunningCommands', () => ({ LocalRunningCommands: () => null }));
-vi.mock('./LocalTerminal', async (importOriginal) => ({
-  ...(await importOriginal<ScanModule2>()),
-  LocalTerminal: ({ onCommandFinished }: { onCommandFinished: () => void }) => (
-    <button type="button" onClick={onCommandFinished}>
-      Run the formatter
-    </button>
-  ),
-}));
 
 const { LocalChangesPanel } = await import('./LocalChangesPanel');
 
@@ -48,20 +39,31 @@ function onDisk(path: string, text: string, sha256: string): FileTextContent {
   return { path, text, sizeBytes: text.length, modifiedAtMs: 1, truncated: false, sha256 };
 }
 
-function renderPanel(sessionBusy = false) {
-  const onClose = vi.fn();
-  const onReview = vi.fn();
-  render(
+function panel(
+  refreshKey: number,
+  sessionBusy: boolean,
+  onClose: () => void,
+  onReview: () => void,
+) {
+  return (
     <LocalChangesPanel
       rootId="root-1"
       title="Tidy"
-      refreshKey={0}
+      refreshKey={refreshKey}
+      runningCommandsKey={0}
       sessionBusy={sessionBusy}
       onReview={onReview}
       onClose={onClose}
-    />,
+    />
   );
-  return { onClose, onReview };
+}
+
+function renderPanel(sessionBusy = false) {
+  const onClose = vi.fn();
+  const onReview = vi.fn();
+  const view = render(panel(0, sessionBusy, onClose, onReview));
+  const terminalCommandFinished = () => view.rerender(panel(1, sessionBusy, onClose, onReview));
+  return { onClose, onReview, terminalCommandFinished };
 }
 
 async function openFile(path: string): Promise<HTMLElement> {
@@ -83,11 +85,11 @@ describe('the file open in the changes panel', () => {
     readWorkspaceText
       .mockResolvedValueOnce(onDisk('src/app.ts', 'one', 'a'.repeat(64)))
       .mockResolvedValue(onDisk('src/app.ts', 'formatted', 'b'.repeat(64)));
-    renderPanel();
+    const { terminalCommandFinished } = renderPanel();
 
     const field = await openFile('src/app.ts');
     await screen.findByDisplayValue('one');
-    await userEvent.click(screen.getByRole('button', { name: 'Run the formatter' }));
+    terminalCommandFinished();
 
     await waitFor(() => expect(field).toHaveValue('formatted'));
   });

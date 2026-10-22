@@ -27,6 +27,11 @@ import {
   type CloudCodeAgentStopReason,
   type CloudCodeGoalCommand,
 } from '@agiworkforce/types';
+import {
+  formatShortcutKeys,
+  matchesShortcut,
+  type ShortcutChord,
+} from '@agiworkforce/unified-chat';
 import { getModelMetadata } from '@shared/config/llm';
 import type { CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 
@@ -115,7 +120,6 @@ export const LOCAL_CODE_COPY = {
     minutes < 1 ? 'Started just now' : `Running for ${minutes} min`,
   stopCommand: (command: string): string => `Stop ${command}`,
   stopAllCommands: 'Stop all',
-  panelPosition: 'Panel position',
   openPreview: 'Preview',
   openPreviewOf: (url: string): string => `Open a preview of ${url}`,
   previewFailed: 'The preview could not be opened.',
@@ -1402,35 +1406,46 @@ export function localCleanupFailureRow(failure: { worktreeId: string; reason: st
   return failure.worktreeId === '' ? failure.reason : `${failure.worktreeId}: ${failure.reason}`;
 }
 
-/** Ctrl+Shift+G, or Cmd+Shift+G on a Mac, as ChatGPT binds its review pane. */
-export function isLocalFilesShortcut(event: {
+export const LOCAL_FILES_SHORTCUT: ShortcutChord = { key: 'P', ctrl: true, meta: true };
+
+export const LOCAL_REVIEW_SHORTCUT: ShortcutChord = {
+  key: 'G',
+  ctrl: true,
+  meta: true,
+  shift: true,
+};
+
+/** Control on every platform, since Cmd+` switches windows on a Mac. */
+export const LOCAL_TERMINAL_SHORTCUT: ShortcutChord = { key: '`', control: true };
+
+interface LocalShortcutEvent {
   key: string;
   shiftKey: boolean;
   metaKey: boolean;
   ctrlKey: boolean;
   altKey: boolean;
-}): boolean {
+}
+
+function matchesEitherModifier(event: LocalShortcutEvent, chord: ShortcutChord): boolean {
   return (
-    event.key.toLowerCase() === 'p' &&
+    event.key.toLowerCase() === chord.key.toLowerCase() &&
     (event.metaKey || event.ctrlKey) &&
-    !event.shiftKey &&
+    event.shiftKey === Boolean(chord.shift) &&
     !event.altKey
   );
 }
 
-export function isLocalReviewShortcut(event: {
-  key: string;
-  shiftKey: boolean;
-  metaKey: boolean;
-  ctrlKey: boolean;
-  altKey: boolean;
-}): boolean {
-  return (
-    event.key.toLowerCase() === 'g' &&
-    event.shiftKey &&
-    !event.altKey &&
-    (event.metaKey || event.ctrlKey)
-  );
+export function isLocalTerminalShortcut(event: LocalShortcutEvent, isMac: boolean): boolean {
+  return matchesShortcut(event, LOCAL_TERMINAL_SHORTCUT, isMac);
+}
+
+export function isLocalFilesShortcut(event: LocalShortcutEvent): boolean {
+  return matchesEitherModifier(event, LOCAL_FILES_SHORTCUT);
+}
+
+/** Ctrl+Shift+G, or Cmd+Shift+G on a Mac, as ChatGPT binds its review pane. */
+export function isLocalReviewShortcut(event: LocalShortcutEvent): boolean {
+  return matchesEitherModifier(event, LOCAL_REVIEW_SHORTCUT);
 }
 
 export const LOCAL_WORKTREE_SETTINGS_COPY = {
@@ -1522,16 +1537,33 @@ export function localReviewCommentsMessage(comments: readonly LocalReviewComment
   return [LOCAL_REVIEW_COPY.commentsIntro, '', ...items].join('\n');
 }
 
-export const LOCAL_PANEL_DOCKS = ['right', 'left', 'bottom'] as const;
+export const LOCAL_PANEL_COPY = {
+  rightPanel: 'Side panel',
+  bottomPanel: 'Terminal panel',
+  shortcuts: 'Panel shortcuts',
+  review: 'Review',
+  terminal: 'Terminal',
+  files: 'Files',
+  terminalTabs: 'Terminals',
+  newTerminal: 'New terminal',
+  closeTerminalPanel: 'Close the terminal panel',
+  closeTerminalTab: (label: string): string => `Close ${label}`,
+  stopTabTitle: 'Close this terminal?',
+  stopTabDescription: (command: string): string =>
+    `${command} is still running here. Closing the terminal stops it and clears what it printed.`,
+  stopTabConfirm: 'Stop and close',
+} as const;
 
-export type LocalPanelDock = (typeof LOCAL_PANEL_DOCKS)[number];
+/** The last segment of a folder path, as a shell prompt names it. */
+export function localFolderName(path: string, fallback: string): string {
+  const name = path.split(/[\\/]/u).findLast((segment) => segment !== '');
+  return name ?? fallback;
+}
 
-export const LOCAL_PANEL_DOCK_LABELS: Record<LocalPanelDock, string> = {
-  right: 'Right of the conversation',
-  left: 'Left of the conversation',
-  bottom: 'Below the conversation',
-};
+export function localTerminalTabLabel(folder: string, ordinal: number): string {
+  return ordinal <= 1 ? folder : `${folder} (${ordinal})`;
+}
 
-export function isLocalPanelDock(value: unknown): value is LocalPanelDock {
-  return (LOCAL_PANEL_DOCKS as readonly unknown[]).includes(value);
+export function localShortcutBadge(chord: ShortcutChord, isMac: boolean): string {
+  return formatShortcutKeys(chord, isMac).join(isMac ? '' : '+');
 }

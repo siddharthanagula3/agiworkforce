@@ -149,38 +149,94 @@ describe('LocalSessionPanel review pane', () => {
     expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument();
   });
 
-  it('moves the side panel below or left of the conversation and remembers where', async () => {
+  it('opens the side panel on its shortcut list and closes whatever it shows', async () => {
     const user = userEvent.setup();
-    window.localStorage.removeItem('agi.code.local.panelDock');
-    const panel = () => (
+    render(
       <LocalSessionPanel
         session={session}
         group={{ name: 'qa-project', branch: 'main', sessions: [session] }}
         runtimeModels={runtime}
         verbose={false}
         onClose={vi.fn()}
-      />
+      />,
     );
-    const { container, unmount } = render(panel());
+    const sideToggle = screen.getByRole('button', { name: 'Side panel' });
+    expect(sideToggle).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByRole('button', { name: /^Panel position/u })).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: 'Files' }));
-    await user.click(
-      screen.getByRole('button', { name: 'Panel position: Right of the conversation' }),
-    );
-    await user.click(await screen.findByRole('menuitemradio', { name: 'Below the conversation' }));
+    await user.click(sideToggle);
 
-    expect(container.querySelector('[data-panel-dock]')).toHaveAttribute(
-      'data-panel-dock',
-      'bottom',
-    );
-    unmount();
+    const list = screen.getByRole('complementary', { name: 'Panel shortcuts' });
+    const rows = within(list).getAllByRole('button');
+    expect(rows.map((row) => row.textContent)).toEqual([
+      'ReviewCtrl+Shift+G',
+      'TerminalCtrl+`',
+      'FilesCtrl+P',
+    ]);
+    expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
 
-    const again = render(panel());
-    expect(again.container.querySelector('[data-panel-dock]')).toHaveAttribute(
-      'data-panel-dock',
-      'bottom',
+    await user.click(within(list).getByRole('button', { name: /^Files/u }));
+    expect(await screen.findByRole('complementary', { name: 'Files' })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Panel shortcuts' }),
+    ).not.toBeInTheDocument();
+    expect(sideToggle).toHaveAttribute('aria-pressed', 'true');
+
+    await user.click(sideToggle);
+    expect(screen.queryByRole('complementary', { name: 'Files' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('complementary', { name: 'Panel shortcuts' }),
+    ).not.toBeInTheDocument();
+    expect(sideToggle).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('docks a terminal for the folder below the conversation and toggles it on Ctrl+`', async () => {
+    const user = userEvent.setup();
+    render(
+      <LocalSessionPanel
+        session={session}
+        group={{ name: 'qa-project', branch: 'main', sessions: [session] }}
+        runtimeModels={runtime}
+        verbose={false}
+        onClose={vi.fn()}
+      />,
     );
+    const bottomToggle = screen.getByRole('button', { name: 'Terminal panel' });
+    expect(screen.queryByTestId('local-terminal-dock')).not.toBeInTheDocument();
+
+    await user.click(bottomToggle);
+
+    const dock = screen.getByTestId('local-terminal-dock');
+    expect(dock).toBeVisible();
+    expect(bottomToggle).toHaveAttribute('aria-pressed', 'true');
+    expect(within(dock).getByRole('tab', { name: 'qa-project' })).toBeInTheDocument();
+    expect(within(dock).getByText('qa-project %')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Side panel' }));
+    expect(screen.getByRole('complementary', { name: 'Panel shortcuts' })).toBeInTheDocument();
+
+    await user.keyboard('{Control>}`{/Control}');
+    expect(dock).not.toBeVisible();
+    expect(bottomToggle).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByRole('complementary', { name: 'Panel shortcuts' })).toBeInTheDocument();
+
+    await user.keyboard('{Control>}`{/Control}');
+    expect(dock).toBeVisible();
+  });
+
+  it('offers no terminal over SSH, where the host terminal is unavailable', () => {
+    render(
+      <LocalSessionPanel
+        session={{ ...session, environment: 'ssh' }}
+        group={{ name: 'qa-project', branch: 'main', sessions: [session] }}
+        runtimeModels={runtime}
+        verbose={false}
+        onClose={vi.fn()}
+      />,
+    );
+
+    expect(screen.queryByRole('button', { name: 'Terminal panel' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Side panel' })).not.toBeInTheDocument();
   });
 
   it('keeps the folder controls in a worktree, which its folder grant covers', () => {

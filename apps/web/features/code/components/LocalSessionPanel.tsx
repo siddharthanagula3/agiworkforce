@@ -83,11 +83,15 @@ import {
   LOCAL_FAILURE_ACTION_LABELS,
   LOCAL_REVIEW_COMMAND,
   LOCAL_REVIEW_COPY,
+  LOCAL_FILES_SHORTCUT,
+  LOCAL_PANEL_COPY,
+  LOCAL_REVIEW_SHORTCUT,
+  LOCAL_TERMINAL_SHORTCUT,
   isLocalFilesShortcut,
-  isLocalPanelDock,
-  LOCAL_PANEL_DOCKS,
-  LOCAL_PANEL_DOCK_LABELS,
+  isLocalTerminalShortcut,
   isLocalReviewShortcut,
+  localFolderName,
+  localShortcutBadge,
   localArchiveSessionConsequence,
   localCleanupFailureRow,
   localCleanupFailuresLine,
@@ -115,11 +119,11 @@ import {
 import { useLocalReview } from '../hooks/use-local-review';
 import { useLocalTests } from '../hooks/use-local-tests';
 import { useLocalTurnOptions } from '../hooks/use-local-turn-options';
-import { useLocalPanelDock } from '../hooks/use-local-panel-dock';
 import { localSessionMemory } from '../local-session-memory';
 import { runThreadSummary, useThreadSummarizing } from '../local-summaries';
 import { UsageRing } from './CodeComposer';
 import { LocalChangesPanel } from './LocalChangesPanel';
+import { LocalTerminalDock } from './LocalTerminal';
 import { LocalFilesPanel } from './LocalFilesPanel';
 import { LocalExtensionsControl } from './LocalExtensionsControl';
 import { LocalMemoryControl } from './LocalMemoryControl';
@@ -375,7 +379,6 @@ export function LocalSessionPanel({
   const boundedTurns = runtimeModels?.features?.maxTurns === true;
   const memoryAvailable = !remoteSsh && runtimeModels?.features?.memory === true;
   const options = useLocalTurnOptions(session.id, runtimeModels);
-  const [panelDock, setPanelDock] = useLocalPanelDock();
   const state = useLocalSession(session, {
     ...(model === '' || model === session.model ? {} : { model }),
     ...(canChooseMode ? { agentMode: options.agentMode } : {}),
@@ -476,6 +479,81 @@ export function LocalSessionPanel({
     if (filesOpen) closeFiles();
     else openFiles(false);
   };
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const sidePanelOpen = shortcutsOpen || changesOpen || filesOpen || reviewOpen;
+  const toggleSidePanel = () => {
+    if (!sidePanelOpen) {
+      setShortcutsOpen(true);
+      return;
+    }
+    const hide = () => {
+      setShortcutsOpen(false);
+      setReviewOpen(false);
+    };
+    if (changesOpen) closeChanges(hide);
+    else if (filesOpen) closeFiles(hide);
+    else hide();
+  };
+  const canUseTerminal = !remoteSsh;
+  const [terminalOpen, setTerminalOpen] = useState(false);
+  const [terminalMounted, setTerminalMounted] = useState(false);
+  const [terminalRuns, setTerminalRuns] = useState(0);
+  const [backgroundRuns, setBackgroundRuns] = useState(0);
+  const toggleTerminal = () => {
+    setTerminalMounted(true);
+    setTerminalOpen((open) => !open);
+  };
+  const openTerminal = () => {
+    setTerminalMounted(true);
+    setTerminalOpen(true);
+  };
+  const toggleTerminalRef = useRef(toggleTerminal);
+  toggleTerminalRef.current = toggleTerminal;
+  useEffect(() => {
+    if (!canUseTerminal) return undefined;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || !isLocalTerminalShortcut(event, safePlatform.isMac())) return;
+      event.preventDefault();
+      toggleTerminalRef.current();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [canUseTerminal]);
+  const isMac = safePlatform.isMac();
+  const terminalBadge = localShortcutBadge(LOCAL_TERMINAL_SHORTCUT, isMac);
+  const panelShortcuts = [
+    ...(canReview
+      ? [
+          {
+            id: 'review',
+            label: LOCAL_PANEL_COPY.review,
+            icon: GitBranch,
+            badge: localShortcutBadge(LOCAL_REVIEW_SHORTCUT, isMac),
+            onSelect: toggleReview,
+          },
+        ]
+      : []),
+    ...(canUseTerminal
+      ? [
+          {
+            id: 'terminal',
+            label: LOCAL_PANEL_COPY.terminal,
+            icon: TerminalSquare,
+            badge: terminalBadge,
+            onSelect: openTerminal,
+          },
+          {
+            id: 'files',
+            label: LOCAL_PANEL_COPY.files,
+            icon: FolderOpen,
+            badge: localShortcutBadge(LOCAL_FILES_SHORTCUT, isMac),
+            onSelect: () => openFiles(false),
+          },
+        ]
+      : []),
+  ];
+  const showShortcuts = shortcutsOpen && !changesOpen && !filesOpen && !reviewOpen;
+  const folder = localFolderName(session.cwd, group.name);
   const toggleReviewRef = useRef(toggleReview);
   toggleReviewRef.current = toggleReview;
   const openFilesRef = useRef(openFiles);
@@ -750,35 +828,6 @@ export function LocalSessionPanel({
           >
             <PanelsTopLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
           </button>
-          {(filesOpen || changesOpen || reviewOpen) && (
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <button
-                  type="button"
-                  className={styles['headerButton']}
-                  aria-label={`${LOCAL_CODE_COPY.panelPosition}: ${LOCAL_PANEL_DOCK_LABELS[panelDock]}`}
-                  title={LOCAL_CODE_COPY.panelPosition}
-                >
-                  <PanelLeft size={HEADER_GLYPH_SIZE} aria-hidden="true" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-64">
-                <DropdownMenuLabel>{LOCAL_CODE_COPY.panelPosition}</DropdownMenuLabel>
-                <DropdownMenuRadioGroup
-                  value={panelDock}
-                  onValueChange={(value) => {
-                    if (isLocalPanelDock(value)) setPanelDock(value);
-                  }}
-                >
-                  {LOCAL_PANEL_DOCKS.map((dock) => (
-                    <DropdownMenuRadioItem key={dock} value={dock}>
-                      {LOCAL_PANEL_DOCK_LABELS[dock]}
-                    </DropdownMenuRadioItem>
-                  ))}
-                </DropdownMenuRadioGroup>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          )}
           {canReview && (
             <button
               type="button"
@@ -952,13 +1001,43 @@ export function LocalSessionPanel({
               <Trash2 size={HEADER_GLYPH_SIZE} aria-hidden="true" />
             </button>
           )}
+          {canUseTerminal && (
+            <button
+              type="button"
+              className={`${styles['headerButton']} ${terminalOpen ? styles['headerButtonActive'] : ''}`}
+              aria-label={LOCAL_PANEL_COPY.bottomPanel}
+              aria-pressed={terminalOpen}
+              aria-keyshortcuts="Control+`"
+              title={`${LOCAL_PANEL_COPY.bottomPanel} (${terminalBadge})`}
+              onClick={toggleTerminal}
+            >
+              <PanelLeft
+                size={HEADER_GLYPH_SIZE}
+                className={styles['glyphPanelBottom']}
+                aria-hidden="true"
+              />
+            </button>
+          )}
+          {panelShortcuts.length > 0 && (
+            <button
+              type="button"
+              className={`${styles['headerButton']} ${sidePanelOpen ? styles['headerButtonActive'] : ''}`}
+              aria-label={LOCAL_PANEL_COPY.rightPanel}
+              aria-pressed={sidePanelOpen}
+              title={LOCAL_PANEL_COPY.rightPanel}
+              onClick={toggleSidePanel}
+            >
+              <PanelLeft
+                size={HEADER_GLYPH_SIZE}
+                className={styles['glyphPanelRight']}
+                aria-hidden="true"
+              />
+            </button>
+          )}
         </div>
       </header>
 
-      <div
-        className={`${styles['body']} ${panelDock === 'right' ? '' : styles[`bodyDock-${panelDock}`]}`}
-        data-panel-dock={panelDock}
-      >
+      <div className={styles['body']}>
         <div className={styles['column']}>
           <div className={styles['scroll']} data-testid="local-code-scroll">
             <div className={styles['center']}>
@@ -1456,7 +1535,8 @@ export function LocalSessionPanel({
           <LocalChangesPanel
             rootId={session.rootId}
             title={session.title}
-            refreshKey={state.messages.length}
+            refreshKey={state.messages.length + terminalRuns}
+            runningCommandsKey={backgroundRuns}
             sessionBusy={busy}
             onReview={requestReview}
             onClose={() => {
@@ -1489,7 +1569,36 @@ export function LocalSessionPanel({
             }}
           />
         )}
+        {showShortcuts && (
+          <aside className={styles['panelShortcuts']} aria-label={LOCAL_PANEL_COPY.shortcuts}>
+            <ul className={styles['panelShortcutList']}>
+              {panelShortcuts.map((shortcut) => (
+                <li key={shortcut.id}>
+                  <button
+                    type="button"
+                    className={styles['panelShortcutRow']}
+                    onClick={shortcut.onSelect}
+                  >
+                    <shortcut.icon size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+                    <span className={styles['panelShortcutLabel']}>{shortcut.label}</span>
+                    <kbd className={styles['panelShortcutBadge']}>{shortcut.badge}</kbd>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </aside>
+        )}
       </div>
+      {canUseTerminal && terminalMounted && (
+        <LocalTerminalDock
+          rootId={session.rootId}
+          folder={folder}
+          open={terminalOpen}
+          onClose={() => setTerminalOpen(false)}
+          onCommandFinished={() => setTerminalRuns((count) => count + 1)}
+          onBackgroundStarted={() => setBackgroundRuns((count) => count + 1)}
+        />
+      )}
     </>
   );
 }

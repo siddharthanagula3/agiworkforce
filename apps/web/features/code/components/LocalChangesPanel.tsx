@@ -16,7 +16,6 @@ import { DiffBody } from './CodeDiffFile';
 import { LocalFileEditor } from './LocalFileEditor';
 import { LocalPullRequest } from './LocalPullRequest';
 import { LocalRunningCommands } from './LocalRunningCommands';
-import { LocalTerminal } from './LocalTerminal';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
@@ -100,6 +99,7 @@ export interface LocalChangesPanelProps {
   rootId: string;
   title: string;
   refreshKey: number;
+  runningCommandsKey: number;
   sessionBusy: boolean;
   onReview: () => void;
   onClose: () => void;
@@ -110,6 +110,7 @@ export function LocalChangesPanel({
   rootId,
   title,
   refreshKey,
+  runningCommandsKey,
   sessionBusy,
   onReview,
   onClose,
@@ -123,7 +124,6 @@ export function LocalChangesPanel({
   const [editing, setEditing] = useState<string | null>(null);
   const [editorDirty, setEditorDirty] = useState(false);
   const [revision, setRevision] = useState(0);
-  const [backgroundKey, setBackgroundKey] = useState(0);
   const { confirm, dialog } = useConfirmAction();
 
   useEffect(() => {
@@ -292,13 +292,7 @@ export function LocalChangesPanel({
 
         <LocalPullRequest rootId={rootId} title={title} refreshKey={refreshKey} />
 
-        <LocalRunningCommands rootId={rootId} refreshKey={backgroundKey} />
-
-        <LocalTerminal
-          rootId={rootId}
-          onCommandFinished={() => void load()}
-          onBackgroundStarted={() => setBackgroundKey((key) => key + 1)}
-        />
+        <LocalRunningCommands rootId={rootId} refreshKey={runningCommandsKey} />
       </div>
       {dialog}
     </aside>
