@@ -753,7 +753,7 @@ export async function readOwnedRunnableArtifact(
     messageId: row.message_id,
     title: row.title,
     type: row.artifact_type,
-    originPrivacyMode: await readConversationOriginPrivacyMode(db, row.conversation_id),
+    originPrivacyMode: await readConversationOriginPrivacyMode(db, owner, row.conversation_id),
   };
 }
 
@@ -765,6 +765,7 @@ interface ConversationOriginSignalRow {
 
 export async function readConversationOriginPrivacyMode(
   db: DatabaseAdapter,
+  owner: LiveArtifactOwner,
   conversationId: string,
 ): Promise<PrivacyMode | null> {
   const rows = await db.query<ConversationOriginSignalRow>(
@@ -773,6 +774,9 @@ export async function readConversationOriginPrivacyMode(
          select conversations.model, null::text as privacy_mode, null::text as provider_mode
            from public.web_conversations conversations
           where conversations.id = $1::uuid
+            and conversations.user_id = $2::text
+            and conversations.deleted_at is null
+            and conversations.organization_id is not distinct from $3::uuid
          union all
          select coalesce(messages.model, messages.metadata->>'model'),
                 messages.metadata->>'privacyMode',
@@ -781,7 +785,7 @@ export async function readConversationOriginPrivacyMode(
           where messages.conversation_id = $1::uuid
             and messages.deleted_at is null
        ) signals`,
-    [conversationId],
+    [conversationId, owner.userId, owner.organizationId],
   );
   return (
     resolveOriginPrivacyMode(

@@ -49,6 +49,7 @@ const {
   readOwnedRunnableArtifact,
 } = await import('../artifact-runtime-service');
 
+const OWNER = { userId: 'user-1', organizationId: null };
 const MANAGED_MODEL_ID = 'auto-balanced';
 const LOCAL_MODEL_ID = 'ollama/fixture-local-model';
 
@@ -160,7 +161,7 @@ describe('readOwnedRunnableArtifact', () => {
     expect(sql).toContain('messages.deleted_at is null');
     expect(sql).toContain('conversations.organization_id is not distinct from $4::uuid');
     expect(params).toEqual(['a1', 'user-1', ['html', 'react'], null]);
-    expect(query.mock.calls[1]?.[1]).toEqual(['c1']);
+    expect(query.mock.calls[1]?.[1]).toEqual(['c1', 'user-1', null]);
   });
 
   it('reads no origin for an artifact the caller does not own', async () => {
@@ -179,7 +180,7 @@ describe('readOwnedRunnableArtifact', () => {
 describe('readConversationOriginPrivacyMode', () => {
   async function originOf(rows: ReturnType<typeof originSignal>[]) {
     const query = vi.fn(async () => rows);
-    const mode = await readConversationOriginPrivacyMode({ query } as never, 'c1');
+    const mode = await readConversationOriginPrivacyMode({ query } as never, OWNER, 'c1');
     return { mode, query };
   }
 
@@ -192,6 +193,15 @@ describe('readConversationOriginPrivacyMode', () => {
     expect(sql).toContain("messages.metadata->>'privacyMode'");
     expect(sql).toContain("messages.metadata->>'providerMode'");
     expect(sql).toContain('messages.deleted_at is null');
+  });
+
+  it('reads only a live conversation of the caller in the active workspace', async () => {
+    const { query } = await originOf([originSignal(MANAGED_MODEL_ID)]);
+    const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain('conversations.user_id = $2::text');
+    expect(sql).toContain('conversations.deleted_at is null');
+    expect(sql).toContain('conversations.organization_id is not distinct from $3::uuid');
+    expect(params).toEqual(['c1', OWNER.userId, OWNER.organizationId]);
   });
 
   it('classes a chat with any Local turn as Local', async () => {
