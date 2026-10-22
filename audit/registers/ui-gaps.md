@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 9813eacf5ee14e7ede9d5387b1480d4a468a64760c1524df8d9c92d3ea6335e8 -->
+<!-- ui-gaps-csv-sha256: 8d6c207580c99e47382517d7900bf34a17cc8cbe9c6cb8053b6245dd058310f3 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -21,24 +21,24 @@ record through `mergedFrom`, combined evidence, and both reference screenshots.
 ## Current snapshot
 
 - 341 normalized gaps: 11 P0, 126 P1, 161 P2, 43 P3.
-- Unresolved: 0 P0, 53 P1, 106 P2, 35 P3.
+- Unresolved: 0 P0, 52 P1, 106 P2, 35 P3.
 
-| Surface          | Gaps |
-| ---------------- | ---: |
-| mobile           |  114 |
-| desktop          |  141 |
-| web              |   44 |
-| extension        |    5 |
-| extension-vscode |   37 |
+| Surface | Gaps |
+| --- | ---: |
+| mobile | 114 |
+| desktop | 141 |
+| web | 44 |
+| extension | 5 |
+| extension-vscode | 37 |
 
-| Status      | Gaps |
-| ----------- | ---: |
-| Open        |  184 |
-| In Progress |   10 |
-| Blocked     |    0 |
-| Deferred    |    0 |
-| Done        |  120 |
-| Not Planned |   27 |
+| Status | Gaps |
+| --- | ---: |
+| Open | 183 |
+| In Progress | 10 |
+| Blocked | 0 |
+| Deferred | 0 |
+| Done | 121 |
+| Not Planned | 27 |
 
 ## P0
 
@@ -3155,24 +3155,24 @@ Completed. Keep custom instructions private to VS Code Memento storage, preserve
 
 - `chatgpt_reference/016-codex-vscode-ext-settings-personalization-personality-memory-instructions.png`
 
-### GAP-137, VS Code keeps Plugins as an availability boundary until a local registry exists
+### GAP-137, VS Code Settings lists the local runtime plugins, MCP servers and skills with switches
 
-- **Status:** Open
-- **Owner:** local-plugin-registry-contract
+- **Status:** Done
+- **Owner:** VS Code
 - **Surface/type:** extension-vscode · missing-screen
 - **Reference:** Codex · VS Code extension · Settings, Plugins list
 
 **Gap**
 
-VS Code has no installed plugin or skill registry and the local app-server does not return commands, skills, agents, plugin versions, provenance, trust, or effective enablement. The Web catalogue and Desktop resolver are separate products with different authority; copying either into the IDE would imply that listed capabilities execute in the current workspace when they may not.
+The reference Settings pages list installed plugins, MCP servers and skills with on and off switches and counts on a shared tab row. The AGI CLI app-server already publishes plugins/list, skills/list and mcp/list with their enable state, so the earlier premise that VS Code has no local registry was stale.
 
 **Evidence**
 
-settingsWebviewContent.ts mounts a Plugins destination, renders shared cross-surface capability availability, states No VS Code plugin registry is installed, explains that local tools come from CLI and MCP configuration, and provides explicit Cloud directory and documentation handoffs. settingsProtocol.ts and localRuntimeClient.ts contain no installed-capability inventory or control contract.
+settingsWebviewContent.ts renders the Plugins, MCPs and Skills tabs with counts, a Servers card with Add server, details and switches, a read-only From plugins card, and plugin and skill switches. SettingsPanel.ts loads them through loadSettingsCapabilities (capabilityManagement.ts) and switches them through plugins/setEnabled, skills/setEnabled and mcp/setEnabled, which the CLI host advertises as mcpSetEnabled. Covered by settingsLocalCapabilities.webview.test.ts and settingsPanelLocalCapabilities.test.ts.
 
 **Suggested fix**
 
-Not planned until a local runtime registry publishes stable capability and plugin IDs, versions, source/provenance, trust, workspace availability, commands/skills/agents, effective enablement, permission review, authoritative controls, and lifecycle errors. Preserve the visible no-registry state instead of presenting Web or Desktop metadata as IDE installation state.
+None. Managed Cloud connectors stay on Web behind the Cloud directory and Manage Cloud connectors handoffs.
 
 **Reference screenshot(s)**
 
@@ -3285,7 +3285,7 @@ Mobile now renders the selected model’s supported reasoning efforts as full-wi
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx renders the tier list from getModelReasoning supportedEfforts; apps/mobile/**tests**/model-picker.test.tsx covers visibility, selection, the checked state, and switching models. The focused picker suite passed on 2026-09-27.
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx renders the tier list from getModelReasoning supportedEfforts; apps/mobile/__tests__/model-picker.test.tsx covers visibility, selection, the checked state, and switching models. The focused picker suite passed on 2026-09-27.
 
 **Suggested fix**
 
@@ -3304,11 +3304,11 @@ Keep the tier list tied to supportedEfforts and preserve full-width accessible s
 
 **Gap**
 
-NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/code-sessions/index.tsx) was deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). There is no standalone Code screen left to add a Devices section to; only a leftover test filename (**tests**/artifacts-code-sessions.test.tsx) still references 'code-sessions', and it tests an artifacts gallery screen, not a Code screen. Do not treat this row as verified-open until re-audited against whatever, if anything, replaced device-awareness inside Companion. Original complaint, preserved verbatim: Reference's Code tab shows a 'Devices' label and a card listing recently connected devices (or 'No recently connected devices') above the sessions list, letting the user see which desktop/mobile devices have been used for remote code sessions. agiworkforce's Code screen went straight from the header into the session list/empty state with no device-awareness section, before that screen was removed entirely.
+NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/code-sessions/index.tsx) was deleted 2026-07-30 in commit c21de5707 ('remove unshipped dead-end surfaces') -- before this CSV was even last edited (2026-08-11). There is no standalone Code screen left to add a Devices section to; only a leftover test filename (__tests__/artifacts-code-sessions.test.tsx) still references 'code-sessions', and it tests an artifacts gallery screen, not a Code screen. Do not treat this row as verified-open until re-audited against whatever, if anything, replaced device-awareness inside Companion. Original complaint, preserved verbatim: Reference's Code tab shows a 'Devices' label and a card listing recently connected devices (or 'No recently connected devices') above the sessions list, letting the user see which desktop/mobile devices have been used for remote code sessions. agiworkforce's Code screen went straight from the header into the session list/empty state with no device-awareness section, before that screen was removed entirely.
 
 **Evidence**
 
-STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/**tests**/artifacts-code-sessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
+STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/__tests__/artifacts-code-sessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
 
 **Suggested fix**
 
@@ -4090,7 +4090,7 @@ AGI Mobile provides Cloud Archived chats, Archive all chats, and Delete all chat
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx gates bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive/delete. apps/mobile/**tests**/data-controls-bulk-chats.test.tsx covers confirmations, errors, mode/account switching, and response validation. Signed-device verification remains unavailable while deployed sign-in routes are incomplete. apps/mobile/app/(app)/settings/archived-chats.tsx now binds loaded rows and restore/delete actions to the current account and Cloud mode; archived-chats-screen.test.tsx covers old-account rows and stale confirmations.
+apps/mobile/src/features/settings/data-controls/index.tsx gates bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive/delete. apps/mobile/__tests__/data-controls-bulk-chats.test.tsx covers confirmations, errors, mode/account switching, and response validation. Signed-device verification remains unavailable while deployed sign-in routes are incomplete. apps/mobile/app/(app)/settings/archived-chats.tsx now binds loaded rows and restore/delete actions to the current account and Cloud mode; archived-chats-screen.test.tsx covers old-account rows and stale confirmations.
 
 **Suggested fix**
 
@@ -4132,15 +4132,15 @@ Completed for supported Cloud search. Keep the UI preference and Cloud request b
 
 **Gap**
 
-The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '**default**' project key with no UI), so users must re-set it repeatedly.
+The reference surfaces an 'Intelligence → Pro level' default in General so every new chat inherits a chosen tier. In agiworkforce, effort is only reachable inside the model picker sheet and is stored per conversation (or under a '__default__' project key with no UI), so users must re-set it repeatedly.
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('**default**')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx:206-215 (setEffort per conversation / setProjectDefault('__default__')); apps/mobile/src/features/settings/general/index.tsx (no effort row)
 
 **Suggested fix**
 
-Add an 'Intelligence' row in General bound to the existing agentControlStore '**default**' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
+Add an 'Intelligence' row in General bound to the existing agentControlStore '__default__' project default, listing the efforts the default model supports, so new conversations start at the user's chosen tier.
 
 **Reference screenshot(s)**
 
@@ -4182,7 +4182,7 @@ Settings Device section now includes the existing Remote destination with live c
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx reads the canonical companion connection status and opens /(app)/companion. apps/mobile/**tests**/settings-page.test.tsx checks navigation and status; six settings suites passed 48 tests. ConnectionStateViews.tsx and DesktopSetupChecklistView.tsx align failure and setup guidance with the code-based trust boundary; three companion/drawer suites passed 24 tests. Device UI remains to be smoke-tested.
+apps/mobile/src/features/settings/index.tsx reads the canonical companion connection status and opens /(app)/companion. apps/mobile/__tests__/settings-page.test.tsx checks navigation and status; six settings suites passed 48 tests. ConnectionStateViews.tsx and DesktopSetupChecklistView.tsx align failure and setup guidance with the code-based trust boundary; three companion/drawer suites passed 24 tests. Device UI remains to be smoke-tested.
 
 **Suggested fix**
 
@@ -6367,7 +6367,7 @@ Closed 2026-08-21 for the parts that are real. An account-level default effort a
 
 **Evidence**
 
-apps/web/features/chat/components/Composer/**tests**/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings, no match
+apps/web/features/chat/components/Composer/__tests__/ComposerFooter.reasoning-flyout.test.tsx (per-message effort only), apps/web/features/settings/sections/GeneralSection.tsx (no effort/intelligence rows); searched 'higher intelligence', 'auto model', 'smart routing' in apps/web/features/settings, no match
 
 **Suggested fix**
 
@@ -6685,7 +6685,7 @@ Add a 'Goal' item to the plus menu that stores a workspace-scoped objective (alo
 
 **Gap**
 
-Claude Code exposes a native VS Code checkbox setting ('claudeCode.useTerminal'). UPDATED 2026-08-21: the core claim (no useTerminal-equivalent key) still holds, but this row's supporting evidence was WRONG, not just stale -- apps/extension-vscode/package.json exists and always did; the original 'no package.json found' claim was a search error. The file has a full contributes.configuration block with 20 real settings (model, agent.mode/effort/thinking, composer.followUpBehavior, desktopBridge._, inlineCompletions._, telemetry, etc.), all genuinely discoverable via VS Code's native Settings search -- the extension is not missing settings-UI infrastructure, it is missing this one specific key.
+Claude Code exposes a native VS Code checkbox setting ('claudeCode.useTerminal'). UPDATED 2026-08-21: the core claim (no useTerminal-equivalent key) still holds, but this row's supporting evidence was WRONG, not just stale -- apps/extension-vscode/package.json exists and always did; the original 'no package.json found' claim was a search error. The file has a full contributes.configuration block with 20 real settings (model, agent.mode/effort/thinking, composer.followUpBehavior, desktopBridge.*, inlineCompletions.*, telemetry, etc.), all genuinely discoverable via VS Code's native Settings search -- the extension is not missing settings-UI infrastructure, it is missing this one specific key.
 
 **Evidence**
 
@@ -7036,7 +7036,7 @@ The mobile primary drawer already exposes Remote as a first-class destination ne
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS includes Remote using MOBILE_REMOTE_SCREEN_LABEL; apps/mobile/**tests**/drawer-content.test.tsx checks presence and navigation. The focused drawer suite passed 2026-09-27.
+apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS includes Remote using MOBILE_REMOTE_SCREEN_LABEL; apps/mobile/__tests__/drawer-content.test.tsx checks presence and navigation. The focused drawer suite passed 2026-09-27.
 
 **Suggested fix**
 
@@ -7082,7 +7082,7 @@ Manual pairing now disables Connect until the trimmed field has content, reads a
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/QRScanner.tsx implements disabled submission, paste, denied-camera manual entry and exit. apps/mobile/**tests**/qr-scanner-manual.test.tsx covers these flows and full pairing payload submission; focused tests, mobile typecheck, lint and formatting passed 2026-09-27. Signed-device verification remains open in ACTIVE_ISSUES.md.
+apps/mobile/src/features/companion/components/QRScanner.tsx implements disabled submission, paste, denied-camera manual entry and exit. apps/mobile/__tests__/qr-scanner-manual.test.tsx covers these flows and full pairing payload submission; focused tests, mobile typecheck, lint and formatting passed 2026-09-27. Signed-device verification remains open in ACTIVE_ISSUES.md.
 
 **Suggested fix**
 
@@ -7097,7 +7097,7 @@ Completed locally; verify the camera-denied and clipboard permission paths on a 
 - **Status:** Done
 - **Owner:** Mobile
 - **Surface/type:** mobile · missing-ia
-- **Reference:** Codex · iOS · Remote overflow menu, Usage remaining
+- **Reference:**  Codex · iOS · Remote overflow menu, Usage remaining
 
 **Gap**
 

@@ -12,7 +12,11 @@ import {
   DEVELOPER_REASONING_EFFORT_LABELS,
 } from '@agiworkforce/local-runtime-contract';
 import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
-import type { SettingsPanelState, SettingsSection } from './settingsProtocol';
+import {
+  LOADING_LOCAL_CAPABILITIES,
+  type SettingsPanelState,
+  type SettingsSection,
+} from './settingsProtocol';
 
 function serializeForInlineScript(value: unknown): string {
   return JSON.stringify(value)
@@ -53,6 +57,12 @@ const VSCODE_DISCOVERABLE_CAPABILITIES: readonly DiscoverableSurfaceCapability[]
   'computer-use',
 ];
 
+const LOCAL_CAPABILITY_TABS: readonly { section: SettingsSection; label: string }[] = [
+  { section: 'plugins', label: 'Plugins' },
+  { section: 'mcp', label: 'MCPs' },
+  { section: 'skills', label: 'Skills' },
+];
+
 export function getSettingsWebviewContent(
   webview: vscode.Webview,
   nonce: string,
@@ -63,6 +73,7 @@ export function getSettingsWebviewContent(
   const serializedState = serializeForInlineScript(initialState);
   const serializedSection = serializeForInlineScript(initialSection);
   const serializedFreePlanTiers = serializeForInlineScript(FREE_PLAN_TIERS);
+  const serializedCapabilities = serializeForInlineScript(LOADING_LOCAL_CAPABILITIES);
   const capabilityAvailabilityRows = VSCODE_DISCOVERABLE_CAPABILITIES.map((capability) => {
     const presentation = getSurfaceCapabilityAvailability(capability, 'vscode');
     return `
@@ -82,6 +93,18 @@ export function getSettingsWebviewContent(
                 <span class="surface-availability">${escapeHtml(presentation.tooltip)}</span>
               </div>`;
   }).join('');
+
+  const capabilityTabs = `
+          <nav class="capability-tabs" aria-label="Local capabilities">
+${LOCAL_CAPABILITY_TABS.map(
+  ({
+    section,
+    label,
+  }) => `            <button class="capability-tab" type="button" data-capability-tab="${section}">
+              ${label}<span class="capability-count" data-capability-count="${section}"></span>
+            </button>`,
+).join('\n')}
+          </nav>`;
 
   return /* html */ `<!doctype html>
 <html lang="en">
@@ -955,6 +978,130 @@ export function getSettingsWebviewContent(
         color: var(--vscode-textLink-activeForeground);
       }
 
+      .capability-tabs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 4px;
+        margin-bottom: 22px;
+      }
+
+      .capability-tab {
+        min-height: var(--control-lg);
+        padding: 4px 12px;
+        border: 0;
+        border-radius: var(--corner-control);
+        color: var(--vscode-descriptionForeground);
+        background: transparent;
+        font: inherit;
+        cursor: pointer;
+      }
+
+      .capability-tab:hover {
+        color: var(--vscode-foreground);
+        background: var(--vscode-list-hoverBackground);
+      }
+
+      .capability-tab[aria-current='page'] {
+        color: var(--vscode-foreground);
+        background: var(--pressed);
+      }
+
+      .capability-tab:focus-visible,
+      .icon-button:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 2px;
+      }
+
+      .capability-count {
+        margin-left: 6px;
+        color: var(--vscode-descriptionForeground);
+      }
+
+      .capability-count:empty {
+        display: none;
+      }
+
+      .list-heading {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+
+      .list-heading h3 {
+        margin: 0;
+        font-size: var(--type-title-size);
+        line-height: var(--type-title-height);
+        font-weight: 600;
+      }
+
+      .capability-group {
+        margin-top: 24px;
+      }
+
+      .capability-list {
+        display: grid;
+      }
+
+      .capability-row {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        min-height: 56px;
+        padding: 10px var(--field-inset);
+      }
+
+      .capability-row + .capability-row {
+        border-top: 1px solid var(--vscode-panel-border);
+      }
+
+      .capability-row-copy {
+        flex: 1 1 auto;
+        min-width: 0;
+      }
+
+      .capability-row-name {
+        display: block;
+        font-weight: 600;
+        overflow-wrap: anywhere;
+      }
+
+      .capability-row-actions {
+        display: flex;
+        flex: 0 0 auto;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .capability-list-note {
+        padding: var(--field-block) var(--field-inset);
+        color: var(--vscode-descriptionForeground);
+        line-height: var(--type-body-height);
+      }
+
+      .icon-button {
+        display: grid;
+        place-items: center;
+        width: var(--control-md);
+        height: var(--control-md);
+        padding: 0;
+        border: 0;
+        border-radius: var(--corner-compact);
+        color: var(--vscode-icon-foreground, var(--vscode-foreground));
+        background: transparent;
+        cursor: pointer;
+      }
+
+      .icon-button:hover {
+        background: var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground));
+      }
+
+      .icon-button svg {
+        width: 16px;
+        height: 16px;
+      }
+
       @media (max-width: 760px) {
         .settings-shell {
           display: block;
@@ -1100,7 +1247,8 @@ export function getSettingsWebviewContent(
           border-color: CanvasText;
         }
 
-        .nav-button[aria-current='page'] {
+        .nav-button[aria-current='page'],
+        .capability-tab[aria-current='page'] {
           color: HighlightText;
           background: Highlight;
         }
@@ -1154,6 +1302,7 @@ export function getSettingsWebviewContent(
             <button class="nav-button" type="button" data-section="mcp">MCP servers</button>
             <button class="nav-button" type="button" data-section="hooks">Hooks</button>
             <button class="nav-button" type="button" data-section="plugins">Plugins</button>
+            <button class="nav-button" type="button" data-section="skills">Skills</button>
           </div>
           <div class="nav-group" role="group" aria-labelledby="nav-account-label">
             <span class="nav-group-label" id="nav-account-label">Account</span>
@@ -1875,18 +2024,31 @@ export function getSettingsWebviewContent(
         </section>
 
         <section class="section" id="section-mcp" data-settings-section="mcp" hidden>
+${capabilityTabs}
+          <div class="list-heading">
+            <h3 id="mcpServersHeading">Servers</h3>
+            <button class="secondary-button" type="button" id="mcpAddServer" hidden>
+              <span aria-hidden="true">+</span> Add server
+            </button>
+          </div>
           <div class="card">
+            <div class="capability-list" id="mcpServerList" role="list" aria-labelledby="mcpServersHeading"></div>
+          </div>
+          <div class="capability-group" id="mcpPluginServers" hidden>
+            <div class="list-heading">
+              <h3 id="mcpPluginServersHeading">From plugins</h3>
+            </div>
+            <div class="card">
+              <div class="capability-list" id="mcpPluginServerList" role="list" aria-labelledby="mcpPluginServersHeading"></div>
+            </div>
+          </div>
+          <div class="card capability-group">
             <div class="empty-capability">
-              <h3>Local MCP is runtime-owned</h3>
-              <p>
-                The workspace-scoped AGI CLI discovers local MCP servers and reports their status in chat. Cloud connectors are a separate Managed Cloud capability.
-              </p>
+              <h3>Cloud connectors</h3>
+              <p>Managed Cloud connectors are set up on Web and never reach this workspace on their own.</p>
               <div class="action-row">
                 <button class="secondary-button" type="button" data-command="manageConnectors">
-                  Manage Cloud connectors
-                </button>
-                <button class="secondary-button" type="button" data-command="openDocs">
-                  Open AGI docs
+                  Manage Cloud connectors <span aria-hidden="true">↗</span>
                 </button>
               </div>
             </div>
@@ -1908,7 +2070,17 @@ export function getSettingsWebviewContent(
         </section>
 
         <section class="section" id="section-plugins" data-settings-section="plugins" hidden>
+${capabilityTabs}
+          <div class="list-heading">
+            <h3 id="pluginListHeading">Installed plugins</h3>
+            <button class="secondary-button" type="button" data-command="showPlugins">
+              Manage plugins
+            </button>
+          </div>
           <div class="card">
+            <div class="capability-list" id="pluginList" role="list" aria-labelledby="pluginListHeading"></div>
+          </div>
+          <div class="card capability-group">
             <div
               class="capability-availability-list"
               role="list"
@@ -1919,19 +2091,27 @@ ${capabilityAvailabilityRows}
           </div>
           <div class="card">
             <div class="empty-capability">
-              <h3>No VS Code plugin registry is installed</h3>
-              <p>
-                Local developer tools come from the AGI CLI and MCP configuration. Managed Cloud connectors are installed and permissioned on Web; they do not silently gain access to this workspace.
-              </p>
+              <h3>Cloud directory</h3>
+              <p>Managed Cloud connectors are set up on Web and never reach this workspace on their own.</p>
               <div class="action-row">
                 <button class="secondary-button" type="button" data-command="manageConnectors">
-                  Open Cloud directory
-                </button>
-                <button class="secondary-button" type="button" data-command="openDocs">
-                  Learn about extensions
+                  Open Cloud directory <span aria-hidden="true">↗</span>
                 </button>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section class="section" id="section-skills" data-settings-section="skills" hidden>
+${capabilityTabs}
+          <div class="list-heading">
+            <h3 id="skillListHeading">Loaded skills</h3>
+            <button class="secondary-button" type="button" data-command="showSkills">
+              Manage skills
+            </button>
+          </div>
+          <div class="card">
+            <div class="capability-list" id="skillList" role="list" aria-labelledby="skillListHeading"></div>
           </div>
         </section>
 
@@ -1998,6 +2178,7 @@ ${capabilityAvailabilityRows}
         var activeSection = ${serializedSection};
         var freePlanTiers = ${serializedFreePlanTiers};
         var statusTimer;
+        var capabilities = ${serializedCapabilities};
         var settingsNav = document.getElementById('settingsNav');
         var navScrollBack = document.getElementById('navScrollBack');
         var navScrollForward = document.getElementById('navScrollForward');
@@ -2020,7 +2201,7 @@ ${capabilityAvailabilityRows}
           },
           mcp: {
             title: 'MCP servers',
-            description: 'Review runtime-owned MCP and Managed Cloud connector boundaries.'
+            description: 'Connect external tools and data sources.'
           },
           hooks: {
             title: 'Hooks',
@@ -2028,7 +2209,11 @@ ${capabilityAvailabilityRows}
           },
           plugins: {
             title: 'Plugins',
-            description: 'Review the explicit installation and permission boundaries for extension capabilities.'
+            description: 'Manage plugins, skills, and MCP servers.'
+          },
+          skills: {
+            title: 'Skills',
+            description: 'Choose which skills the agent can load in this workspace.'
           },
           account: {
             title: 'Cloud account',
@@ -2111,6 +2296,13 @@ ${capabilityAvailabilityRows}
               button.removeAttribute('aria-current');
             }
           });
+          document.querySelectorAll('.capability-tab[data-capability-tab]').forEach(function (tab) {
+            if (tab.getAttribute('data-capability-tab') === section) {
+              tab.setAttribute('aria-current', 'page');
+            } else {
+              tab.removeAttribute('aria-current');
+            }
+          });
           document.getElementById('pageTitle').textContent = sectionCopy[section].title;
           document.getElementById('pageDescription').textContent = sectionCopy[section].description;
           if (moveFocus) {
@@ -2121,6 +2313,173 @@ ${capabilityAvailabilityRows}
             var heading = document.getElementById('pageTitle');
             if (heading) heading.focus();
           }
+        }
+
+        var SVG_NS = 'http://www.w3.org/2000/svg';
+
+        function appendListNote(container, text) {
+          var note = document.createElement('div');
+          note.className = 'capability-list-note';
+          note.setAttribute('role', 'listitem');
+          note.textContent = text;
+          container.appendChild(note);
+        }
+
+        function capabilityRow(name, detail) {
+          var row = document.createElement('div');
+          row.className = 'capability-row';
+          row.setAttribute('role', 'listitem');
+          var copy = document.createElement('div');
+          copy.className = 'capability-row-copy';
+          var title = document.createElement('span');
+          title.className = 'capability-row-name';
+          title.textContent = name;
+          copy.appendChild(title);
+          if (detail) {
+            var description = document.createElement('span');
+            description.className = 'setting-description';
+            description.textContent = detail;
+            copy.appendChild(description);
+          }
+          var actions = document.createElement('div');
+          actions.className = 'capability-row-actions';
+          row.appendChild(copy);
+          row.appendChild(actions);
+          return { row: row, actions: actions };
+        }
+
+        function capabilitySwitch(kind, id, name, enabled) {
+          var label = document.createElement('label');
+          label.className = 'toggle';
+          label.title = name;
+          var input = document.createElement('input');
+          input.type = 'checkbox';
+          input.setAttribute('role', 'switch');
+          input.setAttribute('aria-label', name);
+          input.setAttribute('data-capability-switch', kind);
+          input.setAttribute('data-capability-switch-id', id);
+          input.checked = enabled;
+          var track = document.createElement('span');
+          track.className = 'toggle-track';
+          track.setAttribute('aria-hidden', 'true');
+          label.appendChild(input);
+          label.appendChild(track);
+          input.addEventListener('change', function () {
+            input.disabled = true;
+            setStatus('Turning ' + name + (input.checked ? ' on…' : ' off…'));
+            vscode.postMessage({
+              type: 'settings.capability.setEnabled',
+              kind: kind,
+              id: id,
+              enabled: input.checked
+            });
+          });
+          return label;
+        }
+
+        function detailsButton(name) {
+          var button = document.createElement('button');
+          button.type = 'button';
+          button.className = 'icon-button';
+          button.title = 'Server details';
+          button.setAttribute('aria-label', 'Details for ' + name);
+          button.setAttribute('data-mcp-details', name);
+          var icon = document.createElementNS(SVG_NS, 'svg');
+          icon.setAttribute('viewBox', '0 0 24 24');
+          icon.setAttribute('fill', 'none');
+          icon.setAttribute('stroke', 'currentColor');
+          icon.setAttribute('stroke-width', '2');
+          icon.setAttribute('stroke-linecap', 'round');
+          icon.setAttribute('stroke-linejoin', 'round');
+          icon.setAttribute('aria-hidden', 'true');
+          var gear = document.createElementNS(SVG_NS, 'path');
+          gear.setAttribute(
+            'd',
+            'M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z'
+          );
+          var hub = document.createElementNS(SVG_NS, 'circle');
+          hub.setAttribute('cx', '12');
+          hub.setAttribute('cy', '12');
+          hub.setAttribute('r', '3');
+          icon.appendChild(gear);
+          icon.appendChild(hub);
+          button.appendChild(icon);
+          button.addEventListener('click', function () {
+            vscode.postMessage({ type: 'settings.mcp.details', name: name });
+          });
+          return button;
+        }
+
+        function renderListState(container, list, emptyText) {
+          container.textContent = '';
+          if (list.status === 'loading') {
+            appendListNote(container, 'Loading…');
+            return false;
+          }
+          if (list.status === 'unavailable') {
+            appendListNote(container, list.message);
+            return false;
+          }
+          if (list.rows.length === 0) {
+            appendListNote(container, emptyText);
+            return false;
+          }
+          return true;
+        }
+
+        function renderToggleList(containerId, kind, list, emptyText) {
+          var container = document.getElementById(containerId);
+          if (!container || !renderListState(container, list, emptyText)) return;
+          list.rows.forEach(function (item) {
+            var parts = capabilityRow(item.name, item.detail);
+            if (item.switchable) {
+              parts.actions.appendChild(capabilitySwitch(kind, item.id, item.name, item.enabled));
+            }
+            container.appendChild(parts.row);
+          });
+        }
+
+        function renderMcpServers(list) {
+          var servers = document.getElementById('mcpServerList');
+          var pluginServers = document.getElementById('mcpPluginServerList');
+          var pluginGroup = document.getElementById('mcpPluginServers');
+          var own = list.status === 'ready'
+            ? { status: 'ready', rows: list.rows.filter(function (row) { return row.source !== 'plugin'; }) }
+            : list;
+          var fromPlugins = list.status === 'ready'
+            ? list.rows.filter(function (row) { return row.source === 'plugin'; })
+            : [];
+          if (renderListState(servers, own, 'No MCP servers are configured yet.')) {
+            own.rows.forEach(function (server) {
+              var parts = capabilityRow(server.name, server.state);
+              if (server.inspectable) parts.actions.appendChild(detailsButton(server.name));
+              if (server.switchable) {
+                parts.actions.appendChild(
+                  capabilitySwitch('mcp', server.name, server.name, server.enabled)
+                );
+              }
+              servers.appendChild(parts.row);
+            });
+          }
+          pluginServers.textContent = '';
+          fromPlugins.forEach(function (server) {
+            pluginServers.appendChild(capabilityRow(server.name, server.state).row);
+          });
+          pluginGroup.hidden = fromPlugins.length === 0;
+          return own;
+        }
+
+        function renderCapabilities(next) {
+          capabilities = next;
+          var ownServers = renderMcpServers(next.mcp);
+          renderToggleList('pluginList', 'plugin', next.plugins, 'No plugins are installed yet.');
+          renderToggleList('skillList', 'skill', next.skills, 'No skills are loaded in this workspace.');
+          var counts = { mcp: ownServers, plugins: next.plugins, skills: next.skills };
+          document.querySelectorAll('[data-capability-count]').forEach(function (count) {
+            var listed = counts[count.getAttribute('data-capability-count')];
+            count.textContent = listed && listed.status === 'ready' ? String(listed.rows.length) : '';
+          });
+          document.getElementById('mcpAddServer').hidden = !next.canAddMcpServer;
         }
 
         function renderPlanUsageWindows(windows) {
@@ -2519,6 +2878,21 @@ ${capabilityAvailabilityRows}
           navScrollForward.addEventListener('click', function () { scrollSettingsNav(1); });
         }
 
+        document.querySelectorAll('.capability-tab[data-capability-tab]').forEach(function (tab) {
+          tab.addEventListener('click', function () {
+            var section = tab.getAttribute('data-capability-tab');
+            setSection(section, false);
+            var target = document.querySelector(
+              '#section-' + section + ' .capability-tab[data-capability-tab="' + section + '"]'
+            );
+            if (target) target.focus();
+          });
+        });
+
+        document.getElementById('mcpAddServer').addEventListener('click', function () {
+          vscode.postMessage({ type: 'settings.mcp.add' });
+        });
+
         document.querySelectorAll('[data-setting]').forEach(function (control) {
           control.addEventListener('change', function () {
             var key = control.getAttribute('data-setting');
@@ -2595,15 +2969,19 @@ ${capabilityAvailabilityRows}
                 ? 'Workspace instruction override saved.'
                 : 'Host instructions saved.'
             );
+          } else if (message.type === 'settings.capabilities') {
+            renderCapabilities(message.capabilities);
           } else if (message.type === 'settings.error') {
             setStatus(message.message || 'The setting could not be saved.', 'error');
             applySnapshot(state);
+            renderCapabilities(capabilities);
           } else if (message.type === 'settings.navigate') {
             setSection(message.section, true);
           }
         });
 
         applySnapshot(state);
+        renderCapabilities(capabilities);
         setSection(activeSection, false);
         updateNavOverflow();
         vscode.postMessage({ type: 'settings.ready' });

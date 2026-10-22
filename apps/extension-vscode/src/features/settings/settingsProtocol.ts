@@ -19,6 +19,7 @@ export const SETTINGS_SECTIONS = [
   'mcp',
   'hooks',
   'plugins',
+  'skills',
   'account',
 ] as const;
 
@@ -44,9 +45,53 @@ export const SETTINGS_COMMANDS = [
   'openMemory',
   'openPrivacySettings',
   'openSubprocessors',
+  'showPlugins',
+  'showSkills',
 ] as const;
 
 export type SettingsCommand = (typeof SETTINGS_COMMANDS)[number];
+
+export const SETTINGS_LOCAL_CAPABILITY_KINDS = ['mcp', 'plugin', 'skill'] as const;
+
+export type SettingsLocalCapabilityKind = (typeof SETTINGS_LOCAL_CAPABILITY_KINDS)[number];
+
+export type SettingsCapabilityList<Row> =
+  | { status: 'loading' }
+  | { status: 'ready'; rows: Row[] }
+  | { status: 'unavailable'; message: string };
+
+export interface SettingsMcpServerRow {
+  name: string;
+  source: 'user' | 'project' | 'plugin';
+  state?: string;
+  enabled: boolean;
+  switchable: boolean;
+  inspectable: boolean;
+}
+
+export interface SettingsToggleRow {
+  id: string;
+  name: string;
+  detail: string;
+  enabled: boolean;
+  switchable: boolean;
+}
+
+export interface SettingsLocalCapabilities {
+  mcp: SettingsCapabilityList<SettingsMcpServerRow>;
+  plugins: SettingsCapabilityList<SettingsToggleRow>;
+  skills: SettingsCapabilityList<SettingsToggleRow>;
+  canAddMcpServer: boolean;
+}
+
+export const LOADING_LOCAL_CAPABILITIES: SettingsLocalCapabilities = {
+  mcp: { status: 'loading' },
+  plugins: { status: 'loading' },
+  skills: { status: 'loading' },
+  canAddMcpServer: false,
+};
+
+const capabilityIdSchema = z.string().trim().min(1).max(200);
 
 const httpUrlSchema = z
   .string()
@@ -109,6 +154,16 @@ const messageEnvelopeSchema = z.discriminatedUnion('type', [
       value: z.string().max(MAX_CUSTOM_INSTRUCTION_CHARS),
     })
     .strict(),
+  z
+    .object({
+      type: z.literal('settings.capability.setEnabled'),
+      kind: z.enum(SETTINGS_LOCAL_CAPABILITY_KINDS),
+      id: capabilityIdSchema,
+      enabled: z.boolean(),
+    })
+    .strict(),
+  z.object({ type: z.literal('settings.mcp.add') }).strict(),
+  z.object({ type: z.literal('settings.mcp.details'), name: capabilityIdSchema }).strict(),
 ]);
 
 export type SettingsWebviewMessage =
@@ -119,7 +174,15 @@ export type SettingsWebviewMessage =
       type: 'settings.instructions.update';
       scope: CustomInstructionScope;
       value: string;
-    };
+    }
+  | {
+      type: 'settings.capability.setEnabled';
+      kind: SettingsLocalCapabilityKind;
+      id: string;
+      enabled: boolean;
+    }
+  | { type: 'settings.mcp.add' }
+  | { type: 'settings.mcp.details'; name: string };
 
 export interface SettingsPlanUsage {
   planLabel: string;
@@ -151,7 +214,8 @@ export type SettingsHostMessage =
   | { type: 'settings.saved'; key: MutableConfigKey }
   | { type: 'settings.instructions.saved'; scope: CustomInstructionScope }
   | { type: 'settings.error'; message: string }
-  | { type: 'settings.navigate'; section: SettingsSection };
+  | { type: 'settings.navigate'; section: SettingsSection }
+  | { type: 'settings.capabilities'; capabilities: SettingsLocalCapabilities };
 
 export function isSettingsSection(value: unknown): value is SettingsSection {
   return typeof value === 'string' && SETTINGS_SECTIONS.some((section) => section === value);
@@ -164,6 +228,9 @@ export function parseSettingsWebviewMessage(input: unknown): SettingsWebviewMess
   if (parsed.data.type === 'settings.ready') return parsed.data;
   if (parsed.data.type === 'settings.command') return parsed.data;
   if (parsed.data.type === 'settings.instructions.update') return parsed.data;
+  if (parsed.data.type === 'settings.capability.setEnabled') return parsed.data;
+  if (parsed.data.type === 'settings.mcp.add') return parsed.data;
+  if (parsed.data.type === 'settings.mcp.details') return parsed.data;
 
   const key = parsed.data.key;
   if (!SETTINGS_PANEL_SETTING_KEYS.some((candidate) => candidate === key)) return undefined;

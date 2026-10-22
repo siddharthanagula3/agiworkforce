@@ -812,10 +812,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   context.subscriptions.push(
     register('agi-workforce.sendSelectionToNewSession', sendSelectionToNewSession),
     register('agi-workforce.openSettings', (section?: unknown) => {
-      SettingsPanel.createOrShow(context, section, async () => {
-        const presence = await resolveAccountPresence(context.secrets, cliCapabilities);
-        return presence.source === 'cli';
-      });
+      SettingsPanel.createOrShow(
+        context,
+        section,
+        async () => {
+          const presence = await resolveAccountPresence(context.secrets, cliCapabilities);
+          return presence.source === 'cli';
+        },
+        { adapter: cliCapabilities, mcpServerDetails },
+      );
     }),
     register('agi-workforce.openAgentConfig', async () => {
       try {

@@ -19,6 +19,7 @@ export const CLI_CAPABILITY_METHODS = {
   mcpLogin: 'loginMcpServer',
   mcpAdd: 'addMcpServer',
   mcpRemove: 'removeMcpServer',
+  mcpSetEnabled: 'setMcpServerEnabled',
   mcpTest: 'testMcpServer',
   mcpTools: 'listMcpServerTools',
   hooks: 'listHooks',
@@ -76,6 +77,7 @@ export type CliFamily = keyof Pick<
   | 'trust'
   | 'providerKeys'
   | 'turnToolFilters'
+  | 'mcpSetEnabled'
 >;
 
 const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
@@ -92,6 +94,7 @@ const CLI_CAPABILITY_FAMILIES: Record<CliCapability, CliFamily> = {
   mcpLogin: 'mcp',
   mcpAdd: 'installs',
   mcpRemove: 'installs',
+  mcpSetEnabled: 'mcpSetEnabled',
   mcpTest: 'mcpTools',
   mcpTools: 'mcpTools',
   hooks: 'hooks',
@@ -146,6 +149,7 @@ const CLI_FAMILY_LABELS: Record<CliFamily, string> = {
   trust: 'trusted folders',
   providerKeys: 'provider API keys',
   turnToolFilters: 'choosing tools for a session',
+  mcpSetEnabled: 'turning MCP servers on and off',
 };
 
 export function cliCapabilityNotOffered(capability: CliCapability): string {

@@ -19,6 +19,13 @@ import type {
   TrustedFolderList,
 } from '../../integrations/localRuntimeClient';
 import type { ExtensionAgentMode } from '../permissions/agentModeConsent';
+import type {
+  SettingsCapabilityList,
+  SettingsLocalCapabilities,
+  SettingsLocalCapabilityKind,
+  SettingsMcpServerRow,
+  SettingsToggleRow,
+} from '../settings/settingsProtocol';
 import { createSkill } from './skillAuthoring';
 import type { McpServerDetailsProvider } from './mcpServerDetails';
 import { t, tPlural } from '../../l10n';
@@ -652,7 +659,7 @@ export async function manageMcpServers(
           : [];
         for (const server of result.value.servers) {
           const actions: ManagedAction[] = [
-            ...(inspects && server.status !== 'blocked'
+            ...(inspects && server.status !== 'blocked' && server.disabled !== true
               ? [
                   {
                     button: {
@@ -666,7 +673,7 @@ export async function manageMcpServers(
                   },
                 ]
               : []),
-            ...(toolLists && server.status !== 'blocked'
+            ...(toolLists && server.status !== 'blocked' && server.disabled !== true
               ? [
                   {
                     button: { iconPath: new vscode.ThemeIcon('list-tree'), tooltip: 'Show tools' },
@@ -699,7 +706,7 @@ export async function manageMcpServers(
           }
           items.push({
             label: `$(${server.status === 'blocked' ? 'lock' : server.status === 'needs_auth' ? 'key' : 'plug'}) ${server.name}`,
-            description: `${MCP_STATUS_LABELS[server.status]}, ${server.transport}, ${server.scope}`,
+            description: `${server.disabled === true ? 'Off' : MCP_STATUS_LABELS[server.status]}, ${server.transport}, ${server.scope}`,
             ...([server.policyRefusal, server.url].filter(Boolean).length === 0
               ? {}
               : { detail: [server.policyRefusal, server.url].filter(Boolean).join(' · ') }),
@@ -714,6 +721,107 @@ export async function manageMcpServers(
     },
     'MCP servers',
   );
+}
+
+function settingsList<Value, Row>(
+  result: CliCapabilityResult<Value>,
+  noun: string,
+  rows: (value: Value) => Row[],
+): SettingsCapabilityList<Row> {
+  if (result.status !== 'ok') {
+    return { status: 'unavailable', message: unavailableLabel(result.reason, noun) };
+  }
+  return { status: 'ready', rows: rows(result.value) };
+}
+
+function mcpServerState(server: McpServerListResponse['servers'][number]): string | undefined {
+  if (server.disabled === true) return 'Off';
+  if (server.status !== 'configured' && server.status !== 'authorized') {
+    return MCP_STATUS_LABELS[server.status];
+  }
+  return server.scope === 'project' ? 'From this workspace' : undefined;
+}
+
+export async function loadSettingsCapabilities(
+  adapter: CliCapabilityAdapter,
+): Promise<SettingsLocalCapabilities> {
+  const [servers, plugins, skills, switchesServers, installs, inspects] = await Promise.all([
+    adapter.call<McpServerListResponse>('mcpServers'),
+    adapter.call<PluginListResponse>('plugins'),
+    adapter.call<SkillListResponse>('skills'),
+    adapter.offers('mcpSetEnabled'),
+    adapter.offers('installs'),
+    adapter.offers('mcpInspect'),
+  ]);
+  return {
+    canAddMcpServer: installs && servers.status === 'ok',
+    mcp: settingsList(servers, 'MCP servers', (value) =>
+      value.servers.map((server): SettingsMcpServerRow => {
+        const state = mcpServerState(server);
+        return {
+          name: server.name,
+          source: server.scope,
+          enabled: server.disabled !== true,
+          switchable: switchesServers && server.scope === 'user',
+          inspectable: inspects && server.disabled !== true && server.status !== 'blocked',
+          ...(state === undefined ? {} : { state }),
+        };
+      }),
+    ),
+    plugins: settingsList(plugins, 'plugins', (value) =>
+      value.plugins.map((plugin): SettingsToggleRow => ({
+        id: plugin.id,
+        name: plugin.name,
+        detail: [plugin.version, plugin.source].filter(Boolean).join(', '),
+        enabled: plugin.enabled,
+        switchable: true,
+      })),
+    ),
+    skills: settingsList(skills, 'skills', (value) =>
+      value.skills.map((skill): SettingsToggleRow => ({
+        id: skill.name,
+        name: skill.name,
+        detail: skill.consented ? skill.description : 'Not allowed in this folder yet',
+        enabled: skill.enabled && skill.consented,
+        switchable: skill.consented,
+      })),
+    ),
+  };
+}
+
+export function setSettingsCapabilityEnabled(
+  adapter: CliCapabilityAdapter,
+  kind: SettingsLocalCapabilityKind,
+  id: string,
+  enabled: boolean,
+): Promise<CliCapabilityResult<unknown>> {
+  switch (kind) {
+    case 'mcp':
+      return adapter.call('mcpSetEnabled', id, enabled);
+    case 'plugin':
+      return adapter.call('pluginsSetEnabled', id, enabled);
+    case 'skill':
+      return adapter.call('skillsSetEnabled', id, enabled);
+  }
+}
+
+export async function addMcpServerFromSettings(
+  adapter: CliCapabilityAdapter,
+): Promise<CliCapabilityResult<unknown> | undefined> {
+  const listed = await adapter.call<McpServerListResponse>('mcpServers');
+  if (listed.status !== 'ok') return listed;
+  return addMcpServer(
+    adapter,
+    listed.value.servers.map((server) => server.name),
+  );
+}
+
+export function showMcpServerDetailsFromSettings(
+  adapter: CliCapabilityAdapter,
+  details: McpServerDetailsProvider,
+  name: string,
+): Promise<CliCapabilityResult<unknown> | undefined> {
+  return showMcpServerDetails(adapter, details, name);
 }
 
 async function addHook(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {

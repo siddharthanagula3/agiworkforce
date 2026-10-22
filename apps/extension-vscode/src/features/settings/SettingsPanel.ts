@@ -16,6 +16,8 @@ import {
   isSettingsSection,
   parseSettingsWebviewMessage,
   type SettingsCommand,
+  type SettingsLocalCapabilities,
+  type SettingsLocalCapabilityKind,
   type SettingsHostMessage,
   type SettingsPanelState,
   type SettingsPlanUsage,
@@ -40,6 +42,33 @@ import {
   type CustomInstructionScope,
 } from '../instructions';
 import { getContextPanelProvider } from '../trees/contextPanelProvider';
+import type { CliCapabilityAdapter, CliCapabilityResult } from '../surfaces/cliCapabilities';
+import type { McpServerDetailsProvider } from '../surfaces/mcpServerDetails';
+import {
+  addMcpServerFromSettings,
+  loadSettingsCapabilities,
+  setSettingsCapabilityEnabled,
+  showMcpServerDetailsFromSettings,
+} from '../surfaces/capabilityManagement';
+
+export interface SettingsLocalCapabilityHost {
+  adapter: CliCapabilityAdapter;
+  mcpServerDetails: McpServerDetailsProvider;
+}
+
+const LOCAL_RUNTIME_NOT_CONNECTED = 'The AGI CLI is not connected to this window.';
+
+const DISCONNECTED_LOCAL_CAPABILITIES: SettingsLocalCapabilities = {
+  mcp: { status: 'unavailable', message: LOCAL_RUNTIME_NOT_CONNECTED },
+  plugins: { status: 'unavailable', message: LOCAL_RUNTIME_NOT_CONNECTED },
+  skills: { status: 'unavailable', message: LOCAL_RUNTIME_NOT_CONNECTED },
+  canAddMcpServer: false,
+};
+
+const CAPABILITY_COMMANDS: Partial<Record<SettingsCommand, string>> = {
+  showPlugins: 'agi-workforce.showPlugins',
+  showSkills: 'agi-workforce.showSkills',
+};
 
 const EXTERNAL_DESTINATION_PATHS: Partial<Record<SettingsCommand, string>> = {
   manageAccount: '/settings/account?from=vscode-extension',
@@ -86,6 +115,7 @@ export class SettingsPanel {
   private static instance: SettingsPanel | undefined;
   private readonly disposables: vscode.Disposable[] = [];
   private refreshSequence = 0;
+  private capabilitySequence = 0;
 
   static __resetForTests(): void {
     SettingsPanel.instance = undefined;
@@ -95,6 +125,7 @@ export class SettingsPanel {
     context: vscode.ExtensionContext,
     requestedSection: unknown = 'general',
     signedInThroughCli: () => Promise<boolean> = () => Promise.resolve(false),
+    localCapabilities?: SettingsLocalCapabilityHost,
   ): SettingsPanel {
     const section = isSettingsSection(requestedSection) ? requestedSection : 'general';
     const column = vscode.window.activeTextEditor?.viewColumn ?? vscode.ViewColumn.One;
@@ -103,6 +134,7 @@ export class SettingsPanel {
       SettingsPanel.instance.panel.reveal(column);
       void SettingsPanel.instance.post({ type: 'settings.navigate', section });
       void SettingsPanel.instance.refresh();
+      void SettingsPanel.instance.refreshCapabilities();
       return SettingsPanel.instance;
     }
 
@@ -111,7 +143,13 @@ export class SettingsPanel {
       retainContextWhenHidden: true,
       localResourceRoots: [],
     });
-    SettingsPanel.instance = new SettingsPanel(panel, context, section, signedInThroughCli);
+    SettingsPanel.instance = new SettingsPanel(
+      panel,
+      context,
+      section,
+      signedInThroughCli,
+      localCapabilities,
+    );
     return SettingsPanel.instance;
   }
 
@@ -120,6 +158,7 @@ export class SettingsPanel {
     private readonly context: vscode.ExtensionContext,
     initialSection: SettingsSection,
     private readonly signedInThroughCli: () => Promise<boolean>,
+    private readonly localCapabilities: SettingsLocalCapabilityHost | undefined,
   ) {
     const storedInstructions = getStoredCustomInstructions(this.context);
     const initialState: SettingsPanelState = {
@@ -150,7 +189,24 @@ export class SettingsPanel {
         }
 
         if (message.type === 'settings.ready') {
-          await this.refresh();
+          await Promise.all([this.refresh(), this.refreshCapabilities()]);
+          return;
+        }
+
+        if (message.type === 'settings.capability.setEnabled') {
+          await this.setCapabilityEnabled(message.kind, message.id, message.enabled);
+          return;
+        }
+
+        if (message.type === 'settings.mcp.add') {
+          await this.runCapabilityAction((host) => addMcpServerFromSettings(host.adapter));
+          return;
+        }
+
+        if (message.type === 'settings.mcp.details') {
+          await this.runCapabilityAction((host) =>
+            showMcpServerDetailsFromSettings(host.adapter, host.mcpServerDetails, message.name),
+          );
           return;
         }
 
@@ -232,6 +288,51 @@ export class SettingsPanel {
     }
   }
 
+  private async refreshCapabilities(): Promise<void> {
+    const sequence = ++this.capabilitySequence;
+    const capabilities =
+      this.localCapabilities === undefined
+        ? DISCONNECTED_LOCAL_CAPABILITIES
+        : await loadSettingsCapabilities(this.localCapabilities.adapter);
+    if (sequence !== this.capabilitySequence) return;
+    await this.post({ type: 'settings.capabilities', capabilities });
+  }
+
+  private async setCapabilityEnabled(
+    kind: SettingsLocalCapabilityKind,
+    id: string,
+    enabled: boolean,
+  ): Promise<void> {
+    await this.runCapabilityAction((host) =>
+      setSettingsCapabilityEnabled(host.adapter, kind, id, enabled),
+    );
+  }
+
+  private async runCapabilityAction(
+    action: (
+      host: SettingsLocalCapabilityHost,
+    ) => Promise<CliCapabilityResult<unknown> | undefined>,
+  ): Promise<void> {
+    try {
+      const outcome =
+        this.localCapabilities === undefined
+          ? ({ status: 'unavailable', reason: LOCAL_RUNTIME_NOT_CONNECTED } as const)
+          : await action(this.localCapabilities);
+      if (outcome !== undefined && outcome.status !== 'ok') {
+        await this.post({ type: 'settings.error', message: outcome.reason });
+      }
+    } catch (error) {
+      await this.post({
+        type: 'settings.error',
+        message:
+          error instanceof Error
+            ? `The requested settings action failed: ${error.message}`
+            : 'The requested settings action failed.',
+      });
+    }
+    await this.refreshCapabilities();
+  }
+
   private async updateSetting(
     key: MutableConfigKey,
     update: Parameters<typeof Config.update>[1],
@@ -284,6 +385,12 @@ export class SettingsPanel {
       const destinationPath = EXTERNAL_DESTINATION_PATHS[command];
       if (destinationPath !== undefined) {
         await vscode.env.openExternal(vscode.Uri.parse(`${getCloudWebOrigin()}${destinationPath}`));
+        return;
+      }
+      const capabilityCommand = CAPABILITY_COMMANDS[command];
+      if (capabilityCommand !== undefined) {
+        await vscode.commands.executeCommand(capabilityCommand);
+        await this.refreshCapabilities();
         return;
       }
 

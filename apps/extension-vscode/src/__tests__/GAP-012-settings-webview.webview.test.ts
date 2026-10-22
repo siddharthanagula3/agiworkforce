@@ -141,7 +141,7 @@ describe('settings webview', () => {
       },
       {
         label: 'Integrations',
-        sections: ['mcp', 'hooks', 'plugins'],
+        sections: ['mcp', 'hooks', 'plugins', 'skills'],
       },
       {
         label: 'Account',
@@ -161,6 +161,7 @@ describe('settings webview', () => {
       'MCP servers',
       'Hooks',
       'Plugins',
+      'Skills',
       'Cloud account',
     ]);
     expect([...new Set(renderedSettings)].sort()).toEqual([...SETTINGS_PANEL_SETTING_KEYS].sort());
