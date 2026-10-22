@@ -112,6 +112,7 @@ import { CodePageFrame, CodePaneTools, type CodePaneControls } from './component
 import { useCodePanes } from './hooks/use-code-panes';
 import { useCodeFirstRun } from './hooks/use-code-first-run';
 import { CodeFirstRunWizard } from './components/CodeFirstRunWizard';
+import { CodeUsageDashboard } from './components/CodeUsageDashboard';
 import styles from './CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
@@ -1563,6 +1564,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                             />
                           </nav>
                         )}
+                        <CodeUsageDashboard planTier={availability?.planTier ?? null} />
                       </div>
                     </div>
                   )}
