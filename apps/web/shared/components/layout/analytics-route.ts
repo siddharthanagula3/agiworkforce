@@ -10,6 +10,7 @@ export const DYNAMIC_PAGE_ROUTES = [
   '/connectors/mcp-directory/[...id]',
   '/gallery/[templateId]',
   '/help/[slug]',
+  '/help/collections/[id]',
   '/legal/archive/[policy]',
   '/legal/archive/[policy]/[date]',
   '/open/[target]/[id]',
@@ -29,6 +30,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
   '/chat': [
     'agents',
     'artifacts',
+    'chats',
     'code',
     'customize',
     'finance',
@@ -44,6 +46,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
   ],
   '/chat/agents': ['new'],
   '/code': ['computer', 'shared'],
+  '/help': ['collections'],
   '/quick-ask': ['dictate'],
   '/share': ['schedules'],
   '/settings': [
