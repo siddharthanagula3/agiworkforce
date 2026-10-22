@@ -3,15 +3,15 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 const migration = fs.readFileSync(
-  path.resolve(import.meta.dirname, '0383_event_trigger_signing_salt.sql'),
+  path.resolve(import.meta.dirname, '0387_event_trigger_signing_salt.sql'),
   'utf8',
 );
 const reversal = fs.readFileSync(
-  path.resolve(import.meta.dirname, 'down/0383_event_trigger_signing_salt.down.sql'),
+  path.resolve(import.meta.dirname, 'down/0387_event_trigger_signing_salt.down.sql'),
   'utf8',
 );
 
-describe('0383 event trigger signing salt migration', () => {
+describe('0387 event trigger signing salt migration', () => {
   it('is marked not yet applied', () => {
     expect(migration).toContain('NOT YET APPLIED');
   });
@@ -29,7 +29,7 @@ describe('0383 event trigger signing salt migration', () => {
   it('drops the column and retracts its ledger row', () => {
     expect(reversal).toContain('drop column if exists signing_salt');
     expect(reversal).toContain(
-      "delete from public.schema_migrations\n where filename = '0383_event_trigger_signing_salt.sql'",
+      "delete from public.schema_migrations\n where filename = '0387_event_trigger_signing_salt.sql'",
     );
   });
 });

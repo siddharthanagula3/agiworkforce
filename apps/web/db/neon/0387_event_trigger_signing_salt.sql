@@ -1,5 +1,5 @@
 -- =============================================================================
--- Migration 0383: a rotatable signing secret for connector triggers
+-- Migration 0387: a rotatable signing secret for connector triggers
 --
 -- NOT YET APPLIED : draft only, pending explicit approval before running.
 --
