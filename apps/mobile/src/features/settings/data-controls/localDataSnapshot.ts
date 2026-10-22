@@ -222,7 +222,7 @@ export async function resetLocalInMemoryState(): Promise<void> {
     generateMemoryFromHistory: true,
     personalization: defaultPersonalization,
   };
-  useLocalSettingsStore.setState(defaultModeSettings);
+  useLocalSettingsStore.setState({ ...defaultModeSettings, startWithVoice: false });
   useCloudSettingsStore.setState({
     ...defaultModeSettings,
     referencePastChats: false,

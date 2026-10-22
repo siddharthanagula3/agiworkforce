@@ -138,6 +138,27 @@ describe('Thread header', () => {
     expect(screen.getByLabelText('Unpin')).toBeTruthy();
   });
 
+  it('disables both menu controls until the conversation is in the store, then enables them', () => {
+    useChatStore.setState({ conversations: [], messages: {} } as never);
+    const screen = render(<ChatScreen />);
+
+    const titleButton = screen.getByLabelText('Chat. Open conversation menu');
+    const ellipsis = screen.getByLabelText('Conversation menu');
+    expect(titleButton.props.accessibilityState.disabled).toBe(true);
+    expect(ellipsis.props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(ellipsis);
+    fireEvent.press(titleButton);
+    expect(screen.queryByTestId('conversation-action-pin')).toBeNull();
+
+    act(() => seedThread());
+
+    expect(screen.getByLabelText('Conversation menu').props.accessibilityState.disabled).toBe(
+      false,
+    );
+    fireEvent.press(screen.getByLabelText('Conversation menu'));
+    expect(screen.getByTestId('conversation-action-pin')).toBeTruthy();
+  });
+
   it('leaves the thread after a confirmed delete', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
     seedThread();

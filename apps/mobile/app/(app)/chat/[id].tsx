@@ -1690,9 +1690,11 @@ export default function ChatScreen() {
 
           <Pressable
             onPress={handleMenuPress}
+            disabled={!conversation}
             style={{ flex: 1, minHeight: 32, justifyContent: 'center', paddingHorizontal: 4 }}
             accessibilityLabel={`${title}. Open conversation menu`}
             accessibilityRole="button"
+            accessibilityState={{ disabled: !conversation }}
           >
             <Text
               numberOfLines={1}
@@ -1726,6 +1728,7 @@ export default function ChatScreen() {
             </Pressable>
             <Pressable
               onPress={handleMenuPress}
+              disabled={!conversation}
               hitSlop={6}
               style={({ pressed }) => ({
                 width: 32,
@@ -1734,9 +1737,11 @@ export default function ChatScreen() {
                 alignItems: 'center',
                 justifyContent: 'center',
                 backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                opacity: conversation ? 1 : 0.4,
               })}
               accessibilityLabel="Conversation menu"
               accessibilityRole="button"
+              accessibilityState={{ disabled: !conversation }}
             >
               <MoreHorizontal size={18} color={colors.textSecondary} />
             </Pressable>
