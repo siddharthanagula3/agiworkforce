@@ -81,6 +81,9 @@ import {
 } from '../src/features/continuity/continuity-onboarding';
 import { useAuthStore } from '../src/features/auth/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
+import { useTierStore } from '../src/features/billing/store';
+import { useWaitlistStore } from '../src/features/waitlist/store';
+import { useChatStore } from '../stores/chatStore';
 
 describe('Mobile cross-device continuity onboarding', () => {
   beforeEach(() => {
@@ -94,6 +97,9 @@ describe('Mobile cross-device continuity onboarding', () => {
       clerkUserId: 'user-1',
     });
     useChatAppModeStore.setState({ appMode: 'cloud' });
+    useTierStore.setState({ tier: 'free' });
+    useWaitlistStore.setState({ cloudUnlocked: true });
+    useChatStore.getState().setWorkMode('chat');
   });
 
   it('stores acknowledgement per encoded Cloud owner', () => {
@@ -136,6 +142,7 @@ describe('Mobile cross-device continuity onboarding', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     const { getByText, getByLabelText } = render(<ContinuityOnboardingScreen />);
 
+    expect(getByText('AGI Work')).toBeTruthy();
     expect(getByText('Beta')).toBeTruthy();
     expect(getByText("Keep Cloud work going when you're on the go")).toBeTruthy();
     expect(getByText('Start and steer tasks from your phone')).toBeTruthy();
@@ -146,6 +153,29 @@ describe('Mobile cross-device continuity onboarding', () => {
 
     expect(mockSet).toHaveBeenCalledWith('continuity-onboarding:v1:user-1', true);
     expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+    expect(useChatStore.getState().workMode).toBe('chat');
+  });
+
+  it('lands an owner whose plan includes Work in the Work composer', () => {
+    useTierStore.setState({ tier: 'pro' });
+    const { getByLabelText } = render(<ContinuityOnboardingScreen />);
+
+    fireEvent.press(getByLabelText('Start a Managed Cloud task'));
+
+    expect(useChatAppModeStore.getState().appMode).toBe('cloud');
+    expect(useChatStore.getState().workMode).toBe('agiwork');
+    expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
+  });
+
+  it('keeps the Chat composer while Cloud access is still locked', () => {
+    useTierStore.setState({ tier: 'pro' });
+    useWaitlistStore.setState({ cloudUnlocked: false });
+    const { getByLabelText } = render(<ContinuityOnboardingScreen />);
+
+    fireEvent.press(getByLabelText('Start a Managed Cloud task'));
+
+    expect(useChatStore.getState().workMode).toBe('chat');
     expect(mockReplace).toHaveBeenCalledWith('/(app)/(tabs)/chat');
   });
 

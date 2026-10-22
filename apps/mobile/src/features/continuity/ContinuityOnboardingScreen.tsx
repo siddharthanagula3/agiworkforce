@@ -4,10 +4,14 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Clock3, Globe2, ListChecks, X, type LucideIcon } from 'lucide-react-native';
+import { canUseBillingPlanCapability, PRODUCT_NAMES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
+import { useChatStore } from '@/stores/chatStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
+import { useTierStore } from '@/src/features/billing/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { acknowledgeContinuityOnboarding } from './continuity-onboarding';
@@ -43,6 +47,9 @@ export default function ContinuityOnboardingScreen() {
   const isClerkSignedIn = useAuthStore((state) => state.isClerkSignedIn);
   const clerkUserId = useAuthStore((state) => state.clerkUserId);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
+  const setWorkMode = useChatStore((state) => state.setWorkMode);
+  const subscriptionTier = useTierStore((state) => state.tier);
+  const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
 
   const rememberDecision = useCallback(() => {
     if (isClerkSignedIn && clerkUserId) {
@@ -67,8 +74,20 @@ export default function ContinuityOnboardingScreen() {
 
     rememberDecision();
     setAppMode('cloud');
+    if (cloudUnlocked && canUseBillingPlanCapability(subscriptionTier, 'agi_work')) {
+      setWorkMode('agiwork');
+    }
     router.replace('/(app)/(tabs)/chat');
-  }, [clerkUserId, isClerkSignedIn, rememberDecision, router, setAppMode]);
+  }, [
+    clerkUserId,
+    cloudUnlocked,
+    isClerkSignedIn,
+    rememberDecision,
+    router,
+    setAppMode,
+    setWorkMode,
+    subscriptionTier,
+  ]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
@@ -83,7 +102,28 @@ export default function ContinuityOnboardingScreen() {
         }}
         showsVerticalScrollIndicator={false}
       >
-        <View style={{ minHeight: 44, alignItems: 'flex-end', justifyContent: 'center' }}>
+        <View
+          style={{
+            minHeight: 44,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}
+        >
+          <View style={{ width: 40 }} />
+          <Text
+            accessibilityRole="header"
+            numberOfLines={1}
+            style={{
+              flex: 1,
+              textAlign: 'center',
+              color: colors.textPrimary,
+              fontSize: typeScale.headline,
+              fontWeight: '600',
+            }}
+          >
+            {PRODUCT_NAMES.work}
+          </Text>
           <Pressable
             onPress={leave}
             accessibilityRole="button"
