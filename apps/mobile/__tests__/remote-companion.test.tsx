@@ -250,6 +250,61 @@ describe('remote projects', () => {
   });
 });
 
+describe('sessions list', () => {
+  const synced = '2026-10-22T00:00:00.000Z';
+
+  function seed(sessions: RemoteCodeSessionSummary[]) {
+    useRemoteCodeStore.setState({
+      roots: [{ rootId: 'r1', name: 'agiworkforce', branch: 'main', available: true }],
+      sessions,
+      sessionsSyncedAt: synced,
+    });
+  }
+
+  it('shows a Sessions header, an All filter and each session with its age', () => {
+    seed([
+      {
+        ...session('r1', 't1', 'Audit fix'),
+        updatedAt: new Date(Date.now() - 5 * 86_400_000).toISOString(),
+      },
+    ]);
+    const { getByText, getByLabelText } = render(<CodeSessionsCard canStart={false} />);
+    expect(getByText('Sessions')).toBeTruthy();
+    expect(getByLabelText('Filter sessions: All')).toBeTruthy();
+    expect(getByText('5d ago · r1')).toBeTruthy();
+  });
+
+  it('filters the list by status and says when nothing matches', () => {
+    seed([
+      { ...session('r1', 't1', 'Audit fix'), status: 'running' },
+      { ...session('r1', 't2', 'Hero copy'), status: 'idle' },
+    ]);
+    const { getByText, queryByText, getByLabelText } = render(
+      <CodeSessionsCard canStart={false} />,
+    );
+
+    fireEvent.press(getByLabelText('Filter sessions: All'));
+    fireEvent.press(getByLabelText('Running'));
+    expect(getByText('Audit fix')).toBeTruthy();
+    expect(queryByText('Hero copy')).toBeNull();
+    expect(getByLabelText('Filter sessions: Running')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Filter sessions: Running'));
+    fireEvent.press(getByLabelText('Failed'));
+    expect(getByText('No sessions match this filter.')).toBeTruthy();
+
+    fireEvent.press(getByLabelText('Filter sessions: Failed'));
+    fireEvent.press(getByLabelText('All'));
+    expect(getByText('Hero copy')).toBeTruthy();
+  });
+
+  it('offers no filter before there is a session to filter', () => {
+    seed([]);
+    const { queryByLabelText } = render(<CodeSessionsCard canStart={false} />);
+    expect(queryByLabelText('Filter sessions: All')).toBeNull();
+  });
+});
+
 describe('remote control settings page', () => {
   it('shows a connected desktop with Open Remote and a confirmed Disconnect', () => {
     const disconnect = jest.fn();

@@ -12,6 +12,7 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
+import { useMobileFastMode } from '@/src/features/model-picker/fastMode';
 import { DEFAULT_AUTO_MODE_ID, getShortDisplayName } from '@/src/features/model-picker/service';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { resolveTurnEffort } from '@/src/features/chat/utils/turnEffort';
@@ -35,7 +36,9 @@ interface ModelSelectorButtonProps {
  * through the same helpers as the send path (`resolveTurnEffort` +
  * `getModelEffortOptions`) rather than the raw stored value, a model with no
  * effort axis, or a stale effort it does not support, renders no suffix instead
- * of advertising a setting that will be dropped.
+ * of advertising a setting that will be dropped. The Fast token follows the
+ * same rule: it shows only when fast mode is on and allowed for this model,
+ * which is when the send path attaches the fast speed.
  */
 export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
   const colors = useThemeColors();
@@ -60,6 +63,14 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
     thinkingEnabled,
   });
   const effortLabel = turnEffort ? EFFORT_LABEL[turnEffort as Effort] : undefined;
+  const fastMode = useMobileFastMode(selectedModel);
+  const fastOn = fastMode.offersFast && fastMode.enabled && fastMode.allowed;
+  const accessibilityDetail = [
+    fastOn ? 'fast mode on' : null,
+    effortLabel ? `reasoning effort ${effortLabel}` : null,
+  ]
+    .filter(Boolean)
+    .join(', ');
 
   const handlePress = () => {
     if (hapticsEnabled) {
@@ -84,7 +95,7 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
       hitSlop={8}
       testID="chat.composer.model"
       accessibilityLabel={
-        effortLabel ? `Model: ${label}, reasoning effort ${effortLabel}` : `Model: ${label}`
+        accessibilityDetail ? `Model: ${label}, ${accessibilityDetail}` : `Model: ${label}`
       }
       accessibilityRole="button"
       accessibilityHint="Opens the model picker"
@@ -102,6 +113,19 @@ export function ModelSelectorButton({ onPress }: ModelSelectorButtonProps) {
       >
         {label}
       </Text>
+      {fastOn ? (
+        <Text
+          numberOfLines={1}
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.footnote,
+            lineHeight: 16,
+            includeFontPadding: false,
+          }}
+        >
+          Fast
+        </Text>
+      ) : null}
       {effortLabel ? (
         <Text
           numberOfLines={1}

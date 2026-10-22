@@ -9,6 +9,7 @@ import {
   Code2,
   Folder,
   FolderOpen,
+  ListFilter,
   Play,
   RefreshCw,
 } from 'lucide-react-native';
@@ -21,6 +22,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
+import { formatRelativeTime } from '@/src/lib/time';
 import { useThemeColors } from '@/src/ui/theme';
 import { listCodeSessions, startCodeSession } from '../remote-code/service';
 import { forgetCodeSessionStart, useRemoteCodeStore } from '../remote-code/store';
@@ -159,7 +161,7 @@ export function NewCodeSession({ onStarted }: { onStarted?: () => void }) {
   );
 }
 
-const CLOUD_SESSION_LABEL = 'Cloud, read-only';
+export const CLOUD_SESSION_LABEL = 'Cloud, read-only';
 
 const REMOTE_SESSION_ORIGIN_LABELS = {
   cli: 'CLI',
@@ -182,6 +184,23 @@ const STATUS_COLORS: Record<RemoteCodeSessionStatus, 'gray' | 'blue' | 'yellow' 
   failed: 'red',
   unknown: 'gray',
 };
+
+export type CodeSessionFilter = 'all' | Exclude<RemoteCodeSessionStatus, 'unknown'>;
+
+const SESSION_FILTERS: readonly { value: CodeSessionFilter; label: string }[] = [
+  { value: 'all', label: 'All' },
+  { value: 'running', label: STATUS_LABELS.running },
+  { value: 'awaiting_approval', label: STATUS_LABELS.awaiting_approval },
+  { value: 'idle', label: STATUS_LABELS.idle },
+  { value: 'failed', label: STATUS_LABELS.failed },
+];
+
+export function filterSessionsByStatus(
+  sessions: readonly RemoteCodeSessionSummary[],
+  filter: CodeSessionFilter,
+): RemoteCodeSessionSummary[] {
+  return filter === 'all' ? [...sessions] : sessions.filter((session) => session.status === filter);
+}
 
 export function codeSessionStatusLabel(status: RemoteCodeSessionStatus): string {
   return STATUS_LABELS[status];
@@ -218,6 +237,10 @@ export function groupSessionsByProject(
   return [...projects.values()];
 }
 
+function sessionAge(updatedAt: string): string | null {
+  return Number.isNaN(Date.parse(updatedAt)) ? null : formatRelativeTime(updatedAt);
+}
+
 function SessionRow({ session }: { session: RemoteCodeSessionSummary }) {
   const colors = useThemeColors();
   const router = useRouter();
@@ -238,6 +261,7 @@ function SessionRow({ session }: { session: RemoteCodeSessionSummary }) {
         </Text>
         <Text className="text-sm text-white/45" numberOfLines={1}>
           {[
+            sessionAge(session.updatedAt),
             session.location === 'cloud' ? CLOUD_SESSION_LABEL : null,
             session.origin ? REMOTE_SESSION_ORIGIN_LABELS[session.origin] : null,
             session.folder,
@@ -297,6 +321,63 @@ function ProjectRow({
   );
 }
 
+function SessionFilterButton({
+  value,
+  open,
+  onToggle,
+}: {
+  value: CodeSessionFilter;
+  open: boolean;
+  onToggle: () => void;
+}) {
+  const colors = useThemeColors();
+  const current = SESSION_FILTERS.find((filter) => filter.value === value) ?? SESSION_FILTERS[0];
+  return (
+    <PressableBox
+      onPress={onToggle}
+      accessibilityRole="button"
+      accessibilityState={{ expanded: open }}
+      accessibilityLabel={`Filter sessions: ${current?.label}`}
+      style={{ minHeight: 44 }}
+      className="flex-row items-center gap-1 rounded-full px-2 active:bg-white/5"
+    >
+      <Text className="text-sm text-white/70">{current?.label}</Text>
+      <ListFilter size={14} color={colors.textMuted} />
+    </PressableBox>
+  );
+}
+
+function SessionFilterOptions({
+  value,
+  onChange,
+}: {
+  value: CodeSessionFilter;
+  onChange: (value: CodeSessionFilter) => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View accessibilityRole="radiogroup" className="mb-2 rounded-xl border border-white/10 py-1">
+      {SESSION_FILTERS.map((filter) => {
+        const selected = filter.value === value;
+        return (
+          <PressableBox
+            key={filter.value}
+            onPress={() => onChange(filter.value)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected }}
+            accessibilityLabel={filter.label}
+            style={{ minHeight: 44 }}
+            className="flex-row items-center gap-2 px-3 active:bg-white/5"
+          >
+            <Text className="flex-1 text-sm text-white">{filter.label}</Text>
+            {selected ? <Check size={14} color={colors.textPrimary} /> : null}
+          </PressableBox>
+        );
+      })}
+    </View>
+  );
+}
+
 export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
   const colors = useThemeColors();
   const sessions = useRemoteCodeStore((state) => state.sessions);
@@ -304,8 +385,14 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
   const unavailable = useRemoteCodeStore((state) => state.unavailable);
   const syncedAt = useRemoteCodeStore((state) => state.sessionsSyncedAt);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-  const projects = groupSessionsByProject(sessions, roots);
-  const grouped = projects.length > 1;
+  const [filter, setFilter] = useState<CodeSessionFilter>('all');
+  const [filterOpen, setFilterOpen] = useState(false);
+  const filtered = filter !== 'all';
+  const visibleSessions = filterSessionsByStatus(sessions, filter);
+  const grouped = groupSessionsByProject(sessions, roots).length > 1;
+  const projects = groupSessionsByProject(visibleSessions, roots).filter(
+    (project) => !filtered || project.sessions.length > 0,
+  );
 
   useEffect(() => {
     void listCodeSessions();
@@ -328,8 +415,15 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
             className={`flex-1 text-white ${grouped ? 'text-base font-semibold' : 'text-sm font-medium'}`}
             accessibilityRole="header"
           >
-            {grouped ? 'Projects' : 'AGI Code sessions'}
+            {grouped ? 'Projects' : 'Sessions'}
           </Text>
+          {sessions.length > 0 ? (
+            <SessionFilterButton
+              value={filter}
+              open={filterOpen}
+              onToggle={() => setFilterOpen((isOpen) => !isOpen)}
+            />
+          ) : null}
           <PressableBox
             onPress={() => void listCodeSessions()}
             className="items-center justify-center rounded-lg active:bg-white/5"
@@ -341,8 +435,20 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
           </PressableBox>
         </View>
 
+        {filterOpen && sessions.length > 0 ? (
+          <SessionFilterOptions
+            value={filter}
+            onChange={(next) => {
+              setFilter(next);
+              setFilterOpen(false);
+            }}
+          />
+        ) : null}
+
         {syncedAt === null ? (
           <Text className="text-sm text-white/40">Asking Desktop for its sessions…</Text>
+        ) : filtered && sessions.length > 0 && visibleSessions.length === 0 ? (
+          <Text className="text-sm text-white/40">No sessions match this filter.</Text>
         ) : grouped ? (
           <View>
             {projects.map((project) => (
@@ -362,7 +468,7 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
           </Text>
         ) : (
           <View className="gap-2">
-            {sessions.map((session) => (
+            {visibleSessions.map((session) => (
               <SessionRow key={`${session.rootId}:${session.threadId}`} session={session} />
             ))}
           </View>

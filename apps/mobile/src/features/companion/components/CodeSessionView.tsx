@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ScrollView, TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
@@ -17,6 +17,7 @@ import {
 import {
   REMOTE_CODE_LIMITS,
   managedUsageBucketLabel,
+  type RemoteCodeDiff,
   type RemoteCodeToolRecord,
 } from '@agiworkforce/types';
 import { Badge } from '@/components/ui/badge';
@@ -39,7 +40,28 @@ import {
   useRemoteCodePreferences,
   useRemoteCodeStore,
 } from '../remote-code/store';
-import { codeSessionStatusColor, codeSessionStatusLabel } from './CodeSessionsCard';
+import {
+  CLOUD_SESSION_LABEL,
+  codeSessionStatusColor,
+  codeSessionStatusLabel,
+} from './CodeSessionsCard';
+
+const REMOTE_SESSION_LABEL = 'Remote session';
+
+export function countDiffLines(diffs: readonly RemoteCodeDiff[]): {
+  added: number;
+  removed: number;
+} {
+  let added = 0;
+  let removed = 0;
+  for (const diff of diffs) {
+    for (const line of diff.patch.split('\n')) {
+      if (line.startsWith('+') && !line.startsWith('+++')) added += 1;
+      else if (line.startsWith('-') && !line.startsWith('---')) removed += 1;
+    }
+  }
+  return { added, removed };
+}
 
 interface CodeSessionViewProps {
   rootId: string;
@@ -159,6 +181,12 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
   const [interruptFirst, setInterruptFirst] = useState(steerByDefault);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
+  const [diffOpen, setDiffOpen] = useState(false);
+  const scrollRef = useRef<ScrollView>(null);
+  const diffTop = useRef(0);
+  const summary = useRemoteCodeStore((state) =>
+    state.sessions.find((session) => session.rootId === rootId && session.threadId === threadId),
+  );
 
   useEffect(() => {
     void attachCodeSession(rootId, threadId);
@@ -194,6 +222,14 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
         ];
   const generated = thread.fileChanges.filter((change) => change.kind === 'created');
   const modified = thread.fileChanges.filter((change) => change.kind === 'modified');
+  const diffCounts = countDiffLines(thread.diffs);
+  const location = [summary?.folder, summary?.branch].filter(Boolean).join(' · ');
+
+  const toggleDiff = () => {
+    const opening = !diffOpen;
+    setDiffOpen(opening);
+    if (opening) scrollRef.current?.scrollTo({ y: diffTop.current, animated: true });
+  };
 
   const handleSend = async () => {
     if (!canSend) return;
@@ -211,6 +247,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
 
   return (
     <ScrollView
+      ref={scrollRef}
       className="flex-1"
       contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40, gap: 12 }}
       keyboardShouldPersistTaps="handled"
@@ -223,6 +260,37 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
           label={codeSessionStatusLabel(thread.status)}
           color={codeSessionStatusColor(thread.status)}
         />
+      </View>
+
+      <View className="gap-2">
+        {location ? (
+          <Text className="text-sm text-white/50" numberOfLines={1}>
+            {location}
+          </Text>
+        ) : null}
+        <View className="flex-row flex-wrap items-center gap-2">
+          <Badge
+            label={summary?.location === 'cloud' ? CLOUD_SESSION_LABEL : REMOTE_SESSION_LABEL}
+          />
+          {thread.diffs.length > 0 ? (
+            <PressableBox
+              onPress={toggleDiff}
+              accessibilityRole="button"
+              accessibilityState={{ expanded: diffOpen }}
+              accessibilityLabel={`Diff, ${diffCounts.added} added, ${diffCounts.removed} removed`}
+              style={{ minHeight: 44 }}
+              className="flex-row items-center gap-1.5 rounded-full border border-white/10 px-3 active:bg-white/5"
+            >
+              <Text className="text-sm font-medium text-white">Diff</Text>
+              <Text className="text-sm" style={{ color: colors.agentSuccess }}>
+                {`+${diffCounts.added}`}
+              </Text>
+              <Text className="text-sm" style={{ color: colors.agentError }}>
+                {`-${diffCounts.removed}`}
+              </Text>
+            </PressableBox>
+          ) : null}
+        </View>
       </View>
 
       <PlanUsageLine />
@@ -472,36 +540,47 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
         </Card>
       ) : null}
 
-      {thread.diffs.map((diff) => (
-        <Card key={`diff:${diff.path}`} variant="elevated">
-          <SectionTitle>{`Diff · ${diff.path}`}</SectionTitle>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-            <View>
-              {diff.patch.split('\n').map((line, index) => (
-                <Text
-                  key={index}
-                  variant="mono"
-                  className="text-sm"
-                  style={{
-                    color: line.startsWith('+')
-                      ? colors.agentSuccess
-                      : line.startsWith('-')
-                        ? colors.agentError
-                        : colors.textSecondary,
-                  }}
-                >
-                  {line || ' '}
-                </Text>
-              ))}
-            </View>
-          </ScrollView>
-          {diff.truncated ? (
-            <Text className="mt-2 text-sm text-white/40">
-              The diff is longer than a phone view. Open it on Desktop to read the rest.
-            </Text>
-          ) : null}
-        </Card>
-      ))}
+      {thread.diffs.length > 0 ? (
+        <View
+          onLayout={(event) => {
+            diffTop.current = event.nativeEvent.layout.y;
+          }}
+          className="gap-3"
+        >
+          {diffOpen
+            ? thread.diffs.map((diff) => (
+                <Card key={`diff:${diff.path}`} variant="elevated">
+                  <SectionTitle>{`Diff · ${diff.path}`}</SectionTitle>
+                  <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                    <View>
+                      {diff.patch.split('\n').map((line, index) => (
+                        <Text
+                          key={index}
+                          variant="mono"
+                          className="text-sm"
+                          style={{
+                            color: line.startsWith('+')
+                              ? colors.agentSuccess
+                              : line.startsWith('-')
+                                ? colors.agentError
+                                : colors.textSecondary,
+                          }}
+                        >
+                          {line || ' '}
+                        </Text>
+                      ))}
+                    </View>
+                  </ScrollView>
+                  {diff.truncated ? (
+                    <Text className="mt-2 text-sm text-white/40">
+                      The diff is longer than a phone view. Open it on Desktop to read the rest.
+                    </Text>
+                  ) : null}
+                </Card>
+              ))
+            : null}
+        </View>
+      ) : null}
 
       {thread.messages.length > 0 || thread.transcript ? (
         <Card variant="elevated">

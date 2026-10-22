@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { render, fireEvent } from '@testing-library/react-native';
 
@@ -8,7 +7,30 @@ jest.mock('@/stores/chatStore', () => ({
     selector({ currentConversationId: mockCurrentConversationId }),
 }));
 
-import { EFFORT_LABEL, getModelEffortOptions } from '@agiworkforce/types';
+const mockFetchUsageSnapshot = jest.fn();
+jest.mock('@/services/usage', () => ({
+  fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
+}));
+jest.mock('@/services/api', () => ({
+  api: {
+    get: jest.fn().mockResolvedValue({
+      organizationId: null,
+      governed: false,
+      revision: 0,
+      controls: null,
+      code: null,
+    }),
+  },
+}));
+
+import { act, waitFor } from '@testing-library/react-native';
+import { EFFORT_LABEL, getModelEffortOptions, getModelMetadataById } from '@agiworkforce/types';
+import { requireCatalogModel } from '@/test-utils/modelFixtures';
+import { useFastModeStore } from '@/src/features/model-picker/fastMode';
+import {
+  __resetCloudAccountSessionForTests,
+  activateCloudAccount,
+} from '@/src/features/auth/services/cloudAccountSession';
 import { ModelSelectorButton } from '@/src/features/chat/components/ModelSelectorButton';
 import {
   getModelListForCloudAccess,
@@ -32,6 +54,15 @@ const effortModel = catalog.find(
 const plainModel = catalog.find(
   (model) => isNamed(model.id) && getModelEffortOptions(model.id).length === 0,
 );
+
+const fastModel = requireCatalogModel(
+  (model) => model.provider === 'anthropic' && model.fastTier !== undefined,
+  'Anthropic model with a fast tier',
+);
+
+function setPlan(planTier: 'free' | 'max') {
+  useTierStore.setState({ tier: planTier, lastRefreshedAt: '2026-10-22T00:00:00.000Z' });
+}
 
 function renderLabel(onPress = jest.fn()) {
   return { onPress, ...render(<ModelSelectorButton onPress={onPress} />) };
@@ -98,6 +129,71 @@ describe('composer model label', () => {
 
     expect(getByText(getShortDisplayName(plainModel!.id, tier))).toBeTruthy();
     expect(queryByText(EFFORT_LABEL.high)).toBeNull();
+  });
+
+  describe('fast mode token', () => {
+    beforeEach(() => {
+      __resetCloudAccountSessionForTests();
+      activateCloudAccount('user-1');
+      mockFetchUsageSnapshot
+        .mockReset()
+        .mockResolvedValue({ credits: { purchased: { remaining: 0, overage_enabled: true } } });
+      useFastModeStore.setState({ enabled: false, accountState: null, checking: false });
+      setPlan('max');
+      useModelStore.setState({ selectedModel: fastModel.id });
+    });
+
+    it('shows Fast once fast mode is on and allowed for the selected model', async () => {
+      useFastModeStore.setState({ enabled: true });
+
+      const { getByText, getByTestId } = renderLabel();
+
+      await waitFor(() => expect(getByText('Fast')).toBeTruthy());
+      expect(getByTestId('chat.composer.model').props.accessibilityLabel).toContain('fast mode on');
+    });
+
+    it('shows no Fast token while fast mode is off', async () => {
+      const { queryByText, getByTestId } = renderLabel();
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(queryByText('Fast')).toBeNull();
+      expect(getByTestId('chat.composer.model').props.accessibilityLabel).not.toContain('fast');
+    });
+
+    it('shows no Fast token on a plan that cannot use it', () => {
+      setPlan('free');
+      useFastModeStore.setState({ enabled: true });
+
+      const { queryByText } = renderLabel();
+
+      expect(queryByText('Fast')).toBeNull();
+    });
+
+    it('shows no Fast token for a model without a fast tier', () => {
+      const standard = catalog.find(
+        (model) => isNamed(model.id) && !getModelMetadataById(model.id)?.fastTier,
+      );
+      useFastModeStore.setState({ enabled: true });
+      useModelStore.setState({ selectedModel: standard!.id });
+
+      const { queryByText } = renderLabel();
+
+      expect(queryByText('Fast')).toBeNull();
+    });
+
+    it('shows no Fast token while usage credits are off', async () => {
+      mockFetchUsageSnapshot.mockResolvedValue({
+        credits: { purchased: { remaining: 0, overage_enabled: false } },
+      });
+      useFastModeStore.setState({ enabled: true });
+
+      const { queryByText } = renderLabel();
+
+      await waitFor(() => expect(useFastModeStore.getState().accountState).not.toBeNull());
+      expect(queryByText('Fast')).toBeNull();
+    });
   });
 
   it('opens the model picker when tapped', () => {

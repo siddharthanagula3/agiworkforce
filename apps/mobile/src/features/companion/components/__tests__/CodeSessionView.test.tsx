@@ -227,6 +227,8 @@ describe('CodeSessionView', () => {
 
     expect(await screen.findByText('src/retry.test.ts')).toBeTruthy();
     expect(screen.getByText('New file')).toBeTruthy();
+    expect(screen.queryByText('Diff · src/retry.ts')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Diff, 1 added, 1 removed'));
     expect(screen.getByText('Diff · src/retry.ts')).toBeTruthy();
     expect(screen.getByText('+5')).toBeTruthy();
     expect(
@@ -236,5 +238,66 @@ describe('CodeSessionView', () => {
     ).toBeTruthy();
     expect(screen.getByText('4 passed · 1 failed')).toBeTruthy();
     expect(screen.getByText('retry.test.ts > backs off')).toBeTruthy();
+  });
+
+  it('marks the session as remote and shows where it runs on the computer', async () => {
+    useRemoteCodeStore.setState({
+      sessions: [
+        {
+          rootId: 'root-1',
+          threadId: 'thread-1',
+          title: 'Fix retry backoff',
+          folder: 'agiworkforce',
+          branch: 'main',
+          status: 'idle',
+          model: null,
+          updatedAt: SENT_AT,
+        },
+      ],
+    });
+    render(<CodeSessionView rootId="root-1" threadId="thread-1" />);
+    openSession();
+
+    expect(await screen.findByText('Remote session')).toBeTruthy();
+    expect(screen.getByText('agiworkforce · main')).toBeTruthy();
+  });
+
+  it('offers the Diff button only when the host sent a diff, with the added and removed counts', async () => {
+    render(<CodeSessionView rootId="root-1" threadId="thread-1" />);
+    openSession({ status: 'idle', activeTurnId: null, pendingApprovals: [] });
+    expect(await screen.findByText('Remote session')).toBeTruthy();
+    expect(screen.queryByText('Diff')).toBeNull();
+
+    act(() => {
+      ingestRemoteCodeControl('code.session.event', {
+        action: 'code.session.event',
+        version: 1,
+        rootId: 'root-1',
+        threadId: 'thread-1',
+        event: {
+          type: 'diff',
+          diff: {
+            path: 'src/retry.ts',
+            patch: '--- a/src/retry.ts\n+++ b/src/retry.ts\n@@ -1,2 +1,3 @@\n-3\n+5\n+6\n ok',
+            truncated: false,
+          },
+        },
+        sentAt: SENT_AT,
+      });
+    });
+
+    const button = await screen.findByLabelText('Diff, 2 added, 1 removed');
+    expect(button.props.accessibilityState).toMatchObject({ expanded: false });
+    expect(screen.getByText('+2')).toBeTruthy();
+    expect(screen.getByText('-1')).toBeTruthy();
+
+    fireEvent.press(button);
+    expect(
+      screen.getByLabelText('Diff, 2 added, 1 removed').props.accessibilityState,
+    ).toMatchObject({ expanded: true });
+    expect(screen.getByText('Diff · src/retry.ts')).toBeTruthy();
+
+    fireEvent.press(screen.getByLabelText('Diff, 2 added, 1 removed'));
+    expect(screen.queryByText('Diff · src/retry.ts')).toBeNull();
   });
 });
