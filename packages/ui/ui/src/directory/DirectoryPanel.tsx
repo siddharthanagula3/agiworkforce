@@ -472,6 +472,7 @@ function DirectorySectionPanel({
       });
     }
     const setSkillEnabled = adapter.setSkillEnabled;
+    const setPluginEnabled = adapter.setPluginEnabled;
     return (
       <DirectoryManageView
         section={section}
@@ -485,6 +486,12 @@ function DirectorySectionPanel({
           ? {
               onSetEnabled: (id: string, enabled: boolean) =>
                 void runAction(id, () => setSkillEnabled(id, enabled)),
+            }
+          : {})}
+        {...(section === 'plugins' && setPluginEnabled
+          ? {
+              onSetEnabled: (id: string, enabled: boolean) =>
+                void runGuarded(id, () => setPluginEnabled(id, enabled)),
             }
           : {})}
         busyId={busyId}

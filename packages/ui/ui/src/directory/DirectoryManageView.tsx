@@ -40,8 +40,7 @@ import type {
 } from './types';
 
 const CELL_CLASS = 'hidden px-3 py-2.5 text-sm text-muted-foreground sm:table-cell';
-const HEAD_CELL_CLASS =
-  'px-3 pb-2 text-start text-xs font-medium uppercase tracking-wide text-muted-foreground';
+const HEAD_CELL_CLASS = 'px-3 pb-2 text-start text-sm font-normal text-muted-foreground';
 const TRAILING_HEAD_CELL_CLASS = `hidden sm:table-cell ${HEAD_CELL_CLASS}`;
 
 function formatUpdated(value: string | undefined): string {
@@ -153,10 +152,7 @@ export function DirectoryManageView({
     return (
       <div key={group.id} className="flex flex-col gap-2">
         {group.heading ? (
-          <h3
-            id={headingId}
-            className="text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-          >
+          <h3 id={headingId} className="text-sm font-medium text-muted-foreground">
             {group.heading}
           </h3>
         ) : null}
@@ -205,7 +201,7 @@ export function DirectoryManageView({
                     >
                       {row.slashName ? `${DIRECTORY_MANAGE_SLASH_PREFIX}${row.name}` : row.name}
                     </button>
-                    <p className="mt-0.5 truncate text-xs text-muted-foreground sm:hidden">
+                    <p className="mt-0.5 truncate text-sm text-muted-foreground sm:hidden">
                       {metaLine(row, trailing)}
                     </p>
                   </td>
@@ -323,7 +319,7 @@ export function DirectoryManageView({
           <p className="text-sm font-medium text-foreground">
             {DIRECTORY_MANAGE_EMPTY_TITLES[section]}
           </p>
-          <p className="max-w-sm text-xs text-muted-foreground">
+          <p className="max-w-sm text-sm text-muted-foreground">
             {DIRECTORY_MANAGE_EMPTY_BODIES[section]}
           </p>
           <button

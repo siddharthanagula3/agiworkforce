@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { DirectoryActionConfirmation } from '../action-notice';
 import { DirectoryPanel } from '../DirectoryPanel';
 import type { DirectoryAdapter, DirectoryManageSection } from '../types';
 
@@ -139,6 +140,71 @@ describe('the plugins manage view', () => {
     expect(screen.getByRole('alert').textContent).toBe('Plugins could not be loaded.');
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('turns one plugin on or off from its own row switch', async () => {
+    const setPluginEnabled = vi.fn(() => Promise.resolve());
+    const adapter = renderPlugins(
+      {
+        rows: [
+          { ...ROWS[0]!, enabled: true },
+          { ...ROWS[1]!, enabled: false },
+        ],
+      },
+      { setPluginEnabled, loadDetail: vi.fn(() => Promise.resolve(null)) },
+    );
+    const productivity = screen.getByRole('switch', { name: 'Use Productivity' });
+    const reviewer = screen.getByRole('switch', { name: 'Use Reviewer' });
+    expect(productivity.getAttribute('aria-checked')).toBe('true');
+    expect(reviewer.getAttribute('aria-checked')).toBe('false');
+    fireEvent.click(productivity);
+    await waitFor(() => expect(setPluginEnabled).toHaveBeenCalledWith('productivity', false));
+    expect(setPluginEnabled).toHaveBeenCalledTimes(1);
+    expect(adapter.loadDetail).not.toHaveBeenCalled();
+  });
+
+  it('asks before a plugin switch that also turns off its dependents', async () => {
+    const turnOffTogether = vi.fn(() => Promise.resolve());
+    renderPlugins(
+      { rows: [{ ...ROWS[0]!, enabled: true }] },
+      {
+        setPluginEnabled: () =>
+          Promise.reject(
+            new DirectoryActionConfirmation(
+              'Turn off together?',
+              'Reviewer depends on Productivity and stops working.',
+              'Turn off both',
+              turnOffTogether,
+            ),
+          ),
+      },
+    );
+    fireEvent.click(screen.getByRole('switch', { name: 'Use Productivity' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn off both' }));
+    await waitFor(() => expect(turnOffTogether).toHaveBeenCalledTimes(1));
+  });
+
+  it('shows no plugin switches when the adapter cannot turn plugins on or off', () => {
+    renderPlugins({ rows: [{ ...ROWS[0]!, enabled: true }] });
+    expect(screen.queryByRole('switch')).toBeNull();
+  });
+
+  it('keeps the table text at the 14px floor in regular case', () => {
+    renderPlugins({ rows: ROWS });
+    const header = screen.getByRole('columnheader', { name: 'Plugin' });
+    expect(header.className).toContain('text-sm');
+    expect(header.className).not.toMatch(/uppercase|tracking-|text-xs/);
+    const meta = screen.getByRole('button', { name: 'Manage Reviewer' }).closest('td');
+    expect(meta?.querySelector('p')?.className).toContain('text-sm');
+    expect(document.querySelector('.text-xs')).toBeNull();
+  });
+
+  it('sets the empty-state caption at the 14px floor', () => {
+    renderPlugins({ rows: [] });
+    const title = screen.getByText('No plugins yet');
+    const caption = title.nextElementSibling;
+    expect(caption?.className).toContain('text-sm');
+    expect(caption?.className).not.toContain('text-xs');
   });
 
   it('keeps the catalog when a section supplies no manage view', () => {
