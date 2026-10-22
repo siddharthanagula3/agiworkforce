@@ -93,7 +93,8 @@ function sortDisplayProjects(
 }
 
 export default function ProjectsTabScreen() {
-  const { colors, statusBarStyle } = useTheme();
+  const { colors, isDark, statusBarStyle } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const router = useRouter();
@@ -349,7 +350,7 @@ export default function ProjectsTabScreen() {
   }, [navigation]);
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }} edges={['top']}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: pageBackground }} edges={['top']}>
       <StatusBar style={statusBarStyle} />
       <View className="flex-row items-center px-3 h-12 gap-2">
         <DrawerButton onPress={handleOpenDrawer} />

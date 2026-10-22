@@ -66,7 +66,10 @@ jest.mock('lucide-react-native', () => {
 
 jest.mock('../src/ui/theme', () => {
   const actual = jest.requireActual('../src/ui/theme/tokens');
-  return { useThemeColors: () => actual.lightColors };
+  return {
+    useThemeColors: () => actual.lightColors,
+    useTheme: () => ({ colors: actual.lightColors, isDark: false }),
+  };
 });
 
 jest.mock('../src/navigation/openNearestDrawer', () => ({

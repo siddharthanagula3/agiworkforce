@@ -17,7 +17,7 @@ import {
   FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
   FloatingPrimaryAction,
 } from '@/src/shared/components/FloatingPrimaryAction';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudCodeGate } from './components/CloudCodeGate';
 import { CloudCodeSessionRow } from './components/CloudCodeSessionRow';
@@ -106,7 +106,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 
 function SessionList({ onBack }: { onBack: () => void }) {
   const router = useRouter();
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const [filter, setFilter] = useState<CloudCodeSessionStatusFilter>(DEFAULT_FILTER);
   const { status, sessions, availability, runtimes, error, refreshing, load } =
     useCloudCodeSessions(filter);
@@ -153,7 +154,7 @@ function SessionList({ onBack }: { onBack: () => void }) {
   }, [router]);
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: pageBackground }}>
       <Header onBack={onBack} />
       <NewCloudCodeSessionSheet
         visible={newSessionOpen}

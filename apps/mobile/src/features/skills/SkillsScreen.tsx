@@ -18,7 +18,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
   fetchInstalledSkillNames,
@@ -137,10 +137,11 @@ function SkillsGate({
   onBack: () => void;
   onContinue: () => void;
 }) {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: pageBackground }}>
       <SkillsHeader onBack={onBack} />
       <View
         style={{
@@ -608,7 +609,8 @@ function CatalogError({ message, onRetry }: { message: string; onRetry: () => vo
 export function SkillsScreen() {
   const router = useRouter();
   const { returnTo } = useLocalSearchParams<{ returnTo?: string }>();
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const isClerkLoaded = useAuthStore((state) => state.isClerkLoaded);
@@ -809,7 +811,7 @@ export function SkillsScreen() {
   }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: pageBackground }}>
       <SkillsHeader onBack={handleBack} />
       <View style={{ paddingHorizontal: 16, paddingBottom: 12 }}>
         <SearchField value={query} onChange={setQuery} />

@@ -25,7 +25,7 @@ import {
 import { formatBytes } from '@agiworkforce/utils/format';
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale, zIndex } from '@/src/ui/theme/tokens';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
@@ -118,7 +118,8 @@ function isGeneratedMedia(
 }
 
 export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
-  const c = useThemeColors();
+  const { colors: c, isDark } = useTheme();
+  const pageBackground = isDark ? c.background : c.surfaceBase;
   const insets = useSafeAreaInsets();
   const navigation = useNavigation();
   const { contentWidth, gridColumns } = useResponsiveLayout();
@@ -629,7 +630,7 @@ export function LibraryScreen({ initialImageId }: { initialImageId?: string }) {
   );
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
       <View className="h-12 flex-row items-center px-3 gap-2">
         <View style={{ width: LIBRARY_HEADER_SLOT_WIDTH, alignItems: 'flex-start' }}>
           <DrawerButton testID="library-open-drawer" onPress={openDrawer} />

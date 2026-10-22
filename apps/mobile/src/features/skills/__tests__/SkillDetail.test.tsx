@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockReplace = jest.fn();
@@ -33,7 +33,11 @@ jest.mock('@agiworkforce/types', () => ({
   connectorsReleased: () => mockConnectorsReleased(),
 }));
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  SafeAreaView: ({ children, style }: { children: React.ReactNode; style?: unknown }) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { View } = require('react-native');
+    return <View style={style as never}>{children}</View>;
+  },
 }));
 jest.mock(
   'lucide-react-native',
@@ -72,6 +76,8 @@ import {
 } from '@/src/features/auth/services/cloudAccountSession';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
+import { colors as darkColors, lightColors } from '@/src/ui/theme/tokens';
 import { SkillDetailScreen } from '../SkillDetailScreen';
 
 const { importSkillFile, isTextSkillFile, skillFilePath } = jest.requireActual('../service');
@@ -125,6 +131,23 @@ describe('mobile skill detail', () => {
 
     fireEvent(getByLabelText('Turned on'), 'valueChange', true);
     await waitFor(() => expect(mockInstall).toHaveBeenCalledWith('pdf-reader'));
+  });
+
+  it.each([
+    ['dark', darkColors.background],
+    ['light', lightColors.surfaceBase],
+  ] as const)('paints the %s page root with the right surface', async (themeMode, expected) => {
+    mockParams.name = 'pdf-reader';
+    useCloudSettingsStore.setState({ themeMode });
+    try {
+      const screen = render(<SkillDetailScreen />);
+      await screen.findByText('Read PDFs');
+      const tree = screen.toJSON();
+      const root = Array.isArray(tree) ? tree[0] : tree;
+      expect(StyleSheet.flatten(root?.props.style).backgroundColor).toBe(expected);
+    } finally {
+      useCloudSettingsStore.setState({ themeMode: 'system' });
+    }
   });
 
   it('starts a new personal skill from a catalog skill used as a template', async () => {

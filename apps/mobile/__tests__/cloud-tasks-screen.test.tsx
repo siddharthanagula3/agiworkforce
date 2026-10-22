@@ -27,7 +27,11 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  SafeAreaView: ({ children, style }: { children: React.ReactNode; style?: unknown }) => {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const { View } = require('react-native');
+    return <View style={style as never}>{children}</View>;
+  },
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
@@ -70,6 +74,8 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '../src/features/waitlist/store';
 import { useChatStore } from '../stores/chatStore';
 import { useSettingsStore } from '../stores/settingsStore';
+import { useCloudSettingsStore } from '../stores/settings/cloudSettingsStore';
+import { colors as darkColors, lightColors } from '../src/ui/theme/tokens';
 import { useTierStore } from '../src/features/billing/store';
 import { useAuthStore } from '../src/features/auth/store';
 import {
@@ -148,6 +154,22 @@ describe('Mobile Cloud tasks screen', () => {
 
   afterEach(() => {
     jest.useRealTimers();
+  });
+
+  it.each([
+    ['dark', darkColors.background],
+    ['light', lightColors.surfaceBase],
+  ] as const)('paints the %s page root with the right surface', async (themeMode, expected) => {
+    useCloudSettingsStore.setState({ themeMode });
+    try {
+      const screen = render(<CloudTasksScreen />);
+      await waitFor(() => expect(screen.getByText('Audit the launch checklist')).toBeTruthy());
+      const tree = screen.toJSON();
+      const root = Array.isArray(tree) ? tree[0] : tree;
+      expect(StyleSheet.flatten(root?.props.style).backgroundColor).toBe(expected);
+    } finally {
+      useCloudSettingsStore.setState({ themeMode: 'system' });
+    }
   });
 
   it('loads real active Cloud runs from the server state query', async () => {

@@ -41,6 +41,8 @@ const mockProjects = [
 
 let mockActiveProjectId: string | null = null;
 
+let mockIsDark = false;
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
@@ -59,7 +61,10 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  SafeAreaView: ({ children, style }: { children: React.ReactNode; style?: unknown }) => {
+    const { View } = require('react-native');
+    return <View style={style as never}>{children}</View>;
+  },
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
@@ -73,7 +78,7 @@ jest.mock('../src/ui/theme', () => {
   const actual = jest.requireActual('../src/ui/theme/tokens');
   return {
     ...actual,
-    useTheme: () => ({ colors: actual.lightColors, statusBarStyle: 'dark' }),
+    useTheme: () => ({ colors: actual.lightColors, isDark: mockIsDark, statusBarStyle: 'dark' }),
     useThemeColors: () => actual.lightColors,
   };
 });
@@ -175,6 +180,12 @@ function chooseSort(screen: ReturnType<typeof render>, text: string) {
       .find((button) => button.text === text)
       ?.onPress?.();
   });
+}
+
+function pageBackground(screen: ReturnType<typeof render>) {
+  const tree = screen.toJSON();
+  const root = Array.isArray(tree) ? tree[0] : tree;
+  return StyleSheet.flatten(root?.props.style).backgroundColor;
 }
 
 describe('Projects list ergonomics', () => {
@@ -351,5 +362,17 @@ describe('Projects list ergonomics', () => {
       fireEvent.press(screen.getByLabelText('Retry loading projects'));
     });
     expect(mockSyncNow).toHaveBeenCalledTimes(2);
+  });
+
+  it.each([
+    [true, lightColors.background],
+    [false, lightColors.surfaceBase],
+  ])('paints the page root for dark mode %s with the right surface', (isDark, expected) => {
+    mockIsDark = isDark;
+    try {
+      expect(pageBackground(render(<ProjectsTabScreen />))).toBe(expected);
+    } finally {
+      mockIsDark = false;
+    }
   });
 });

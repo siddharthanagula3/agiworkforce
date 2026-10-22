@@ -29,7 +29,7 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useTierStore } from '@/src/features/billing/store';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { CloudRunCard } from './components/CloudRunCard';
 import { CloudRunDetailSheet } from './components/CloudRunDetailSheet';
@@ -128,10 +128,11 @@ function CloudTasksGate({
   onBack: () => void;
   onContinue: () => void;
 }) {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: pageBackground }}>
       <Header onBack={onBack} />
       <View
         style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32 }}
@@ -303,7 +304,8 @@ function ErrorState({ message, onRetry }: { message: string; onRetry: () => void
 
 export function CloudTasksScreen() {
   const router = useRouter();
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const appMode = useChatAppModeStore((state) => state.appMode);
   const setAppMode = useChatAppModeStore((state) => state.setAppMode);
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
@@ -498,7 +500,7 @@ export function CloudTasksScreen() {
   const canStartWork = grantedCapabilities.includes('canUseAgiWork');
 
   return (
-    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: pageBackground }}>
       <Header onBack={handleBack} onOpenSchedules={handleOpenSchedules} />
 
       <ScrollView

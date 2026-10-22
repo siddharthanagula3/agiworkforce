@@ -19,6 +19,8 @@ let mockAuthState = {
   clerkUserId: 'user-1' as string | null,
 };
 
+let mockIsDark = false;
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
@@ -30,7 +32,10 @@ jest.mock('expo-router', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  SafeAreaView: ({ children, style }: { children: React.ReactNode; style?: unknown }) => {
+    const { View } = require('react-native');
+    return <View style={style as never}>{children}</View>;
+  },
 }));
 
 jest.mock('lucide-react-native', () => {
@@ -74,8 +79,9 @@ jest.mock('@/components/ui/skeleton', () => {
   return { Skeleton: () => <View testID="skills-loading-skeleton" /> };
 });
 
-jest.mock('@/src/ui/theme', () => ({
-  useThemeColors: () => ({
+jest.mock('@/src/ui/theme', () => {
+  const colors = {
+    background: '#000000',
     surfaceBase: '#111111',
     surfaceElevated: '#222222',
     surfaceHover: '#333333',
@@ -92,8 +98,9 @@ jest.mock('@/src/ui/theme', () => ({
     dangerBorder: '#703030',
     agentError: '#ff7777',
     transparent: 'transparent',
-  }),
-}));
+  };
+  return { useThemeColors: () => colors, useTheme: () => ({ colors, isDark: mockIsDark }) };
+});
 
 jest.mock('@/src/features/chat/store/appModeStore', () => ({
   useChatAppModeStore: (
@@ -152,6 +159,12 @@ const mockImportSkillFile = jest.fn();
 import { ApiHttpError } from '@/services/api';
 import { SkillsScreen } from '@/src/features/skills/SkillsScreen';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
+
+function pageBackground(screen: ReturnType<typeof render>) {
+  const tree = screen.toJSON();
+  const root = Array.isArray(tree) ? tree[0] : tree;
+  return StyleSheet.flatten(root?.props.style).backgroundColor;
+}
 
 describe('Mobile Skills screen', () => {
   beforeEach(() => {
@@ -440,5 +453,19 @@ describe('Mobile Skills screen', () => {
 
     expect(await screen.findByText(/SKILL.md is at the top of the zip./)).toBeTruthy();
     mockFetchCanAuthorSkills.mockResolvedValue(false);
+  });
+
+  it.each([
+    [true, '#000000'],
+    [false, '#111111'],
+  ])('paints the page root for dark mode %s with the right surface', async (isDark, expected) => {
+    mockIsDark = isDark;
+    try {
+      const screen = render(<SkillsScreen />);
+      await screen.findByText('Skills');
+      expect(pageBackground(screen)).toBe(expected);
+    } finally {
+      mockIsDark = false;
+    }
   });
 });

@@ -21,7 +21,7 @@ import {
 import { Text } from '@/components/ui/text';
 import { Badge } from '@/components/ui/badge';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openNearestDrawer } from '@/src/navigation/openNearestDrawer';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';
@@ -79,7 +79,8 @@ export function ArtifactsGalleryScreen({
   initialLoading = false,
   initialArtifactId,
 }: ArtifactsGalleryScreenProps) {
-  const c = useThemeColors();
+  const { colors: c, isDark } = useTheme();
+  const pageBackground = isDark ? c.background : c.surfaceBase;
   const navigation = useNavigation();
   const { contentWidth, gridColumns } = useResponsiveLayout();
   const [selectedArtifact, setSelectedArtifact] = useState<MobileArtifact | null>(null);
@@ -178,7 +179,7 @@ export function ArtifactsGalleryScreen({
   );
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
       <View className="h-12 flex-row items-center px-3 gap-2">
         <DrawerButton testID="artifacts-open-drawer" onPress={openDrawer} />
 

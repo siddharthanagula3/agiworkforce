@@ -29,7 +29,7 @@ import {
 } from '@/src/shared/components/cloud-screen';
 import { useCloudFeatureAccess } from '@/src/shared/hooks/useCloudFeatureAccess';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { NewSkillSheet } from './NewSkillSheet';
 import {
@@ -96,7 +96,8 @@ export function skillTemplateDraft(skill: ManagedSkillSummary, body: string): Sk
 
 export function SkillDetailScreen() {
   const router = useRouter();
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const { name: param } = useLocalSearchParams<{ name?: string }>();
   const name = typeof param === 'string' ? param : '';
   const access = useCloudFeatureAccess();
@@ -212,7 +213,7 @@ export function SkillDetailScreen() {
   const pluginOwned = skill ? isPluginOwnedSkill(skill) : false;
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: pageBackground }}>
       <ScreenHeader title={name || 'Skill'} onBack={goBack} />
       {loadError ? (
         <EmptyState

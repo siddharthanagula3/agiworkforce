@@ -7,6 +7,8 @@ const mockPush = jest.fn();
 const mockInsetBottom = 34;
 let mockNewSessionSheetVisible = false;
 
+let mockIsDark = false;
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
@@ -20,7 +22,9 @@ jest.mock('expo-router', () => ({
 jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
   return {
-    SafeAreaView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    SafeAreaView: ({ children, style }: { children: React.ReactNode; style?: unknown }) => (
+      <View style={style as never}>{children}</View>
+    ),
     useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: mockInsetBottom, left: 0 }),
   };
 });
@@ -33,7 +37,10 @@ jest.mock('lucide-react-native', () => {
 
 jest.mock('../src/ui/theme', () => {
   const actual = jest.requireActual('../src/ui/theme/tokens');
-  return { useThemeColors: () => actual.lightColors };
+  return {
+    useThemeColors: () => actual.lightColors,
+    useTheme: () => ({ colors: actual.lightColors, isDark: mockIsDark }),
+  };
 });
 
 jest.mock('@/lib/mmkv', () => ({
@@ -83,6 +90,12 @@ import { CloudCodeSessionsScreen } from '../src/features/cloud-code/CloudCodeSes
 import { lightColors } from '../src/ui/theme/tokens';
 import { FLOATING_PRIMARY_ACTION_GAP } from '../src/shared/components/FloatingPrimaryAction';
 
+function pageBackground(screen: ReturnType<typeof render>) {
+  const tree = screen.toJSON();
+  const root = Array.isArray(tree) ? tree[0] : tree;
+  return StyleSheet.flatten(root?.props.style).backgroundColor;
+}
+
 describe('Cloud code sessions new session action', () => {
   beforeEach(() => {
     mockNewSessionSheetVisible = false;
@@ -114,5 +127,17 @@ describe('Cloud code sessions new session action', () => {
 
     expect(screen.getByText(/Start one with New session/)).toBeTruthy();
     expect(screen.queryByText(/\+ button/)).toBeNull();
+  });
+
+  it.each([
+    [true, lightColors.background],
+    [false, lightColors.surfaceBase],
+  ])('paints the page root for dark mode %s with the right surface', (isDark, expected) => {
+    mockIsDark = isDark;
+    try {
+      expect(pageBackground(render(<CloudCodeSessionsScreen />))).toBe(expected);
+    } finally {
+      mockIsDark = false;
+    }
   });
 });

@@ -14,6 +14,8 @@ const mockPush = jest.fn();
 const mockReplace = jest.fn();
 const mockBack = jest.fn();
 const mockDispatch = jest.fn();
+let mockIsDark = false;
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useRouter: () => ({
@@ -43,7 +45,9 @@ jest.mock('react-native-safe-area-context', () => {
   const { View } = require('react-native');
 
   return {
-    SafeAreaView: ({ children }: { children: React.ReactNode }) => <View>{children}</View>,
+    SafeAreaView: ({ children, style }: { children: React.ReactNode; style?: unknown }) => (
+      <View style={style as never}>{children}</View>
+    ),
     useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 }),
   };
 });
@@ -53,12 +57,12 @@ jest.mock(
   () => new Proxy({}, { get: () => jest.fn().mockReturnValue(null) }),
 );
 
-jest.mock('@/src/ui/theme', () => ({
-  useThemeColors: () => ({
+jest.mock('@/src/ui/theme', () => {
+  const colors = {
     terraCotta: '#da7756',
     teal: '#21808d',
     warmPeach: '#f3b99d',
-    background: '#20211f',
+    background: '#000000',
     surfaceBase: '#20211f',
     surfaceElevated: '#171817',
     surfaceOverlay: '#242424',
@@ -79,8 +83,9 @@ jest.mock('@/src/ui/theme', () => ({
     white: '#ffffff',
     black: '#000000',
     transparent: 'transparent',
-  }),
-}));
+  };
+  return { useThemeColors: () => colors, useTheme: () => ({ colors, isDark: mockIsDark }) };
+});
 
 jest.mock('@/src/features/waitlist', () => {
   return {
@@ -96,6 +101,12 @@ jest.mock('@/lib/clipboard', () => ({
 jest.mock('@/src/features/image/hooks/useGeneratedImageSource', () => ({
   useGeneratedImageSource: (uri: string) => ({ source: { uri }, status: 'ready' }),
 }));
+
+function pageBackground(screen: ReturnType<typeof render>) {
+  const tree = screen.toJSON();
+  const root = Array.isArray(tree) ? tree[0] : tree;
+  return StyleSheet.flatten(root?.props.style).backgroundColor;
+}
 
 describe('Artifacts gallery', () => {
   beforeEach(() => {
@@ -358,5 +369,17 @@ describe('Artifacts gallery', () => {
     });
 
     expect(screen.getByTestId('artifact-preview-content')).toBeTruthy();
+  });
+
+  it.each([
+    [true, '#000000'],
+    [false, '#20211f'],
+  ])('paints the page root for dark mode %s with the right surface', (isDark, expected) => {
+    mockIsDark = isDark;
+    try {
+      expect(pageBackground(render(<ArtifactsGalleryScreen />))).toBe(expected);
+    } finally {
+      mockIsDark = false;
+    }
   });
 });

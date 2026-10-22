@@ -3,6 +3,8 @@ import React from 'react';
 import { Alert, ScrollView, StyleSheet } from 'react-native';
 import { act, fireEvent, render, within } from '@testing-library/react-native';
 
+let mockIsDark = false;
+
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
   useNavigation: () => ({ openDrawer: jest.fn(), navigate: jest.fn(), goBack: jest.fn() }),
@@ -19,7 +21,10 @@ jest.mock('@react-navigation/native', () => ({
 }));
 
 jest.mock('react-native-safe-area-context', () => ({
-  SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
+  SafeAreaView: ({ children, style }: { children: React.ReactNode; style?: unknown }) => {
+    const { View } = require('react-native');
+    return <View style={style as never}>{children}</View>;
+  },
   useSafeAreaInsets: () => ({ top: 0, right: 0, bottom: 0, left: 0 }),
 }));
 
@@ -35,7 +40,10 @@ jest.mock('lucide-react-native', () => {
 
 jest.mock('../src/ui/theme', () => {
   const actual = jest.requireActual('../src/ui/theme/tokens');
-  return { useThemeColors: () => actual.lightColors };
+  return {
+    useThemeColors: () => actual.lightColors,
+    useTheme: () => ({ colors: actual.lightColors, isDark: mockIsDark }),
+  };
 });
 
 jest.mock('../src/navigation/openNearestDrawer', () => ({
@@ -89,6 +97,13 @@ jest.mock('../src/features/chat/components/ImageFullScreen', () => ({
 }));
 
 import { LibraryScreen } from '../src/features/library';
+import { lightColors } from '../src/ui/theme/tokens';
+
+function pageBackground(screen: ReturnType<typeof render>) {
+  const tree = screen.toJSON();
+  const root = Array.isArray(tree) ? tree[0] : tree;
+  return StyleSheet.flatten(root?.props.style).backgroundColor;
+}
 
 describe('Library filter chips', () => {
   it('centres a semibold Library title in the header', () => {
@@ -158,5 +173,17 @@ describe('Library filter chips', () => {
       expect.arrayContaining([expect.objectContaining({ text: '✓ Name' })]),
     );
     alert.mockRestore();
+  });
+
+  it.each([
+    [true, lightColors.background],
+    [false, lightColors.surfaceBase],
+  ])('paints the page root for dark mode %s with the right surface', (isDark, expected) => {
+    mockIsDark = isDark;
+    try {
+      expect(pageBackground(render(<LibraryScreen />))).toBe(expected);
+    } finally {
+      mockIsDark = false;
+    }
   });
 });
