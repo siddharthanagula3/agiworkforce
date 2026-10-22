@@ -26,9 +26,9 @@ export function Switch({
       value={value}
       onValueChange={onValueChange}
       disabled={disabled}
-      trackColor={{ false: colors.surfaceHover, true: colors.agentSuccess }}
+      trackColor={{ false: colors.switchTrackOff, true: colors.agentSuccess }}
       thumbColor={colors.white}
-      ios_backgroundColor={colors.surfaceHover}
+      ios_backgroundColor={colors.switchTrackOff}
       style={{ opacity: disabled ? 0.65 : 1 }}
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
