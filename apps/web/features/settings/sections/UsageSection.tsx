@@ -2,7 +2,13 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { Progress, SegmentedControl, Spinner, translateUiPlural } from '@agiworkforce/ui';
+import {
+  Progress,
+  SegmentedControl,
+  Spinner,
+  translateUiPlural,
+  useConfirmAction,
+} from '@agiworkforce/ui';
 import { getUsageUrgency } from '@agiworkforce/unified-chat';
 import {
   estimateVoiceMinutes,
@@ -474,6 +480,7 @@ function SpendLimitEditor({
   );
   const [pending, setPending] = useState<'save' | 'remove' | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
   const credits = Number(value);
   const valid = value.trim() !== '' && Number.isInteger(credits) && credits >= 1;
 
@@ -509,60 +516,75 @@ function SpendLimitEditor({
     void send('PUT');
   };
 
+  const confirmRemove = () =>
+    confirm({
+      title: 'Remove your monthly limit?',
+      description:
+        state.monthlyCapCredits === null
+          ? 'Credits past your plan limits will no longer stop at a monthly cap. You can set a new limit any time.'
+          : `Credits past your plan limits will no longer stop at ${state.monthlyCapCredits.toLocaleString('en-US')} credits a month. You can set a new limit any time.`,
+      confirmLabel: 'Remove limit',
+      destructive: true,
+      onConfirm: () => send('DELETE'),
+    });
+
   return (
-    <form
-      onSubmit={submit}
-      noValidate
-      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
-    >
-      <label
-        htmlFor="usage-spend-limit-input"
-        style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}
+    <>
+      <form
+        onSubmit={submit}
+        noValidate
+        style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
       >
-        Monthly limit in credits
-      </label>
-      <input
-        id="usage-spend-limit-input"
-        type="number"
-        inputMode="numeric"
-        min={1}
-        step={1}
-        value={value}
-        onChange={(event) => setValue(event.target.value)}
-        disabled={pending !== null}
-        aria-invalid={error !== null}
-        aria-describedby={error ? 'usage-spend-limit-error' : undefined}
-        className={`${FIELD_CLASS} max-w-xs`}
-      />
-      {error && (
-        <p id="usage-spend-limit-error" role="alert" style={{ ...CRITICAL_DETAIL, margin: 0 }}>
-          {error}
-        </p>
-      )}
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
-        <button type="submit" disabled={pending !== null} className={PRIMARY_BUTTON_CLASS}>
-          {pending === 'save' ? 'Saving…' : 'Save limit'}
-        </button>
-        {state.configured && (
+        <label
+          htmlFor="usage-spend-limit-input"
+          style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}
+        >
+          Monthly limit in credits
+        </label>
+        <input
+          id="usage-spend-limit-input"
+          type="number"
+          inputMode="numeric"
+          min={1}
+          step={1}
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          disabled={pending !== null}
+          aria-invalid={error !== null}
+          aria-describedby={error ? 'usage-spend-limit-error' : undefined}
+          className={`${FIELD_CLASS} max-w-xs`}
+        />
+        {error && (
+          <p id="usage-spend-limit-error" role="alert" style={{ ...CRITICAL_DETAIL, margin: 0 }}>
+            {error}
+          </p>
+        )}
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+          <button type="submit" disabled={pending !== null} className={PRIMARY_BUTTON_CLASS}>
+            {pending === 'save' ? 'Saving…' : 'Save limit'}
+          </button>
+          {state.configured && (
+            <button
+              type="button"
+              disabled={pending !== null}
+              onClick={confirmRemove}
+              className={QUIET_BUTTON_CLASS}
+            >
+              {pending === 'remove' ? 'Removing…' : 'Remove limit'}
+            </button>
+          )}
           <button
             type="button"
             disabled={pending !== null}
-            onClick={() => void send('DELETE')}
+            onClick={onCancel}
             className={QUIET_BUTTON_CLASS}
           >
-            {pending === 'remove' ? 'Removing…' : 'Remove limit'}
+            Cancel
           </button>
-        )}
-        <button
-          type="button"
-          disabled={pending !== null}
-          onClick={onCancel}
-          className={QUIET_BUTTON_CLASS}
-        >
-          Cancel
-        </button>
-      </div>
-    </form>
+        </div>
+      </form>
+      {confirmDialog}
+    </>
   );
 }
 

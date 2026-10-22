@@ -141,6 +141,16 @@ describe('PUT /api/settings/spend-limit', () => {
   });
 });
 
+describe('spend limit write rate limit', () => {
+  it('limits saves and removals on their own bucket, apart from checkout', async () => {
+    await PUT(request('PUT', { monthlyCapCredits: 2_000 }));
+    await DELETE(request('DELETE'));
+
+    const buckets = mocks.withRateLimit.mock.calls.map((call) => call[1]);
+    expect(buckets).toEqual(['settings-spend-limit-write', 'settings-spend-limit-write']);
+  });
+});
+
 describe('DELETE /api/settings/spend-limit', () => {
   it('removes the caller limit behind the CSRF check', async () => {
     mocks.readPersonalSpendState.mockResolvedValueOnce({

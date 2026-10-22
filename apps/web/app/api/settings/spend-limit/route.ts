@@ -47,7 +47,7 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError;
 
-  const rateLimitResponse = await withRateLimit(request, 'checkout');
+  const rateLimitResponse = await withRateLimit(request, 'settings-spend-limit-write');
   if (rateLimitResponse) return rateLimitResponse;
 
   const body = await readValidatedJsonBody(
@@ -66,7 +66,7 @@ async function handleDelete(request: NextRequest): Promise<NextResponse | Respon
   const csrfError = await requireCsrfToken(request, userId);
   if (csrfError) return csrfError;
 
-  const rateLimitResponse = await withRateLimit(request, 'checkout');
+  const rateLimitResponse = await withRateLimit(request, 'settings-spend-limit-write');
   if (rateLimitResponse) return rateLimitResponse;
 
   await deletePersonalSpendLimit(db, userId);

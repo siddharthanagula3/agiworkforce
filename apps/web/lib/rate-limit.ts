@@ -478,6 +478,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'settings-spend-limit-write': {
+    limit: 20,
+    window: '1 m',
+    failClosed: false,
+  },
   'plugin-installation-write': {
     limit: 20,
     window: '1 m',

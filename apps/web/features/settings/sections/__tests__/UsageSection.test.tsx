@@ -741,10 +741,34 @@ describe('UsageSection monthly spend limit', () => {
     fireEvent.click(await within(await waitForCard()).findByRole('button', { name: 'Manage' }));
     fireEvent.click(screen.getByRole('button', { name: 'Remove limit' }));
 
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText(/no longer stop at 800 credits a month/)).toBeTruthy();
+    expect(writes).toEqual([]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove limit' }));
+
     await waitFor(() =>
       expect(screen.getByTestId('usage-spend-limit-status').textContent).toMatch(/^No limit set/),
     );
     expect(writes).toEqual([{ method: 'DELETE', body: undefined }]);
+  });
+
+  it('keeps a saved limit when the removal is declined', async () => {
+    stubSpend({
+      spendLimit: () =>
+        answer(spendState({ configured: true, monthlyCapCredits: 800, remainingCredits: 800 })),
+      spendLimitWrite: () => answer(spendState()),
+    });
+    renderSection();
+
+    fireEvent.click(await within(await waitForCard()).findByRole('button', { name: 'Manage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove limit' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }),
+    );
+
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(writes).toEqual([]);
+    expect(screen.getByRole('button', { name: 'Remove limit' })).toBeTruthy();
   });
 
   it('admits it could not read the limit and offers a retry instead of showing none', async () => {
