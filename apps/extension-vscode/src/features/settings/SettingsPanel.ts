@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { Config, type MutableConfigKey } from '../../platform/config';
 import {
@@ -143,7 +144,7 @@ export class SettingsPanel {
       this.panel.webview.onDidReceiveMessage(async (input: unknown) => {
         const message = parseSettingsWebviewMessage(input);
         if (message === undefined) {
-          console.warn('[AGI Workforce] dropped malformed settings webview message');
+          console.warn(`[${PRODUCT_NAMES.code}] dropped malformed settings webview message`);
           return;
         }
 

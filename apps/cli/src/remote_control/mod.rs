@@ -222,7 +222,7 @@ async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
         .json(&json!({ "initiator": "desktop" }))
         .send()
         .await
-        .context("AGI Workforce could not be reached to start Remote Control")?;
+        .context("AGI could not be reached to start Remote Control")?;
     let status = response.status();
     let body: Value = response.json().await.unwrap_or(Value::Null);
     if !status.is_success() {
@@ -246,7 +246,7 @@ async fn request_pairing(base: &str, jwt: &str) -> Result<Pairing> {
             .chars()
             .all(|character| character.is_ascii_uppercase() || character.is_ascii_digit());
     if !valid_code || relay_http_url(&ws_url, &base).is_err() || pair_token.is_empty() {
-        bail!("AGI Workforce answered the pairing request with something this build cannot read");
+        bail!("AGI answered the pairing request with something this build cannot read");
     }
     Ok(Pairing {
         code,
@@ -674,13 +674,13 @@ fn print_status(status: RemoteControlStatus) {
             println!("Remote Control is on for {folder}.");
             match pairing_qr(&pairing_line) {
                 Some(qr) => {
-                    println!("On your phone, open AGI Workforce, go to Remote, tap Scan and point it at this code:");
+                    println!("On your phone, open AGI Mobile, go to Remote, tap Scan and point it at this code:");
                     println!();
                     println!("{qr}");
                     println!();
                     println!("Or choose to enter the code on the phone and paste:");
                 }
-                None => println!("On your phone, open AGI Workforce, go to Remote, tap Scan, choose to enter the code, and paste:"),
+                None => println!("On your phone, open AGI Mobile, go to Remote, tap Scan, choose to enter the code, and paste:"),
             }
             println!();
             println!("  {pairing_line}");
@@ -695,7 +695,7 @@ fn print_status(status: RemoteControlStatus) {
         }
         RemoteControlStatus::PhoneNeedsUpdate => {
             eprintln!(
-                "The phone runs an older AGI Workforce build. Update the app, then pair again."
+                "The phone runs an older AGI Mobile build. Update the app, then pair again."
             )
         }
         RemoteControlStatus::Reconnecting => {

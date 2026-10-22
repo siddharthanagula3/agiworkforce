@@ -9,6 +9,7 @@ import {
   type CloudTaskHandoff,
   type DeveloperSessionHandoffLink,
   type LocalContextHandoff,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 
 import { t, tPlural } from '../../l10n';
@@ -216,7 +217,7 @@ export async function resolveGitCheckoutHost(): Promise<CloudResultPullHost> {
       return choice === 'Switch anyway';
     },
     report: (message: string) => {
-      void vscode.window.showInformationMessage(`AGI Workforce: ${message}`);
+      void vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: ${message}`);
     },
   };
 }
@@ -234,7 +235,7 @@ export async function handleContextHandoffUri(
     const link = parseDeveloperSessionHandoffQuery(uri.query);
     if (link === null) {
       void vscode.window.showWarningMessage(
-        'AGI Workforce: that session link names no session or folder. Send it again from the desktop app.',
+        `${PRODUCT_NAMES.code}: that session link names no session or folder. Send it again from the desktop app.`,
       );
       return false;
     }
@@ -243,20 +244,20 @@ export async function handleContextHandoffUri(
   }
   if (uri.path !== VSCODE_CONTEXT_HANDOFF_PATH) {
     void vscode.window.showWarningMessage(
-      `AGI Workforce: this link asks for "${uri.path}", which this extension does not handle.`,
+      `${PRODUCT_NAMES.code}: this link asks for "${uri.path}", which this extension does not handle.`,
     );
     return false;
   }
   const handoff = parseLocalContextHandoffQuery(uri.query);
   if (handoff === null) {
     void vscode.window.showWarningMessage(
-      'AGI Workforce: that browser handoff link is expired or malformed. Select the text again in Chrome.',
+      `${PRODUCT_NAMES.code}: that browser handoff link is expired or malformed. Select the text again in Chrome.`,
     );
     return false;
   }
   if (target === undefined) {
     void vscode.window.showWarningMessage(
-      'AGI Workforce: the chat view is not available, so the browser selection was not placed. Reload the window and send it again.',
+      `${PRODUCT_NAMES.code}: the chat view is not available, so the browser selection was not placed. Reload the window and send it again.`,
     );
     return false;
   }
@@ -275,13 +276,13 @@ export async function handleCloudTaskHandoffUri(
   const handoff = parseCloudTaskHandoffQuery(uri.query);
   if (handoff === null) {
     void vscode.window.showWarningMessage(
-      'AGI Workforce: that cloud task link names no task. Open the task in the browser and send it again.',
+      `${PRODUCT_NAMES.code}: that cloud task link names no task. Open the task in the browser and send it again.`,
     );
     return false;
   }
   if (target === undefined) {
     void vscode.window.showWarningMessage(
-      'AGI Workforce: the chat view is not available, so the cloud task context was not placed. Reload the window and send it again.',
+      `${PRODUCT_NAMES.code}: the chat view is not available, so the cloud task context was not placed. Reload the window and send it again.`,
     );
     return false;
   }
@@ -306,7 +307,7 @@ export async function continueCloudWorkHere(
   // in only when the reader asks, and the dirty-tree guard still runs after.
   if (handoff.branch !== null && resolvePullHost !== undefined) {
     const choice = await vscode.window.showInformationMessage(
-      `AGI Workforce: this cloud task works on ${handoff.branch}.`,
+      `${PRODUCT_NAMES.code}: this cloud task works on ${handoff.branch}.`,
       BRING_CLOUD_BRANCH_IN,
     );
     if (choice === BRING_CLOUD_BRANCH_IN) {

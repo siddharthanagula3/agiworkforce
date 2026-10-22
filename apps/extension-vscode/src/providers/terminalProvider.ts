@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   appendTerminalOutput,
@@ -24,7 +25,7 @@ import {
 import { Config } from '../platform/config';
 import { setTerminalOutputSource, type TerminalOutput } from '../data/terminalOutput';
 
-const TERMINAL_NAME = 'AGI Workforce';
+const TERMINAL_NAME = PRODUCT_NAMES.code;
 
 /**
  * A bare `agi` on PATH should read as `agi login openai` in the terminal, not
@@ -111,7 +112,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
   runCommand(command: string): void {
     if (!vscode.workspace.isTrusted) {
       vscode.window.showWarningMessage(
-        'AGI Workforce: command execution is disabled in untrusted workspaces. Trust the workspace to run terminal commands.',
+        `${PRODUCT_NAMES.code}: command execution is disabled in untrusted workspaces. Trust the workspace to run terminal commands.`,
       );
       return;
     }
@@ -143,7 +144,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
   runSuggestedCommand(command: string): boolean {
     const rejection = runSuggestedCommand(this, command);
     if (rejection !== undefined) {
-      vscode.window.showErrorMessage(`AGI Workforce: Refused to run command, ${rejection}`);
+      vscode.window.showErrorMessage(`${PRODUCT_NAMES.code}: Refused to run command, ${rejection}`);
       return false;
     }
     return true;
@@ -175,7 +176,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
       {
         role: 'system',
         content:
-          'You are AGI Workforce, a terminal command expert. ' +
+          `You are ${PRODUCT_NAMES.code}, a terminal command expert. ` +
           'Given the user context, suggest 1 to 5 terminal commands that would be helpful. ' +
           'Output EXACTLY one command per line, with no explanations, no numbering, no markdown, ' +
           'no backticks, and no blank lines. Just the raw shell commands.\n\n' +
@@ -195,7 +196,9 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
     const suggestions = parseSuggestedCommands(response);
 
     if (suggestions.length === 0) {
-      vscode.window.showWarningMessage('AGI Workforce: No command suggestions were generated.');
+      vscode.window.showWarningMessage(
+        `${PRODUCT_NAMES.code}: No command suggestions were generated.`,
+      );
       return undefined;
     }
 
@@ -220,7 +223,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
     });
 
     const picked = await vscode.window.showQuickPick(items, {
-      title: 'AGI Workforce, Suggested Commands (AI-generated, verify before running)',
+      title: `${PRODUCT_NAMES.code}, Suggested Commands (AI-generated, verify before running)`,
       placeHolder: 'Select a command to run in the terminal',
     });
 
@@ -230,7 +233,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
 
     if (!picked._valid) {
       vscode.window.showErrorMessage(
-        `AGI Workforce: Refused to run command, ${picked.description ?? 'safety check failed'}`,
+        `${PRODUCT_NAMES.code}: Refused to run command, ${picked.description ?? 'safety check failed'}`,
       );
       return undefined;
     }
@@ -279,7 +282,7 @@ export class TerminalProvider implements vscode.Disposable, CodeTerminalSession 
         : 'No command output has been captured in this terminal yet.';
 
     const pastedOutput = await vscode.window.showInputBox({
-      title: 'AGI Workforce, Paste Terminal Output',
+      title: `${PRODUCT_NAMES.code}, Paste Terminal Output`,
       prompt: `${reason} Copy the terminal output you want explained and paste it here.`,
       placeHolder: 'Paste terminal output here…',
       ignoreFocusOut: true,
@@ -326,8 +329,8 @@ export function activateTerminal(
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.runCommand', async () => {
       const command = await vscode.window.showInputBox({
-        title: 'AGI Workforce, Run Command',
-        prompt: 'Enter a command to run in the AGI Workforce terminal',
+        title: `${PRODUCT_NAMES.code}, Run Command`,
+        prompt: `Enter a command to run in the ${PRODUCT_NAMES.code} terminal`,
         placeHolder: 'e.g. npm install, git status, cargo build',
         ignoreFocusOut: true,
         validateInput: (value) => {
@@ -344,7 +347,7 @@ export function activateTerminal(
         provider.runCommand(command.trim());
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        vscode.window.showErrorMessage(`AGI Workforce: Failed to run command, ${message}`);
+        vscode.window.showErrorMessage(`${PRODUCT_NAMES.code}: Failed to run command, ${message}`);
       }
     }),
   );
@@ -356,7 +359,7 @@ export function activateTerminal(
       const providerId = typeof raw === 'string' ? raw.trim() : '';
       if (!/^[A-Za-z0-9_-]{1,64}$/u.test(providerId)) {
         vscode.window.showWarningMessage(
-          'AGI Workforce: no provider was named, so there is nothing to sign in to.',
+          `${PRODUCT_NAMES.code}: no provider was named, so there is nothing to sign in to.`,
         );
         return;
       }
@@ -383,7 +386,7 @@ export function activateTerminal(
       }
 
       const userContext = await vscode.window.showInputBox({
-        title: 'AGI Workforce, Suggest Command',
+        title: `${PRODUCT_NAMES.code}, Suggest Command`,
         prompt:
           'What are you trying to do? (e.g., "run tests", "find large files", "check git history")',
         placeHolder: 'Describe what you need…',
@@ -403,7 +406,7 @@ export function activateTerminal(
       const failure = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'AGI Workforce: Generating command suggestions…',
+          title: `${PRODUCT_NAMES.code}: Generating command suggestions…`,
           cancellable: true,
         },
         async (_progress, progressToken): Promise<unknown> => {
@@ -418,7 +421,7 @@ export function activateTerminal(
             cancelSource.dispose();
 
             if (result !== undefined) {
-              vscode.window.showInformationMessage(`AGI Workforce: Running "${result}"`);
+              vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: Running "${result}"`);
             }
             return undefined;
           } catch (err) {
@@ -431,7 +434,7 @@ export function activateTerminal(
       if (failure === undefined) return;
       if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
       await showCloudUtilityErrorActions(failure, {
-        title: 'AGI Workforce: Failed to suggest command',
+        title: `${PRODUCT_NAMES.code}: Failed to suggest command`,
         retry: () => vscode.commands.executeCommand('agi-workforce.suggestCommand'),
         secrets,
       });

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 90-second demo flow for AGI Workforce CLI.
+# 90-second demo flow for AGI CLI.
 #
 # Pre-reqs:
 #   * a debug build, which is the only kind that accepts --demo:
@@ -23,7 +23,7 @@ DEMO_FALLBACK_MODEL=${DEMO_FALLBACK_MODEL:-$(jq -er 'map(select(.provider == "op
 pause() { read -r -p "" _; }
 
 clear
-echo "=== AGI Workforce CLI demo ==="
+echo "=== AGI CLI demo ==="
 echo
 echo "We're running v$($CLI --version | awk '{print $2}')."
 echo "Four headline differentiators in 90 seconds."

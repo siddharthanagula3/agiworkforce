@@ -4,6 +4,7 @@ import {
   getPickerModelTier,
   normalizeUIPlanTier,
   type ManagedUsageBucket,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import {
   AgiWorkforceApiError,
@@ -139,7 +140,7 @@ async function switchToModel(
     return;
   }
   void vscode.window.showInformationMessage(
-    `AGI Workforce model set to ${modelDisplayLabel(modelId)}. Run the command again to use it.`,
+    `${PRODUCT_NAMES.code} model set to ${modelDisplayLabel(modelId)}. Run the command again to use it.`,
   );
 }
 

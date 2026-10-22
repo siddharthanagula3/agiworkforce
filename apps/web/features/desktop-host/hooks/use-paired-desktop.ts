@@ -17,8 +17,8 @@ const PRESENCE_RANK: Readonly<Record<DevicePresence, number>> = {
 
 const PRESENCE_COPY: Readonly<Record<DevicePresence, string>> = {
   online: 'is online',
-  sleeping: 'is asleep and wakes when AGI Cloud opens',
-  offline: 'is offline; open AGI Cloud on it first',
+  sleeping: 'is asleep and wakes when AGI Desktop opens',
+  offline: 'is offline; open AGI Desktop on it first',
 };
 
 interface ListedDesktop {

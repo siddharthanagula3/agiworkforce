@@ -4,13 +4,14 @@ import {
   CONNECTOR_OAUTH_CALLBACK_PATH,
   MCP_CLIENT_METADATA_PATH,
 } from '@agiworkforce/cloud-contracts';
+import { PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 
 import { isLocalDevOrigin } from '@/lib/connectors/oauth-registry';
 
-const CLIENT_NAME = 'AGI Workforce';
+const CLIENT_NAME = PRODUCT_BRAND;
 const NATIVE_CLIENT_NAMES = {
-  cli: 'AGI Workforce CLI',
-  desktop: 'AGI Workforce Desktop',
+  cli: PRODUCT_NAMES.cli,
+  desktop: PRODUCT_NAMES.desktop,
 } as const;
 const NATIVE_REDIRECT_URIS = ['http://127.0.0.1/callback', 'http://localhost/callback'];
 const GRANT_TYPES = ['authorization_code', 'refresh_token'];

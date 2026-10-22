@@ -856,7 +856,7 @@
           "ordinal": 0,
           "heading": "How deletion works",
           "headingPath": "Delete your account, or cancel a scheduled deletion › How deletion works",
-          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and all associated data are permanently deleted, you are\nsigned out now, and erasure runs 24 hours after you confirm.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes."
+          "text": "Settings, Account carries **Delete account**, marked \"This cannot be undone.\"\nConfirming requires typing `DELETE` into the dialog. The dialog states what\nhappens: your account and all associated data are permanently deleted, you are\nsigned out now, and erasure runs 24 hours after you confirm.\n\nIn the AGI Mobile app for iPhone and Android, Settings, Cloud Account carries\n**Delete Account**.\n\nAfter you confirm, the dialog shows the date and time the 24 hours are up, and\nyou are signed out when you continue. That is the earliest moment erasure can\nbegin, not the moment it finishes: the job that erases accounts runs once a day,\nso the work starts on the first daily run after that deadline passes."
         },
         {
           "id": "delete-your-account#1",
@@ -1152,7 +1152,7 @@
           "ordinal": 3,
           "heading": "What to set up first",
           "headingPath": "Getting started with AGI › What to set up first",
-          "text": "1. For local inference, follow the Local mode guide after checking CLI\n   availability.\n2. For a supported provider API key, run `agi login <provider>` and inspect saved\n   credentials with `agi auth-status`.\n3. To use your AGI account in the browser, open\n   [AGI Web](https://agiworkforce.com/chat)."
+          "text": "1. For local inference, follow the Local mode guide after checking CLI\n   availability.\n2. For a supported provider API key, run `agi login <provider>` and inspect saved\n   credentials with `agi auth-status`.\n3. To use your AGI account in the browser, open\n   [AGI Chat](https://agiworkforce.com/chat)."
         },
         {
           "id": "getting-started#4",
@@ -1298,7 +1298,7 @@
           "ordinal": 3,
           "heading": "Mobile",
           "headingPath": "Installing the desktop and mobile apps › Mobile",
-          "text": "Check the [Mobile page](https://agiworkforce.com/mobile) for current availability.\nTo use AGI from a phone browser, open [AGI Web](https://agiworkforce.com/chat)."
+          "text": "Check the [Mobile page](https://agiworkforce.com/mobile) for current availability.\nTo use AGI from a phone browser, open [AGI Chat](https://agiworkforce.com/chat)."
         },
         {
           "id": "install-desktop-and-mobile#4",
@@ -2271,7 +2271,7 @@
           "ordinal": 3,
           "heading": "Phones and tablets",
           "headingPath": "System requirements and supported browsers › Phones and tablets",
-          "text": "To use AGI on a phone or tablet, open\n[AGI Web](https://agiworkforce.com/chat) in the browser. The\n[Mobile page](https://agiworkforce.com/mobile) shows whether an app has been\nreleased."
+          "text": "To use AGI on a phone or tablet, open\n[AGI Chat](https://agiworkforce.com/chat) in the browser. The\n[Mobile page](https://agiworkforce.com/mobile) shows whether an app has been\nreleased."
         },
         {
           "id": "system-requirements#4",
@@ -2689,7 +2689,7 @@
           "ordinal": 2,
           "heading": "Account and provider credentials",
           "headingPath": "The VS Code extension › Account and provider credentials",
-          "text": "**Set API Key** and **Clear API Key** manage the AGI Workforce account API key.\nFor model-provider key setup and storage, see\n[BYOK](https://agiworkforce.com/help/byok-provider-keys). Keep account sign-in\nseparate from provider-key setup."
+          "text": "**Set API Key** and **Clear API Key** manage the AGI account API key.\nFor model-provider key setup and storage, see\n[BYOK](https://agiworkforce.com/help/byok-provider-keys). Keep account sign-in\nseparate from provider-key setup."
         },
         {
           "id": "vscode-extension#3",

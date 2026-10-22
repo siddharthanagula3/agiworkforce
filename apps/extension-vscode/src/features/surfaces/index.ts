@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   composeSurfaceSections,
@@ -275,7 +276,7 @@ export const CONTEXT_TITLE_ACTIONS: readonly SurfaceTitleAction[] = [
 
 export function openProjectsSurface(provider: TreeSource): Promise<void> {
   return showSurfaceQuickPick({
-    title: 'AGI Workforce, Projects',
+    title: `${PRODUCT_NAMES.code}, Projects`,
     placeholder: 'Open a project…',
     provider,
     rowActions: PROJECT_ROW_ACTIONS,
@@ -285,7 +286,7 @@ export function openProjectsSurface(provider: TreeSource): Promise<void> {
 
 export function openArtifactsSurface(provider: TreeSource): Promise<void> {
   return showSurfaceQuickPick({
-    title: 'AGI Workforce, Artifacts',
+    title: `${PRODUCT_NAMES.code}, Artifacts`,
     placeholder: 'Open an artifact…',
     provider,
     rowActions: ARTIFACT_ROW_ACTIONS,
@@ -295,7 +296,7 @@ export function openArtifactsSurface(provider: TreeSource): Promise<void> {
 
 export function openCloudTasksSurface(provider: TreeSource): Promise<void> {
   return showSurfaceQuickPick({
-    title: 'AGI Workforce, Cloud tasks',
+    title: `${PRODUCT_NAMES.code}, Cloud tasks`,
     placeholder: 'Open a cloud task…',
     provider,
     rowActions: CLOUD_TASK_ROW_ACTIONS,
@@ -305,7 +306,7 @@ export function openCloudTasksSurface(provider: TreeSource): Promise<void> {
 
 export function openSchedulesSurface(provider: TreeSource): Promise<void> {
   return showSurfaceQuickPick({
-    title: 'AGI Workforce, Schedules',
+    title: `${PRODUCT_NAMES.code}, Schedules`,
     placeholder: 'Open a scheduled task…',
     provider,
     rowActions: SCHEDULE_ROW_ACTIONS,
@@ -315,7 +316,7 @@ export function openSchedulesSurface(provider: TreeSource): Promise<void> {
 
 export function openWorkSurface(cloudTasks: TreeSource, schedules: TreeSource): Promise<void> {
   return showSurfaceQuickPick({
-    title: 'AGI Workforce, Work',
+    title: `${PRODUCT_NAMES.code}, Work`,
     placeholder: 'Cloud tasks and schedules…',
     provider: composeSurfaceSections([
       { label: 'Cloud tasks', provider: cloudTasks },
@@ -328,7 +329,7 @@ export function openWorkSurface(cloudTasks: TreeSource, schedules: TreeSource): 
 
 export function openConnectorsSurface(provider: TreeSource): Promise<void> {
   return showSurfaceQuickPick({
-    title: 'AGI Workforce, Connectors',
+    title: `${PRODUCT_NAMES.code}, Connectors`,
     placeholder: 'Review a connector…',
     provider,
     rowActions: CONNECTOR_ROW_ACTIONS,
@@ -338,7 +339,7 @@ export function openConnectorsSurface(provider: TreeSource): Promise<void> {
 
 export function openMemorySurface(provider: TreeSource, placeholder: string): Promise<void> {
   return showSurfaceQuickPick({
-    title: 'AGI Workforce, Memory',
+    title: `${PRODUCT_NAMES.code}, Memory`,
     placeholder,
     provider,
     rowActions: MEMORY_ROW_ACTIONS,
@@ -348,7 +349,7 @@ export function openMemorySurface(provider: TreeSource, placeholder: string): Pr
 
 export function openContextSurface(provider: TreeSource): Promise<void> {
   return showSurfaceQuickPick({
-    title: 'AGI Workforce, Context',
+    title: `${PRODUCT_NAMES.code}, Context`,
     placeholder: 'Files in this conversation’s context…',
     provider,
     rowActions: CONTEXT_ROW_ACTIONS,
@@ -358,7 +359,7 @@ export function openContextSurface(provider: TreeSource): Promise<void> {
 
 const CAPABILITY_TITLES: Record<string, { title: string; placeholder: string; empty: string }> = {
   instructions: {
-    title: 'AGI Workforce, Instructions',
+    title: `${PRODUCT_NAMES.code}, Instructions`,
     placeholder: 'Instruction files the AGI CLI loads…',
     empty: 'The CLI loads no instruction files in this workspace',
   },

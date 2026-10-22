@@ -128,13 +128,13 @@ describe('DesktopUpdateRow', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('AGI Cloud could not restart to install the update.');
+    expect(alert).toHaveTextContent('AGI Desktop could not restart to install the update.');
     expect(alert).not.toHaveTextContent('Error invoking remote method');
     expect(screen.getByRole('button', { name: 'Restart to update' })).toBeEnabled();
   });
 
   it.each([
-    ['deferred', 'status', 'The update will install the next time AGI Cloud quits.'],
+    ['deferred', 'status', 'The update will install the next time AGI Desktop quits.'],
     ['not-ready', 'alert', 'The update has not finished downloading.'],
   ] as const)('says what happened when the restart is %s', async (outcome, role, text) => {
     installHost({
@@ -181,7 +181,7 @@ describe('DesktopUpdateRow', () => {
   it('reports a failed check without claiming the app is current', async () => {
     installHost({
       checkForUpdate: async () => {
-        throw new Error('AGI Cloud update information is unavailable (503).');
+        throw new Error('AGI Desktop update information is unavailable (503).');
       },
     });
     render(<DesktopUpdateRow />);
@@ -189,7 +189,7 @@ describe('DesktopUpdateRow', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Check for updates' }));
     await waitFor(() => {
       expect(screen.getByRole('alert')).toHaveTextContent(
-        'AGI Cloud update information is unavailable (503).',
+        'AGI Desktop update information is unavailable (503).',
       );
     });
     expect(screen.queryByRole('status')).toBeNull();

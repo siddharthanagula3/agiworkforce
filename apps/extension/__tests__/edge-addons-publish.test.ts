@@ -20,7 +20,7 @@ function options(fetchImpl: typeof fetch) {
     apiKey: 'edge-api-key',
     clientId: client,
     productId: product,
-    notes: 'AGI Workforce 1.2.0',
+    notes: 'AGI Extension 1.2.0',
     packageBytes: Buffer.from('verified zip bytes'),
     fetchImpl,
     sleep: vi.fn(async () => undefined),

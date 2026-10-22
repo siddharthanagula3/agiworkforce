@@ -1,5 +1,6 @@
 import { type BrowserWindow } from 'electron';
 import { realpath, stat } from 'node:fs/promises';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { grantRoot, WorkspaceGrantRefused } from './runtime/workspaceStore';
 import { shownValue } from './runtime/dialogText';
 import { showNativeMessage } from './runtime/nativeSurface';
@@ -52,7 +53,7 @@ export async function handleWorkspaceDrop(
     const { response } = await showNativeMessage(window, {
       type: 'question',
       title: GRANT_TITLE,
-      message: 'Let AGI Cloud open this folder?',
+      message: `Let ${PRODUCT_NAMES.desktop} open this folder?`,
       detail: [
         'AGI can then read and write files inside this folder when you ask it to, and you can attach them from the composer. Remove the folder any time in Settings, under Capabilities.',
         [

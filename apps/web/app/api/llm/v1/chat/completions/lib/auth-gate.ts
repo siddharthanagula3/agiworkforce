@@ -132,8 +132,8 @@ function termsRefusal(
   acceptanceUrl.searchParams.set('redirectTo', '/chat');
   const message =
     standing.reason === 'never_accepted'
-      ? `Accept the Terms of Service at ${acceptanceUrl.toString()} to start using AGI Workforce, then try again.`
-      : `The Terms of Service were updated. Accept the updated terms at ${acceptanceUrl.toString()} to keep using AGI Workforce, then try again.`;
+      ? `Accept the Terms of Service at ${acceptanceUrl.toString()} to start using AGI, then try again.`
+      : `The Terms of Service were updated. Accept the updated terms at ${acceptanceUrl.toString()} to keep using AGI, then try again.`;
   return NextResponse.json(
     {
       error: {

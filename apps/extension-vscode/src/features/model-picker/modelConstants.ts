@@ -23,6 +23,7 @@ import {
   type ProviderId,
   type EnvironmentAvailability,
   type ModelEnvironment,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { getAutoCapabilityEnvelope } from '@agiworkforce/routing';
 
@@ -507,7 +508,7 @@ export const MODEL_PICKER_OPTIONS: ModelPickerOption[] = [
     id: 'auto',
     label: 'Auto',
     description: 'Smart routing, best model per task',
-    detail: 'Recommended: AGI Workforce picks the optimal model automatically',
+    detail: `Recommended: ${PRODUCT_NAMES.code} picks the optimal model automatically`,
     availability: 'live',
   },
   ...AUTO_CHOICE_ROWS.filter((row) => row.choice !== 'auto').map((row) => ({

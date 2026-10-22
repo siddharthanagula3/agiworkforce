@@ -1,4 +1,5 @@
 import type { SettingsNavKey } from '@agiworkforce/ui';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 export interface DesktopSettingSearchEntry {
   id: string;
@@ -13,14 +14,14 @@ export const DESKTOP_SETTINGS_SEARCH_INDEX: DesktopSettingSearchEntry[] = [
     id: 'global-hotkey',
     tab: 'general',
     label: 'Global hotkey',
-    description: 'Open AGI Workforce with a system-wide keyboard shortcut.',
+    description: `Open ${PRODUCT_NAMES.desktop} with a system-wide keyboard shortcut.`,
     keywords: ['shortcut', 'key combination'],
   },
   {
     id: 'menu-bar',
     tab: 'general',
     label: 'Show in menu bar',
-    description: 'Keep AGI Workforce available after the main window closes.',
+    description: `Keep ${PRODUCT_NAMES.desktop} available after the main window closes.`,
     keywords: ['tray', 'background', 'close', 'dock'],
   },
   {

@@ -16,7 +16,7 @@ const MAX_BASH_TIMEOUT_SECS: u64 = 300;
 const DEFAULT_AGENT_TIMEOUT_SECS: u64 = 300;
 const RUN_TASK_TOOL: &str = "agi_run_task";
 const RUN_TASK_APPROVAL_PROMPT: &str =
-    "Another app on this computer asked AGI Workforce to run this agent task.";
+    "Another app on this computer asked AGI Desktop to run this agent task.";
 
 #[derive(Debug, Clone)]
 pub struct McpServerToolOutcome {

@@ -6,6 +6,7 @@ import type {
   HostAgentNotificationPreferences,
 } from '@agiworkforce/local-runtime-contract';
 import { redactSecrets } from '@agiworkforce/utils';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { approvalNeedsMain, type PendingApprovalReview } from './runtime/approvalReview';
 
 export interface RunningTurn {
@@ -225,7 +226,7 @@ export function approvalBody(
     clip(redactSecrets(request.summary)),
     request.command ? `$ ${clip(redactSecrets(request.command), COMMAND_LIMIT)}` : null,
     facts.length > 0 ? facts.join(', ') : null,
-    answerable ? null : 'Open AGI Cloud to review it.',
+    answerable ? null : `Open ${PRODUCT_NAMES.desktop} to review it.`,
   ]
     .filter((line): line is string => line !== null && line !== '')
     .join('\n');

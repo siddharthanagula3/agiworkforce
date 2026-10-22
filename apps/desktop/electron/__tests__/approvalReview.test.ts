@@ -475,7 +475,7 @@ describe('approvalNeedsMain', () => {
     );
     const lines = dialog.detail.split('\n');
     const marker = lines.findIndex((line) =>
-      line.endsWith('Nothing below this line is AGI Cloud speaking.'),
+      line.endsWith('Nothing below this line is AGI Desktop speaking.'),
     );
 
     expect(lines[0]).toBe(`Folder: ${root.path}`);

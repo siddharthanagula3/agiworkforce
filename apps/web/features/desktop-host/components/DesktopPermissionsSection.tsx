@@ -21,9 +21,10 @@ import {
 
 const HEADING = 'Permissions';
 const HEADING_HINT =
-  'What you have allowed or refused on this computer. Remove an answer and AGI Cloud asks again the next time it needs that permission.';
+  'What you have allowed or refused on this computer. Remove an answer and AGI Desktop asks again the next time it needs that permission.';
 const ANSWERS_HEADING = 'Your answers';
-const NO_ANSWERS = 'No saved answers yet. AGI Cloud asks the first time it needs each permission.';
+const NO_ANSWERS =
+  'No saved answers yet. AGI Desktop asks the first time it needs each permission.';
 const LOAD_FAILED = 'Permissions could not be read from the app.';
 const REMOVE_FAILED = 'That answer was not removed.';
 const SUB_HEADING_CLASS = 'text-xs font-medium uppercase tracking-wider text-[var(--text-3)]';

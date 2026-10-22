@@ -789,7 +789,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         // -----------------------------------------------------------------------
         def(
             "cron_create",
-            "Create a scheduled task on the signed-in AGI Workforce account. The task runs in \
+            "Create a scheduled task on the signed-in AGI account. The task runs in \
              AGI cloud on the account's own schedule, not on this machine and not in this \
              session, so it keeps firing after the CLI exits and is visible on every surface. \
              The schedule is a standard 5-field cron expression (minute hour day month weekday). \
@@ -809,7 +809,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         ).with_size_cap(2_000).deferred(),
         def(
             "cron_delete",
-            "Delete a scheduled task from the signed-in AGI Workforce account by its ID or exact \
+            "Delete a scheduled task from the signed-in AGI account by its ID or exact \
              name. It stops firing on every surface and its run history goes with it. This cannot \
              be undone.",
             serde_json::json!({
@@ -822,7 +822,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         ).with_size_cap(2_000).deferred(),
         def(
             "cron_list",
-            "List the signed-in AGI Workforce account's scheduled tasks with their cadence, \
+            "List the signed-in AGI account's scheduled tasks with their cadence, \
              status, next run and last run. These are the same schedules the web and mobile \
              apps show.",
             serde_json::json!({
@@ -1213,7 +1213,7 @@ pub fn always_loaded_tool_definitions() -> Vec<ToolDefinition> {
 pub fn image_tool_definitions(allowed_tools: Option<&[String]>) -> Vec<ToolDefinition> {
     vec![def(
         "generate_image",
-        "Create an image from a description with the user's AGI Workforce account and save it in the workspace. Use it when the user asks for a picture, illustration, logo, icon, diagram-style image or photo-style image. Write the prompt as a complete, specific description: subject, setting, style, composition and any text that must appear. Each image uses the account's credits. The result names the saved file; mention its path instead of describing the image at length.",
+        "Create an image from a description with the user's AGI account and save it in the workspace. Use it when the user asks for a picture, illustration, logo, icon, diagram-style image or photo-style image. Write the prompt as a complete, specific description: subject, setting, style, composition and any text that must appear. Each image uses the account's credits. The result names the saved file; mention its path instead of describing the image at length.",
         serde_json::json!({
             "type": "object",
             "properties": {

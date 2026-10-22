@@ -40,7 +40,7 @@ describe('MenuBarResidencySetting', () => {
     expect(toggle).toBeChecked();
     expect(
       screen.getByText(
-        'Keep AGI Workforce in the macOS menu bar or system tray when the main window is closed.',
+        'Keep AGI Desktop in the macOS menu bar or system tray when the main window is closed.',
       ),
     ).toBeVisible();
   });

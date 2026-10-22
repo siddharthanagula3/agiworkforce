@@ -368,7 +368,7 @@ describe('a plainly unrelated request', () => {
     expect(result.reason).toBe('out_of_scope');
     expect(result.handoffOffered).toBe(false);
     expect(result.route).toBeNull();
-    expect(result.text).toContain('I can only help with AGI Workforce');
+    expect(result.text).toContain('I can only help with AGI:');
     expect(modelMocks.resolveAutoRoute).not.toHaveBeenCalled();
     expect(modelMocks.buildServerProviderAdapter).not.toHaveBeenCalled();
     expect(admitModelCall).not.toHaveBeenCalled();
@@ -383,7 +383,7 @@ describe('a plainly unrelated request', () => {
     if (result.kind !== 'abstention') return;
     expect(result.reason).toBe('no_relevant_source');
     expect(result.handoffOffered).toBe(true);
-    expect(result.text).toContain('AGI Workforce');
+    expect(result.text).toContain('questions about AGI,');
     expect(result.text).toContain('help articles');
     expect(result.text).toContain('a person can help');
   });

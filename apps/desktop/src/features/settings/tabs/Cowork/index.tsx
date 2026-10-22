@@ -1,5 +1,6 @@
 import { Laptop, Radio, ShieldCheck, Smartphone } from 'lucide-react';
 import { useShallow } from 'zustand/react/shallow';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 import { Button } from '@/ui/Button';
 import { Switch } from '@/ui/Switch';
@@ -50,7 +51,7 @@ export function CoworkTab({ onManagePairing }: CoworkTabProps) {
                 Dispatch
               </h3>
               <p className="max-w-xl text-sm leading-relaxed text-muted-foreground">
-                Accept new tasks from your paired AGI Workforce mobile app. Tasks run on this
+                Accept new tasks from your paired {PRODUCT_NAMES.mobile} app. Tasks run on this
                 computer with the same privacy boundary, tool approvals, and audit trail as tasks
                 started here.
               </p>

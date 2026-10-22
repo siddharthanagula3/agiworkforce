@@ -32,6 +32,8 @@ import {
   type ManagedUsageBucketReading,
   type ManagedUsageCreditWindow,
   type ManagedUsageCredits,
+  PRODUCT_BRAND,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { MeResponseSchema } from '@agiworkforce/cloud-contracts/me';
 import {
@@ -542,7 +544,7 @@ export function parseCloudCompletionError(
     const advertised = responseHeaders[MINIMUM_API_VERSION_RESPONSE_HEADER];
     return new AgiWorkforceClientUpdateRequiredError(
       message ??
-        'This version of AGI for VS Code is older than AGI Workforce now supports. Update the extension to continue.',
+        `This version of ${PRODUCT_NAMES.code} is older than ${PRODUCT_BRAND} now supports. Update the extension to continue.`,
       typeof advertised === 'string' ? advertised : advertised?.[0],
     );
   }

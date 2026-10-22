@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Cloud, Loader2, Shield } from 'lucide-react';
-import { formatChatExecutionModeLabel } from '@agiworkforce/types';
+import { formatChatExecutionModeLabel, PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 import { autostart, window as desktopWindow } from '@agiworkforce/desktop-command-client';
 import { toast } from 'sonner';
 import { isTauri, isCloudWeb } from '@/lib/tauri-mock';
@@ -204,7 +204,8 @@ export function MenuBarResidencySetting() {
         <div className="min-w-0 space-y-0.5">
           <Label htmlFor="keepInMenuBar">Show in menu bar</Label>
           <p className="text-xs text-muted-foreground">
-            Keep AGI Workforce in the macOS menu bar or system tray when the main window is closed.
+            Keep {PRODUCT_NAMES.desktop} in the macOS menu bar or system tray when the main window
+            is closed.
           </p>
         </div>
         <Switch
@@ -276,7 +277,7 @@ export function LaunchAtLoginSetting() {
         <div className="min-w-0 space-y-0.5">
           <Label htmlFor="launchAtLogin">Launch at login</Label>
           <p className="text-xs text-muted-foreground">
-            Start AGI Workforce automatically when you sign in to this device.
+            Start {PRODUCT_NAMES.desktop} automatically when you sign in to this device.
           </p>
         </div>
         <Switch
@@ -322,8 +323,8 @@ export function GeneralTab({
         <div className="rounded-lg border border-blue-500/20 bg-blue-500/5 px-4 py-3 flex items-center gap-3">
           <Cloud className="h-4 w-4 text-blue-400 shrink-0" />
           <p className="text-sm text-blue-400">
-            You are using AGI Workforce {formatChatExecutionModeLabel('cloud_managed')}. Models and
-            billing are managed by your plan.
+            You are using {PRODUCT_BRAND} {formatChatExecutionModeLabel('cloud_managed')}. Models
+            and billing are managed by your plan.
           </p>
         </div>
       ) : (
@@ -346,7 +347,7 @@ export function GeneralTab({
                 <div className="space-y-0.5">
                   <Label htmlFor="globalHotkeyEnabled">Enable Global Hotkey</Label>
                   <p className="text-xs text-muted-foreground">
-                    Open AGI Workforce from anywhere with a keyboard shortcut.
+                    Open {PRODUCT_NAMES.desktop} from anywhere with a keyboard shortcut.
                   </p>
                 </div>
                 <Switch

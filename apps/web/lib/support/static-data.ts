@@ -169,7 +169,7 @@ export const STATIC_ARTICLES: SupportArticle[] = [
     title: 'Connecting AI providers',
     slug: 'connecting-providers',
     excerpt: 'Step-by-step guide to adding provider API keys.',
-    content: `# Connecting AI providers\n\nThe CLI supports BYOK (bring your own key) for cloud providers. ${BYOK_SURFACES.availability} ${BYOK_SURFACES.exclusion}\n\n## On the CLI\n1. Create an API key with your provider.\n2. Run "agi login <provider>" and paste it, then "agi auth-status" to inspect the saved credentials. A bare "agi login" signs in to AGI managed cloud.\n\n## In VS Code\nVS Code provider-key management requires a connected local CLI runtime and delegates key storage to that runtime. "AGI Workforce: Set API Key" and "AGI Workforce: Clear API Key" manage the AGI Workforce account API key, not a provider key.`,
+    content: `# Connecting AI providers\n\nThe CLI supports BYOK (bring your own key) for cloud providers. ${BYOK_SURFACES.availability} ${BYOK_SURFACES.exclusion}\n\n## On the CLI\n1. Create an API key with your provider.\n2. Run "agi login <provider>" and paste it, then "agi auth-status" to inspect the saved credentials. A bare "agi login" signs in to AGI managed cloud.\n\n## In VS Code\nVS Code provider-key management requires a connected local CLI runtime and delegates key storage to that runtime. "AGI Code: Set API Key" and "AGI Code: Clear API Key" manage the AGI account API key, not a provider key.`,
     views: 875,
     updated: '2026-10-12',
     maturity: 'ga',

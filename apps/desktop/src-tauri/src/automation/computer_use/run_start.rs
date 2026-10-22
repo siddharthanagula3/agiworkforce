@@ -8,7 +8,7 @@ use async_trait::async_trait;
 use super::app_permissions::{AppPermissionManager, PermissionStatus};
 use super::target_app::TargetApp;
 
-pub const NOTHING_TO_START_IN: &str = "No app is open that this task could use. Open the app you want AGI Workforce to work in, allow it in Settings > Capabilities > Computer use, then start the task again.";
+pub const NOTHING_TO_START_IN: &str = "No app is open that this task could use. Open the app you want AGI Desktop to work in, allow it in Settings > Capabilities > Computer use, then start the task again.";
 const NO_APP_CHOSEN: &str = "The task did not name an app, and no open app could be chosen for it. Name the app in the task, then start it again.";
 
 /// What the app in front means for the next capture.

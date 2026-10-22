@@ -5,7 +5,7 @@
  * `ELECTRON_RUN_AS_NODE=1`), owns the session secret and the envelope
  * authentication, and relays every authenticated message to the running shell
  * over the loopback bridge. Nothing privileged happens here: a host process
- * without the shell answers "AGI Cloud is not running".
+ * without the shell answers "AGI Desktop is not running".
  */
 import { readFileSync } from 'node:fs';
 import process from 'node:process';
@@ -14,6 +14,7 @@ import {
   BROWSER_BRIDGE_ROUTES,
   BROWSER_COMMAND_POLL_WINDOW_MS,
   NATIVE_HOST_TOKEN_HEADER,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { createNativeMessageReader, encodeNativeMessage } from './framing';
 import { EnvelopeRejected, NativeSession, parseEnvelope } from './envelope';
@@ -41,7 +42,10 @@ async function relay(
   message: Record<string, unknown>,
 ): Promise<Record<string, unknown>> {
   if (!token) {
-    return { success: false, error: 'AGI Cloud has not registered this browser host.' };
+    return {
+      success: false,
+      error: `${PRODUCT_NAMES.desktop} has not registered this browser host.`,
+    };
   }
   try {
     const response = await fetch(bridgeUrl(), {
@@ -54,15 +58,18 @@ async function relay(
       signal: AbortSignal.timeout(RELAY_TIMEOUT_MS),
     });
     if (!response.ok) {
-      return { success: false, error: `AGI Cloud refused the request (${response.status}).` };
+      return {
+        success: false,
+        error: `${PRODUCT_NAMES.desktop} refused the request (${response.status}).`,
+      };
     }
     const parsed = (await response.json()) as unknown;
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-      return { success: false, error: 'AGI Cloud returned an unreadable response.' };
+      return { success: false, error: `${PRODUCT_NAMES.desktop} returned an unreadable response.` };
     }
     return parsed as Record<string, unknown>;
   } catch {
-    return { success: false, error: 'AGI Cloud is not running.' };
+    return { success: false, error: `${PRODUCT_NAMES.desktop} is not running.` };
   }
 }
 

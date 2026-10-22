@@ -76,7 +76,7 @@ const inputSchema = z.object({
 
 const GENERIC_ABSTENTION_COPY: Readonly<Record<SupportAbstentionReason, string>> = Object.freeze({
   no_relevant_source:
-    "I only answer questions about AGI Workforce, and only from the help articles. I couldn't find anything there for this one, so I'm not going to guess. If it's about the product, a person can help.",
+    "I only answer questions about AGI, and only from the help articles. I couldn't find anything there for this one, so I'm not going to guess. If it's about the product, a person can help.",
   out_of_scope: OUT_OF_SCOPE_COPY,
   hard_abstain_billing: HARD_ABSTAIN_COPY.billing,
   hard_abstain_data_deletion: HARD_ABSTAIN_COPY.data_deletion,

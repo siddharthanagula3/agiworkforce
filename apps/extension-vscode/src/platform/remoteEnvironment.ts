@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { execFile } from 'node:child_process';
 import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import * as os from 'node:os';
@@ -129,6 +130,6 @@ export async function probeCli(cliPath: string, runVersion: RunVersion): Promise
 
 export function cliProbeMessage(result: CliProbeResult, environment: RemoteEnvironment): string {
   return result.ok
-    ? `AGI Workforce: ${result.version} runs from ${result.cliPath} in ${environment.label}.`
-    : `AGI Workforce: The AGI CLI at ${result.cliPath} ${result.reason} in ${environment.label}. Install the CLI there, or set agiWorkforce.cliPath to its path inside ${environment.label}.`;
+    ? `${PRODUCT_NAMES.code}: ${result.version} runs from ${result.cliPath} in ${environment.label}.`
+    : `${PRODUCT_NAMES.code}: The AGI CLI at ${result.cliPath} ${result.reason} in ${environment.label}. Install the CLI there, or set agiWorkforce.cliPath to its path inside ${environment.label}.`;
 }

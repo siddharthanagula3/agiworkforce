@@ -74,5 +74,5 @@ export function describeSiteToolApproval(
     .map(([key, value]) => `  ${key}: ${String(value).slice(0, 120)}`)
     .join('\n');
   const why = plan.reason ? `\n\n${plan.reason}` : '';
-  return `AGI Workforce: the tool "${toolName}" on this page wants to run:\n\n${argLines}${why}\n\nClick OK to allow, or Cancel to stop.`;
+  return `AGI: the tool "${toolName}" on this page wants to run:\n\n${argLines}${why}\n\nClick OK to allow, or Cancel to stop.`;
 }

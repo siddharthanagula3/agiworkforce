@@ -376,7 +376,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         ),
         RegistryCommand::builtin_slash(
             "release-notes",
-            "Show release notes for the current AGI Workforce version",
+            "Show release notes for the current AGI CLI version",
             true,
             false,
             vec!["changelog"],
@@ -554,7 +554,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         ),
         RegistryCommand::builtin_slash(
             "exit",
-            "Exit AGI Workforce",
+            "Exit AGI CLI",
             true,
             false,
             vec!["quit", "q"],
@@ -754,7 +754,7 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
         ),
         RegistryCommand::builtin_slash(
             "powerup",
-            "Discover AGI Workforce features through quick interactive lessons",
+            "Discover AGI CLI features through quick interactive lessons",
             false,
             true,
             vec![],
@@ -809,7 +809,7 @@ mod tests {
     #[test]
     fn registry_command_matching_uses_aliases_and_exact_names() {
         let command =
-            RegistryCommand::builtin_slash("exit", "Exit AGI Workforce", true, false, vec!["quit"]);
+            RegistryCommand::builtin_slash("exit", "Exit AGI CLI", true, false, vec!["quit"]);
 
         assert!(command.matches_name("exit"));
         assert!(command.matches_name("/exit"));

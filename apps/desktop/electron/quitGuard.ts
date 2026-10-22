@@ -1,4 +1,5 @@
 import type { RemoteControlState } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 export interface LiveWork {
   shellRuns: number;
@@ -57,7 +58,7 @@ export function quitPrompt(work: LiveWork): GuardPrompt | null {
   if (lines.length === 0) return null;
   return {
     type: 'warning',
-    title: 'Quit AGI Cloud?',
+    title: `Quit ${PRODUCT_NAMES.desktop}?`,
     message: 'Quitting stops the work running on this computer.',
     detail: `${lines.map((line) => `• ${line}`).join('\n')}\n\nAn agent turn stops where it is and has to be asked again. Commands are ended without finishing. Your phone loses its connection until you start Remote Control again.`,
     buttons: ['Cancel', 'Quit and Stop All'],
@@ -118,8 +119,7 @@ export function revokeComputerUsePrompt(): GuardPrompt {
     type: 'warning',
     title: 'Stop computer use and revoke access?',
     message: 'Agents lose control of this screen until you allow it again.',
-    detail:
-      'Anything an agent is doing with the mouse or keyboard stops now. The next time an agent needs the screen, AGI Cloud asks you first, as it did the first time.',
+    detail: `Anything an agent is doing with the mouse or keyboard stops now. The next time an agent needs the screen, ${PRODUCT_NAMES.desktop} asks you first, as it did the first time.`,
     buttons: ['Cancel', 'Stop and Revoke'],
     defaultId: 0,
     cancelId: 0,

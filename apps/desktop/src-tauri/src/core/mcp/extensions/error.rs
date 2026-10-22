@@ -41,7 +41,7 @@ pub enum ExtensionError {
     ManifestMissingField(String),
 
     /// The manifest version is not supported
-    #[error("Extension requires a newer version of AGI Workforce")]
+    #[error("Extension requires a newer version of AGI Desktop")]
     UnsupportedManifestVersion { found: String, minimum: String },
 
     /// The extension ID is not valid

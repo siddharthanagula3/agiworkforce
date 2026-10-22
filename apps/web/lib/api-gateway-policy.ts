@@ -62,7 +62,7 @@ export function assertInboundContract(
   if (requestedVersion) {
     if (!resolveClientUpgrade(SERVER_VERSION_ADVERTISEMENT, requestedVersion).usable) {
       throw createError.clientUpdateRequired(
-        `This version speaks API contract ${requestedVersion}, and AGI Workforce now needs ${MINIMUM_SUPPORTED_API_CONTRACT_VERSION} or newer. Update to continue.`,
+        `This version speaks API contract ${requestedVersion}, and AGI now needs ${MINIMUM_SUPPORTED_API_CONTRACT_VERSION} or newer. Update to continue.`,
       );
     }
     if (!SUPPORTED_API_CONTRACT_VERSIONS.has(requestedVersion)) {

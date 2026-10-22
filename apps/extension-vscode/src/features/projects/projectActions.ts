@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   PROJECT_DESCRIPTION_MAX_LENGTH,
@@ -209,12 +210,15 @@ export async function showProjectDetail(
   let detail: Awaited<ReturnType<typeof readProjectDetail>>;
   try {
     detail = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'AGI Workforce: opening project…' },
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `${PRODUCT_NAMES.code}: opening project…`,
+      },
       () => readProjectDetail(workspace, projectId),
     );
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: this project could not be opened, ${describeProjectFailure(error)}`,
+      `${PRODUCT_NAMES.code}: this project could not be opened, ${describeProjectFailure(error)}`,
     );
     return;
   }
@@ -269,7 +273,7 @@ async function projectEdit(
 ): Promise<ManagedCloudProjectUpdateRequest | undefined> {
   if (action === 'edit-name') {
     const name = await vscode.window.showInputBox({
-      title: 'AGI Workforce, Rename project',
+      title: `${PRODUCT_NAMES.code}, Rename project`,
       value: projectTitle(project),
       ignoreFocusOut: true,
       validateInput: (value) => {
@@ -284,7 +288,7 @@ async function projectEdit(
   }
   if (action === 'edit-description') {
     const description = await vscode.window.showInputBox({
-      title: 'AGI Workforce, Project description',
+      title: `${PRODUCT_NAMES.code}, Project description`,
       prompt: 'What this project is for. Leave empty to remove it.',
       value: project.description ?? '',
       ignoreFocusOut: true,
@@ -297,7 +301,7 @@ async function projectEdit(
   }
   if (action === 'edit-instructions') {
     const instructions = await vscode.window.showInputBox({
-      title: 'AGI Workforce, Project instructions',
+      title: `${PRODUCT_NAMES.code}, Project instructions`,
       prompt: 'Applied to every chat in this project, on every client. Leave empty to remove them.',
       value: project.instructions ?? '',
       ignoreFocusOut: true,
@@ -318,7 +322,7 @@ async function projectEdit(
       },
       { label: '$(close) No default model', value: null },
     ],
-    { title: 'AGI Workforce, Project default model' },
+    { title: `${PRODUCT_NAMES.code}, Project default model` },
   );
   return choice === undefined ? undefined : { defaultModelId: choice.value };
 }
@@ -333,7 +337,10 @@ async function editProject(
   if (update === undefined) return;
   try {
     const updated = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'AGI Workforce: saving project…' },
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `${PRODUCT_NAMES.code}: saving project…`,
+      },
       () => workspace.projects.updateProject(project.id, update),
     );
     if (getActiveCloudProject(host.workspaceState)?.id === updated.id) {
@@ -344,11 +351,11 @@ async function editProject(
       });
     }
     void vscode.window.showInformationMessage(
-      `AGI Workforce: "${projectTitle(updated)}" was saved to your account, on every client.`,
+      `${PRODUCT_NAMES.code}: "${projectTitle(updated)}" was saved to your account, on every client.`,
     );
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: the project was not saved, ${describeProjectFailure(error)}`,
+      `${PRODUCT_NAMES.code}: the project was not saved, ${describeProjectFailure(error)}`,
     );
   } finally {
     host.onChanged();
@@ -363,7 +370,7 @@ export async function applyProjectToChat(
   if (active?.id === project.id) {
     await clearActiveCloudProject(host.workspaceState);
     void vscode.window.showInformationMessage(
-      `AGI Workforce: turns in this workspace no longer use "${projectTitle(project)}".`,
+      `${PRODUCT_NAMES.code}: turns in this workspace no longer use "${projectTitle(project)}".`,
     );
     host.onChanged();
     return;
@@ -378,8 +385,8 @@ export async function applyProjectToChat(
   host.onChanged();
   const applied =
     instructions === ''
-      ? `AGI Workforce: turns in this workspace now name "${projectTitle(project)}". It has no instructions to apply.`
-      : `AGI Workforce: turns in this workspace now apply "${projectTitle(project)}" and its instructions.`;
+      ? `${PRODUCT_NAMES.code}: turns in this workspace now name "${projectTitle(project)}". It has no instructions to apply.`
+      : `${PRODUCT_NAMES.code}: turns in this workspace now apply "${projectTitle(project)}" and its instructions.`;
   const defaultModel = project.defaultModelId;
   if (!defaultModel || defaultModel === normalizeConfiguredModelId(Config.model())) {
     void vscode.window.showInformationMessage(applied);
@@ -399,7 +406,7 @@ export async function createProjectInteractively(
   host: ProjectActionHost,
 ): Promise<ManagedCloudProject | undefined> {
   const name = await vscode.window.showInputBox({
-    title: 'AGI Workforce, New Project',
+    title: `${PRODUCT_NAMES.code}, New Project`,
     prompt:
       'A project keeps instructions, knowledge files and chats together. It is created on your AGI Cloud account and appears in the web app, the CLI and mobile.',
     placeHolder: 'Example: Payments service',
@@ -416,7 +423,7 @@ export async function createProjectInteractively(
   if (name === undefined || name.trim() === '') return undefined;
 
   const instructions = await vscode.window.showInputBox({
-    title: `AGI Workforce, Instructions for "${name.trim()}"`,
+    title: `${PRODUCT_NAMES.code}, Instructions for "${name.trim()}"`,
     prompt:
       'Applied to every chat in this project, on every client. Leave empty to add them later on the web.',
     placeHolder: 'Example: Prefer TypeScript, and always show the migration before the code.',
@@ -430,7 +437,10 @@ export async function createProjectInteractively(
 
   try {
     const created = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'AGI Workforce: creating project…' },
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `${PRODUCT_NAMES.code}: creating project…`,
+      },
       () =>
         workspace.projects.createProject({
           name: name.trim(),
@@ -438,12 +448,12 @@ export async function createProjectInteractively(
         }),
     );
     void vscode.window.showInformationMessage(
-      `AGI Workforce: "${projectTitle(created)}" is on your account, on every client.`,
+      `${PRODUCT_NAMES.code}: "${projectTitle(created)}" is on your account, on every client.`,
     );
     return created;
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: the project was not created, ${describeProjectFailure(error)}`,
+      `${PRODUCT_NAMES.code}: the project was not created, ${describeProjectFailure(error)}`,
     );
     return undefined;
   } finally {
@@ -465,17 +475,20 @@ export async function deleteProjectInteractively(
 
   try {
     await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'AGI Workforce: deleting project…' },
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `${PRODUCT_NAMES.code}: deleting project…`,
+      },
       () => workspace.projects.deleteProject(project.id),
     );
     if (getActiveCloudProject(host.workspaceState)?.id === project.id) {
       await clearActiveCloudProject(host.workspaceState);
     }
     void vscode.window.showInformationMessage(
-      `AGI Workforce: "${projectTitle(project)}" was deleted from your account.`,
+      `${PRODUCT_NAMES.code}: "${projectTitle(project)}" was deleted from your account.`,
     );
   } catch (error) {
-    const message = `AGI Workforce: the project was not deleted, ${describeProjectFailure(error)}`;
+    const message = `${PRODUCT_NAMES.code}: the project was not deleted, ${describeProjectFailure(error)}`;
     const answer = isRecoverableProjectFailure(error)
       ? await vscode.window.showErrorMessage(message, RETRY_ACTION)
       : await vscode.window.showErrorMessage(message);

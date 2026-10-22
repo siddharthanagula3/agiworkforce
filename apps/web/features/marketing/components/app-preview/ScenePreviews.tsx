@@ -647,7 +647,7 @@ export function MemoryScenePreview({
   return (
     <SceneShell
       scene={`memory-${view}`}
-      label="Authored example of the Memory settings in AGI Web"
+      label="Authored example of the Memory settings in AGI Chat"
       className={className}
       chats={MEMORY_SIDEBAR_CHATS}
       overlay={
@@ -1317,7 +1317,7 @@ export function ComposerScenePreview({
   return (
     <SceneShell
       scene={`composer-${view}`}
-      label="Authored example of the AGI Web composer"
+      label="Authored example of the AGI Chat composer"
       className={className}
       chats={COMPOSER_SIDEBAR_CHATS}
     >

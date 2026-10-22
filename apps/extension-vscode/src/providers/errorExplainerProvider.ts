@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   buildAskAboutCodePrompt,
@@ -19,7 +20,7 @@ async function explainErrorCommand(): Promise<void> {
 
 async function askAboutCodeCommand(): Promise<void> {
   const question = await vscode.window.showInputBox({
-    title: 'AGI Workforce, Ask About Code',
+    title: `${PRODUCT_NAMES.code}, Ask About Code`,
     prompt: 'Ask anything about your code…',
     placeHolder: 'e.g. "Why does this function return undefined?"',
     ignoreFocusOut: true,

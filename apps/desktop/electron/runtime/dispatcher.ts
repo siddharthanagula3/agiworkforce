@@ -76,6 +76,7 @@ import {
   CLOUD_CODE_TURN_STEP_BOUNDS,
   isBrowserCommand,
   isCloudCodeTurnStepBound,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import {
   BrowserBridgeError,
@@ -1077,7 +1078,7 @@ async function confirmClearRefusal(
     defaultId: 0,
     cancelId: 0,
     title: 'Clear this refusal?',
-    message: `Let AGI Cloud ask again to ${describePermission(capability, scope)}?`,
+    message: `Let ${PRODUCT_NAMES.desktop} ask again to ${describePermission(capability, scope)}?`,
     detail:
       'You refused this earlier. Clearing the refusal allows nothing by itself: the next time it is needed you are asked again, and can refuse again.',
     noLink: true,
@@ -2521,13 +2522,12 @@ function toFailure(error: unknown): DesktopRuntimeResponse<never> {
 }
 
 /**
- * AGI Cloud is the Electron shell, and D-2026-09-15-04 makes it Cloud-only, so
+ * AGI Desktop is the Electron shell, and D-2026-09-15-04 makes it Cloud-only, so
  * the shell refuses on-device inference rather than only hiding it: a hidden
  * control over a live backend still leaves the capability reachable by
  * anything that can reach the bridge.
  */
-const LOCAL_INFERENCE_UNSUPPORTED =
-  'AGI Cloud answers every conversation in the cloud. Models running on this Mac are not one of its runtimes.';
+const LOCAL_INFERENCE_UNSUPPORTED = `${PRODUCT_NAMES.desktop} answers every conversation in the cloud. Models running on this Mac are not one of its runtimes.`;
 
 const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
 

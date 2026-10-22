@@ -28,7 +28,7 @@ export default function DownloadError({
 
       <h1 className="mb-3 text-h1">Unable to load downloads</h1>
       <p className="mx-auto mb-2 max-w-sm text-muted-foreground">
-        The download page could not be loaded. Retry the page, use AGI Web, or check the CLI page.
+        The download page could not be loaded. Retry the page, use AGI Chat, or check the CLI page.
       </p>
 
       {error.digest && (
@@ -50,7 +50,7 @@ export default function DownloadError({
           href={WEB_ENTRY_HREF}
           className="inline-flex h-10 items-center justify-center rounded-full border border-border bg-card px-6 text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
-          Use AGI Web
+          Use AGI Chat
         </Link>
         <Link
           href="/cli"

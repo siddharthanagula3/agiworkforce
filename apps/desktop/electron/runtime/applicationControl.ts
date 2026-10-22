@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron';
 import type { PermissionScope, PermissionState } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   ComputerUseRefused,
   applicationAt,
@@ -34,11 +35,9 @@ const SHELL_APP_PREFIXES: readonly string[] = ['com.jetbrains.'];
 const FILE_MANAGER = 'com.apple.finder';
 const SYSTEM_SETTINGS = 'com.apple.systempreferences';
 
-const OWN_WINDOW_REFUSED =
-  "That spot is on AGI Cloud's own window, which AGI does not control. Take a new screenshot and work in the app you mean.";
+const OWN_WINDOW_REFUSED = `That spot is on ${PRODUCT_NAMES.desktop}'s own window, which AGI does not control. Take a new screenshot and work in the app you mean.`;
 
-const OWN_FRONT_REFUSED =
-  'AGI Cloud is in front, so typing would land in its own window. Click the app you want to type in first.';
+const OWN_FRONT_REFUSED = `${PRODUCT_NAMES.desktop} is in front, so typing would land in its own window. Click the app you want to type in first.`;
 
 const KEYBOARD_STEPS: ReadonlySet<string> = new Set(['computer_type', 'computer_key']);
 

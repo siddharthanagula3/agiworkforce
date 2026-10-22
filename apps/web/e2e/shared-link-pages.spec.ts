@@ -41,7 +41,7 @@ test.describe('pages opened from a shared link', () => {
     await page.goto('/slack/link', { waitUntil: 'domcontentloaded' });
 
     await expect(
-      page.getByRole('heading', { level: 1, name: 'Connect Slack to AGI Workforce' }),
+      page.getByRole('heading', { level: 1, name: 'Connect Slack to AGI' }),
     ).toBeVisible();
     await expect(
       page.getByRole('alert').filter({ hasText: 'This link is missing its code.' }),

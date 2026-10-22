@@ -425,7 +425,7 @@ pub async fn extension_select_package(app: AppHandle) -> Result<Option<String>, 
     let file_path = app
         .dialog()
         .file()
-        .add_filter("AGI Workforce Extension", &["agiext"])
+        .add_filter("AGI Desktop Extension", &["agiext"])
         .blocking_pick_file();
 
     // FilePath is an enum, convert to string

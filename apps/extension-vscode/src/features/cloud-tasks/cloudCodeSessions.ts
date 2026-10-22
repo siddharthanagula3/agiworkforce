@@ -21,6 +21,7 @@ import {
   type CloudCodeSession,
   type CloudCodeTerminalEntry,
   type CloudTaskHandoff,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
@@ -244,7 +245,7 @@ async function decide(
     const turn = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `AGI Workforce: ${CLOUD_CODE_SESSION_COPY.agentWorking}`,
+        title: `${PRODUCT_NAMES.code}: ${CLOUD_CODE_SESSION_COPY.agentWorking}`,
       },
       () =>
         api.decideApproval(sessionId, {
@@ -254,11 +255,11 @@ async function decide(
         }),
     );
     void vscode.window.showInformationMessage(
-      `AGI Workforce: ${CLOUD_CODE_STOP_REASON_LABELS[turn.stopReason]}`,
+      `${PRODUCT_NAMES.code}: ${CLOUD_CODE_STOP_REASON_LABELS[turn.stopReason]}`,
     );
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: the decision could not be sent, ${describeCloudRunFailure(error)}`,
+      `${PRODUCT_NAMES.code}: the decision could not be sent, ${describeCloudRunFailure(error)}`,
     );
   }
 }
@@ -274,7 +275,7 @@ export async function showCloudCodeSession(
     [detail, approvals] = await Promise.all([api.get(sessionId), api.listApprovals(sessionId)]);
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: this AGI Code session could not be opened, ${describeCloudRunFailure(error)}`,
+      `${PRODUCT_NAMES.code}: this AGI Code session could not be opened, ${describeCloudRunFailure(error)}`,
     );
     return;
   }
@@ -308,7 +309,7 @@ export async function showCloudCodeSession(
       query = encodeCloudTaskHandoffQuery(cloudCodeHandoff(detail.session));
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: this session's branch cannot be brought in, ${describeCloudRunFailure(error)}`,
+        `${PRODUCT_NAMES.code}: this session's branch cannot be brought in, ${describeCloudRunFailure(error)}`,
       );
       return;
     }
@@ -321,11 +322,11 @@ export async function showCloudCodeSession(
     try {
       await api.cancelAgentTurn(sessionId, running?.turnId);
       void vscode.window.showInformationMessage(
-        `AGI Workforce: ${CLOUD_CODE_SESSION_COPY.stoppingTurn}.`,
+        `${PRODUCT_NAMES.code}: ${CLOUD_CODE_SESSION_COPY.stoppingTurn}.`,
       );
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: the task could not be stopped, ${describeCloudRunFailure(error)}`,
+        `${PRODUCT_NAMES.code}: the task could not be stopped, ${describeCloudRunFailure(error)}`,
       );
     }
     return;

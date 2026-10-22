@@ -18,6 +18,7 @@ import {
   type LocalRoutineInput,
   type LocalRoutineState,
 } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   LocalRoutineEngine,
   validateLocalRoutineInput,
@@ -147,7 +148,9 @@ async function confirm(
 ): Promise<void> {
   const root = getRoot(input.rootId);
   if (!window || window.isDestroyed() || !root || !authority(input.rootId))
-    throw new Error('Open an AGI Workforce window and allow the agent in this folder first.');
+    throw new Error(
+      `Open an ${PRODUCT_NAMES.desktop} window and allow the agent in this folder first.`,
+    );
   const before = authority(input.rootId);
   const digest = createHash('sha256').update(JSON.stringify(input)).digest('hex');
   const result = await askNativeQuestion(

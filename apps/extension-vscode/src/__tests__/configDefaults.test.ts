@@ -181,9 +181,7 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     expect(commands.filter((entry) => /Sign In to AGI Cloud/u.test(entry.title ?? ''))).toEqual([
       expect.objectContaining({ command: 'agi-workforce.signIn' }),
     ]);
-    expect(commands.filter((entry) => !(entry.title ?? '').startsWith('AGI Workforce: '))).toEqual(
-      [],
-    );
+    expect(commands.filter((entry) => !(entry.title ?? '').startsWith('AGI Code: '))).toEqual([]);
   });
 
   it('treats agent.mode = plan as active plan mode', () => {

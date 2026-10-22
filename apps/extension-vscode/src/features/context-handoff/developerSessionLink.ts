@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import type { DeveloperSessionHandoffLink } from '@agiworkforce/types';
@@ -35,7 +36,7 @@ export async function openDeveloperSessionLink(
     return;
   }
   const choice = await vscode.window.showInformationMessage(
-    `AGI Workforce: this session works in ${link.cwd}, which is not open in this window.`,
+    `${PRODUCT_NAMES.code}: this session works in ${link.cwd}, which is not open in this window.`,
     OPEN_FOLDER,
   );
   if (choice !== OPEN_FOLDER) return;

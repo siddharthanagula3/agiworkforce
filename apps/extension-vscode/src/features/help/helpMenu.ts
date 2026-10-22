@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { getCloudWebOrigin } from '../../utils/api';
 
@@ -25,7 +26,7 @@ export async function showHelpMenu(): Promise<void> {
     {
       label: '$(keyboard) Keyboard shortcuts',
       command: 'workbench.action.openGlobalKeybindings',
-      args: ['AGI Workforce'],
+      args: [PRODUCT_NAMES.code],
     },
     {
       label: '$(pulse) Service status',
@@ -47,7 +48,7 @@ export async function showHelpMenu(): Promise<void> {
       url: `${origin}/support?from=vscode-extension`,
     },
   ];
-  const picked = await vscode.window.showQuickPick(items, { title: 'AGI Workforce, Help' });
+  const picked = await vscode.window.showQuickPick(items, { title: `${PRODUCT_NAMES.code}, Help` });
   if (picked === undefined) return;
   if (picked.url !== undefined) {
     await vscode.env.openExternal(vscode.Uri.parse(picked.url));

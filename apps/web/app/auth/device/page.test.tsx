@@ -103,7 +103,7 @@ describe('/auth/device page', () => {
             json: () =>
               Promise.resolve({
                 user_code: 'ABCD-1234',
-                client: { name: 'AGI for VS Code', type: 'vscode' },
+                client: { name: 'AGI Code', type: 'vscode' },
                 scopes: [
                   {
                     id: 'account:read',
@@ -181,7 +181,7 @@ describe('/auth/device page', () => {
 
     expect(screen.getByLabelText('Signed-in account')).toHaveTextContent('Ada Lovelace');
     expect(screen.getByLabelText('Signed-in account')).toHaveTextContent('ada@example.com');
-    expect(await screen.findByRole('heading', { name: 'AGI for VS Code' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'AGI Code' })).toBeVisible();
     expect(screen.getByText('Account identity and plan')).toBeVisible();
     expect(screen.getByText('AGI Managed Cloud')).toBeVisible();
     expect(screen.getByRole('link', { name: 'Terms of Service' })).toHaveAttribute(
@@ -237,7 +237,7 @@ describe('/auth/device page', () => {
             json: () =>
               Promise.resolve({
                 user_code: 'ABCD-1234',
-                client: { name: 'AGI for VS Code', type: 'vscode' },
+                client: { name: 'AGI Code', type: 'vscode' },
                 scopes: [
                   { id: 'account:read', label: 'Account identity', description: 'Read identity.' },
                 ],
@@ -259,7 +259,7 @@ describe('/auth/device page', () => {
     );
 
     render(<AuthDevicePage />);
-    await screen.findByRole('heading', { name: 'AGI for VS Code' });
+    await screen.findByRole('heading', { name: 'AGI Code' });
     fireEvent.click(screen.getByRole('button', { name: 'Approve device' }));
 
     // Approval links a device to the account. Leaving the form live beside a
@@ -284,7 +284,7 @@ describe('/auth/device page', () => {
             json: () =>
               Promise.resolve({
                 user_code: 'ABCD-1234',
-                client: { name: 'AGI for VS Code', type: 'vscode' },
+                client: { name: 'AGI Code', type: 'vscode' },
                 scopes: [
                   { id: 'account:read', label: 'Account identity', description: 'Read identity.' },
                 ],
@@ -307,7 +307,7 @@ describe('/auth/device page', () => {
     );
 
     render(<AuthDevicePage />);
-    await screen.findByRole('heading', { name: 'AGI for VS Code' });
+    await screen.findByRole('heading', { name: 'AGI Code' });
     fireEvent.click(screen.getByRole('button', { name: 'Approve device' }));
 
     await waitFor(() => {
@@ -326,7 +326,7 @@ describe('/auth/device page', () => {
             json: () =>
               Promise.resolve({
                 user_code: 'ABCD-1234',
-                client: { name: 'AGI for VS Code', type: 'vscode' },
+                client: { name: 'AGI Code', type: 'vscode' },
                 scopes: [
                   { id: 'account:read', label: 'Account identity', description: 'Read identity.' },
                 ],
@@ -357,7 +357,7 @@ describe('/auth/device page', () => {
     );
 
     render(<AuthDevicePage />);
-    await screen.findByRole('heading', { name: 'AGI for VS Code' });
+    await screen.findByRole('heading', { name: 'AGI Code' });
     fireEvent.click(screen.getByRole('button', { name: 'Approve device' }));
 
     expect(await screen.findByRole('link', { name: 'Review current policies' })).toHaveAttribute(
@@ -400,7 +400,7 @@ describe('/auth/device page', () => {
       fetchMock.mock.calls.filter(([url]) => String(url).startsWith('/api/auth/device/code?'))
         .length;
 
-    expect(await screen.findByRole('heading', { name: 'AGI for VS Code' })).toBeVisible();
+    expect(await screen.findByRole('heading', { name: 'AGI Code' })).toBeVisible();
     expect(lookups()).toBe(1);
 
     await act(async () => {
@@ -408,7 +408,7 @@ describe('/auth/device page', () => {
     });
 
     expect(lookups()).toBe(1);
-    expect(screen.getByRole('heading', { name: 'AGI for VS Code' })).toBeVisible();
+    expect(screen.getByRole('heading', { name: 'AGI Code' })).toBeVisible();
     expect(screen.queryByText('Verifying the requesting app…')).not.toBeInTheDocument();
   });
 

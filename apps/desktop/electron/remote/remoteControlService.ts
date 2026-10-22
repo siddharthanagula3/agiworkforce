@@ -16,6 +16,7 @@ import {
   REMOTE_CODE_LIMITS,
   parseDispatchTaskPendingSteps,
   parseDispatchTaskReplyError,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import {
   RemoteCommandRefused,
@@ -317,7 +318,9 @@ function watchDispatchPage(contents: WebContents): void {
 
 function dispatchWindowContents(window: BrowserWindow | null): WebContents {
   if (!window || window.isDestroyed()) {
-    throw new RemoteControlRefused('Only an AGI Workforce window can run tasks sent from a phone.');
+    throw new RemoteControlRefused(
+      `Only an ${PRODUCT_NAMES.desktop} window can run tasks sent from a phone.`,
+    );
   }
   return window.webContents;
 }

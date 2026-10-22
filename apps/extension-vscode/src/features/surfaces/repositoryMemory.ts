@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
 import type { MemoryAddResult } from '../../integrations/localRuntimeClient';
@@ -8,7 +9,7 @@ const OPEN_MEMORY_FILE = 'Open memory file';
 export async function rememberForRepository(cli: CliCapabilityAdapter): Promise<void> {
   const text = (
     await vscode.window.showInputBox({
-      title: 'AGI Workforce, Remember for this repository',
+      title: `${PRODUCT_NAMES.code}, Remember for this repository`,
       prompt:
         'Sessions in this repository load this note. It is saved in the project, not your account.',
       placeHolder: 'For example: run pnpm test:unit before committing',
@@ -18,11 +19,11 @@ export async function rememberForRepository(cli: CliCapabilityAdapter): Promise<
   if (text === undefined || text === '') return;
   const result = await cli.call<MemoryAddResult>('memoryAdd', text);
   if (result.status !== 'ok') {
-    void vscode.window.showWarningMessage(`AGI Workforce: ${result.reason}`);
+    void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${result.reason}`);
     return;
   }
   const choice = await vscode.window.showInformationMessage(
-    `AGI Workforce: saved to ${result.value.path}. Sessions in this repository will load it.`,
+    `${PRODUCT_NAMES.code}: saved to ${result.value.path}. Sessions in this repository will load it.`,
     OPEN_MEMORY_FILE,
   );
   if (choice === OPEN_MEMORY_FILE) {

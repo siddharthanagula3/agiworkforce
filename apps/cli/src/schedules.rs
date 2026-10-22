@@ -33,10 +33,10 @@ impl std::fmt::Display for ScheduleError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ScheduleError::SignedOut => f.write_str(
-                "no AGI Workforce credential: schedules live in your cloud account, sign in with `agi login`",
+                "no AGI credential: schedules live in your cloud account, sign in with `agi login`",
             ),
             ScheduleError::SessionExpired => {
-                f.write_str("your AGI Workforce session expired, sign in again with `agi login`")
+                f.write_str("your AGI session expired, sign in again with `agi login`")
             }
             ScheduleError::LocalPrivacy => f.write_str(
                 "schedules are unavailable in Local privacy mode: a scheduled task runs in AGI cloud, \

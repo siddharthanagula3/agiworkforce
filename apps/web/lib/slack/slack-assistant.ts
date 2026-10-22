@@ -54,14 +54,14 @@ import { findSlackTask, slackTask, slackTaskAvailable, type SlackTask } from './
 
 const FAILED_ANSWER = 'I could not finish that answer. Please try again.';
 const CHANNEL_OFF =
-  'AGI Workforce is turned off in this channel by the person who added it to Slack. You can still message it directly.';
-const TASK_STOPPED = 'You stopped this task in AGI Workforce, so it has no answer to post.';
+  'AGI is turned off in this channel by the person who added it to Slack. You can still message it directly.';
+const TASK_STOPPED = 'You stopped this task in AGI, so it has no answer to post.';
 const RATE_LIMITED =
-  'You are sending messages faster than AGI Workforce can answer them. Wait a minute, then try again.';
+  'You are sending messages faster than AGI can answer them. Wait a minute, then try again.';
 const ACCOUNT_UNAVAILABLE =
-  'The AGI Workforce account linked to this Slack account cannot be used right now, so I cannot answer.';
+  'The AGI account linked to this Slack account cannot be used right now, so I cannot answer.';
 const WORKSPACE_LEFT =
-  'The AGI Workforce account linked to this Slack account is no longer a member of the workspace ' +
+  'The AGI account linked to this Slack account is no longer a member of the workspace ' +
   'it was linked in. Disconnect it in Settings → Slack, then send me a message to link it again.';
 
 interface Destination {
@@ -453,7 +453,7 @@ export async function claimSlackApproval(input: {
   approval: ManagedCloudScheduleRunApproval;
 }): Promise<() => Promise<void>> {
   const origin = slackAppOrigin();
-  if (!origin) throw new SlackApprovalUnavailableError('AGI Workforce in Slack is not configured');
+  if (!origin) throw new SlackApprovalUnavailableError('AGI in Slack is not configured');
   const { run, checkpoint } = await claimSlackRunApproval(input.scopedDb, {
     userId: input.userId,
     runId: input.runId,

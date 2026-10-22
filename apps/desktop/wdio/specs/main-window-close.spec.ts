@@ -22,7 +22,7 @@ describe('AGI Desktop main-window lifecycle', () => {
 
     const menuBarCopy = await browser.execute(() =>
       document.body.textContent?.includes(
-        'Keep AGI Workforce in the macOS menu bar or system tray when the main window is closed.',
+        'Keep AGI Desktop in the macOS menu bar or system tray when the main window is closed.',
       ),
     );
     expect(menuBarCopy).toBe(true);

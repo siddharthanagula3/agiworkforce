@@ -23,7 +23,7 @@ describe('DesktopUpdateNotice', () => {
     }));
     render(<DesktopUpdateNotice host={host({ checkForUpdate, openUpdateInstaller })} />);
 
-    expect(await screen.findByRole('status')).toHaveTextContent('AGI Cloud 1.3.0 is available');
+    expect(await screen.findByRole('status')).toHaveTextContent('AGI Desktop 1.3.0 is available');
     fireEvent.click(screen.getByRole('button', { name: 'Download installer' }));
     expect(openUpdateInstaller).toHaveBeenCalledTimes(1);
   });
@@ -43,7 +43,7 @@ describe('DesktopUpdateNotice', () => {
     );
 
     expect(await screen.findByRole('status')).toHaveTextContent(
-      'AGI Cloud 1.3.0 is ready to install',
+      'AGI Desktop 1.3.0 is ready to install',
     );
     expect(screen.queryByRole('button', { name: 'Download installer' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Restart to update' }));
@@ -69,13 +69,13 @@ describe('DesktopUpdateNotice', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Restart to update' }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('AGI Cloud could not restart to install the update.');
+    expect(alert).toHaveTextContent('AGI Desktop could not restart to install the update.');
     expect(alert).not.toHaveTextContent('Error invoking remote method');
     expect(screen.getByRole('button', { name: 'Restart to update' })).toBeEnabled();
   });
 
   it.each([
-    ['deferred', 'The update will install the next time AGI Cloud quits.'],
+    ['deferred', 'The update will install the next time AGI Desktop quits.'],
     ['not-ready', 'The update has not finished downloading.'],
   ] as const)('says what happened when the restart is %s', async (outcome, text) => {
     const restartToUpdate = vi.fn(async () => outcome);

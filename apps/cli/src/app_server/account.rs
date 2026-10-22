@@ -307,12 +307,12 @@ pub async fn renew_managed_session_if_expiring() -> Option<String> {
     match crate::oauth::renew_device_session(&device_auth_base(), &refresh).await {
         crate::oauth::DeviceSessionRenewal::Renewed(entry) => save_device_grant(entry)
             .err()
-            .map(|error| format!("The renewed AGI Workforce session could not be saved: {error:#}. Run agi login.")),
+            .map(|error| format!("The renewed AGI session could not be saved: {error:#}. Run agi login.")),
         crate::oauth::DeviceSessionRenewal::Refused(reason) => reason,
         crate::oauth::DeviceSessionRenewal::Revoked => Some(match logout() {
-            Ok(()) => "Your AGI Workforce session ended. Sign in again to continue.".to_string(),
+            Ok(()) => "Your AGI session ended. Sign in again to continue.".to_string(),
             Err(error) => format!(
-                "Your AGI Workforce session ended, and the saved credential could not be removed: {error:#}. Run agi logout, then sign in again."
+                "Your AGI session ended, and the saved credential could not be removed: {error:#}. Run agi logout, then sign in again."
             ),
         }),
         crate::oauth::DeviceSessionRenewal::Unavailable => None,
@@ -335,7 +335,7 @@ pub enum RejectedSessionRecovery {
 }
 
 pub const SESSION_ENDED_MESSAGE: &str =
-    "Your AGI Workforce session ended. Sign in again to continue.";
+    "Your AGI session ended. Sign in again to continue.";
 
 fn stored_managed_grant(store: &AuthStore) -> Option<(String, String)> {
     match store.entries.get("agiworkforce") {
@@ -402,13 +402,13 @@ pub async fn recover_rejected_session(rejected_access: &str) -> RejectedSessionR
         crate::oauth::DeviceSessionRenewal::Renewed(entry) => match save_device_grant(entry) {
             Ok(()) => RejectedSessionRecovery::Renewed,
             Err(error) => RejectedSessionRecovery::Refused(format!(
-                "The renewed AGI Workforce session could not be saved: {error:#}. Run agi login."
+                "The renewed AGI session could not be saved: {error:#}. Run agi login."
             )),
         },
         crate::oauth::DeviceSessionRenewal::Revoked => forget_session(),
         crate::oauth::DeviceSessionRenewal::Refused(reason) => {
             RejectedSessionRecovery::Refused(reason.unwrap_or_else(|| {
-                "AGI Workforce did not renew this session. Sign in again on agiworkforce.com."
+                "AGI did not renew this session. Sign in again on agiworkforce.com."
                     .to_string()
             }))
         }

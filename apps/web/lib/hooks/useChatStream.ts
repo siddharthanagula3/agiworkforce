@@ -511,7 +511,7 @@ function surfaceTermsNotice(response: Response): void {
     });
     return;
   }
-  toast.info('Our Terms of Service were updated. Using AGI Workforce means you accept them.', {
+  toast.info('Our Terms of Service were updated. Using AGI means you accept them.', {
     duration: 15_000,
     action: { label: 'Read terms', onClick: () => window.open('/terms', '_blank', 'noopener') },
   });
@@ -1749,7 +1749,7 @@ async function driveDeviceSteps(
       device && device.deviceId === step.deviceId
         ? await executeDeviceStep(step.name, step.input, ctx.runId)
         : {
-            content: `This step is waiting on ${step.deviceName}. Open the AGI Cloud app on that machine.`,
+            content: `This step is waiting on ${step.deviceName}. Open AGI Desktop on that machine.`,
             isError: true,
           };
     updateToolEntry(

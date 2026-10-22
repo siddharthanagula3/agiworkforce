@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees/conversationTreeProvider';
 import { type DiffDecorationProvider } from '../../providers/diffDecorationProvider';
@@ -97,7 +98,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
       });
       if (parsed === undefined) {
         console.warn(
-          '[AGI Workforce] dropping a webview message that is malformed or belongs to a replaced conversation',
+          `[${PRODUCT_NAMES.code}] dropping a webview message that is malformed or belongs to a replaced conversation`,
           msg,
         );
         return;
@@ -311,7 +312,7 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     this.reveal();
     if (await this._stateManager.attachContext('terminal')) return;
     void vscode.window.showInformationMessage(
-      'AGI Workforce: no command output has been captured in the active terminal. Run a command in a terminal with shell integration, then try again.',
+      `${PRODUCT_NAMES.code}: no command output has been captured in the active terminal. Run a command in a terminal with shell integration, then try again.`,
     );
   }
 

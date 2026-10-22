@@ -967,7 +967,7 @@ pub fn render_keybindings() -> String {
     let body = vec![
         "    Global".to_string(),
         "      Ctrl+C       Cancel current turn / interrupt".to_string(),
-        "      Ctrl+D       Exit AGI".to_string(),
+        format!("      Ctrl+D       Exit {}", crate::PRODUCT_NAME),
         "      Ctrl+L       Redraw the screen (preserve session)".to_string(),
         "      Tab          Toggle plan mode".to_string(),
         "      Shift+Tab    Cycle plan / accept / reject".to_string(),

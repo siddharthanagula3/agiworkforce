@@ -32,14 +32,14 @@ const UNSUBSCRIBE = contactMailto(UNSUBSCRIBE_SUBJECT);
 const NOTICE: BillingNotice = {
   userId: 'user-1',
   title: 'You can now upgrade to Pro',
-  message: 'Paid upgrades are open on AGI Workforce, and you can upgrade now.',
+  message: 'Paid upgrades are open on AGI, and you can upgrade now.',
   target: { kind: 'settings', id: 'billing' },
   dedupeKey: 'upgrade-waitlist-open:user-1',
   action: { label: 'See plans', url: 'https://agiworkforce.com/pricing' },
 };
 
 const REASON =
-  'You are receiving this because you joined the AGI Workforce waitlist for Pro. It is the only email about that waitlist.';
+  'You are receiving this because you joined the AGI waitlist for Pro. It is the only email about that waitlist.';
 
 function sentEmail() {
   return mocks.send.mock.calls[0]?.[0] as {

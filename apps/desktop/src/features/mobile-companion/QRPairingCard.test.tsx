@@ -78,8 +78,8 @@ describe('QRPairingCard', () => {
   it('names the real Mobile path and copies the full pairing link, not the bare code', async () => {
     render(<QRPairingCard />);
 
-    expect(screen.getByText(/AGI Workforce/)).toHaveTextContent(
-      `AGI Workforce → ${MOBILE_REMOTE_SCREEN_LABEL}`,
+    expect(screen.getByText(/AGI Mobile/)).toHaveTextContent(
+      `AGI Mobile → ${MOBILE_REMOTE_SCREEN_LABEL}`,
     );
     expect(screen.getByText('Select Scan QR Code')).toBeInTheDocument();
     expect(screen.getByText(/Pairing needs the full link/)).toBeInTheDocument();

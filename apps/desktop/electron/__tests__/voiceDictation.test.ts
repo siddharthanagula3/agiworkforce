@@ -133,7 +133,7 @@ describe('global dictation press', () => {
 
     expect(openMainWindow).toHaveBeenCalledTimes(1);
     expect(notifications).toHaveLength(1);
-    expect(notifications[0]?.title).toBe('Opening AGI Cloud');
+    expect(notifications[0]?.title).toBe('Opening AGI Desktop');
   });
 
   it('opens a new window rather than sending into a destroyed one', async () => {

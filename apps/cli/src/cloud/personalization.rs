@@ -162,7 +162,7 @@ async fn show() -> Result<String, CloudError> {
 }
 
 fn format_preferences(settings: &Map<String, Value>, base: &str) -> String {
-    let mut lines = vec!["Personalization (your AGI Workforce account):".to_string()];
+    let mut lines = vec!["Personalization (your AGI account):".to_string()];
     for field in FIELDS {
         let value = settings
             .get(field.namespace)

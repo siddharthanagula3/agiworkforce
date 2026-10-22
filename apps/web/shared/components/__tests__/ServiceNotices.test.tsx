@@ -5,7 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ServiceNotices } from '../ServiceNotices';
 
 const PRODUCT_INCIDENT =
-  'AGI Workforce is having a problem right now, and some requests may fail. We are working on it.';
+  'AGI is having a problem right now, and some requests may fail. We are working on it.';
 const BILLING_INCIDENT =
   'Billing is having a problem right now, so upgrades and billing changes may not go through. We are working on it.';
 

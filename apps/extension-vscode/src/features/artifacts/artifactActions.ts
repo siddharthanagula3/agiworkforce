@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { deriveArtifacts } from '@agiworkforce/artifacts';
 import type {
@@ -82,19 +83,22 @@ export async function openArtifactReadOnly(
   let content: string | undefined;
   try {
     content = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'AGI Workforce: opening artifact…' },
+      {
+        location: vscode.ProgressLocation.Notification,
+        title: `${PRODUCT_NAMES.code}: opening artifact…`,
+      },
       () => readArtifactContent(workspace, artifact),
     );
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: this artifact could not be opened, ${describeArtifactFailure(error)}`,
+      `${PRODUCT_NAMES.code}: this artifact could not be opened, ${describeArtifactFailure(error)}`,
     );
     return;
   }
 
   if (content === undefined) {
     void vscode.window.showWarningMessage(
-      `AGI Workforce: "${artifactTitle(artifact)}" is indexed but its message no longer produces it, so there is nothing to show.`,
+      `${PRODUCT_NAMES.code}: "${artifactTitle(artifact)}" is indexed but its message no longer produces it, so there is nothing to show.`,
     );
     return;
   }
@@ -114,18 +118,20 @@ export async function copyArtifactContent(
     content = await readArtifactContent(workspace, artifact);
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: the artifact was not copied, ${describeArtifactFailure(error)}`,
+      `${PRODUCT_NAMES.code}: the artifact was not copied, ${describeArtifactFailure(error)}`,
     );
     return;
   }
   if (content === undefined) {
     void vscode.window.showWarningMessage(
-      `AGI Workforce: "${artifactTitle(artifact)}" is indexed but its message no longer produces it, so there is nothing to copy.`,
+      `${PRODUCT_NAMES.code}: "${artifactTitle(artifact)}" is indexed but its message no longer produces it, so there is nothing to copy.`,
     );
     return;
   }
   await vscode.env.clipboard.writeText(content);
-  void vscode.window.showInformationMessage(`AGI Workforce: copied "${artifactTitle(artifact)}".`);
+  void vscode.window.showInformationMessage(
+    `${PRODUCT_NAMES.code}: copied "${artifactTitle(artifact)}".`,
+  );
 }
 
 export async function saveArtifactToWorkspace(
@@ -134,7 +140,7 @@ export async function saveArtifactToWorkspace(
 ): Promise<void> {
   if ((vscode.workspace.workspaceFolders ?? []).length === 0) {
     void vscode.window.showWarningMessage(
-      'AGI Workforce: open a folder first, a copy needs somewhere to land.',
+      `${PRODUCT_NAMES.code}: open a folder first, a copy needs somewhere to land.`,
     );
     return;
   }
@@ -146,13 +152,13 @@ export async function saveArtifactToWorkspace(
     content = await readArtifactContent(workspace, artifact);
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: the copy was not saved, ${describeArtifactFailure(error)}`,
+      `${PRODUCT_NAMES.code}: the copy was not saved, ${describeArtifactFailure(error)}`,
     );
     return;
   }
   if (content === undefined) {
     void vscode.window.showWarningMessage(
-      `AGI Workforce: "${artifactTitle(artifact)}" is indexed but its message no longer produces it, so there is nothing to save.`,
+      `${PRODUCT_NAMES.code}: "${artifactTitle(artifact)}" is indexed but its message no longer produces it, so there is nothing to save.`,
     );
     return;
   }
@@ -167,7 +173,7 @@ export async function saveArtifactToWorkspace(
     await vscode.workspace.fs.writeFile(target, Buffer.from(content, 'utf8'));
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: the copy was not saved, ${describeArtifactFailure(error)}`,
+      `${PRODUCT_NAMES.code}: the copy was not saved, ${describeArtifactFailure(error)}`,
     );
     return;
   }

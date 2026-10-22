@@ -15,7 +15,7 @@ function workspaceRoot(): string {
   return root;
 }
 
-suite('AGI Workforce sidebar surfaces', () => {
+suite('AGI Code sidebar surfaces', () => {
   suiteSetup(async () => {
     const extension = vscode.extensions.getExtension('agiworkforce.agi-workforce');
     assert.ok(extension, 'extension agiworkforce.agi-workforce not found');

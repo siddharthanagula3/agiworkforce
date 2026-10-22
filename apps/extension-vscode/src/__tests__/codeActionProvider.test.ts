@@ -35,7 +35,7 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(CARET, [diagnostic('error TS2304')]);
 
     expect(actions).toHaveLength(1);
-    expect(actions[0]!.title).toBe('Fix with AGI Workforce');
+    expect(actions[0]!.title).toBe('Fix with AGI Code');
     expect(actions[0]!.command?.command).toBe('agi-workforce.fix');
     expect(actions[0]!.kind).toBe(vscode.CodeActionKind.QuickFix);
   });
@@ -61,9 +61,9 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(MULTILINE);
 
     expect(actions.map((action) => action.title)).toEqual([
-      'Refactor with AGI Workforce',
-      'Explain with AGI Workforce',
-      'Generate Tests with AGI Workforce',
+      'Refactor with AGI Code',
+      'Explain with AGI Code',
+      'Generate Tests with AGI Code',
     ]);
     expect(actions.map((action) => action.command?.command)).toEqual([
       'agi-workforce.refactor',
@@ -84,10 +84,10 @@ describe('AgiCodeActionProvider', () => {
     const actions = actionsFor(MULTILINE, [diagnostic('unused variable')]);
 
     expect(actions.map((action) => action.title)).toEqual([
-      'Fix with AGI Workforce',
-      'Refactor with AGI Workforce',
-      'Explain with AGI Workforce',
-      'Generate Tests with AGI Workforce',
+      'Fix with AGI Code',
+      'Refactor with AGI Code',
+      'Explain with AGI Code',
+      'Generate Tests with AGI Code',
     ]);
   });
 

@@ -7,7 +7,7 @@ expression: rendered
 
     Global
       Ctrl+C       Cancel current turn / interrupt
-      Ctrl+D       Exit AGI
+      Ctrl+D       Exit AGI CLI
       Ctrl+L       Redraw the screen (preserve session)
       Tab          Toggle plan mode
       Shift+Tab    Cycle plan / accept / reject

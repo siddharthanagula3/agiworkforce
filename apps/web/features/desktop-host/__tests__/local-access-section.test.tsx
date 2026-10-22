@@ -202,7 +202,7 @@ describe('LocalAccessSection', () => {
     readDesktopPermissions.mockResolvedValue(reviewOf([screenRefused]));
     render(<LocalAccessSection />);
     expect(
-      await screen.findByText('Refused until you quit AGI Cloud', { exact: false }),
+      await screen.findByText('Refused until you quit AGI Desktop', { exact: false }),
     ).toBeInTheDocument();
     expect(screen.queryByText('Worktrees')).not.toBeInTheDocument();
     expect(localWorktreeKeep).not.toHaveBeenCalled();
@@ -217,7 +217,7 @@ describe('LocalAccessSection', () => {
     expect(
       screen.getByText('Read the screen and control the mouse and keyboard'),
     ).toBeInTheDocument();
-    expect(screen.getByText('This Mac · Refused until you quit AGI Cloud')).toBeInTheDocument();
+    expect(screen.getByText('This Mac · Refused until you quit AGI Desktop')).toBeInTheDocument();
   });
 
   it('withdraws one permission and rereads the list', async () => {

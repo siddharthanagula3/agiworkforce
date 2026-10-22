@@ -340,7 +340,7 @@ describe('asking for a permission', () => {
     await runtime.requestPermission(null, 'filesystem.write', LEDGER, 'reason');
 
     const options = (showMessageBox.mock.calls.at(-1) as unknown[])[0] as { message: string };
-    expect(options.message).toMatch(/^Allow AGI Cloud to /u);
+    expect(options.message).toMatch(/^Allow AGI Desktop to /u);
   });
 
   it('asks again once an open dialog has been answered and its answer withdrawn', async () => {

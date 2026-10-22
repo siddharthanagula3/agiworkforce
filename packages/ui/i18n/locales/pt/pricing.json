@@ -98,7 +98,7 @@
   "heroLedePart1": "O {{localLabel}} mantém o trabalho com modelos abertos no seu dispositivo. O {{byokLabel}} envia apenas as solicitações que você escolhe ao provedor de API que selecionar, sob os termos de cobrança e de dados desse provedor. Ambos continuam gratuitos, sem assento nem cartão.",
   "installCta": "Quero ser avisado",
   "talkToSalesCta": "Falar com vendas",
-  "tryAgiCta": "Experimentar o AGI Web",
+  "tryAgiCta": "Experimentar o AGI Chat",
   "modeRibbonLabel": "Modos de confiança",
   "ribbonLocal": "Local, gratuito para sempre",
   "ribbonByok": "BYOK, suas próprias chaves",

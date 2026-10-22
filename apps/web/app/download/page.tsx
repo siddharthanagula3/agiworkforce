@@ -9,7 +9,7 @@ import './download.css';
 export const metadata = buildMetadata({
   title: 'Download AGI: every app and where it stands',
   description:
-    'Open AGI Web in any current browser, see where AGI Desktop, the CLI, mobile and the extensions stand, and leave an email to hear when an app is ready.',
+    'Open AGI Chat in any current browser, see where AGI Desktop, the CLI, mobile and the extensions stand, and leave an email to hear when an app is ready.',
   path: '/download',
 });
 

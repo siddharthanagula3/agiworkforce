@@ -98,7 +98,7 @@
   "heroLedePart1": "{{localLabel}} はオープンモデルでの作業をお使いのデバイス内に留めます。{{byokLabel}} は選択したリクエストだけを、指定した API プロバイダーへ、そのプロバイダーの課金およびデータ条件のもとで送信します。どちらも無料のままで、シートもクレジットカードも必要ありません。",
   "installCta": "通知を受け取る",
   "talkToSalesCta": "営業に相談する",
-  "tryAgiCta": "AGI Web を試す",
+  "tryAgiCta": "AGI Chat を試す",
   "modeRibbonLabel": "信頼モード",
   "ribbonLocal": "ローカル、ずっと無料",
   "ribbonByok": "BYOK、自分のキーを使用",

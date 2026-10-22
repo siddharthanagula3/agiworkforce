@@ -1,7 +1,11 @@
 import { buildMetadata } from '@/lib/seo/metadata';
 import Link from 'next/link';
 import { COMPUTER_USE_STOP_SHORTCUT } from '@agiworkforce/local-runtime-contract';
-import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  PRODUCT_NAMES,
+  connectorsReleased,
+} from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import {
@@ -22,7 +26,7 @@ const ACCOUNT_CARRIES = connectorsReleased()
 export const metadata = buildMetadata({
   title: 'AGI Desktop | Your account, on your Mac',
   description:
-    'The AGI app for macOS: managed-cloud chat in a window that stays open, plus the folders you approve, computer use that asks each session and before each app, and a menu bar shortcut. The Desktop contract does not accept provider keys or local-model connections. Check installer availability.',
+    'AGI Desktop for macOS: managed-cloud chat in a window that stays open, plus the folders you approve, computer use that asks each session and before each app, and a menu bar shortcut. The Desktop contract does not accept provider keys or local-model connections. Check installer availability.',
   path: '/desktop',
 });
 
@@ -44,7 +48,7 @@ export default function DesktopPage() {
                   Check installer availability
                 </Link>
                 <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--secondary">
-                  Use AGI Web
+                  Use AGI Chat
                 </Link>
                 <WaitlistTrigger
                   label="Discuss Enterprise access"
@@ -54,7 +58,7 @@ export default function DesktopPage() {
               </div>
             </div>
             <div className="agi-fl-hero-visual agi-fl-hero-frame--main" aria-hidden="true">
-              <ProductFrame variant="desktop" title="AGI Workforce" badge="Cloud" />
+              <ProductFrame variant="desktop" title={PRODUCT_NAMES.desktop} badge="Cloud" />
             </div>
           </div>
         </section>
@@ -184,7 +188,7 @@ export default function DesktopPage() {
           body="A download control appears only once the release API verifies a signed build for your architecture, so this page reflects what is published rather than what is built. The availability section above reports what that check finds for macOS right now. Windows and Linux installers are not published."
           ctas={[
             { href: '#desktop-downloads', label: 'Check installer availability' },
-            { href: WEB_ENTRY_HREF, label: 'Use AGI Web' },
+            { href: WEB_ENTRY_HREF, label: 'Use AGI Chat' },
             { label: 'Discuss Enterprise access', waitlist: true },
           ]}
           stamp="macOS · verification required before download"

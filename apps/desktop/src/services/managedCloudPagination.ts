@@ -1,3 +1,5 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+
 export type ManagedCloudPaginationResource = 'conversations' | 'messages';
 
 export type ManagedCloudPaginationErrorCode =
@@ -26,8 +28,8 @@ export const MANAGED_CLOUD_MESSAGE_LIMITS: ManagedCloudPaginationLimits = {
 
 function remediation(resource: ManagedCloudPaginationResource): string {
   return resource === 'conversations'
-    ? 'Archive older conversations in AGI Web, then retry in Desktop.'
-    : 'Start a new chat, or open and export this conversation in AGI Web.';
+    ? `Archive older conversations in ${PRODUCT_NAMES.chat}, then retry in ${PRODUCT_NAMES.desktop}.`
+    : `Start a new chat, or open and export this conversation in ${PRODUCT_NAMES.chat}.`;
 }
 
 export class ManagedCloudPaginationError extends Error {

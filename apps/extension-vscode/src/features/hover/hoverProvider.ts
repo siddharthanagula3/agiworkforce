@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { Config } from '../../platform/config';
 
@@ -17,7 +18,7 @@ export class AgiHoverProvider implements vscode.HoverProvider {
     }
 
     const md = new vscode.MarkdownString(
-      '**AGI Workforce**, ' +
+      `**${PRODUCT_NAMES.code}**, ` +
         '[$(info) Explain](command:agi-workforce.explain "Explain this code") · ' +
         '[$(wrench) Fix](command:agi-workforce.fix "Fix issues in selection") · ' +
         '[$(beaker) Tests](command:agi-workforce.generateTests "Generate tests")',

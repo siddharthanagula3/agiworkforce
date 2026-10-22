@@ -2,6 +2,7 @@ import { Notification, globalShortcut } from 'electron';
 import { getShortcuts } from './settingsStore';
 import { createNativeNotification } from './runtime/nativeSurface';
 import type { HostShortcutStatus } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   SHORTCUT_KEYS,
   SHORTCUT_LABELS,
@@ -30,10 +31,10 @@ export interface ShortcutRegistration {
 }
 
 const TAKEN_NOTIFICATION_TITLE = 'Shortcut unavailable';
-const DUPLICATE_STATUS_DETAIL = 'is already assigned to another AGI Cloud shortcut';
+const DUPLICATE_STATUS_DETAIL = `is already assigned to another ${PRODUCT_NAMES.desktop} shortcut`;
 const TAKEN_STATUS_DETAIL = 'is already in use by another app';
 const MALFORMED_STATUS_DETAIL = 'is not a valid accelerator';
-const TRAY_FALLBACK_DETAIL = 'Use the AGI Cloud tray menu instead.';
+const TRAY_FALLBACK_DETAIL = `Use the ${PRODUCT_NAMES.desktop} tray menu instead.`;
 
 let warnedAboutConflict = false;
 let registrations: ShortcutRegistration[] = [];

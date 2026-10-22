@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   codeSessionActivityNotice,
@@ -32,7 +33,12 @@ export function alertSessionActivity(
   if (message.type === 'approvalRequested') {
     const { requestId, summary } = message.payload;
     void vscode.window
-      .showWarningMessage(`AGI Workforce: ${title}. ${summary}`, ALLOW_ONCE, DENY, OPEN_CHAT)
+      .showWarningMessage(
+        `${PRODUCT_NAMES.code}: ${title}. ${summary}`,
+        ALLOW_ONCE,
+        DENY,
+        OPEN_CHAT,
+      )
       .then((choice) => {
         if (choice === ALLOW_ONCE) host.respond(requestId, 'once');
         else if (choice === DENY) host.respond(requestId, 'deny');
@@ -40,7 +46,7 @@ export function alertSessionActivity(
       });
     return;
   }
-  const text = `AGI Workforce: ${title}. ${body}`;
+  const text = `${PRODUCT_NAMES.code}: ${title}. ${body}`;
   const shown =
     event === 'failed'
       ? vscode.window.showWarningMessage(text, OPEN_CHAT)

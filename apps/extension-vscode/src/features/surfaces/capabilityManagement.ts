@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import type {
   HookListResponse,
@@ -67,7 +68,7 @@ function unavailableLabel(reason: string, noun: string): string {
 
 function reportFailure(outcome: CliCapabilityResult<unknown> | undefined): void {
   if (outcome !== undefined && outcome.status !== 'ok') {
-    void vscode.window.showErrorMessage(`AGI Workforce: ${outcome.reason}`);
+    void vscode.window.showErrorMessage(`${PRODUCT_NAMES.code}: ${outcome.reason}`);
   }
 }
 
@@ -115,7 +116,7 @@ function pickOnce(surface: ManagedSurface, noun: string): Promise<ManagedFollowU
         reportFailure(await item.run());
       } catch (error) {
         void vscode.window.showErrorMessage(
-          `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+          `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
       await render();
@@ -141,7 +142,7 @@ async function showManagedSurface(surface: ManagedSurface, noun: string): Promis
       reportFailure(await followUp.run());
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+        `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
     if (!followUp.reopen) return;
@@ -183,7 +184,7 @@ function toggleLabel(name: string, enabled: boolean): string {
 
 async function installSkillFromFolder(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
   const folder = await vscode.window.showOpenDialog({
-    title: 'AGI Workforce, Install a skill',
+    title: `${PRODUCT_NAMES.code}, Install a skill`,
     openLabel: 'Install skill',
     canSelectFiles: false,
     canSelectFolders: true,
@@ -205,7 +206,7 @@ export async function manageSkills(adapter: CliCapabilityAdapter): Promise<void>
   const installs = await adapter.offers('installs');
   return showManagedSurface(
     {
-      title: 'AGI Workforce, Skills',
+      title: `${PRODUCT_NAMES.code}, Skills`,
       placeholder: 'Pick a skill to turn it on or off',
       empty: 'No skills are loaded in this workspace',
       load: async () => {
@@ -269,7 +270,7 @@ export async function manageSkills(adapter: CliCapabilityAdapter): Promise<void>
 
 async function installPlugin(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
   const source = await vscode.window.showInputBox({
-    title: 'AGI Workforce, Install a plugin',
+    title: `${PRODUCT_NAMES.code}, Install a plugin`,
     prompt: 'A Git URL or a plugin folder on this computer',
     ignoreFocusOut: true,
     validateInput: (value) =>
@@ -277,7 +278,7 @@ async function installPlugin(adapter: CliCapabilityAdapter): ReturnType<ManagedR
   });
   if (source === undefined) return undefined;
   const integrity = await vscode.window.showInputBox({
-    title: 'AGI Workforce, Install a plugin',
+    title: `${PRODUCT_NAMES.code}, Install a plugin`,
     prompt:
       'Its sha256 pin, as sha256:<hex>. Leave empty to require the publisher’s signature instead.',
     ignoreFocusOut: true,
@@ -332,7 +333,7 @@ export async function managePlugins(adapter: CliCapabilityAdapter): Promise<void
   ]);
   return showManagedSurface(
     {
-      title: 'AGI Workforce, Plugins',
+      title: `${PRODUCT_NAMES.code}, Plugins`,
       placeholder: 'Pick a plugin to turn it on or off',
       empty: installs
         ? 'No plugins are installed yet'
@@ -432,7 +433,7 @@ async function addMcpServer(
   adapter: CliCapabilityAdapter,
   existing: readonly string[],
 ): ReturnType<ManagedRun> {
-  const title = 'AGI Workforce, Add an MCP server';
+  const title = `${PRODUCT_NAMES.code}, Add an MCP server`;
   const name = await vscode.window.showInputBox({
     title,
     prompt: 'A name for the server',
@@ -537,7 +538,10 @@ async function showMcpServerTools(
   name: string,
 ): ReturnType<ManagedRun> {
   const result = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `AGI Workforce: starting ${name}` },
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `${PRODUCT_NAMES.code}: starting ${name}`,
+    },
     () => adapter.call<McpServerToolsResponse>('mcpTools', name),
   );
   if (result.status !== 'ok') return result;
@@ -572,7 +576,7 @@ async function showMcpServerTools(
     ...warnings.map((warning) => ({ label: `$(warning) ${warning}`, alwaysShow: true })),
   ];
   await vscode.window.showQuickPick(items, {
-    title: `AGI Workforce, ${name}`,
+    title: `${PRODUCT_NAMES.code}, ${name}`,
     placeHolder:
       tools.length === 0 ? 'This server offers no tools' : 'What this server offers the agent',
     matchOnDetail: true,
@@ -582,7 +586,10 @@ async function showMcpServerTools(
 
 async function testMcpServer(adapter: CliCapabilityAdapter, name: string): ReturnType<ManagedRun> {
   const result = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `AGI Workforce: testing ${name}` },
+    {
+      location: vscode.ProgressLocation.Notification,
+      title: `${PRODUCT_NAMES.code}: testing ${name}`,
+    },
     () => adapter.call<McpServerProbe>('mcpTest', name),
   );
   if (result.status !== 'ok') return result;
@@ -624,7 +631,7 @@ export async function manageMcpServers(
   ]);
   return showManagedSurface(
     {
-      title: 'AGI Workforce, MCP servers',
+      title: `${PRODUCT_NAMES.code}, MCP servers`,
       placeholder: 'Pick a server that needs sign-in to sign in',
       empty: installs
         ? 'No MCP servers are configured yet'
@@ -709,7 +716,7 @@ export async function manageMcpServers(
 }
 
 async function addHook(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
-  const title = 'AGI Workforce, Add a hook';
+  const title = `${PRODUCT_NAMES.code}, Add a hook`;
   const event = await vscode.window.showInputBox({
     title,
     prompt:
@@ -739,7 +746,7 @@ export async function manageHooks(adapter: CliCapabilityAdapter): Promise<void> 
   const installs = await adapter.offers('installs');
   return showManagedSurface(
     {
-      title: 'AGI Workforce, Hooks',
+      title: `${PRODUCT_NAMES.code}, Hooks`,
       placeholder: 'Commands the AGI CLI runs on agent events',
       empty: 'No hooks are configured',
       load: async () => {
@@ -841,7 +848,7 @@ export async function chooseSessionTools(
 ): Promise<void> {
   if (!(await adapter.offers('turnToolFilters'))) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: ${CLI_CAPABILITY_REQUIREMENT} to choose the tools a session may use.`,
+      `${PRODUCT_NAMES.code}: ${CLI_CAPABILITY_REQUIREMENT} to choose the tools a session may use.`,
     );
     return;
   }
@@ -853,7 +860,7 @@ export async function chooseSessionTools(
     specs: tool.specs,
   }));
   const picked = await vscode.window.showQuickPick(items, {
-    title: 'AGI Workforce, Tools for this session',
+    title: `${PRODUCT_NAMES.code}, Tools for this session`,
     placeHolder: 'Tick the tools the agent may use. Your choice applies from your next message.',
     canPickMany: true,
     ignoreFocusOut: true,
@@ -879,7 +886,7 @@ const RULE_KINDS: Record<PermissionRule['kind'], string> = {
 };
 
 async function addPermissionRule(adapter: CliCapabilityAdapter): ReturnType<ManagedRun> {
-  const title = 'AGI Workforce, Add a permission rule';
+  const title = `${PRODUCT_NAMES.code}, Add a permission rule`;
   const kind = await vscode.window.showQuickPick(
     [
       {
@@ -1051,7 +1058,7 @@ export async function manageSavedApprovals(
   if (rules) {
     return showManagedSurface(
       {
-        title: 'AGI Workforce, Permissions',
+        title: `${PRODUCT_NAMES.code}, Permissions`,
         placeholder: 'What the agent may do, in this session and in every session',
         empty: t('savedApprovals.empty'),
         load: () => loadPermissionsView(adapter, session, tools, trust),
@@ -1099,7 +1106,7 @@ async function setProviderKey(
   provider: ProviderKeyList['providers'][number],
 ): ReturnType<ManagedRun> {
   const apiKey = await vscode.window.showInputBox({
-    title: `AGI Workforce, ${provider.label} API key`,
+    title: `${PRODUCT_NAMES.code}, ${provider.label} API key`,
     prompt: `Paste your ${provider.label} API key. Turns you send to ${provider.label} models are billed to it.`,
     password: true,
     ignoreFocusOut: true,
@@ -1113,7 +1120,7 @@ async function setProviderKey(
   );
   if (result.status === 'ok') {
     void vscode.window.showInformationMessage(
-      `AGI Workforce: ${provider.label} models are now under Your providers in the model picker.`,
+      `${PRODUCT_NAMES.code}: ${provider.label} models are now under Your providers in the model picker.`,
     );
   }
   return result;
@@ -1122,7 +1129,7 @@ async function setProviderKey(
 export async function manageProviderKeys(adapter: CliCapabilityAdapter): Promise<void> {
   return showManagedSurface(
     {
-      title: 'AGI Workforce, Provider API keys',
+      title: `${PRODUCT_NAMES.code}, Provider API keys`,
       placeholder: 'Pick a provider to add or replace your own API key',
       empty: 'The AGI CLI lists no providers that take a key',
       load: async () => {

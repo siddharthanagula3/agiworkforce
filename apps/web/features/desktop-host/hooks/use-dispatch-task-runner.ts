@@ -57,16 +57,16 @@ export interface DispatchRun {
   unsubscribe: () => void;
 }
 
-const CREATE_FAILED = 'AGI Cloud could not open a chat for this task.';
-const NOT_SENT = 'AGI Cloud could not send this task to the model.';
+const CREATE_FAILED = 'AGI Desktop could not open a chat for this task.';
+const NOT_SENT = 'AGI Desktop could not send this task to the model.';
 const NO_ANSWER = 'The chat ended without an answer.';
 const TURN_FAILED = 'The chat stopped with an error.';
 const PLAN_LIMIT =
-  "This account's plan stopped the task. Open AGI Cloud on the computer to see why.";
-const WAITING_ON_ANSWER = 'Waiting for your answer in AGI Cloud on the computer.';
-const WAITING_ON_PERMISSION = 'Waiting for a permission prompt in AGI Cloud on the computer.';
+  "This account's plan stopped the task. Open AGI Desktop on the computer to see why.";
+const WAITING_ON_ANSWER = 'Waiting for your answer in AGI Desktop on the computer.';
+const WAITING_ON_PERMISSION = 'Waiting for a permission prompt in AGI Desktop on the computer.';
 const CANCELLED = 'The task was stopped.';
-const RUNNER_NOT_READY = 'AGI Cloud on the computer was not ready to run this task.';
+const RUNNER_NOT_READY = 'AGI Desktop on the computer was not ready to run this task.';
 const REPLY_NOT_ACCEPTED = 'The computer could not use this answer. Check it and send it again.';
 
 const TERMINAL: ReadonlySet<string> = new Set(TERMINAL_LIFECYCLE_STATUSES);

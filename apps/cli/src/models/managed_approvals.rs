@@ -7,7 +7,7 @@ use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
 const TOOL_APPROVAL_REQUEST_EVENT: &str = "x_tool_approval_request";
 const AGENT_EVENT: &str = "x_agent_event";
 const APPROVAL_REQUESTED: &str = "approval-requested";
-const CONNECTOR_HOST: &str = "AGI Workforce";
+const CONNECTOR_HOST: &str = "AGI";
 
 tokio::task_local! {
     static MANAGED_TOOL_APPROVAL: ManagedToolApproval;
@@ -83,7 +83,7 @@ impl ManagedApprovalPause {
         let calls = std::mem::take(&mut self.calls);
         let run_id = self.run_id.take().ok_or_else(|| {
             anyhow!(
-                "AGI Workforce paused this turn for approval but did not say which run to resume."
+                "AGI paused this turn for approval but did not say which run to resume."
             )
         })?;
         Ok(Some((run_id, calls)))

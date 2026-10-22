@@ -111,7 +111,7 @@ export const CATALOG_SCOPES = Object.freeze({
   managedRosterModels: scope(
     managedRoster.size,
     ['managed roster model', 'managed roster models'],
-    'The models the plan allow lists name for AGI managed cloud, which is the only route AGI Web uses. Which of them a plan includes is shown on the pricing page.',
+    'The models the plan allow lists name for AGI managed cloud, which is the only route AGI Chat uses. Which of them a plan includes is shown on the pricing page.',
   ),
 });
 

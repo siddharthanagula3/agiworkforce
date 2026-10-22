@@ -40,7 +40,7 @@ vi.mock('../runtime/cliAccountStore', () => ({
   rememberShellSignedCliIn: () => undefined,
 }));
 
-const RESOURCES = '/Applications/AGI Cloud.app/Contents/Resources';
+const RESOURCES = '/Applications/AGI Desktop.app/Contents/Resources';
 const BUNDLED = `${RESOURCES}/agi-cli/agi`;
 const INSTALLED = '/Users/qa/.agi/bin/agi';
 const CONFIRMED = '/opt/agi/bin/agi';

@@ -79,7 +79,7 @@ const PLAN_CAPABILITY_LABELS: [(&str, &str); 16] = [
     ("video_generation", "Video generation"),
     ("managed_api", "Managed API access"),
     ("developer_surfaces", "Managed Cloud in the CLI and VS Code"),
-    ("slack_app", "AGI Workforce in Slack"),
+    ("slack_app", "AGI in Slack"),
     ("artifact_connectors", "Connected apps in published apps"),
     ("team_admin", "Team administration"),
     ("enterprise_controls", "SSO, SCIM and admin controls"),

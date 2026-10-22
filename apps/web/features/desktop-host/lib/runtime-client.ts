@@ -75,7 +75,7 @@ import type {
   ThreadDeleteResponse,
 } from '@agiworkforce/types/protocol';
 
-const NO_HOST_MESSAGE = 'Local access is only available in the AGI Cloud desktop app.';
+const NO_HOST_MESSAGE = 'Local access is only available in AGI Desktop.';
 
 export class DesktopHostUnavailable extends Error {
   constructor() {

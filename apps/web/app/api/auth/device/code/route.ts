@@ -5,6 +5,7 @@ import type {
   DeviceAuthorizationLookupResponse,
   DeviceAuthorizationStartResponseWire,
 } from '@agiworkforce/cloud-contracts';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { NextRequest, NextResponse } from 'next/server';
 
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -21,10 +22,10 @@ import { DEVICE_CODE_EXPIRES_SECONDS, DEVICE_POLL_INTERVAL_SECONDS } from '../gr
 export const runtime = 'nodejs';
 
 const DEVICE_SURFACES = {
-  cli: { name: 'AGI CLI', type: 'cli' },
-  desktop: { name: 'AGI Desktop', type: 'desktop' },
-  vscode: { name: 'AGI for VS Code', type: 'vscode' },
-  chrome: { name: 'AGI Browser Extension', type: 'chrome' },
+  cli: { name: PRODUCT_NAMES.cli, type: 'cli' },
+  desktop: { name: PRODUCT_NAMES.desktop, type: 'desktop' },
+  vscode: { name: PRODUCT_NAMES.code, type: 'vscode' },
+  chrome: { name: PRODUCT_NAMES.extension, type: 'chrome' },
 } as const;
 
 type DeviceSurface = keyof typeof DEVICE_SURFACES;

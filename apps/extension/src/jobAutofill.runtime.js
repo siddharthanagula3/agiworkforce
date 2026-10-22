@@ -1011,7 +1011,7 @@ function confirmApplyClick(button) {
   return {
     label,
     confirmed: window.confirm(
-      `AGI Workforce: click "${label}" on ${window.location.host}?\n\n` +
+      `AGI: click "${label}" on ${window.location.host}?\n\n` +
         'This button can start or send a job application. Click OK to click it, or Cancel to ' +
         'leave the page alone.',
     ),

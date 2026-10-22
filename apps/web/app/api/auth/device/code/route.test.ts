@@ -86,7 +86,7 @@ describe('GET /api/auth/device/code', () => {
     expect(response.headers.get('cache-control')).toBe('no-store');
     await expect(response.json()).resolves.toEqual({
       user_code: 'ABCD-2345',
-      client: { name: 'AGI for VS Code', type: 'vscode' },
+      client: { name: 'AGI Code', type: 'vscode' },
       scopes: [
         {
           id: 'account:read',

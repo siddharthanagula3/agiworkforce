@@ -79,11 +79,11 @@ describe('cloud utility recovery actions', () => {
 
     await showCloudUtilityErrorActions(
       new AgiWorkforceApiError('Session expired.', 401, 'ACCOUNT_AUTH_REQUIRED'),
-      { title: 'AGI Workforce: Request failed' },
+      { title: 'AGI Code: Request failed' },
     );
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed, Session expired.',
+      'AGI Code: Request failed, Session expired.',
       'Sign in',
     );
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.signIn');
@@ -94,11 +94,11 @@ describe('cloud utility recovery actions', () => {
 
     await showCloudUtilityErrorActions(
       new AgiWorkforceApiError('Invalid key.', 401, 'INVALID_API_KEY'),
-      { title: 'AGI Workforce: Request failed' },
+      { title: 'AGI Code: Request failed' },
     );
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed, Invalid key.',
+      'AGI Code: Request failed, Invalid key.',
       'Set API Key',
     );
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.setApiKey');
@@ -108,10 +108,10 @@ describe('cloud utility recovery actions', () => {
     vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Upgrade' as never);
     const error = new AgiWorkforcePaywallError('chat', 'pro', 'IDE access requires Pro.');
 
-    await showCloudUtilityErrorActions(error, { title: 'AGI Workforce: Request failed' });
+    await showCloudUtilityErrorActions(error, { title: 'AGI Code: Request failed' });
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed, IDE access requires Pro.',
+      'AGI Code: Request failed, IDE access requires Pro.',
       'Compare plans',
       'Upgrade',
       'Manage billing',
@@ -125,7 +125,7 @@ describe('cloud utility recovery actions', () => {
     vi.mocked(vscode.window.showWarningMessage).mockResolvedValue('Compare plans' as never);
     const error = new AgiWorkforcePaywallError('video', 'max_15x', 'Video needs a larger plan.');
 
-    await showCloudUtilityErrorActions(error, { title: 'AGI Workforce: Request failed' });
+    await showCloudUtilityErrorActions(error, { title: 'AGI Code: Request failed' });
 
     expect(vscode.commands.executeCommand).toHaveBeenCalledWith('agi-workforce.comparePlans');
     expect(vscode.env.openExternal).not.toHaveBeenCalled();
@@ -134,10 +134,10 @@ describe('cloud utility recovery actions', () => {
   it('names the required plan by its catalog label when the server gives no reason', async () => {
     const error = new AgiWorkforcePaywallError('video', 'max_15x', '');
 
-    await showCloudUtilityErrorActions(error, { title: 'AGI Workforce: Request failed' });
+    await showCloudUtilityErrorActions(error, { title: 'AGI Code: Request failed' });
 
     expect(vi.mocked(vscode.window.showWarningMessage).mock.calls[0]?.[0]).toBe(
-      'AGI Workforce: Request failed, Upgrade to Max 20x to continue.',
+      'AGI Code: Request failed, Upgrade to Max 20x to continue.',
     );
   });
 
@@ -150,10 +150,10 @@ describe('cloud utility recovery actions', () => {
       'subscription_inactive',
     );
 
-    await showCloudUtilityErrorActions(error, { title: 'AGI Workforce: Request failed' });
+    await showCloudUtilityErrorActions(error, { title: 'AGI Code: Request failed' });
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed, Update billing.',
+      'AGI Code: Request failed, Update billing.',
       'Manage billing',
     );
     expect(vi.mocked(vscode.env.openExternal).mock.calls[0]?.[0].toString()).toContain(
@@ -167,11 +167,11 @@ describe('cloud utility recovery actions', () => {
 
     await showCloudUtilityErrorActions(
       new AgiWorkforceApiError('Please wait.', 429, 'RATE_LIMITED'),
-      { title: 'AGI Workforce: Request failed', retry },
+      { title: 'AGI Code: Request failed', retry },
     );
 
     expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed, Please wait.',
+      'AGI Code: Request failed, Please wait.',
       'Retry',
     );
     expect(retry).toHaveBeenCalledOnce();
@@ -221,13 +221,13 @@ describe('plan usage limit recovery', () => {
     );
 
     await showCloudUtilityErrorActions(error, {
-      title: 'AGI Workforce: Request failed',
+      title: 'AGI Code: Request failed',
       secrets: SECRETS,
     });
 
     expect(fetchTierInfo).toHaveBeenCalledWith(SECRETS);
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed, You have used your rolling 5-hour capacity. Resets in 3 hr 30 min.',
+      'AGI Code: Request failed, You have used your rolling 5-hour capacity. Resets in 3 hr 30 min.',
       'Add credits',
       'View usage',
     );
@@ -241,7 +241,7 @@ describe('plan usage limit recovery', () => {
     });
 
     await showCloudUtilityErrorActions(error, {
-      title: 'AGI Workforce: Request failed',
+      title: 'AGI Code: Request failed',
       secrets: SECRETS,
     });
 
@@ -261,11 +261,11 @@ describe('plan usage limit recovery', () => {
 
     await showCloudUtilityErrorActions(
       usageLimit('flagship_weekly_limit_reached', 'Flagship capacity is used up.'),
-      { title: 'AGI Workforce: Request failed', secrets: SECRETS, retry },
+      { title: 'AGI Code: Request failed', secrets: SECRETS, retry },
     );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      `AGI Workforce: Request failed, Flagship capacity is used up. ${formatUsageResetIn(FLAGSHIP_RESET_AT, NOW)}.`,
+      `AGI Code: Request failed, Flagship capacity is used up. ${formatUsageResetIn(FLAGSHIP_RESET_AT, NOW)}.`,
       switchLabel,
       'Upgrade',
       'View usage',
@@ -285,18 +285,18 @@ describe('plan usage limit recovery', () => {
 
     await showCloudUtilityErrorActions(
       usageLimit('flagship_weekly_limit_reached', 'Flagship capacity is used up.'),
-      { title: 'AGI Workforce: Request failed', secrets: SECRETS },
+      { title: 'AGI Code: Request failed', secrets: SECRETS },
     );
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      `AGI Workforce model set to ${modelDisplayLabel(alternative)}. Run the command again to use it.`,
+      `AGI Code model set to ${modelDisplayLabel(alternative)}. Run the command again to use it.`,
     );
   });
 
   it('does not suggest a model for a limit a standard model would not clear', async () => {
     await showCloudUtilityErrorActions(
       usageLimit('rolling_weekly_limit_reached', 'Weekly capacity is used up.'),
-      { title: 'AGI Workforce: Request failed', secrets: SECRETS },
+      { title: 'AGI Code: Request failed', secrets: SECRETS },
     );
 
     const actions = vi.mocked(vscode.window.showWarningMessage).mock.calls[0]!.slice(1);
@@ -309,11 +309,11 @@ describe('plan usage limit recovery', () => {
         action: 'view_usage',
         href: '/settings/usage',
       }),
-      { title: 'AGI Workforce: Request failed', secrets: SECRETS },
+      { title: 'AGI Code: Request failed', secrets: SECRETS },
     );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed, That capability requires a paid plan.',
+      'AGI Code: Request failed, That capability requires a paid plan.',
       'View usage',
     );
   });
@@ -323,11 +323,11 @@ describe('plan usage limit recovery', () => {
 
     await showCloudUtilityErrorActions(
       usageLimit('flagship_weekly_limit_reached', 'Flagship capacity is used up.'),
-      { title: 'AGI Workforce: Request failed', secrets: SECRETS },
+      { title: 'AGI Code: Request failed', secrets: SECRETS },
     );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Request failed, Flagship capacity is used up.',
+      'AGI Code: Request failed, Flagship capacity is used up.',
       'Upgrade',
       'View usage',
     );

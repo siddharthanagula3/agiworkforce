@@ -11,7 +11,7 @@ import { SignedOutSkills, type PublicSkill } from './SignedOutSkills';
 export const metadata = buildMetadata({
   title: 'Skills',
   description:
-    'The built-in skills every AGI Workforce account starts with: reusable instruction sets the assistant loads on demand.',
+    'The built-in skills every AGI account starts with: reusable instruction sets the assistant loads on demand.',
   path: '/skills',
 });
 

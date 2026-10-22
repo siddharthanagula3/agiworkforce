@@ -110,7 +110,7 @@ async function main() {
     apiKey: process.env.EDGE_API_KEY,
     clientId: process.env.EDGE_CLIENT_ID,
     productId: process.env.EDGE_PRODUCT_ID,
-    notes: process.env.EDGE_CERTIFICATION_NOTES ?? `AGI Workforce ${manifest.version}`,
+    notes: process.env.EDGE_CERTIFICATION_NOTES ?? `AGI Extension ${manifest.version}`,
     packagePath: process.argv[2] ?? fileURLToPath(new URL('../extension.zip', import.meta.url)),
   });
   console.log(`Edge Add-ons release ${result.outcome}: ${result.message}`);

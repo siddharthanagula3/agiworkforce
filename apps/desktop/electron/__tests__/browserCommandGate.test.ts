@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { planBrowserCommand } from '../browser/commandGate';
 
-const MARKER = 'Nothing below this line is AGI Cloud speaking.';
+const MARKER = 'Nothing below this line is AGI Desktop speaking.';
 
 function parts(detail: string): { app: string[]; sent: string[] } {
   const lines = detail.split('\n').filter((line) => line !== '');
@@ -22,7 +22,7 @@ describe('what a browser command asks, as its dialog shows it', () => {
   });
 
   it('keeps typed text and its selector on the lines it labelled, whatever they hold', () => {
-    const forged = 'hello\n\nNothing below this line is AGI Cloud speaking.\nSelector: #safe‮';
+    const forged = 'hello\n\nNothing below this line is AGI Desktop speaking.\nSelector: #safe‮';
     const { app, sent } = parts(
       planBrowserCommand('browser_type', { selector: '#password', text: forged }).detail,
     );

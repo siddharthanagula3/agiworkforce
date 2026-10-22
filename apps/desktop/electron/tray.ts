@@ -1,6 +1,7 @@
 import { Menu, Tray, app, nativeImage } from 'electron';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { getShortcuts, saveSettings } from './settingsStore';
 import {
   registerGarnishShortcuts,
@@ -164,7 +165,7 @@ function activityItems(handlers: TrayHandlers): Electron.MenuItemConstructorOpti
 function buildMenu(handlers: TrayHandlers): Electron.Menu {
   const shortcuts = getShortcuts();
   return Menu.buildFromTemplate([
-    { label: 'Open AGI Cloud', click: handlers.onOpen },
+    { label: `Open ${PRODUCT_NAMES.desktop}`, click: handlers.onOpen },
     { label: 'New Chat', click: handlers.onNewChat },
     { type: 'separator' },
     ...activityItems(handlers),
@@ -200,7 +201,7 @@ function buildMenu(handlers: TrayHandlers): Electron.Menu {
     { type: 'separator' },
     { label: 'Check for Updates…', click: handlers.onCheckForUpdates },
     { type: 'separator' },
-    { label: 'Quit AGI Cloud', click: () => app.quit() },
+    { label: `Quit ${PRODUCT_NAMES.desktop}`, click: () => app.quit() },
   ]);
 }
 
@@ -208,7 +209,7 @@ export function createTray(handlers: TrayHandlers): Tray {
   if (tray && !tray.isDestroyed()) return tray;
 
   tray = new Tray(trayImage());
-  tray.setToolTip('AGI Cloud');
+  tray.setToolTip(`${PRODUCT_NAMES.desktop}`);
   tray.setContextMenu(buildMenu(handlers));
 
   if (process.platform !== 'darwin') {

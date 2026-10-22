@@ -28,15 +28,15 @@ const DICTATE_LABEL = 'Start voice input';
 
 const HEADING = 'Your computer';
 const INTRO =
-  'Send a task to AGI Cloud on your own computer. It runs there as a chat that can use the folders, apps and browser you allowed on that computer, and the answer comes back here.';
+  'Send a task to AGI Desktop on your own computer. It runs there as a chat that can use the folders, apps and browser you allowed on that computer, and the answer comes back here.';
 const COMPUTERS_HEADING = 'Computers on your account';
-const NO_COMPUTERS = 'No computer with AGI Cloud is linked to this account yet.';
-const NEEDS_UPDATE = 'update AGI Cloud on it to send tasks';
+const NO_COMPUTERS = 'No computer with AGI Desktop is linked to this account yet.';
+const NEEDS_UPDATE = 'update AGI Desktop on it to send tasks';
 const HOW_TO_CONNECT =
-  'On that computer, open AGI Cloud and go to Settings, Capabilities, Remote Control. Choose Pair a phone, then Copy link for a browser, and open the link here or paste it below.';
+  'On that computer, open AGI Desktop and go to Settings, Capabilities, Remote Control. Choose Pair a phone, then Copy link for a browser, and open the link here or paste it below.';
 const LINK_LABEL = 'Pairing link';
 const LINK_PLACEHOLDER = 'Paste the link copied on your computer';
-const LINK_INVALID = 'That is not a pairing link from AGI Cloud. Copy it again on your computer.';
+const LINK_INVALID = 'That is not a pairing link from AGI Desktop. Copy it again on your computer.';
 const CONNECT_LABEL = 'Connect';
 const CONNECTING = 'Connecting to your computer';
 const AWAY = 'Your computer went offline. This page reconnects when it is back.';
@@ -259,7 +259,7 @@ export function RemoteComputerPage() {
           <p className="text-sm text-muted-foreground">
             {NO_COMPUTERS}{' '}
             <Link href={DOWNLOAD_PATH} className="underline underline-offset-2">
-              Get AGI Cloud for your computer
+              Get AGI Desktop for your computer
             </Link>
           </p>
         ) : (

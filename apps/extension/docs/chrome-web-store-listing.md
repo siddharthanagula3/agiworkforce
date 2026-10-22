@@ -12,7 +12,7 @@ The security boundary each justification asserts is specified in
 
 ## Single purpose
 
-AGI Workforce gives you one AI assistant in a Chrome side panel that can
+AGI Extension gives you one AI assistant in a Chrome side panel that can
 read the page you are on and, on sites you explicitly approve, act in that page
 on your behalf.
 
@@ -29,7 +29,7 @@ optional link to the AGI Desktop app.
 
 **Detailed description**
 
-> AGI Workforce puts an AI assistant in Chrome's side panel.
+> AGI Extension puts an AI assistant in Chrome's side panel.
 >
 > **Chat about the page you are on.** Attach the current page's text to a
 > message with one click, or use a slash command like `/summarize` or

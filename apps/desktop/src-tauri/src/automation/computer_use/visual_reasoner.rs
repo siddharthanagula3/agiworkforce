@@ -26,7 +26,7 @@ use super::types::{ElementBounds, ScreenAnalysis, ScreenElement};
 const CAPTURE_NEEDS_APP_HANDLE: &str =
     "The screen is not captured without the desktop app handle to check the app in front.";
 const OWN_WINDOW_NOT_CAPTURED: &str =
-    "AGI Workforce is in front, and its own window is never captured for a model.";
+    "AGI Desktop is in front, and its own window is never captured for a model.";
 
 /// A capture that was not taken because of the app in front. A wait or a
 /// retry that polls the screen must stop on this, not try again: the reason

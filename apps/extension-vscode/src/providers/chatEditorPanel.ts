@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { Config } from '../platform/config';
 import { normalizeConfiguredModelId } from '../features/model-picker/modelConstants';
@@ -180,7 +181,7 @@ export class ChatEditorPanel {
         });
         if (parsed === undefined) {
           console.warn(
-            '[AGI Workforce] dropping an editor-chat webview message that is malformed or belongs to a replaced conversation',
+            `[${PRODUCT_NAMES.code}] dropping an editor-chat webview message that is malformed or belongs to a replaced conversation`,
             message,
           );
           return;

@@ -442,7 +442,7 @@ describe('background service worker security guards', () => {
 
     it('rejects an off-allowlist destination before consent is consulted and an unconsented one after', async () => {
       await expect(navigate(RUN_TAB_ID, 'https://evil.example/steal')).rejects.toThrow(
-        /not on your AGI Workforce approved-sites list/,
+        /not on your AGI approved-sites list/,
       );
       await expect(assertDestinationAllowlisted(`${SITE_B}/inbox`)).rejects.toThrow(
         /full Chrome DevTools Protocol control/,

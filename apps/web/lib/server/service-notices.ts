@@ -78,7 +78,7 @@ function incidentNotices(health: HealthCheckResult): ServiceNotice[] {
       tone: 'danger',
       scope: 'product',
       message:
-        'AGI Workforce is having a problem right now, and some requests may fail. We are working on it.',
+        'AGI is having a problem right now, and some requests may fail. We are working on it.',
       href: '/status',
       linkLabel: 'Status',
     });

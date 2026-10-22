@@ -10,7 +10,7 @@ import {
 
 export const metadata = buildMetadata({
   title: 'No connection',
-  description: 'AGI Workforce cannot reach the network right now.',
+  description: 'AGI Chat cannot reach the network right now.',
   path: '/offline',
   robots: { index: false, follow: false },
 });

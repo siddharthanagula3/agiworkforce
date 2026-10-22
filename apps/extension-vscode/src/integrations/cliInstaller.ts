@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
 export const CLI_INSTALL_COMMAND = 'curl -fsSL https://agiworkforce.com/install.sh | bash';
@@ -43,19 +44,19 @@ export async function installCli(): Promise<boolean> {
   const release = await cliReleaseState();
   if (release === 'unpublished') {
     void vscode.window.showInformationMessage(
-      'AGI Workforce: No signed AGI CLI release is published yet, so there is nothing to install. Set agiWorkforce.cliPath to an AGI CLI you built from source.',
+      `${PRODUCT_NAMES.code}: No signed AGI CLI release is published yet, so there is nothing to install. Set agiWorkforce.cliPath to an AGI CLI you built from source.`,
     );
     return false;
   }
   if (release === 'unreachable') {
     void vscode.window.showErrorMessage(
-      'AGI Workforce: Could not reach agiworkforce.com to find the AGI CLI release. Check the connection, then try again.',
+      `${PRODUCT_NAMES.code}: Could not reach agiworkforce.com to find the AGI CLI release. Check the connection, then try again.`,
     );
     return false;
   }
   if (process.platform === 'win32') {
     const choice = await vscode.window.showInformationMessage(
-      `AGI Workforce: The AGI CLI installer runs in Git Bash or WSL. Run this there, then reload VS Code: ${CLI_INSTALL_COMMAND}`,
+      `${PRODUCT_NAMES.code}: The AGI CLI installer runs in Git Bash or WSL. Run this there, then reload VS Code: ${CLI_INSTALL_COMMAND}`,
       'Copy command',
     );
     if (choice === 'Copy command') await vscode.env.clipboard.writeText(CLI_INSTALL_COMMAND);
@@ -64,7 +65,7 @@ export async function installCli(): Promise<boolean> {
   const exitCode = await runInstallerInTerminal();
   if (exitCode !== 0) {
     void vscode.window.showErrorMessage(
-      'AGI Workforce: The AGI CLI installer did not finish. Its terminal output says why.',
+      `${PRODUCT_NAMES.code}: The AGI CLI installer did not finish. Its terminal output says why.`,
     );
     return false;
   }

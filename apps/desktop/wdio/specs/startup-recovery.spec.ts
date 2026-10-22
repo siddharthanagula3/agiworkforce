@@ -30,7 +30,7 @@ describe('AGI Desktop encrypted-database startup recovery', () => {
     await expect($('button=Retry')).toBeDisplayed();
     await expect($('button=Open Data Folder')).toBeDisplayed();
     await expect($('button=Export Diagnostics')).toBeDisplayed();
-    await expect($('button=Quit AGI')).toBeDisplayed();
+    await expect($('button=Quit AGI Desktop')).toBeDisplayed();
 
     const mountedSurfaces = await browser.execute(() => ({
       composer: !!document.querySelector('textarea[aria-label="Chat message input"]'),

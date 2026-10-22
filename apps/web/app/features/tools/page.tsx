@@ -31,7 +31,7 @@ import {
 export const metadata = buildMetadata({
   title: 'Tools and connectors: MCP servers, OAuth apps, and permissions',
   description:
-    'How a tool call is gated in AGI Web: a tool you denied, your saved choice, the account default, the connector tools AGI does not know, and the high-risk approval no standing answer covers.',
+    'How a tool call is gated in AGI Chat: a tool you denied, your saved choice, the account default, the connector tools AGI does not know, and the high-risk approval no standing answer covers.',
   path: '/features/tools',
 });
 

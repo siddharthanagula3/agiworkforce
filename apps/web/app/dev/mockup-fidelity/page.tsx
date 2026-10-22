@@ -39,13 +39,13 @@ const LABEL = {
 } as const;
 
 const PREVIEWS = [
-  ['AGI Web', <WebAppPreview key="web" />],
+  ['AGI Chat', <WebAppPreview key="web" />],
   ['AGI Desktop', <DesktopAppPreview key="desktop" />],
   ['AGI Desktop with the Local and Cloud switch', <DesktopAppPreview key="switch" modeSwitch />],
   ['AGI CLI', <TerminalAppPreview key="cli" />],
-  ['AGI in Chrome', <ChromeAppPreview key="chrome" />],
+  ['AGI Extension', <ChromeAppPreview key="chrome" />],
   ['Chrome side panel alone', <SidePanelPreview key="panel" />],
-  ['AGI in VS Code', <EditorAppPreview key="editor" />],
+  ['AGI Code for VS Code', <EditorAppPreview key="editor" />],
   ['AGI Mobile', <PhoneAppPreview key="phone" />],
   ['AGI Mobile with the side panel open', <PhoneAppPreview key="drawer" drawerOpen />],
   ['Scene: artifact beside a chat', <ArtifactScenePreview key="artifact" />],

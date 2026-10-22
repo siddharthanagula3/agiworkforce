@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { t } from '../l10n';
 
@@ -71,7 +72,7 @@ export async function applyLlmEdit(
 
 async function openInNewTab(content: string, label: string): Promise<void> {
   const doc = await vscode.workspace.openTextDocument({
-    content: `# AGI Workforce, ${label}\n\n${content}`,
+    content: `# ${PRODUCT_NAMES.code}, ${label}\n\n${content}`,
     language: 'markdown',
   });
   await vscode.window.showTextDocument(doc, {

@@ -1,4 +1,5 @@
 import { Notification, type BrowserWindow, type WebContents } from 'electron';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { recordDesktopEvent } from './runtime/desktopTelemetryService';
 import { createNativeNotification } from './runtime/nativeSurface';
 import { focusPageComposer } from './composerFocus';
@@ -6,7 +7,7 @@ import { ELECTRON_IPC_CHANNELS } from '../src/lib/tauri-electron/bridgeContract'
 import { isQuickAskVisible, quickAskPanel, surfaceQuickAsk } from './quickAsk';
 
 const COMPOSER_SETTLE_MS = 120;
-const OPENING_TITLE = 'Opening AGI Cloud';
+const OPENING_TITLE = `Opening ${PRODUCT_NAMES.desktop}`;
 const OPENING_BODY = 'Press the dictation shortcut again once the window is open.';
 
 function delay(ms: number): Promise<void> {

@@ -18,11 +18,11 @@ export default function GitHubInstallReturnPage() {
       <main id="main-content">
         <Section size="sm" labelledBy="github-installed-title">
           <h1 id="github-installed-title" className="agi-ds-h1" style={{ textAlign: 'center' }}>
-            Finish in the AGI Workforce app
+            Finish in AGI Mobile
           </h1>
           <p className="agi-ds-prose" style={{ textAlign: 'center' }}>
             This GitHub connection was started on your phone. Open this link on that phone with the
-            AGI Workforce app installed to finish it. Nothing was linked here.
+            AGI Mobile installed to finish it. Nothing was linked here.
           </p>
         </Section>
       </main>

@@ -258,7 +258,7 @@ export interface DeveloperRuntimeStatus {
 
 /** What the page says when a shell answers a coding-session command it does not have. */
 export const DEVELOPER_COMMAND_NEEDS_UPDATE =
-  'This needs a newer version of AGI Cloud. Update the app, then try again.';
+  'This needs a newer version of AGI Desktop. Update the app, then try again.';
 
 export function developerRuntimeCapabilities(
   status: Pick<DeveloperRuntimeStatus, 'capabilities'>,

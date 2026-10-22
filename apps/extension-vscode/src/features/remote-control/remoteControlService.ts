@@ -27,7 +27,7 @@ import {
   type RemoteControlHost,
   type RemotePhoneToConfirm,
 } from '@agiworkforce/utils/remote-control';
-import { REMOTE_CODE_LIMITS, type ThreadSummary } from '@agiworkforce/types';
+import { REMOTE_CODE_LIMITS, type ThreadSummary, PRODUCT_NAMES } from '@agiworkforce/types';
 import { Config } from '../../platform/config';
 import { accountRequestHeaders } from '../../platform/accountHeaders';
 import { getExtensionVersion } from '../../platform/version';
@@ -259,7 +259,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
   private _relay(rootId: string, event: DeveloperSessionEvent): void {
     this._host.handleSessionEvent(rootId, event);
     this._reportActivity(rootId, event).catch((error: unknown) =>
-      console.warn('[AGI Workforce] could not deliver session activity:', error),
+      console.warn(`[${PRODUCT_NAMES.code}] could not deliver session activity:`, error),
     );
   }
 
@@ -277,7 +277,7 @@ export class VscodeRemoteControl implements vscode.Disposable {
       try {
         runtime = this._runtime(root);
       } catch (error) {
-        console.warn(`[AGI Workforce] Remote Control cannot follow ${root.name}`, error);
+        console.warn(`[${PRODUCT_NAMES.code}] Remote Control cannot follow ${root.name}`, error);
         continue;
       }
       this._watched.set(root.path, [

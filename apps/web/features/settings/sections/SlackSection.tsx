@@ -29,13 +29,13 @@ import { SlackChannelPolicies } from '@/features/slack/components/SlackChannelPo
 const OVERVIEW_UNREADABLE = 'Your Slack settings could not be loaded.';
 
 const INSTALL_STATUS_MESSAGE: Readonly<Record<SlackInstallStatus, string>> = {
-  installed: 'AGI Workforce was added to Slack. Send it a message there to start.',
+  installed: 'AGI was added to Slack. Send it a message there to start.',
   denied: 'Slack did not add the app because the request was cancelled.',
   invalid_state:
     'That Slack install link expired or was opened in another browser. Start again from here.',
-  unavailable: 'AGI Workforce in Slack is not available right now.',
+  unavailable: 'AGI in Slack is not available right now.',
   workspace_install_only:
-    'Add AGI Workforce to one Slack workspace at a time. Organization-wide installs are not supported.',
+    'Add AGI to one Slack workspace at a time. Organization-wide installs are not supported.',
   failed: 'Slack could not finish adding the app. Try again.',
 };
 
@@ -288,7 +288,7 @@ export function SlackSection() {
         );
         if (!response.ok) throw await readError(response, 'The app could not be removed.');
         ManagedCloudSlackInstallationRemovedSchema.parse(await response.json());
-        return `AGI Workforce was removed from ${teamName}.`;
+        return `AGI was removed from ${teamName}.`;
       },
       'The app could not be removed.',
     );
@@ -349,9 +349,8 @@ export function SlackSection() {
           Slack app
         </h1>
         <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Message AGI Workforce in Slack, or mention it in a channel, and it answers in the thread
-          as the app. Each person links their own account, so answers use their plan, settings and
-          approvals.
+          Message AGI in Slack, or mention it in a channel, and it answers in the thread as the app.
+          Each person links their own account, so answers use their plan, settings and approvals.
         </p>
       </div>
 
@@ -398,7 +397,7 @@ export function SlackSection() {
         <>
           {!data.available ? (
             <p style={{ margin: 0, fontSize: 13, color: 'var(--text-2)' }}>
-              AGI Workforce in Slack is not set up on this service yet.
+              AGI in Slack is not set up on this service yet.
             </p>
           ) : null}
           {data.available && !data.planAllowed ? (
@@ -434,7 +433,7 @@ export function SlackSection() {
           <Card
             id="settings-slack-links-heading"
             title="Your Slack accounts"
-            description="Slack accounts that AGI Workforce answers as you. To link one, send the app a message in Slack and follow the link it sends back."
+            description="Slack accounts that AGI answers as you. To link one, send the app a message in Slack and follow the link it sends back."
           >
             {data.links.length === 0 ? (
               <EmptyRow>No Slack accounts are linked yet.</EmptyRow>
@@ -461,7 +460,7 @@ export function SlackSection() {
                         confirm({
                           title: `Disconnect your Slack account in ${link.teamName}?`,
                           description:
-                            'AGI Workforce stops answering this Slack account, and the record of its Slack answers is deleted, including any answer still waiting for your approval. Answers already posted stay in Slack, and tasks it started stay in your tasks. You can link it again by messaging the app.',
+                            'AGI stops answering this Slack account, and the record of its Slack answers is deleted, including any answer still waiting for your approval. Answers already posted stay in Slack, and tasks it started stay in your tasks. You can link it again by messaging the app.',
                           confirmLabel: 'Disconnect',
                           destructive: true,
                           onConfirm: () => unlink(link.id, link.teamName),
@@ -515,7 +514,7 @@ export function SlackSection() {
                       disabled={busy !== null}
                       onClick={() =>
                         confirm({
-                          title: `Remove AGI Workforce from ${installation.teamName}?`,
+                          title: `Remove AGI from ${installation.teamName}?`,
                           description: `The app is uninstalled from ${installation.teamName}. Everyone there stops getting answers, every linked Slack account in it is disconnected, and answers waiting for approval are dropped. This cannot be undone; you can add the app again later.`,
                           confirmLabel: 'Remove',
                           destructive: true,

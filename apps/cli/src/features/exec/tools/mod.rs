@@ -1193,7 +1193,7 @@ async fn execute_generate_image(
     if opts.privacy_mode != crate::agent::PrivacyMode::Managed {
         return Ok(result(
             false,
-            "generate_image runs on the user's AGI Workforce account, so it is available only in Managed sessions.".to_string(),
+            "generate_image runs on the user's AGI account, so it is available only in Managed sessions.".to_string(),
         ));
     }
     let aspect_ratio = match args
@@ -2184,7 +2184,7 @@ async fn execute_browser_command(
                 other => serde_json::to_string_pretty(other).unwrap_or_else(|_| other.to_string()),
             };
             if browser_capture_is_empty(command, &value) {
-                output.push_str("\n\nNothing is recorded for this tab. The extension records console messages and network requests only while it watches the page: ask the user to press Watch page in the AGI Workforce side panel on this tab, reproduce the problem, then read again.");
+                output.push_str("\n\nNothing is recorded for this tab. The extension records console messages and network requests only while it watches the page: ask the user to press Watch page in the AGI Extension side panel on this tab, reproduce the problem, then read again.");
             }
             Ok(ToolResult {
                 tool_name: command.to_string(),

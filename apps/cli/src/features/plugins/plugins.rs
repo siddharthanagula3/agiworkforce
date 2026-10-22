@@ -7,7 +7,7 @@ use std::path::{Component, Path, PathBuf};
 // Manifest discovery, Sprint B6
 // ---------------------------------------------------------------------------
 //
-// AGI Workforce CLI accepts plugin manifests in five locations, in priority
+// AGI CLI accepts plugin manifests in five locations, in priority
 // order. The first one found wins; legacy paths emit a one-time deprecation
 // notice on stderr per session per plugin.
 //

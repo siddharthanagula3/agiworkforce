@@ -25,6 +25,7 @@ import { cn } from '../../lib/utils';
 import { useConfirm } from '@/ui/ConfirmDialog';
 import { usePrompt } from '@/ui/PromptDialog';
 import { toast } from 'sonner';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 const PROVIDER_LABELS: Record<CloudProvider, string> = {
   google_drive: 'Google Drive',
@@ -239,7 +240,7 @@ export function CloudStoragePanel() {
     const providerLabel = PROVIDER_LABELS[provider];
     confirmAction({
       title: `Disconnect ${name}?`,
-      description: `AGI Workforce forgets the sign-in for this ${providerLabel} account. Its files stop being listed here, and uploads, downloads and share links for it stop working until you authorize it again. Nothing in ${providerLabel} is deleted.`,
+      description: `${PRODUCT_BRAND} forgets the sign-in for this ${providerLabel} account. Its files stop being listed here, and uploads, downloads and share links for it stop working until you authorize it again. Nothing in ${providerLabel} is deleted.`,
       confirmLabel: 'Disconnect',
       destructive: true,
       onConfirm: async () => {

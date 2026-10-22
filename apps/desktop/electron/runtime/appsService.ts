@@ -2,6 +2,7 @@ import { shell } from 'electron';
 import { promises as fs, type BigIntStats } from 'node:fs';
 import path from 'node:path';
 import type { ApplicationOpenResult, WorkspaceRoot } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { OPEN_FILE_FOR_CHECKED_READ, openChecked } from './filesystemService';
 import { PathRefused, resolveWithinRoot } from './pathGuard';
 
@@ -77,7 +78,10 @@ function assertOpenable(absolute: string, stat: BigIntStats): void {
     return;
   }
   if (!stat.isFile() || !INERT_DOCUMENT_EXTENSIONS.has(extension)) {
-    throw revealInstead(absolute, 'is not a kind of document AGI Cloud opens for you.');
+    throw revealInstead(
+      absolute,
+      `is not a kind of document ${PRODUCT_NAMES.desktop} opens for you.`,
+    );
   }
   if ((stat.mode & EXECUTABLE_MODE_BITS) !== 0n) {
     throw revealInstead(absolute, 'is marked executable.');

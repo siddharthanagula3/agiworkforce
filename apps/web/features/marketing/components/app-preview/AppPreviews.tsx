@@ -165,7 +165,7 @@ export function AppSidebar({
       {macChrome ? <TrafficLights /> : null}
       <div className="agi-app-brand">
         <AgiMark className="agi-app-mark" />
-        <span className="agi-app-wordmark">AGI Workforce</span>
+        <span className="agi-app-wordmark">AGI</span>
         <Bell className="agi-app-icon agi-app-end agi-app-quiet" />
       </div>
       <div className="agi-app-controls">
@@ -437,7 +437,7 @@ export function WebAppPreview({
   return (
     <AppShell
       kind="web"
-      label="Authored example of the AGI Web chat interface"
+      label="Authored example of the AGI Chat interface"
       className={className}
       chats={WEB_CHATS}
       view={view}
@@ -623,7 +623,11 @@ const APPROVAL_ACTIONS = [
 
 export function EditorAppPreview({ className }: { className?: string }) {
   return (
-    <PreviewRoot kind="editor" label="Authored example of AGI in VS Code" className={className}>
+    <PreviewRoot
+      kind="editor"
+      label="Authored example of AGI Code for VS Code"
+      className={className}
+    >
       <div className="agi-app-titlebar agi-app-titlebar--editor">
         <TrafficLights />
         <span className="agi-app-command">

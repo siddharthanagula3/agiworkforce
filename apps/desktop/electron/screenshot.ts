@@ -7,6 +7,7 @@ import {
   screen,
   systemPreferences,
 } from 'electron';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { focusPageComposer } from './composerFocus';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { pickSourceForDisplay } from './garnishCore';
@@ -41,9 +42,8 @@ function warnIfScreenCaptureBlocked(): void {
   void showNativeMessage(null, {
     type: 'info',
     title: 'Screen recording permission needed',
-    message: 'AGI Cloud needs permission to capture your screen.',
-    detail:
-      'Open System Settings > Privacy & Security > Screen & System Audio Recording and enable AGI Cloud, then relaunch the app. macOS only applies the change after a relaunch.',
+    message: `${PRODUCT_NAMES.desktop} needs permission to capture your screen.`,
+    detail: `Open System Settings > Privacy & Security > Screen & System Audio Recording and enable ${PRODUCT_NAMES.desktop}, then relaunch the app. macOS only applies the change after a relaunch.`,
     buttons: ['OK'],
   });
 }
@@ -119,7 +119,7 @@ export async function captureWindowToChat(
     if (!source || source.thumbnail.isEmpty()) {
       notify(
         'Window capture failed',
-        'That window could not be captured. Check Screen & System Audio Recording permission for AGI Cloud, then relaunch.',
+        `That window could not be captured. Check Screen & System Audio Recording permission for ${PRODUCT_NAMES.desktop}, then relaunch.`,
       );
       return;
     }
@@ -165,7 +165,7 @@ export async function captureToChat(mainWindow: BrowserWindow | null): Promise<v
       notify(
         'Screenshot failed',
         process.platform === 'darwin'
-          ? 'No screen content was available. Check Screen & System Audio Recording permission for AGI Cloud, then relaunch.'
+          ? `No screen content was available. Check Screen & System Audio Recording permission for ${PRODUCT_NAMES.desktop}, then relaunch.`
           : 'No screen content was available.',
       );
       return;

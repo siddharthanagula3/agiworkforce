@@ -1,3 +1,4 @@
+import { PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
@@ -42,11 +43,11 @@ export async function showApprovalHistory(secrets: vscode.SecretStorage): Promis
     const response = await fetch(`${origin}${APPROVAL_HISTORY_PATH}`, {
       headers: { Authorization: `Bearer ${token}`, ...platformRequestHeaders() },
     });
-    if (!response.ok) throw new Error(`AGI Workforce answered HTTP ${response.status}`);
+    if (!response.ok) throw new Error(`${PRODUCT_BRAND} answered HTTP ${response.status}`);
     history = ApprovalHistorySchema.parse(await response.json());
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: approval history could not be loaded, ${error instanceof Error ? error.message : String(error)}.`,
+      `${PRODUCT_NAMES.code}: approval history could not be loaded, ${error instanceof Error ? error.message : String(error)}.`,
     );
     return;
   }
@@ -62,7 +63,7 @@ export async function showApprovalHistory(secrets: vscode.SecretStorage): Promis
             : { detail: 'Open the conversation', conversationId: entry.conversationId }),
         }));
   const picked = await vscode.window.showQuickPick(items, {
-    title: 'AGI Workforce, Approval history',
+    title: `${PRODUCT_NAMES.code}, Approval history`,
     placeHolder: 'Tool approvals you decided on every AGI client, newest first',
     matchOnDescription: true,
   });

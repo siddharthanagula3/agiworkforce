@@ -154,7 +154,7 @@ describe('readServiceNotices', () => {
 
       expect(scopes(notices)).toEqual([{ kind: 'incident', scope: 'product', tone: 'danger' }]);
       expect(notices[0]?.message).toBe(
-        'AGI Workforce is having a problem right now, and some requests may fail. We are working on it.',
+        'AGI is having a problem right now, and some requests may fail. We are working on it.',
       );
     },
   );

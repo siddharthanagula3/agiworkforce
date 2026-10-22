@@ -34,11 +34,11 @@ import {
 
 const TITLE_MAX_CHARS = 60;
 const NO_TRAINING_ANSWER =
-  'No model on your plan keeps your chats out of training right now, so AGI Workforce could not answer. Try again later in the app.';
+  'No model on your plan keeps your chats out of training right now, so AGI could not answer. Try again later in the app.';
 const ASK_DIRECTIVE =
   'The person asked this through Siri and will hear the answer spoken. Answer in plain sentences without markdown, lists, tables, links or code, in at most a few short paragraphs.';
 
-export const MOBILE_INTENT_SIGN_IN_MESSAGE = 'Open AGI Workforce to sign in.';
+export const MOBILE_INTENT_SIGN_IN_MESSAGE = 'Open AGI Mobile to sign in.';
 
 export class MobileIntentRefusal extends Error {
   constructor(
@@ -100,7 +100,7 @@ export async function answerMobileIntentAsk(input: {
     throw new MobileIntentRefusal(
       403,
       'terms_acceptance_required',
-      'Open AGI Workforce to review the updated terms.',
+      'Open AGI Mobile to review the updated terms.',
     );
   }
   const moderation = moderateManagedPrompt({ userId: owner.userId, segments: [prompt] });

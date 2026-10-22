@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { patchAccountPreferences, readAccountPreferences } from '../utils/accountPreferences';
 
@@ -25,7 +26,7 @@ export async function manageMemoryExclusions(secrets: vscode.SecretStorage): Pro
       namespace = await readAccountPreferences(secrets, MEMORY_NAMESPACE);
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: your never-remember list could not be loaded, ${failure(error)}.`,
+        `${PRODUCT_NAMES.code}: your never-remember list could not be loaded, ${failure(error)}.`,
       );
       return;
     }
@@ -51,7 +52,7 @@ export async function manageMemoryExclusions(secrets: vscode.SecretStorage): Pro
             ]),
       ],
       {
-        title: 'AGI Workforce, Never remember',
+        title: `${PRODUCT_NAMES.code}, Never remember`,
         placeHolder: 'Memory refuses to save anything that mentions these terms, on every client',
       },
     );
@@ -61,7 +62,7 @@ export async function manageMemoryExclusions(secrets: vscode.SecretStorage): Pro
     if (picked.add === true) {
       const term = (
         await vscode.window.showInputBox({
-          title: 'AGI Workforce, Never remember',
+          title: `${PRODUCT_NAMES.code}, Never remember`,
           prompt: 'A word or phrase memory should never save, such as a client or project name',
           ignoreFocusOut: true,
         })
@@ -76,7 +77,7 @@ export async function manageMemoryExclusions(secrets: vscode.SecretStorage): Pro
       await patchAccountPreferences(secrets, MEMORY_NAMESPACE, { [EXCLUDED_TERMS_KEY]: next });
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: the never-remember list was not saved, ${failure(error)}.`,
+        `${PRODUCT_NAMES.code}: the never-remember list was not saved, ${failure(error)}.`,
       );
       return;
     }

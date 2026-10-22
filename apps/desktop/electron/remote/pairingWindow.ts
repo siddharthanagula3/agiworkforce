@@ -2,14 +2,14 @@ import { BrowserWindow } from 'electron';
 import QRCode from 'qrcode';
 import { REMOTE_SESSION_PARTITION } from '../config';
 import type { RemotePairingDisplay } from '@agiworkforce/utils/remote-control';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 const WINDOW_WIDTH = 380;
 const WINDOW_HEIGHT = 520;
 const QR_SIZE = 240;
 
 const TITLE = 'Pair a phone';
-const HOW_TO_PAIR =
-  'Open the AGI Workforce app on your phone, choose Pair with Desktop, and scan this code. It works once and expires in a few minutes.';
+const HOW_TO_PAIR = `Open ${PRODUCT_NAMES.mobile} on your phone, choose Pair with Desktop, and scan this code. It works once and expires in a few minutes.`;
 const CLOSE_TO_CANCEL = 'Closing this window cancels pairing.';
 
 let current: BrowserWindow | null = null;

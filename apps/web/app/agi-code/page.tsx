@@ -61,7 +61,7 @@ export default function AgiCodePage() {
             },
             {
               index: '02',
-              name: 'AGI in VS Code',
+              name: 'AGI Code for VS Code',
               tagline: 'IDE-native assistance.',
               body: 'Chat with @agi inside your editor with workspace-scoped context. Review diffs before they land, run slash commands like /explain and /tests, and hand off to other surfaces explicitly.',
               capabilities: [
@@ -144,7 +144,7 @@ export default function AgiCodePage() {
             },
             {
               meta: 'Editor',
-              title: 'AGI in VS Code',
+              title: 'AGI Code for VS Code',
               body: 'Editor-native chat, diffs, and reviews.',
               href: '/vscode-extension',
             },
@@ -154,7 +154,7 @@ export default function AgiCodePage() {
         <FinalCta
           eyebrow="AGI Code"
           title="Bring the agent to your repo."
-          body={`The CLI is ${SURFACE_STATUS.cli.toLowerCase()} and AGI in VS Code is ${SURFACE_STATUS.vscode.toLowerCase()}. The download page shows what is published and takes an email to tell you when the VS Code extension is ready to install. Choose the route for every task: local models, your own keys, or AGI managed cloud, which is in public alpha and included with ${DEVELOPER_SURFACE_PLANS} on these two surfaces.`}
+          body={`The CLI is ${SURFACE_STATUS.cli.toLowerCase()} and AGI Code for VS Code is ${SURFACE_STATUS.vscode.toLowerCase()}. The download page shows what is published and takes an email to tell you when the VS Code extension is ready to install. Choose the route for every task: local models, your own keys, or AGI managed cloud, which is in public alpha and included with ${DEVELOPER_SURFACE_PLANS} on these two surfaces.`}
           ctas={[
             { href: '/download', label: 'Check availability' },
             { href: '/cli', label: 'See the CLI' },

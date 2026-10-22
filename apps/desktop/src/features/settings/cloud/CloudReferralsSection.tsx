@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 import { WEB_APP_URL } from '../../../api/config';
 import { openExternalUrl } from '../../../utils/navigation';
@@ -26,7 +27,7 @@ export function CloudReferralsSection() {
     <div className="flex flex-col gap-5" data-testid="cloud-referrals">
       <SectionHeading
         title="Referrals"
-        description="Invite friends to AGI Workforce with your own link."
+        description={`Invite friends to ${PRODUCT_BRAND} with your own link.`}
       />
 
       <div className="rounded-lg border border-border bg-card/40 p-5">

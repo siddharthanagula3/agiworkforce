@@ -1,4 +1,4 @@
-# AGI for VS Code, Contributor Notes
+# AGI Code, Contributor Notes
 
 Status: Current
 
@@ -59,7 +59,7 @@ No AGI Cloud sign-in or extension API key is required for the local developer-se
 
 ## Cloud account and Web handoffs
 
-`AGI Workforce: Sign In to AGI Cloud` uses the shared browser-approved device
+`AGI Code: Sign In to AGI Cloud` uses the shared browser-approved device
 flow and stores its revocable developer credential in VS Code `SecretStorage`.
 The Account & Usage command reads `/api/usage`, applies both plan and
 subscription status before caching an effective tier, and exposes explicit Web

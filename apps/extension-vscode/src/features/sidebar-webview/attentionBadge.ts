@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 /**
  * What the Activity Bar icon should say while the chat panel is hidden.
  *
@@ -40,11 +41,11 @@ export class AttentionState {
         value: this.approvals,
         tooltip:
           this.approvals === 1
-            ? 'AGI Workforce is waiting for your approval'
-            : `AGI Workforce is waiting on ${this.approvals} approvals`,
+            ? `${PRODUCT_NAMES.code} is waiting for your approval`
+            : `${PRODUCT_NAMES.code} is waiting on ${this.approvals} approvals`,
       };
     }
-    if (this.finished) return { value: 1, tooltip: 'AGI Workforce finished a reply' };
+    if (this.finished) return { value: 1, tooltip: `${PRODUCT_NAMES.code} finished a reply` };
     return undefined;
   }
 }

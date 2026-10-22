@@ -118,7 +118,7 @@ jobs:
           PREV_TAG=$(git describe --tags --match 'v-cloud-desktop-*' --abbrev=0 "${TAG}^" 2>/dev/null || true)
           NOTES_FILE="${RUNNER_TEMP}/notes.md"
           {
-            echo "AGI Cloud desktop (Electron shell) ${VERSION}"
+            echo "AGI Desktop ${VERSION}"
             echo
             echo "## Changes"
             if [ -n "$PREV_TAG" ]; then
@@ -132,7 +132,7 @@ jobs:
             EXTRA_FLAGS="--prerelease"
           fi
           gh release create "$TAG" --draft $EXTRA_FLAGS \
-            --title "AGI Cloud Desktop ${VERSION}" \
+            --title "AGI Desktop ${VERSION}" \
             --notes-file "$NOTES_FILE"
 
   validate:
@@ -318,8 +318,8 @@ jobs:
             }
           }
 
-          verify_app "$out/mac/AGI Cloud.app" x86_64
-          verify_app "$out/mac-arm64/AGI Cloud.app" arm64
+          verify_app "$out/mac/AGI Desktop.app" x86_64
+          verify_app "$out/mac-arm64/AGI Desktop.app" arm64
 
           for dmg in "${dmgs[@]}"; do
             [ -s "$dmg" ] || { echo "ERROR: empty artifact $dmg" >&2; exit 1; }
@@ -341,7 +341,7 @@ jobs:
         run: |
           set -euo pipefail
           node scripts/release/verify-cli-protocol-handshake.mjs \
-            "apps/desktop/release/mac-arm64/AGI Cloud.app/Contents/Resources/agi-cli/agi"
+            "apps/desktop/release/mac-arm64/AGI Desktop.app/Contents/Resources/agi-cli/agi"
 
       # Notarization proves who built the installer, not which bytes arrived.
       # /api/download/checksums serves this file, so the download page can only
@@ -361,8 +361,8 @@ jobs:
           set -euo pipefail
           node --test scripts/lib/rollout/release-guards.test.mjs
           node scripts/release/scan-release-artifact.mjs \
-            "apps/desktop/release/mac/AGI Cloud.app" \
-            "apps/desktop/release/mac-arm64/AGI Cloud.app"
+            "apps/desktop/release/mac/AGI Desktop.app" \
+            "apps/desktop/release/mac-arm64/AGI Desktop.app"
 
       - name: Upload artifacts to the draft release
         env:

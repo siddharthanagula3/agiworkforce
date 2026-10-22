@@ -1440,7 +1440,7 @@ function SkillsPanel({ adapter }: { adapter?: SettingsDataAdapter }) {
           {skills.length === 0
             ? canAuthor
               ? 'No skills yet. Create one, or download a bundled SKILL.md from Browse.'
-              : 'No skills loaded in this environment. Skills ship bundled with AGI Workforce.'
+              : 'No skills loaded in this environment. Skills ship bundled with AGI.'
             : 'No skills match your search.'}
         </p>
       ) : (

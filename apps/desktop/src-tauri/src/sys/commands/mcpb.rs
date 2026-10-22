@@ -510,7 +510,7 @@ fn verified_install_spec(
     allowlist.pinned(npm_package).cloned().ok_or_else(|| {
         tracing::warn!(package = %npm_package, absent = allowlist.is_absent(), "MCP install refused");
         if allowlist.is_absent() {
-            format!("The MCP allow-list is missing from this installation, so '{npm_package}' cannot be verified. Reinstall AGI Workforce.")
+            format!("The MCP allow-list is missing from this installation, so '{npm_package}' cannot be verified. Reinstall AGI Desktop.")
         } else {
             format!("MCP package '{npm_package}' is not on the allow-list.")
         }

@@ -42,12 +42,12 @@ export default async function GitHubConnectPage({ searchParams }: Props) {
           {next ? (
             <>
               <h1 id="github-connect-title" className="agi-ds-h1">
-                {`Connecting GitHub to the AGI Workforce account ${next.requester}`}
+                {`Connecting GitHub to the AGI account ${next.requester}`}
               </h1>
               <p className="agi-ds-prose">
-                Continue only if you started this from the AGI Workforce app yourself. If someone
-                sent you this link, close this page: continuing would give their account access to
-                the repositories you choose.
+                Continue only if you started this from AGI yourself. If someone sent you this link,
+                close this page: continuing would give their account access to the repositories you
+                choose.
               </p>
               <p>
                 <a className="agi-ds-btn" data-variant="primary" href={next.href} rel="noreferrer">
@@ -62,7 +62,7 @@ export default async function GitHubConnectPage({ searchParams }: Props) {
               </h1>
               <p className="agi-ds-prose">
                 It was already used, has timed out, or GitHub cannot be connected right now. Start
-                again from the AGI Workforce app.
+                again from AGI.
               </p>
             </>
           )}

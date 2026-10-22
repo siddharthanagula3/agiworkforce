@@ -152,7 +152,7 @@ describe('device-code sign-ins', () => {
             {
               device_id: GRANT_ID,
               kind: 'vscode',
-              name: 'AGI for VS Code',
+              name: 'AGI Code',
               registered_at: '2026-10-19T00:40:00.000Z',
               last_seen_at: '2026-10-19T00:50:00.000Z',
             },
@@ -167,7 +167,7 @@ describe('device-code sign-ins', () => {
       expect.objectContaining({
         id: GRANT_ID,
         kind: 'vscode',
-        name: 'AGI for VS Code',
+        name: 'AGI Code',
         hasLiveCredential: true,
       }),
     );

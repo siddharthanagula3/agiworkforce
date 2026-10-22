@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
-import { creditsFromCents, formatCredits } from '@agiworkforce/types';
+import { creditsFromCents, formatCredits, PRODUCT_BRAND } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { useAccountStore, useAuthStore } from '../../stores/auth';
 import type { CreditBalance, SubscriptionStatus } from '../../stores/auth';
@@ -72,7 +72,7 @@ export function AccountSettings() {
   const displayName = resolveAccountDisplayName(
     accountData.displayName,
     accountData.email,
-    'AGI Workforce user',
+    `${PRODUCT_BRAND} user`,
   );
   const subscriptionStatusLabel =
     SUBSCRIPTION_STATUS_LABELS[accountData.subscriptionStatus] ?? 'Unknown';

@@ -114,7 +114,7 @@ export const CODE_COPY = {
   extraHostsPlaceholder: 'api.example.com, *.internal.example.com',
   extraHostsHelp: 'Comma separated, one leading wildcard allowed, up to 10 hosts.',
   fullNetworkAcknowledgement:
-    'I understand commands in this session can contact any internet host. The environment stays isolated and receives no AGI Workforce credentials.',
+    'I understand commands in this session can contact any internet host. The environment stays isolated and receives no AGI credentials.',
   environmentPromotedToTrusted:
     'Cloning a repository needs Trusted hosts, so choosing one raises the tier.',
   approvalMode: 'Approval mode',
@@ -267,7 +267,7 @@ export const CODE_COPY = {
   shareTeam: 'Team',
   shareTeamHint: 'Members of your workspace can open it with the link.',
   sharePublic: 'Public',
-  sharePublicHint: 'Anyone signed in to AGI Workforce can open it with the link.',
+  sharePublicHint: 'Anyone signed in to AGI can open it with the link.',
   shareWarning:
     'Check this session for sensitive content before you share it. It can contain code and credentials from private repositories.',
   shareSnapshotNote:

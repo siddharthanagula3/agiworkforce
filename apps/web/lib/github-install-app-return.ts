@@ -101,7 +101,7 @@ export async function appInstallRequester(installState: string): Promise<string 
     [userId],
   );
   const email = profiles[0]?.email;
-  return email ? maskEmail(email) : 'an AGI Workforce account';
+  return email ? maskEmail(email) : 'an AGI account';
 }
 
 export async function pendingAppInstallation(

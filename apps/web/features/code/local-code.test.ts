@@ -238,7 +238,7 @@ describe('local code surface', () => {
 
     const sentence = localTurnFailureSentence(failure);
 
-    expect(sentence).toContain('Sign out of AGI Workforce and sign back in');
+    expect(sentence).toContain('Sign out of AGI and sign back in');
     expect(sentence).not.toContain('agi login');
     expect(localOfferFor(failure.action, failure.provider, failure.retryable)).toBeNull();
     expect(

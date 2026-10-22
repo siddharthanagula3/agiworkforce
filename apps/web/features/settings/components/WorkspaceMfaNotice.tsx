@@ -47,7 +47,7 @@ export function WorkspaceMfaNotice() {
     <ProductNoticeCard
       icon={ShieldAlert}
       tone="warning"
-      message="Your workspace requires two-factor authentication. Turn it on to keep using AGI Workforce."
+      message="Your workspace requires two-factor authentication. Turn it on to keep using AGI."
       action={
         <Button asChild size="sm" variant="outline" className="shrink-0 pointer-coarse:min-h-11">
           <Link href={ENROLLMENT_PATH}>Turn on two-factor</Link>

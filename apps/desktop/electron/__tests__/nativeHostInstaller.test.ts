@@ -60,7 +60,7 @@ describe('native messaging host installation', () => {
   it('writes a launcher that runs the bundled host through Electron as Node', async () => {
     const { launcherScript } = await installer();
     const script = launcherScript({
-      electronPath: '/Applications/AGI Cloud.app/Contents/MacOS/AGI Cloud',
+      electronPath: '/Applications/AGI Desktop.app/Contents/MacOS/AGI Desktop',
       hostBundle: '/tmp/native-host.cjs',
       tokenFile: '/tmp/host-token',
       port: 8787,
@@ -68,7 +68,7 @@ describe('native messaging host installation', () => {
     expect(script.startsWith('#!/bin/sh')).toBe(true);
     expect(script).toContain('ELECTRON_RUN_AS_NODE=1');
     expect(script).toContain('AGI_CLOUD_BRIDGE_PORT=8787');
-    expect(script).toContain("exec '/Applications/AGI Cloud.app/Contents/MacOS/AGI Cloud'");
+    expect(script).toContain("exec '/Applications/AGI Desktop.app/Contents/MacOS/AGI Desktop'");
     expect(script).toContain('"$@"');
   });
 
@@ -107,6 +107,53 @@ describe('native messaging host installation', () => {
     uninstallNativeHost([profile], home);
     expect(existsSync(manifest)).toBe(false);
     expect(existsSync(result.launcher)).toBe(false);
+  });
+
+  it('points an installed host at the app that is running now, keeping its manifest path', async () => {
+    const { installNativeHost, refreshInstalledHost, launcherPath, uninstallNativeHost } =
+      await installer();
+    const profile = path.join(home, 'renamed-profile', 'NativeMessagingHosts');
+    const manifest = path.join(profile, `${NATIVE_MESSAGING_HOST_NAME}.json`);
+    installNativeHost({
+      extensionId: EXTENSION_ID,
+      port: 8787,
+      extraManifestDirectories: [profile],
+      home,
+    });
+    writeFileSync(
+      launcherPath(),
+      "#!/bin/sh\nexec '/Applications/AGI Cloud.app/Contents/MacOS/AGI Cloud' host.cjs\n",
+    );
+
+    const result = refreshInstalledHost({
+      extensionId: EXTENSION_ID,
+      port: 8787,
+      extraManifestDirectories: [profile],
+      home,
+    });
+
+    expect(result?.manifestPaths).toContain(manifest);
+    expect(JSON.parse(readFileSync(manifest, 'utf8')).path).toBe(
+      path.join(userData, 'native-host', 'agi-native-host'),
+    );
+    const launcher = readFileSync(launcherPath(), 'utf8');
+    expect(launcher).toContain(`exec '${process.execPath}'`);
+    expect(launcher).not.toContain('AGI Cloud.app');
+    uninstallNativeHost([profile], home);
+  });
+
+  it('installs nothing on refresh when no browser has the host', async () => {
+    const { refreshInstalledHost, launcherPath } = await installer();
+    const profile = path.join(home, 'never-paired', 'NativeMessagingHosts');
+    expect(
+      refreshInstalledHost({
+        extensionId: EXTENSION_ID,
+        port: 8787,
+        extraManifestDirectories: [profile],
+        home,
+      }),
+    ).toBeNull();
+    expect(existsSync(launcherPath())).toBe(false);
   });
 
   it('refuses to install when the host was not built into the app', async () => {

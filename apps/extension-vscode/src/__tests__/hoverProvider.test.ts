@@ -85,7 +85,7 @@ describe('AgiHoverProvider', () => {
   it('labels the actions under the product name', () => {
     const markdown = hoverOver(WORD_RANGE)?.contents as vscode.MarkdownString;
 
-    expect(markdown.value).toContain('AGI Workforce');
+    expect(markdown.value).toContain('AGI Code');
     expect(markdown.value).toContain('Explain');
     expect(markdown.value).toContain('Fix');
     expect(markdown.value).toContain('Tests');

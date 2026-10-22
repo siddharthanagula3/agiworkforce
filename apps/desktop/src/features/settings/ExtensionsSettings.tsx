@@ -16,6 +16,7 @@ import {
 import { getSimpleErrorMessage } from '@/lib/errorMessages';
 import { invoke, listen } from '@/lib/tauri-mock';
 import { toast } from 'sonner';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { Badge } from '@/ui/Badge';
 import { ScrollArea } from '@/ui/ScrollArea';
@@ -494,8 +495,8 @@ export function ExtensionsSettings() {
       <div>
         <h3 className="text-h3 mb-2">Extensions</h3>
         <p className="text-sm text-muted-foreground mb-4">
-          Install and manage MCP extensions to add new capabilities to AGI Workforce. Extensions can
-          provide tools for email, calendars, databases, and more.
+          Install and manage MCP extensions to add new capabilities to {PRODUCT_NAMES.desktop}.
+          Extensions can provide tools for email, calendars, databases, and more.
         </p>
       </div>
 
@@ -825,7 +826,10 @@ export function ExtensionsSettings() {
       {/* Help Text */}
       <div className="text-xs text-muted-foreground space-y-1">
         <p>Extensions are packaged as .agiext files containing MCP server implementations.</p>
-        <p>Enabled extensions run automatically and provide tools that AGI Workforce can use.</p>
+        <p>
+          Enabled extensions run automatically and provide tools that {PRODUCT_NAMES.desktop} can
+          use.
+        </p>
       </div>
     </div>
   );

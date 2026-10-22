@@ -11,7 +11,7 @@ describe('view container contribution', () => {
 
   it('places the single AGI view container in the activity bar', () => {
     expect(containers.activitybar).toEqual([
-      expect.objectContaining({ id: 'agi-workforce-sidebar', title: 'AGI Workforce' }),
+      expect.objectContaining({ id: 'agi-workforce-sidebar', title: 'AGI Code' }),
     ]);
     expect(containers.secondarySidebar).toBeUndefined();
   });

@@ -10,7 +10,7 @@ import { useDesktopVoiceHotkey } from '../hooks/use-desktop-voice-hotkey';
 
 export const DICTATION_BAR_COPY = {
   label: 'Dictation',
-  outsideShell: 'This bar opens from the AGI Cloud desktop app, over the app you dictate into.',
+  outsideShell: 'This bar opens from AGI Desktop, over the app you dictate into.',
   dictationOff: 'Dictation is off. Turn it on in Settings > Voice, then press the shortcut again.',
   notTyped: 'What you said could not be typed.',
 } as const;

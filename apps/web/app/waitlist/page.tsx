@@ -71,7 +71,7 @@ export const metadata = buildMetadata({
 const WHILE_YOU_WAIT = [
   {
     meta: 'Try it now',
-    title: 'Try AGI Web',
+    title: 'Try AGI Chat',
     body: 'Hosted chat with projects and artifacts, in the browser today.',
     href: WEB_ENTRY_HREF,
   },

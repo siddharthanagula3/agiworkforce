@@ -39,7 +39,7 @@ export function isDesktopHost(): boolean {
  * The bridge, but only from a shell that has a Local mode.
  *
  * Every on-device surface hangs off this rather than off `useDesktopHost`:
- * AGI Cloud is Electron and answers in the cloud, so under it there is no
+ * AGI Desktop is Electron and answers in the cloud, so under it there is no
  * model to list, no server address to edit and no local runtime to grant.
  */
 export function useLocalModeHost(): HostBridge | null {

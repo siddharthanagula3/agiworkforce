@@ -221,7 +221,7 @@ async function handleDeviceRefresh(request: NextRequest): Promise<NextResponse> 
     return NextResponse.json(
       {
         error: 'terms_acceptance_required',
-        error_description: `Accept the Terms of Service at ${termsAcceptanceUrl(request)} to keep using AGI Workforce on this device.`,
+        error_description: `Accept the Terms of Service at ${termsAcceptanceUrl(request)} to keep using AGI on this device.`,
         terms_version: CURRENT_TERMS_VERSION,
         acceptance_url: termsAcceptanceUrl(request),
       } satisfies DeviceTokenError,

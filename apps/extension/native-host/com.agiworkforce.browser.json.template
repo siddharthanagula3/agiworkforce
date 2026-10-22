@@ -1,6 +1,6 @@
 {
   "name": "com.agiworkforce.browser",
-  "description": "AGI Workforce Browser Automation Host",
+  "description": "AGI Desktop browser host",
   "path": "<NATIVE_HOST_PATH_PLACEHOLDER>",
   "type": "stdio",
   "allowed_origins": [

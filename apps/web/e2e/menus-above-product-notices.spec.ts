@@ -3,7 +3,7 @@ import { expect, test, type Locator, type Page } from '@playwright/test';
 import { signIn } from './qa-capability-harness';
 
 const INCIDENT_MESSAGE =
-  'AGI Workforce is having a problem right now, and some requests may fail. We are working on it.';
+  'AGI is having a problem right now, and some requests may fail. We are working on it.';
 
 const INCIDENT_FEED = {
   notices: [

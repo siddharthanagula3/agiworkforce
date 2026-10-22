@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   MAX_CLOUD_AGENT_RUN_STEER_LENGTH,
@@ -222,7 +223,7 @@ export async function showCloudRunDetail(
     snapshot = await client.getRun(runId);
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: this cloud task could not be opened, ${describeCloudRunFailure(error)}`,
+      `${PRODUCT_NAMES.code}: this cloud task could not be opened, ${describeCloudRunFailure(error)}`,
     );
     return;
   }
@@ -257,7 +258,7 @@ export async function showCloudRunDetail(
 
   if (picked.action === 'copy-result') {
     await vscode.env.clipboard.writeText(cloudRunResultText(snapshot.events));
-    void vscode.window.showInformationMessage('AGI Workforce: copied the task result.');
+    void vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: copied the task result.`);
     return;
   }
 
@@ -347,10 +348,10 @@ async function runCloudRunMutation(
 ): Promise<void> {
   try {
     await mutate();
-    void vscode.window.showInformationMessage(`AGI Workforce: ${success}`);
+    void vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: ${success}`);
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: ${failure}, ${describeCloudRunFailure(error)}`,
+      `${PRODUCT_NAMES.code}: ${failure}, ${describeCloudRunFailure(error)}`,
     );
   } finally {
     host.onChanged();

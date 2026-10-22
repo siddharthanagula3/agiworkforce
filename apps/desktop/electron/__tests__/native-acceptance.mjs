@@ -220,7 +220,7 @@ async function launch(origin) {
     await new Promise((resolve) => socket.listen(0, '127.0.0.1', resolve));
     const port = socket.address().port;
     await new Promise((resolve) => socket.close(resolve));
-    const executable = path.join(packaged, 'Contents/MacOS/AGI Cloud');
+    const executable = path.join(packaged, 'Contents/MacOS/AGI Desktop');
     const log = fs.openSync(path.join(dir, 'packaged.log'), 'a');
     const child = spawn(
       executable,

@@ -65,7 +65,7 @@
       "switchTo": "Переключиться на {{mode}}",
       "soon": "Скоро",
       "cloudUnavailable": "AGI Cloud доступен на десктопе, войдите, чтобы использовать управляемые модели и синхронизированные чаты.",
-      "localUnavailable": "Локальный режим работает в CLI AGI Workforce через Ollama или LM Studio. Разговоры в Desktop используют управляемое облако."
+      "localUnavailable": "Локальный режим работает в AGI CLI через Ollama или LM Studio. Разговоры в Desktop используют управляемое облако."
     },
     "groups": {
       "lastHour": "Last hour",
@@ -371,7 +371,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "Не давать компьютеру засыпать",
-      "keepAwakeHint": "Запланированные задачи выполняются, только пока AGI Workforce открыт. Запуск, пропущенный, пока приложение было закрыто или компьютер спал, выполнится один раз при следующем открытии приложения, если он был запланирован в последние 7 дней.",
+      "keepAwakeHint": "Запланированные задачи выполняются, только пока AGI Desktop открыт. Запуск, пропущенный, пока приложение было закрыто или компьютер спал, выполнится один раз при следующем открытии приложения, если он был запланирован в последние 7 дней.",
       "keepAwakeUnavailable": "Недоступно: {{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",

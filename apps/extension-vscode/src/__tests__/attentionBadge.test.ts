@@ -15,14 +15,14 @@ describe('what the hidden chat panel says on the Activity Bar', () => {
   it('marks a turn that is blocked on an approval', () => {
     expect(after('approval-requested')).toEqual({
       value: 1,
-      tooltip: 'AGI Workforce is waiting for your approval',
+      tooltip: 'AGI Code is waiting for your approval',
     });
   });
 
   it('counts concurrent approvals rather than showing the first one twice', () => {
     expect(after('approval-requested', 'approval-requested')).toEqual({
       value: 2,
-      tooltip: 'AGI Workforce is waiting on 2 approvals',
+      tooltip: 'AGI Code is waiting on 2 approvals',
     });
   });
 
@@ -41,7 +41,7 @@ describe('what the hidden chat panel says on the Activity Bar', () => {
   it('marks a reply that finished while the panel was hidden', () => {
     expect(after('turn-finished')).toEqual({
       value: 1,
-      tooltip: 'AGI Workforce finished a reply',
+      tooltip: 'AGI Code finished a reply',
     });
   });
 

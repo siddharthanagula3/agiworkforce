@@ -83,8 +83,8 @@ export function SlackChannelPolicies({
   return (
     <section aria-label={`Channels in ${teamName}`} className="flex flex-col gap-2">
       <p className="text-xs text-muted-foreground">
-        Choose what AGI Workforce may do in each channel of {teamName}. Channels you have not set
-        answer and run tasks as usual. Direct messages are not affected.
+        Choose what AGI may do in each channel of {teamName}. Channels you have not set answer and
+        run tasks as usual. Direct messages are not affected.
       </p>
       {error ? (
         <p role="alert" className="text-xs text-danger">
@@ -113,7 +113,7 @@ export function SlackChannelPolicies({
                 {channel.channelId}
               </a>
               <select
-                aria-label={`What AGI Workforce may do in ${channel.channelId}`}
+                aria-label={`What AGI may do in ${channel.channelId}`}
                 value={channel.mode ?? DEFAULT_MODE}
                 disabled={busy === channel.channelId}
                 onChange={(event) =>

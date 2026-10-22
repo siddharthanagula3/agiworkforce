@@ -343,7 +343,7 @@ impl fmt::Display for CliError {
             CliError::AccountSignedOut { model } => {
                 write!(
                     f,
-                    "No AGI Workforce session, and no provider key for '{}'.",
+                    "No AGI session, and no provider key for '{}'.",
                     model
                 )
             }
@@ -510,7 +510,7 @@ impl CliError {
             CliError::Auth { provider, .. }
                 if provider == crate::models::provider_name(&crate::models::Provider::ManagedCloud) =>
             {
-                "Run `agi login` to sign in to your AGI Workforce account again.".to_string()
+                "Run `agi login` to sign in to your AGI account again.".to_string()
             }
             CliError::Auth { provider, .. } => format!(
                 "Run `agi login {provider}` to refresh credentials, or set the \
@@ -519,15 +519,15 @@ impl CliError {
             CliError::AuthMissing { provider, .. } => {
                 if provider == crate::models::provider_name(&crate::models::Provider::ManagedCloud)
                 {
-                    "Run `agi login` to use your AGI Workforce plan.".to_string()
+                    "Run `agi login` to use your AGI plan.".to_string()
                 } else if login_opens_vendor_subscription(provider) {
                     format!(
-                        "Run `agi login` to use your AGI Workforce plan, or set the \
+                        "Run `agi login` to use your AGI plan, or set the \
                          {provider} API key environment variable to use your own key."
                     )
                 } else {
                     format!(
-                        "Run `agi login` to use your AGI Workforce plan, or run \
+                        "Run `agi login` to use your AGI plan, or run \
                          `agi login {provider}` to use your own key."
                     )
                 }
@@ -571,7 +571,7 @@ impl CliError {
                 ..
             } => stream_failure_hint(*is_retryable, detail),
             CliError::AccountSignedOut { .. } => {
-                "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
+                "Run `agi login` to use your AGI plan, or set the provider's own key."
                     .to_string()
             }
             CliError::PlanExcludesModel {
@@ -1167,7 +1167,7 @@ mod tests {
         };
         assert_eq!(
             err.to_string(),
-            "No AGI Workforce session, and no provider key for 'fixture-model'."
+            "No AGI session, and no provider key for 'fixture-model'."
         );
         assert!(!err.turn_failure().message.contains("agi login"));
     }
@@ -1217,9 +1217,9 @@ mod tests {
         })
         .context("while running the turn");
         let text = terminal_text(&error);
-        assert!(text.starts_with("while running the turn: No AGI Workforce session"));
+        assert!(text.starts_with("while running the turn: No AGI session"));
         assert!(text.ends_with(
-            "Run `agi login` to use your AGI Workforce plan, or set the provider's own key."
+            "Run `agi login` to use your AGI plan, or set the provider's own key."
         ));
         assert_eq!(terminal_text(&anyhow::anyhow!("plain")), "plain");
     }
@@ -1235,7 +1235,7 @@ mod tests {
         assert!(json["error"]
             .as_str()
             .unwrap()
-            .starts_with("No AGI Workforce session"));
+            .starts_with("No AGI session"));
         assert!(json["hint"].as_str().unwrap().contains("agi login"));
         let plain = result_error_json(&anyhow::anyhow!("plain"));
         assert!(plain["kind"].is_null() && plain["hint"].is_null());
@@ -1508,10 +1508,10 @@ mod tests {
 
     #[test]
     fn a_missing_managed_session_hint_names_only_the_plan_sign_in() {
-        let err = CliError::auth_missing("managed_cloud", "No AGI Workforce session found.");
+        let err = CliError::auth_missing("managed_cloud", "No AGI session found.");
         assert_eq!(
             err.hint(),
-            "Run `agi login` to use your AGI Workforce plan."
+            "Run `agi login` to use your AGI plan."
         );
     }
 

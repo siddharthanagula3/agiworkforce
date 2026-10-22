@@ -24,6 +24,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 import { Loader2 } from 'lucide-react';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 import {
   createDefaultLLMConfig,
@@ -798,7 +799,7 @@ export function SettingsPanel({ open, onOpenChange, initialTab = 'general' }: Se
               <DialogHeader className="px-1 pb-4">
                 <DialogTitle className="text-lg font-semibold">{t('settings:title')}</DialogTitle>
                 <DialogDescription className="sr-only">
-                  Search and configure AGI Workforce preferences
+                  Search and configure {PRODUCT_NAMES.desktop} preferences
                 </DialogDescription>
               </DialogHeader>
 

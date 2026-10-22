@@ -17,7 +17,7 @@ describe('Header', () => {
 
     expect(screen.getByRole('navigation', { name: 'Primary' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute('href', '/login');
-    expect(screen.getByRole('link', { name: 'Try AGI Web' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Try AGI Chat' })).toHaveAttribute(
       'href',
       '/login?redirectTo=%2F',
     );
@@ -28,7 +28,7 @@ describe('Header', () => {
 
     expect(screen.queryByRole('navigation', { name: 'Primary' })).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Try AGI Web' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Try AGI Chat' })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'AGI' })).toHaveAttribute('href', '/');
   });
 
@@ -41,7 +41,7 @@ describe('Header', () => {
       expect(screen.getByRole('link', { name: 'Open AGI' })).toHaveAttribute('href', '/chat');
     });
     expect(screen.queryByRole('link', { name: 'Sign in' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: 'Try AGI Web' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Try AGI Chat' })).not.toBeInTheDocument();
   });
 
   it('does not treat an anonymous clerk dev-browser cookie as signed in', async () => {

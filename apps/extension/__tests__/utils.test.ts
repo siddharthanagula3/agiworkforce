@@ -57,28 +57,28 @@ describe('logger', () => {
     vi.restoreAllMocks();
   });
 
-  it('logger.debug calls console.debug with [AGI Workforce] prefix', () => {
+  it('logger.debug calls console.debug with [AGI Extension] prefix', () => {
     logger.debug('test message', { key: 'val' });
-    expect(console.debug).toHaveBeenCalledWith('[AGI Workforce] %s', 'test message', {
+    expect(console.debug).toHaveBeenCalledWith('[AGI Extension] %s', 'test message', {
       key: 'val',
     });
   });
 
-  it('logger.info calls console.info with [AGI Workforce] prefix', () => {
+  it('logger.info calls console.info with [AGI Extension] prefix', () => {
     logger.info('info msg');
     // eslint-disable-next-line no-console
-    expect(console.info).toHaveBeenCalledWith('[AGI Workforce] %s', 'info msg', undefined);
+    expect(console.info).toHaveBeenCalledWith('[AGI Extension] %s', 'info msg', undefined);
   });
 
-  it('logger.warn calls console.warn with [AGI Workforce] prefix', () => {
+  it('logger.warn calls console.warn with [AGI Extension] prefix', () => {
     logger.warn('warn msg', 'extra');
-    expect(console.warn).toHaveBeenCalledWith('[AGI Workforce] %s', 'warn msg', 'extra');
+    expect(console.warn).toHaveBeenCalledWith('[AGI Extension] %s', 'warn msg', 'extra');
   });
 
-  it('logger.error calls console.error with [AGI Workforce] prefix', () => {
+  it('logger.error calls console.error with [AGI Extension] prefix', () => {
     const err = new Error('oops');
     logger.error('error msg', err);
-    expect(console.error).toHaveBeenCalledWith('[AGI Workforce] %s', 'error msg', err);
+    expect(console.error).toHaveBeenCalledWith('[AGI Extension] %s', 'error msg', err);
   });
 
   it("drops debug and info in a packaged build, where the console is the user's", () => {
@@ -100,8 +100,8 @@ describe('logger', () => {
     logger.warn('warn msg');
     logger.error('error msg');
 
-    expect(console.warn).toHaveBeenCalledWith('[AGI Workforce] %s', 'warn msg', undefined);
-    expect(console.error).toHaveBeenCalledWith('[AGI Workforce] %s', 'error msg', undefined);
+    expect(console.warn).toHaveBeenCalledWith('[AGI Extension] %s', 'warn msg', undefined);
+    expect(console.error).toHaveBeenCalledWith('[AGI Extension] %s', 'error msg', undefined);
 
     vi.unstubAllEnvs();
   });

@@ -34,7 +34,7 @@ describe('LaunchAtLoginSetting', () => {
 
     expect(toggle).not.toBeChecked();
     expect(
-      screen.getByText('Start AGI Workforce automatically when you sign in to this device.'),
+      screen.getByText('Start AGI Desktop automatically when you sign in to this device.'),
     ).toBeVisible();
   });
 

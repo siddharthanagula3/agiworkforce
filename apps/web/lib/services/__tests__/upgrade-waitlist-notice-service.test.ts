@@ -137,12 +137,12 @@ describe('notifyUpgradeWaitlist', () => {
       userId: 'user-1',
       title: 'You can now upgrade to Basic or Pro',
       message:
-        'Paid upgrades are open on AGI Workforce. You joined the waitlist for Basic or Pro, and you can upgrade now.',
+        'Paid upgrades are open on AGI. You joined the waitlist for Basic or Pro, and you can upgrade now.',
       dedupeKey: `${UPGRADE_WAITLIST_OPEN_NOTICE}user-1`,
       action: { label: 'See plans', url: expect.stringMatching(/\/pricing$/) },
       promotion: {
         reason:
-          'You are receiving this because you joined the AGI Workforce waitlist for Basic or Pro. It is the only email about that waitlist.',
+          'You are receiving this because you joined the AGI waitlist for Basic or Pro. It is the only email about that waitlist.',
       },
     });
     expect(mocks.email).toHaveBeenCalledWith(db, notice);

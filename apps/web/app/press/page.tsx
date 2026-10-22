@@ -15,6 +15,7 @@ import { FactLine, PageHero } from '@/features/marketing/components/pages/surfac
 import {
   BILLING_PLAN_PRICING,
   CONNECTORS_COMING_SOON_DETAIL,
+  PRODUCT_NAMES,
   connectorsReleased,
 } from '@agiworkforce/types';
 import { PAID_UPGRADE_ACCESS_NOTE } from '@/lib/billing/paid-upgrade-copy';
@@ -58,12 +59,12 @@ const TOOLS_FACT = CONNECTORS_RELEASED ? 'tools and connectors' : 'tools';
 const CONNECTORS_NOTE = CONNECTORS_RELEASED ? '' : ` ${CONNECTORS_COMING_SOON_DETAIL}`;
 
 const SURFACE_PRODUCTS = {
-  web: 'AGI Web, in any browser',
-  desktop: 'AGI Desktop for macOS',
-  cli: 'AGI CLI for macOS, Linux and Windows',
-  mobile: 'AGI Mobile (iOS, Android)',
-  vscode: 'AGI for VS Code',
-  chrome: 'AGI for Chrome',
+  web: `${PRODUCT_NAMES.chat}, in any browser`,
+  desktop: `${PRODUCT_NAMES.desktop} for macOS`,
+  cli: `${PRODUCT_NAMES.cli} for macOS, Linux and Windows`,
+  mobile: `${PRODUCT_NAMES.mobile} (iOS, Android)`,
+  vscode: `${PRODUCT_NAMES.code} for VS Code`,
+  chrome: `${PRODUCT_NAMES.extension} for Chrome`,
 } as const satisfies Record<SurfaceId, string>;
 
 const ALL_SURFACE_NAMES = joinSurfaceNames(SURFACE_IDS.map((surface) => SURFACE_NAMES[surface]));
@@ -91,11 +92,11 @@ const PRODUCT_FACTS: { label: string; value: string }[] = [
   ...SURFACE_FACTS,
   {
     label: 'Where inference runs',
-    value: `Three separate routes: Local (models on the user’s own hardware, works offline), BYOK (the user’s own provider key, traffic goes directly to that provider), and AGI managed cloud (hosted and metered by AGI). Work does not move between routes without an explicit, labeled action. AGI Web runs on managed cloud. Local runs in the CLI. BYOK runs on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability}`,
+    value: `Three separate routes: Local (models on the user’s own hardware, works offline), BYOK (the user’s own provider key, traffic goes directly to that provider), and AGI managed cloud (hosted and metered by AGI). Work does not move between routes without an explicit, labeled action. AGI Chat runs on managed cloud. Local runs in the CLI. BYOK runs on ${BYOK_SURFACES.label}. ${BYOK_SURFACES.availability}`,
   },
   {
     label: 'Managed cloud status',
-    value: `In ${MANAGED_CLOUD_STATUS}, not general availability. AGI Web launched publicly on ${PUBLIC_WEB_LAUNCH_DATE}. The ${BILLING_PLAN_PRICING.free.label} plan is open by default: sign in and start, with no waitlist and no invite. ${PAID_UPGRADE_ACCESS_NOTE}`,
+    value: `In ${MANAGED_CLOUD_STATUS}, not general availability. AGI Chat launched publicly on ${PUBLIC_WEB_LAUNCH_DATE}. The ${BILLING_PLAN_PRICING.free.label} plan is open by default: sign in and start, with no waitlist and no invite. ${PAID_UPGRADE_ACCESS_NOTE}`,
   },
   {
     label: 'Model catalog',
@@ -172,7 +173,7 @@ export default function PressPage() {
                 <Prose size="sm">
                   AGI is an AI assistant designed to work across the web, desktop, and terminal, and
                   to let you choose whether each request runs on your own hardware, on your own
-                  provider key, or on AGI&rsquo;s hosted service. AGI Web runs on the hosted
+                  provider key, or on AGI&rsquo;s hosted service. AGI Chat runs on the hosted
                   service. The CLI runs models on your own hardware, and your own provider key works
                   on {BYOK_SURFACES.label}. {surfaceAvailabilitySummary()}
                 </Prose>
@@ -186,8 +187,9 @@ export default function PressPage() {
                   choice is that the user selects where inference happens: locally on their own
                   hardware, through their own provider API key, or on AGI&rsquo;s managed cloud.
                   Those three routes are separate trust boundaries, and work does not move between
-                  them without an explicit, labeled action. AGI Web runs on managed cloud. The local
-                  route runs in the CLI, and the provider-key route runs on {BYOK_SURFACES.label}.
+                  them without an explicit, labeled action. AGI Chat runs on managed cloud. The
+                  local route runs in the CLI, and the provider-key route runs on{' '}
+                  {BYOK_SURFACES.label}.
                 </Prose>
               </Stack>
             </Stack>

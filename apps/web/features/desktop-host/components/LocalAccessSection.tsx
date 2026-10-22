@@ -37,14 +37,14 @@ const HEADING = 'Local access';
 const FOLDERS_HEADING = 'Folders';
 const COMMANDS_HEADING = 'Commands';
 const COMMANDS_INTRO =
-  'Programs AGI Cloud may start inside an approved folder. Anything not listed asks you every time it runs, quoting the exact command first.';
+  'Programs AGI Desktop may start inside an approved folder. Anything not listed asks you every time it runs, quoting the exact command first.';
 const COMMANDS_FOOTNOTE = `${ALWAYS_REFUSED_PROGRAMS.join(', ')} are never available here, whatever this list says: changing which account a command runs as is not something approving a folder can cover.`;
 const POLICY_LOAD_FAILED = 'The command list could not be read.';
 const POLICY_SAVE_FAILED = 'The command list was not saved.';
 const ALLOWED_EMPTY = 'Nothing runs without asking.';
 const BLOCKED_EMPTY = 'Nothing is blocked outright.';
 const INTRO =
-  'Folders on this Mac that AGI Cloud may open. Files you attach from one are uploaded to your account the same way any attachment is.';
+  'Folders on this Mac that AGI Desktop may open. Files you attach from one are uploaded to your account the same way any attachment is.';
 const EMPTY_COPY =
   'No folders approved yet. Add one to attach its files without leaving the app, and to let AGI read it when you ask.';
 const LOAD_FAILED = 'Approved folders could not be read.';
@@ -56,8 +56,8 @@ const ADD_BUSY_LABEL = 'Choosing…';
 
 const PERMISSIONS_HEADING = 'Permissions';
 const PERMISSIONS_INTRO =
-  'Answers you gave when AGI Cloud asked to do something on this Mac. Withdraw one and you are asked again the next time it comes up.';
-const PERMISSIONS_EMPTY = 'No standing answers. AGI Cloud asks before each of these.';
+  'Answers you gave when AGI Desktop asked to do something on this Mac. Withdraw one and you are asked again the next time it comes up.';
+const PERMISSIONS_EMPTY = 'No standing answers. AGI Desktop asks before each of these.';
 const PERMISSIONS_LOAD_FAILED = 'Permissions could not be read.';
 const PERMISSION_REVOKE_FAILED = 'That permission was not withdrawn.';
 const WITHDRAW_LABEL = 'Withdraw';
@@ -84,9 +84,9 @@ const CAPABILITY_TITLES: Record<DesktopCapability, string> = {
 function permissionStanding(decision: PermissionDecision): string {
   const always = decision.duration === 'always';
   if (decision.state === 'granted') {
-    return always ? 'Always allowed' : 'Allowed until you quit AGI Cloud';
+    return always ? 'Always allowed' : 'Allowed until you quit AGI Desktop';
   }
-  return always ? 'Always refused' : 'Refused until you quit AGI Cloud';
+  return always ? 'Always refused' : 'Refused until you quit AGI Desktop';
 }
 
 function permissionSubject(decision: PermissionDecision): string {
@@ -114,7 +114,7 @@ const SUB_HEADING_CLASS = 'text-xs font-medium uppercase tracking-wider text-mut
 
 const MODELS_HEADING = 'Local models';
 const MODELS_INTRO =
-  'Models already running on this Mac through Ollama or LM Studio. A chat on one of them is answered here: nothing in it reaches AGI Cloud or any provider, and it uses none of your plan.';
+  'Models already running on this Mac through Ollama or LM Studio. A chat on one of them is answered here: nothing in it reaches AGI Desktop or any provider, and it uses none of your plan.';
 const MODELS_ALLOW_LABEL = 'Allow local models';
 const MODELS_ALLOWED_TEXT = 'Allowed. The composer lists them under "On this device".';
 const MODELS_NOT_RUNNING = 'Not running';

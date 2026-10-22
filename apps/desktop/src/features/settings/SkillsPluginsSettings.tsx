@@ -14,6 +14,7 @@ import {
 import { useCallback, useEffect, useState } from 'react';
 import { homeDir as getHomeDir } from '@tauri-apps/api/path';
 import { useConfirmAction, useUiTranslation } from '@agiworkforce/ui';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { getSimpleErrorMessage } from '../../lib/errorMessages';
 import { invoke, isTauriContext } from '../../lib/tauri-mock';
 import { useSettingsStore } from '../../stores/settingsStore';
@@ -839,7 +840,7 @@ export function SkillsPluginsSettings() {
                   <code className="rounded bg-muted px-1 py-0.5">
                     {projectRoot ? `${projectRoot}/.claude` : '.claude'}
                   </code>
-                  . AGI Workforce chat does not run these commands or load these skills.
+                  . {PRODUCT_NAMES.desktop} chat does not run these commands or load these skills.
                 </p>
               </div>
 

@@ -126,7 +126,7 @@ describe('BYOK help article follows the implemented credential paths', () => {
       /async fn set_provider_key\([\s\S]{0,450}crate::auth::save_api_key\(&params.provider, &params.api_key\)/u,
     );
     expect(setup).toContain(
-      'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage',
+      'Enter your ${PRODUCT_BRAND} API key. It will be stored in VS Code SecretStorage',
     );
     expect(article).toContain(
       'VS Code provider-key management requires a connected local CLI runtime and delegates key storage to that runtime.',
@@ -442,7 +442,7 @@ describe('current CLI help articles distinguish implementation from release avai
       expect(manifest.contributes.commands).toContainEqual(
         expect.objectContaining({
           command: `agi-workforce.${command}`,
-          title: `AGI Workforce: ${label}`,
+          title: `AGI Code: ${label}`,
         }),
       );
       expect(setup).toContain(`register('agi-workforce.${command}',`);
@@ -452,14 +452,14 @@ describe('current CLI help articles distinguish implementation from release avai
     expect(start).toBeGreaterThan(-1);
     expect(end).toBeGreaterThan(start);
     const credentials = setup.slice(start, end);
-    expect(credentials).toContain('Enter your AGI Workforce API key.');
+    expect(credentials).toContain('Enter your ${PRODUCT_BRAND} API key.');
     expect(credentials).toContain('await setApiKey(context.secrets, apiKey.trim());');
     expect(credentials).toContain('await clearApiKey(context.secrets);');
     expect(setup).toContain('const result = await localRuntimes.restartAll();');
     expect(setup).toContain('const result = await probeCli(cliPath, runCliVersion);');
     const article = collapsed('content/support/vscode-extension.md');
     expect(article).toContain(
-      '**Set API Key** and **Clear API Key** manage the AGI Workforce account API key.',
+      '**Set API Key** and **Clear API Key** manage the AGI account API key.',
     );
     expect(article).toContain(canonicalSupportUrl('/help/byok-provider-keys'));
     expect(article).not.toMatch(
@@ -495,10 +495,10 @@ describe('current CLI help articles distinguish implementation from release avai
       'const explicitRange = targetRange ?? (selection.isEmpty ? undefined : selection);',
     );
     expect(inline).toMatch(
-      /if \(explicitRange === undefined\) \{\s*vscode\.window\.showWarningMessage\('AGI Workforce: Select some code first\.'\);\s*return;/u,
+      /if \(explicitRange === undefined\) \{\s*vscode\.window\.showWarningMessage\(`\$\{PRODUCT_NAMES\.code\}: Select some code first\.`\);\s*return;/u,
     );
     expect(inline).toMatch(
-      /if \(selectedText\.trim\(\) === ''\) \{\s*vscode\.window\.showWarningMessage\('AGI Workforce: Select some code first\.'\);\s*return;/u,
+      /if \(selectedText\.trim\(\) === ''\) \{\s*vscode\.window\.showWarningMessage\(`\$\{PRODUCT_NAMES\.code\}: Select some code first\.`\);\s*return;/u,
     );
     const article = collapsed('content/support/vscode-extension.md');
     expect(article).toContain(

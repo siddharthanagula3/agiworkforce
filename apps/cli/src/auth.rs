@@ -574,8 +574,8 @@ fn auth_status_from_store(
             } => {
                 // Determine token type label from provider name
                 let auth_type = match provider.as_str() {
-                    "agiworkforce" => "AGI Workforce OAuth".to_string(),
-                    "managed_cloud" => "AGI Workforce OAuth".to_string(),
+                    "agiworkforce" => "AGI OAuth".to_string(),
+                    "managed_cloud" => "AGI OAuth".to_string(),
                     "copilot" => "Copilot OAuth".to_string(),
                     _ => "oauth".to_string(),
                 };
@@ -1331,7 +1331,7 @@ mod tests {
         let now_ms = chrono::Utc::now().timestamp_millis();
         let results = auth_status_from_store(&store, now_ms, true, &[]);
         assert_eq!(results.len(), 1);
-        assert_eq!(results[0].auth_type, "AGI Workforce OAuth");
+        assert_eq!(results[0].auth_type, "AGI OAuth");
     }
 
     #[test]

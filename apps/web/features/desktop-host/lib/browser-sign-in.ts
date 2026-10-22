@@ -17,7 +17,7 @@ export type BrowserSignInState =
   | { kind: 'failed'; message: string; pending?: boolean };
 
 export const BROWSER_SIGN_IN_NEEDS_UPDATE =
-  'Update AGI Cloud to use browser sign-in with cancellation. You can still sign in here.';
+  'Update AGI Desktop to use browser sign-in with cancellation. You can still sign in here.';
 
 const OPEN_FAILED = 'The browser could not be opened. Try again, or sign in here.';
 const CANCEL_FAILED =

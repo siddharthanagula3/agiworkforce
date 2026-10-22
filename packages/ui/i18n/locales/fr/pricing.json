@@ -98,7 +98,7 @@
   "heroLedePart1": "{{localLabel}} garde le travail sur modèles ouverts sur votre appareil. {{byokLabel}} n'envoie que les requêtes que vous choisissez au fournisseur d'API que vous sélectionnez, selon ses conditions de facturation et de données. Les deux restent gratuits, sans siège ni carte bancaire.",
   "installCta": "Être prévenu",
   "talkToSalesCta": "Parler aux ventes",
-  "tryAgiCta": "Essayer AGI Web",
+  "tryAgiCta": "Essayer AGI Chat",
   "modeRibbonLabel": "Modes de confiance",
   "ribbonLocal": "Local, gratuit pour toujours",
   "ribbonByok": "BYOK, vos propres clés",

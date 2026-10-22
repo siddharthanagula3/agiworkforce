@@ -122,7 +122,7 @@ export function DesktopUpdateRow() {
           </p>
         ) : readyToInstall ? (
           <p role="status" style={hintStyle}>
-            {`Version ${result?.version} is ready. Restart AGI Cloud to finish updating.`}
+            {`Version ${result?.version} is ready. Restart AGI Desktop to finish updating.`}
           </p>
         ) : downloading ? (
           <p role="status" style={hintStyle}>

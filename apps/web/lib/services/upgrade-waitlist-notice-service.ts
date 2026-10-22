@@ -1,12 +1,15 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { SELF_SERVE_PAID_PLAN_TIERS, getBillingPlanPricing } from '@agiworkforce/types';
+import {
+  PRODUCT_BRAND,
+  SELF_SERVE_PAID_PLAN_TIERS,
+  getBillingPlanPricing,
+} from '@agiworkforce/types';
 import {
   UNATTENDED_RUN_DENIED_STATUSES,
   ownerMayRunUnattendedSql,
 } from '@/lib/auth/account-lifecycle';
-import { PRODUCT_NAME } from '@/lib/legal-constants';
 import { logger } from '@/lib/logger';
 import { absoluteUrl } from '@/lib/seo/site';
 import { billingUpgradesOpenFor } from '@/lib/server/billing-waitlist-access';
@@ -61,14 +64,14 @@ function upgradeOpenNotice(account: WaitlistedAccount): BillingNotice {
   );
   const plans = labels.length > 0 ? PLAN_LIST.format(labels) : null;
   const waitlist = plans
-    ? `${PRODUCT_NAME} waitlist for ${plans}`
-    : `${PRODUCT_NAME} upgrade waitlist`;
+    ? `${PRODUCT_BRAND} waitlist for ${plans}`
+    : `${PRODUCT_BRAND} upgrade waitlist`;
   return {
     userId: account.user_id,
     title: plans ? `You can now upgrade to ${plans}` : 'Paid upgrades are open',
     message: plans
-      ? `Paid upgrades are open on ${PRODUCT_NAME}. You joined the waitlist for ${plans}, and you can upgrade now.`
-      : `Paid upgrades are open on ${PRODUCT_NAME}, and you can upgrade now.`,
+      ? `Paid upgrades are open on ${PRODUCT_BRAND}. You joined the waitlist for ${plans}, and you can upgrade now.`
+      : `Paid upgrades are open on ${PRODUCT_BRAND}, and you can upgrade now.`,
     target: { kind: 'settings', id: 'billing' },
     dedupeKey: `${UPGRADE_WAITLIST_OPEN_NOTICE}${account.user_id}`,
     action: { label: 'See plans', url: absoluteUrl('/pricing') },

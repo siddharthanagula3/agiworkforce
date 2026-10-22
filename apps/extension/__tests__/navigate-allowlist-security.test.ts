@@ -89,14 +89,14 @@ describe('cdpDriver.assertDestinationAllowlisted, P0 security fix', () => {
   it('rejects a URL whose origin is NOT on the allowlist', async () => {
     setAllowlist(['https://example.com']);
     await expect(assertDestinationAllowlisted('https://evil.com/steal')).rejects.toThrow(
-      /not on your AGI Workforce approved-sites list/,
+      /not on your AGI approved-sites list/,
     );
   });
 
   it('rejects off-allowlist even if host is similar to an allowlisted host', async () => {
     setAllowlist(['https://example.com']);
     await expect(assertDestinationAllowlisted('https://evilexample.com')).rejects.toThrow(
-      /not on your AGI Workforce approved-sites list/,
+      /not on your AGI approved-sites list/,
     );
   });
 
@@ -131,14 +131,14 @@ describe('cdpDriver.assertDestinationAllowlisted, P0 security fix', () => {
   it('rejects when allowlist is empty (fail-closed)', async () => {
     setAllowlist([]);
     await expect(assertDestinationAllowlisted('https://example.com')).rejects.toThrow(
-      /not on your AGI Workforce approved-sites list/,
+      /not on your AGI approved-sites list/,
     );
   });
 
   it('rejects when chrome.storage is unavailable (fail-closed)', async () => {
     chromeMock.storage.local.get = vi.fn().mockRejectedValue(new Error('storage unavailable'));
     await expect(assertDestinationAllowlisted('https://example.com')).rejects.toThrow(
-      /not on your AGI Workforce approved-sites list/,
+      /not on your AGI approved-sites list/,
     );
   });
 

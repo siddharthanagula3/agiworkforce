@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { Config } from '../platform/config';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
@@ -28,7 +29,7 @@ export async function runInlineCommand(
 ): Promise<void> {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined) {
-    vscode.window.showWarningMessage('AGI Workforce: No active editor. Open a file first.');
+    vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: No active editor. Open a file first.`);
     return;
   }
 
@@ -36,20 +37,20 @@ export async function runInlineCommand(
   const explicitRange = targetRange ?? (selection.isEmpty ? undefined : selection);
 
   if (explicitRange === undefined) {
-    vscode.window.showWarningMessage('AGI Workforce: Select some code first.');
+    vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Select some code first.`);
     return;
   }
 
   const refusal = describeOutboundRefusal(editor.document);
   if (refusal !== null) {
-    vscode.window.showWarningMessage(`AGI Workforce: ${refusal}`);
+    vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${refusal}`);
     return;
   }
 
   const selectedText = editor.document.getText(explicitRange);
 
   if (selectedText.trim() === '') {
-    vscode.window.showWarningMessage('AGI Workforce: Select some code first.');
+    vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Select some code first.`);
     return;
   }
 
@@ -59,7 +60,7 @@ export async function runInlineCommand(
 
   if (planModeEnabled) {
     const choice = await vscode.window.showInformationMessage(
-      `AGI Workforce plan mode is enabled. Proceed with ${commandLabel(command)}?`,
+      `${PRODUCT_NAMES.code} plan mode is enabled. Proceed with ${commandLabel(command)}?`,
       'Proceed',
       'Cancel',
     );
@@ -79,7 +80,7 @@ export async function runInlineCommand(
     {
       role: 'system',
       content:
-        'You are AGI Workforce, a model-agnostic AI coding assistant. ' +
+        `You are ${PRODUCT_NAMES.code}, a model-agnostic AI coding assistant. ` +
         'Be concise and produce production-ready Markdown output.',
     },
     { role: 'user', content: prompts[command] ?? selectedText },
@@ -88,7 +89,7 @@ export async function runInlineCommand(
   const failure = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
-      title: `AGI Workforce: ${commandLabel(command)}…`,
+      title: `${PRODUCT_NAMES.code}: ${commandLabel(command)}…`,
       cancellable: true,
     },
     async (progress, progressToken): Promise<unknown> => {
@@ -126,7 +127,7 @@ export async function runInlineCommand(
   if (failure === undefined) return;
   if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
   await showCloudUtilityErrorActions(failure, {
-    title: `AGI Workforce: ${commandLabel(command)} failed`,
+    title: `${PRODUCT_NAMES.code}: ${commandLabel(command)} failed`,
     retry: () => runInlineCommand(context, command, targetRange),
     secrets: context.secrets,
   });

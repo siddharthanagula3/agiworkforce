@@ -417,7 +417,7 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
   if (!canUseBillingPlanCapability(entitlement.plan, 'slack_app')) {
     return refused(
       'slack_plan_required',
-      `AGI Workforce in Slack is available on ${billingPlanCapabilityPlanLabels('slack_app')} plans.`,
+      `AGI in Slack is available on ${billingPlanCapabilityPlanLabels('slack_app')} plans.`,
       { label: 'See plans', path: '/pricing' },
     );
   }

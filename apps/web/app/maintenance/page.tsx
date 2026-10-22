@@ -5,7 +5,7 @@ import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({
   title: 'Down for maintenance',
-  description: 'AGI Workforce is briefly unavailable while we finish planned maintenance.',
+  description: 'AGI is briefly unavailable while we finish planned maintenance.',
   path: '/maintenance',
   robots: { index: false, follow: false },
 });
@@ -33,8 +33,8 @@ export default function MaintenancePage() {
               <h1 className="agi-ds-h1">We&rsquo;ll be back shortly.</h1>
             </div>
             <Prose>
-              AGI Workforce is briefly unavailable while we finish planned maintenance. This is
-              deliberate, not an outage, and your data is untouched.
+              AGI is briefly unavailable while we finish planned maintenance. This is deliberate,
+              not an outage, and your data is untouched.
             </Prose>
             <Prose size="sm">
               Conversations, projects, and files are stored and unaffected. Anything that was

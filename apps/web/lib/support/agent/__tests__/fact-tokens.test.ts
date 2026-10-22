@@ -323,7 +323,7 @@ describe('static support answers follow the catalogue and the registry', () => {
     expect(content).toContain(
       'VS Code provider-key management requires a connected local CLI runtime and delegates key storage to that runtime.',
     );
-    expect(content).toContain('manage the AGI Workforce account API key, not a provider key.');
+    expect(content).toContain('manage the AGI account API key, not a provider key.');
     expect(content).not.toMatch(
       /unreleased extension|with VS Code SecretStorage|when a VSIX is published/,
     );

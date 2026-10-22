@@ -70,7 +70,7 @@ describe('landing, the Desktop surface card', () => {
    */
   it('describes the Electron app rather than the Tauri build', () => {
     const source = collapsed(LANDING);
-    expect(source).toContain('The AGI app for macOS');
+    expect(source).toContain('AGI Desktop for macOS');
     expect(source).not.toMatch(/built in Rust|AppImage|Linux x64/u);
   });
 

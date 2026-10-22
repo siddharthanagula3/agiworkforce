@@ -14,7 +14,7 @@ import {
 export const metadata = buildMetadata({
   title: 'Not available in your region',
   description:
-    'The page a visitor sees when AGI Workforce refuses access from their region. It says what that means and where availability is published.',
+    'The page a visitor sees when AGI refuses access from their region. It says what that means and where availability is published.',
   path: '/region-unavailable',
   robots: { index: false, follow: false },
 });
@@ -43,8 +43,8 @@ export default function RegionUnavailablePage() {
               <h1 className="agi-ds-h1">Not available in your region.</h1>
             </div>
             <Prose>
-              You see this page when {LEGAL_ENTITY} refuses access to AGI Workforce from the region
-              a request comes from. If you opened this address yourself, nothing has been refused.
+              You see this page when {LEGAL_ENTITY} refuses access to AGI from the region a request
+              comes from. If you opened this address yourself, nothing has been refused.
             </Prose>
             <Prose size="sm">
               A refusal by region is a decision about where we offer the service, not an outage. If

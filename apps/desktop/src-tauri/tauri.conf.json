@@ -15,7 +15,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "AGI",
+        "title": "AGI Desktop",
         "width": 1400,
         "height": 850,
         "minWidth": 1000,

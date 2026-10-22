@@ -720,13 +720,13 @@ describe('/get-started leads with the surface a visitor can use now', () => {
   const page = rendered('app/get-started/page.tsx');
   const nav = rendered('features/marketing/components/system/nav.ts');
 
-  it('offers Try AGI Web as the first hero action, on the shared web entry', () => {
+  it('offers Try AGI Chat as the first hero action, on the shared web entry', () => {
     expect(nav).toMatch(/WEB_ENTRY_HREF = '\/login\?redirectTo=%2F'/u);
-    expect(page).toMatch(/ctas=\{\[\s*\{ href: WEB_ENTRY_HREF, label: 'Try AGI Web' \}/u);
+    expect(page).toMatch(/ctas=\{\[\s*\{ href: WEB_ENTRY_HREF, label: 'Try AGI Chat' \}/u);
   });
 
   it('puts the Web action before any CLI link and before the CLI transcript', () => {
-    const webAction = page.indexOf("label: 'Try AGI Web'");
+    const webAction = page.indexOf("label: 'Try AGI Chat'");
     const cliLinks = [...page.matchAll(/href[=:]\s*["']\/cli["']/gu)].map((m) => m.index ?? -1);
     const transcript = page.indexOf('lines={CLI_PREVIEW_TRANSCRIPT}');
 
@@ -969,10 +969,10 @@ describe('/byok, custody names the store each runtime really writes to', () => {
       "const SECRET_KEY = 'agiWorkforce.apiKey';",
     );
     expect(repoText('apps', 'extension-vscode', 'src', 'core', 'commandSetup.ts')).toContain(
-      'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage',
+      'Enter your ${PRODUCT_BRAND} API key. It will be stored in VS Code SecretStorage',
     );
     expect(collapsed('app/byok/page.tsx')).toContain(
-      'VS Code stores its separate AGI Workforce account API key in SecretStorage',
+      'VS Code stores its separate AGI account API key in SecretStorage',
     );
   });
 
@@ -1074,7 +1074,7 @@ describe('/web, the browser surface has one route and it is managed cloud', () =
     );
     for (const count of routeCounts) expect(count).toBe('1');
     expect(page).not.toMatch(/\b(?:two|three|four|[2-9]|\d{2,}) routes\b/iu);
-    expect(page).toMatch(/AGI Web uses managed cloud/u);
+    expect(page).toMatch(/AGI Chat uses managed cloud/u);
   });
 
   it('never offers Local or BYOK as a route of the browser surface', () => {

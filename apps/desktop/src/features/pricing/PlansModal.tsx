@@ -9,6 +9,7 @@ import {
   normalizeUIPlanTier,
   tierAtLeast,
   type UIPlanTier,
+  PRODUCT_BRAND,
 } from '@agiworkforce/types';
 import { selectPlan, useAuthStore } from '../../stores/auth';
 import { WEB_APP_URL } from '../../api/config';
@@ -125,7 +126,7 @@ export function PlansModal({ open, onOpenChange }: PlansModalProps) {
               <div className="space-y-1">
                 <DialogTitle className="text-h3 text-foreground">Plans &amp; Pricing</DialogTitle>
                 <DialogDescription className="text-sm text-muted-foreground">
-                  AGI Workforce, Beyond one model. Beyond one surface.{' '}
+                  {PRODUCT_BRAND}, Beyond one model. Beyond one surface.{' '}
                   <span className="font-medium">Local and BYOK are always free.</span>
                 </DialogDescription>
               </div>

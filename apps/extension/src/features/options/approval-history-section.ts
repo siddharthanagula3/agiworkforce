@@ -196,7 +196,7 @@ export function createApprovalHistorySection(
         `${deps.gateway}${MANAGED_CLOUD_APPROVAL_HISTORY_PATH}?${params.toString()}`,
         { headers: { Authorization: `Bearer ${token}`, ...(deps.headers?.() ?? {}) } },
       );
-      if (!response.ok) throw new Error(`AGI Workforce answered HTTP ${response.status}.`);
+      if (!response.ok) throw new Error(`AGI answered HTTP ${response.status}.`);
       const answer = parseApprovalHistoryPage(await response.json());
       if (run !== generation) return;
       const { entries, hasMore } = answer;

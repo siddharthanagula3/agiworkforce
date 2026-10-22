@@ -15,7 +15,7 @@ vi.mock('react-i18next', () => ({
         'sidebar.mode.local': 'Local',
         'sidebar.mode.cloud': 'Cloud',
         'sidebar.mode.aria': 'Switch between Local and Cloud',
-        'sidebar.mode.localUnavailable': 'Local mode runs in the AGI Workforce desktop app.',
+        'sidebar.mode.localUnavailable': 'Local mode runs in AGI Desktop.',
       };
       if (key === 'sidebar.mode.switchTo') return `Switch to ${vars?.['mode'] ?? ''}`;
       return labels[key] ?? key;
@@ -57,7 +57,7 @@ describe('LocalCloudToggle · Local is refused where it cannot run', () => {
 
     const local = screen.getByRole('tab', { name: /local/i });
     expect(local.getAttribute('aria-disabled')).toBe('true');
-    expect(local.getAttribute('title')).toContain('desktop app');
+    expect(local.getAttribute('title')).toContain('AGI Desktop');
 
     await user.click(local);
     expect(mocks.setMode).not.toHaveBeenCalled();
@@ -90,7 +90,7 @@ describe('LocalCloudToggle · Local is refused where it cannot run', () => {
 
     const button = screen.getByRole('button');
     expect(button.getAttribute('aria-disabled')).toBe('true');
-    expect(button.getAttribute('title')).toContain('desktop app');
+    expect(button.getAttribute('title')).toContain('AGI Desktop');
 
     await user.click(button);
     expect(mocks.setMode).not.toHaveBeenCalled();

@@ -275,7 +275,7 @@ const CHANGE_NOT_CONFIRMED: &str =
 fn setup_question() -> NativeConfirm {
     NativeConfirm {
         title: "Set a master password?".to_string(),
-        body: "Your saved provider keys will be sealed with the password you just typed in the AGI Workforce window, and will need it at every start.\n\nIt cannot be recovered. If you forget it, those saved keys are lost.".to_string(),
+        body: "Your saved provider keys will be sealed with the password you just typed in the AGI Desktop window, and will need it at every start.\n\nIt cannot be recovered. If you forget it, those saved keys are lost.".to_string(),
         confirm_label: SETUP_CONFIRM_LABEL.to_string(),
     }
 }
@@ -283,7 +283,7 @@ fn setup_question() -> NativeConfirm {
 fn change_question() -> NativeConfirm {
     NativeConfirm {
         title: "Change the master password?".to_string(),
-        body: "Your saved provider keys will be sealed with the new password you just typed in the AGI Workforce window, and will need it at every start.\n\nIt cannot be recovered. If you forget it, those saved keys are lost.".to_string(),
+        body: "Your saved provider keys will be sealed with the new password you just typed in the AGI Desktop window, and will need it at every start.\n\nIt cannot be recovered. If you forget it, those saved keys are lost.".to_string(),
         confirm_label: CHANGE_CONFIRM_LABEL.to_string(),
     }
 }
@@ -689,7 +689,7 @@ mod tests {
         for question in [setup_question(), change_question()] {
             assert!(question.body.contains("cannot be recovered"));
             assert!(question.body.contains("at every start"));
-            assert!(question.body.contains("typed in the AGI Workforce window"));
+            assert!(question.body.contains("typed in the AGI Desktop window"));
             assert!(crate::sys::native_confirm::can_ask_with(
                 &question.confirm_label
             ));

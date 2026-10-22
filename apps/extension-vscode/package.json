@@ -1,6 +1,6 @@
 {
   "name": "agi-workforce",
-  "displayName": "AGI Workforce",
+  "displayName": "AGI Code",
   "description": "Multi-provider AI coding assistant for VS Code",
   "version": "0.0.1",
   "publisher": "agiworkforce",
@@ -67,7 +67,7 @@
     },
     "virtualWorkspaces": {
       "supported": false,
-      "description": "AGI Workforce runs the AGI CLI against a checkout on disk, so agent mode, git, terminal commands and local developer sessions need a real filesystem. Open the repository locally, or through a remote, dev container or WSL window."
+      "description": "AGI Code runs the AGI CLI against a checkout on disk, so agent mode, git, terminal commands and local developer sessions need a real filesystem. Open the repository locally, or through a remote, dev container or WSL window."
     }
   },
   "main": "./out/extension.js",
@@ -76,729 +76,729 @@
     "commands": [
       {
         "command": "agi-workforce.chat",
-        "title": "AGI Workforce: Open Chat",
+        "title": "AGI Code: Open Chat",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "agi-workforce.openChatInEditor",
-        "title": "AGI Workforce: Open Chat in Editor",
+        "title": "AGI Code: Open Chat in Editor",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "agi-workforce.retryLastMessage",
-        "title": "AGI Workforce: Retry Last Message",
+        "title": "AGI Code: Retry Last Message",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.openSettings",
-        "title": "AGI Workforce: Open Settings",
+        "title": "AGI Code: Open Settings",
         "icon": "$(settings-gear)"
       },
       {
         "command": "agi-workforce.openAgentConfig",
-        "title": "AGI Workforce: Open Agent Configuration",
+        "title": "AGI Code: Open Agent Configuration",
         "icon": "$(file-code)"
       },
       {
         "command": "agi-workforce.restartLocalRuntime",
-        "title": "AGI Workforce: Restart Local Runtime",
+        "title": "AGI Code: Restart Local Runtime",
         "icon": "$(debug-restart)"
       },
       {
         "command": "agi-workforce.checkCli",
-        "title": "AGI Workforce: Check the CLI in This Environment",
+        "title": "AGI Code: Check the CLI in This Environment",
         "icon": "$(pulse)"
       },
       {
         "command": "agi-workforce.installCli",
-        "title": "AGI Workforce: Install AGI CLI",
+        "title": "AGI Code: Install AGI CLI",
         "icon": "$(cloud-download)"
       },
       {
         "command": "agi-workforce.agentMode",
-        "title": "AGI Workforce: Choose Agent Mode",
+        "title": "AGI Code: Choose Agent Mode",
         "icon": "$(robot)"
       },
       {
         "command": "agi-workforce.explain",
-        "title": "AGI Workforce: Explain Selection",
+        "title": "AGI Code: Explain Selection",
         "icon": "$(info)"
       },
       {
         "command": "agi-workforce.fix",
-        "title": "AGI Workforce: Fix Issue",
+        "title": "AGI Code: Fix Issue",
         "icon": "$(wrench)"
       },
       {
         "command": "agi-workforce.refactor",
-        "title": "AGI Workforce: Refactor Code",
+        "title": "AGI Code: Refactor Code",
         "icon": "$(symbol-class)"
       },
       {
         "command": "agi-workforce.generateTests",
-        "title": "AGI Workforce: Generate Tests",
+        "title": "AGI Code: Generate Tests",
         "icon": "$(beaker)"
       },
       {
         "command": "agi-workforce.signIn",
-        "title": "AGI Workforce: Sign In to AGI Cloud",
+        "title": "AGI Code: Sign In to AGI Cloud",
         "icon": "$(sign-in)"
       },
       {
         "command": "agi-workforce.signOut",
-        "title": "AGI Workforce: Sign Out of AGI Cloud",
+        "title": "AGI Code: Sign Out of AGI Cloud",
         "icon": "$(sign-out)"
       },
       {
         "command": "agi-workforce.openUpgrade",
-        "title": "AGI Workforce: Upgrade Your Plan",
+        "title": "AGI Code: Upgrade Your Plan",
         "icon": "$(rocket)"
       },
       {
         "command": "agi-workforce.openReferrals",
-        "title": "AGI Workforce: Invite Friends",
+        "title": "AGI Code: Invite Friends",
         "icon": "$(gift)"
       },
       {
         "command": "agi-workforce.setApiKey",
-        "title": "AGI Workforce: Set API Key",
+        "title": "AGI Code: Set API Key",
         "icon": "$(key)"
       },
       {
         "command": "agi-workforce.clearApiKey",
-        "title": "AGI Workforce: Clear API Key",
+        "title": "AGI Code: Clear API Key",
         "icon": "$(trash)"
       },
       {
         "command": "agi-workforce.selectModel",
-        "title": "AGI Workforce: Select Model",
+        "title": "AGI Code: Select Model",
         "icon": "$(symbol-misc)"
       },
       {
         "command": "agi-workforce.openConversation",
-        "title": "AGI Workforce: Open Conversation",
+        "title": "AGI Code: Open Conversation",
         "icon": "$(comment)"
       },
       {
         "command": "agi-workforce.forkConversation",
-        "title": "AGI Workforce: Fork Conversation",
+        "title": "AGI Code: Fork Conversation",
         "icon": "$(git-branch)"
       },
       {
         "command": "agi-workforce.deleteConversation",
-        "title": "AGI Workforce: Delete Conversation",
+        "title": "AGI Code: Delete Conversation",
         "icon": "$(trash)"
       },
       {
         "command": "agi-workforce.permanentlyDeleteConversation",
-        "title": "AGI Workforce: Permanently Delete Conversation"
+        "title": "AGI Code: Permanently Delete Conversation"
       },
       {
         "command": "agi-workforce.refreshConversations",
-        "title": "AGI Workforce: Refresh Conversations",
+        "title": "AGI Code: Refresh Conversations",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.showSessionsHistory",
-        "title": "AGI Workforce: Show Sessions History",
+        "title": "AGI Code: Show Sessions History",
         "icon": "$(history)"
       },
       {
         "command": "agi-workforce.showCheckpoints",
-        "title": "AGI Workforce: Checkpoints",
+        "title": "AGI Code: Checkpoints",
         "icon": "$(debug-step-back)"
       },
       {
         "command": "agi-workforce.compactConversation",
-        "title": "AGI Workforce: Summarize Session to Free Context"
+        "title": "AGI Code: Summarize Session to Free Context"
       },
       {
         "command": "agi-workforce.showSessionStatus",
-        "title": "AGI Workforce: Session Status"
+        "title": "AGI Code: Session Status"
       },
       {
         "command": "agi-workforce.exportConversation",
-        "title": "AGI Workforce: Export Conversation"
+        "title": "AGI Code: Export Conversation"
       },
       {
         "command": "agi-workforce.addTerminalOutputToChat",
-        "title": "AGI Workforce: Add Terminal Output to Chat"
+        "title": "AGI Code: Add Terminal Output to Chat"
       },
       {
         "command": "agi-workforce.revisePlanFromDocument",
-        "title": "AGI Workforce: Revise the Plan with My Notes",
+        "title": "AGI Code: Revise the Plan with My Notes",
         "icon": "$(comment-discussion)"
       },
       {
         "command": "agi-workforce.showSavedApprovals",
-        "title": "AGI Workforce: Permissions",
+        "title": "AGI Code: Permissions",
         "icon": "$(shield)"
       },
       {
         "command": "agi-workforce.chooseSessionTools",
-        "title": "AGI Workforce: Choose Tools for This Session",
+        "title": "AGI Code: Choose Tools for This Session",
         "icon": "$(tools)"
       },
       {
         "command": "agi-workforce.manageProviderKeys",
-        "title": "AGI Workforce: Provider API Keys",
+        "title": "AGI Code: Provider API Keys",
         "icon": "$(key)"
       },
       {
         "command": "agi-workforce.createPullRequest",
-        "title": "AGI Workforce: Create Pull Request",
+        "title": "AGI Code: Create Pull Request",
         "icon": "$(git-pull-request-create)"
       },
       {
         "command": "agi-workforce.showArchivedSessions",
-        "title": "AGI Workforce: Archived Sessions",
+        "title": "AGI Code: Archived Sessions",
         "icon": "$(archive)"
       },
       {
         "command": "agi-workforce.remoteControl",
-        "title": "AGI Workforce: Remote Control",
+        "title": "AGI Code: Remote Control",
         "icon": "$(broadcast)"
       },
       {
         "command": "agi-workforce.stopRemoteControl",
-        "title": "AGI Workforce: Stop Remote Control"
+        "title": "AGI Code: Stop Remote Control"
       },
       {
         "command": "agi-workforce.copyRemoteControlLink",
-        "title": "AGI Workforce: Copy Remote Control Pairing Link"
+        "title": "AGI Code: Copy Remote Control Pairing Link"
       },
       {
         "command": "agi.git.status",
-        "title": "AGI Workforce: Git Status",
+        "title": "AGI Code: Git Status",
         "icon": "$(source-control)"
       },
       {
         "command": "agi.git.diff",
-        "title": "AGI Workforce: Git Diff",
+        "title": "AGI Code: Git Diff",
         "icon": "$(diff)"
       },
       {
         "command": "agi.git.commit",
-        "title": "AGI Workforce: Git Commit",
+        "title": "AGI Code: Git Commit",
         "icon": "$(git-commit)"
       },
       {
         "command": "agi.test.run",
-        "title": "AGI Workforce: Run Tests",
+        "title": "AGI Code: Run Tests",
         "icon": "$(beaker)"
       },
       {
         "command": "agi-workforce.resetTokenCounter",
-        "title": "AGI Workforce: Reset Token Counter",
+        "title": "AGI Code: Reset Token Counter",
         "icon": "$(clear-all)"
       },
       {
         "command": "agi-workforce.docs",
-        "title": "AGI Workforce: Generate Docs",
+        "title": "AGI Code: Generate Docs",
         "icon": "$(book)"
       },
       {
         "command": "agi-workforce.codeReview",
-        "title": "AGI Workforce: Code Review",
+        "title": "AGI Code: Code Review",
         "icon": "$(eye)"
       },
       {
         "command": "agi-workforce.sendFeedback",
-        "title": "AGI Workforce: Send Feedback",
+        "title": "AGI Code: Send Feedback",
         "icon": "$(feedback)"
       },
       {
         "command": "agi-workforce.runCommand",
-        "title": "AGI Workforce: Run Terminal Command",
+        "title": "AGI Code: Run Terminal Command",
         "icon": "$(terminal)"
       },
       {
         "command": "agi-workforce.signInProvider",
-        "title": "AGI Workforce: Sign In to a Provider",
+        "title": "AGI Code: Sign In to a Provider",
         "icon": "$(key)"
       },
       {
         "command": "agi-workforce.explainTerminal",
-        "title": "AGI Workforce: Explain Terminal Output",
+        "title": "AGI Code: Explain Terminal Output",
         "icon": "$(output)"
       },
       {
         "command": "agi-workforce.suggestCommand",
-        "title": "AGI Workforce: Suggest Terminal Command",
+        "title": "AGI Code: Suggest Terminal Command",
         "icon": "$(wand)"
       },
       {
         "command": "agi-workforce.explainError",
-        "title": "AGI Workforce: Explain Error",
+        "title": "AGI Code: Explain Error",
         "icon": "$(error)"
       },
       {
         "command": "agi-workforce.askAboutCode",
-        "title": "AGI Workforce: Ask About Code",
+        "title": "AGI Code: Ask About Code",
         "icon": "$(question)"
       },
       {
         "command": "agi-workforce.newConversation",
-        "title": "AGI Workforce: New Conversation",
+        "title": "AGI Code: New Conversation",
         "icon": "$(add)"
       },
       {
         "command": "agi-workforce.modelDashboard",
-        "title": "AGI Workforce: Model Dashboard",
+        "title": "AGI Code: Model Dashboard",
         "icon": "$(graph)"
       },
       {
         "command": "agi-workforce.showTokenBreakdown",
-        "title": "AGI Workforce: Show Token Breakdown",
+        "title": "AGI Code: Show Token Breakdown",
         "icon": "$(pulse)"
       },
       {
         "command": "agi-workforce.acceptDiff",
-        "title": "AGI Workforce: Accept Diff",
+        "title": "AGI Code: Accept Diff",
         "icon": "$(check)"
       },
       {
         "command": "agi-workforce.rejectDiff",
-        "title": "AGI Workforce: Reject Diff",
+        "title": "AGI Code: Reject Diff",
         "icon": "$(close)"
       },
       {
         "command": "agi-workforce.acceptAllDiffs",
-        "title": "AGI Workforce: Accept All Diffs in File",
+        "title": "AGI Code: Accept All Diffs in File",
         "icon": "$(check-all)"
       },
       {
         "command": "agi-workforce.rejectAllDiffs",
-        "title": "AGI Workforce: Reject All Diffs in File",
+        "title": "AGI Code: Reject All Diffs in File",
         "icon": "$(close-all)"
       },
       {
         "command": "agi-workforce.acceptCurrentDiff",
-        "title": "AGI Workforce: Accept Current Diff",
+        "title": "AGI Code: Accept Current Diff",
         "icon": "$(check)"
       },
       {
         "command": "agi-workforce.rejectCurrentDiff",
-        "title": "AGI Workforce: Reject Current Diff",
+        "title": "AGI Code: Reject Current Diff",
         "icon": "$(close)"
       },
       {
         "command": "agi-workforce.acceptAllDiffsGlobal",
-        "title": "AGI Workforce: Accept All Diffs (All Files)",
+        "title": "AGI Code: Accept All Diffs (All Files)",
         "icon": "$(check-all)"
       },
       {
         "command": "agi-workforce.rejectAllDiffsGlobal",
-        "title": "AGI Workforce: Reject All Diffs (All Files)",
+        "title": "AGI Code: Reject All Diffs (All Files)",
         "icon": "$(close-all)"
       },
       {
         "command": "agi-workforce.acceptBatch",
-        "title": "AGI Workforce: Accept Entire Patch Batch",
+        "title": "AGI Code: Accept Entire Patch Batch",
         "icon": "$(checklist)"
       },
       {
         "command": "agi-workforce.rejectBatch",
-        "title": "AGI Workforce: Reject Entire Patch Batch",
+        "title": "AGI Code: Reject Entire Patch Batch",
         "icon": "$(trash)"
       },
       {
         "command": "agi-workforce.restoreRejectedDiffs",
-        "title": "AGI Workforce: Restore Discarded Changes",
+        "title": "AGI Code: Restore Discarded Changes",
         "icon": "$(discard)"
       },
       {
         "command": "agi-workforce.addToContext",
-        "title": "AGI Workforce: Add File to Context",
+        "title": "AGI Code: Add File to Context",
         "icon": "$(pin)"
       },
       {
         "command": "agi-workforce.removeFromContext",
-        "title": "AGI Workforce: Remove from Context",
+        "title": "AGI Code: Remove from Context",
         "icon": "$(pinned-dirty)"
       },
       {
         "command": "agi-workforce.clearContext",
-        "title": "AGI Workforce: Clear Context",
+        "title": "AGI Code: Clear Context",
         "icon": "$(clear-all)"
       },
       {
         "command": "agi-workforce.refreshContext",
-        "title": "AGI Workforce: Refresh Context",
+        "title": "AGI Code: Refresh Context",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.openActionSheet",
-        "title": "AGI Workforce: Open Actions",
+        "title": "AGI Code: Open Actions",
         "icon": "$(menu)"
       },
       {
         "command": "agi-workforce.mentionFileInChat",
-        "title": "AGI Workforce: Mention File in Chat",
+        "title": "AGI Code: Mention File in Chat",
         "icon": "$(mention)"
       },
       {
         "command": "agi-workforce.showSubsystemHealth",
-        "title": "AGI Workforce: Show Subsystem Health",
+        "title": "AGI Code: Show Subsystem Health",
         "category": "AGI"
       },
       {
         "command": "agi-workforce.exportDiagnostics",
-        "title": "AGI Workforce: Export Diagnostics",
+        "title": "AGI Code: Export Diagnostics",
         "icon": "$(save)"
       },
       {
         "command": "agi-workforce.showTierStatus",
-        "title": "AGI Workforce: Show Tier Status",
+        "title": "AGI Code: Show Tier Status",
         "icon": "$(account)"
       },
       {
         "command": "agi-workforce.setAgentMode",
-        "title": "AGI Workforce: Set Agent Mode",
+        "title": "AGI Code: Set Agent Mode",
         "icon": "$(robot)"
       },
       {
         "command": "agi-workforce.setAgentEffort",
-        "title": "AGI Workforce: Set Reasoning Effort",
+        "title": "AGI Code: Set Reasoning Effort",
         "icon": "$(brain)"
       },
       {
         "command": "agi-workforce.memory",
-        "title": "AGI Workforce: Memory",
+        "title": "AGI Code: Memory",
         "icon": "$(book)"
       },
       {
         "command": "agi-workforce.memory.toggle",
-        "title": "AGI Workforce: Turn Memory On or Off",
+        "title": "AGI Code: Turn Memory On or Off",
         "icon": "$(circle-slash)"
       },
       {
         "command": "agi-workforce.memory.refresh",
-        "title": "AGI Workforce: Refresh Memory",
+        "title": "AGI Code: Refresh Memory",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.memory.create",
-        "title": "AGI Workforce: Add Memory Fact",
+        "title": "AGI Code: Add Memory Fact",
         "icon": "$(add)"
       },
       {
         "command": "agi-workforce.memory.rememberSelection",
-        "title": "AGI Workforce: Remember This"
+        "title": "AGI Code: Remember This"
       },
       {
         "command": "agi-workforce.memory.edit",
-        "title": "AGI Workforce: Edit Memory Fact",
+        "title": "AGI Code: Edit Memory Fact",
         "icon": "$(edit)"
       },
       {
         "command": "agi-workforce.memory.delete",
-        "title": "AGI Workforce: Delete Memory Fact",
+        "title": "AGI Code: Delete Memory Fact",
         "icon": "$(trash)"
       },
       {
         "command": "agi-workforce.cycleAgentMode",
-        "title": "AGI Workforce: Cycle Agent Mode",
+        "title": "AGI Code: Cycle Agent Mode",
         "icon": "$(robot)"
       },
       {
         "command": "agi-workforce.showAccountUsage",
-        "title": "AGI Workforce: Account & Usage",
+        "title": "AGI Code: Account & Usage",
         "icon": "$(account)"
       },
       {
         "command": "agi-workforce.comparePlans",
-        "title": "AGI Workforce: Compare Plans",
+        "title": "AGI Code: Compare Plans",
         "icon": "$(list-unordered)"
       },
       {
         "command": "agi-workforce.showOnboarding",
-        "title": "AGI Workforce: Show Getting Started",
+        "title": "AGI Code: Show Getting Started",
         "icon": "$(getting-started)"
       },
       {
         "command": "agi-workforce.showCloudTasks",
-        "title": "AGI Workforce: Show Cloud Tasks",
+        "title": "AGI Code: Show Cloud Tasks",
         "icon": "$(cloud)"
       },
       {
         "command": "agi-workforce.refreshCloudTasks",
-        "title": "AGI Workforce: Refresh Cloud Tasks",
+        "title": "AGI Code: Refresh Cloud Tasks",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.openCloudTasksOnWeb",
-        "title": "AGI Workforce: Open Cloud Tasks on Web",
+        "title": "AGI Code: Open Cloud Tasks on Web",
         "icon": "$(link-external)"
       },
       {
         "command": "agi-workforce.openCloudTask",
-        "title": "AGI Workforce: Open Cloud Task"
+        "title": "AGI Code: Open Cloud Task"
       },
       {
         "command": "agi-workforce.approveCloudTask",
-        "title": "AGI Workforce: Approve Cloud Task",
+        "title": "AGI Code: Approve Cloud Task",
         "icon": "$(check)"
       },
       {
         "command": "agi-workforce.rejectCloudTask",
-        "title": "AGI Workforce: Reject Cloud Task",
+        "title": "AGI Code: Reject Cloud Task",
         "icon": "$(x)"
       },
       {
         "command": "agi-workforce.pullCloudTaskIntoWorkspace",
-        "title": "AGI Workforce: Pull Cloud Task Into Workspace",
+        "title": "AGI Code: Pull Cloud Task Into Workspace",
         "icon": "$(cloud-download)"
       },
       {
         "command": "agi-workforce.showHelp",
-        "title": "AGI Workforce: Help",
+        "title": "AGI Code: Help",
         "icon": "$(question)"
       },
       {
         "command": "agi-workforce.reviewPullRequest",
-        "title": "AGI Workforce: Review a Pull Request",
+        "title": "AGI Code: Review a Pull Request",
         "icon": "$(git-pull-request)"
       },
       {
         "command": "agi-workforce.securityReview",
-        "title": "AGI Workforce: Security Review of Pending Changes",
+        "title": "AGI Code: Security Review of Pending Changes",
         "icon": "$(shield)"
       },
       {
         "command": "agi-workforce.showApprovalHistory",
-        "title": "AGI Workforce: Show Approval History",
+        "title": "AGI Code: Show Approval History",
         "icon": "$(checklist)"
       },
       {
         "command": "agi-workforce.showSessionActivity",
-        "title": "AGI Workforce: Show Session Activity",
+        "title": "AGI Code: Show Session Activity",
         "icon": "$(history)"
       },
       {
         "command": "agi-workforce.continueInCloud",
-        "title": "AGI Workforce: Continue in the Cloud",
+        "title": "AGI Code: Continue in the Cloud",
         "icon": "$(cloud-upload)"
       },
       {
         "command": "agi-workforce.openCloudCodeSession",
-        "title": "AGI Workforce: Open AGI Code Session",
+        "title": "AGI Code: Open AGI Code Session",
         "icon": "$(cloud)"
       },
       {
         "command": "agi-workforce.showSchedules",
-        "title": "AGI Workforce: Show Schedules",
+        "title": "AGI Code: Show Schedules",
         "icon": "$(watch)"
       },
       {
         "command": "agi-workforce.refreshSchedules",
-        "title": "AGI Workforce: Refresh Schedules",
+        "title": "AGI Code: Refresh Schedules",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.openSchedulesOnWeb",
-        "title": "AGI Workforce: Open Schedules on Web",
+        "title": "AGI Code: Open Schedules on Web",
         "icon": "$(link-external)"
       },
       {
         "command": "agi-workforce.openSchedule",
-        "title": "AGI Workforce: Open Schedule on Web"
+        "title": "AGI Code: Open Schedule on Web"
       },
       {
         "command": "agi-workforce.pauseSchedule",
-        "title": "AGI Workforce: Pause Schedule",
+        "title": "AGI Code: Pause Schedule",
         "icon": "$(debug-pause)"
       },
       {
         "command": "agi-workforce.resumeSchedule",
-        "title": "AGI Workforce: Resume Schedule",
+        "title": "AGI Code: Resume Schedule",
         "icon": "$(debug-start)"
       },
       {
         "command": "agi-workforce.runScheduleNow",
-        "title": "AGI Workforce: Run Schedule Now",
+        "title": "AGI Code: Run Schedule Now",
         "icon": "$(play-circle)"
       },
       {
         "command": "agi-workforce.showScheduleRuns",
-        "title": "AGI Workforce: Show Schedule Runs",
+        "title": "AGI Code: Show Schedule Runs",
         "icon": "$(history)"
       },
       {
         "command": "agi-workforce.mentionFileFromProject",
-        "title": "AGI Workforce: Mention File from Project",
+        "title": "AGI Code: Mention File from Project",
         "icon": "$(mention)"
       },
       {
         "command": "agi-workforce.openPathReference",
-        "title": "AGI Workforce: Open File Reference"
+        "title": "AGI Code: Open File Reference"
       },
       {
         "command": "agi-workforce.showProjects",
-        "title": "AGI Workforce: Show Projects",
+        "title": "AGI Code: Show Projects",
         "icon": "$(folder-library)"
       },
       {
         "command": "agi-workforce.refreshProjects",
-        "title": "AGI Workforce: Refresh Projects",
+        "title": "AGI Code: Refresh Projects",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.openProjectsOnWeb",
-        "title": "AGI Workforce: Open Projects on Web",
+        "title": "AGI Code: Open Projects on Web",
         "icon": "$(link-external)"
       },
       {
         "command": "agi-workforce.createProject",
-        "title": "AGI Workforce: New Project",
+        "title": "AGI Code: New Project",
         "icon": "$(new-folder)"
       },
       {
         "command": "agi-workforce.openProject",
-        "title": "AGI Workforce: Open Project"
+        "title": "AGI Code: Open Project"
       },
       {
         "command": "agi-workforce.deleteProject",
-        "title": "AGI Workforce: Delete Project",
+        "title": "AGI Code: Delete Project",
         "icon": "$(trash)"
       },
       {
         "command": "agi-workforce.useProjectInChat",
-        "title": "AGI Workforce: Use Project in This Chat",
+        "title": "AGI Code: Use Project in This Chat",
         "icon": "$(rocket)"
       },
       {
         "command": "agi-workforce.clearActiveProject",
-        "title": "AGI Workforce: Stop Using a Project in This Chat",
+        "title": "AGI Code: Stop Using a Project in This Chat",
         "icon": "$(circle-slash)"
       },
       {
         "command": "agi-workforce.showArtifacts",
-        "title": "AGI Workforce: Show Artifacts",
+        "title": "AGI Code: Show Artifacts",
         "icon": "$(file-code)"
       },
       {
         "command": "agi-workforce.refreshArtifacts",
-        "title": "AGI Workforce: Refresh Artifacts",
+        "title": "AGI Code: Refresh Artifacts",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.openArtifactsOnWeb",
-        "title": "AGI Workforce: Open Artifacts on Web",
+        "title": "AGI Code: Open Artifacts on Web",
         "icon": "$(link-external)"
       },
       {
         "command": "agi-workforce.openArtifact",
-        "title": "AGI Workforce: Open Artifact"
+        "title": "AGI Code: Open Artifact"
       },
       {
         "command": "agi-workforce.copyArtifact",
-        "title": "AGI Workforce: Copy Artifact Content",
+        "title": "AGI Code: Copy Artifact Content",
         "icon": "$(copy)"
       },
       {
         "command": "agi-workforce.saveArtifactToWorkspace",
-        "title": "AGI Workforce: Save Artifact into Workspace",
+        "title": "AGI Code: Save Artifact into Workspace",
         "icon": "$(save)"
       },
       {
         "command": "agi-workforce.openArtifactOnWeb",
-        "title": "AGI Workforce: Open Published Artifact",
+        "title": "AGI Code: Open Published Artifact",
         "icon": "$(globe)"
       },
       {
         "command": "agi-workforce.showConnectors",
-        "title": "AGI Workforce: Show Connectors",
+        "title": "AGI Code: Show Connectors",
         "icon": "$(plug)"
       },
       {
         "command": "agi-workforce.refreshConnectors",
-        "title": "AGI Workforce: Refresh Connectors",
+        "title": "AGI Code: Refresh Connectors",
         "icon": "$(refresh)"
       },
       {
         "command": "agi-workforce.manageConnectors",
-        "title": "AGI Workforce: Manage Connectors",
+        "title": "AGI Code: Manage Connectors",
         "icon": "$(link-external)"
       },
       {
         "command": "agi-workforce.showWork",
-        "title": "AGI Workforce: Show Work",
+        "title": "AGI Code: Show Work",
         "icon": "$(cloud)"
       },
       {
         "command": "agi-workforce.showContextFiles",
-        "title": "AGI Workforce: Show Context Files",
+        "title": "AGI Code: Show Context Files",
         "icon": "$(pin)"
       },
       {
         "command": "agi-workforce.personalize",
-        "title": "AGI Workforce: Personalization",
+        "title": "AGI Code: Personalization",
         "icon": "$(person)"
       },
       {
         "command": "agi-workforce.showSkills",
-        "title": "AGI Workforce: Show Skills",
+        "title": "AGI Code: Show Skills",
         "icon": "$(lightbulb)"
       },
       {
         "command": "agi-workforce.newSessionInWorktree",
-        "title": "AGI Workforce: New Session in a Worktree",
+        "title": "AGI Code: New Session in a Worktree",
         "icon": "$(git-branch)"
       },
       {
         "command": "agi-workforce.manageWorktrees",
-        "title": "AGI Workforce: Session Worktrees",
+        "title": "AGI Code: Session Worktrees",
         "icon": "$(list-tree)"
       },
       {
         "command": "agi-workforce.rememberForRepository",
-        "title": "AGI Workforce: Remember for This Repository",
+        "title": "AGI Code: Remember for This Repository",
         "icon": "$(bookmark)"
       },
       {
         "command": "agi-workforce.showPlugins",
-        "title": "AGI Workforce: Show Plugins",
+        "title": "AGI Code: Show Plugins",
         "icon": "$(extensions)"
       },
       {
         "command": "agi-workforce.showMcpServers",
-        "title": "AGI Workforce: Show MCP Servers",
+        "title": "AGI Code: Show MCP Servers",
         "icon": "$(server)"
       },
       {
         "command": "agi-workforce.showHooks",
-        "title": "AGI Workforce: Show Hooks",
+        "title": "AGI Code: Show Hooks",
         "icon": "$(symbol-event)"
       },
       {
         "command": "agi-workforce.showInstructions",
-        "title": "AGI Workforce: Show Instructions",
+        "title": "AGI Code: Show Instructions",
         "icon": "$(law)"
       },
       {
         "command": "agi-workforce.runCliCommand",
-        "title": "AGI Workforce: Run CLI Command",
+        "title": "AGI Code: Run CLI Command",
         "icon": "$(terminal)"
       },
       {
         "command": "agi-workforce.continueCliSession",
-        "title": "AGI Workforce: Continue CLI Session Here",
+        "title": "AGI Code: Continue CLI Session Here",
         "icon": "$(arrow-right)"
       },
       {
         "command": "agi-workforce.continueInTerminal",
-        "title": "AGI Workforce: Continue This Session in the Terminal"
+        "title": "AGI Code: Continue This Session in the Terminal"
       },
       {
         "command": "agi-workforce.sendSelectionToNewSession",
-        "title": "AGI Workforce: Send Selection to a New Chat"
+        "title": "AGI Code: Send Selection to a New Chat"
       }
     ],
     "walkthroughs": [
       {
         "id": "agiWorkforce.gettingStarted",
-        "title": "Get started with AGI Workforce",
+        "title": "Get started with AGI Code",
         "description": "Understand workspace scope, task handoffs, review, autonomy, and trust boundaries before your first developer session.",
         "steps": [
           {
@@ -874,7 +874,7 @@
       {
         "id": "agiworkforce.agi",
         "name": "agi",
-        "fullName": "AGI Workforce",
+        "fullName": "AGI Code",
         "description": "Multi-provider AI coding assistant for VS Code",
         "isSticky": true,
         "commands": [
@@ -936,7 +936,7 @@
       "activitybar": [
         {
           "id": "agi-workforce-sidebar",
-          "title": "AGI Workforce",
+          "title": "AGI Code",
           "icon": "media/icon-sidebar.svg"
         }
       ]
@@ -946,8 +946,8 @@
         {
           "type": "webview",
           "id": "agi-workforce.sidebar",
-          "name": "AGI Workforce",
-          "contextualTitle": "AGI Workforce"
+          "name": "AGI Code",
+          "contextualTitle": "AGI Code"
         }
       ]
     },
@@ -1162,17 +1162,17 @@
       ]
     },
     "configuration": {
-      "title": "AGI Workforce",
+      "title": "AGI Code",
       "properties": {
         "agiWorkforce.apiEndpoint": {
           "type": "string",
           "default": "https://agiworkforce.com/api/llm/v1",
-          "description": "AGI Workforce API endpoint base URL"
+          "description": "AGI API endpoint base URL"
         },
         "agiWorkforce.model": {
           "type": "string",
           "default": "auto",
-          "description": "Default LLM model. Run 'AGI Workforce: Select Model' (cmd+shift+m) to pick from currently available providers."
+          "description": "Default LLM model. Run 'AGI Code: Select Model' (cmd+shift+m) to pick from currently available providers."
         },
         "agiWorkforce.cliPath": {
           "type": "string",
@@ -1231,7 +1231,7 @@
           "type": "boolean",
           "default": false,
           "scope": "machine",
-          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI Workforce account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them. Also subject to VS Code's telemetry setting."
+          "markdownDescription": "Send product usage events, such as stopping a response or accepting a suggested edit, to your AGI account when its [product analytics choice](https://agiworkforce.com/settings/privacy?from=vscode-extension) allows them. Also subject to VS Code's telemetry setting."
         },
         "agiWorkforce.memory.enabled": {
           "type": "boolean",
@@ -1241,12 +1241,12 @@
         "agiWorkforce.hoverEnabled": {
           "type": "boolean",
           "default": false,
-          "description": "Show AGI Workforce quick actions on hover over identifiers"
+          "description": "Show AGI Code quick actions on hover over identifiers"
         },
         "agiWorkforce.codeLensEnabled": {
           "type": "boolean",
           "default": false,
-          "description": "Show AGI Workforce action lenses above every function and class. Off by default: the lenses render on every declaration in every open file, which competes with the editor's own lenses (references, implementations, test status). The same actions are always available from the right-click menu and the sidebar."
+          "description": "Show AGI Code action lenses above every function and class. Off by default: the lenses render on every declaration in every open file, which competes with the editor's own lenses (references, implementations, test status). The same actions are always available from the right-click menu and the sidebar."
         },
         "agiWorkforce.autoApplyFixes": {
           "type": "boolean",
@@ -1275,7 +1275,7 @@
         "agiWorkforce.agent.planMode": {
           "type": "boolean",
           "default": false,
-          "deprecationMessage": "Use AGI Workforce: Open Settings and choose Agent mode → Plan instead.",
+          "deprecationMessage": "Use AGI Code: Open Settings and choose Agent mode → Plan instead.",
           "description": "Deprecated, use agiWorkforce.agent.mode instead. When true, maps to agent.mode = 'plan'."
         },
         "agiWorkforce.agent.mode": {
@@ -1317,12 +1317,12 @@
           "type": "string",
           "default": "unknown",
           "readOnly": true,
-          "description": "Current subscription tier (read-only, populated on activation). Run 'AGI Workforce: Show Tier Status' to see full usage details or visit agiworkforce.com/pricing to upgrade."
+          "description": "Current subscription tier (read-only, populated on activation). Run 'AGI Code: Show Tier Status' to see full usage details or visit agiworkforce.com/pricing to upgrade."
         },
         "agiWorkforce.activateOnStartup": {
           "type": "boolean",
           "default": false,
-          "description": "Start AGI Workforce background work (device heartbeat, plan lookup) as soon as the window opens. Off by default, so nothing leaves the machine until you open the AGI view, run an AGI command or reopen an AGI session."
+          "description": "Start AGI Code background work (device heartbeat, plan lookup) as soon as the window opens. Off by default, so nothing leaves the machine until you open the AGI view, run an AGI command or reopen an AGI session."
         }
       }
     },

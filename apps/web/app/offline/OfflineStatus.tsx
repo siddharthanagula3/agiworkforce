@@ -26,9 +26,7 @@ export function OfflineSummary() {
   const online = useOnlineStatus();
 
   return (
-    <Prose>
-      {online === true ? KEPT_WORK : `AGI Workforce cannot reach the network. ${KEPT_WORK}`}
-    </Prose>
+    <Prose>{online === true ? KEPT_WORK : `AGI Chat cannot reach the network. ${KEPT_WORK}`}</Prose>
   );
 }
 

@@ -4,10 +4,21 @@ param(
   [string]$ExtensionId,
 
   [Parameter(Mandatory = $false)]
-  [string]$HostPath = "$Env:LOCALAPPDATA\Programs\AGI Workforce\native_messaging_host.exe"
+  [string]$HostPath
 )
 
 $ErrorActionPreference = 'Stop'
+
+if (!$HostPath) {
+  $candidates = @(
+    "$Env:LOCALAPPDATA\AGI\native_messaging_host.exe",
+    "$Env:LOCALAPPDATA\Programs\AGI Workforce\native_messaging_host.exe"
+  )
+  $HostPath = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (!$HostPath) {
+    $HostPath = $candidates[0]
+  }
+}
 
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $template = Join-Path $scriptDir '..\native-host\com.agiworkforce.browser.json.template'

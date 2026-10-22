@@ -37,7 +37,7 @@ describe('StartupRecoveryScreen', () => {
     expect(screen.getByRole('button', { name: 'Retry' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Open Data Folder' })).toBeEnabled();
     expect(screen.getByRole('button', { name: 'Export Diagnostics' })).toBeEnabled();
-    expect(screen.getByRole('button', { name: 'Quit AGI' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Quit AGI Desktop' })).toBeEnabled();
   });
 
   it('wires all recovery actions and reports a successful sanitized export', async () => {
@@ -54,7 +54,7 @@ describe('StartupRecoveryScreen', () => {
     await user.click(screen.getByRole('button', { name: 'Retry' }));
     expect(props.onRetry).toHaveBeenCalledOnce();
 
-    await user.click(screen.getByRole('button', { name: 'Quit AGI' }));
+    await user.click(screen.getByRole('button', { name: 'Quit AGI Desktop' }));
     expect(props.onQuit).toHaveBeenCalledOnce();
   });
 

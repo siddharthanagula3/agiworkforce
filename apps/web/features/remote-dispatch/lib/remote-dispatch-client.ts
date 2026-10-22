@@ -27,7 +27,7 @@ const DEVICE_UNLINKED =
 const RECEIPT_TIMEOUT_MS = 8_000;
 const MAX_SEND_ATTEMPTS = 3;
 const NOT_CONFIRMED =
-  'Your computer has not confirmed this task, so it may or may not be running. Check AGI Cloud on the computer, or send it again.';
+  'Your computer has not confirmed this task, so it may or may not be running. Check AGI Desktop on the computer, or send it again.';
 
 export interface RemoteTaskStatus {
   requestId: string;

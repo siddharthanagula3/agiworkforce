@@ -5,6 +5,7 @@ import { isTauri, relaunchApp } from '@/lib/tauri-mock';
 import { deleteLocalData, exportLocalData } from '@/api/privacy';
 import { settings, onboarding } from '@agiworkforce/desktop-command-client';
 import { appDataDir } from '@tauri-apps/api/path';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { Spinner } from '@/ui/Spinner';
 import { errorTracking } from '../../../../services/errorTracking';
@@ -125,8 +126,7 @@ function DataPrivacySection() {
   const handleDeleteAllData = () => {
     confirmAction({
       title: 'Delete all data on this device?',
-      description:
-        'This removes every conversation, memory and project, your saved API keys and credentials, your settings, and the files AGI Workforce stored in its own data folders on this device, with its log of the terminal commands it ran. None of it can be recovered. You are signed out and the app restarts as if newly installed. Not removed: installed extensions, downloaded speech models, the settings, hooks, skills and agents shared with the command-line tool, and temporary files, which the system clears. A Cloud account, if you have one, is not deleted: delete it with Manage Cloud privacy, under Cloud account data on this page. Your system asks you once more before anything is deleted.',
+      description: `This removes every conversation, memory and project, your saved API keys and credentials, your settings, and the files ${PRODUCT_NAMES.desktop} stored in its own data folders on this device, with its log of the terminal commands it ran. None of it can be recovered. You are signed out and the app restarts as if newly installed. Not removed: installed extensions, downloaded speech models, the settings, hooks, skills and agents shared with the command-line tool, and temporary files, which the system clears. A Cloud account, if you have one, is not deleted: delete it with Manage Cloud privacy, under Cloud account data on this page. Your system asks you once more before anything is deleted.`,
       confirmLabel: 'Delete all data',
       destructive: true,
       onConfirm: deleteAllLocalData,
@@ -182,10 +182,10 @@ function DataPrivacySection() {
             <div className="flex-1">
               <h4 className="font-semibold mb-2">Export your data</h4>
               <p className="text-sm text-muted-foreground mb-2">
-                Saves one JSON file, where you choose, with what AGI Workforce keeps for you on this
-                device: conversations, memories, projects, settings and history, your schedules and
-                saved knowledge, app permissions and trusted workflows, and the two settings files
-                it shares with the command-line tool.
+                Saves one JSON file, where you choose, with what {PRODUCT_NAMES.desktop} keeps for
+                you on this device: conversations, memories, projects, settings and history, your
+                schedules and saved knowledge, app permissions and trusted workflows, and the two
+                settings files it shares with the command-line tool.
               </p>
               <p className="text-sm text-muted-foreground mb-4">
                 Passwords, API keys, tokens and sign-in sessions are left out; a field that held one
@@ -259,8 +259,8 @@ function DataPrivacySection() {
                 Delete all data on this device
               </h4>
               <p className="text-sm text-muted-foreground mb-4">
-                Erases everything AGI Workforce keeps on this device, signs you out and restarts the
-                app as if newly installed. A Cloud account is not affected.
+                Erases everything {PRODUCT_NAMES.desktop} keeps on this device, signs you out and
+                restarts the app as if newly installed. A Cloud account is not affected.
               </p>
               <Button
                 variant="destructive"
@@ -315,9 +315,9 @@ function DataPrivacySection() {
             <div className="flex-1">
               <h4 className="font-semibold mb-2">Crash Reporting</h4>
               <p className="text-sm text-muted-foreground mb-3">
-                Help us improve AGI Workforce by automatically sending crash reports and error
-                diagnostics. Reports include stack traces and system information but never include
-                your conversations, API keys, or personal data.
+                Help us improve {PRODUCT_NAMES.desktop} by automatically sending crash reports and
+                error diagnostics. Reports include stack traces and system information but never
+                include your conversations, API keys, or personal data.
               </p>
               <ul className="space-y-1 text-xs text-muted-foreground mb-3">
                 <li>Error messages and stack traces</li>

@@ -26,7 +26,7 @@ describe('SlackChannelPolicies', () => {
       );
     render(<SlackChannelPolicies installationId={INSTALLATION} teamName="Acme" send={send} />);
     const select = await screen.findByRole('combobox', {
-      name: 'What AGI Workforce may do in C111',
+      name: 'What AGI may do in C111',
     });
     await userEvent.selectOptions(select, 'answer');
     await waitFor(() =>

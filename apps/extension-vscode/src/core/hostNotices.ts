@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { getCloudWebOrigin } from '../utils/api';
 import { getExtensionVersion } from '../platform/version';
@@ -11,7 +12,7 @@ export async function announceExtensionUpdate(state: vscode.Memento): Promise<vo
   await state.update(LAST_SEEN_VERSION_KEY, current);
   if (previous === undefined || previous === current) return;
   const choice = await vscode.window.showInformationMessage(
-    `AGI Workforce was updated to ${current}.`,
+    `${PRODUCT_NAMES.code} was updated to ${current}.`,
     WHATS_NEW,
   );
   if (choice === WHATS_NEW) {
@@ -28,7 +29,7 @@ export async function announceMissingNativeChat(state: vscode.Memento): Promise<
   if (state.get<boolean>(NATIVE_CHAT_NOTICE_KEY) === true) return;
   await state.update(NATIVE_CHAT_NOTICE_KEY, true);
   const choice = await vscode.window.showInformationMessage(
-    `AGI Workforce: ${vscode.env.appName} ${vscode.version} has no native Chat view, so @agi is not available here. Chat runs in the AGI Workforce sidebar instead.`,
+    `${PRODUCT_NAMES.code}: ${vscode.env.appName} ${vscode.version} has no native Chat view, so @agi is not available here. Chat runs in the ${PRODUCT_NAMES.code} sidebar instead.`,
     OPEN_CHAT,
   );
   if (choice === OPEN_CHAT) await vscode.commands.executeCommand('agi-workforce.sidebar.focus');

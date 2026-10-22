@@ -45,7 +45,7 @@ fn is_the_confirmed_one(confirmed: Option<&str>, found: &str) -> bool {
 fn start_recording_question() -> NativeConfirm {
     NativeConfirm {
         title: "Record what you do on this computer?".to_string(),
-        body: "AGI Workforce will record every click and every key you press, in every app, until you stop the recording. Anything you type while it runs is recorded, passwords included.".to_string(),
+        body: "AGI Desktop will record every click and every key you press, in every app, until you stop the recording. Anything you type while it runs is recorded, passwords included.".to_string(),
         confirm_label: START_RECORDING_CONFIRM_LABEL.to_string(),
     }
 }

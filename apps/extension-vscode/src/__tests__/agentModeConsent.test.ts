@@ -120,7 +120,7 @@ describe('agent-mode bypass consent', () => {
       vscode.ConfigurationTarget.Global,
     );
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Workforce kept Auto mode. Bypass Permissions was not enabled.',
+      'AGI Code kept Auto mode. Bypass Permissions was not enabled.',
     );
   });
 
@@ -230,7 +230,7 @@ describe('agent-mode bypass consent', () => {
     await reconcileAgentEffortConsent(context);
     expect(config.effort()).toBe('high');
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Workforce kept High reasoning effort. Max with Bypass Permissions was not enabled.',
+      'AGI Code kept High reasoning effort. Max with Bypass Permissions was not enabled.',
     );
 
     await config.update('agent.effort', 'max');

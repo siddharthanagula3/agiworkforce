@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
 export type ExtensionAgentMode = 'ask' | 'auto' | 'plan' | 'bypass';
@@ -241,7 +242,7 @@ export async function reconcileAgentModeConsent(context: vscode.ExtensionContext
   if (await setAgentModeWithConsent(context, 'bypass')) return;
 
   vscode.window.showInformationMessage(
-    'AGI Workforce kept Auto mode. Bypass Permissions was not enabled.',
+    `${PRODUCT_NAMES.code} kept Auto mode. Bypass Permissions was not enabled.`,
   );
 }
 
@@ -260,7 +261,7 @@ export async function reconcileAgentEffortConsent(context: vscode.ExtensionConte
   if (await setAgentEffortWithConsent(context, 'max')) return;
 
   vscode.window.showInformationMessage(
-    'AGI Workforce kept High reasoning effort. Max with Bypass Permissions was not enabled.',
+    `${PRODUCT_NAMES.code} kept High reasoning effort. Max with Bypass Permissions was not enabled.`,
   );
 }
 

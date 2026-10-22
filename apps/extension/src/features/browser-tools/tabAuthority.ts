@@ -9,7 +9,7 @@ import { evaluateSitePolicy, sitePolicyDenialMessage } from '@agiworkforce/types
 import type { BrowserProfileCapability } from '@agiworkforce/types';
 
 export const SITE_NOT_APPROVED_FOR_BROWSER_TOOLS =
-  'is not on your AGI Workforce approved-sites list. Open the extension options, ' +
+  'is not on your AGI approved-sites list. Open the extension options, ' +
   'add this origin under "Approved sites", then try again.';
 
 export interface AuthorizedTab {

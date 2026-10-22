@@ -1,3 +1,5 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+
 const HIDDEN = /[\p{Cf}\p{Zl}\p{Zp}]|[^\P{Cc}\n\t]/gu;
 const LINE_BREAK = /\r\n|\n/gu;
 const TAB = /\t/gu;
@@ -86,6 +88,6 @@ export function shownValue(
  * repeats. Text from a request, a project file or another program goes below
  * it, each value on a line this app labelled.
  */
-export const APP_NAME = 'AGI Cloud';
+export const APP_NAME = PRODUCT_NAMES.desktop;
 
 export const NOT_THIS_APP = `Nothing below this line is ${APP_NAME} speaking.`;

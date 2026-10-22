@@ -40,7 +40,7 @@ const RUN = {
   },
 } as unknown as Parameters<typeof buildCloudRunDetailItems>[0];
 
-suite('AGI Workforce cloud tasks', () => {
+suite('AGI Code cloud tasks', () => {
   suiteSetup(async () => {
     const extension = vscode.extensions.getExtension('agiworkforce.agi-workforce');
     assert.ok(extension, 'extension agiworkforce.agi-workforce not found');

@@ -118,7 +118,11 @@ import {
   describeHandoffRefusal,
   describeHandoffReview,
 } from '../integrations/developerSessionHandoff';
-import { DEVELOPER_SESSION_PROTOCOL_VERSION } from '@agiworkforce/types';
+import {
+  DEVELOPER_SESSION_PROTOCOL_VERSION,
+  PRODUCT_BRAND,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import {
   CliCapabilityAdapter,
   openArtifactsSurface,
@@ -283,7 +287,7 @@ function buildSidebarReferenceDraft(target: vscode.Uri): {
 
 function warnNoDiffUnderCursor(verb: 'accept' | 'dismiss'): void {
   vscode.window.showWarningMessage(
-    `AGI Workforce: no suggestion to ${verb} in the active editor. Open the file that has the pending change, or use Accept/Reject All.`,
+    `${PRODUCT_NAMES.code}: no suggestion to ${verb} in the active editor. Open the file that has the pending change, or use Accept/Reject All.`,
   );
 }
 
@@ -356,7 +360,7 @@ async function confirmDiffBulkAction(
 function resolveDiffBatchId(batchId: unknown): string | undefined {
   if (typeof batchId === 'string' && batchId !== '') return batchId;
   vscode.window.showWarningMessage(
-    'AGI Workforce: batch accept and reject run from the CodeLens on a proposed batch. Use Accept/Reject All Changes to act on every pending change.',
+    `${PRODUCT_NAMES.code}: batch accept and reject run from the CodeLens on a proposed batch. Use Accept/Reject All Changes to act on every pending change.`,
   );
   return undefined;
 }
@@ -366,7 +370,7 @@ function resolveDiffFileTarget(uri: unknown): vscode.Uri | undefined {
   const active = vscode.window.activeTextEditor?.document.uri;
   if (active === undefined) {
     vscode.window.showWarningMessage(
-      'AGI Workforce: open the file whose pending changes you want to act on.',
+      `${PRODUCT_NAMES.code}: open the file whose pending changes you want to act on.`,
     );
   }
   return active;
@@ -389,7 +393,7 @@ function announceRejected(
 let _agiGitOutputChannel: vscode.OutputChannel | undefined;
 function getAgiGitOutputChannel(): vscode.OutputChannel {
   if (_agiGitOutputChannel === undefined) {
-    _agiGitOutputChannel = vscode.window.createOutputChannel('AGI Workforce: Git');
+    _agiGitOutputChannel = vscode.window.createOutputChannel(`${PRODUCT_NAMES.code}: Git`);
   }
   return _agiGitOutputChannel;
 }
@@ -407,7 +411,7 @@ async function runGitToOutputChannel(args: string[], cwd: string, title: string)
     const msg = err instanceof Error ? err.message : String(err);
     channel.appendLine(`[error] ${msg}`);
     channel.show(true);
-    vscode.window.showErrorMessage(`AGI Workforce: ${title} failed, ${msg}`);
+    vscode.window.showErrorMessage(`${PRODUCT_NAMES.code}: ${title} failed, ${msg}`);
     return false;
   }
 }
@@ -439,14 +443,14 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
   const threadId = sidebarProvider.activeThreadId();
   if (threadId === undefined) {
     await vscode.window.showInformationMessage(
-      'AGI Workforce: send a message first, then the terminal can pick this session up.',
+      `${PRODUCT_NAMES.code}: send a message first, then the terminal can pick this session up.`,
     );
     return;
   }
   const folder = getActiveWorkspaceFolderSync();
   if (folder === undefined) {
     await vscode.window.showWarningMessage(
-      'AGI Workforce: open the folder this session is working in before continuing it in the terminal.',
+      `${PRODUCT_NAMES.code}: open the folder this session is working in before continuing it in the terminal.`,
     );
     return;
   }
@@ -454,7 +458,7 @@ async function continueThisSessionInTheTerminal(sidebarProvider: SidebarProvider
     await sidebarProvider.releaseForTerminal();
   } catch (error) {
     await vscode.window.showWarningMessage(
-      `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+      `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
     );
     return;
   }
@@ -476,7 +480,7 @@ async function continueCliSessionHere(
   const folder = getActiveWorkspaceFolderSync();
   if (folder === undefined) {
     await vscode.window.showWarningMessage(
-      'AGI Workforce: open the folder the session is working in before continuing it here.',
+      `${PRODUCT_NAMES.code}: open the folder the session is working in before continuing it here.`,
     );
     return;
   }
@@ -487,7 +491,7 @@ async function continueCliSessionHere(
     threads = await runtime.listThreads({ cwd });
   } catch (error) {
     await vscode.window.showErrorMessage(
-      `AGI Workforce: could not reach the AGI CLI. ${error instanceof Error ? error.message : String(error)}`,
+      `${PRODUCT_NAMES.code}: could not reach the AGI CLI. ${error instanceof Error ? error.message : String(error)}`,
     );
     return;
   }
@@ -498,8 +502,8 @@ async function continueCliSessionHere(
   if (newest === undefined) {
     await vscode.window.showInformationMessage(
       threadId === undefined
-        ? 'AGI Workforce: the AGI CLI has no session in this folder to continue.'
-        : 'AGI Workforce: that session is not in this folder. Open the folder it works in and send it again.',
+        ? `${PRODUCT_NAMES.code}: the AGI CLI has no session in this folder to continue.`
+        : `${PRODUCT_NAMES.code}: that session is not in this folder. Open the folder it works in and send it again.`,
     );
     return;
   }
@@ -513,7 +517,7 @@ async function continueCliSessionHere(
   });
   if (outcome.status === 'refused') {
     await vscode.window.showWarningMessage(
-      `AGI Workforce: ${describeHandoffRefusal(outcome.refusal)}`,
+      `${PRODUCT_NAMES.code}: ${describeHandoffRefusal(outcome.refusal)}`,
     );
     return;
   }
@@ -548,7 +552,9 @@ async function runUnreachableOffer(unreachable: HostModelUnreachable): Promise<v
     await vscode.commands.executeCommand('agi-workforce.openSettings');
     return;
   }
-  vscode.window.showWarningMessage('AGI Workforce: that model is not set up on this machine yet.');
+  vscode.window.showWarningMessage(
+    `${PRODUCT_NAMES.code}: that model is not set up on this machine yet.`,
+  );
 }
 
 export interface CommandDeps {
@@ -694,13 +700,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         artifact = artifacts.find((entry) => entry.id === artifactId);
       } catch (error) {
         void vscode.window.showErrorMessage(
-          `AGI Workforce: the artifact index could not be read, ${describeArtifactFailure(error)}`,
+          `${PRODUCT_NAMES.code}: the artifact index could not be read, ${describeArtifactFailure(error)}`,
         );
         return;
       }
       if (artifact === undefined) {
         void vscode.window.showWarningMessage(
-          'AGI Workforce: this artifact is no longer in your account index.',
+          `${PRODUCT_NAMES.code}: this artifact is no longer in your account index.`,
         );
         return;
       }
@@ -719,7 +725,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       (thread) => !isCloudThread(thread),
     );
     if (threads.length === 0) {
-      vscode.window.showInformationMessage('AGI Workforce: No developer sessions in this window.');
+      vscode.window.showInformationMessage(
+        `${PRODUCT_NAMES.code}: No developer sessions in this window.`,
+      );
       return undefined;
     }
     const picked = await vscode.window.showQuickPick(
@@ -761,7 +769,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
   const prefillFirstPartyReference = async (target: vscode.Uri): Promise<void> => {
     const validated = await validateWorkspaceContextFile(target);
     if (!validated.ok) {
-      vscode.window.showWarningMessage(`AGI Workforce: ${validated.message}`);
+      vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${validated.message}`);
       return;
     }
     const draft = buildSidebarReferenceDraft(validated.uri);
@@ -773,7 +781,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     const editor = vscode.window.activeTextEditor;
     if (editor === undefined || editor.selection.isEmpty) {
       vscode.window.showWarningMessage(
-        'AGI Workforce: select the code you want the new chat to start from.',
+        `${PRODUCT_NAMES.code}: select the code you want the new chat to start from.`,
       );
       return;
     }
@@ -806,7 +814,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       try {
         const configPath = await openAgentConfig();
         const action = await vscode.window.showInformationMessage(
-          `AGI Workforce: Opened ${configPath}. Restart the local runtime after changing this file.`,
+          `${PRODUCT_NAMES.code}: Opened ${configPath}. Restart the local runtime after changing this file.`,
           'Restart local runtime',
         );
         if (action === 'Restart local runtime') {
@@ -815,7 +823,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       } catch (error) {
         const message =
           error instanceof Error ? error.message : 'The agent configuration could not be opened.';
-        vscode.window.showErrorMessage(`AGI Workforce: ${message}`);
+        vscode.window.showErrorMessage(`${PRODUCT_NAMES.code}: ${message}`);
       }
     }),
     register('agi-workforce.restartLocalRuntime', async () => {
@@ -830,7 +838,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         return { ok: true as const, restartedWorkspaces: result.restartedWorkspaces };
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`AGI Workforce: Local runtime restart failed, ${message}`);
+        vscode.window.showErrorMessage(
+          `${PRODUCT_NAMES.code}: Local runtime restart failed, ${message}`,
+        );
         return { ok: false as const, error: message };
       } finally {
         sidebarProvider.refreshRuntimeStatus();
@@ -865,7 +875,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         vscode.window.showErrorMessage(
-          `AGI Workforce: The AGI CLI is installed, but the local runtime did not restart, ${message}`,
+          `${PRODUCT_NAMES.code}: The AGI CLI is installed, but the local runtime did not restart, ${message}`,
         );
       } finally {
         conversationTreeProvider.refresh();
@@ -878,12 +888,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.addToContext', async (uri?: vscode.Uri) => {
       const target = uri ?? vscode.window.activeTextEditor?.document.uri;
       if (target === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: No file to add to context.');
+        vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: No file to add to context.`);
         return;
       }
       const result = await validateWorkspaceContextFile(target);
       if (!result.ok) {
-        vscode.window.showWarningMessage(`AGI Workforce: ${result.message}`);
+        vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${result.message}`);
         return;
       }
       contextPanelProvider.addFile(result.uri);
@@ -892,7 +902,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.removeFromContext', (item?: vscode.Uri | ContextItem) => {
       const target = contextCommandTarget(item) ?? vscode.window.activeTextEditor?.document.uri;
       if (target === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: No file to remove from context.');
+        vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: No file to remove from context.`);
         return;
       }
       contextPanelProvider.removeFile(target);
@@ -909,7 +919,9 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.mentionFileInChat', async (item?: vscode.Uri | ContextItem) => {
       const target = contextCommandTarget(item) ?? vscode.window.activeTextEditor?.document.uri;
       if (target === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: No file selected to mention in chat.');
+        vscode.window.showWarningMessage(
+          `${PRODUCT_NAMES.code}: No file selected to mention in chat.`,
+        );
         return;
       }
       await prefillFirstPartyReference(target);
@@ -986,7 +998,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const restored = diffDecorationProvider.restoreRejected();
       if (restored.length === 0) {
         vscode.window.showWarningMessage(
-          'AGI Workforce: there are no discarded changes left to restore in this session.',
+          `${PRODUCT_NAMES.code}: there are no discarded changes left to restore in this session.`,
         );
         return;
       }
@@ -1034,14 +1046,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.codeReview', async () => {
       const editor = vscode.window.activeTextEditor;
       if (editor === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: No active editor.');
+        vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: No active editor.`);
         return;
       }
 
       const failure = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'AGI Workforce: Running Code Review…',
+          title: `${PRODUCT_NAMES.code}: Running Code Review…`,
           cancellable: true,
         },
         async (_progress, progressToken): Promise<unknown> => {
@@ -1074,7 +1086,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (failure === undefined) return;
       if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
       await showCloudUtilityErrorActions(failure, {
-        title: 'AGI Workforce: Code review failed',
+        title: `${PRODUCT_NAMES.code}: Code review failed`,
         retry: () => vscode.commands.executeCommand('agi-workforce.codeReview'),
         secrets: context.secrets,
       });
@@ -1104,7 +1116,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const cliSignOut = await cliCapabilities.logout();
       if (cliSignOut.status === 'failed') {
         vscode.window.showWarningMessage(
-          `AGI Workforce: The AGI CLI on this machine is still signed in, ${cliSignOut.reason}`,
+          `${PRODUCT_NAMES.code}: The AGI CLI on this machine is still signed in, ${cliSignOut.reason}`,
         );
       }
       await clearAccountTierCache(context);
@@ -1117,9 +1129,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const placeholder = existing !== undefined ? '(already set, enter new key to replace)' : '';
 
       const apiKey = await vscode.window.showInputBox({
-        title: 'AGI Workforce, Set API Key',
-        prompt:
-          'Enter your AGI Workforce API key. It will be stored in VS Code SecretStorage (encrypted).',
+        title: `${PRODUCT_NAMES.code}, Set API Key`,
+        prompt: `Enter your ${PRODUCT_BRAND} API key. It will be stored in VS Code SecretStorage (encrypted).`,
         placeHolder: placeholder !== '' ? placeholder : 'sk_live_…',
         password: true,
         ignoreFocusOut: true,
@@ -1135,7 +1146,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       sidebarProvider.pushUsageMeter();
 
       vscode.window
-        .showInformationMessage('AGI Workforce API key saved.', 'Open Chat')
+        .showInformationMessage(`${PRODUCT_BRAND} API key saved.`, 'Open Chat')
         .then((choice) => {
           if (choice === 'Open Chat') {
             vscode.commands.executeCommand('agi-workforce.chat');
@@ -1145,14 +1156,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.clearApiKey', async () => {
       const choice = await vscode.window.showWarningMessage(
-        'Clear the stored AGI Workforce API key?',
+        `Clear the stored ${PRODUCT_BRAND} API key?`,
         { modal: true },
         'Clear',
       );
       if (choice === 'Clear') {
         await clearApiKey(context.secrets);
         sidebarProvider.pushUsageMeter();
-        vscode.window.showInformationMessage('AGI Workforce API key cleared.');
+        vscode.window.showInformationMessage(`${PRODUCT_BRAND} API key cleared.`);
       }
     }),
 
@@ -1176,7 +1187,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }));
 
       const picked = await vscode.window.showQuickPick(allItems, {
-        title: 'AGI Workforce, Select Model',
+        title: `${PRODUCT_NAMES.code}, Select Model`,
         placeHolder: `Current: ${modelDisplayLabel(currentModel)}`,
         matchOnDescription: true,
         matchOnDetail: true,
@@ -1190,7 +1201,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       }
       if (picked.refusedBoundary !== undefined) {
         vscode.window.showWarningMessage(
-          'AGI Workforce: this chat keeps its work inside one trust boundary, so it cannot switch to that model. Start a new chat to change where the work goes.',
+          `${PRODUCT_NAMES.code}: this chat keeps its work inside one trust boundary, so it cannot switch to that model. Start a new chat to change where the work goes.`,
         );
         return;
       }
@@ -1230,8 +1241,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       vscode.window.showInformationMessage(
         scope === 'conversation'
-          ? `AGI Workforce: this chat now uses ${modelDisplayLabel(picked.modelId)}. New chats still start with ${modelDisplayLabel(normalizeConfiguredModelId(Config.model()))}.`
-          : `AGI Workforce: new chats now use ${modelDisplayLabel(picked.modelId)}.`,
+          ? `${PRODUCT_NAMES.code}: this chat now uses ${modelDisplayLabel(picked.modelId)}. New chats still start with ${modelDisplayLabel(normalizeConfiguredModelId(Config.model()))}.`
+          : `${PRODUCT_NAMES.code}: new chats now use ${modelDisplayLabel(picked.modelId)}.`,
       );
     }),
 
@@ -1261,7 +1272,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (choice === 'Archive') {
         const archived = await conversationTreeProvider.archiveThread(thread.id);
         if (!archived) {
-          vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
+          vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Developer session not found.`);
         }
       }
     }),
@@ -1283,11 +1294,11 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       try {
         const deleted = await conversationTreeProvider.deleteThread(thread.id);
         if (!deleted) {
-          vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
+          vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Developer session not found.`);
         }
       } catch (error) {
         vscode.window.showErrorMessage(
-          `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+          `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
         );
       }
     }),
@@ -1306,7 +1317,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         title.trim() === '' ? undefined : title.trim(),
       );
       if (forkedId === null) {
-        vscode.window.showWarningMessage('AGI Workforce: Developer session not found.');
+        vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Developer session not found.`);
         return;
       }
       await revealFirstPartyChat();
@@ -1339,7 +1350,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const token = await getAccountToken(context.secrets);
       if (!token) {
         vscode.window.showWarningMessage(
-          'AGI Workforce: sign in first. Diagnostics are redacted on the server, so nothing is exported while you are signed out.',
+          `${PRODUCT_NAMES.code}: sign in first. Diagnostics are redacted on the server, so nothing is exported while you are signed out.`,
         );
         return;
       }
@@ -1365,10 +1376,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           target,
           Buffer.from(JSON.stringify(result.diagnostics, null, 2), 'utf8'),
         );
-        vscode.window.showInformationMessage(`AGI Workforce: ${result.summary}`);
+        vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: ${result.summary}`);
       } catch (cause) {
         vscode.window.showErrorMessage(
-          `AGI Workforce: ${cause instanceof Error ? cause.message : 'Diagnostics export failed.'}`,
+          `${PRODUCT_NAMES.code}: ${cause instanceof Error ? cause.message : 'Diagnostics export failed.'}`,
         );
       }
     }),
@@ -1387,14 +1398,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       ];
 
       const picked = await vscode.window.showQuickPick(FEEDBACK_TYPES, {
-        title: 'AGI Workforce, Send Feedback',
+        title: `${PRODUCT_NAMES.code}, Send Feedback`,
         placeHolder: 'What kind of feedback?',
       });
 
       if (picked === undefined) return;
 
       const feedbackText = await vscode.window.showInputBox({
-        title: 'AGI Workforce, Send Feedback',
+        title: `${PRODUCT_NAMES.code}, Send Feedback`,
         prompt: `${picked.label.replace(/\$\([^)]+\)\s*/, '')}: Describe your feedback`,
         placeHolder: 'Your feedback here…',
         ignoreFocusOut: true,
@@ -1412,33 +1423,33 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const outcome = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'AGI Workforce: sending feedback',
+          title: `${PRODUCT_NAMES.code}: sending feedback`,
         },
         () => submitFeedback(context.secrets, feedbackType, feedbackText),
       );
       if (outcome.status === 'sent') {
         void vscode.window.showInformationMessage(
-          'AGI Workforce: thanks, your feedback reached the team.',
+          `${PRODUCT_NAMES.code}: thanks, your feedback reached the team.`,
         );
         return;
       }
       if (outcome.status === 'signed-out') {
         const choice = await vscode.window.showWarningMessage(
-          'AGI Workforce: sign in to AGI Cloud to send feedback from VS Code.',
+          `${PRODUCT_NAMES.code}: sign in to AGI Cloud to send feedback from VS Code.`,
           'Sign in',
         );
         if (choice === 'Sign in') await vscode.commands.executeCommand('agi-workforce.signIn');
         return;
       }
       void vscode.window.showErrorMessage(
-        `AGI Workforce: your feedback was not sent, ${outcome.reason}. Try again in a moment.`,
+        `${PRODUCT_NAMES.code}: your feedback was not sent, ${outcome.reason}. Try again in a moment.`,
       );
     }),
 
     register('agi.git.status', async () => {
       if (!vscode.workspace.isTrusted) {
         vscode.window.showWarningMessage(
-          'AGI Workforce: git is disabled in untrusted workspaces. Trust the workspace to run git.',
+          `${PRODUCT_NAMES.code}: git is disabled in untrusted workspaces. Trust the workspace to run git.`,
         );
         return;
       }
@@ -1453,7 +1464,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi.git.diff', async () => {
       if (!vscode.workspace.isTrusted) {
         vscode.window.showWarningMessage(
-          'AGI Workforce: git is disabled in untrusted workspaces. Trust the workspace to run git.',
+          `${PRODUCT_NAMES.code}: git is disabled in untrusted workspaces. Trust the workspace to run git.`,
         );
         return;
       }
@@ -1474,7 +1485,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const folder = await getActiveWorkspaceFolder();
       if (!folder) {
         vscode.window.showErrorMessage(
-          'AGI Workforce: open a workspace folder before committing, there is no repository to commit to.',
+          `${PRODUCT_NAMES.code}: open a workspace folder before committing, there is no repository to commit to.`,
         );
         return;
       }
@@ -1497,12 +1508,17 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           const repo = api.repositories.find((r) => r.rootUri.fsPath === folder.uri.fsPath);
           if (repo !== undefined) {
             await repo.commit(msg, { all: true });
-            vscode.window.showInformationMessage(`AGI Workforce: committed "${msg.slice(0, 60)}"`);
+            vscode.window.showInformationMessage(
+              `${PRODUCT_NAMES.code}: committed "${msg.slice(0, 60)}"`,
+            );
             return;
           }
         }
       } catch (err) {
-        console.warn('[AGI Workforce] git ext commit failed, falling back to execFile:', err);
+        console.warn(
+          `[${PRODUCT_NAMES.code}] git ext commit failed, falling back to execFile:`,
+          err,
+        );
       }
 
       if (!vscode.workspace.isTrusted) {
@@ -1515,13 +1531,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (!(await runGitToOutputChannel(['commit', '-m', msg], folder.uri.fsPath, 'git commit'))) {
         return;
       }
-      vscode.window.showInformationMessage(`AGI Workforce: committed "${msg.slice(0, 60)}"`);
+      vscode.window.showInformationMessage(
+        `${PRODUCT_NAMES.code}: committed "${msg.slice(0, 60)}"`,
+      );
     }),
 
     register('agi.test.run', async () => {
       if (!vscode.workspace.isTrusted) {
         vscode.window.showWarningMessage(
-          'AGI Workforce: test execution is disabled in untrusted workspaces. Trust the workspace to run tests.',
+          `${PRODUCT_NAMES.code}: test execution is disabled in untrusted workspaces. Trust the workspace to run tests.`,
         );
         return;
       }
@@ -1642,7 +1660,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       ];
 
       const pick = await vscode.window.showQuickPick(allItems, {
-        title: 'AGI Workforce, Actions',
+        title: `${PRODUCT_NAMES.code}, Actions`,
         placeHolder: 'Search actions…',
         matchOnDescription: true,
       });
@@ -1656,7 +1674,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             canSelectFiles: true,
             canSelectFolders: false,
             openLabel: 'Add to Context',
-            title: 'AGI Workforce, Attach Workspace Files to Context',
+            title: `${PRODUCT_NAMES.code}, Attach Workspace Files to Context`,
           });
           if (uris !== undefined && uris.length > 0) {
             for (const uri of uris) {
@@ -1739,7 +1757,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
       ];
       const modePick = await vscode.window.showQuickPick(modeItems, {
-        title: 'AGI Workforce, Modes',
+        title: `${PRODUCT_NAMES.code}, Modes`,
         placeHolder: `Current: ${capMode(currentMode)} · choose the authority for future actions`,
         matchOnDescription: true,
       });
@@ -1747,7 +1765,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         const selectedMode = modePick.mode;
         if (await setAgentModeWithConsent(context, selectedMode)) {
           vscode.window.showInformationMessage(
-            `AGI Workforce agent mode set to: ${capMode(selectedMode)}`,
+            `${PRODUCT_NAMES.code} agent mode set to: ${capMode(selectedMode)}`,
           );
         }
       }
@@ -1785,7 +1803,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         },
       ];
       const effortPick = await vscode.window.showQuickPick(effortItems, {
-        title: 'AGI Workforce, Effort',
+        title: `${PRODUCT_NAMES.code}, Effort`,
         placeHolder: `Current: ${capEffort(currentEffort)}`,
         matchOnDescription: true,
       });
@@ -1793,7 +1811,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         const selectedEffort = effortPick.detail as 'low' | 'medium' | 'high' | 'max';
         if (await setAgentEffortWithConsent(context, selectedEffort)) {
           vscode.window.showInformationMessage(
-            `AGI Workforce effort set to: ${capEffort(selectedEffort)}`,
+            `${PRODUCT_NAMES.code} effort set to: ${capEffort(selectedEffort)}`,
           );
         }
       }
@@ -1813,7 +1831,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           { label: '$(trash) Forget everything', detail: 'clear' },
         ],
         {
-          title: `AGI Workforce, Memory (${enabled ? 'on' : 'off'})`,
+          title: `${PRODUCT_NAMES.code}, Memory (${enabled ? 'on' : 'off'})`,
           placeHolder: enabled
             ? 'Choose an action'
             : 'Saved facts are kept but not sent with your turns',
@@ -1845,7 +1863,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (action.detail === 'clear') {
         const store = getAccountMemoryStore();
         if (store === undefined) {
-          vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+          vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
           return;
         }
         if (await store.signedOut()) {
@@ -1900,7 +1918,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
     register('agi-workforce.memory.create', async (prefill?: unknown) => {
       if (!(await requireMemoryEnabledForCapture(context))) return;
       const text = await vscode.window.showInputBox({
-        title: 'AGI Workforce, Add Memory Fact',
+        title: `${PRODUCT_NAMES.code}, Add Memory Fact`,
         value: typeof prefill === 'string' ? prefill : '',
         prompt:
           'A short fact saved to your AGI Cloud account. Every AGI client uses it, and it is sent with turns only while memory is on.',
@@ -1917,7 +1935,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const trimmed = text.trim();
       const store = getAccountMemoryStore();
       if (store === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+        vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
         return;
       }
       if (await store.signedOut()) {
@@ -1940,7 +1958,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.memory.edit', async (item: MemoryFactItem) => {
       const newText = await vscode.window.showInputBox({
-        title: 'AGI Workforce, Edit Memory Fact',
+        title: `${PRODUCT_NAMES.code}, Edit Memory Fact`,
         value: item.fact.text,
         prompt: 'Update this fact in your AGI Cloud account. The change reaches every AGI client.',
         ignoreFocusOut: true,
@@ -1954,7 +1972,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (!newText || newText.trim() === item.fact.text) return;
       const store = getAccountMemoryStore();
       if (store === undefined) {
-        vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+        vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
         return;
       }
       const updated = await store.update(item.fact.id, newText.trim());
@@ -1962,7 +1980,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         vscode.window.showInformationMessage('Updated in your account, on every client.');
       } else {
         vscode.window.showWarningMessage(
-          `AGI Workforce: not updated. ${updated.refusals.join(' ')}`,
+          `${PRODUCT_NAMES.code}: not updated. ${updated.refusals.join(' ')}`,
         );
       }
     }),
@@ -1976,7 +1994,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (confirm === 'Delete') {
         const store = getAccountMemoryStore();
         if (store === undefined) {
-          vscode.window.showWarningMessage('AGI Workforce: memory is not ready yet.');
+          vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: memory is not ready yet.`);
           return;
         }
         const removed = await store.remove(item.fact.id);
@@ -2319,7 +2337,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       });
 
       const pick = await vscode.window.showQuickPick(items, {
-        title: `AGI Workforce, Account & Usage (${planLabel})`,
+        title: `${PRODUCT_NAMES.code}, Account & Usage (${planLabel})`,
         placeHolder: 'Session stats',
         matchOnDescription: true,
       });
@@ -2372,7 +2390,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         );
       } else if (pick?.action === 'reset-counter') {
         counter.reset();
-        vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
+        vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: Token counter reset.`);
       }
     }),
   );
@@ -2462,13 +2480,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const active = getActiveCloudProject(context.workspaceState);
       if (active === undefined) {
         vscode.window.showInformationMessage(
-          'AGI Workforce: no project is applied to turns in this workspace.',
+          `${PRODUCT_NAMES.code}: no project is applied to turns in this workspace.`,
         );
         return;
       }
       await clearActiveCloudProject(context.workspaceState);
       vscode.window.showInformationMessage(
-        `AGI Workforce: turns in this workspace no longer use "${active.name}".`,
+        `${PRODUCT_NAMES.code}: turns in this workspace no longer use "${active.name}".`,
       );
       projectsTreeProvider.refresh();
       sidebarProvider.pushActiveProject();
@@ -2568,12 +2586,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         canSelectFiles: true,
         canSelectFolders: false,
         openLabel: 'Mention in Chat',
-        title: 'AGI Workforce, Mention File from Project',
+        title: `${PRODUCT_NAMES.code}, Mention File from Project`,
       });
       if (uris === undefined || uris.length === 0 || uris[0] === undefined) return;
       const result = await validateWorkspaceContextFile(uris[0]);
       if (!result.ok) {
-        vscode.window.showWarningMessage(`AGI Workforce: ${result.message}`);
+        vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${result.message}`);
         return;
       }
       await prefillFirstPartyReference(result.uri);
@@ -2588,7 +2606,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
   if (failedCommandIds.length > 0) {
     console.error(
-      `[AGI Workforce] ${failedCommandIds.length} command registration(s) failed: ${failedCommandIds.join(', ')}`,
+      `[${PRODUCT_NAMES.code}] ${failedCommandIds.length} command registration(s) failed: ${failedCommandIds.join(', ')}`,
     );
     vscode.window.showErrorMessage(
       tPlural('commands.registrationFailed', failedCommandIds.length, {

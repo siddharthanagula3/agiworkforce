@@ -1,4 +1,4 @@
-// OAuth provider authentication for AGI Workforce CLI
+// OAuth provider authentication for AGI CLI
 // Supports: the AGI Workforce device flow; provider keys are entered, never OAuth'd (D-2026-09-15-05)
 
 use anyhow::{Context, Result};
@@ -147,7 +147,7 @@ pub async fn poll_device_code(api_base: &str, device_code: &str) -> Result<Devic
                 body.get("error_description")
                     .and_then(|value| value.as_str())
                     .filter(|value| !value.trim().is_empty())
-                    .unwrap_or("This AGI Workforce account cannot sign in right now.")
+                    .unwrap_or("This AGI account cannot sign in right now.")
                     .to_string(),
             ),
             (_, "access_denied") => DeviceCodePoll::Denied,

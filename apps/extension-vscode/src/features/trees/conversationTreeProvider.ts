@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import type { ThreadReadResponse, ThreadSummary } from '@agiworkforce/types';
 import {
@@ -135,7 +136,7 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
               isCloudThread(thread) || isSameWorkspacePath(folder.uri.fsPath, thread.cwd);
             if (!owned) {
               console.warn(
-                `[AGI Workforce] ignoring developer session ${thread.id} with mismatched workspace metadata`,
+                `[${PRODUCT_NAMES.code}] ignoring developer session ${thread.id} with mismatched workspace metadata`,
               );
             }
             return owned;
@@ -145,7 +146,10 @@ export class ConversationTreeProvider implements vscode.TreeDataProvider<vscode.
           }
           return ownedThreads;
         } catch (error) {
-          console.warn(`[AGI Workforce] failed to list sessions for ${folder.uri.fsPath}`, error);
+          console.warn(
+            `[${PRODUCT_NAMES.code}] failed to list sessions for ${folder.uri.fsPath}`,
+            error,
+          );
           this.listingFailures.push({
             folderName: folder.name,
             reason: describeListingFailure(error),

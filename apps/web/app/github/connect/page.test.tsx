@@ -50,7 +50,7 @@ describe('/github/connect requester page', () => {
   it('names the requesting AGI account before anyone reaches GitHub', async () => {
     const html = await render(STATE);
 
-    expect(html).toContain('Connecting GitHub to the AGI Workforce account m***@example.com');
+    expect(html).toContain('Connecting GitHub to the AGI account m***@example.com');
     expect(html).toContain('If someone sent you this link, close this page');
     expect(html).toContain(
       `href="https://github.com/apps/agi-workforce/installations/new?state=${STATE}"`,

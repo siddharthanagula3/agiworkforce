@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   AgiWorkforcePaywallError,
@@ -218,7 +219,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
         if (!this.paywallSuppressed) {
           this.paywallSuppressed = true;
           void showCloudUtilityErrorActions(paywallError, {
-            title: 'AGI Workforce: Inline completions paused',
+            title: `${PRODUCT_NAMES.code}: Inline completions paused`,
             secrets: this.secrets,
           });
         }
@@ -228,7 +229,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
         if (this.limitPausedUntilMs === undefined) {
           this.limitPausedUntilMs = Number.POSITIVE_INFINITY;
           void showCloudUtilityErrorActions(error, {
-            title: 'AGI Workforce: Inline completions paused',
+            title: `${PRODUCT_NAMES.code}: Inline completions paused`,
             secrets: this.secrets,
           });
           const resetAt = limitResetAt(error.code, await fetchTierInfo(this.secrets));

@@ -1,5 +1,10 @@
 import { type DesktopCapability } from '@agiworkforce/local-runtime-contract';
-import { BROWSER_CDP_COMMANDS, isBrowserCommand, type BrowserCommand } from '@agiworkforce/types';
+import {
+  BROWSER_CDP_COMMANDS,
+  isBrowserCommand,
+  type BrowserCommand,
+  PRODUCT_NAMES,
+} from '@agiworkforce/types';
 import { NOT_THIS_APP, shownValue } from '../runtime/dialogText';
 
 const SELECTOR_SHOWN = { head: 300, tail: 100 };
@@ -130,7 +135,7 @@ export function planBrowserCommand(
       return plan(
         {},
         'List the tabs open in the paired browser?',
-        'The titles and addresses of every open web tab are shown in AGI Cloud so you can choose one. Nothing is added to the conversation until you read a tab.',
+        `The titles and addresses of every open web tab are shown in ${PRODUCT_NAMES.desktop} so you can choose one. Nothing is added to the conversation until you read a tab.`,
       );
     case 'browser_read_page': {
       const tabId = optionalNumber(rawArgs, 'tabId');

@@ -61,9 +61,9 @@ test.describe('Windows: App Launch', () => {
     await setupPage(page);
   });
 
-  test('window title is "AGI Workforce"', async ({ page }) => {
+  test('window title is "AGI Desktop"', async ({ page }) => {
     const title = await page.title();
-    expect(title).toMatch(/AGI Workforce/i);
+    expect(title).toMatch(/AGI Desktop/i);
   });
 
   test('app root renders at the configured initial dimensions (1400x850)', async ({ page }) => {

@@ -8,7 +8,7 @@ import { Reveal } from '@/features/marketing/components/Reveal';
 import { NOTIFY_CTA, SURFACE_STATUS } from '../../lib/marketing-constants';
 
 export const metadata = buildMetadata({
-  title: 'AGI in Chrome | Browser Context, Desktop Bridge',
+  title: 'AGI Extension | Browser Context, Desktop Bridge',
   description:
     'A Chrome Manifest V3 side panel that reads the tab only when you ask. Chat answers come back from AGI Managed Cloud, a paired HMAC-signed bridge passes selections and captures to AGI Desktop, and computer use posts the conversation with its screenshots, and any console messages and request records it read, to the Managed Cloud gateway directly from the extension.',
   path: '/chrome-extension',
@@ -117,9 +117,9 @@ export default function ChromeExtensionPage() {
           <div className="agi-fl-hero-backdrop" aria-hidden="true" />
           <div className="agi-fl-hero-split">
             <div className="agi-fl-hero-copy">
-              <p className="agi-fl-eyebrow">AGI in Chrome · {SURFACE_STATUS.chrome}</p>
+              <p className="agi-fl-eyebrow">AGI Extension · {SURFACE_STATUS.chrome}</p>
               <h1 id="agi-fl-chrome-hero-title" className="sr-only">
-                AGI in Chrome
+                AGI Extension
               </h1>
               <div className="agi-fl-cta-row">
                 <Link href={NOTIFY_CTA.href} className="agi-fl-cta agi-fl-cta--primary">
@@ -145,7 +145,7 @@ export default function ChromeExtensionPage() {
             The browser asks. Managed Cloud answers.
           </h2>
           <p className="agi-fl-section-lede">
-            AGI in Chrome never runs a model locally and never stores provider keys. It captures
+            AGI Extension never runs a model locally and never stores provider keys. It captures
             what you point at, sends it to Managed Cloud under your account, and brings the answer
             back into the panel. Pairing AGI Desktop adds a local road for selections and captures,
             not a second place an answer can come from. Computer use keeps the same gateway and adds

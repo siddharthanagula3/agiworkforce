@@ -110,7 +110,7 @@ describe('the desktop settings section', () => {
   });
 
   it.each([
-    ['bundled', 'Bundled with the app', '/Applications/AGI Cloud.app/Contents/Resources/agi'],
+    ['bundled', 'Bundled with the app', '/Applications/AGI Desktop.app/Contents/Resources/agi'],
     ['custom', 'Custom path', '/opt/agi/bin/agi'],
     ['path', 'From PATH', '/usr/local/bin/agi'],
   ] as const)('says where a %s CLI came from', async (source, label, cliPath) => {
@@ -169,7 +169,7 @@ describe('the desktop settings section', () => {
     );
     // The version already has its own row, and the bridge's platform value is
     // an id to branch on rather than something to show anyone.
-    expect(screen.getByText('AGI Cloud on macOS')).toBeInTheDocument();
+    expect(screen.getByText('AGI Desktop on macOS')).toBeInTheDocument();
     expect(screen.queryByText(/electron-darwin/u)).not.toBeInTheDocument();
   });
 
@@ -266,7 +266,7 @@ describe('the desktop settings section', () => {
     render(<DesktopSettingsSection />);
 
     expect(await screen.findByText('Already used by another app.')).toBeInTheDocument();
-    expect(screen.getByText('Already used by another AGI Cloud shortcut.')).toBeInTheDocument();
+    expect(screen.getByText('Already used by another AGI Desktop shortcut.')).toBeInTheDocument();
   });
 
   // The shell asks the user natively before it saves a new CLI path, so what
@@ -339,7 +339,7 @@ describe('the desktop settings section', () => {
     render(<DesktopSettingsSection />);
 
     const mode = await screen.findByLabelText('Agent notifications');
-    expect(mode).toHaveDisplayValue('Only when AGI Cloud is in the background');
+    expect(mode).toHaveDisplayValue('Only when AGI Desktop is in the background');
 
     expect(screen.getByLabelText('Questions')).toBeChecked();
     await userEvent.click(screen.getByLabelText('Finished turns'));

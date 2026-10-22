@@ -6,6 +6,7 @@ import {
   CLOUD_CODE_STOP_REASON_LABELS,
   cloudCodeStopReasonIsFailure,
   modelDisplayNameById,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import type { WorkspaceCloudSource } from '../context-handoff';
 import { describeCloudRunFailure } from './cloudRunApproval';
@@ -81,13 +82,13 @@ export async function continueInCloud(host: ContinueInCloudHost): Promise<void> 
   const source = await host.readSource();
   const refusal = describeCloudSourceRefusal(source);
   if (source === null || source.branch === null || refusal !== null) {
-    void vscode.window.showWarningMessage(`AGI Workforce: ${refusal}`);
+    void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${refusal}`);
     return;
   }
   const api = await host.resolveApi();
   if (api === null) {
     void vscode.window.showWarningMessage(
-      'AGI Workforce: sign in to AGI Cloud to continue work in the cloud.',
+      `${PRODUCT_NAMES.code}: sign in to AGI Cloud to continue work in the cloud.`,
     );
     return;
   }
@@ -116,7 +117,7 @@ export async function continueInCloud(host: ContinueInCloudHost): Promise<void> 
     const created = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'AGI Workforce: starting a cloud session',
+        title: `${PRODUCT_NAMES.code}: starting a cloud session`,
       },
       () =>
         api.create({
@@ -130,7 +131,7 @@ export async function continueInCloud(host: ContinueInCloudHost): Promise<void> 
     sessionId = created.session.id;
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: the cloud session could not start, ${describeCloudRunFailure(error)}`,
+      `${PRODUCT_NAMES.code}: the cloud session could not start, ${describeCloudRunFailure(error)}`,
     );
     return;
   }
@@ -139,20 +140,20 @@ export async function continueInCloud(host: ContinueInCloudHost): Promise<void> 
     const turn = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: 'AGI Workforce: the cloud session is working',
+        title: `${PRODUCT_NAMES.code}: the cloud session is working`,
       },
       () => api.startAgentTurn(sessionId, { goal, model: modelId, idempotencyKey: randomUUID() }),
     );
     const label = CLOUD_CODE_STOP_REASON_LABELS[turn.stopReason];
     const shown = cloudCodeStopReasonIsFailure(turn.stopReason)
-      ? vscode.window.showWarningMessage(`AGI Workforce: ${label}`, OPEN_SESSION)
-      : vscode.window.showInformationMessage(`AGI Workforce: ${label}`, OPEN_SESSION);
+      ? vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${label}`, OPEN_SESSION)
+      : vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: ${label}`, OPEN_SESSION);
     if ((await shown) === OPEN_SESSION) {
       await vscode.commands.executeCommand(OPEN_CLOUD_CODE_SESSION_COMMAND, sessionId);
     }
   } catch (error) {
     const choice = await vscode.window.showErrorMessage(
-      `AGI Workforce: the cloud session started but its task did not, ${describeCloudRunFailure(error)}`,
+      `${PRODUCT_NAMES.code}: the cloud session started but its task did not, ${describeCloudRunFailure(error)}`,
       OPEN_SESSION,
     );
     if (choice === OPEN_SESSION) {

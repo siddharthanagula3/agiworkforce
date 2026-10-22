@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { describeOutboundRefusal } from '../../core/outboundContentGuard';
 
@@ -25,12 +26,12 @@ export function setEditorUtilityChat(sink?: (prompt: string) => void | PromiseLi
 
 export async function runEditorUtility(built: EditorUtilityPrompt): Promise<void> {
   if (!built.ok) {
-    vscode.window.showWarningMessage(`AGI Workforce: ${built.message}`);
+    vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${built.message}`);
     return;
   }
   if (askChat === undefined) {
     vscode.window.showWarningMessage(
-      'AGI Workforce: The chat view is not available in this window. Reload the window and try again.',
+      `${PRODUCT_NAMES.code}: The chat view is not available in this window. Reload the window and try again.`,
     );
     return;
   }

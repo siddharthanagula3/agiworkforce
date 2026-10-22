@@ -25,12 +25,12 @@ const SURFACE_LANDING_PAGES: Partial<Record<SurfaceKey, string>> = {
 };
 
 const SURFACE_NAME_PATTERNS: Record<SurfaceKey, RegExp> = {
-  web: /\bAGI Web\b/i,
+  web: /\bAGI Chat\b/i,
   desktop: /\bAGI Desktop\b|\bDesktop app\b|\bDesktop\b/i,
   cli: /\bAGI CLI\b|\bagi binary\b|\bCLI\b/i,
   mobile: /\bAGI Mobile\b|\bMobile app\b/i,
-  chrome: /\bAGI in Chrome\b|\bChrome extension\b/i,
-  vscode: /\bAGI in VS Code\b|\bVS Code extension\b/i,
+  chrome: /\bAGI Extension\b|\bChrome extension\b/i,
+  vscode: /\bAGI Code for VS Code\b|\bVS Code extension\b/i,
 };
 
 const UNRELEASED_PHRASES = [
@@ -632,7 +632,7 @@ describe('an unreleased surface is never described as released', () => {
     ['of which the web app, desktop app, and CLI have shipped.', 'have shipped'],
     ['Local and BYOK run on the CLI today', 'today'],
     [
-      "label: 'Available now', value: 'AGI Web, in any browser · AGI CLI, coming soon'",
+      "label: 'Available now', value: 'AGI Chat, in any browser · AGI CLI, coming soon'",
       'available now',
     ],
     ["value: '3', label: 'surfaces released: Web, Desktop, CLI'", 'released'],
@@ -641,7 +641,7 @@ describe('an unreleased surface is never described as released', () => {
   });
 
   it.each([
-    'AGI Web is available now.',
+    'AGI Chat is available now.',
     'The CLI is coming soon.',
     'Mobile has no published release.',
     'Desktop, Mobile, VS Code and Chrome are not released yet',

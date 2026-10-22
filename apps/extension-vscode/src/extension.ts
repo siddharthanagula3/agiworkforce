@@ -29,7 +29,7 @@ import {
   SHOW_SESSION_ACTIVITY_COMMAND,
   showSessionReceipt,
 } from './features/sidebar-webview/sessionReceipt';
-import { resolveCloudCodeAgentModel } from '@agiworkforce/types';
+import { resolveCloudCodeAgentModel, PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 import { resolveTierSync } from './integrations/tierResolver';
 import { Config } from './platform/config';
 import { initModelMetrics } from './features/model-picker/modelMetrics';
@@ -77,7 +77,7 @@ let activeLocalRuntimes: LocalRuntimePool | undefined;
 function reportBootFailure(subsystem: string, err: unknown, impact: string): void {
   recordFailure(subsystem, err);
   const message = err instanceof Error ? err.message : String(err);
-  void vscode.window.showErrorMessage(`AGI Workforce: ${impact}, ${message}`);
+  void vscode.window.showErrorMessage(`${PRODUCT_NAMES.code}: ${impact}, ${message}`);
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -196,7 +196,7 @@ export function activate(context: vscode.ExtensionContext): void {
         const handoff = parseCloudTaskHandoffQuery(query);
         if (handoff === null) {
           void vscode.window.showWarningMessage(
-            'AGI Workforce: open a cloud task first, this command needs the task it should bring in.',
+            `${PRODUCT_NAMES.code}: open a cloud task first, this command needs the task it should bring in.`,
           );
           return;
         }
@@ -207,14 +207,14 @@ export function activate(context: vscode.ExtensionContext): void {
         async (argument: unknown) => {
           if (typeof argument !== 'string' || argument === '') {
             void vscode.window.showWarningMessage(
-              'AGI Workforce: pick an AGI Code session from Sessions, this command needs the session to open.',
+              `${PRODUCT_NAMES.code}: pick an AGI Code session from Sessions, this command needs the session to open.`,
             );
             return;
           }
           const code = await resolveCloudCodeApi(context.secrets);
           if (code.status === 'signed-out') {
             void vscode.window.showWarningMessage(
-              'AGI Workforce: sign in to AGI Cloud to open AGI Code sessions.',
+              `${PRODUCT_NAMES.code}: sign in to AGI Cloud to open AGI Code sessions.`,
             );
             return;
           }
@@ -227,7 +227,7 @@ export function activate(context: vscode.ExtensionContext): void {
               const target = resolveChatTarget();
               if (target === undefined) {
                 void vscode.window.showWarningMessage(
-                  'AGI Workforce: the chat view is not available, so this session was not placed. Reload the window and open it again.',
+                  `${PRODUCT_NAMES.code}: the chat view is not available, so this session was not placed. Reload the window and open it again.`,
                 );
                 return;
               }
@@ -245,7 +245,7 @@ export function activate(context: vscode.ExtensionContext): void {
           await showSessionReceipt(await provider?.activeThreadReceipt());
         } catch (error) {
           void vscode.window.showErrorMessage(
-            `AGI Workforce: this session's activity could not be read, ${error instanceof Error ? error.message : String(error)}.`,
+            `${PRODUCT_NAMES.code}: this session's activity could not be read, ${error instanceof Error ? error.message : String(error)}.`,
           );
         }
       }),
@@ -282,7 +282,7 @@ export function activate(context: vscode.ExtensionContext): void {
     { dispose: () => setEditorUtilityChat(undefined) },
     vscode.commands.registerCommand('agi-workforce.reviewPullRequest', async () => {
       const reference = await vscode.window.showInputBox({
-        title: 'AGI Workforce, Review a pull request',
+        title: `${PRODUCT_NAMES.code}, Review a pull request`,
         prompt: 'A pull request number, such as 128, or a branch name',
         ignoreFocusOut: true,
       });
@@ -309,8 +309,7 @@ export function activate(context: vscode.ExtensionContext): void {
         'Apply the changed agent permissions?',
         {
           modal: true,
-          detail:
-            'Restarting stops running local turns in this window and applies the current permission consent. New turns and steering are blocked until the restart finishes. Cancel keeps running turns and their interruption and approval controls available. You can restart later with AGI Workforce: Restart Local Runtime.',
+          detail: `Restarting stops running local turns in this window and applies the current permission consent. New turns and steering are blocked until the restart finishes. Cancel keeps running turns and their interruption and approval controls available. You can restart later with ${PRODUCT_NAMES.code}: Restart Local Runtime.`,
         },
         'Restart Local Runtime',
       );
@@ -319,7 +318,9 @@ export function activate(context: vscode.ExtensionContext): void {
         await localRuntimes.restartAll();
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        vscode.window.showErrorMessage(`AGI Workforce: Local runtime restart failed, ${message}`);
+        vscode.window.showErrorMessage(
+          `${PRODUCT_NAMES.code}: Local runtime restart failed, ${message}`,
+        );
       } finally {
         refreshRuntimeSurfaces();
       }
@@ -382,13 +383,17 @@ export function activate(context: vscode.ExtensionContext): void {
       });
       void resumePendingDeveloperSession(context.globalState);
     } catch (err) {
-      reportBootFailure('commands', err, 'Some AGI Workforce commands could not be registered');
+      reportBootFailure(
+        'commands',
+        err,
+        `Some ${PRODUCT_NAMES.code} commands could not be registered`,
+      );
     }
   }
 
   const statusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 100);
   statusBar.command = 'agi-workforce.selectModel';
-  statusBar.tooltip = 'AGI Workforce, click to change model';
+  statusBar.tooltip = `${PRODUCT_NAMES.code}, click to change model`;
   context.subscriptions.push(statusBar);
 
   function updateStatusBar(): void {
@@ -439,7 +444,7 @@ export function activate(context: vscode.ExtensionContext): void {
           .catch((error: unknown) => {
             const message = error instanceof Error ? error.message : String(error);
             vscode.window.showErrorMessage(
-              `AGI Workforce: Could not restart the local runtime after ${runtimeSetting} changed, ${message}`,
+              `${PRODUCT_NAMES.code}: Could not restart the local runtime after ${runtimeSetting} changed, ${message}`,
             );
           })
           .finally(refreshRuntimeSurfaces);
@@ -516,11 +521,11 @@ async function checkInlineCompletionsFirstRun(context: vscode.ExtensionContext):
   if (alreadyShown === true) return;
 
   await vscode.window.showInformationMessage(
-    'AGI Workforce inline completions are now active. On each keystroke, up to ' +
-      '~100 lines of surrounding code are sent to the AGI Workforce API for ' +
+    `${PRODUCT_NAMES.code} inline completions are now active. On each keystroke, up to ` +
+      `~100 lines of surrounding code are sent to the ${PRODUCT_BRAND} API for ` +
       'suggestion. Files in the sensitive-file denylist (.env, .pem, .ssh/, ' +
       'credentials, secrets.json, etc.) are automatically excluded. Manage in ' +
-      'Settings → AGI Workforce.',
+      `Settings → ${PRODUCT_NAMES.code}.`,
     'Got it',
   );
 

@@ -11,7 +11,7 @@ impl McpServerToolRegistry {
         let all_tools = vec![
             json!({
                 "name": "agi_chat",
-                "description": "Chat through AGI Workforce auto-routing. External MCP callers cannot override model IDs or system prompts.",
+                "description": "Chat through AGI Desktop auto-routing. External MCP callers cannot override model IDs or system prompts.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -22,7 +22,7 @@ impl McpServerToolRegistry {
             }),
             json!({
                 "name": "agi_run_task",
-                "description": "Run an agent task with the desktop app's tools. Requires user approval via the AGI Workforce desktop app. Returns the final result.",
+                "description": "Run an agent task with the desktop app's tools. Requires user approval via AGI Desktop. Returns the final result.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -33,7 +33,7 @@ impl McpServerToolRegistry {
             }),
             json!({
                 "name": "agi_execute_skill",
-                "description": "Execute an available AGI Workforce skill by name.",
+                "description": "Execute an available AGI Desktop skill by name.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {
@@ -45,7 +45,7 @@ impl McpServerToolRegistry {
             }),
             json!({
                 "name": "agi_bash",
-                "description": "Execute a shell command on the desktop with timeout. Requires user approval via the AGI Workforce desktop app.",
+                "description": "Execute a shell command on the desktop with timeout. Requires user approval via AGI Desktop.",
                 "inputSchema": {
                     "type": "object",
                     "properties": {

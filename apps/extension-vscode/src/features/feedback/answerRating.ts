@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { createHash } from 'node:crypto';
 import * as vscode from 'vscode';
 import { modelDisplayLabel } from '../model-picker/modelConstants';
@@ -52,14 +53,14 @@ async function reportRatingOutcome(outcome: FeedbackOutcome): Promise<void> {
   if (outcome.status === 'sent') return;
   if (outcome.status === 'signed-out') {
     const choice = await vscode.window.showWarningMessage(
-      'AGI Workforce: sign in to AGI Cloud to rate answers from VS Code.',
+      `${PRODUCT_NAMES.code}: sign in to AGI Cloud to rate answers from VS Code.`,
       'Sign in',
     );
     if (choice === 'Sign in') await vscode.commands.executeCommand('agi-workforce.signIn');
     return;
   }
   void vscode.window.showErrorMessage(
-    `AGI Workforce: your rating was not sent, ${outcome.reason}. Try again in a moment.`,
+    `${PRODUCT_NAMES.code}: your rating was not sent, ${outcome.reason}. Try again in a moment.`,
   );
 }
 

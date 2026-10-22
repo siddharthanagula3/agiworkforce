@@ -50,7 +50,7 @@ use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinSet;
 
 const SERVER_NAME: &str = "agiworkforce-app-server";
-const SERVER_TITLE: &str = "AGI Workforce App Server";
+const SERVER_TITLE: &str = "AGI CLI App Server";
 
 /// Stable host boundary implemented by the local developer runtime.
 ///

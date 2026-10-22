@@ -63,6 +63,7 @@ import {
   PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
   isSupportedRuntimeVersion as isSupportedCliVersion,
   messageKindForAgentEvent,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { redactTelemetryText } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
@@ -88,7 +89,7 @@ export const CLI_NOT_FOUND_MARKER = 'AGI_CLI_NOT_FOUND';
 export const CLI_NOT_EXECUTABLE_MARKER = 'AGI_CLI_NOT_EXECUTABLE';
 
 export function cliAcquisitionHint(): string {
-  return `Run "AGI Workforce: Install AGI CLI" to install AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer, or set ${CLI_PATH_SETTING} to one you already have.`;
+  return `Run "${PRODUCT_NAMES.code}: Install AGI CLI" to install AGI CLI ${MINIMUM_SUPPORTED_CLI_VERSION_LABEL} or newer, or set ${CLI_PATH_SETTING} to one you already have.`;
 }
 
 function describeSpawnFailure(cliPath: string, error: Error, environmentLabel?: string): Error {
@@ -1990,7 +1991,7 @@ export class LocalRuntimeClient {
   private assertPermissionAuthority(): void {
     if (this.requiresPermissionRestart()) {
       throw new Error(
-        'Agent permissions changed. Run AGI Workforce: Restart Local Runtime to apply them before starting or steering a turn. Restarting stops running local turns.',
+        `Agent permissions changed. Run ${PRODUCT_NAMES.code}: Restart Local Runtime to apply them before starting or steering a turn. Restarting stops running local turns.`,
       );
     }
   }
@@ -2083,7 +2084,7 @@ export class LocalRuntimeClient {
       .request('initialize', {
         clientInfo: {
           name: 'agi_vscode',
-          title: 'AGI for VS Code',
+          title: PRODUCT_NAMES.code,
           version: this.options.clientVersion,
         },
         protocolVersion: SUPPORTED_PROTOCOL_VERSION,
@@ -2113,7 +2114,7 @@ export class LocalRuntimeClient {
       throw new Error(
         `Installed AGI CLI streams agent events in schema ${result.agentEventSchemaVersion}; this extension reads schema ${AGENT_EVENT_SCHEMA_VERSION}. ${
           result.agentEventSchemaVersion > AGENT_EVENT_SCHEMA_VERSION
-            ? 'Update AGI for VS Code.'
+            ? `Update ${PRODUCT_NAMES.code}.`
             : 'Update the AGI CLI or set agiWorkforce.cliPath to a current binary.'
         }`,
       );
@@ -2288,7 +2289,7 @@ function describeVersionRefusal(error: unknown): unknown {
   const newestSupported = Math.max(...supportedProtocolVersions);
   const action =
     SUPPORTED_PROTOCOL_VERSION < minimumProtocolVersion
-      ? 'Update AGI for VS Code.'
+      ? `Update ${PRODUCT_NAMES.code}.`
       : 'Update the AGI CLI or set agiWorkforce.cliPath to a current binary.';
   return new Error(
     `Installed AGI CLI answers developer-session protocol ${minimumProtocolVersion} through ${newestSupported}; this extension requires protocol ${SUPPORTED_PROTOCOL_VERSION}. ${action}`,

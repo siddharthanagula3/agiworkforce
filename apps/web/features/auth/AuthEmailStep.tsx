@@ -50,10 +50,10 @@ const HEADING_DEFAULTS: Readonly<Record<AuthMode, { key: string; label: string }
 };
 
 const DETAIL_DEFAULTS: Readonly<Record<AuthMode, { key: string; label: string }>> = {
-  login: { key: 'flow.detail.login', label: 'Log in to AGI Workforce.' },
+  login: { key: 'flow.detail.login', label: 'Log in to AGI.' },
   signup: {
     key: 'flow.detail.signup',
-    label: 'Get started with AGI Workforce and put AI to work for you.',
+    label: 'Get started with AGI and put AI to work for you.',
   },
 };
 

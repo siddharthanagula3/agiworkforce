@@ -1,4 +1,4 @@
-
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
 export const CODE_ACTION_KINDS = [
@@ -22,12 +22,12 @@ export class AgiCodeActionProvider implements vscode.CodeActionProvider {
 
     if (context.diagnostics.length > 0) {
       const fixAction = new vscode.CodeAction(
-        'Fix with AGI Workforce',
+        `Fix with ${PRODUCT_NAMES.code}`,
         vscode.CodeActionKind.QuickFix,
       );
       fixAction.command = {
         command: 'agi-workforce.fix',
-        title: 'Fix with AGI Workforce',
+        title: `Fix with ${PRODUCT_NAMES.code}`,
       };
       fixAction.diagnostics = [...context.diagnostics];
       fixAction.isPreferred = false;
@@ -36,32 +36,32 @@ export class AgiCodeActionProvider implements vscode.CodeActionProvider {
 
     if (hasSelection) {
       const refactorAction = new vscode.CodeAction(
-        'Refactor with AGI Workforce',
+        `Refactor with ${PRODUCT_NAMES.code}`,
         vscode.CodeActionKind.Refactor,
       );
       refactorAction.command = {
         command: 'agi-workforce.refactor',
-        title: 'Refactor with AGI Workforce',
+        title: `Refactor with ${PRODUCT_NAMES.code}`,
       };
       actions.push(refactorAction);
 
       const explainAction = new vscode.CodeAction(
-        'Explain with AGI Workforce',
+        `Explain with ${PRODUCT_NAMES.code}`,
         vscode.CodeActionKind.Empty,
       );
       explainAction.command = {
         command: 'agi-workforce.explain',
-        title: 'Explain with AGI Workforce',
+        title: `Explain with ${PRODUCT_NAMES.code}`,
       };
       actions.push(explainAction);
 
       const testAction = new vscode.CodeAction(
-        'Generate Tests with AGI Workforce',
+        `Generate Tests with ${PRODUCT_NAMES.code}`,
         vscode.CodeActionKind.Empty,
       );
       testAction.command = {
         command: 'agi-workforce.generateTests',
-        title: 'Generate Tests with AGI Workforce',
+        title: `Generate Tests with ${PRODUCT_NAMES.code}`,
       };
       actions.push(testAction);
     }

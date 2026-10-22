@@ -807,7 +807,7 @@ async function handleAutoFillJobApplication(
   const safeOptions = { ...options };
   if (safeOptions.autoSubmit === true) {
     const confirmed = window.confirm(
-      'AGI Workforce: Auto-submit the job application form?\n\nClick OK to submit, or Cancel to fill only.',
+      'AGI: Auto-submit the job application form?\n\nClick OK to submit, or Cancel to fill only.',
     );
     if (!confirmed) {
       safeOptions.autoSubmit = false;

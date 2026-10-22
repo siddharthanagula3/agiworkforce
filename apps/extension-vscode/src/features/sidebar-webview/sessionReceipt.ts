@@ -1,6 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { buildVsCodeDeveloperSessionHandoffUri } from '@agiworkforce/types';
+import { buildVsCodeDeveloperSessionHandoffUri, PRODUCT_NAMES } from '@agiworkforce/types';
 import type {
   DeveloperSessionApproval,
   DeveloperSessionFileChange,
@@ -119,19 +119,21 @@ export function buildSessionReceiptItems(receipt: SessionReceipt): ReceiptItem[]
 export async function showSessionReceipt(receipt: SessionReceipt | undefined): Promise<void> {
   if (receipt === undefined) {
     void vscode.window.showInformationMessage(
-      'AGI Workforce: open or start a session first, then its activity can be shown.',
+      `${PRODUCT_NAMES.code}: open or start a session first, then its activity can be shown.`,
     );
     return;
   }
   const picked = await vscode.window.showQuickPick(buildSessionReceiptItems(receipt), {
-    title: `AGI Workforce, Session: ${receipt.title}`,
+    title: `${PRODUCT_NAMES.code}, Session: ${receipt.title}`,
     placeHolder: 'Details, every file this session wrote and every approval it asked for',
     matchOnDescription: true,
     matchOnDetail: true,
   });
   if (picked?.copyLink !== undefined) {
     await vscode.env.clipboard.writeText(picked.copyLink);
-    void vscode.window.showInformationMessage('AGI Workforce: copied a link to this session.');
+    void vscode.window.showInformationMessage(
+      `${PRODUCT_NAMES.code}: copied a link to this session.`,
+    );
     return;
   }
   if (picked?.file !== undefined) {

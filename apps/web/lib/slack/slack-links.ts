@@ -46,7 +46,7 @@ export interface SlackAccountLink {
 
 export class SlackLinkConflictError extends Error {
   constructor() {
-    super('This Slack account is already linked to another AGI Workforce account');
+    super('This Slack account is already linked to another AGI account');
     this.name = 'SlackLinkConflictError';
   }
 }

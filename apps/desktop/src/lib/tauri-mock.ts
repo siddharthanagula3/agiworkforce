@@ -13,6 +13,7 @@
  * `src/__tests__/tauriMock.test.ts`, "which runtimes may answer with a fixture".
  */
 import { invoke as tauriInvoke } from '@tauri-apps/api/core';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   createCloudConversation,
   deleteCloudConversation,
@@ -33,8 +34,7 @@ export {
 } from './runtimeEnvironment';
 
 const CLOUD_WEB_FALLTHROUGH = Symbol('CLOUD_WEB_FALLTHROUGH');
-const NATIVE_ONLY_FEATURE_MESSAGE =
-  'This feature runs only in the AGI Workforce desktop app. Switch to Local mode there, or download it from https://agiworkforce.com/download';
+const NATIVE_ONLY_FEATURE_MESSAGE = `This feature runs only in ${PRODUCT_NAMES.desktop}. Switch to Local mode there, or download it from https://agiworkforce.com/download`;
 const CLOUD_CHAT_DEFAULT_MODEL = getTaskModelForProvider('anthropic', 'chat') ?? '';
 const MOCK_INSTALLED_MCP_BUNDLES = new Set<string>();
 
@@ -281,7 +281,7 @@ export async function invoke<T>(command: string, args?: Record<string, unknown>)
   }
 
   if (!shouldServeFixtures({ test: isTestEnvironment, desktopUiDev: isDesktopUiDevLocal })) {
-    const errorMessage = `This feature requires the AGI Workforce desktop application. Please download it from https://agiworkforce.com/download`;
+    const errorMessage = `This feature requires ${PRODUCT_NAMES.desktop}. Please download it from https://agiworkforce.com/download`;
     console.error(`[Tauri] ${errorMessage}`, { command, args });
     throw new Error(errorMessage);
   }

@@ -497,7 +497,7 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
 
     let mut manifest = NativeHostManifest::new(
         host_name,
-        "AGI Workforce Browser Automation Host",
+        "AGI Desktop browser host",
         exe_path_str,
     );
 

@@ -81,7 +81,7 @@ export function MarketingMobileNav({ signedIn = false }: { signedIn?: boolean } 
             className="agi-ds-btn"
             data-variant="primary"
           >
-            {signedIn ? 'Open AGI' : 'Try AGI Web'}
+            {signedIn ? 'Open AGI' : 'Try AGI Chat'}
           </Link>
         </nav>
       </SheetContent>

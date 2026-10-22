@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { getContextBuilder, type EditorContextSource } from './contextBuilder';
 import { CONTEXT_ATTACHMENT_KINDS, type ContextAttachmentKind } from '../protocol/webviewMessages';
@@ -193,7 +194,7 @@ function pageText(html: string): string {
 
 async function webPage(): Promise<ContextAttachment | undefined> {
   const input = await vscode.window.showInputBox({
-    title: 'AGI Workforce, Attach a web page',
+    title: `${PRODUCT_NAMES.code}, Attach a web page`,
     prompt: 'The page is read once now and its text is attached to your next message',
     placeHolder: 'https://',
     ignoreFocusOut: true,
@@ -223,7 +224,7 @@ async function webPage(): Promise<ContextAttachment | undefined> {
     return { name: new URL(url).host, text: `Content of ${url}:\n${clipped}` };
   } catch (error) {
     void vscode.window.showErrorMessage(
-      `AGI Workforce: ${url} could not be read, ${error instanceof Error ? error.message : String(error)}.`,
+      `${PRODUCT_NAMES.code}: ${url} could not be read, ${error instanceof Error ? error.message : String(error)}.`,
     );
     return undefined;
   }

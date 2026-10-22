@@ -11,6 +11,7 @@ import {
   managedUsageComparisonLines,
   type BillingPlanCapability,
   type BillingPlanTier,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 
 export const COMPARED_PLANS: readonly BillingPlanTier[] = [
@@ -77,7 +78,7 @@ export async function showPlanComparison(
     { label: `$(link-external) ${openPricing}`, description: 'Prices, trials and checkout' },
   ];
   const pick = await vscode.window.showQuickPick(items, {
-    title: 'AGI Workforce, what each plan includes',
+    title: `${PRODUCT_NAMES.code}, what each plan includes`,
     placeHolder: 'Usage and the features each plan adds',
     matchOnDescription: true,
     matchOnDetail: true,

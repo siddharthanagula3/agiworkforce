@@ -65,7 +65,7 @@
       "switchTo": "Passa a {{mode}}",
       "soon": "Presto",
       "cloudUnavailable": "AGI Cloud è disponibile su desktop: accedi per usare i modelli gestiti e le chat sincronizzate.",
-      "localUnavailable": "La modalità Locale funziona nella CLI di AGI Workforce tramite Ollama o LM Studio. Le conversazioni Desktop usano il cloud gestito."
+      "localUnavailable": "La modalità Locale funziona in AGI CLI tramite Ollama o LM Studio. Le conversazioni Desktop usano il cloud gestito."
     },
     "groups": {
       "lastHour": "Last hour",
@@ -369,7 +369,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "Mantieni il computer attivo",
-      "keepAwakeHint": "Le attività pianificate vengono eseguite solo mentre AGI Workforce è aperto. Un’esecuzione saltata mentre l’app era chiusa o il computer in stop viene eseguita una volta alla riapertura dell’app, se era prevista negli ultimi 7 giorni.",
+      "keepAwakeHint": "Le attività pianificate vengono eseguite solo mentre AGI Desktop è aperto. Un’esecuzione saltata mentre l’app era chiusa o il computer in stop viene eseguita una volta alla riapertura dell’app, se era prevista negli ultimi 7 giorni.",
       "keepAwakeUnavailable": "Non disponibile: {{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",

@@ -71,7 +71,7 @@ export default function ProjectsFeaturePage() {
                 Project instructions, with selected reference material.
               </h1>
               <ButtonRow>
-                <Button href={PROJECTS_ENTRY_HREF}>Open Projects in AGI Web</Button>
+                <Button href={PROJECTS_ENTRY_HREF}>Open Projects in AGI Chat</Button>
               </ButtonRow>
             </div>
             <div className="agi-lp-hero-stage">

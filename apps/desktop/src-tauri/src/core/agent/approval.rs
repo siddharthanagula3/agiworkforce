@@ -415,7 +415,7 @@ impl ApprovalController {
                 "agent:status:update",
                 json!({
                     "id": "main_agent",
-                    "name": "AGI Workforce Agent",
+                    "name": "AGI Desktop Agent",
                     "status": status,
                     "currentStep": current_step,
                     "progress": 50

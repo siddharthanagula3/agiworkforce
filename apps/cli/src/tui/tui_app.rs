@@ -1883,7 +1883,7 @@ fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
 
     let mut spans = vec![
         Span::styled(
-            " AGI ",
+            format!(" {} ", crate::PRODUCT_NAME),
             Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
         ),
         Span::styled(
@@ -3561,7 +3561,7 @@ fn open_command_popup(app: &mut TuiApp) {
         ),
         (
             "remote-control",
-            "Continue this session from the AGI Workforce phone app",
+            "Continue this session from AGI Mobile",
         ),
         ("memories", "Configure auto-memory settings"),
         ("skills-toggle", "Enable or disable individual skills"),
@@ -3850,8 +3850,8 @@ fn start_remote_control(app: &mut TuiApp) -> String {
                 match &update {
                     RemoteControlStatus::Waiting { folder, pairing_line } => {
                         let scan = crate::remote_control::render_qr(pairing_line, false)
-                            .map(|qr| format!("On your phone, open AGI Workforce, go to Remote, tap Scan and point it at this code:\n{qr}\nOr enter the code on the phone and paste:\n"))
-                            .unwrap_or_else(|| "On your phone, open AGI Workforce, go to Remote, tap Scan, choose to enter the code, and paste:\n".to_string());
+                            .map(|qr| format!("On your phone, open AGI Mobile, go to Remote, tap Scan and point it at this code:\n{qr}\nOr enter the code on the phone and paste:\n"))
+                            .unwrap_or_else(|| "On your phone, open AGI Mobile, go to Remote, tap Scan, choose to enter the code, and paste:\n".to_string());
                         crate::tui::push_tui_notice(format!(
                             "Remote Control is on for {folder}.\n{scan}{pairing_line}"
                         ))

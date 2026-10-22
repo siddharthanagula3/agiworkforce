@@ -383,7 +383,7 @@ export async function claimSlackRunApproval(
   if (claimed) return claimed;
   await cancelStoppedSlackTasks(scopedDb, input.userId);
   throw new SlackRunApprovalError(
-    'This task was stopped in AGI Workforce, so it cannot continue.',
+    'This task was stopped in AGI, so it cannot continue.',
     'stopped',
   );
 }

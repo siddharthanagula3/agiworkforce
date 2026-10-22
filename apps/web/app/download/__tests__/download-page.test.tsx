@@ -121,7 +121,7 @@ beforeEach(() => {
 });
 
 describe('/download with no published desktop build', () => {
-  it('leads with AGI Web under one visible heading', async () => {
+  it('leads with AGI Chat under one visible heading', async () => {
     render(<DownloadPage />);
 
     const heading = screen.getByRole('heading', { level: 1 });
@@ -130,7 +130,7 @@ describe('/download with no published desktop build', () => {
     expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
 
     const hero = heading.closest('section')!;
-    expect(within(hero).getByRole('link', { name: 'Open AGI Web' })).toHaveAttribute(
+    expect(within(hero).getByRole('link', { name: 'Open AGI Chat' })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );
@@ -204,7 +204,9 @@ describe('/download with no published desktop build', () => {
     );
     fireEvent.click(within(desktop).getByRole('button', { name: 'Retry release check' }));
 
-    expect(await screen.findByRole('heading', { level: 1, name: 'AGI for Mac' })).toBeVisible();
+    expect(
+      await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' }),
+    ).toBeVisible();
   });
 });
 
@@ -214,7 +216,7 @@ describe('/download with a published macOS build', () => {
     macRelease();
     render(<DownloadPage />);
 
-    const heading = await screen.findByRole('heading', { level: 1, name: 'AGI for Mac' });
+    const heading = await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' });
     const hero = heading.closest('section')!;
     await waitFor(() => expect(hero).toHaveTextContent('Detected: Apple silicon.'));
     expect(within(hero).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
@@ -224,7 +226,7 @@ describe('/download with a published macOS build', () => {
     expect(
       within(hero).getByRole('link', { name: 'Download the Intel Mac version' }),
     ).toHaveAttribute('href', '/api/download?platform=mac&arch=x64');
-    expect(within(hero).getByRole('link', { name: 'Open AGI Web' })).toHaveAttribute(
+    expect(within(hero).getByRole('link', { name: 'Open AGI Chat' })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );
@@ -243,9 +245,9 @@ describe('/download with a published macOS build', () => {
     macRelease();
     render(<DownloadPage />);
 
-    const hero = (await screen.findByRole('heading', { level: 1, name: 'AGI for Mac' })).closest(
-      'section',
-    )!;
+    const hero = (
+      await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' })
+    ).closest('section')!;
     await waitFor(() =>
       expect(within(hero).getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
         'href',
@@ -263,9 +265,9 @@ describe('/download with a published macOS build', () => {
     macRelease({ arm64: true, x64: false });
     render(<DownloadPage />);
 
-    const hero = (await screen.findByRole('heading', { level: 1, name: 'AGI for Mac' })).closest(
-      'section',
-    )!;
+    const hero = (
+      await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' })
+    ).closest('section')!;
     await waitFor(() =>
       expect(hero).toHaveTextContent('This release is published for Apple silicon only.'),
     );
@@ -280,9 +282,9 @@ describe('/download with a published macOS build', () => {
     macRelease();
     render(<DownloadPage />);
 
-    const hero = (await screen.findByRole('heading', { level: 1, name: 'AGI for Mac' })).closest(
-      'section',
-    )!;
+    const hero = (
+      await screen.findByRole('heading', { level: 1, name: 'AGI Desktop for Mac' })
+    ).closest('section')!;
     expect(hero).toHaveTextContent('This is the Apple silicon version.');
     expect(hero).toHaveTextContent('About This Mac');
     expect(
@@ -301,7 +303,7 @@ describe('/download with a published macOS build', () => {
     const checksums = await within(details).findByRole('list', { name: 'Installer checksums' });
     expect(checksums).toHaveTextContent(ARM64_SHA);
     expect(checksums).not.toHaveTextContent(X64_SHA);
-    expect(details).toHaveTextContent('codesign -dv --verbose=4 "/Applications/AGI Cloud.app"');
+    expect(details).toHaveTextContent('codesign -dv --verbose=4 "/Applications/AGI Desktop.app"');
     expect(details).toHaveTextContent(
       'xcrun stapler validate ~/Downloads/agiworkforce_1.2.0_aarch64.dmg',
     );

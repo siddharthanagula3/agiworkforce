@@ -2,6 +2,7 @@ import { AlertCircle, ArrowRight, Check, Download, Loader2, RefreshCw, X } from 
 import { useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { useUpdater } from './useUpdater';
 import { Button } from '@/ui/Button';
 import {
@@ -98,7 +99,7 @@ export function UpdateDialog({ open, onOpenChange }: UpdateDialogProps) {
               ? 'There was a problem downloading the update.'
               : isDownloadComplete
                 ? 'The update has been downloaded and is ready to install.'
-                : 'A new version of AGI Workforce is available.'}
+                : `A new version of ${PRODUCT_NAMES.desktop} is available.`}
           </DialogDescription>
         </DialogHeader>
 

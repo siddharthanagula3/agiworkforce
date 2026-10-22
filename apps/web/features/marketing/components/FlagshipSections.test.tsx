@@ -20,7 +20,7 @@ describe('landing section ownership', () => {
         titleLines={['One AI workspace.', 'You choose where it runs.']}
         em="You choose where it runs."
         lede="Run each request where it belongs."
-        ctas={[{ href: '/chat', label: 'Try AGI Web' }]}
+        ctas={[{ href: '/chat', label: 'Try AGI Chat' }]}
         modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         visual={<div>Product preview</div>}
       />,
@@ -31,7 +31,7 @@ describe('landing section ownership', () => {
     expect(headings[0]).toHaveTextContent('One AI workspace. You choose where it runs.');
     expect(screen.getByText('AGI')).toBeInTheDocument();
     expect(screen.getByText('the AI application suite')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Try AGI Web' })).toHaveAttribute('href', '/chat');
+    expect(screen.getByRole('link', { name: 'Try AGI Chat' })).toHaveAttribute('href', '/chat');
     expect(screen.getByText('Product preview')).toBeInTheDocument();
     expect(screen.queryByRole('list', { name: 'Trust modes' })).not.toBeInTheDocument();
     expect(screen.queryByText('Run each request where it belongs.')).not.toBeInTheDocument();

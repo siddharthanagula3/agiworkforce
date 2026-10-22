@@ -2,6 +2,7 @@ import { execFile } from 'node:child_process';
 import { readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { ComputerUseRefused, requireAvailable } from './computerUseService';
 
 const LOOKUP_TIMEOUT_MS = 5_000;
@@ -106,7 +107,7 @@ export async function findInstalledApplication(application: string): Promise<Ins
   if (appPath === own || bundleId === (await bundleIdAt(own))) {
     throw new ComputerUseRefused(
       'failed',
-      'That is AGI Cloud itself, which AGI does not open or control. Name the app you want to work in.',
+      `That is ${PRODUCT_NAMES.desktop} itself, which AGI does not open or control. Name the app you want to work in.`,
     );
   }
   return { name: path.basename(appPath, APP_SUFFIX), bundleId, path: appPath };

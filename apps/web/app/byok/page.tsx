@@ -29,7 +29,7 @@ const CUSTODY_ROWS = [
   {
     label: 'AGI account key',
     value:
-      'VS Code stores its separate AGI Workforce account API key in SecretStorage. This is distinct from provider-key management.',
+      'VS Code stores its separate AGI account API key in SecretStorage. This is distinct from provider-key management.',
   },
 ] as const;
 

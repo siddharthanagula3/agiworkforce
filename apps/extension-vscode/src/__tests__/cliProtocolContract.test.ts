@@ -149,7 +149,7 @@ describe('missing-CLI copy names only the distribution that exists', () => {
   it('points at the install command instead of a package manager', () => {
     const hint = cliAcquisitionHint();
 
-    expect(hint).toContain('AGI Workforce: Install AGI CLI');
+    expect(hint).toContain('AGI Code: Install AGI CLI');
     expect(hint).not.toMatch(/npm (install|i) -g/u);
     expect(hint).not.toContain('@agiworkforce/cli');
     expect(hint).not.toMatch(/brew install/u);

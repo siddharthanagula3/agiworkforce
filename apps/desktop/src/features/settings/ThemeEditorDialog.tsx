@@ -2,6 +2,7 @@ import { useState, useCallback, useRef } from 'react';
 import { useDialogKeyboard } from '@agiworkforce/ui';
 import { Moon, Sun, X } from 'lucide-react';
 import { toast } from 'sonner';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import type { ThemeDefinition, ThemeColors } from '../../themes/types';
 import { saveCustomTheme } from '../../themes';
 
@@ -164,7 +165,7 @@ function MiniPreview({ colors }: MiniPreviewProps) {
           className="ml-2 truncate text-[9px]"
           style={{ color: `hsl(${colors.cardForeground})` }}
         >
-          AGI Workforce
+          {PRODUCT_NAMES.desktop}
         </span>
       </div>
       <div className="flex gap-1.5 px-2 pb-1.5 pt-1">

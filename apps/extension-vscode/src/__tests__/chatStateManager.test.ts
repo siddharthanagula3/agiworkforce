@@ -3597,7 +3597,7 @@ describe('ChatStateManager local turn lifecycle', () => {
       name: 'web_search',
       category: 'web-search',
       summary: 'Searching official sources',
-      input: { query: 'AGI Workforce' },
+      input: { query: 'AGI Code' },
     });
     harness.emit({
       type: 'tool_execution_end',
@@ -3629,7 +3629,7 @@ describe('ChatStateManager local turn lifecycle', () => {
         name: 'web_search',
         category: 'web-search',
         summary: 'Searching official sources',
-        input: { query: 'AGI Workforce' },
+        input: { query: 'AGI Code' },
       },
     });
     expect(harness.posted).toContainEqual({
@@ -4076,7 +4076,7 @@ describe('ChatStateManager session compaction', () => {
     await harness.manager.compactConversation();
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Workforce: nothing in this session is old enough to summarize yet.',
+      'AGI Code: nothing in this session is old enough to summarize yet.',
     );
     expect(harness.posted.filter((message) => message.type === 'sessionNotice')).toHaveLength(0);
   });
@@ -4282,7 +4282,7 @@ describe('ChatStateManager error classification', () => {
     );
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Trust this workspace before resuming a developer session.',
+      'AGI Code: Trust this workspace before resuming a developer session.',
       'Manage Trust',
     );
   });

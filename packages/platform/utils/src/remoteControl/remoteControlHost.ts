@@ -41,7 +41,7 @@ const RECONNECT_BASE_DELAY_MS = 1_000;
 const RECONNECT_MAX_DELAY_MS = 30_000;
 
 const PAGE_CLOSED_BEFORE_FINISHING =
-  'The AGI Workforce window running this task closed before it finished.';
+  'The AGI Desktop window running this task closed before it finished.';
 const FINISHED_TASK_STATUSES: ReadonlySet<DispatchTaskLifecycleStatus> = new Set([
   'completed',
   'failed',
@@ -398,7 +398,7 @@ export function createRemoteControlHost(options: RemoteControlHostOptions) {
       if (verified.reason === 'update_required') {
         publish({
           status: 'error',
-          error: 'The phone runs an older AGI Workforce build. Update the app, then pair again.',
+          error: 'The phone runs an older AGI Mobile build. Update the app, then pair again.',
         });
       }
       return;

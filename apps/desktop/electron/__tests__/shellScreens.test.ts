@@ -19,7 +19,7 @@ describe('the page the shell draws when it cannot show the app', () => {
   it('does not call a device offline on an error that does not say so', () => {
     for (const code of [-21, -105, -109, -137, -138]) {
       const screen = offlineScreen(code);
-      expect(screen.heading).toBe("Can't connect to AGI Workforce");
+      expect(screen.heading).toBe("Can't connect to AGI");
       expect(screen.body).toContain('VPN, proxy or firewall');
       expect(screen.body).not.toMatch(/offline|not connected to the internet/);
     }
@@ -27,7 +27,7 @@ describe('the page the shell draws when it cannot show the app', () => {
 
   it('never blames the reader for our own outage', () => {
     const unreachable = offlineScreen(-102);
-    expect(unreachable.heading).toBe("Can't reach AGI Workforce");
+    expect(unreachable.heading).toBe("Can't reach AGI");
     expect(unreachable.body).toContain('nothing is wrong with your account');
     expect(unreachable.body).not.toContain('offline');
   });

@@ -23,7 +23,7 @@ import {
   LOCAL_CODE_SESSION_ACTIVITY_PATH,
   type LocalCodeSessionActivity,
 } from '@agiworkforce/cloud-contracts';
-import { CLOUD_CODE_PAGE_ROUTE, REMOTE_CODE_LIMITS } from '@agiworkforce/types';
+import { CLOUD_CODE_PAGE_ROUTE, REMOTE_CODE_LIMITS, PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   checkDesktopCloudUpdate,
   desktopCloudInstallerDownloadUrl,
@@ -227,6 +227,7 @@ import {
 } from './windowRegistry';
 import { handleWorkspaceDrop } from './workspaceDrop';
 import { createWorkKeeper } from './workKeeper';
+import { settleAppIdentity } from './userDataLocation';
 import {
   isTrustedCloudRendererOrigin,
   isTrustedPageUrl,
@@ -274,7 +275,7 @@ function focusWindow(id: number): void {
 
 function installedMacArchitecture(): DesktopCloudMacArchitecture {
   if (process.arch === 'arm64' || process.arch === 'x64') return process.arch;
-  throw new Error(`Unsupported AGI Cloud macOS architecture: ${process.arch}`);
+  throw new Error(`Unsupported ${PRODUCT_NAMES.desktop} macOS architecture: ${process.arch}`);
 }
 
 const QUICK_ASK_WARMUP_MS = 5000;
@@ -339,13 +340,14 @@ async function startPairingBridge(): Promise<void> {
         void showNativeMessage(mainWindow, {
           type: 'info',
           buttons: ['OK'],
-          title: 'Pair Chrome with AGI Cloud',
+          title: `Pair Chrome with ${PRODUCT_NAMES.desktop}`,
           message: `Pairing code ${shownValue(prompt.code, PAIRING_CODE_SHOWN)}`,
-          detail: `Type this code in the AGI extension in Chrome within two minutes. It pairs the extension with the ID below with this app, so the agent can use that browser when you allow it.\n\nExtension ID: ${shownValue(prompt.extensionId, PAIRING_CODE_SHOWN)}`,
+          detail: `Type this code in ${PRODUCT_NAMES.extension} in Chrome within two minutes. It pairs the extension with the ID below with this app, so the agent can use that browser when you allow it.\n\nExtension ID: ${shownValue(prompt.extensionId, PAIRING_CODE_SHOWN)}`,
           noLink: true,
         }).catch(() => undefined);
       },
       appVersion: app.getVersion(),
+      refreshInstalledHost: app.isPackaged,
       // The bridge holds the routes; the gate lives with the renderer's own
       // dispatch. Injected here so neither module has to import the other.
       runBrowserCommand: async (command, args, caller, signal) => {
@@ -638,7 +640,7 @@ function configureSession(targetSession: Electron.Session): void {
           const selection = await showNativeMessage(null, {
             type: 'question',
             title: 'Share a screen or window',
-            message: 'Choose what to share with AGI Cloud',
+            message: `Choose what to share with ${PRODUCT_NAMES.desktop}`,
             detail:
               'A window shares only that window, even when something else is in front of it. Sharing stops when you end screen capture in the chat.',
             buttons: [
@@ -1368,7 +1370,7 @@ const dictationElsewhere = createDictationElsewhere({
 
 /**
  * With dictation into other apps on, a press over another app opens the bar
- * there; over AGI Cloud, or when the app in front cannot be read, it dictates
+ * there; over AGI Desktop, or when the app in front cannot be read, it dictates
  * into this app as it always has.
  */
 async function dictateFromShortcut(): Promise<void> {
@@ -1493,7 +1495,7 @@ async function confirmBuiltInCli(window: BrowserWindow | null, current: string):
     title: 'Go back to the built-in AGI CLI?',
     message: 'Stop using the program you chose for coding sessions?',
     detail: [
-      "AGI Cloud will run the AGI CLI that comes with this app for every coding session, or the program named agi on this app's PATH when this build carries none.",
+      `${PRODUCT_NAMES.desktop} will run the AGI CLI that comes with this app for every coding session, or the program named agi on this app's PATH when this build carries none.`,
       `Program in use now: ${shownValue(current, PROGRAM_PATH_SHOWN)}`,
     ].join('\n\n'),
     noLink: true,
@@ -1510,8 +1512,8 @@ async function confirmLaunchAtLogin(window: BrowserWindow | null): Promise<boole
     buttons: ['Cancel', 'Open at login'],
     defaultId: 0,
     cancelId: 0,
-    title: 'Open AGI Cloud at login?',
-    message: 'Open AGI Cloud each time you log in to this computer?',
+    title: `Open ${PRODUCT_NAMES.desktop} at login?`,
+    message: `Open ${PRODUCT_NAMES.desktop} each time you log in to this computer?`,
     detail:
       "It starts when you log in and keeps running until you quit it. You can turn this off in Settings, or in your system's login items.",
     noLink: true,
@@ -1530,8 +1532,7 @@ async function confirmDictateIntoApps(window: BrowserWindow | null): Promise<boo
     cancelId: 0,
     title: 'Dictate into other apps?',
     message: 'Type what you dictate into the app you are using?',
-    detail:
-      'When another app is in front, the dictation shortcut opens a small bar there and types what you said into that app when you press it again. Line breaks become spaces and nothing is typed into a password field. macOS asks you to allow Accessibility for AGI Cloud.',
+    detail: `When another app is in front, the dictation shortcut opens a small bar there and types what you said into that app when you press it again. Line breaks become spaces and nothing is typed into a password field. macOS asks you to allow Accessibility for ${PRODUCT_NAMES.desktop}.`,
     noLink: true,
   });
 }
@@ -1561,7 +1562,7 @@ async function confirmCliPath(
     title: 'Use this program as the AGI CLI?',
     message: 'Run this program for coding sessions?',
     detail: [
-      'AGI Cloud starts this program to check its version and to run every coding session. It runs with your account: it can read and change files in the folders you approve and start other programs. Use it only if you set this path yourself.',
+      `${PRODUCT_NAMES.desktop} starts this program to check its version and to run every coding session. It runs with your account: it can read and change files in the folders you approve and start other programs. Use it only if you set this path yourself.`,
       `The path a page asked for. ${NOT_THIS_APP}`,
       [
         `Program: ${shownValue(resolved, PROGRAM_PATH_SHOWN)}`,
@@ -1766,8 +1767,8 @@ function announceUpdateReady(version: string): void {
   sendRuntimeEvent({ kind: 'update-ready', version });
   if (!Notification.isSupported()) return;
   const notification = createNativeNotification({
-    title: 'AGI Cloud update ready',
-    body: `Version ${version} is downloaded. Restart AGI Cloud to finish updating.`,
+    title: `${PRODUCT_NAMES.desktop} update ready`,
+    body: `Version ${version} is downloaded. Restart ${PRODUCT_NAMES.desktop} to finish updating.`,
     actions: [{ type: 'button', text: 'Restart to Update' }],
   });
   notification.on('action', () => void restartToUpdate());
@@ -1844,11 +1845,12 @@ function installMenu(): void {
   );
 }
 
+settleAppIdentity(app);
+
 const hasSingleInstanceLock = app.requestSingleInstanceLock();
 if (!hasSingleInstanceLock) {
   app.quit();
 } else {
-  app.setName('AGI Cloud');
   app.setAsDefaultProtocolClient(DEEP_LINK_SCHEME);
 
   const launchLink = process.argv.find((arg) => arg.startsWith(`${DEEP_LINK_SCHEME}://`));

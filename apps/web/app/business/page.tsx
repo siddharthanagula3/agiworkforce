@@ -33,7 +33,7 @@ const AGI_CODE_SURFACES = `the CLI (${SURFACE_STATUS.cli.toLowerCase()}) and VS 
 
 export const metadata = buildMetadata({
   title: 'AGI for Business: an AI workspace your team can govern',
-  description: `A business AI workspace with chat, projects, artifacts, research, code, apps, and governance. AGI Web runs on managed cloud in ${MANAGED_CLOUD_STATUS}. Local and BYOK run in the CLI. ${CLI_AVAILABILITY_NOTE}`,
+  description: `A business AI workspace with chat, projects, artifacts, research, code, apps, and governance. AGI Chat runs on managed cloud in ${MANAGED_CLOUD_STATUS}. Local and BYOK run in the CLI. ${CLI_AVAILABILITY_NOTE}`,
   path: '/business',
 });
 
@@ -101,11 +101,11 @@ export default function BusinessPage() {
           rows={[
             {
               k: 'Model choice',
-              v: `One product routes across a dated, inspectable catalog: ${CATALOG_SCOPES.catalogueEntries.text} across ${CATALOG_SCOPES.providerRecords.text} as of ${CATALOG_AS_OF}. The CLI supports BYOK plus local ${CLI_LOCAL_RUNTIMES.label} models. ${BYOK_SURFACES.availability} AGI Web and Desktop use managed cloud. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
+              v: `One product routes across a dated, inspectable catalog: ${CATALOG_SCOPES.catalogueEntries.text} across ${CATALOG_SCOPES.providerRecords.text} as of ${CATALOG_AS_OF}. The CLI supports BYOK plus local ${CLI_LOCAL_RUNTIMES.label} models. ${BYOK_SURFACES.availability} AGI Chat and Desktop use managed cloud. Model access is tiered by plan, so higher-capability models sit on higher tiers.`,
             },
             {
               k: 'Cost shape',
-              v: `AGI managed cloud is ${MANAGED_CLOUD_STATUS}, open by default: a new account starts on the ${BILLING_PLAN_PRICING.free.label} plan in AGI Web. ${PAID_UPGRADE_ACCESS_NOTE} Local and BYOK carry no AGI charge and run in the CLI. ${CLI_AVAILABILITY_NOTE}`,
+              v: `AGI managed cloud is ${MANAGED_CLOUD_STATUS}, open by default: a new account starts on the ${BILLING_PLAN_PRICING.free.label} plan in AGI Chat. ${PAID_UPGRADE_ACCESS_NOTE} Local and BYOK carry no AGI charge and run in the CLI. ${CLI_AVAILABILITY_NOTE}`,
             },
             {
               k: 'Data boundary',
@@ -156,7 +156,7 @@ export default function BusinessPage() {
         <FinalCta
           eyebrow="Start now"
           title="Start the rollout where the risk is lowest."
-          body={`Start on the ${BILLING_PLAN_PRICING.free.label} plan in AGI Web today. ${PAID_UPGRADE_ACCESS_NOTE} Local and BYOK run in the CLI at no platform cost. ${CLI_AVAILABILITY_NOTE} ${BILLING_PLAN_PRICING.enterprise.label} controls are sales-assisted.`}
+          body={`Start on the ${BILLING_PLAN_PRICING.free.label} plan in AGI Chat today. ${PAID_UPGRADE_ACCESS_NOTE} Local and BYOK run in the CLI at no platform cost. ${CLI_AVAILABILITY_NOTE} ${BILLING_PLAN_PRICING.enterprise.label} controls are sales-assisted.`}
           ctas={[
             { href: '/contact-sales', label: 'Contact Sales' },
             surfaceCta('desktop'),

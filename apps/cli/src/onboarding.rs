@@ -63,17 +63,17 @@ fn local_pull_hint() -> String {
 
 fn print_welcome_banner() {
     let logo = r#"
-     _    ____ ___  __        __         _     __
-    / \  / ___|_ _| \ \      / /__  _ __| | __/ _| ___  _ __ ___ ___
-   / _ \| |  _ | |   \ \ /\ / / _ \| '__| |/ / |_ / _ \| '__/ __/ _ \
-  / ___ \ |_| || |    \ V  V / (_) | |  |   <|  _| (_) | | | (_|  __/
- /_/   \_\____|___|    \_/\_/ \___/|_|  |_|\_\_|  \___/|_|  \___\___|
+     _    ____ ___     ____ _     ___
+    / \  / ___|_ _|   / ___| |   |_ _|
+   / _ \| |  _ | |   | |   | |    | |
+  / ___ \ |_| || |   | |___| |___ | |
+ /_/   \_\____|___|   \____|_____|___|
     "#;
 
     eprintln!("{}", ts::brand(logo));
     eprintln!(
         "  {} {}",
-        ts::brand_header("Welcome to AGI"),
+        ts::brand_header(format!("Welcome to {}", crate::PRODUCT_NAME)),
         ts::muted(format!("v{}", env!("CARGO_PKG_VERSION"))),
     );
     eprintln!(

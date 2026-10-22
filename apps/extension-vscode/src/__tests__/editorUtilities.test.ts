@@ -182,7 +182,7 @@ describe('routing', () => {
 
     expect(asked).toEqual([]);
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Select some code first.',
+      'AGI Code: Select some code first.',
     );
   });
 
@@ -190,7 +190,7 @@ describe('routing', () => {
     await runEditorUtility({ ok: true, prompt: 'Explain this' });
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: The chat view is not available in this window. Reload the window and try again.',
+      'AGI Code: The chat view is not available in this window. Reload the window and try again.',
     );
   });
 });

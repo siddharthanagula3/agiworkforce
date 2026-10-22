@@ -5,6 +5,7 @@
  * Displays safety warnings before enabling computer use capabilities.
  */
 import { AlertTriangle, Shield } from 'lucide-react';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/ui/Dialog';
 import { Button } from '@/ui/Button';
 
@@ -38,8 +39,8 @@ export function ComputerUseConsentDialog({
 
         <div className="space-y-4 py-2">
           <p className="text-sm text-muted-foreground text-center">
-            AGI Workforce will take screenshots of your screen and control your mouse and keyboard.
-            You&apos;ll approve each app, but not confirm each step it performs.
+            {PRODUCT_NAMES.desktop} will take screenshots of your screen and control your mouse and
+            keyboard. You&apos;ll approve each app, but not confirm each step it performs.
           </p>
 
           <div className="space-y-3">

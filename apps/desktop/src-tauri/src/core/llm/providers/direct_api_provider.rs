@@ -309,7 +309,7 @@ fn validate_provider_base_url(url: &str) -> Result<(), String> {
     if let Some(host) = parsed.host_str() {
         if is_retired_provider_host(host) {
             return Err(format!(
-                "'{host}' belongs to a provider AGI Workforce has removed. Point this provider at a supported endpoint."
+                "'{host}' belongs to a provider AGI Desktop has removed. Point this provider at a supported endpoint."
             ));
         }
     }

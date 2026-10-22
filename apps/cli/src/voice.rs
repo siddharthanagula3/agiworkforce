@@ -110,7 +110,7 @@ pub async fn run_voice_mode(
     match &backend {
         TranscriptionBackend::Managed(_) => {
             eprintln!(
-                "  {} Transcribing with AGI Workforce on your account",
+                "  {} Transcribing with AGI on your account",
                 ts::accent_header("voice:")
             );
         }
@@ -137,7 +137,7 @@ pub async fn run_voice_mode(
             } else {
                 output::print_error(
                     "No transcription backend available.\n\
-                     Sign in with `agi login` to transcribe on your AGI Workforce account, set\n\
+                     Sign in with `agi login` to transcribe on your AGI account, set\n\
                      OPENAI_API_KEY for the Whisper API, or install the `whisper` CLI tool.",
                 );
             }
@@ -378,7 +378,7 @@ const RECORDING_NOTICE_FILE: &str = "voice-recording-notice";
 
 fn accept_recording_notice(backend: &TranscriptionBackend) -> Result<bool> {
     let destination = match backend {
-        TranscriptionBackend::Managed(_) => "your AGI Workforce account, which turns it into text",
+        TranscriptionBackend::Managed(_) => "your AGI account, which turns it into text",
         TranscriptionBackend::OpenAiApi => "OpenAI's Whisper API with your OPENAI_API_KEY",
         TranscriptionBackend::LocalBinary(_) => {
             "the whisper program on this computer; it does not leave this computer"
@@ -994,7 +994,7 @@ async fn transcribe_managed(
         .timeout(Duration::from_secs(60))
         .send()
         .await
-        .context("Failed to reach AGI Workforce transcription")?;
+        .context("Failed to reach AGI transcription")?;
     let status = response.status();
     let body = response
         .text()

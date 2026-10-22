@@ -250,7 +250,7 @@ export function GuestChat({ dailyLimit, signInHref, signUpHref }: GuestChatProps
           className="flex flex-row items-center gap-2 rounded-md text-sm font-semibold text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
         >
           <AgiMark size={20} />
-          <span className="max-sm:sr-only">AGI Workforce</span>
+          <span className="max-sm:sr-only">AGI</span>
         </Link>
         <nav aria-label="Account" className="flex flex-row items-center gap-2">
           <Link href={signInHref} className={PRIMARY_LINK_CLASS}>

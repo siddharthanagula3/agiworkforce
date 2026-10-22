@@ -1,9 +1,10 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
 import type { WorktreeSummary } from '../../integrations/localRuntimeClient';
 import type { CliCapabilityAdapter } from './cliCapabilities';
 
-const TITLE = 'AGI Workforce, Session Worktrees';
+const TITLE = `${PRODUCT_NAMES.code}, Session Worktrees`;
 
 async function openWorktree(worktree: WorktreeSummary): Promise<void> {
   await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(worktree.path), {
@@ -14,7 +15,7 @@ async function openWorktree(worktree: WorktreeSummary): Promise<void> {
 export async function newSessionInWorktree(cli: CliCapabilityAdapter): Promise<void> {
   const created = await cli.call<WorktreeSummary>('worktreeCreate');
   if (created.status !== 'ok') {
-    void vscode.window.showWarningMessage(`AGI Workforce: ${created.reason}`);
+    void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${created.reason}`);
     return;
   }
   await openWorktree(created.value);
@@ -39,16 +40,16 @@ async function removeWorktree(cli: CliCapabilityAdapter, worktree: WorktreeSumma
     worktree.hasWork,
   );
   if (removed.status !== 'ok') {
-    void vscode.window.showWarningMessage(`AGI Workforce: ${removed.reason}`);
+    void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${removed.reason}`);
     return;
   }
-  void vscode.window.showInformationMessage(`AGI Workforce: removed ${worktree.name}.`);
+  void vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: removed ${worktree.name}.`);
 }
 
 export async function manageSessionWorktrees(cli: CliCapabilityAdapter): Promise<void> {
   const listed = await cli.call<WorktreeSummary[]>('worktreeList');
   if (listed.status !== 'ok') {
-    void vscode.window.showWarningMessage(`AGI Workforce: ${listed.reason}`);
+    void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${listed.reason}`);
     return;
   }
   type Item = vscode.QuickPickItem & { worktree?: WorktreeSummary; create?: true };

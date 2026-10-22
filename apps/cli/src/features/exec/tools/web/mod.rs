@@ -393,7 +393,7 @@ pub(super) async fn execute_web_search(args: &HashMap<String, String>) -> Result
     let backend = match search_backend() {
         Ok(Some(backend)) => backend,
         Ok(None) => {
-            return failed("Web search not configured. Save a Brave Search or Tavily key with `agi login brave` or `agi login tavily`, or set BRAVE_SEARCH_API_KEY or TAVILY_API_KEY. In Managed mode AGI Workforce runs the search itself.".to_string());
+            return failed("Web search not configured. Save a Brave Search or Tavily key with `agi login brave` or `agi login tavily`, or set BRAVE_SEARCH_API_KEY or TAVILY_API_KEY. In Managed mode AGI runs the search itself.".to_string());
         }
         Err(problem) => {
             return failed(format!(

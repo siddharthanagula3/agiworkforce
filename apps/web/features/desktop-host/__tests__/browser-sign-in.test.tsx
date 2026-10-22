@@ -182,6 +182,6 @@ it('leaves older Desktop login usable without probing unsupported native command
   expect(invoke).not.toHaveBeenCalled();
   expect(screen.getByRole('button', { name: 'Continue', hidden: true })).toBeEnabled();
   expect(screen.getByRole('button', { name: 'Continue in your browser' })).toBeDisabled();
-  expect(screen.getByText(/Update AGI Cloud to use browser sign-in/)).toBeVisible();
+  expect(screen.getByText(/Update AGI Desktop to use browser sign-in/)).toBeVisible();
   expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
 });

@@ -16,6 +16,7 @@ import {
   type ComputerUseStatus,
   type PermissionScope,
 } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { getPreferences, saveSettings } from '../settingsStore';
 import {
   ComputerUseRefused,
@@ -49,8 +50,7 @@ const RESUMED_MESSAGE =
 const EXPIRED_MESSAGE =
   'The user has taken over the screen and has not handed it back, so this step did not run. Tell them what you were about to do and ask them to hand control back.';
 const FINISHED_MESSAGE = 'This reply ended while the user had the screen, so the step did not run.';
-const DISABLED_MESSAGE =
-  'Computer use is turned off in AGI Cloud settings, so this step did not run. Tell the user they can turn it on under Settings, Desktop app.';
+const DISABLED_MESSAGE = `Computer use is turned off in ${PRODUCT_NAMES.desktop} settings, so this step did not run. Tell the user they can turn it on under Settings, Desktop app.`;
 
 type HeldOutcome = 'resume' | 'stopped' | 'finished' | 'expired';
 
@@ -214,7 +214,7 @@ function beginRun(window: BrowserWindow | null): void {
     'AGI is using your computer',
     stopShortcutHeld
       ? `Press ${stopKeyLabel()} to stop it.`
-      : 'Stop it from the AGI Cloud window or its File menu.',
+      : `Stop it from the ${PRODUCT_NAMES.desktop} window or its File menu.`,
   );
   hooks.onChange();
 }
@@ -252,7 +252,7 @@ function pause(cause: ComputerUsePauseCause): void {
   if (cause === 'user-input') {
     announce(
       'AGI paused',
-      'You used the mouse or keyboard, so it stopped where it was. Hand back control in AGI Cloud when you want it to carry on.',
+      `You used the mouse or keyboard, so it stopped where it was. Hand back control in ${PRODUCT_NAMES.desktop} when you want it to carry on.`,
     );
   }
   hooks.onChange();

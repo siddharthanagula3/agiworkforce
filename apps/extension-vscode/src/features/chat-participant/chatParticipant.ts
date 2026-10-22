@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { type ConversationTreeProvider } from '../trees';
 import {
@@ -140,8 +141,7 @@ interface ResolvedParticipantModel {
   provider?: LocalModelSummary['provider'];
 }
 
-const LOCAL_MODEL_NOT_FOUND_MESSAGE =
-  'The configured model is neither a selectable catalog model nor a CLI-discovered local model. Run `agi models scan`, then select an available model in AGI Workforce settings.';
+const LOCAL_MODEL_NOT_FOUND_MESSAGE = `The configured model is neither a selectable catalog model nor a CLI-discovered local model. Run \`agi models scan\`, then select an available model in ${PRODUCT_NAMES.code} settings.`;
 const LOCAL_MODEL_DISCOVERY_FAILED_MESSAGE =
   'The AGI CLI could not verify the configured local model. Check the AGI CLI path in Settings, run `agi models scan`, then select an available model.';
 
@@ -297,7 +297,7 @@ export function createChatHandler(
     stream: vscode.ChatResponseStream,
     token: vscode.CancellationToken,
   ): Promise<vscode.ChatResult> => {
-    stream.progress('AGI Workforce is thinking…');
+    stream.progress(`${PRODUCT_NAMES.code} is thinking…`);
 
     if (request.command === 'model') {
       await vscode.commands.executeCommand('agi-workforce.selectModel');
@@ -311,12 +311,12 @@ export function createChatHandler(
         workspace === undefined
           ? 'Open a workspace folder before starting a developer session.'
           : 'The AGI local runtime is unavailable.';
-      stream.markdown(`> **AGI Workforce**: ${message}`);
+      stream.markdown(`> **${PRODUCT_NAMES.code}**: ${message}`);
       return { errorDetails: { message } };
     }
     if (!vscode.workspace.isTrusted) {
       const message = 'Trust this workspace before starting a developer session.';
-      stream.markdown(`> **AGI Workforce**: ${message}`);
+      stream.markdown(`> **${PRODUCT_NAMES.code}**: ${message}`);
       return { errorDetails: { message } };
     }
 
@@ -336,7 +336,7 @@ export function createChatHandler(
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'The configured model could not be verified.';
-      stream.markdown(`> **AGI Workforce**: ${message}`);
+      stream.markdown(`> **${PRODUCT_NAMES.code}**: ${message}`);
       return { errorDetails: { message } };
     }
     const { model, provider } = requestedModel;
@@ -535,7 +535,7 @@ export function createChatHandler(
         assertRequestedThreadAuthority(requestedModel, threadAuthority);
         if (boundaryChanged) {
           stream.markdown(
-            '> **AGI Workforce**: Provider or model boundary changed. A new developer session was started without forwarding the earlier transcript.\n\n',
+            `> **${PRODUCT_NAMES.code}**: Provider or model boundary changed. A new developer session was started without forwarding the earlier transcript.\n\n`,
           );
         }
       }
@@ -636,7 +636,7 @@ export function registerChatParticipant(
     participant = createParticipant.call(vscode.chat, 'agiworkforce.agi', handler);
   } catch (error) {
     console.warn(
-      '[AGI Workforce] Native Chat participant is unavailable; using the AGI sidebar instead.',
+      `[${PRODUCT_NAMES.code}] Native Chat participant is unavailable; using the AGI sidebar instead.`,
       error,
     );
     return undefined;

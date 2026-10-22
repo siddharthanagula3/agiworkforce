@@ -44,9 +44,9 @@ const SAVE_FAILED = 'That setting was not saved.';
 const NO_SHORTCUT_LABEL = 'No shortcut';
 
 const STARTUP_LABEL = 'Run on startup';
-const STARTUP_HINT = 'Start AGI Cloud when you log in to this computer.';
+const STARTUP_HINT = 'Start AGI Desktop when you log in to this computer.';
 const MENU_BAR_LABEL = 'Menu bar';
-const MENU_BAR_HINT = 'Show AGI Cloud in the menu bar.';
+const MENU_BAR_HINT = 'Show AGI Desktop in the menu bar.';
 const DICTATE_ELSEWHERE_LABEL = 'Dictate into the app you are using';
 const DICTATE_ELSEWHERE_HINT =
   'With another app in front, the dictation shortcut opens a small bar there and types what you said into that app when you press it again.';
@@ -110,7 +110,7 @@ const NOTIFY_LABEL = 'Agent notifications';
 const NOTIFY_HINT = 'When coding agents on this computer notify you.';
 const NOTIFY_MODE_LABELS: Record<HostAgentNotificationMode, string> = {
   always: 'Always',
-  unfocused: 'Only when AGI Cloud is in the background',
+  unfocused: 'Only when AGI Desktop is in the background',
   never: 'Never',
 };
 const NOTIFY_KIND_ROWS: Record<HostAgentNotificationKind, { label: string; hint: string }> = {
@@ -139,7 +139,7 @@ const NOTIFY_SOUND_HINT = 'Play the system sound with agent notifications.';
  * and `off` say nothing: the control already shows both.
  */
 const STATUS_NOTE: Partial<Record<HostShortcutStatus, string>> = {
-  duplicate: 'Already used by another AGI Cloud shortcut.',
+  duplicate: 'Already used by another AGI Desktop shortcut.',
   taken: 'Already used by another app.',
   malformed: 'Not a shortcut this computer can register.',
 };
@@ -360,7 +360,7 @@ export function DesktopSettingsSection() {
         </div>
 
         {platformName !== null && (
-          <p className="text-xs text-[var(--text-3)]">AGI Cloud on {platformName}</p>
+          <p className="text-xs text-[var(--text-3)]">AGI Desktop on {platformName}</p>
         )}
       </section>
 

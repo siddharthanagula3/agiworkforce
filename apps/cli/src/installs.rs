@@ -407,7 +407,7 @@ pub(crate) fn remove_skill(project_root: &Path, name: &str) -> Result<PathBuf> {
         .with_context(|| format!("no skill named '{name}' is installed"))?;
     anyhow::ensure!(
         !matches!(entry.origin, crate::skills::SkillOrigin::Account),
-        "'{name}' comes from your AGI Workforce account: remove it there, or turn it off on this device"
+        "'{name}' comes from your AGI account: remove it there, or turn it off on this device"
     );
     anyhow::ensure!(
         matches!(entry.origin, crate::skills::SkillOrigin::User),

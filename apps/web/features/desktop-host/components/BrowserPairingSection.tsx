@@ -12,15 +12,15 @@ import { installBrowserHost, readBrowserPairing, unpairBrowser } from '../lib/ru
 
 const HEADING = 'Chrome';
 const INTRO =
-  'Pair the AGI Workforce extension with this Mac and AGI can read the page you are on, click, type, open addresses, screenshot, and read the console, network and downloads, from chat. Chrome still only acts on sites you approved in the extension, and every action asks you first.';
+  'Pair the AGI Extension with this Mac and AGI can read the page you are on, click, type, open addresses, screenshot, and read the console, network and downloads, from chat. Chrome still only acts on sites you approved in the extension, and every action asks you first.';
 const HOW_TO_PAIR =
-  'In Chrome, open the AGI Workforce side panel, choose Connect to Desktop, and type the code this app shows you.';
+  'In Chrome, open the AGI Extension side panel, choose Connect to Desktop, and type the code this app shows you.';
 const NO_EXTENSION =
-  'Nothing has asked to pair yet. Install the AGI Workforce extension in Chrome, then start pairing from its side panel.';
+  'Nothing has asked to pair yet. Install the AGI Extension in Chrome, then start pairing from its side panel.';
 const HOST_MISSING =
   'The browser host is not registered, so Chrome cannot reach this app. Register it again below.';
 const BRIDGE_NOT_LISTENING =
-  'The local pairing bridge is not listening, so Chrome cannot reach this app. Quit and reopen AGI Cloud.';
+  'The local pairing bridge is not listening, so Chrome cannot reach this app. Quit and reopen AGI Desktop.';
 const LOAD_FAILED = 'The pairing state could not be read.';
 const INSTALL_FAILED = 'The browser host was not registered.';
 const UNPAIR_FAILED = 'The browser was not unpaired.';
@@ -28,7 +28,7 @@ const UNPAIR_FAILED = 'The browser was not unpaired.';
 const BUTTON_CLASS =
   'min-h-[32px] rounded-md border border-border/60 px-3 py-1 text-xs text-foreground transition-colors hover:bg-muted/60 disabled:cursor-not-allowed disabled:opacity-60';
 const CODE_SHOWN_BY_APP =
-  'The code is in a dialog AGI Cloud opened on this Mac. It is never shown on this page.';
+  'The code is in a dialog AGI Desktop opened on this Mac. It is never shown on this page.';
 
 function messageFor(error: unknown, fallback: string): string | null {
   if (error instanceof DesktopRuntimeError) {

@@ -98,7 +98,7 @@
   "heroLedePart1": "{{localLabel}} 让开放模型的工作留在你的设备上。{{byokLabel}} 只把你选择的请求发送给你指定的 API 提供商，并按该提供商的计费与数据条款处理。两者始终免费，无需席位，也无需信用卡。",
   "installCta": "通知我",
   "talkToSalesCta": "联系销售",
-  "tryAgiCta": "试用 AGI Web",
+  "tryAgiCta": "试用 AGI Chat",
   "modeRibbonLabel": "信任模式",
   "ribbonLocal": "本地，永久免费",
   "ribbonByok": "BYOK，使用你自己的密钥",

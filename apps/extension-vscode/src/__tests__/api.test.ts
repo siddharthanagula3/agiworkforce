@@ -270,7 +270,7 @@ describe('cloud completion error envelopes', () => {
         error: {
           code: 'CLIENT_UPDATE_REQUIRED',
           message:
-            'This version speaks API contract 2020-01-01, and AGI Workforce now needs 2026-09-17 or newer. Update to continue.',
+            'This version speaks API contract 2020-01-01, and AGI Code now needs 2026-09-17 or newer. Update to continue.',
         },
       }),
       { 'x-agi-api-version-minimum': '2026-09-17' },

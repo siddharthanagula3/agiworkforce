@@ -1,7 +1,7 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
-const STALE_DIFF_MESSAGE =
-  'AGI Workforce: this file changed since the edit was proposed, so nothing was applied. Ask again to get a fresh edit.';
+const STALE_DIFF_MESSAGE = `${PRODUCT_NAMES.code}: this file changed since the edit was proposed, so nothing was applied. Ask again to get a fresh edit.`;
 
 export interface DiffSession {
   readonly id: string;
@@ -351,7 +351,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
       this._removeSession(sessionId);
     } else {
       vscode.window.showWarningMessage(
-        'AGI Workforce: Could not apply diff, document may have changed.',
+        `${PRODUCT_NAMES.code}: Could not apply diff, document may have changed.`,
       );
     }
     return applied;
@@ -481,7 +481,7 @@ export class DiffDecorationProvider implements vscode.Disposable {
       vscode.window.showWarningMessage(
         stale === 1
           ? STALE_DIFF_MESSAGE
-          : `AGI Workforce: ${stale} edits were not applied because those files changed since they were proposed. Ask again to get fresh edits.`,
+          : `${PRODUCT_NAMES.code}: ${stale} edits were not applied because those files changed since they were proposed. Ask again to get fresh edits.`,
       );
     }
   }

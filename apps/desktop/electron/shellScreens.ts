@@ -1,3 +1,4 @@
+import { PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
 import { pageBackgroundColor } from './windowChrome';
 
 /**
@@ -30,7 +31,7 @@ export function offlineScreen(errorCode: number): ShellScreen {
   const reference = `net-${Math.abs(errorCode)}`;
   if (errorCode === DEVICE_OFFLINE_ERROR) {
     return {
-      title: 'AGI Workforce, offline',
+      title: `${PRODUCT_NAMES.desktop}, offline`,
       heading: "You're offline",
       body: `This device is not connected to the internet. ${ACCOUNT_UNCHANGED}, reconnect to continue.`,
       action: 'Try again',
@@ -39,17 +40,17 @@ export function offlineScreen(errorCode: number): ShellScreen {
   }
   if (DEVICE_PATH_ERRORS.has(errorCode)) {
     return {
-      title: 'AGI Workforce, not connected',
-      heading: "Can't connect to AGI Workforce",
+      title: `${PRODUCT_NAMES.desktop}, not connected`,
+      heading: `Can't connect to ${PRODUCT_BRAND}`,
       body: `This device could not reach agiworkforce.com. Check the internet connection and any VPN, proxy or firewall, then try again. ${ACCOUNT_UNCHANGED}.`,
       action: 'Try again',
       reference,
     };
   }
   return {
-    title: 'AGI Workforce, unreachable',
-    heading: "Can't reach AGI Workforce",
-    body: `AGI Workforce did not answer. ${ACCOUNT_UNCHANGED} and nothing is wrong with your account. Try again in a moment.`,
+    title: `${PRODUCT_NAMES.desktop}, unreachable`,
+    heading: `Can't reach ${PRODUCT_BRAND}`,
+    body: `${PRODUCT_BRAND} did not answer. ${ACCOUNT_UNCHANGED} and nothing is wrong with your account. Try again in a moment.`,
     action: 'Try again',
     reference,
   };
@@ -57,7 +58,7 @@ export function offlineScreen(errorCode: number): ShellScreen {
 
 export function crashScreen(reference: string): ShellScreen {
   return {
-    title: 'AGI Workforce, stopped',
+    title: `${PRODUCT_NAMES.desktop}, stopped`,
     heading: 'This window stopped responding',
     body: 'It stopped twice in a row, so it was not reloaded again. Anything you had sent is saved to your account, and a message you were still typing is kept on this device. Attachments you had not sent may need adding again.',
     action: 'Reload',

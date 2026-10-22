@@ -9,6 +9,8 @@ const mocks = vi.hoisted(() => ({
   eraseProfileRow: vi.fn(),
   deleteUser: vi.fn(),
   invalidateAccountStatusCache: vi.fn(),
+  cancelLiveStripeSubscriptionsNow: vi.fn(),
+  readStripeBillingOwner: vi.fn(),
   calls: [] as string[],
 }));
 
@@ -25,6 +27,12 @@ vi.mock('../identity', () => ({
 vi.mock('../request-context-cache', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   invalidateAccountStatusCache: (...args: unknown[]) => mocks.invalidateAccountStatusCache(...args),
+}));
+vi.mock('../payments/stripe-provider', () => ({
+  cancelLiveStripeSubscriptionsNow: (...args: unknown[]) => {
+    mocks.calls.push('stripe');
+    return mocks.cancelLiveStripeSubscriptionsNow(...args);
+  },
 }));
 vi.mock('../account-erasure', () => ({
   openErasureTombstone: (...args: unknown[]) => {
@@ -43,6 +51,7 @@ vi.mock('../account-erasure', () => ({
     mocks.calls.push('profile');
     return mocks.eraseProfileRow(...args);
   },
+  readStripeBillingOwner: (...args: unknown[]) => mocks.readStripeBillingOwner(...args),
 }));
 
 import { eraseScheduledAccount, reEraseTombstonedAccount } from '../scheduled-account-erasure';
@@ -62,6 +71,55 @@ beforeEach(() => {
   mocks.eraseUserAccountData.mockResolvedValue(completeReport());
   mocks.eraseProfileRow.mockResolvedValue(undefined);
   mocks.deleteUser.mockResolvedValue(undefined);
+  mocks.cancelLiveStripeSubscriptionsNow.mockResolvedValue([]);
+  mocks.readStripeBillingOwner.mockResolvedValue({
+    subscriptionReference: null,
+    customerReference: null,
+  });
+});
+
+function withStripeBilling() {
+  mocks.readStripeBillingOwner.mockResolvedValue({
+    subscriptionReference: 'sub_live1',
+    customerReference: 'cus_live1',
+  });
+}
+
+describe('scheduled erasure ends Stripe billing first', () => {
+  it('cancels the live Stripe subscription before any row is touched', async () => {
+    withStripeBilling();
+    mocks.cancelLiveStripeSubscriptionsNow.mockResolvedValue(['sub_live1']);
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toEqual({
+      status: 'purged',
+      resurrected: false,
+    });
+    expect(mocks.cancelLiveStripeSubscriptionsNow).toHaveBeenCalledWith({
+      subscriptionReference: 'sub_live1',
+      customerReference: 'cus_live1',
+    });
+    expect(mocks.calls[0]).toBe('stripe');
+  });
+
+  it('erases nothing and keeps the billing linkage when Stripe cannot cancel', async () => {
+    withStripeBilling();
+    mocks.cancelLiveStripeSubscriptionsNow.mockRejectedValue(new Error('stripe unavailable'));
+
+    await expect(eraseScheduledAccount('user-1')).resolves.toMatchObject({
+      status: 'failed',
+      stage: 'billing',
+    });
+    expect(mocks.calls).toEqual(['stripe']);
+    expect(mocks.openErasureTombstone).not.toHaveBeenCalled();
+    expect(mocks.eraseUserAccountData).not.toHaveBeenCalled();
+    expect(mocks.deleteUser).not.toHaveBeenCalled();
+  });
+
+  it('skips Stripe for an account that never had a Stripe customer', async () => {
+    await eraseScheduledAccount('user-1');
+
+    expect(mocks.cancelLiveStripeSubscriptionsNow).not.toHaveBeenCalled();
+  });
 });
 
 describe('eraseScheduledAccount', () => {

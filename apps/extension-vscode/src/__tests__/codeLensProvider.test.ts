@@ -151,7 +151,7 @@ describe('code lenses, the lens set on a declaration', () => {
 
   it('gives every lens a tooltip naming the product', () => {
     for (const lens of lensesFor(lines, 'typescript')) {
-      expect(lens.command?.tooltip, lens.command?.command).toMatch(/AGI Workforce/);
+      expect(lens.command?.tooltip, lens.command?.command).toMatch(/AGI Code/);
     }
   });
 

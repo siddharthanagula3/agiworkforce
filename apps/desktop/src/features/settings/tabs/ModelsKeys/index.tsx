@@ -9,6 +9,7 @@ import { formatModelSize, type OllamaPullOutcome, type OllamaPullProgress } from
 import { useSettingsStore } from '@/stores/settingsStore';
 import { VAULT_STATE_CHANGED_EVENT } from '../../masterPasswordVault';
 import { useConfirmAction } from '@agiworkforce/ui';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Button } from '@/ui/Button';
 import { Progress } from '@/ui/Progress';
 import { Spinner } from '@/ui/Spinner';
@@ -204,7 +205,7 @@ export function BYOKApiKeysSection() {
     (providerId: Provider, name: string) => {
       confirm({
         title: `Remove the ${name} key?`,
-        description: `The ${name} key is deleted from this device and AGI Workforce stops sending requests to ${name} straight away. BYOK chats that use ${name} keep their history but cannot send until you save a key again. The key cannot be recovered from AGI Workforce; you would paste it again from your ${name} account.`,
+        description: `The ${name} key is deleted from this device and ${PRODUCT_NAMES.desktop} stops sending requests to ${name} straight away. BYOK chats that use ${name} keep their history but cannot send until you save a key again. The key cannot be recovered from ${PRODUCT_NAMES.desktop}; you would paste it again from your ${name} account.`,
         confirmLabel: 'Remove key',
         onConfirm: async () => {
           try {

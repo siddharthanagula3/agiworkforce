@@ -1,4 +1,5 @@
 import { MonitorSmartphone, ShieldCheck } from 'lucide-react';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { MobileCompanionPanel } from '../../../mobile-companion/MobileCompanionPanel';
 
 export function ConnectionsTab() {
@@ -10,7 +11,7 @@ export function ConnectionsTab() {
           <h2 className="text-h2">Connections</h2>
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          Pair the AGI Workforce mobile app to monitor this Mac and respond to agent approvals.
+          Pair {PRODUCT_NAMES.mobile} to monitor this Mac and respond to agent approvals.
         </p>
       </header>
 

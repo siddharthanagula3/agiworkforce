@@ -707,7 +707,7 @@ pub fn unsandboxed_consequence(server_name: &str, command: &str, args: &[String]
     };
     format!(
         "'{server_name}' will run with your full user rights: it can read, change and delete \
-         any file you can, including other apps' data and your AGI Workforce settings. \
+         any file you can, including other apps' data and your AGI Desktop settings. \
          {rechecked}, so an edit to one of those runs with your rights the next time it starts. \
          Keep the sandbox on to contain it; you can turn it back on in MCP settings at any time. \
          In the sandbox it can reach the internet but cannot read your keys, cloud logins, \

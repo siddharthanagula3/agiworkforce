@@ -118,7 +118,7 @@ pub fn resolve_selected_provider(model: &str, provider_override: Option<&str>) -
             if provider == Provider::ManagedCloud {
                 if !catalog_model.cloud_eligible && !crate::tier_cache::plan_lists_model(model) {
                     return Err(CliError::config(format!(
-                        "Model '{}' is not eligible for AGI Workforce managed cloud.",
+                        "Model '{}' is not eligible for AGI managed cloud.",
                         model
                     ))
                     .into());
@@ -492,7 +492,7 @@ pub(crate) fn resolve_key(config: &CliConfig, provider: &Provider) -> Result<Opt
         Provider::ManagedCloud => {
             let token = crate::tier_cache::load_jwt();
             if token.is_none() {
-                return Err(CliError::auth_missing(name, "No AGI Workforce session found.").into());
+                return Err(CliError::auth_missing(name, "No AGI session found.").into());
             }
             Ok(token)
         }

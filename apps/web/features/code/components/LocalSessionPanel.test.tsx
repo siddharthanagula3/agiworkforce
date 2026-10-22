@@ -961,7 +961,7 @@ describe('local session attachments', () => {
 
     expect(
       await screen.findByText(
-        'Pasting images into a coding session needs a newer version of AGI Cloud. Update the app, then try again.',
+        'Pasting images into a coding session needs a newer version of AGI Desktop. Update the app, then try again.',
       ),
     ).toBeInTheDocument();
   });

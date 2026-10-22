@@ -72,7 +72,7 @@ export function MarketingHeader({
                 <Link href={SIGN_IN_HREF} className="agi-ds-navlink">
                   Sign in
                 </Link>
-                <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
+                <Button href={WEB_ENTRY_HREF}>Try AGI Chat</Button>
               </>
             )}
             <MarketingMobileNav signedIn={signedIn} />

@@ -73,9 +73,10 @@ vi.mock('electron', () => {
     nativeTheme: { shouldUseDarkColors: true, on: vi.fn(), off: vi.fn() },
     Tray: vi.fn(() => ({ setToolTip: vi.fn(), setContextMenu: vi.fn(), on: vi.fn() })),
     app: {
-      name: 'AGI Cloud',
+      name: 'AGI Desktop',
       requestSingleInstanceLock: () => true,
       setName: vi.fn(),
+      setPath: vi.fn(),
       setAsDefaultProtocolClient: vi.fn(),
       on: vi.fn((event: string, cb: (...args: unknown[]) => void) => {
         appHandlers.set(event, cb);

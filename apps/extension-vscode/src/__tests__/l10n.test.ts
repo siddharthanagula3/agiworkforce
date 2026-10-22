@@ -126,7 +126,7 @@ describe('applyLlmEdit in a translated editor', () => {
     await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
 
     expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Workforce: Refactor の結果を適用しますか？',
+      'AGI Code: Refactor の結果を適用しますか？',
       { modal: false },
       'その場に適用',
       '新しいタブで表示',
@@ -154,7 +154,7 @@ describe('applyLlmEdit in a translated editor', () => {
     await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
 
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-      'AGI Workforce: 編集を適用できませんでした, ドキュメントが変更された可能性があります。',
+      'AGI Code: 編集を適用できませんでした, ドキュメントが変更された可能性があります。',
     );
   });
 });

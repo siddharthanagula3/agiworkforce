@@ -3527,7 +3527,7 @@ async fn settle_document(
         }
         let text = crate::documents::untrusted(
             name,
-            "[this file was uploaded to AGI Workforce Cloud and is not available in this mode]",
+            "[this file was uploaded to AGI Cloud and is not available in this mode]",
         );
         *block = ContentBlock::Text { text };
         return None;

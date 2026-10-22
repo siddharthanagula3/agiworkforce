@@ -67,7 +67,7 @@ describe('a drop on the window', () => {
 
       const [prompt] = messageBoxes as Array<{ message: string; detail?: string }>;
       const lines = (prompt?.detail ?? '').split('\n').filter((line) => line !== '');
-      expect(prompt?.message).toBe('Let AGI Cloud open this folder?');
+      expect(prompt?.message).toBe('Let AGI Desktop open this folder?');
       expect(lines).toContain(`Folder: ${join(scratch, 'Documents')}`);
       expect(lines.at(-1)).toMatch(
         new RegExp(`^You dropped: ${join(scratch, 'tpl')}, which is a link`, 'u'),

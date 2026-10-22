@@ -157,7 +157,7 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
   },
   {
     key: 'agi-in-chrome',
-    label: 'AGI in Chrome',
+    label: 'AGI Extension',
     icon: Globe,
     keywords: ['browser', 'extension', 'bridge', 'native messaging', 'pairing'],
   },

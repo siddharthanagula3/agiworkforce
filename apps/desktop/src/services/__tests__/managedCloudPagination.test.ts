@@ -38,7 +38,7 @@ describe('managedCloudPagination', () => {
         name: 'ManagedCloudPaginationError',
         code: 'managed_cloud_pagination_non_advancing',
         resource: 'conversations',
-        message: expect.stringContaining('Archive older conversations in AGI Web'),
+        message: expect.stringContaining('Archive older conversations in AGI Chat'),
       }),
     );
   });

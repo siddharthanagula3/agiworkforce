@@ -55,6 +55,7 @@ import {
   type ThreadSummary,
   type UsageMeter,
   type UserInput,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import {
   presentChatError,
@@ -1263,7 +1264,7 @@ export class ChatStateManager {
         }
         if (await this._continueAccountConversationHere(msg.payload.id)) break;
         void vscode.window.showInformationMessage(
-          'AGI Workforce: this AGI CLI cannot open account chats in VS Code yet, so the chat opened on the web.',
+          `${PRODUCT_NAMES.code}: this AGI CLI cannot open account chats in VS Code yet, so the chat opened on the web.`,
         );
         await vscode.env.openExternal(
           vscode.Uri.parse(`${getCloudWebOrigin()}/chat/${msg.payload.id}?from=vscode-extension`),
@@ -1764,7 +1765,7 @@ export class ChatStateManager {
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : t('webview.couldNotOpenDiff');
-          void vscode.window.showErrorMessage(`AGI Workforce: ${message}`);
+          void vscode.window.showErrorMessage(`${PRODUCT_NAMES.code}: ${message}`);
           this._post({ type: 'diffProposalFailed', payload: { message } });
         }
         break;
@@ -2106,7 +2107,11 @@ export class ChatStateManager {
     const entries = await this._loadSlashEntries();
     const picked = await vscode.window.showQuickPick(
       [...entries.values()].map((entry) => ({ label: entry.name, description: entry.description })),
-      { title: 'AGI Workforce, Commands', placeHolder: 'Run a command', matchOnDescription: true },
+      {
+        title: `${PRODUCT_NAMES.code}, Commands`,
+        placeHolder: 'Run a command',
+        matchOnDescription: true,
+      },
     );
     if (picked !== undefined) await this.runSlashCommand(picked.label);
   }
@@ -2117,7 +2122,7 @@ export class ChatStateManager {
     const entry = entries.get(normalized);
     if (entry === undefined) {
       void vscode.window.showWarningMessage(
-        `AGI Workforce: ${normalized} runs only in the agi terminal. Use Continue This Session in the Terminal to run it there.`,
+        `${PRODUCT_NAMES.code}: ${normalized} runs only in the agi terminal. Use Continue This Session in the Terminal to run it there.`,
       );
       return;
     }
@@ -2135,12 +2140,14 @@ export class ChatStateManager {
           bare,
         );
         if (result.status !== 'ok') {
-          void vscode.window.showWarningMessage(`AGI Workforce: ${result.reason}`);
+          void vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: ${result.reason}`);
           return;
         }
         const text = result.value.text.trim();
         void vscode.window.showInformationMessage(
-          text === '' ? `AGI Workforce: ${normalized} finished.` : `AGI Workforce: ${text}`,
+          text === ''
+            ? `${PRODUCT_NAMES.code}: ${normalized} finished.`
+            : `${PRODUCT_NAMES.code}: ${text}`,
         );
         return;
       }
@@ -2409,7 +2416,7 @@ export class ChatStateManager {
 
   private _rejectResume(message: string, hint?: ChatErrorHint): false {
     this._postError(message, hint);
-    const warning = `AGI Workforce: ${message}`;
+    const warning = `${PRODUCT_NAMES.code}: ${message}`;
     // The error block can only post the five `resolveTurnFailure` kinds, none of
     // which reaches workspace trust, so the warning that already accompanies a
     // refusal carries the one control that resolves it.
@@ -2498,13 +2505,13 @@ export class ChatStateManager {
     const changed = this._lastChangedTurn;
     if (thread === undefined || changed?.turnId !== turnId || changed.threadId !== thread.id) {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: only the latest reply in this session can be undone here. Use Checkpoints to go back further.',
+        `${PRODUCT_NAMES.code}: only the latest reply in this session can be undone here. Use Checkpoints to go back further.`,
       );
       return;
     }
     if (this._activeTurn?.threadId === thread.id) {
       void vscode.window.showWarningMessage(
-        'AGI Workforce: stop the current response before undoing a reply.',
+        `${PRODUCT_NAMES.code}: stop the current response before undoing a reply.`,
       );
       return;
     }
@@ -2523,7 +2530,7 @@ export class ChatStateManager {
       const latest = checkpoints[checkpoints.length - 1];
       if (latest === undefined) {
         void vscode.window.showWarningMessage(
-          'AGI Workforce: this session kept no checkpoint for that reply, so its changes cannot be undone here.',
+          `${PRODUCT_NAMES.code}: this session kept no checkpoint for that reply, so its changes cannot be undone here.`,
         );
         return;
       }
@@ -2546,7 +2553,7 @@ export class ChatStateManager {
       void vscode.window.showInformationMessage(tPlural('checkpoints.filesRestored', restored));
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+        `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
       );
     }
   }
@@ -2774,7 +2781,7 @@ export class ChatStateManager {
     const thread = this._thread;
     if (thread === undefined) {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: open a developer session to see its checkpoints.',
+        `${PRODUCT_NAMES.code}: open a developer session to see its checkpoints.`,
       );
       return;
     }
@@ -2783,13 +2790,13 @@ export class ChatStateManager {
       listed = await thread.runtime.listCheckpoints(thread.id);
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+        `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return;
     }
     if (listed.checkpoints.length === 0) {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: this session has no checkpoints yet. One is saved with each prompt.',
+        `${PRODUCT_NAMES.code}: this session has no checkpoints yet. One is saved with each prompt.`,
       );
       return;
     }
@@ -2800,7 +2807,7 @@ export class ChatStateManager {
         detail: tPlural('checkpoints.trackedFiles', checkpoint.trackedFiles),
         checkpoint,
       })),
-      { title: 'AGI Workforce, Checkpoints', placeHolder: 'Pick the prompt to go back to' },
+      { title: `${PRODUCT_NAMES.code}, Checkpoints`, placeHolder: 'Pick the prompt to go back to' },
     );
     if (picked === undefined) return;
     const hasConversation = picked.checkpoint.messageIndex !== undefined;
@@ -2812,12 +2819,12 @@ export class ChatStateManager {
     );
     if (choices.length === 0) {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: this checkpoint has nothing left to restore. Its conversation was compacted and it tracked no files.',
+        `${PRODUCT_NAMES.code}: this checkpoint has nothing left to restore. Its conversation was compacted and it tracked no files.`,
       );
       return;
     }
     const choice = await vscode.window.showQuickPick(choices, {
-      title: `AGI Workforce, Rewind to “${picked.label}”`,
+      title: `${PRODUCT_NAMES.code}, Rewind to “${picked.label}”`,
       placeHolder: 'What goes back to this point',
     });
     if (choice === undefined) return;
@@ -2829,7 +2836,7 @@ export class ChatStateManager {
     if (confirmed !== REWIND || this._thread !== thread) return;
     if (this._activeTurn?.threadId === thread.id) {
       void vscode.window.showWarningMessage(
-        'AGI Workforce: stop the current response before rewinding this session.',
+        `${PRODUCT_NAMES.code}: stop the current response before rewinding this session.`,
       );
       return;
     }
@@ -2842,7 +2849,7 @@ export class ChatStateManager {
       });
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: ${error instanceof Error ? error.message : String(error)}`,
+        `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
       );
       return;
     }
@@ -2932,7 +2939,7 @@ export class ChatStateManager {
     const thread = this._thread;
     if (thread === undefined) {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: open a developer session to summarize it.',
+        `${PRODUCT_NAMES.code}: open a developer session to summarize it.`,
       );
       return;
     }
@@ -2942,7 +2949,7 @@ export class ChatStateManager {
     }
     if (!(await thread.runtime.offers('threadCompact'))) {
       void vscode.window.showWarningMessage(
-        'AGI Workforce: the installed AGI CLI cannot summarize a session. Update the AGI CLI to compact it.',
+        `${PRODUCT_NAMES.code}: the installed AGI CLI cannot summarize a session. Update the AGI CLI to compact it.`,
       );
       return;
     }
@@ -2961,7 +2968,7 @@ export class ChatStateManager {
       outcome = await vscode.window.withProgress(
         {
           location: vscode.ProgressLocation.Notification,
-          title: 'AGI Workforce: summarizing this session…',
+          title: `${PRODUCT_NAMES.code}: summarizing this session…`,
         },
         () => thread.runtime.compactThread(thread.id),
       );
@@ -2975,7 +2982,7 @@ export class ChatStateManager {
     }
     if (!outcome.compacted) {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: nothing in this session is old enough to summarize yet.',
+        `${PRODUCT_NAMES.code}: nothing in this session is old enough to summarize yet.`,
       );
       return;
     }
@@ -3039,7 +3046,7 @@ export class ChatStateManager {
     const thread = this._thread;
     if (thread === undefined) {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: open a developer session to export it.',
+        `${PRODUCT_NAMES.code}: open a developer session to export it.`,
       );
       return;
     }
@@ -3063,13 +3070,13 @@ export class ChatStateManager {
         { label: '$(copy) Copy as Markdown', action: 'copy' as const },
         { label: '$(save) Save as a Markdown file…', action: 'save' as const },
       ],
-      { title: 'AGI Workforce, Export Conversation' },
+      { title: `${PRODUCT_NAMES.code}, Export Conversation` },
     );
     if (picked === undefined) return;
     if (picked.action === 'copy') {
       await vscode.env.clipboard.writeText(markdown);
       void vscode.window.showInformationMessage(
-        'AGI Workforce: copied the conversation as Markdown.',
+        `${PRODUCT_NAMES.code}: copied the conversation as Markdown.`,
       );
       return;
     }
@@ -3091,7 +3098,7 @@ export class ChatStateManager {
     }
     const open = 'Open';
     const choice = await vscode.window.showInformationMessage(
-      `AGI Workforce: saved the conversation to ${vscode.workspace.asRelativePath(target)}.`,
+      `${PRODUCT_NAMES.code}: saved the conversation to ${vscode.workspace.asRelativePath(target)}.`,
       open,
     );
     if (choice === open) await vscode.window.showTextDocument(target);
@@ -3182,7 +3189,7 @@ export class ChatStateManager {
       },
     ];
     const picked = await vscode.window.showQuickPick(rows, {
-      title: 'AGI Workforce, Status',
+      title: `${PRODUCT_NAMES.code}, Status`,
       placeHolder: 'Select a row to change it or see more',
     });
     await picked?.run?.();
@@ -4161,7 +4168,10 @@ export class ChatStateManager {
         });
       }
     } catch (error) {
-      console.warn(`[AGI Workforce] failed to refresh developer session ${threadId}`, error);
+      console.warn(
+        `[${PRODUCT_NAMES.code}] failed to refresh developer session ${threadId}`,
+        error,
+      );
     }
   }
 
@@ -4238,7 +4248,9 @@ export class ChatStateManager {
     const thread = this._thread;
     const plan = this._currentPlan();
     if (thread === undefined || plan === undefined) {
-      void vscode.window.showInformationMessage('AGI Workforce: this session has no plan yet.');
+      void vscode.window.showInformationMessage(
+        `${PRODUCT_NAMES.code}: this session has no plan yet.`,
+      );
       return;
     }
     const content = planDocumentMarkdown(plan);
@@ -4261,13 +4273,13 @@ export class ChatStateManager {
     const document = vscode.window.activeTextEditor?.document;
     if (tracked === undefined || document?.uri.toString() !== tracked.uri) {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: open the plan as a document, add your notes to it, then revise from there.',
+        `${PRODUCT_NAMES.code}: open the plan as a document, add your notes to it, then revise from there.`,
       );
       return;
     }
     if (this._thread?.id !== tracked.threadId) {
       void vscode.window.showWarningMessage(
-        'AGI Workforce: this plan belongs to a session that is no longer open here.',
+        `${PRODUCT_NAMES.code}: this plan belongs to a session that is no longer open here.`,
       );
       return;
     }
@@ -4275,13 +4287,13 @@ export class ChatStateManager {
     const notes = planDocumentNotes(tracked.original, edited);
     if (notes === '') {
       void vscode.window.showInformationMessage(
-        'AGI Workforce: add your notes to the plan document first.',
+        `${PRODUCT_NAMES.code}: add your notes to the plan document first.`,
       );
       return;
     }
     if (notes.length > PLAN_FEEDBACK_LIMIT) {
       void vscode.window.showWarningMessage(
-        `AGI Workforce: your notes are longer than the ${PLAN_FEEDBACK_LIMIT.toLocaleString()} characters a plan revision takes. Shorten them and try again.`,
+        `${PRODUCT_NAMES.code}: your notes are longer than the ${PLAN_FEEDBACK_LIMIT.toLocaleString()} characters a plan revision takes. Shorten them and try again.`,
       );
       return;
     }
@@ -4447,7 +4459,10 @@ export class ChatStateManager {
         this._adoptStoredTranscript(thread, response);
       }
     } catch (error) {
-      console.warn(`[AGI Workforce] failed to re-read developer session ${thread.id}`, error);
+      console.warn(
+        `[${PRODUCT_NAMES.code}] failed to re-read developer session ${thread.id}`,
+        error,
+      );
     } finally {
       this._transcriptSyncActive = false;
     }
@@ -4458,7 +4473,10 @@ export class ChatStateManager {
     try {
       response = await thread.runtime.readThread(thread.id);
     } catch (error) {
-      console.warn(`[AGI Workforce] failed to re-read developer session ${thread.id}`, error);
+      console.warn(
+        `[${PRODUCT_NAMES.code}] failed to re-read developer session ${thread.id}`,
+        error,
+      );
       return this._thread === thread;
     }
     if (this._thread !== thread) return false;
@@ -4530,7 +4548,10 @@ export class ChatStateManager {
     try {
       await thread.runtime.releaseWriter(thread.id);
     } catch (error) {
-      console.warn(`[AGI Workforce] could not hand developer session ${thread.id} over`, error);
+      console.warn(
+        `[${PRODUCT_NAMES.code}] could not hand developer session ${thread.id} over`,
+        error,
+      );
     }
   }
 

@@ -9,7 +9,7 @@ import { spawn as nodeSpawn, type ChildProcessWithoutNullStreams } from 'node:ch
 import { accessSync, constants as fsConstants, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { messageKindForAgentEvent } from '@agiworkforce/types';
+import { messageKindForAgentEvent, PRODUCT_NAMES } from '@agiworkforce/types';
 import type {
   DeveloperActiveTurn,
   DeveloperAgentMode,
@@ -119,7 +119,7 @@ import {
 } from './workspaceStore';
 
 const CLIENT_NAME = 'agi-desktop';
-const CLIENT_TITLE = 'AGI Cloud for desktop';
+const CLIENT_TITLE = PRODUCT_NAMES.desktop;
 const DEFAULT_BINARY = 'agi';
 const REQUEST_TIMEOUT_MS = 30_000;
 /**

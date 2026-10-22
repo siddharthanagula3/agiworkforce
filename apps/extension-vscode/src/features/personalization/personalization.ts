@@ -8,6 +8,7 @@ import {
   TECHNICAL_LEVELS,
   normalizeResponseStylePreference,
   type ResponseStylePreference,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import {
   patchAccountPreferences,
@@ -248,13 +249,13 @@ export async function managePersonalization(secrets: vscode.SecretStorage): Prom
       ]);
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: personalization could not be loaded, ${error instanceof Error ? error.message : String(error)}.`,
+        `${PRODUCT_NAMES.code}: personalization could not be loaded, ${error instanceof Error ? error.message : String(error)}.`,
       );
       return;
     }
     if (identity === undefined || namespace === undefined) {
       const choice = await vscode.window.showWarningMessage(
-        'AGI Workforce: sign in to AGI Cloud to change how AGI answers you.',
+        `${PRODUCT_NAMES.code}: sign in to AGI Cloud to change how AGI answers you.`,
         'Sign in',
       );
       if (choice === 'Sign in') await vscode.commands.executeCommand('agi-workforce.signIn');
@@ -263,7 +264,7 @@ export async function managePersonalization(secrets: vscode.SecretStorage): Prom
     const picked = await vscode.window.showQuickPick(
       buildItems(identity, namespace, normalizeResponseStylePreference(namespace)),
       {
-        title: 'AGI Workforce, Personalization',
+        title: `${PRODUCT_NAMES.code}, Personalization`,
         placeHolder: 'Applies to AGI Cloud answers on every device',
       },
     );
@@ -274,7 +275,7 @@ export async function managePersonalization(secrets: vscode.SecretStorage): Prom
       await patchAccountPreferences(secrets, edit.namespace, edit.patch);
     } catch (error) {
       void vscode.window.showErrorMessage(
-        `AGI Workforce: that change was not saved, ${error instanceof Error ? error.message : String(error)}.`,
+        `${PRODUCT_NAMES.code}: that change was not saved, ${error instanceof Error ? error.message : String(error)}.`,
       );
       return;
     }

@@ -1,3 +1,4 @@
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import type * as vscode from 'vscode';
 import { getAccountToken, getCloudWebOrigin } from './api';
 import { platformRequestHeaders } from '../platform/platformHeaders';
@@ -26,7 +27,7 @@ async function preferencesRequest(
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
     },
   );
-  if (!response.ok) throw new Error(`AGI Workforce answered HTTP ${response.status}`);
+  if (!response.ok) throw new Error(`${PRODUCT_BRAND} answered HTTP ${response.status}`);
   const payload = (await response.json()) as { settings?: unknown };
   return method === 'GET' && payload.settings !== null && typeof payload.settings === 'object'
     ? (payload.settings as PreferenceNamespace)

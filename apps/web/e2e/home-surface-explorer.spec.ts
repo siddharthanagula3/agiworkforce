@@ -2,10 +2,10 @@ import { expect, test } from '@playwright/test';
 
 const surfaces = [
   ['AGI Desktop', '/desktop'],
-  ['AGI Web', '/web'],
+  ['AGI Chat', '/web'],
   ['AGI CLI', '/cli'],
-  ['AGI in Chrome', '/chrome-extension'],
-  ['AGI in VS Code', '/vscode-extension'],
+  ['AGI Extension', '/chrome-extension'],
+  ['AGI Code for VS Code', '/vscode-extension'],
   ['AGI Mobile', '/mobile'],
 ] as const;
 

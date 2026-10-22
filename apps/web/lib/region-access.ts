@@ -5,7 +5,7 @@ import { CANONICAL_POLICY_ROUTES } from './legal-constants';
 export const REGION_UNAVAILABLE_PATH = '/region-unavailable';
 
 const REGION_UNAVAILABLE_MESSAGE =
-  'AGI Workforce is not available in your country or region. The list of places where it is not offered is at /supported-countries.';
+  'AGI is not available in your country or region. The list of places where it is not offered is at /supported-countries.';
 
 export const REGION_UNAVAILABLE_BODY = {
   success: false,

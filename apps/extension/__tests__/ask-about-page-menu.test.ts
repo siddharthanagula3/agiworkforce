@@ -26,11 +26,11 @@ function run<T>(code: string, exported: string, dependencies: Record<string, unk
   ) as T;
 }
 
-describe('right-click Ask AGI Workforce about this page', () => {
+describe('right-click Ask AGI about this page', () => {
   it('is offered on the page itself, next to Summarize this page', () => {
     const items = slice(backgroundSource, 'const CONTEXT_MENU_ITEMS', '];');
     expect(items).toContain("{ id: 'ask-page', title: t('menuAskAboutPage'), contexts: ['page'] }");
-    expect(manifestCatalog['menuAskAboutPage']?.message).toBe('Ask AGI Workforce about this page');
+    expect(manifestCatalog['menuAskAboutPage']?.message).toBe('Ask AGI about this page');
   });
 
   it('opens the side panel for that tab with an ask-about-page request and sends nothing', () => {

@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 
 import { declarationSpan, type DeclarationSpan } from './declarationSpan';
@@ -59,7 +60,7 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
       lenses.push(
         new vscode.CodeLens(lensRange, {
           title: '$(hubot) Ask AI',
-          tooltip: 'Explain this with AGI Workforce',
+          tooltip: `Explain this with ${PRODUCT_NAMES.code}`,
           command: 'agi-workforce.explain',
           arguments: [targetRange],
         }),
@@ -68,7 +69,7 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
       lenses.push(
         new vscode.CodeLens(lensRange, {
           title: '$(beaker) Tests',
-          tooltip: 'Generate tests with AGI Workforce',
+          tooltip: `Generate tests with ${PRODUCT_NAMES.code}`,
           command: 'agi-workforce.generateTests',
           arguments: [targetRange],
         }),
@@ -77,7 +78,7 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
       lenses.push(
         new vscode.CodeLens(lensRange, {
           title: '$(edit) Refactor',
-          tooltip: 'Refactor this with AGI Workforce',
+          tooltip: `Refactor this with ${PRODUCT_NAMES.code}`,
           command: 'agi-workforce.refactor',
           arguments: [targetRange],
         }),
@@ -86,7 +87,7 @@ function computeLenses(document: vscode.TextDocument): vscode.CodeLens[] {
       lenses.push(
         new vscode.CodeLens(lensRange, {
           title: '$(book) Docs',
-          tooltip: 'Generate documentation with AGI Workforce',
+          tooltip: `Generate documentation with ${PRODUCT_NAMES.code}`,
           command: 'agi-workforce.docs',
           arguments: [targetRange],
         }),
@@ -143,7 +144,7 @@ function noteActions(keyword: string): ReadonlyArray<{
   return [
     {
       title: `$(wrench) Resolve ${keyword}`,
-      tooltip: `Have AGI Workforce carry out this ${keyword}`,
+      tooltip: `Have ${PRODUCT_NAMES.code} carry out this ${keyword}`,
       command: 'agi-workforce.fix',
     },
     {

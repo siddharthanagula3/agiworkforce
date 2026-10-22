@@ -24,7 +24,7 @@ import {
 
 const TITLE = 'Attach from a local folder';
 const NO_ROOTS_COPY =
-  'No folders are approved yet. Choose one, and AGI Cloud asks your permission before it reads anything inside.';
+  'No folders are approved yet. Choose one, and AGI Desktop asks your permission before it reads anything inside.';
 const EMPTY_FOLDER_COPY = 'Nothing here that can be attached.';
 const LOAD_FAILED = 'That folder could not be read.';
 const READ_FAILED = 'That file could not be read.';

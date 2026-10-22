@@ -48,7 +48,7 @@ function decodeEntities(text: string): string {
 function readableText(text: string, names: ReadonlyMap<string, string>, botUserId: string): string {
   const replaced = text
     .replace(USER_MENTION_RE, (_match, id: string) =>
-      id === botUserId ? '@AGI Workforce' : `@${names.get(id) ?? 'someone'}`,
+      id === botUserId ? '@AGI' : `@${names.get(id) ?? 'someone'}`,
     )
     .replace(/<!(channel|here|everyone)(?:\|[^>]*)?>/g, '@$1')
     .replace(/<!subteam\^[A-Z0-9]+(?:\|([^>]*))?>/g, (_match, label?: string) => label ?? '@group')
@@ -180,7 +180,7 @@ function channelContextBlock(
   const entries = prior.map((message) => ({
     from:
       message.speaker === 'assistant'
-        ? 'AGI Workforce (you)'
+        ? 'AGI (you)'
         : message.speaker === 'requester'
           ? `${names.get(message.userId ?? '') ?? 'the person asking'} (the person asking)`
           : (names.get(message.userId ?? '') ?? 'another member'),
@@ -237,7 +237,7 @@ export async function buildSlackTurnContext(
   const bounded = withinBudget(context, SLACK_CONTEXT_LIMITS.maxChars);
 
   const currentText = [
-    readableText(request.text, names, request.botUserId).replace(/^@AGI Workforce\s*/, ''),
+    readableText(request.text, names, request.botUserId).replace(/^@AGI\s*/, ''),
     request.fileNames.length > 0
       ? `(I attached files in Slack that you cannot open: ${request.fileNames.join(', ')})`
       : '',

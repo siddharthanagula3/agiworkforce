@@ -103,9 +103,9 @@ function normalizeReason(raw: unknown): SupportAbstentionReason {
 
 export const ABSTENTION_FALLBACK_TEXT: Record<SupportAbstentionReason, string> = {
   no_relevant_source:
-    'I only answer questions about AGI Workforce from the help articles, and I could not find anything there for this one.',
+    'I only answer questions about AGI from the help articles, and I could not find anything there for this one.',
   out_of_scope:
-    'I can only help with AGI Workforce: your account, plans, features, and fixing problems with the product.',
+    'I can only help with AGI: your account, plans, features, and fixing problems with the product.',
   hard_abstain_billing:
     'I do not answer billing questions, charges, refunds and invoices are handled by a person, not by me.',
   hard_abstain_data_deletion:

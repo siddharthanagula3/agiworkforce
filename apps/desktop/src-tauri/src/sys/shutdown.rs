@@ -128,7 +128,7 @@ pub fn quit_prompt(work: &LiveWork) -> Option<QuitPrompt> {
         .collect::<Vec<_>>()
         .join("\n");
     Some(QuitPrompt {
-        title: "Quit AGI Workforce?".to_string(),
+        title: "Quit AGI Desktop?".to_string(),
         body: format!(
             "Quitting stops the work running on this computer.\n\n{listed}\n\n\
              A chat reply stops where it is and can be retried when you reopen the app. \
@@ -425,7 +425,7 @@ mod tests {
             scheduled_runs: 1,
         })
         .expect("live work must ask before quitting");
-        assert_eq!(prompt.title, "Quit AGI Workforce?");
+        assert_eq!(prompt.title, "Quit AGI Desktop?");
         assert!(prompt.body.contains("• 2 chat replies still being written"));
         assert!(prompt.body.contains("• 2 background agents still running"));
         assert!(prompt.body.contains("• 1 scheduled run in progress"));

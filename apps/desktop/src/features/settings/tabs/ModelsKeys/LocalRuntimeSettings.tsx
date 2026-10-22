@@ -2,6 +2,7 @@ import React from 'react';
 import { Check, Loader2, RefreshCw, Server } from 'lucide-react';
 import { toast } from 'sonner';
 import { useConfirmAction } from '@agiworkforce/ui';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { McpClient } from '@/api/mcp';
 import { deleteApiKey, listSavedApiKeys } from '@/api/byok';
 import { validateUrl } from '@/utils/security';
@@ -211,7 +212,7 @@ function LocalRuntimeCard({ runtime }: { runtime: RuntimeConfig }) {
   const requestRemoveKey = () => {
     confirm({
       title: `Remove the ${runtime.label} server key?`,
-      description: `The key is deleted from this device. If your ${runtime.label} server was started with an API key, AGI Workforce can no longer use it until you save the key again.`,
+      description: `The key is deleted from this device. If your ${runtime.label} server was started with an API key, ${PRODUCT_NAMES.desktop} can no longer use it until you save the key again.`,
       confirmLabel: 'Remove key',
       onConfirm: async () => {
         try {

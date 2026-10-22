@@ -10,7 +10,7 @@ import '@/features/marketing/components/pages/company/company.css';
 export const metadata = buildMetadata({
   title: 'Apply to test',
   description:
-    'Apply to test AGI Workforce before a surface ships. Tell us which surfaces you would actually exercise and what you would use them for.',
+    'Apply to test AGI before a surface ships. Tell us which surfaces you would actually exercise and what you would use them for.',
   path: '/beta',
 });
 

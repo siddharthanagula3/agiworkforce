@@ -299,7 +299,7 @@ describe('TwoFactorEnrollmentPanel · backup codes', () => {
       expect(frame).toHaveAttribute('aria-hidden', 'true');
       expect(frame).toHaveAttribute('sandbox', 'allow-same-origin allow-modals');
       const printed = frame.contentDocument!;
-      expect(printed.title).toBe('AGI Workforce backup codes');
+      expect(printed.title).toBe('AGI backup codes');
       expect([...printed.querySelectorAll('li')].map((item) => item.textContent)).toEqual(
         BACKUP_CODES,
       );

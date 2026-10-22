@@ -195,10 +195,10 @@ export default function AboutPage() {
               Judge the bet on its merits.
             </h2>
             <Prose>
-              {`Try AGI Web in the browser. The CLI runs local models and your own keys on your own hardware. ${CLI_AVAILABILITY_NOTE} Either way, you see where every request runs before it leaves your device.`}
+              {`Try AGI Chat in the browser. The CLI runs local models and your own keys on your own hardware. ${CLI_AVAILABILITY_NOTE} Either way, you see where every request runs before it leaves your device.`}
             </Prose>
             <ButtonRow>
-              <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
+              <Button href={WEB_ENTRY_HREF}>Try AGI Chat</Button>
               <Button href={CLI_CTA.href} variant="secondary">
                 {CLI_CTA.label}
               </Button>

@@ -1,9 +1,10 @@
 import type { MetadataRoute } from 'next';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'AGI | One AI workspace across models and tools.',
-    short_name: 'AGI',
+    name: PRODUCT_NAMES.chat,
+    short_name: PRODUCT_NAMES.chat,
     description:
       'AI workspace for chat, code, research, files, projects, artifacts, tools, connectors, memory, and automation with explicit Local, BYOK, and managed cloud modes.',
     start_url: '/',

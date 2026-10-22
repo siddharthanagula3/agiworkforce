@@ -25,7 +25,7 @@ import { MANAGED_CLOUD_STATUS } from '@/lib/legal-constants';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 
 export const metadata = buildMetadata({
-  title: 'AGI Web: the workspace in your browser',
+  title: 'AGI Chat: the workspace in your browser',
   description:
     'Chat, projects, artifacts, memory, deep research and agents in the browser, with every admitted model behind one selector. Every reply names the model that answered in its actions menu.',
   path: '/web',
@@ -34,7 +34,7 @@ export const metadata = buildMetadata({
 const DESKTOP_CTA = surfaceCta('desktop');
 const RESEARCH_PLANS = billingPlanCapabilityPlanLabels('deep_research');
 const FINAL_CTA_BODY = [
-  `Free to try in the browser. AGI Web uses managed cloud (${MANAGED_CLOUD_STATUS}).`,
+  `Free to try in the browser. AGI Chat uses managed cloud (${MANAGED_CLOUD_STATUS}).`,
   'Desktop adds approved folders, computer use and scheduled work on the same managed-cloud account; Local and BYOK run in the CLI.',
   CLI_AVAILABILITY_NOTE,
 ]
@@ -82,7 +82,7 @@ export default function WebSurfacePage() {
             <div className="agi-fl-hero-copy">
               <div className="agi-fl-web-bar">
                 <h1 id={IDS.hero} className="agi-fl-web-title">
-                  AGI Web
+                  AGI Chat
                 </h1>
                 <span className="agi-fl-web-status">
                   <span className="agi-fl-web-status-dot" aria-hidden="true" />
@@ -91,7 +91,7 @@ export default function WebSurfacePage() {
               </div>
               <div className="agi-fl-cta-row">
                 <Link href={WEB_ENTRY_HREF} className="agi-fl-cta agi-fl-cta--primary">
-                  Try AGI Web
+                  Try AGI Chat
                 </Link>
                 <Link href="/features" className="agi-fl-cta agi-fl-cta--secondary">
                   See every feature
@@ -160,7 +160,7 @@ export default function WebSurfacePage() {
               </h2>
             </div>
             <Bento
-              label="What AGI Web includes"
+              label="What AGI Chat includes"
               tiles={[
                 {
                   eyebrow: 'Artifacts',
@@ -208,7 +208,7 @@ export default function WebSurfacePage() {
           title="Open it in a tab, or take it with you."
           body={FINAL_CTA_BODY}
           ctas={[
-            { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
+            { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
             { href: DESKTOP_CTA.href, label: DESKTOP_CTA.label },
             { href: '/pricing', label: 'See pricing' },
           ]}

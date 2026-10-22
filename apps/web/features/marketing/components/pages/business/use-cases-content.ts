@@ -88,7 +88,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       {
         meta: 'Cost',
         title: 'Cheap experiments',
-        body: `Local mode is free and BYOK pays providers at their public rates, both in the CLI. ${CLI_AVAILABILITY_NOTE} AGI Web runs on managed cloud.`,
+        body: `Local mode is free and BYOK pays providers at their public rates, both in the CLI. ${CLI_AVAILABILITY_NOTE} AGI Chat runs on managed cloud.`,
       },
     ],
     ledgerEyebrow: 'What you actually get',
@@ -106,7 +106,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
       { label: 'Plans and access', value: POSITIONING.routeBoundary },
     ],
     closeTitle: 'Start free, route deliberately.',
-    closeBody: `Local and BYOK run in the CLI at no platform cost, and AGI Web runs on managed cloud when you want hosted compute. ${CLI_AVAILABILITY_NOTE}`,
+    closeBody: `Local and BYOK run in the CLI at no platform cost, and AGI Chat runs on managed cloud when you want hosted compute. ${CLI_AVAILABILITY_NOTE}`,
     closeCtas: [
       { href: '/download', label: "See what's live" },
       { ...surfaceCta('cli'), variant: 'secondary' },
@@ -121,7 +121,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     eyebrow: 'Use case · sales teams',
     title: 'Know the account. Own the context.',
     lede: `Research, outreach drafts, deal-room briefings, and pipeline triage. Provider choice through your own keys is part of the CLI, with a visible label on every route. ${BYOK_SURFACES.availability}`,
-    ctas: [{ href: WEB_ENTRY_HREF, label: 'Try AGI Web' }, BYOK_EXPLAINER_CTA],
+    ctas: [{ href: WEB_ENTRY_HREF, label: 'Try AGI Chat' }, BYOK_EXPLAINER_CTA],
     visual: {
       light: '/product/hero-thread-light.png',
       dark: '/product/hero-thread-dark.png',
@@ -173,7 +173,7 @@ export const USE_CASE_CONTENT: Record<string, UseCaseContent> = {
     closeTitle: 'Brief better, route deliberately.',
     closeBody: `Bring your own keys in the CLI and keep account context under your control while the team works. ${BYOK_SURFACES.availability}`,
     closeCtas: [
-      { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
+      { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
       BYOK_EXPLAINER_CTA,
       { href: '/apps', label: 'Browse apps & connectors', variant: 'secondary' },
     ],

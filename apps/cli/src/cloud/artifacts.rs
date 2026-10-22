@@ -332,7 +332,7 @@ pub async fn resolve(
         .find(|entry| entry.id == artifact_id)
         .ok_or_else(|| CloudError::Api {
             status: 404,
-            message: format!("No artifact '{artifact_id}' in your AGI Workforce account"),
+            message: format!("No artifact '{artifact_id}' in your AGI account"),
         })
 }
 
@@ -557,7 +557,7 @@ pub fn render_index_marked(
     published: &[PublishedArtifact],
 ) -> String {
     if entries.is_empty() {
-        return "No artifacts in your AGI Workforce account yet.".to_string();
+        return "No artifacts in your AGI account yet.".to_string();
     }
     let mut lines = Vec::with_capacity(entries.len() * 2);
     for entry in entries {

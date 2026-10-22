@@ -1723,7 +1723,7 @@ pub(crate) fn render_chrome_state(state: &crate::browser_bridge::BrowserState) -
 
 pub fn render_ide() -> String {
     format!(
-        "AGI Workforce for VS Code runs on this CLI: it signs in with the same account, and the sessions you start in a folder here are listed in its history for that folder.\nGet it at {}",
+        "AGI Code runs on this CLI: it signs in with the same account, and the sessions you start in a folder here are listed in its history for that folder.\nGet it at {}",
         product_page(VSCODE_PAGE)
     )
 }
@@ -1745,7 +1745,7 @@ pub fn render_mobile() -> String {
         .map(|qr| format!("Scan this with your phone's camera, or open {url}\n{qr}"))
         .unwrap_or_else(|| format!("Open {url} on your phone."));
     format!(
-        "AGI Workforce for iPhone and Android.\n{scan}\nOnce it is installed and signed in, run `agi remote-control` in this folder to let it follow, steer and approve the sessions here."
+        "AGI Mobile for iPhone and Android.\n{scan}\nOnce it is installed and signed in, run `agi remote-control` in this folder to let it follow, steer and approve the sessions here."
     )
 }
 
@@ -2408,7 +2408,7 @@ pub mod connectors {
             }) => LocalToolPolicy::Unrestricted,
             Err(_) if !workspace_member => LocalToolPolicy::Unrestricted,
             Err(CloudError::SessionExpired) => LocalToolPolicy::Unreadable(
-                "Your AGI Workforce session expired, so your workspace's website rules could \
+                "Your AGI session expired, so your workspace's website rules could \
                  not be checked and the assistant will not read websites. Sign in again with \
                  `agi login`."
                     .to_string(),
@@ -2509,7 +2509,7 @@ pub mod connectors {
         match privacy {
             PrivacyMode::Managed => "Your account's connectors\n  Connectors you connected at https://agiworkforce.com/connectors, such as Google Drive, Slack and Notion, are offered to this session's turns. Each call asks first unless you allowed that tool there.".to_string(),
             PrivacyMode::Byok | PrivacyMode::Local => format!(
-                "Your account's connectors\n  This {} session keeps your data out of AGI Workforce's cloud, so the connectors on your account are not offered to it. Use them from a Managed Cloud session, or add an MCP server here with agi mcp add.",
+                "Your account's connectors\n  This {} session keeps your data out of AGI Cloud, so the connectors on your account are not offered to it. Use them from a Managed Cloud session, or add an MCP server here with agi mcp add.",
                 privacy.label()
             ),
         }
@@ -2916,7 +2916,7 @@ mod tests {
         for (command, expected) in [
             ("/agents", "Agents"),
             ("/chrome", "Chrome integration"),
-            ("/ide", "AGI Workforce for VS Code"),
+            ("/ide", "AGI Code"),
             ("/diagnose", "Diagnostics"),
             ("/changelog", "Release notes"),
             ("/keys", "Keybindings"),

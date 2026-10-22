@@ -942,7 +942,7 @@ const NATIVE_REQUEST_TIMEOUT_MS = 10000;
 const CONTENT_SCRIPT_FORWARD_TIMEOUT_MS = 30000;
 const NATIVE_CONNECT_MAX_WAIT_MS = 2000;
 const NATIVE_CONNECT_POLL_INTERVAL_MS = 100;
-const TAB_GROUP_NAME = 'AGI Workforce';
+const TAB_GROUP_NAME = 'AGI';
 
 const _bgCtx = {
   nativeReconnectTimer: null as ReturnType<typeof setTimeout> | null,
@@ -3102,7 +3102,7 @@ async function executeScheduledTask(
 // of isAllowlistedSender(). PING and GET_AGI_BRIDGE_URL are not discovery-bypass
 // types: content scripts on arbitrary pages must not receive fingerprinting replies.
 const SITE_NOT_APPROVED_MESSAGE =
-  'This site is not on your AGI Workforce approved-sites list. ' +
+  'This site is not on your AGI approved-sites list. ' +
   'Open the extension options and use the "Approved sites" section to add this origin, then reload.';
 
 let siteAllowlistCache = new Set<string>();

@@ -4,7 +4,7 @@ import { HOST_COMMANDS, HOST_MENU_SHORTCUTS } from '@agiworkforce/local-runtime-
 
 vi.mock('electron', () => ({
   Menu: { buildFromTemplate: vi.fn((template: unknown) => template), setApplicationMenu: vi.fn() },
-  app: { name: 'AGI Cloud', isPackaged: true },
+  app: { name: 'AGI Desktop', isPackaged: true },
 }));
 vi.mock('../launchAtLogin', () => ({
   isLaunchAtLoginEnabled: () => false,
@@ -14,9 +14,9 @@ vi.mock('../launchAtLogin', () => ({
 const { appMenuTemplate, dockMenuTemplate } = await import('../appMenu');
 
 const isMac = process.platform === 'darwin';
-const SETTINGS_MENU = isMac ? 'AGI Cloud' : 'File';
+const SETTINGS_MENU = isMac ? 'AGI Desktop' : 'File';
 const SETTINGS_LABEL = isMac ? 'Settings…' : 'Settings';
-const UPDATES_MENU = isMac ? 'AGI Cloud' : 'Help';
+const UPDATES_MENU = isMac ? 'AGI Desktop' : 'Help';
 const UPDATES_LABEL = isMac ? 'Check for Updates…' : 'Check for Updates';
 
 function actions() {

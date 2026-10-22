@@ -223,8 +223,7 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
   const appOrigin = CLOUD_APP_ORIGIN;
 
   win.webContents.userAgent = win.webContents.userAgent
-    .replace(/\sAGICloud\/[\d.]+/i, '')
-    .replace(/\sAGI Cloud\/[\d.]+/i, '')
+    .replace(/\sAGI ?(?:Cloud|Desktop)\/[\d.]+/i, '')
     .replace(/\sElectron\/[\d.]+/i, '');
 
   win.webContents.setWindowOpenHandler(({ url, frameName }) => {

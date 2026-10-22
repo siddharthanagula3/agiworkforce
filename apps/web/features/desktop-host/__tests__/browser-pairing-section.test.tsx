@@ -47,7 +47,7 @@ describe('BrowserPairingSection', () => {
     expect(
       await screen.findByText(/Another app on this computer is already using the browser bridge/),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/Quit and reopen AGI Cloud/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Quit and reopen AGI Desktop/)).not.toBeInTheDocument();
   });
 
   it('falls back to the general line when the shell gave no reason', async () => {
@@ -77,7 +77,7 @@ describe('BrowserPairingSection', () => {
     render(<BrowserPairingSection />);
 
     expect(
-      await screen.findByText(/The code is in a dialog AGI Cloud opened on this Mac/),
+      await screen.findByText(/The code is in a dialog AGI Desktop opened on this Mac/),
     ).toBeInTheDocument();
     expect(screen.queryByText('123456')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Pairing code')).not.toBeInTheDocument();

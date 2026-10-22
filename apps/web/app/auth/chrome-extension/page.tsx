@@ -30,7 +30,7 @@ export default function ChromeExtensionAuthCompletePage() {
         >
           <Stack gap="loose">
             <div>
-              <Eyebrow>AGI for Chrome</Eyebrow>
+              <Eyebrow>AGI Extension</Eyebrow>
               <h1 className="agi-ds-h1" id="chrome-auth-title">
                 {!isLoaded
                   ? 'Checking your account.'

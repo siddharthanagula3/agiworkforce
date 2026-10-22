@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { SURFACE_STATUS } from '@/lib/surface-status';
 import {
   AUTH_LOGIN_PATH,
@@ -48,34 +49,42 @@ export const NAV_GROUPS: readonly NavGroupDefinition[] = [
     items: [
       {
         href: '/web',
-        label: 'AGI Web',
+        label: PRODUCT_NAMES.chat,
         description: 'Chat, projects and artifacts in the browser',
       },
       {
         href: '/desktop',
-        label: 'AGI Desktop',
+        label: PRODUCT_NAMES.desktop,
         description: 'Cloud AI on your desktop, with the folders and screen you allow',
       },
-      { href: '/cli', label: 'AGI CLI', description: 'A Rust agent for the shell, sandboxed' },
+      {
+        href: '/cli',
+        label: PRODUCT_NAMES.cli,
+        description: 'A Rust agent for the shell, sandboxed',
+      },
       {
         href: '/chrome-extension',
-        label: 'AGI in Chrome',
+        label: PRODUCT_NAMES.extension,
         description: 'A side panel that reads the page you are on',
       },
       {
         href: '/vscode-extension',
-        label: 'AGI in VS Code',
+        label: `${PRODUCT_NAMES.code} for VS Code`,
         description: 'Chat, diffs and commands inside the editor',
       },
-      { href: '/mobile', label: 'AGI Mobile', description: 'Local mode on the phone by default' },
+      {
+        href: '/mobile',
+        label: PRODUCT_NAMES.mobile,
+        description: 'Local mode on the phone by default',
+      },
       {
         href: '/agi-work',
-        label: 'AGI Work',
+        label: PRODUCT_NAMES.work,
         description: 'A goal in, a plan first, approvals on sensitive steps',
       },
       {
         href: '/agi-code',
-        label: 'AGI Code',
+        label: PRODUCT_NAMES.code,
         description: 'One coding agent across the CLI and VS Code',
       },
     ],
@@ -239,8 +248,8 @@ export const FOOTER_COLUMNS = [
   {
     title: 'Capabilities',
     links: [
-      { href: '/agi-work', label: 'AGI Work' },
-      { href: '/agi-code', label: 'AGI Code' },
+      { href: '/agi-work', label: PRODUCT_NAMES.work },
+      { href: '/agi-code', label: PRODUCT_NAMES.code },
       { href: '/features/agents', label: 'Agents' },
       { href: '/features/artifacts', label: 'Artifacts' },
       { href: '/features/memory', label: 'Memory' },

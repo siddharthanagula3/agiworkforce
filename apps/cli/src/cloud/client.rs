@@ -39,11 +39,11 @@ impl std::fmt::Display for CloudError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             CloudError::SignedOut => f.write_str(
-                "no AGI Workforce credential: your account history, projects and memory live in \
+                "no AGI credential: your account history, projects and memory live in \
                  your cloud account, sign in with `agi login`",
             ),
             CloudError::SessionExpired => {
-                f.write_str("your AGI Workforce session expired, sign in again with `agi login`")
+                f.write_str("your AGI session expired, sign in again with `agi login`")
             }
             CloudError::NotManaged(mode) => write!(
                 f,
@@ -58,7 +58,7 @@ impl std::fmt::Display for CloudError {
                  server, got '{base}'"
             ),
             CloudError::Transport(message) => {
-                write!(f, "could not reach your AGI Workforce account: {message}")
+                write!(f, "could not reach your AGI account: {message}")
             }
             CloudError::Api { status, message } => write!(f, "{message} (HTTP {status})"),
             CloudError::UpgradeRequired(error) => error.fmt(f),
@@ -66,7 +66,7 @@ impl std::fmt::Display for CloudError {
             CloudError::Decode(message) => {
                 write!(
                     f,
-                    "your AGI Workforce account returned an unreadable response: {message}"
+                    "your AGI account returned an unreadable response: {message}"
                 )
             }
         }

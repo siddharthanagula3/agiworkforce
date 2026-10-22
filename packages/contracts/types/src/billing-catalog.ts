@@ -1,6 +1,7 @@
 import { MAX_ATTACHMENT_BYTES } from './chat';
 import { MICROUSD_PER_USD } from './credits';
 import { FEATURE_RATE_CARD } from './rate-card';
+import { PRODUCT_BRAND, PRODUCT_NAMES } from './product-names';
 
 export type BillingPlanTier =
   | 'local-only'
@@ -394,13 +395,13 @@ export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapabili
     memory_personalization: 'Memory and personalization',
     skills_connectors: 'Skills and connectors',
     cloud_sync: 'Sync across devices',
-    agi_work: 'AGI Work',
+    agi_work: PRODUCT_NAMES.work,
     deep_research: 'Deep Research',
     image_generation: 'Image generation',
     video_generation: 'Video generation',
     managed_api: 'Managed API access',
     developer_surfaces: 'Managed Cloud in the CLI and VS Code',
-    slack_app: 'AGI Workforce in Slack',
+    slack_app: `${PRODUCT_BRAND} in Slack`,
     artifact_connectors: 'Connected apps in published apps',
     team_admin: 'Team administration',
     enterprise_controls: 'SSO, SCIM and admin controls',
@@ -422,7 +423,7 @@ export function billingPlanCapabilitiesAddedOver(
 
 export const USAGE_WORKLOAD_LABELS: Readonly<Record<string, string>> = Object.freeze({
   chat: 'Chat',
-  work: 'AGI Work',
+  work: PRODUCT_NAMES.work,
   research: 'Deep Research',
   code: 'AGI Code',
   browser: 'Browser',

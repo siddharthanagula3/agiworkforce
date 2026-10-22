@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Copy, Check, Share2 } from 'lucide-react';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { McpClient } from '@/api/mcp';
 import { useMcpServerStore } from '@/stores/mcpServerStore';
 
@@ -107,7 +108,8 @@ export function MCPServerSettings() {
         <div>
           <h3 className="text-lg font-semibold">MCP Server</h3>
           <p className="text-sm text-muted-foreground">
-            Expose AGI Workforce as an MCP server for desktop clients, IDEs, and local tools.
+            Expose {PRODUCT_NAMES.desktop} as an MCP server for desktop clients, IDEs, and local
+            tools.
           </p>
         </div>
       </div>

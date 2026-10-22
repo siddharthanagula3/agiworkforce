@@ -201,7 +201,7 @@ impl<H: DeveloperSessionHost> CodeHost<H> {
     fn client() -> AppServerClientInfo {
         AppServerClientInfo {
             name: CLIENT_NAME.to_string(),
-            title: "AGI Workforce Remote Control".to_string(),
+            title: format!("{} Remote Control", crate::PRODUCT_NAME),
             version: env!("CARGO_PKG_VERSION").to_string(),
         }
     }

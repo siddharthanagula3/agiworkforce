@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import {
   describePathReference,
@@ -56,7 +57,7 @@ export async function openPathReference(raw: unknown): Promise<boolean> {
   const uri = await resolvePathReferenceUri(target);
   if (uri === undefined) {
     void vscode.window.showWarningMessage(
-      `AGI Workforce: ${target.path} is not a readable file inside this workspace.`,
+      `${PRODUCT_NAMES.code}: ${target.path} is not a readable file inside this workspace.`,
     );
     return false;
   }
@@ -86,7 +87,7 @@ export async function openWorkspaceFileDiff(rawPath: unknown): Promise<boolean> 
   const uri = await resolvePathReferenceUri({ path: rawPath });
   if (uri === undefined) {
     void vscode.window.showWarningMessage(
-      `AGI Workforce: ${rawPath} is not a readable file inside this workspace.`,
+      `${PRODUCT_NAMES.code}: ${rawPath} is not a readable file inside this workspace.`,
     );
     return false;
   }
@@ -96,7 +97,7 @@ export async function openWorkspaceFileDiff(rawPath: unknown): Promise<boolean> 
   } catch {
     await vscode.window.showTextDocument(uri, { preview: true });
     void vscode.window.showInformationMessage(
-      'AGI Workforce: this workspace has no source control to diff against, so the file opened instead.',
+      `${PRODUCT_NAMES.code}: this workspace has no source control to diff against, so the file opened instead.`,
     );
     return false;
   }

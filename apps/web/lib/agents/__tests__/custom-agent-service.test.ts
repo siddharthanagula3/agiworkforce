@@ -11,7 +11,11 @@ import { OWNER, TEAMMATE, agentConfig, agentRow } from './agent-fixtures';
 describe('custom agent presentation', () => {
   it('shows the owner the working copy with an unpublished-changes flag', () => {
     const unpublished = toManagedCloudAgent(agentRow(), OWNER, null);
-    expect(unpublished).toMatchObject({ isOwner: true, hasUnpublishedChanges: true });
+    expect(unpublished).toMatchObject({
+      isOwner: true,
+      ownerUserId: null,
+      hasUnpublishedChanges: true,
+    });
     const published = toManagedCloudAgent(
       agentRow({ published_version: 1, published_config: agentConfig() }),
       OWNER,
@@ -40,6 +44,7 @@ describe('custom agent presentation', () => {
       name: 'Published name',
       isOwner: false,
       ownerName: 'Ada',
+      ownerUserId: agentRow().user_id,
       hasUnpublishedChanges: false,
     });
     expect(effectiveAgentConfig(agentRow({ published_config: { name: '' } }), TEAMMATE)).toBeNull();

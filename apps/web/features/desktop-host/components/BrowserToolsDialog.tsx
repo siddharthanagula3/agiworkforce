@@ -30,12 +30,12 @@ const TITLE = 'Use the browser';
 const INTRO =
   'Acts in the Chrome window paired with this Mac. Every action asks you first, and Chrome carries it out only on sites you approved in the extension.';
 const NOT_PAIRED =
-  'No browser is paired yet. Open Settings, Capabilities to pair the AGI Workforce extension with this Mac.';
+  'No browser is paired yet. Open Settings, Capabilities to pair the AGI Extension with this Mac.';
 const NOT_CONNECTED =
-  'The paired browser is not answering. Open Chrome with the AGI Workforce extension enabled and try again.';
+  'The paired browser is not answering. Open Chrome with the AGI Extension enabled and try again.';
 const FAILED = 'That browser action did not run.';
 const ACTIVITY_HEADING = 'Recent activity';
-const NO_ACTIVITY = 'Nothing has used the paired browser since AGI Cloud opened.';
+const NO_ACTIVITY = 'Nothing has used the paired browser since AGI Desktop opened.';
 const DOWNLOADS_HEADING = 'Downloads';
 const OPEN_DOWNLOADS_LABEL = 'Open Downloads folder';
 const SUB_HEADING_CLASS = 'text-xs font-medium text-muted-foreground';

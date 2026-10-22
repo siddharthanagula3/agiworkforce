@@ -7,6 +7,7 @@ import {
   TOOL_APPROVAL_ACTION_LABELS,
   type AgentMode,
   type Effort,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import {
   agiCornerCssVars,
@@ -110,7 +111,7 @@ export function getWebviewContent(
              script-src 'nonce-${nonce}' ${cspSource};
              img-src ${cspSource};
              font-src ${cspSource};" />
-  <title>AGI Workforce</title>
+  <title>${PRODUCT_NAMES.code}</title>
   <link rel="stylesheet" href="${codiconCssUri}" />
   <style nonce="${nonce}">
     :root {
@@ -2532,7 +2533,7 @@ export function getWebviewContent(
         >
           <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
         </button>
-        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Workforce surfaces">
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="${PRODUCT_NAMES.code} surfaces">
           ${SURFACE_MENU_ITEMS.filter((item) => item.id !== 'account')
             .map(
               (item) => `<button

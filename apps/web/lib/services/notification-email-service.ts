@@ -230,7 +230,7 @@ export async function sendAccountSecurityEnabledEmail(
   }
 
   const summary =
-    'Advanced Account Security was turned on for your AGI Workforce account. Every sign-in now needs one of the passkeys or security keys that were added, and your other devices were signed out.';
+    'Advanced Account Security was turned on for your AGI account. Every sign-in now needs one of the passkeys or security keys that were added, and your other devices were signed out.';
   const undo = `If this was not you, turn it off with the link below. It signs everyone out and resets your password, and it does not need a passkey. It works until ${input.undoExpiresAt}. Afterwards, choose a new password with Forgot password on the sign-in screen.`;
   const ignore = 'If it was you, you can ignore this email.';
   const result = await sendTransactionalEmail({

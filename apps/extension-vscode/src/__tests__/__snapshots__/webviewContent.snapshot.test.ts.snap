@@ -12,7 +12,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
              script-src 'nonce-NONCE' vscode-webview://mock;
              img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
-  <title>AGI Workforce</title>
+  <title>AGI Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
   <style nonce="NONCE">
     :root {
@@ -2471,7 +2471,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         >
           <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
         </button>
-        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Workforce surfaces">
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Code surfaces">
           <button
             type="button"
             class="actions-menu-item"
@@ -7867,7 +7867,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
              script-src 'nonce-NONCE' vscode-webview://mock;
              img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
-  <title>AGI Workforce</title>
+  <title>AGI Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
   <style nonce="NONCE">
     :root {
@@ -10326,7 +10326,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         >
           <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
         </button>
-        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Workforce surfaces">
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Code surfaces">
           <button
             type="button"
             class="actions-menu-item"
@@ -15722,7 +15722,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
              script-src 'nonce-NONCE' vscode-webview://mock;
              img-src vscode-webview://mock;
              font-src vscode-webview://mock;" />
-  <title>AGI Workforce</title>
+  <title>AGI Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
   <style nonce="NONCE">
     :root {
@@ -18181,7 +18181,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         >
           <span class="codicon codicon-ellipsis" aria-hidden="true"></span>
         </button>
-        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Workforce surfaces">
+        <div class="actions-menu" id="actionsMenu" role="menu" aria-label="AGI Code surfaces">
           <button
             type="button"
             class="actions-menu-item"

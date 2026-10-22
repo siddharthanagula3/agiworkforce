@@ -81,10 +81,11 @@ vi.mock('electron', () => {
     Menu: { buildFromTemplate: vi.fn(() => ({})), setApplicationMenu: vi.fn() },
     nativeTheme: { shouldUseDarkColors: true, on: vi.fn(), off: vi.fn() },
     app: {
-      name: 'AGI Cloud',
+      name: 'AGI Desktop',
       isPackaged: true,
       requestSingleInstanceLock: () => true,
       setName: vi.fn(),
+      setPath: vi.fn(),
       setAsDefaultProtocolClient: vi.fn(),
       setLoginItemSettings: vi.fn(),
       setBadgeCount: vi.fn(),

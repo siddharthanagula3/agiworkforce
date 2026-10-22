@@ -3,6 +3,7 @@ import {
   cloudCodeSessionPagePath,
   type ThreadReadResponse,
   type ThreadSummary,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import { t } from '../../l10n';
 import { getCloudWebOrigin } from '../../utils/api';
@@ -35,7 +36,7 @@ export async function showCloudSession(response: ThreadReadResponse): Promise<vo
   const url = cloudSessionUrl(response.thread.id);
   const open = t('chatNotice.openOnWeb');
   const choice = await vscode.window.showInformationMessage(
-    `AGI Workforce: ${t('chatNotice.cloudSessionReadOnly')}`,
+    `${PRODUCT_NAMES.code}: ${t('chatNotice.cloudSessionReadOnly')}`,
     ...(url ? [open] : []),
   );
   if (choice === open && url) await vscode.env.openExternal(vscode.Uri.parse(url));

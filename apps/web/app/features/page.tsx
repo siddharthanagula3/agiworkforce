@@ -184,7 +184,7 @@ export default function FeaturesPage() {
                 Conversation is the front door. This is what sits behind it.
               </h1>
               <ButtonRow>
-                <Button href={WEB_ENTRY_HREF}>Try AGI Web</Button>
+                <Button href={WEB_ENTRY_HREF}>Try AGI Chat</Button>
                 <Button href={CLI_CTA.href} variant="secondary">
                   {CLI_CTA.label}
                 </Button>
@@ -271,13 +271,13 @@ export default function FeaturesPage() {
               cards={[
                 {
                   title: 'Start on your own',
-                  body: 'AGI Web is free to try in the browser. Local and BYOK need no account at all.',
+                  body: 'AGI Chat is free to try in the browser. Local and BYOK need no account at all.',
                   points: [
                     'Every admitted model behind one selector',
                     'Projects, memory, artifacts and web search from the first day',
                     'Every reply names the model that answered it',
                   ],
-                  cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
+                  cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
                 },
                 {
                   title: 'Bring your team',

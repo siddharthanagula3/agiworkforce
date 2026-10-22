@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -47,13 +48,13 @@ export async function createSkill(): Promise<boolean> {
             },
           ]),
     ],
-    { title: 'AGI Workforce, New skill', placeHolder: 'Where should the skill live?' },
+    { title: `${PRODUCT_NAMES.code}, New skill`, placeHolder: 'Where should the skill live?' },
   );
   if (scope === undefined) return false;
 
   const name = (
     await vscode.window.showInputBox({
-      title: 'AGI Workforce, New skill',
+      title: `${PRODUCT_NAMES.code}, New skill`,
       prompt: 'A short name in lowercase with hyphens, such as release-notes',
       ignoreFocusOut: true,
       validateInput: (value) =>
@@ -64,7 +65,7 @@ export async function createSkill(): Promise<boolean> {
 
   const description = (
     await vscode.window.showInputBox({
-      title: `AGI Workforce, ${name}`,
+      title: `${PRODUCT_NAMES.code}, ${name}`,
       prompt: 'When should AGI use this skill? The model reads this to decide.',
       ignoreFocusOut: true,
       validateInput: (value) => (value.trim() === '' ? 'Describe when to use it.' : null),
@@ -76,7 +77,7 @@ export async function createSkill(): Promise<boolean> {
   try {
     await vscode.workspace.fs.stat(file);
     void vscode.window.showWarningMessage(
-      `AGI Workforce: a skill named ${name} already exists there.`,
+      `${PRODUCT_NAMES.code}: a skill named ${name} already exists there.`,
     );
     return false;
   } catch {

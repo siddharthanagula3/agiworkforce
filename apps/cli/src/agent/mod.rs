@@ -1912,7 +1912,7 @@ impl AgentSession {
             return;
         };
         let (holder_id, warning) =
-            match writer_lease::claim(path, writer_lease::process_writer("AGI CLI")) {
+            match writer_lease::claim(path, writer_lease::process_writer(crate::PRODUCT_NAME)) {
                 Ok(LeaseClaim::HeldBy(holder)) => (
                     holder.holder_id.clone(),
                     format!(
@@ -1969,7 +1969,7 @@ impl AgentSession {
                 "Writing: {}",
                 writer_lease::holder_summary(
                     writer_lease::read(path).as_ref(),
-                    writer_lease::process_writer("AGI CLI"),
+                    writer_lease::process_writer(crate::PRODUCT_NAME),
                     chrono::Utc::now(),
                 )
             ));
@@ -2085,7 +2085,7 @@ impl AgentSession {
                     },
                 ));
                 format!(
-                    "Routing set to {}. AGI Workforce picks the model for each message from its task, its tools, your plan and cost, and names it when it changes.",
+                    "Routing set to {}. AGI picks the model for each message from its task, its tools, your plan and cost, and names it when it changes.",
                     describe(crate::routing::profile::id(profile))
                 )
             }
@@ -2104,7 +2104,7 @@ impl AgentSession {
             return "This conversation is not saved as a session, so there is nothing to hand to another client.".to_string();
         };
         let id = managed.session_id.as_str();
-        let own = writer_lease::process_writer("AGI CLI");
+        let own = writer_lease::process_writer(crate::PRODUCT_NAME);
         let holder = || {
             writer_lease::holder_summary(writer_lease::read(path).as_ref(), own, chrono::Utc::now())
         };

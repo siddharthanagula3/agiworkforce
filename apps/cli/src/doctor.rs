@@ -532,7 +532,7 @@ fn model_access_checks(config: &CliConfig) -> Vec<DoctorCheck> {
             "model.default_access",
             "default model access",
             DoctorStatus::Pass,
-            "uses your AGI Workforce plan",
+            "uses your AGI plan",
             vec![
                 format!("model: {model}"),
                 format!(

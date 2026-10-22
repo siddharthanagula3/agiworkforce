@@ -53,7 +53,7 @@ vi.mock('../runtime/computerUseService', () => ({
 const { findInstalledApplication, launchApplication } =
   await import('../runtime/applicationLaunch');
 
-const OWN_BUNDLE = '/Applications/AGI Cloud.app';
+const OWN_BUNDLE = '/Applications/AGI Desktop.app';
 
 function plist(appPath: string, bundleId: string): void {
   replies.set(
@@ -69,9 +69,9 @@ beforeEach(() => {
   requireAvailable.mockReset();
   Object.defineProperty(process, 'execPath', {
     configurable: true,
-    value: `${OWN_BUNDLE}/Contents/MacOS/AGI Cloud`,
+    value: `${OWN_BUNDLE}/Contents/MacOS/AGI Desktop`,
   });
-  folders.set('/Applications', ['AGI Cloud.app', 'Visual Studio Code.app']);
+  folders.set('/Applications', ['AGI Desktop.app', 'Visual Studio Code.app']);
   folders.set('/System/Applications', ['Notes.app', 'Calculator.app']);
   plist(OWN_BUNDLE, 'com.agiworkforce.desktop.cloud');
   plist('/System/Applications/Notes.app', 'com.apple.Notes');
@@ -106,8 +106,10 @@ describe('finding the app a step names', () => {
     });
   });
 
-  it('refuses AGI Cloud itself, by place and by bundle id', async () => {
-    await expect(findInstalledApplication('AGI Cloud')).rejects.toMatchObject({ reason: 'failed' });
+  it('refuses AGI Desktop itself, by place and by bundle id', async () => {
+    await expect(findInstalledApplication('AGI Desktop')).rejects.toMatchObject({
+      reason: 'failed',
+    });
 
     folders.set('/Applications/Utilities', ['AGI Copy.app']);
     plist('/Applications/Utilities/AGI Copy.app', 'com.agiworkforce.desktop.cloud');

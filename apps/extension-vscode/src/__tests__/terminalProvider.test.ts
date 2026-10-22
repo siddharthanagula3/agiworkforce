@@ -25,14 +25,14 @@ function token(): vscode.CancellationToken {
 }
 
 function spyTerminal(): { sendText: ReturnType<typeof vi.fn> } {
-  const terminal = { name: 'AGI Workforce', show: vi.fn(), sendText: vi.fn(), dispose: vi.fn() };
+  const terminal = { name: 'AGI Code', show: vi.fn(), sendText: vi.fn(), dispose: vi.fn() };
   vi.mocked(vscode.window.createTerminal).mockReturnValue(terminal as never);
   return terminal;
 }
 
 function openTerminalAt(cwd: string): { sendText: ReturnType<typeof vi.fn> } {
   const terminal = {
-    name: 'AGI Workforce',
+    name: 'AGI Code',
     show: vi.fn(),
     sendText: vi.fn(),
     dispose: vi.fn(),
@@ -361,7 +361,7 @@ describe('provider sign-in', () => {
 
       expect(terminal.sendText).not.toHaveBeenCalled();
       expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
-        'AGI Workforce: no provider was named, so there is nothing to sign in to.',
+        'AGI Code: no provider was named, so there is nothing to sign in to.',
       );
     },
   );

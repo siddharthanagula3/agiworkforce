@@ -10,9 +10,9 @@
     <key>CFBundleIdentifier</key>
     <string>com.agiworkforce.desktop</string>
     <key>CFBundleName</key>
-    <string>AGI</string>
+    <string>AGI Desktop</string>
     <key>CFBundleDisplayName</key>
-    <string>AGI</string>
+    <string>AGI Desktop</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <!-- Tauri owns CFBundleShortVersionString and CFBundleVersion from

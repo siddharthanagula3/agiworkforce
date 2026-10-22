@@ -1,4 +1,5 @@
 import type { BrowserWindow, MessageBoxOptions, MessageBoxReturnValue } from 'electron';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { showDevicePrompt } from './devicePrompts';
 
 /**
@@ -33,8 +34,7 @@ export interface NativeAnswer extends MessageBoxReturnValue {
 export const NOT_ASKED_MESSAGES: Record<QuestionNotAsked, string> = {
   'cancelled-recently':
     'You chose Cancel for this, or for several questions like it, a moment ago, so it was not asked again. Try again in a minute.',
-  'too-many-open':
-    'AGI Cloud is already waiting for your answer to other questions. Answer those first.',
+  'too-many-open': `${PRODUCT_NAMES.desktop} is already waiting for your answer to other questions. Answer those first.`,
 };
 
 export const OPEN_QUESTION_LIMIT = 3;

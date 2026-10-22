@@ -61,9 +61,9 @@ jobs:
           printf '%s  %s\n' "$CANDIDATE_SHA256" "$CANDIDATE_ASSET" | shasum -a 256 -c -
           mkdir installed
           ditto -x -k "$CANDIDATE_ASSET" installed
-          signature=$(codesign -d --verbose=4 'installed/AGI Cloud.app' 2>&1)
+          signature=$(codesign -d --verbose=4 'installed/AGI Desktop.app' 2>&1)
           printf '%s\n' "$signature" | grep -F 'TeamIdentifier=D2PR62RLT4'
-          test "$(lipo -archs 'installed/AGI Cloud.app/Contents/MacOS/AGI Cloud')" = x86_64
+          test "$(lipo -archs 'installed/AGI Desktop.app/Contents/MacOS/AGI Desktop')" = x86_64
           test "$(uname -m)" = x86_64
       - name: Install the pinned harness dependencies
         run: pnpm install --frozen-lockfile
@@ -73,7 +73,7 @@ jobs:
           AGI_ACCEPTANCE_EXPECT_BROWSER_SIGN_IN: '1'
           AGI_ACCEPTANCE_EXPECT_WORKSPACE_CONSENT: '1'
         run: |
-          node apps/desktop/electron/__tests__/packaged-acceptance.mjs "$RUNNER_TEMP/candidate/installed/AGI Cloud.app"
+          node apps/desktop/electron/__tests__/packaged-acceptance.mjs "$RUNNER_TEMP/candidate/installed/AGI Desktop.app"
           node --input-type=module <<'JS'
           import fs from 'node:fs';
           const receipt = JSON.parse(fs.readFileSync(`${process.env.AGI_ACCEPTANCE_OUTPUT_DIR}/packaged-acceptance.json`));

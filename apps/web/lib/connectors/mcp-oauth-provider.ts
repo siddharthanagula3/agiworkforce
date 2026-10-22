@@ -1,5 +1,6 @@
 import 'server-only';
 
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import type {
   AuthorizationServerMetadata,
   OAuthClientInformationContext,
@@ -25,7 +26,7 @@ import {
 } from '@/lib/connectors/mcp-oauth-clients';
 
 const PKCE_METHOD = 'S256';
-const CLIENT_NAME = 'AGI Workforce';
+const CLIENT_NAME = PRODUCT_BRAND;
 
 export interface McpPendingAuthorizationDraft {
   authorizationUrl: string;

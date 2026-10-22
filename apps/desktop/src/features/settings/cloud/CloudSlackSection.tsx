@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 import { WEB_APP_URL } from '../../../api/config';
 import { openExternalUrl } from '../../../utils/navigation';
@@ -26,7 +27,7 @@ export function CloudSlackSection() {
     <div className="flex flex-col gap-5" data-testid="cloud-slack">
       <SectionHeading
         title="Slack app"
-        description="Message AGI Workforce in Slack, or mention it in a channel, and it answers there as the app."
+        description={`Message ${PRODUCT_BRAND} in Slack, or mention it in a channel, and it answers there as the app.`}
       />
 
       <div className="rounded-lg border border-border bg-card/40 p-5">

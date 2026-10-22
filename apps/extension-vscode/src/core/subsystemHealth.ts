@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { t } from '../l10n';
 
@@ -39,7 +40,7 @@ export function runBoot(subsystem: string, fn: () => void): void {
 export function recordFailure(subsystem: string, err: unknown): void {
   const message = err instanceof Error ? err.message : String(err);
   failures.push({ subsystem, message, recordedAt: Date.now() });
-  console.warn(`[AGI Workforce] subsystem '${subsystem}' failed: ${message}`);
+  console.warn(`[${PRODUCT_NAMES.code}] subsystem '${subsystem}' failed: ${message}`);
   refresh();
 }
 

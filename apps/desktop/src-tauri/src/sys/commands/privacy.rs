@@ -43,7 +43,7 @@ pub async fn privacy_export_data(
     let chosen = tokio::task::spawn_blocking(move || {
         app.dialog()
             .file()
-            .set_title("Export your AGI Workforce data")
+            .set_title("Export your AGI Desktop data")
             .set_file_name(suggested.as_str())
             .add_filter("JSON", &["json"])
             .blocking_save_file()
@@ -1458,7 +1458,7 @@ fn delete_all_data_question() -> crate::sys::native_confirm::NativeConfirm {
     crate::sys::native_confirm::NativeConfirm {
         title: "Delete all data on this device?".to_string(),
         body: "This removes every conversation, memory and project, your saved API keys and \
-               credentials, your settings, and the files AGI Workforce stored in its own data \
+               credentials, your settings, and the files AGI Desktop stored in its own data \
                folders on this device, with its log of the terminal commands it ran. None of it \
                can be recovered. You are signed out and the app restarts as if newly installed.\n\nNot removed: installed extensions, \
                downloaded speech models, the settings, hooks, skills and agents shared with the \
@@ -1880,7 +1880,7 @@ mod tests {
         for phrase in [
             "every conversation, memory and project",
             "your saved API keys and credentials",
-            "the files AGI Workforce stored in its own data folders on this device",
+            "the files AGI Desktop stored in its own data folders on this device",
             "with its log of the terminal commands it ran",
             "None of it can be recovered",
             "the app restarts as if newly installed",

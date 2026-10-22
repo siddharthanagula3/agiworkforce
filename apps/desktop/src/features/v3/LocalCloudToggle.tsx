@@ -83,7 +83,7 @@ export function LocalCloudToggle({ collapsed }: LocalCloudToggleProps) {
    * Local mode is Tauri's: `supportsLocalAppMode` is `isTauri ||
    * isDesktopUiDevLocal`, and `appModeStore` refuses the mode three separate
    * ways without it. So in Electron this toggle can only ever be the disabled
-   * half, whose label reads "Local mode runs in the AGI Workforce desktop app.
+   * half, whose label reads "Local mode runs in AGI Desktop.
    * Download it to keep chats and files on this machine." Shown inside the
    * desktop app, to someone who downloaded it.
    *

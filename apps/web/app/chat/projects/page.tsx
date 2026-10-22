@@ -216,7 +216,7 @@ export default function ProjectsPage() {
                 }}
               >
                 Group related conversations under a shared project. Each project can carry its own
-                files, instructions, and chat history. Projects sync securely across your AGI Web,
+                files, instructions, and chat history. Projects sync securely across your AGI Chat,
                 Mobile, and Desktop cloud sessions.
               </p>
             </div>

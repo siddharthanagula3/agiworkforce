@@ -99,6 +99,8 @@ export * from './model';
 export * from './user';
 
 export * from './billing-catalog';
+
+export * from './product-names';
 export * from './billing-plan-catalog';
 export * from './product-plan';
 export * from './credits';

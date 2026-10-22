@@ -134,7 +134,7 @@ describe('device refresh across a terms revision', () => {
     await expect(response.json()).resolves.toEqual({
       error: 'terms_acceptance_required',
       error_description:
-        'Accept the Terms of Service at https://agiworkforce.com/login/complete?redirectTo=%2F to keep using AGI Workforce on this device.',
+        'Accept the Terms of Service at https://agiworkforce.com/login/complete?redirectTo=%2F to keep using AGI on this device.',
       terms_version: CURRENT_TERMS_VERSION,
       acceptance_url: 'https://agiworkforce.com/login/complete?redirectTo=%2F',
     });

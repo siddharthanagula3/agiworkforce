@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Database, FileDown, FolderOpen, Power, RotateCcw, ShieldCheck } from 'lucide-react';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 export interface StartupRecoveryInfo {
   code: string;
@@ -141,7 +142,7 @@ export function StartupRecoveryScreen({
             className="inline-flex h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-transparent px-4 text-sm font-medium text-white/65 transition hover:bg-white/[0.05] hover:text-white disabled:cursor-wait disabled:opacity-50"
           >
             <Power className="h-4 w-4" aria-hidden="true" />
-            {pending === 'quit' ? 'Quitting…' : 'Quit AGI'}
+            {pending === 'quit' ? 'Quitting…' : `Quit ${PRODUCT_NAMES.desktop}`}
           </button>
         </div>
 

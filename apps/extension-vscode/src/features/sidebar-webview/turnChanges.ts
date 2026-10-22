@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as path from 'node:path';
 import * as vscode from 'vscode';
 
@@ -50,7 +51,7 @@ export async function openTurnChanges(files: readonly string[]): Promise<void> {
       await vscode.window.showTextDocument(vscode.Uri.file(file), { preview: false });
     }
     void vscode.window.showInformationMessage(
-      'AGI Workforce: this workspace has no source control to diff against, so the changed files opened instead.',
+      `${PRODUCT_NAMES.code}: this workspace has no source control to diff against, so the changed files opened instead.`,
     );
     return;
   }

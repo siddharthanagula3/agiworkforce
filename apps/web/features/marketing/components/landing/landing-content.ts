@@ -43,7 +43,7 @@ export const CLOUD_NAME = LANE_NAMES.cloud;
 export const HERO = {
   title: 'One AI workspace. You choose where it runs.',
   lede: 'Work with the same assistant on the web and in your terminal. Run each request locally, through a provider key you already own, or on AGI Cloud, and see the route, model, privacy boundary and cost beneath every answer.',
-  primary: { label: 'Try AGI Web', href: WEB_ENTRY_HREF },
+  primary: { label: 'Try AGI Chat', href: WEB_ENTRY_HREF },
   secondary: surfaceCta('cli'),
 } as const;
 
@@ -398,7 +398,7 @@ export const SURFACES_SECTION = {
 export const WEB_SHOT = {
   light: '/product/projects-light-landing.png',
   dark: '/product/projects-dark-landing.png',
-  alt: 'AGI Web showing the projects view, with chat, code, projects, library and schedules in the sidebar',
+  alt: 'AGI Chat showing the projects view, with chat, code, projects, library and schedules in the sidebar',
   width: 2880,
   height: 1300,
   url: CONSOLE_URL,
@@ -473,7 +473,7 @@ export const PRICING = {
 export const CLOSE = {
   title: 'Start on the web. Continue in the terminal.',
   body: [
-    'AGI Web needs no install.',
+    'AGI Chat needs no install.',
     CLI_AVAILABILITY_NOTE,
     'Whichever you open, the answer says where it ran.',
   ]

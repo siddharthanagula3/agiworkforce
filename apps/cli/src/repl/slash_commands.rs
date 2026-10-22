@@ -530,7 +530,7 @@ pub(super) async fn handle_slash_command(
         }
         "/image" | "/imagine" => match arg {
             "" => output::print_info(
-                "/image <prompt> draws an image on your AGI Workforce account and saves it to \
+                "/image <prompt> draws an image on your AGI account and saves it to \
                  the working directory. Put --aspect 16:9, --quality hd, --transparent, --model \
                  or -n before the prompt to change settings, and add --save-defaults to keep \
                  them. /image again reuses your last prompt and settings, /image retry tries a \

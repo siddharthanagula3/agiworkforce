@@ -65,7 +65,7 @@
       "switchTo": "切换到{{mode}}",
       "soon": "即将推出",
       "cloudUnavailable": "AGI Cloud 可在桌面端使用,, 登录后即可使用托管模型和同步的对话。",
-      "localUnavailable": "本地模式通过 AGI Workforce CLI 中的 Ollama 或 LM Studio 运行。桌面版对话使用托管云。"
+      "localUnavailable": "本地模式通过 AGI CLI 中的 Ollama 或 LM Studio 运行。桌面版对话使用托管云。"
     },
     "groups": {
       "lastHour": "Last hour",
@@ -369,7 +369,7 @@
       "keepAwake": "Keep this Mac awake for scheduled tasks",
       "keepAwakeDesc": "When on, uses caffeinate to prevent sleep during scheduled runs. Plug in for long tasks.",
       "keepAwakeTitle": "保持电脑唤醒",
-      "keepAwakeHint": "计划任务仅在 AGI Workforce 打开时运行。如果在应用关闭或电脑睡眠期间错过了某次运行，且该运行在过去 7 天内到期，则会在应用再次打开时运行一次。",
+      "keepAwakeHint": "计划任务仅在 AGI Desktop 打开时运行。如果在应用关闭或电脑睡眠期间错过了某次运行，且该运行在过去 7 天内到期，则会在应用再次打开时运行一次。",
       "keepAwakeUnavailable": "不可用：{{reason}}",
       "loading": "Loading scheduled tasks…",
       "nextRun": "Next run",

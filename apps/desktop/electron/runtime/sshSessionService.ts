@@ -1,5 +1,6 @@
 import { type BrowserWindow } from 'electron';
 import { type StartedDeveloperSession } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   validateSshEnvironment,
   admitSshEnvironment,
@@ -20,7 +21,7 @@ export async function connectSshSession(
 ): Promise<StartedDeveloperSession> {
   const input = validateSshEnvironment(value);
   if (!window || window.isDestroyed())
-    throw new Error('Open an AGI Workforce window before connecting over SSH.');
+    throw new Error(`Open an ${PRODUCT_NAMES.desktop} window before connecting over SSH.`);
   const result = await askNativeQuestion(
     window,
     { group: 'ssh-environment', key: JSON.stringify(input), quietAfterCancel: true },

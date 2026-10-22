@@ -22,7 +22,7 @@ import { apiErrorMessage } from '@/shared/utils/api-error';
 
 const SETTINGS_PATH = '/chat?settings=slack';
 const LOOKUP_FAILED =
-  'This link could not be checked. Send AGI Workforce a message in Slack to get a new one.';
+  'This link could not be checked. Send AGI a message in Slack to get a new one.';
 const CONNECT_FAILED = 'Your Slack account could not be connected.';
 
 type LookupState =
@@ -119,7 +119,7 @@ function SlackLinkForm() {
         </h1>
         <SuccessState
           title="Your Slack account is connected"
-          description={`Go back to ${connectedTeam} in Slack and send AGI Workforce a message. It answers in the thread, as the app.`}
+          description={`Go back to ${connectedTeam} in Slack and send AGI a message. It answers in the thread, as the app.`}
           action={{ label: 'Manage in Settings', onClick: () => router.push(SETTINGS_PATH) }}
         />
       </section>
@@ -136,24 +136,24 @@ function SlackLinkForm() {
         <div>
           <Eyebrow>Slack</Eyebrow>
           <h1 className="agi-ds-h1" id="slack-link-title">
-            Connect Slack to AGI Workforce
+            Connect Slack to AGI
           </h1>
         </div>
         <Prose>
-          AGI Workforce answers your Slack messages as the app, on your account: your plan and
-          credits, your workspace&apos;s policies, and your approval settings. Anything that needs
-          your approval waits for you here on the web or in the desktop app.
+          AGI answers your Slack messages as the app, on your account: your plan and credits, your
+          workspace&apos;s policies, and your approval settings. Anything that needs your approval
+          waits for you here on the web or in the desktop app.
         </Prose>
 
         {!token ? (
           <p role="alert" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-error)' }}>
-            This link is missing its code. Send AGI Workforce a message in Slack to get a new one.
+            This link is missing its code. Send AGI a message in Slack to get a new one.
           </p>
         ) : null}
 
         {token && isLoaded && !isSignedIn ? (
           <p role="alert" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-error)' }}>
-            Sign in to the AGI Workforce account Slack should answer as.{' '}
+            Sign in to the AGI account Slack should answer as.{' '}
             <Link href={signInHref} className="agi-ds-link">
               Sign in
             </Link>{' '}
@@ -229,7 +229,7 @@ function SlackLinkForm() {
 
         {preview && workspace && !workspace.planAllowed ? (
           <p role="alert" style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-error)' }}>
-            AGI Workforce in Slack is available on {preview.requiredPlans} plans.{' '}
+            AGI in Slack is available on {preview.requiredPlans} plans.{' '}
             <Link href="/pricing" className="agi-ds-link">
               See plans
             </Link>

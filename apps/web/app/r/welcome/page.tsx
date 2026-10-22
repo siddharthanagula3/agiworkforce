@@ -24,7 +24,7 @@ import { TRIAL_REMINDER_DAYS } from '@/lib/services/trial-reminder-service';
 
 export const metadata = buildMetadata({
   title: 'Your invitation',
-  description: 'A friend invited you to AGI Workforce, with a free Pro trial and bonus credits.',
+  description: 'A friend invited you to AGI, with a free Pro trial and bonus credits.',
   path: REFERRAL_WELCOME_PATH,
   robots: { index: false, follow: false },
 });
@@ -68,7 +68,7 @@ export default async function ReferralWelcomePage() {
           <PageHero
             id="agi-referral-welcome-title"
             eyebrow="Invitation"
-            title="A friend invited you to AGI Workforce."
+            title="A friend invited you to AGI."
             em="invited you"
             lede={`Create your account in this browser within ${REFERRAL_PROGRAM.attributionDays} days to accept. Your ${PRO} trial is ready as soon as paid upgrades are open to your account.`}
             ctas={[{ href: AUTH_SIGNUP_PATH, label: 'Create your account' }, terms]}

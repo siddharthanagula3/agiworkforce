@@ -18,7 +18,7 @@ const buildOptions = {
   minify: isProduction,
   treeShaking: true,
   banner: {
-    js: isProduction ? '' : '// AGI Workforce VS Code Extension (dev build)',
+    js: isProduction ? '' : '// AGI Code (dev build)',
   },
   logLevel: 'info',
   mainFields: ['main', 'module'],

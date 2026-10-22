@@ -1,9 +1,9 @@
 import { expect, test, type Locator, type Page } from '@playwright/test';
 
 const ROUTE = '/get-started';
-const PRIMARY_ACTION = 'Try AGI Web';
+const PRIMARY_ACTION = 'Try AGI Chat';
 const PRIMARY_HREF = '/login?redirectTo=%2F';
-const FIRST_STEP = '1. Open AGI Web.';
+const FIRST_STEP = '1. Open AGI Chat.';
 const LAST_STEP = '3. Send a message.';
 const SUBPIXEL_TOLERANCE_PX = 1;
 
@@ -53,12 +53,12 @@ async function expectInFirstViewport(locator: Locator, name: string, height: num
 test.describe(`${ROUTE} first screen at ${DESKTOP.width} by ${DESKTOP.height}`, () => {
   test.use({ viewport: DESKTOP });
 
-  test('shows Try AGI Web and the three-step live path without scrolling', async ({ page }) => {
+  test('shows Try AGI Chat and the three-step live path without scrolling', async ({ page }) => {
     const first = await open(page);
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
     await expect(first.action).toHaveAttribute('href', PRIMARY_HREF);
-    await expectInFirstViewport(first.action, 'Try AGI Web', DESKTOP.height);
+    await expectInFirstViewport(first.action, 'Try AGI Chat', DESKTOP.height);
     await expectInFirstViewport(first.firstStep, 'first step', DESKTOP.height);
     await expectInFirstViewport(first.lastStep, 'last step', DESKTOP.height);
     expect(await horizontalOverflow(page)).toBeLessThanOrEqual(0);
@@ -69,13 +69,13 @@ for (const viewport of PHONES) {
   test.describe(`${ROUTE} at ${viewport.width} wide`, () => {
     test.use({ viewport });
 
-    test('shows Try AGI Web in the first screen with no horizontal scroll', async ({ page }) => {
+    test('shows Try AGI Chat in the first screen with no horizontal scroll', async ({ page }) => {
       const first = await open(page);
       expect(await page.evaluate(() => window.scrollY)).toBe(0);
 
       await expect(first.action).toHaveAttribute('href', PRIMARY_HREF);
-      await expectInFirstViewport(first.action, 'Try AGI Web', viewport.height);
-      const action = await box(first.action, 'Try AGI Web');
+      await expectInFirstViewport(first.action, 'Try AGI Chat', viewport.height);
+      const action = await box(first.action, 'Try AGI Chat');
       const firstStep = await box(first.firstStep, 'first step');
       expect(firstStep.top, 'the live path stacks under the action').toBeGreaterThanOrEqual(
         action.bottom - SUBPIXEL_TOLERANCE_PX,

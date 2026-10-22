@@ -1,5 +1,5 @@
 #!/bin/bash
-# AGI Workforce CLI installer
+# AGI CLI installer
 # Usage: curl -fsSL https://agiworkforce.com/install.sh | bash
 #
 # Options:
@@ -108,7 +108,7 @@ resolve_version() {
     case "$status" in
       200) ;;
       404) fail "No signed AGI CLI release is published yet." ;;
-      451) fail "AGI Workforce is not available in your region." ;;
+      451) fail "AGI is not available in your region." ;;
       *) fail "The release feed answered HTTP ${status}." ;;
     esac
     requested=$(printf '%s' "${response%$'\n'*}" \
@@ -262,7 +262,7 @@ add_to_path() {
   for config_file in $config_files; do
     if [ -f "$config_file" ]; then
       if ! grep -q "$INSTALL_DIR" "$config_file" 2>/dev/null; then
-        printf '\n# AGI Workforce CLI\n%s\n' "$export_line" >> "$config_file"
+        printf '\n# AGI CLI\n%s\n' "$export_line" >> "$config_file"
         echo -e "${GREEN}Added ${INSTALL_DIR} to PATH in ${config_file}${NC}"
       fi
       break
@@ -274,7 +274,7 @@ add_to_path() {
 
 main() {
   echo ""
-  echo -e "${BOLD}${CYAN}  AGI Workforce CLI installer${NC}"
+  echo -e "${BOLD}${CYAN}  AGI CLI installer${NC}"
   echo ""
 
   local platform version

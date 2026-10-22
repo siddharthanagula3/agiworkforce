@@ -258,7 +258,7 @@ const ERROR_CODE_MESSAGES: Record<ErrorCodeValue, FriendlyError> = {
   },
   [ErrorCode.CLIENT_UPDATE_REQUIRED]: {
     title: 'Update required',
-    message: 'This version is too old to talk to AGI Workforce.',
+    message: 'This version is too old to talk to AGI.',
     suggestion: 'Install the latest version and sign in again.',
     icon: 'warning',
   },

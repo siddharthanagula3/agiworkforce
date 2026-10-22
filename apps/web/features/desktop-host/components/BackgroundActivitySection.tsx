@@ -18,7 +18,7 @@ import {
 
 const HEADING = 'Running on this Mac';
 const HEADING_HINT =
-  'What AGI Cloud keeps running in the background. Stop any of it here without quitting the app.';
+  'What AGI Desktop keeps running in the background. Stop any of it here without quitting the app.';
 const NOTHING_RUNNING = 'Nothing is running in the background.';
 const LOAD_FAILED = 'What is running could not be read from the app.';
 const STOP_FAILED = 'That was not stopped.';

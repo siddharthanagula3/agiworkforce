@@ -1,4 +1,4 @@
-# AGI Workforce CLI
+# AGI CLI
 
 Status: Current
 Owner role: CLI lead
@@ -15,7 +15,7 @@ The terminal-native AI coding agent that doesn't surprise you.
 ```
 $ agi
                     ┌──────────────────── ▮ in 1.2k · out 0 · $0.011 · ctx 4% ┐
- AGI Workforce v0.0.1 │ catalog-selected-model │ provider │ main │ 4% ctx
+ AGI CLI v0.0.1 │ catalog-selected-model │ provider │ main │ 4% ctx
 └─────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -28,7 +28,7 @@ Claude Code, OpenAI Codex CLI, OpenCode, and Gemini CLI are the four serious
 competitors. We close gaps none of them close, and meet them on parity where
 the ecosystem expects it.
 
-| Feature                                                 |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                  **AGI Workforce**                   |
+| Feature                                                 |     Claude Code      |    Codex CLI     |        OpenCode        |   Gemini CLI   |                     **AGI CLI**                      |
 | ------------------------------------------------------- | :------------------: | :--------------: | :--------------------: | :------------: | :--------------------------------------------------: |
 | Multi-provider in one session, mid-turn switch          |  ❌ Anthropic only   |  ❌ OpenAI only  | ✅ ~10 (Vercel AI SDK) | ❌ Google only |                  ✅ 15+ + `/model`                   |
 | Always-on usage HUD top-right (tokens + credits + ctx%) | ⚠️ status line only  | ⚠️ /status card  |           ❌           |       ❌       |                          ✅                          |
@@ -364,6 +364,6 @@ agi hooks remove PreToolUse 1
 
 ## License
 
-Proprietary. AGI Workforce CLI is part of the AGI Workforce platform; the
+Proprietary. AGI CLI is part of the AGI Workforce platform; the
 whole platform is proprietary, not open source. See the root `THIRD_PARTY_LICENSES.md` for
 third-party attribution.

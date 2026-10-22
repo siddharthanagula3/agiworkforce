@@ -1,5 +1,5 @@
 //! A2A (Agent-to-Agent) protocol for inter-agent communication, discovery,
-//! and task delegation between AGI Workforce CLI instances.
+//! and task delegation between AGI CLI instances.
 //!
 //! This module implements:
 //! - **Agent Card**: Capability advertisement for peer discovery.

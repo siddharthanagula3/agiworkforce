@@ -9,7 +9,7 @@
 # `v-desktop-*` release: the Tauri updater feed and /api/download match by tag
 # prefix and first-asset heuristics, and mixing assets would cross the streams.
 appId: com.agiworkforce.desktop.cloud
-productName: AGI Cloud
+productName: AGI Desktop
 electronLanguages:
   - en
 
@@ -67,9 +67,9 @@ electronFuses:
 mac:
   category: public.app-category.productivity
   # Explicit arch marker on every artifact: the default x64 names omit it
-  # ("AGI Cloud-1.0.0.dmg"), which breaks arch-aware selection in the
+  # ("AGI Desktop-1.0.0.dmg"), which breaks arch-aware selection in the
   # website download route and human triage on the releases page. No space
-  # either: GitHub stores an uploaded "AGI Cloud-..." as "AGI.Cloud-...", so
+  # either: GitHub stores an uploaded "AGI Desktop-..." as "AGI.Desktop-...", so
   # the asset would match neither SHA256SUMS nor the file a user downloads.
   artifactName: AGI-Cloud-${version}-${arch}.${ext}
   target:

@@ -106,7 +106,7 @@ function deviceClearanceCopy(
     case 'waiting':
       return {
         summary: `Waiting for ${deviceName} to come online`,
-        detail: `${reason ? `${reason} ` : ''}Open AGI Cloud on that computer to let the task carry on. If it is still offline after ${waitMinutes} minutes, the task continues without it.`,
+        detail: `${reason ? `${reason} ` : ''}Open AGI Desktop on that computer to let the task carry on. If it is still offline after ${waitMinutes} minutes, the task continues without it.`,
         status: 'running',
       };
     case 'back':

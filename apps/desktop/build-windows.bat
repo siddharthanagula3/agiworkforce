@@ -1,9 +1,9 @@
 @echo off
-REM Windows Build Script for AGI Workforce Desktop
+REM Windows Build Script for AGI Desktop
 REM Prevents LNK1318 PDB limit error by forcing zero debug info
 
 echo ========================================
-echo AGI Workforce Desktop - Windows Build
+echo AGI Desktop - Windows Build
 echo ========================================
 echo.
 echo This script prevents LNK1318 PDB errors by:

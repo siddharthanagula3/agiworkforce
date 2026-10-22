@@ -34,7 +34,7 @@ import { ARCHITECTURE_LABELS, macDownloadHref, useDesktopRelease } from './use-d
 import { CLI_PLATFORM_LABELS, useCliRelease, type CliAvailability } from './use-cli-release';
 import type { MacArchitecture } from './detect-architecture';
 
-const DESKTOP_APP_PATH = '/Applications/AGI Cloud.app';
+const DESKTOP_APP_PATH = '/Applications/AGI Desktop.app';
 
 const SURFACE_HREFS: Record<SurfaceId, string> = {
   web: '/web',
@@ -107,7 +107,7 @@ function WebHero({ preview }: { preview: ReactNode }) {
       </p>
       <div className="agi-ds-btn-row">
         <Link href={WEB_ENTRY_HREF} className="agi-ds-btn" data-variant="primary">
-          Open AGI Web
+          Open AGI Chat
         </Link>
         {NOTIFY_SURFACES.length > 0 ? (
           <a href={`#${NOTIFY_FORM_ID}`} className="agi-ds-btn" data-variant="secondary">
@@ -141,7 +141,7 @@ function MacHero({
         {surfaceNav('desktop').name} for Mac is available · version {version}
       </p>
       <h1 className="agi-dl-title" id="agi-download-hero-title">
-        AGI for Mac
+        AGI Desktop for Mac
       </h1>
       <p className="agi-dl-lede">
         {surfaceNav('desktop').description}. One signed and notarized installer for each Mac
@@ -158,7 +158,7 @@ function MacHero({
           Download for Mac
         </a>
         <Link href={WEB_ENTRY_HREF} className="agi-ds-btn" data-variant="secondary">
-          Open AGI Web
+          Open AGI Chat
         </Link>
       </div>
       <p className="agi-dl-fine" id="agi-download-arch">
@@ -284,7 +284,7 @@ export function DownloadSurfaces({
     if (surface === 'web') {
       return (
         <Link href={WEB_ENTRY_HREF} className="agi-ds-btn" data-variant="primary">
-          Open AGI Web
+          Open AGI Chat
         </Link>
       );
     }

@@ -268,7 +268,7 @@ describe('scenes inside the chat shell reuse the real sidebar and composer', () 
   it.each(shelled)('%s lists the navigation the signed-in app defines', (_scene, make) => {
     const { container } = render(make());
     expect(texts(container, '.agi-app-navrow')).toEqual(destinations);
-    expect(text(container, '.agi-app-wordmark')).toBe('AGI Workforce');
+    expect(text(container, '.agi-app-wordmark')).toBe('AGI');
   });
 
   it('marks Projects as the open destination on the project page only', () => {

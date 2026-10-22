@@ -3842,7 +3842,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         match account::recover_rejected_session(&jwt).await {
                             Recovery::Renewed => {
                                 failure.message =
-                                    "Your AGI Workforce session was renewed. Send it again."
+                                    "Your AGI session was renewed. Send it again."
                                         .to_string();
                                 failure.retryable = true;
                                 failure.action =
@@ -4485,13 +4485,13 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         }
         let (token, expires_ms) = account::managed_credential().ok_or_else(|| {
             DeveloperSessionHostError::not_found(
-                "This machine holds no AGI Workforce credential; call account/login first",
+                "This machine holds no AGI credential; call account/login first",
             )
         })?;
         if let Some(expires_ms) = expires_ms {
             if expires_ms <= chrono::Utc::now().timestamp_millis() {
                 return Err(DeveloperSessionHostError::unavailable(
-                    "The stored AGI Workforce credential has expired; call account/login again",
+                    "The stored AGI credential has expired; call account/login again",
                 ));
             }
         }

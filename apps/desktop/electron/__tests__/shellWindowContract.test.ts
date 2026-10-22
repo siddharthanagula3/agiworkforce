@@ -181,7 +181,7 @@ describe('what the reader is told about an update', () => {
       version: '1.2.3',
       downloadUrl: '',
     });
-    expect(prompt).toMatchObject({ type: 'info', title: 'AGI Cloud is up to date' });
+    expect(prompt).toMatchObject({ type: 'info', title: 'AGI Desktop is up to date' });
     expect(prompt.detail).toContain('Installed: 1.2.3');
     expect(prompt.downloadButton).toBeNull();
   });
@@ -200,7 +200,7 @@ describe('what the reader is told about an update', () => {
 
   it('says the check failed rather than saying the app is up to date', () => {
     const prompt = desktopUpdatePrompt({
-      failure: 'AGI Cloud could not reach the update service.',
+      failure: 'AGI Desktop could not reach the update service.',
     });
     expect(prompt.type).toBe('error');
     expect(prompt.title).not.toContain('up to date');

@@ -1,4 +1,4 @@
-import { isSecureRelayUrl, isSecureRelayHttpUrl } from '@agiworkforce/types';
+import { isSecureRelayUrl, isSecureRelayHttpUrl, PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   SignalingClient,
   type SignalingClientOptions,
@@ -103,8 +103,7 @@ export const MOBILE_COMPANION_SESSION_ENDED_EVENT = 'mobile-companion:session-en
  * frame from that peer is dropped, so without this the pairing looks connected
  * and silently does nothing.
  */
-export const MOBILE_DISPATCH_UPDATE_REQUIRED =
-  'This phone is running an older AGI Workforce build and cannot secure the connection. Update the app on your phone, then scan a new pairing QR.';
+export const MOBILE_DISPATCH_UPDATE_REQUIRED = `This phone is running an older ${PRODUCT_NAMES.mobile} build and cannot secure the connection. Update the app on your phone, then scan a new pairing QR.`;
 
 /**
  * Shown when the signed control channel could not be keyed. The phone stays

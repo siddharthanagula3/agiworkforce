@@ -95,7 +95,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Ok(s) => s,
         Err(e) => {
             tracing::error!(
-                "Failed to connect to main app: {}. Ensure AGI Workforce is running.",
+                "Failed to connect to main app: {}. Ensure AGI Desktop is running.",
                 e
             );
             return Err(e.into());

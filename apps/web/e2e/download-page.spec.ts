@@ -55,7 +55,7 @@ for (const colorScheme of ['dark', 'light'] as const) {
         await publishMacRelease(page);
         await page.goto('/download');
 
-        await expect(page.getByRole('heading', { level: 1 })).toHaveText('AGI for Mac');
+        await expect(page.getByRole('heading', { level: 1 })).toHaveText('AGI Desktop for Mac');
         const hero = page.locator('.agi-dl-hero');
         await expect(hero.getByRole('link', { name: 'Download for Mac' })).toHaveAttribute(
           'href',
@@ -75,7 +75,7 @@ test.describe('/download on a touch screen', () => {
   test('every control in the page body takes a 44px tap', async ({ page }) => {
     await publishMacRelease(page);
     await page.goto('/download');
-    await expect(page.getByRole('heading', { level: 1 })).toHaveText('AGI for Mac');
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText('AGI Desktop for Mac');
 
     const controls = page.locator('main').locator('a[href], button, summary, input');
     const count = await controls.count();

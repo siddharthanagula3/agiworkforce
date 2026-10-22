@@ -1496,7 +1496,7 @@ it('offers an update instead of starting uncancellable browser sign-in on an old
   window.agiHost = hostBridgeStub({ browserSignIn: undefined });
   expect(await client('login').current.startProvider('google')).toMatchObject({
     status: 'failed',
-    message: expect.stringContaining('Update AGI Cloud'),
+    message: expect.stringContaining('Update AGI Desktop'),
   });
   expect(browserSignIn.begin).not.toHaveBeenCalled();
   expect(signInState.sso).not.toHaveBeenCalled();

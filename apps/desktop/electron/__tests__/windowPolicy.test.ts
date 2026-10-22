@@ -162,6 +162,14 @@ describe('applyRemoteWindowPolicy', () => {
     openExternal.mockReset();
   });
 
+  it('leaves the app name and Electron out of the user agent the site sees', () => {
+    const { win, webContents } = fakeWindow();
+    webContents.userAgent =
+      'Mozilla/5.0 Chrome/146.0.0.0 AGI Desktop/1.4.0 Electron/44.4.5 Safari/537.36';
+    applyRemoteWindowPolicy(win);
+    expect(webContents.userAgent).toBe('Mozilla/5.0 Chrome/146.0.0.0 Safari/537.36');
+  });
+
   it("cancels a main-frame redirect to a Clerk tenant that is not this build's own", () => {
     const { win, webContents } = fakeWindow();
     applyRemoteWindowPolicy(win);

@@ -34,9 +34,7 @@ test.describe('Self-Healing Agent', () => {
     await expect(chatInput).toBeVisible({ timeout: 20000 });
     await chatInput.fill(prompt);
 
-    const desktopRuntimeGate = page.getByText(
-      /This feature requires the AGI Workforce desktop application/i,
-    );
+    const desktopRuntimeGate = page.getByText(/This feature requires AGI Desktop/i);
     const subscriptionDialog = page.getByRole('dialog', { name: /Subscription Required/i });
     const sendButton = page.getByRole('button', { name: /send/i }).first();
 

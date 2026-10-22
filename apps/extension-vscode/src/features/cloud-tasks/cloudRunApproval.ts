@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import type { CloudAgentRun, ManagedCloudAgentRunClient } from '@agiworkforce/cloud-contracts';
 import { TOOL_APPROVAL_GUIDANCE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
@@ -110,7 +111,7 @@ export async function decideCloudRunApprovalInteractively(
 ): Promise<void> {
   if ((run.pendingApproval?.toolCalls ?? []).length === 0) {
     void vscode.window.showInformationMessage(
-      'AGI Workforce: this task is no longer waiting on a decision.',
+      `${PRODUCT_NAMES.code}: this task is no longer waiting on a decision.`,
     );
     host.onChanged();
     return;
@@ -141,19 +142,19 @@ async function sendCloudRunDecision(
         location: vscode.ProgressLocation.Notification,
         title:
           decision === 'approved'
-            ? `AGI Workforce: approving "${cloudRunTitle(run)}"…`
-            : `AGI Workforce: rejecting "${cloudRunTitle(run)}"…`,
+            ? `${PRODUCT_NAMES.code}: approving "${cloudRunTitle(run)}"…`
+            : `${PRODUCT_NAMES.code}: rejecting "${cloudRunTitle(run)}"…`,
       },
       () =>
         decideCloudRunApproval(client, run, decision, guidance === undefined ? {} : { guidance }),
     );
     void vscode.window.showInformationMessage(
       decision === 'approved'
-        ? 'AGI Workforce: approved, the task continues.'
-        : 'AGI Workforce: rejected, the task will not run it.',
+        ? `${PRODUCT_NAMES.code}: approved, the task continues.`
+        : `${PRODUCT_NAMES.code}: rejected, the task will not run it.`,
     );
   } catch (error) {
-    const message = `AGI Workforce: your decision could not be sent, ${describeCloudRunFailure(error)}`;
+    const message = `${PRODUCT_NAMES.code}: your decision could not be sent, ${describeCloudRunFailure(error)}`;
     const answer = isRecoverableCloudRunFailure(error)
       ? await vscode.window.showErrorMessage(message, RETRY_ACTION)
       : await vscode.window.showErrorMessage(message);

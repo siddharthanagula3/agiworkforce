@@ -30,6 +30,7 @@ import {
   Key,
   X,
 } from 'lucide-react';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   useMcpbStore,
   selectFilteredBundles,
@@ -299,9 +300,9 @@ function BundleDetailsModal({
               <div className="mb-6 rounded-lg border border-amber-500/30 bg-amber-500/10 p-3">
                 <p className="text-sm font-medium text-amber-300">Not on the allow-list</p>
                 <p className="mt-1 text-xs text-amber-200/80">
-                  AGI Workforce installs only the packages its allow-list pins, so this one cannot
-                  be installed from here. If you trust its publisher, add it by hand as an MCP
-                  server.
+                  {PRODUCT_NAMES.desktop} installs only the packages its allow-list pins, so this
+                  one cannot be installed from here. If you trust its publisher, add it by hand as
+                  an MCP server.
                 </p>
               </div>
             )}
@@ -672,8 +673,7 @@ export function MCPBundleBrowser({ onConfigureServer }: MCPBundleBrowserProps) {
         featuredBundles.find((candidate) => candidate.id === bundleId);
       const accepted = await confirm({
         title: `Remove ${bundle?.name ?? 'this MCP bundle'}?`,
-        description:
-          'This removes the MCP server from AGI Workforce configuration. The globally installed npm package is retained so other applications are not broken.',
+        description: `This removes the MCP server from ${PRODUCT_NAMES.desktop} configuration. The globally installed npm package is retained so other applications are not broken.`,
         confirmText: 'Remove bundle',
         cancelText: 'Cancel',
         variant: 'destructive',

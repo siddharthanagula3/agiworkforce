@@ -80,7 +80,7 @@ export default function AiChatFeaturePage() {
                 <em className="agi-lp-accent">The reply shows its work.</em>
               </h1>
               <ButtonRow>
-                <Button href={WEB_ENTRY_HREF}>Open AGI Web</Button>
+                <Button href={WEB_ENTRY_HREF}>Open AGI Chat</Button>
                 <Button href="/desktop" variant="secondary">
                   See AGI Desktop
                 </Button>
@@ -181,12 +181,12 @@ export default function AiChatFeaturePage() {
                 Send the first message. <em className="agi-lp-accent">See what comes back.</em>
               </h2>
               <p className="agi-lp-lede">
-                AGI Web runs in the browser with the command menu, the model footer, and the
+                AGI Chat runs in the browser with the command menu, the model footer, and the
                 artifacts panel. AGI Desktop carries the same chat in a macOS app, and Desktop is{' '}
                 {SURFACE_STATUS.desktop.toLowerCase()}.
               </p>
               <ButtonRow>
-                <Button href={WEB_ENTRY_HREF}>Open AGI Web</Button>
+                <Button href={WEB_ENTRY_HREF}>Open AGI Chat</Button>
                 <Button href="/desktop" variant="secondary">
                   See AGI Desktop
                 </Button>

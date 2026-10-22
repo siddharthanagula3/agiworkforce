@@ -45,7 +45,7 @@ impl ShortcutsState {
             Shortcut {
                 id: "quick_summon".to_string(),
                 key: platform_default_quick_summon_combo().to_string(),
-                description: "Quick summon AGI Workforce from anywhere".to_string(),
+                description: "Quick summon AGI Desktop from anywhere".to_string(),
                 action: "quick_summon".to_string(),
                 enabled: true,
                 is_global: true,

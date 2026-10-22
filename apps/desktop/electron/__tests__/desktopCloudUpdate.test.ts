@@ -174,7 +174,7 @@ describe('desktop cloud update contract', () => {
     );
 
     await expect(checkDesktopCloudUpdate('1.2.0', 'x64', armOnly as typeof fetch)).rejects.toThrow(
-      /no signed AGI Cloud x64 installer/i,
+      /no signed AGI Desktop x64 installer/i,
     );
   });
 });
@@ -198,7 +198,7 @@ describe('desktop cloud update origin and in-place prompts', () => {
       readyToInstall: true,
     });
 
-    expect(prompt.title).toBe('AGI Cloud update ready');
+    expect(prompt.title).toBe('AGI Desktop update ready');
     expect(prompt.buttons[prompt.restartButton ?? -1]).toBe('Restart to Update');
     expect(prompt.downloadButton).toBeNull();
   });

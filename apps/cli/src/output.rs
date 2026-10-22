@@ -652,7 +652,7 @@ pub fn print_banner(model: &str, provider: &str) {
     };
     eprintln!(
         "{} {} {}{}",
-        ts::brand_header("AGI CLI"),
+        ts::brand_header(crate::PRODUCT_NAME),
         ts::muted(format!("v{}", env!("CARGO_PKG_VERSION"))),
         ts::muted(format!(
             "({} via {})",

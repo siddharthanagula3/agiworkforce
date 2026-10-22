@@ -13,6 +13,7 @@ import { useEffect, useId, useState } from 'react';
 import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 import type { LifecycleStatus } from '@agiworkforce/types';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { Spinner } from '@/ui/Spinner';
@@ -144,7 +145,7 @@ function KeepAwakeSetting() {
           <p className="mt-0.5 text-xs text-[var(--chat-text-secondary)]">
             {t(
               'agiWork.scheduled.keepAwakeHint',
-              'Scheduled tasks run only while AGI Workforce is open. A run missed while the app was closed or the computer slept runs once when the app opens again, if it was due in the last 7 days.',
+              `Scheduled tasks run only while ${PRODUCT_NAMES.desktop} is open. A run missed while the app was closed or the computer slept runs once when the app opens again, if it was due in the last 7 days.`,
             )}
           </p>
         </div>

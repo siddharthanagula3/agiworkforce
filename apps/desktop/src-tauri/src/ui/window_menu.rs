@@ -143,7 +143,7 @@ pub fn build_window_menu(app: &mut App) -> Result<()> {
     let quit = PredefinedMenuItem::quit(app, None)?;
     let app_menu = Submenu::with_items(
         app,
-        "AGI Workforce",
+        "AGI Desktop",
         true,
         &[
             &settings,

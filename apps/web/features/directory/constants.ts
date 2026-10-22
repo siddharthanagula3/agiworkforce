@@ -20,7 +20,7 @@ export const SKILL_PUBLISHER_PLUGIN = 'From a plugin';
 export const SKILL_LICENSE_PREFIX = 'Complete terms in';
 
 export const SKILL_ORIGIN_PERSONAL = 'Created by you';
-export const SKILL_ORIGIN_BUNDLED = 'Included with AGI Workforce';
+export const SKILL_ORIGIN_BUNDLED = 'Included with AGI';
 export const SKILL_ORIGIN_MANAGED = 'Managed for this workspace';
 export const SKILL_ORIGIN_UNKNOWN_PLUGIN = 'Part of a plugin';
 
@@ -44,7 +44,7 @@ export function skillPluginPublisher(pluginName: string): string {
 }
 
 export function skillCatalogPluginOrigin(pluginName: string): string {
-  return `Part of the ${pluginName} plugin, included with AGI Workforce`;
+  return `Part of the ${pluginName} plugin, included with AGI`;
 }
 
 export function skillRepositoryPluginOrigin(pluginName: string, marketplace?: string): string {

@@ -1,5 +1,9 @@
 import type { FreeQuotaMediaOffer } from '@agiworkforce/cloud-contracts';
-import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  PRODUCT_NAMES,
+  connectorsReleased,
+} from '@agiworkforce/types';
 import { Header } from '@shared/components/layout/Header';
 import './legacy-landing.css';
 import './motion/motion.css';
@@ -62,7 +66,7 @@ export function MarketingLanding({
           eyebrow="the AI application suite"
           titleLines={[]}
           em=""
-          ctas={[{ href: WEB_ENTRY_HREF, label: 'Try AGI Web' }, surfaceCta('desktop')]}
+          ctas={[{ href: WEB_ENTRY_HREF, label: 'Try AGI Chat' }, surfaceCta('desktop')]}
           modeRibbon={[]}
           visual={<MobileHeroVisual />}
           announcement={landingAnnouncement(freeMediaOffer, {
@@ -108,7 +112,7 @@ export function MarketingLanding({
               index: '01',
               name: 'AGI Desktop',
               tagline: 'Your managed account on your Mac.',
-              body: 'The AGI app for macOS. Your managed-cloud account in a window that stays open, plus approved folders and computer use that asks each session and before each app. The current Desktop accepts no provider keys or local models.',
+              body: 'AGI Desktop for macOS. Your managed-cloud account in a window that stays open, plus approved folders and computer use that asks each session and before each app. The current Desktop accepts no provider keys or local models.',
               capabilities: [
                 'Managed-cloud chat with visible model labels',
                 'Approved folders and programs',
@@ -119,11 +123,11 @@ export function MarketingLanding({
               platforms: 'macOS, Apple silicon and Intel',
               status: SURFACE_STATUS.desktop,
               href: '/desktop',
-              frame: { variant: 'desktop', title: 'AGI Workforce', badge: 'Cloud' },
+              frame: { variant: 'desktop', title: PRODUCT_NAMES.desktop, badge: 'Cloud' },
             },
             {
               index: '02',
-              name: 'AGI Web',
+              name: 'AGI Chat',
               tagline: 'Zero install.',
               body: 'Chat in the browser. Projects, artifacts, web search, and shared links. Your account and managed cloud live here.',
               capabilities: [
@@ -157,7 +161,7 @@ export function MarketingLanding({
             },
             {
               index: '04',
-              name: 'AGI in Chrome',
+              name: 'AGI Extension',
               tagline: 'Context from any page.',
               body: 'A side panel that reads the page when you ask. Answers come back from AGI Managed Cloud. Pairing Desktop adds a local road for selections and captures, not a second place an answer comes from.',
               capabilities: [
@@ -175,7 +179,7 @@ export function MarketingLanding({
             },
             {
               index: '05',
-              name: 'AGI in VS Code',
+              name: 'AGI Code for VS Code',
               tagline: 'Help where you code.',
               body: 'Chat with @agi in the editor. Workspace context, diff review, slash commands. Handoffs are explicit.',
               capabilities: [
@@ -358,14 +362,14 @@ export function MarketingLanding({
           cards={[
             {
               title: 'Start on your own',
-              body: `AGI Web is free to try in the browser. The CLI offers Local and BYOK routes. ${CLI_AVAILABILITY_NOTE}`,
+              body: `AGI Chat is free to try in the browser. The CLI offers Local and BYOK routes. ${CLI_AVAILABILITY_NOTE}`,
               points: [
                 'Every admitted model behind one selector, with Auto as the default',
                 'Projects, memory, artifacts and web search on the first day',
                 'Every reply names the model that answered it',
                 'The same account carries to Desktop, the CLI and the extensions once they are released',
               ],
-              cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Web' },
+              cta: { href: WEB_ENTRY_HREF, label: 'Try AGI Chat' },
             },
             {
               title: 'Bring your organisation',

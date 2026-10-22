@@ -63,13 +63,13 @@ impl Default for ComputerUseState {
 const CONSENT_REQUIRED_ERROR: &str = "Computer use has not been consented to on this device. Approve the computer-use request that opens on this computer, then start the action again.";
 const CONSENT_PROMPT_BUSY_ERROR: &str = "The computer-use consent request is open on this computer. It has to be answered there, so nothing can be driven through this app until it is.";
 const AUTOMATION_NOT_SUSPENDED_ERROR: &str = "Computer use cannot ask for permission right now: this app could not pause its own pointer and keyboard control while the request is open. Try again, or restart AGI Workforce.";
-const CONSENT_PROMPT_TITLE: &str = "Allow AGI Workforce to control this computer?";
-const CONSENT_PROMPT_BODY: &str = "AGI Workforce is asking to watch this screen and to move the pointer, type, and click on your behalf. The permission lasts until you turn computer use off in Settings or quit AGI Workforce. Allow this only if you just started a computer-use task yourself.";
+const CONSENT_PROMPT_TITLE: &str = "Allow AGI Desktop to control this computer?";
+const CONSENT_PROMPT_BODY: &str = "AGI Desktop is asking to watch this screen and to move the pointer, type, and click on your behalf. The permission lasts until you turn computer use off in Settings or quit AGI Desktop. Allow this only if you just started a computer-use task yourself.";
 const CONSENT_PROMPT_ALLOW_LABEL: &str = "Allow";
 const CONSENT_PROMPT_COOLDOWN: Duration = Duration::from_secs(30);
 const DESKTOP_GATE_UNAVAILABLE_ERROR: &str = "Desktop control is unavailable: its safety checks did not start, so no app can be checked before it is used.";
 const SELF_CONTROL_REFUSED_ERROR: &str =
-    "AGI Workforce does not click or type into its own window. Name another app to use.";
+    "AGI Desktop does not click or type into its own window. Name another app to use.";
 
 static CONSENT_PROMPT: Lazy<ConsentPrompt> = Lazy::new(ConsentPrompt::default);
 
@@ -848,7 +848,7 @@ fn looser_permission_question(
         return Ok(crate::sys::native_confirm::NativeConfirm {
             title: "Allow computer control of this app?".to_string(),
             body: format!(
-                "AGI Workforce will be able to watch \"{name}\" and to click and type in it during computer-use tasks, without asking again.\n\nApp: {name}\nIdentifier: {identifier}\n\nYou can change this in Settings, under Computer Use."
+                "AGI Desktop will be able to watch \"{name}\" and to click and type in it during computer-use tasks, without asking again.\n\nApp: {name}\nIdentifier: {identifier}\n\nYou can change this in Settings, under Computer Use."
             ),
             confirm_label: ALLOW_APP_CONFIRM_LABEL.to_string(),
         });
@@ -1057,7 +1057,7 @@ static HAND_BACK_DECISIONS: crate::sys::native_confirm::ConfirmGate =
 
 fn hand_back_question() -> crate::sys::native_confirm::NativeConfirm {
     crate::sys::native_confirm::NativeConfirm {
-        title: "Hand screen control back to AGI Workforce?".to_string(),
+        title: "Hand screen control back to AGI Desktop?".to_string(),
         body: "You took over the screen, so nothing can move the pointer or type. Handing control back lets computer-use tasks click and type again in the apps you allowed.".to_string(),
         confirm_label: HAND_BACK_CONFIRM_LABEL.to_string(),
     }

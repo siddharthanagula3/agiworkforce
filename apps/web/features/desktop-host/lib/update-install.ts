@@ -1,9 +1,9 @@
 import type { HostBridge } from '@agiworkforce/local-runtime-contract';
 import { toUserMessage } from '@/lib/user-error-message';
 
-const RESTART_FAILED = 'AGI Cloud could not restart to install the update. Try again.';
+const RESTART_FAILED = 'AGI Desktop could not restart to install the update. Try again.';
 const INSTALLER_FAILED = 'The installer download could not be opened. Try again.';
-const RESTART_DEFERRED = 'The update will install the next time AGI Cloud quits.';
+const RESTART_DEFERRED = 'The update will install the next time AGI Desktop quits.';
 const RESTART_NOT_READY =
   'The update has not finished downloading. Check for updates again in a few minutes.';
 

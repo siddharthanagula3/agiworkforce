@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { AgiCodeActionProvider, CODE_ACTION_KINDS } from '../providers/codeActionProvider';
 import { AgiHoverProvider } from '../features/hover';
@@ -30,7 +31,7 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
   try {
     registerPathLinks(context);
   } catch (err) {
-    console.warn('[AGI Workforce] Path link providers init failed:', err);
+    console.warn(`[${PRODUCT_NAMES.code}] Path link providers init failed:`, err);
   }
 
   const codeLensProvider = new AgiCodeLensProvider();
@@ -51,7 +52,7 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
   try {
     syncCodeLensProvider();
   } catch (err) {
-    console.warn('[AGI Workforce] CodeLens provider init failed:', err);
+    console.warn(`[${PRODUCT_NAMES.code}] CodeLens provider init failed:`, err);
   }
 
   const diagnosticsProvider = new AgiDiagnosticsProvider();
@@ -60,19 +61,19 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
   try {
     activateTokenCounter(context);
   } catch (err) {
-    console.warn('[AGI Workforce] Token counter init failed:', err);
+    console.warn(`[${PRODUCT_NAMES.code}] Token counter init failed:`, err);
   }
 
   try {
     activateTerminal(context, context.secrets);
   } catch (err) {
-    console.warn('[AGI Workforce] Terminal integration init failed:', err);
+    console.warn(`[${PRODUCT_NAMES.code}] Terminal integration init failed:`, err);
   }
 
   try {
     activateErrorExplainer(context);
   } catch (err) {
-    console.warn('[AGI Workforce] Error explainer init failed:', err);
+    console.warn(`[${PRODUCT_NAMES.code}] Error explainer init failed:`, err);
   }
 
   let inlineCompletionRegistration: vscode.Disposable | undefined;
@@ -94,7 +95,7 @@ export function setupProviders(context: vscode.ExtensionContext): ProviderState 
   try {
     syncInlineCompletionProvider();
   } catch (err) {
-    console.warn('[AGI Workforce] Inline completion provider init failed:', err);
+    console.warn(`[${PRODUCT_NAMES.code}] Inline completion provider init failed:`, err);
   }
 
   const diffDecorationProvider = new DiffDecorationProvider();

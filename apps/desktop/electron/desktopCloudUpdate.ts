@@ -1,4 +1,5 @@
 import type { HostUpdateAvailability } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { platformRequestHeaders } from '../src/lib/platformHeaders';
 import { CLOUD_APP_ORIGIN } from './config';
 
@@ -60,7 +61,7 @@ export function compareDesktopCloudVersions(left: string, right: string): number
   const a = parseSemver(left);
   const b = parseSemver(right);
   if (!a || !b) {
-    throw new Error('AGI Cloud received invalid release version metadata.');
+    throw new Error(`${PRODUCT_NAMES.desktop} received invalid release version metadata.`);
   }
 
   for (let index = 0; index < a.core.length; index += 1) {
@@ -93,7 +94,7 @@ export function compareDesktopCloudVersions(left: string, right: string): number
 
 function parseReleasePayload(value: unknown): DesktopCloudReleasePayload {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error('AGI Cloud received an invalid release response.');
+    throw new Error(`${PRODUCT_NAMES.desktop} received an invalid release response.`);
   }
   const record = value as Record<string, unknown>;
   const platforms = record['platforms'];
@@ -111,10 +112,10 @@ function parseReleasePayload(value: unknown): DesktopCloudReleasePayload {
     typeof (architectures as Record<string, unknown>)['arm64'] !== 'boolean' ||
     typeof (architectures as Record<string, unknown>)['x64'] !== 'boolean'
   ) {
-    throw new Error('AGI Cloud received incomplete release metadata.');
+    throw new Error(`${PRODUCT_NAMES.desktop} received incomplete release metadata.`);
   }
   if (record['publishedAt'] !== undefined && typeof record['publishedAt'] !== 'string') {
-    throw new Error('AGI Cloud received an invalid release date.');
+    throw new Error(`${PRODUCT_NAMES.desktop} received an invalid release date.`);
   }
   return {
     version: record['version'],
@@ -133,7 +134,7 @@ export async function checkDesktopCloudUpdate(
   fetchImpl: typeof fetch = fetch,
 ): Promise<DesktopCloudUpdateAvailability> {
   if (!parseSemver(currentVersion)) {
-    throw new Error('AGI Cloud could not determine the installed app version.');
+    throw new Error(`${PRODUCT_NAMES.desktop} could not determine the installed app version.`);
   }
 
   // Whatever the network, a proxy or the runtime has to say about a failed
@@ -152,8 +153,8 @@ export async function checkDesktopCloudUpdate(
     console.warn('[desktop-cloud-update] release check failed:', error);
     throw new Error(
       error instanceof DOMException && error.name === 'TimeoutError'
-        ? 'AGI Cloud could not reach the update service in time.'
-        : 'AGI Cloud could not reach the update service. Check your connection and try again.',
+        ? `${PRODUCT_NAMES.desktop} could not reach the update service in time.`
+        : `${PRODUCT_NAMES.desktop} could not reach the update service. Check your connection and try again.`,
     );
   }
   // A 404 from this endpoint is the honest answer to "is there a newer
@@ -167,7 +168,9 @@ export async function checkDesktopCloudUpdate(
     return { available: false, currentVersion, version: currentVersion, downloadUrl: '' };
   }
   if (!response.ok) {
-    throw new Error(`AGI Cloud update information is unavailable (${response.status}).`);
+    throw new Error(
+      `${PRODUCT_NAMES.desktop} update information is unavailable (${response.status}).`,
+    );
   }
 
   let payload: unknown;
@@ -177,13 +180,15 @@ export async function checkDesktopCloudUpdate(
     // A captive portal or a proxy answers 200 with a login page, and the JSON
     // parser's complaint about a `<` was reaching the update dialog verbatim.
     console.warn('[desktop-cloud-update] release response was not JSON:', error);
-    throw new Error('AGI Cloud received an invalid release response.');
+    throw new Error(`${PRODUCT_NAMES.desktop} received an invalid release response.`);
   }
 
   const release = parseReleasePayload(payload);
   const available = compareDesktopCloudVersions(release.version, currentVersion) > 0;
   if (available && !release.architectures[architecture]) {
-    throw new Error(`No signed AGI Cloud ${architecture} installer is published for this update.`);
+    throw new Error(
+      `No signed ${PRODUCT_NAMES.desktop} ${architecture} installer is published for this update.`,
+    );
   }
   return {
     available,
@@ -216,7 +221,7 @@ export function desktopUpdatePrompt(
     return {
       type: 'error',
       title: 'Couldn’t check for updates',
-      message: 'AGI Cloud update information is currently unavailable.',
+      message: `${PRODUCT_NAMES.desktop} update information is currently unavailable.`,
       detail: outcome.failure,
       buttons: ['OK'],
       downloadButton: null,
@@ -226,8 +231,8 @@ export function desktopUpdatePrompt(
   if (!outcome.available) {
     return {
       type: 'info',
-      title: 'AGI Cloud is up to date',
-      message: 'You have the latest AGI Cloud version.',
+      title: `${PRODUCT_NAMES.desktop} is up to date`,
+      message: `You have the latest ${PRODUCT_NAMES.desktop} version.`,
       detail:
         outcome.version === outcome.currentVersion
           ? `Installed: ${outcome.currentVersion}\nNo newer version is available.`
@@ -240,9 +245,9 @@ export function desktopUpdatePrompt(
   if (outcome.readyToInstall) {
     return {
       type: 'info',
-      title: 'AGI Cloud update ready',
-      message: `AGI Cloud ${outcome.version} is ready to install.`,
-      detail: `You have ${outcome.currentVersion}. Restart AGI Cloud to finish updating; your chats are saved in your account.`,
+      title: `${PRODUCT_NAMES.desktop} update ready`,
+      message: `${PRODUCT_NAMES.desktop} ${outcome.version} is ready to install.`,
+      detail: `You have ${outcome.currentVersion}. Restart ${PRODUCT_NAMES.desktop} to finish updating; your chats are saved in your account.`,
       buttons: ['Restart to Update', 'Later'],
       downloadButton: null,
       restartButton: 0,
@@ -251,9 +256,9 @@ export function desktopUpdatePrompt(
   if (outcome.installsAutomatically || outcome.downloading) {
     return {
       type: 'info',
-      title: 'AGI Cloud update available',
-      message: `AGI Cloud ${outcome.version} is downloading.`,
-      detail: `You have ${outcome.currentVersion}. AGI Cloud tells you when the update is ready, then installs it when you restart.`,
+      title: `${PRODUCT_NAMES.desktop} update available`,
+      message: `${PRODUCT_NAMES.desktop} ${outcome.version} is downloading.`,
+      detail: `You have ${outcome.currentVersion}. ${PRODUCT_NAMES.desktop} tells you when the update is ready, then installs it when you restart.`,
       buttons: ['OK'],
       downloadButton: null,
       restartButton: null,
@@ -261,11 +266,11 @@ export function desktopUpdatePrompt(
   }
   return {
     type: 'info',
-    title: 'AGI Cloud update available',
-    message: `AGI Cloud ${outcome.version} is available.`,
+    title: `${PRODUCT_NAMES.desktop} update available`,
+    message: `${PRODUCT_NAMES.desktop} ${outcome.version} is available.`,
     detail:
       `You have ${outcome.currentVersion}. Download the signed and notarized macOS installer, ` +
-      'then replace AGI Cloud in Applications. This opens your browser and does not install automatically.',
+      `then replace ${PRODUCT_NAMES.desktop} in Applications. This opens your browser and does not install automatically.`,
     buttons: ['Download Installer', 'Later'],
     downloadButton: 0,
     restartButton: null,

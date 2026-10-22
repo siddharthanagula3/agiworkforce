@@ -191,7 +191,7 @@ export function AgentRunScenePreview({ className }: { className?: string }) {
   return (
     <WorkShell
       scene="work-run"
-      label="Authored example of an AGI Work run in AGI Web"
+      label="Authored example of an AGI Work run in AGI Chat"
       className={className}
       chats={RUN_SIDEBAR_CHATS}
       composer={<WorkComposer />}

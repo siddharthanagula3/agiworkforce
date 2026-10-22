@@ -8,7 +8,7 @@ import { ARCHITECTURE_LABELS, macDownloadHref, useDesktopRelease } from './use-d
 const INSTALL_STEPS: readonly string[] = [
   'Download the installer for your Mac. The buttons above appear only for an architecture this release actually publishes.',
   'Check the file against the published SHA-256 below with shasum -a 256, and compare the two strings before you open anything.',
-  'Open the .dmg and drag AGI Cloud into your Applications folder. Installing anywhere else leaves updates unable to find the app.',
+  'Open the .dmg and drag AGI Desktop into your Applications folder. Installing anywhere else leaves updates unable to find the app.',
   'Launch it from Applications. macOS verifies the notarization ticket on first launch, so no Gatekeeper override is needed.',
   'Sign in with the same account you use on the web. Nothing installs or updates on its own.',
 ];
@@ -28,7 +28,7 @@ function Alternatives() {
   return (
     <p className="agi-ds-availability-links">
       <Link href={WEB_ENTRY_HREF} className="agi-ds-link">
-        Use AGI Web
+        Use AGI Chat
       </Link>
       <Link href="/cli" className="agi-ds-link">
         See CLI availability

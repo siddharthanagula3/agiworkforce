@@ -143,7 +143,7 @@ for (const viewport of [
         const edge = surface.locator(':scope > .agi-ds-header-edge');
         await expect(edge).toHaveCount(1);
         await expect(edge).toHaveAttribute('aria-hidden', 'true');
-        await expect(header.getByRole('link', { name: 'Try AGI Web', exact: true })).toBeVisible();
+        await expect(header.getByRole('link', { name: 'Try AGI Chat', exact: true })).toBeVisible();
         const records: unknown[] = [];
         for (const scroll of [0, 600, 0]) {
           await page.evaluate((top) => scrollTo({ top, behavior: 'instant' }), scroll);
@@ -227,7 +227,7 @@ for (const viewport of [
         expect((await page.goto('/pricing'))?.status()).toBe(200);
         const header = page.locator('header.agi-ds-header');
         const surface = header.locator('.agi-ds-header-surface');
-        const action = header.getByRole('link', { name: 'Try AGI Web', exact: true });
+        const action = header.getByRole('link', { name: 'Try AGI Chat', exact: true });
         await expect(action).toBeVisible();
         await page.evaluate(() => document.fonts.ready);
         await expect(header).not.toHaveAttribute('data-scrolled');

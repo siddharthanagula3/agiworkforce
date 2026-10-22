@@ -15,15 +15,15 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { apiErrorMessage } from '@shared/utils/api-error';
 
 const GRANT_PATH = '/api/auth/desktop/grant';
-const HEADING = 'Return to AGI Cloud';
+const HEADING = 'Return to AGI Desktop';
 const DETAIL =
-  'Your browser asks to open AGI Cloud. Allow it, and the desktop app finishes signing you in. You can close this tab afterwards.';
-const OPEN_LABEL = 'Open AGI Cloud';
+  'Your browser asks to open AGI Desktop. Allow it, and the desktop app finishes signing you in. You can close this tab afterwards.';
+const OPEN_LABEL = 'Open AGI Desktop';
 const PREPARING = 'Preparing your sign-in';
 const GRANT_FAILED = 'This sign-in could not be handed to the desktop app. Try again.';
 const INVALID_HEADING = 'Start from the desktop app';
 const INVALID_DETAIL =
-  'This link is missing part of the sign-in. Open AGI Cloud on your computer and choose Continue in your browser again.';
+  'This link is missing part of the sign-in. Open AGI Desktop on your computer and choose Continue in your browser again.';
 
 type HandoffState = { kind: 'preparing' } | { kind: 'ready' } | { kind: 'failed'; message: string };
 

@@ -2002,7 +2002,7 @@ impl ToolExecutor {
                     "agent:status:update",
                     json!({
                         "id": "main_agent",
-                        "name": "AGI Workforce Agent",
+                        "name": "AGI Desktop Agent",
                         "status": "paused",
                         "currentStep": format!("Waiting for approval to execute: {}", tool.name),
                         "progress": 50
@@ -2124,7 +2124,7 @@ impl ToolExecutor {
                 "agent:status:update",
                 json!({
                     "id": "main_agent",
-                    "name": "AGI Workforce Agent",
+                    "name": "AGI Desktop Agent",
                     "status": "running",
                     "currentStep": format!("Executing: {}", tool.name),
                     "progress": 60
@@ -2898,7 +2898,7 @@ impl ToolExecutor {
             "agent:status:update",
             json!({
                 "id": "main_agent",
-                "name": "AGI Workforce Agent",
+                "name": "AGI Desktop Agent",
                 "status": "awaiting_confirmation",
                 "currentStep": format!("Waiting for your approval to: {}", tool_name),
                 "progress": 50

@@ -7,7 +7,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 export const metadata = buildMetadata({
   title: 'Appeal a suspension',
   description:
-    'Appeal the suspension of your AGI Workforce account. A person reviews every appeal and replies to the account email address.',
+    'Appeal the suspension of your AGI account. A person reviews every appeal and replies to the account email address.',
   path: '/appeal',
 });
 

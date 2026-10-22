@@ -66,9 +66,9 @@ describe('a press of the dictation shortcut', () => {
     expect(deps.openBar).toHaveBeenCalledTimes(1);
   });
 
-  it('leaves a press over AGI Cloud itself, or with nothing readable in front, to the app', async () => {
+  it('leaves a press over AGI Desktop itself, or with nothing readable in front, to the app', async () => {
     const dictation = createDictationElsewhere(deps);
-    front = { name: 'AGI Cloud', pid: OWN_PID, bundleId: null, secureInput: false };
+    front = { name: 'AGI Desktop', pid: OWN_PID, bundleId: null, secureInput: false };
     expect(await dictation.handlePress()).toBe(false);
     front = null;
     expect(await dictation.handlePress()).toBe(false);
@@ -128,9 +128,9 @@ describe('typing what was dictated', () => {
     }
   });
 
-  it('never types into AGI Cloud itself, even if it came to the front', async () => {
+  it('never types into AGI Desktop itself, even if it came to the front', async () => {
     const dictation = await listening();
-    front = { name: 'AGI Cloud', pid: OWN_PID, bundleId: null, secureInput: false };
+    front = { name: 'AGI Desktop', pid: OWN_PID, bundleId: null, secureInput: false };
     expect(await dictation.finish(BAR_ID, 'hello')).toBe('copied');
     expect(deps.typeText).not.toHaveBeenCalled();
   });

@@ -179,7 +179,7 @@ pub fn global_service() -> anyhow::Result<Arc<AutomationService>> {
     Ok(service)
 }
 
-pub const ACCESSIBILITY_PERMISSION_MISSING: &str = "Desktop control needs the macOS Accessibility permission. Turn on AGI Workforce in System Settings > Privacy & Security > Accessibility, then try again.";
+pub const ACCESSIBILITY_PERMISSION_MISSING: &str = "Desktop control needs the macOS Accessibility permission. Turn on AGI Desktop in System Settings > Privacy & Security > Accessibility, then try again.";
 
 /// The service startup manages, or, when Accessibility was granted after
 /// launch, the process-wide one built on first use, so a fresh grant works

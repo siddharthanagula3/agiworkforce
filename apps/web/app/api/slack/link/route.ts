@@ -36,7 +36,7 @@ import {
 
 const ENDPOINT = '/api/slack/link';
 const EXPIRED_LINK =
-  'This link has expired or was already used. Send AGI Workforce a message in Slack to get a new one.';
+  'This link has expired or was already used. Send AGI a message in Slack to get a new one.';
 
 async function handlePreview(request: NextRequest): Promise<NextResponse> {
   const { db, userId, organizationId } = await getUserScopedDb(request, {
@@ -45,7 +45,7 @@ async function handlePreview(request: NextRequest): Promise<NextResponse> {
   const rateLimitResponse = await withRateLimit(request, 'slack-link', `user:${userId}`);
   if (rateLimitResponse) return rateLimitResponse;
   if (!isSlackAppConfigured()) {
-    throw createError.serviceUnavailable('AGI Workforce in Slack is not available right now');
+    throw createError.serviceUnavailable('AGI in Slack is not available right now');
   }
 
   const token = new URL(request.url).searchParams.get('token');
@@ -78,7 +78,7 @@ async function handleConfirm(request: NextRequest): Promise<NextResponse> {
 
   const origin = slackAppOrigin();
   if (!origin || !isSlackAppConfigured()) {
-    throw createError.serviceUnavailable('AGI Workforce in Slack is not available right now');
+    throw createError.serviceUnavailable('AGI in Slack is not available right now');
   }
   const parsed = ManagedCloudSlackLinkConfirmSchema.safeParse(
     await request.json().catch(() => null),
@@ -95,9 +95,7 @@ async function handleConfirm(request: NextRequest): Promise<NextResponse> {
   }
   const db = requestDb.withOrg(organizationId);
   if (!(await slackPlanAllowed(db, userId, organizationId))) {
-    throw createError.forbidden(
-      `AGI Workforce in Slack is available on ${slackRequiredPlans()} plans.`,
-    );
+    throw createError.forbidden(`AGI in Slack is available on ${slackRequiredPlans()} plans.`);
   }
 
   const serviceDb = getNeonDb();

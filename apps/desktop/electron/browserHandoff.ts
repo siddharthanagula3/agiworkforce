@@ -1,4 +1,5 @@
 import { type BrowserWindow, clipboard, ClipboardItem } from 'electron';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import type { BrowserChatHandoff } from './browser/bridgeServer';
 import { focusPageComposer } from './composerFocus';
 import { takeCaptureBackFromClipboard } from './screenshot';
@@ -38,7 +39,7 @@ export async function deliverBrowserHandoff(
   handoff: BrowserChatHandoff,
 ): Promise<void> {
   if (!win || win.isDestroyed()) {
-    throw new Error('AGI Cloud has no window open. Open it, then try again.');
+    throw new Error(`${PRODUCT_NAMES.desktop} has no window open. Open it, then try again.`);
   }
   if (win.isMinimized()) win.restore();
   win.show();
@@ -46,7 +47,9 @@ export async function deliverBrowserHandoff(
   win.webContents.focus();
   await delay(COMPOSER_SETTLE_MS);
   if (win.isDestroyed() || !(await focusPageComposer(win))) {
-    throw new Error('No chat is open in AGI Cloud. Open a chat there, then try again.');
+    throw new Error(
+      `No chat is open in ${PRODUCT_NAMES.desktop}. Open a chat there, then try again.`,
+    );
   }
   if (handoff.kind === 'selection') {
     await win.webContents.insertText(selectionDraft(handoff.text, handoff.url));

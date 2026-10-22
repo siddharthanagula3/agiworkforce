@@ -102,7 +102,7 @@ describe('Web and Desktop share the real app shell', () => {
     expect(
       Array.from(container.querySelectorAll('.agi-app-navrow'), (row) => row.textContent),
     ).toEqual(destinations);
-    expect(container.querySelector('.agi-app-wordmark')?.textContent).toBe('AGI Workforce');
+    expect(container.querySelector('.agi-app-wordmark')?.textContent).toBe('AGI');
     expect(container.querySelector('.agi-app-newchat')?.textContent).toBe('New Chat');
     expect(container.querySelectorAll('.agi-app-navrow[data-active]')).toHaveLength(1);
   });

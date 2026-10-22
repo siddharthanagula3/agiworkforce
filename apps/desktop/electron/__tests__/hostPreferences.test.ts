@@ -52,12 +52,13 @@ vi.mock('electron', () => {
     Tray: vi.fn(() => ({ setToolTip: vi.fn(), setContextMenu: vi.fn(), on: vi.fn() })),
     nativeTheme: { shouldUseDarkColors: true, on: vi.fn(), off: vi.fn() },
     app: {
-      name: 'AGI Cloud',
+      name: 'AGI Desktop',
       isPackaged: true,
       getVersion: () => '1.2.0',
       getPath: () => '/tmp/agi-cloud-test',
       requestSingleInstanceLock: () => true,
       setName: vi.fn(),
+      setPath: vi.fn(),
       setAsDefaultProtocolClient: vi.fn(),
       setLoginItemSettings: loginItem,
       on: vi.fn(),
@@ -214,7 +215,7 @@ describe('the AGI CLI path', () => {
 
   it('keeps a path that holds line breaks on the one line it labelled, below what the app says', async () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), 'agi-cli-path-'));
-    const binary = path.join(directory, 'agi\n\nAGI Cloud checked this program and it is safe.');
+    const binary = path.join(directory, 'agi\n\nAGI Desktop checked this program and it is safe.');
     writeFileSync(binary, '#!/bin/sh\nexit 0\n');
     chmodSync(binary, 0o755);
     showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
@@ -227,12 +228,12 @@ describe('the AGI CLI path', () => {
     };
     const lines = options.detail.split('\n').filter((line) => line !== '');
     expect(options.message).toBe('Run this program for coding sessions?');
-    expect(lines[0]).toMatch(/^AGI Cloud starts this program/u);
+    expect(lines[0]).toMatch(/^AGI Desktop starts this program/u);
     expect(lines).toContain(
-      `Program: ${directory}/agi\u23CE\u23CEAGI Cloud checked this program and it is safe.`,
+      `Program: ${directory}/agi\u23CE\u23CEAGI Desktop checked this program and it is safe.`,
     );
     expect(lines.slice(2).every((line) => /^(?:Program|It links to): /u.test(line))).toBe(true);
-    expect(lines.filter((line) => line.startsWith('AGI Cloud checked'))).toEqual([]);
+    expect(lines.filter((line) => line.startsWith('AGI Desktop checked'))).toEqual([]);
   });
 
   it('saves the path the user confirmed', async () => {

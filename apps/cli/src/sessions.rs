@@ -727,7 +727,7 @@ pub fn adopt_hosted_conversation(
     if adoption == HostedAdoption::Created {
         metadata.title = Some(conversation.title.clone());
         metadata.custom_title = true;
-        metadata.imported_from = Some("your AGI Workforce account".to_string());
+        metadata.imported_from = Some("your AGI account".to_string());
         metadata.model = session.model.clone();
     }
     write_metadata(&conn.base_dir, &conversation.id, &metadata)?;
@@ -1079,7 +1079,7 @@ mod tests {
         );
         assert_eq!(
             imported_from(&conn, &conversation.id).as_deref(),
-            Some("your AGI Workforce account")
+            Some("your AGI account")
         );
     }
 

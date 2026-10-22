@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { MICROUSD_PER_USD, creditsFromMicrousd } from '@agiworkforce/types';
+import { MICROUSD_PER_USD, creditsFromMicrousd, PRODUCT_NAMES } from '@agiworkforce/types';
 import { MODEL_COST_RATES } from '../features/model-picker/modelConstants';
 import { isAutoRoutingModel } from '../integrations/routingTask';
 import { fetchBilledCredits, onDidCompleteManagedRequest } from '../utils/api';
@@ -148,7 +148,7 @@ export class TokenCounter implements vscode.Disposable {
         ? `$(pulse) Tokens: ${formatTokenCount(this.totalTokens)}`
         : `$(credit-card) Billed: ${formatBilledCredits(this)}`;
     this._statusBarItem.tooltip =
-      `AGI Workforce -- Session Token Usage\n` +
+      `${PRODUCT_NAMES.code} -- Session Token Usage\n` +
       `Measured this session, across every model used.\n\n` +
       `Input: ${formatTokenCount(this._promptTokens)}\n` +
       `Output: ${formatTokenCount(this._completionTokens)}\n` +
@@ -199,7 +199,7 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand('agi-workforce.resetTokenCounter', () => {
       counter.reset();
-      vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
+      vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: Token counter reset.`);
     }),
   );
 
@@ -212,7 +212,7 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
         counter.unsettledRequests === 0
       ) {
         vscode.window.showInformationMessage(
-          'AGI Workforce: No measured token usage yet this session.',
+          `${PRODUCT_NAMES.code}: No measured token usage yet this session.`,
         );
         return;
       }
@@ -257,13 +257,13 @@ export function activateTokenCounter(context: vscode.ExtensionContext): void {
       ];
 
       const picked = await vscode.window.showQuickPick(items, {
-        title: 'AGI Workforce -- Token Usage Breakdown',
+        title: `${PRODUCT_NAMES.code} -- Token Usage Breakdown`,
         placeHolder: 'Session token usage details',
       });
 
       if (picked?.label.includes('Reset Counter')) {
         counter.reset();
-        vscode.window.showInformationMessage('AGI Workforce: Token counter reset.');
+        vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: Token counter reset.`);
       }
     }),
   );

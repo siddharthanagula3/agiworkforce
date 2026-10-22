@@ -837,7 +837,7 @@ describe('dispatch, opening files', () => {
     const { PathRefused } = await import('../runtime/pathGuard');
     const { writeTextFile } = await import('../runtime/filesystemService');
     const message =
-      'notes.txt is shared with another location through a hard link, so AGI Cloud will not overwrite it.';
+      'notes.txt is shared with another location through a hard link, so AGI Desktop will not overwrite it.';
     vi.mocked(writeTextFile).mockRejectedValueOnce(new PathRefused('shared-file', message));
     vi.mocked(writeTextFile).mockRejectedValueOnce(new PathRefused('traversal', 'moved'));
     const write = () =>
@@ -1282,7 +1282,7 @@ describe('recorded permissions', () => {
       message: string;
       detail: string;
     };
-    expect(options.message).toBe(`Let AGI Cloud ask again to shell.execute in ${root.path}?`);
+    expect(options.message).toBe(`Let AGI Desktop ask again to shell.execute in ${root.path}?`);
     expect(options.detail).toContain('allows nothing by itself');
     expect(options.buttons).toEqual(['Cancel', 'Clear Refusal']);
     expect(options.defaultId).toBe(0);
@@ -2130,7 +2130,7 @@ describe('the dialog a local command is approved in', () => {
     cwd: '/approved/project/src',
     sandboxed,
   });
-  const MARKER = 'Nothing below this line is AGI Cloud speaking.';
+  const MARKER = 'Nothing below this line is AGI Desktop speaking.';
 
   it.each([true, false])(
     'says what it knows first, then the command on one line (sandboxed: %s)',

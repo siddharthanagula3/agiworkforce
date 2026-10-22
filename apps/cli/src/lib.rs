@@ -7,6 +7,8 @@
 #![allow(clippy::ptr_arg)]
 #![allow(clippy::result_large_err)]
 
+pub const PRODUCT_NAME: &str = "AGI CLI";
+
 // Active modules, core CLI functionality
 pub mod agent;
 pub mod agent_events;
@@ -456,7 +458,7 @@ pub struct Cli {
 
     /// Use automatic model routing (mutually exclusive with --model).
     ///
-    /// AGI Workforce picks the model for each message from the task, the tools
+    /// AGI picks the model for each message from the task, the tools
     /// in play, your plan and cost, and the CLI names the model that answered.
     ///
     /// Only applies to managed-cloud sessions; BYOK and local (Ollama / LMStudio)
@@ -845,7 +847,7 @@ enum Command {
         #[arg(long)]
         no_memory: bool,
     },
-    /// Let the AGI Workforce phone app list, start, follow and steer sessions in this folder.
+    /// Let AGI Mobile list, start, follow and steer sessions in this folder.
     #[command(alias = "rc")]
     RemoteControl,
     /// Run a prompt in the background so it keeps working after this terminal closes (alias: bg).
@@ -857,7 +859,7 @@ enum Command {
     /// Continue previous session, from this device or from your account.
     Resume {
         session_id: Option<String>,
-        /// Resolve the id against your AGI Workforce account rather than this device.
+        /// Resolve the id against your AGI account rather than this device.
         #[arg(long)]
         cloud: bool,
         /// Bring a cloud Code session here: check out its branch in this repository and
@@ -913,7 +915,7 @@ enum Command {
         /// Maximum number of sessions to display.
         #[arg(long, default_value = "20")]
         limit: usize,
-        /// Show only the conversations stored in your AGI Workforce account.
+        /// Show only the conversations stored in your AGI account.
         #[arg(long)]
         cloud: bool,
         /// Show only the account conversations filed under this project (id or name).
@@ -925,9 +927,9 @@ enum Command {
         #[command(subcommand)]
         action: SyncSubcommand,
     },
-    /// Sign in to your AGI Workforce account, or store a provider API key.
+    /// Sign in to your AGI account, or store a provider API key.
     Login {
-        /// Omit for your AGI Workforce account; name a provider (anthropic, openai, google, …) to enter its API key under Your Key; copilot uses its device flow.
+        /// Omit for your AGI account; name a provider (anthropic, openai, google, …) to enter its API key under Your Key; copilot uses its device flow.
         provider: Option<String>,
     },
     /// Logout from AGI cloud.
@@ -1002,17 +1004,17 @@ enum Command {
         #[command(subcommand)]
         action: SchedulesSubcommand,
     },
-    /// Browse and create the projects in your AGI Workforce account.
+    /// Browse and create the projects in your AGI account.
     Projects {
         #[command(subcommand)]
         action: ProjectsSubcommand,
     },
-    /// Browse, read and publish the artifacts in your AGI Workforce account.
+    /// Browse, read and publish the artifacts in your AGI account.
     Artifacts {
         #[command(subcommand)]
         action: ArtifactsSubcommand,
     },
-    /// Read and write the memory your AGI Workforce account shares across clients.
+    /// Read and write the memory your AGI account shares across clients.
     Memory {
         #[command(subcommand)]
         action: MemorySubcommand,
@@ -1023,14 +1025,14 @@ enum Command {
         #[command(subcommand)]
         action: CodeSubcommand,
     },
-    /// List the devices signed in to your AGI Workforce account, whether each
+    /// List the devices signed in to your AGI account, whether each
     /// is online, and what each can host.
     Devices {
         /// Print the devices as JSON.
         #[arg(long)]
         json: bool,
     },
-    /// Generate an image with your AGI Workforce account and save it to a file.
+    /// Generate an image with your AGI account and save it to a file.
     ///
     /// Runs on the same hosted image route the web and mobile apps use, so the
     /// image lands in your account library as well as on disk. Managed privacy
@@ -1158,7 +1160,7 @@ enum CodeSubcommand {
 
 #[derive(Subcommand, Debug)]
 enum HistorySubcommand {
-    /// Delete a conversation from your AGI Workforce account.
+    /// Delete a conversation from your AGI account.
     Delete {
         /// Conversation id, as `agi history` prints it.
         id: String,
@@ -2624,7 +2626,7 @@ async fn adopt_hosted_conversation(conversation_id: &str) -> Result<String> {
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?
         .ok_or_else(|| {
-            anyhow::anyhow!("No conversation '{conversation_id}' in your AGI Workforce account")
+            anyhow::anyhow!("No conversation '{conversation_id}' in your AGI account")
         })?;
 
     let default_model = config::CliConfig::load_merged()
@@ -2673,7 +2675,7 @@ async fn print_project_history(project: &str, limit: usize) -> Result<()> {
         .map_err(|error| anyhow::anyhow!("{error}"))?;
     let found = projects
         .find(project)
-        .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+        .with_context(|| format!("No project '{project}' in your AGI account"))?;
     let conversations = cloud::hosted_conversations(privacy)
         .await
         .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -2710,11 +2712,11 @@ async fn print_hosted_history(limit: usize) {
                 .iter()
                 .all(|conversation| conversation.archived) =>
         {
-            println!("No conversations in your AGI Workforce account yet.");
+            println!("No conversations in your AGI account yet.");
             print_archived_note(&conversations);
         }
         Ok(conversations) => {
-            println!("In your AGI Workforce account:");
+            println!("In your AGI account:");
             for conversation in conversations
                 .iter()
                 .filter(|conversation| !conversation.archived)
@@ -3331,7 +3333,7 @@ async fn handle_projects_command(
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let found = cache.find(project).ok_or_else(|| {
-                anyhow::anyhow!("No project '{project}' in your AGI Workforce account")
+                anyhow::anyhow!("No project '{project}' in your AGI account")
             })?;
             let (id, name) = (found.id.clone(), found.name.clone());
             if !confirm_destructive(
@@ -3364,7 +3366,7 @@ async fn handle_projects_command(
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let found = cache.find(project).ok_or_else(|| {
-                anyhow::anyhow!("No project '{project}' in your AGI Workforce account")
+                anyhow::anyhow!("No project '{project}' in your AGI account")
             })?;
             let (id, name) = (found.id.clone(), found.name.clone());
             cloud::set_project_archived(privacy, &id, !*undo)
@@ -3422,7 +3424,7 @@ async fn handle_projects_command(
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             if cache.projects.is_empty() {
-                println!("No projects in your AGI Workforce account.");
+                println!("No projects in your AGI account.");
                 println!("Create one with `agi projects create <name>`.");
                 return Ok(());
             }
@@ -3445,7 +3447,7 @@ async fn handle_projects_command(
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let found = cache
                 .find(project)
-                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+                .with_context(|| format!("No project '{project}' in your AGI account"))?;
             let (detail, files) = cloud::project_detail(privacy, &found.id)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -3533,7 +3535,7 @@ async fn handle_projects_command(
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let found = cache
                 .find(project)
-                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+                .with_context(|| format!("No project '{project}' in your AGI account"))?;
             cloud::update_project(privacy, &found.id, &serde_json::Value::Object(patch))
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -3566,7 +3568,7 @@ async fn handle_projects_command(
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let found = cache
                 .find(project)
-                .with_context(|| format!("No project '{project}' in your AGI Workforce account"))?;
+                .with_context(|| format!("No project '{project}' in your AGI account"))?;
             let file = cloud::knowledge::add_file(privacy, &found.id, path)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
@@ -3586,7 +3588,7 @@ async fn handle_projects_command(
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
             let found = cache.find(project).ok_or_else(|| {
-                anyhow::anyhow!("No project '{project}' in your AGI Workforce account")
+                anyhow::anyhow!("No project '{project}' in your AGI account")
             })?;
             let cwd = std::env::current_dir()?;
             let home = config::CliConfig::config_dir()?;
@@ -3871,7 +3873,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 println!("Memory is off for your account. Turn it on with `agi memory on`.");
             }
             if cache.entries.is_empty() {
-                println!("Your AGI Workforce account holds no memories in {workspace}.");
+                println!("Your AGI account holds no memories in {workspace}.");
                 println!("Add one with `agi memory add <text>`.");
                 return Ok(());
             }
@@ -3936,7 +3938,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?
             {
-                None => anyhow::bail!("No memory '{memory}' in your AGI Workforce account"),
+                None => anyhow::bail!("No memory '{memory}' in your AGI account"),
                 Some(refusals) if refusals.is_empty() => {
                     println!("Updated in your account, on every client.");
                     Ok(())
@@ -3958,7 +3960,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?
             {
-                None => anyhow::bail!("No memory '{memory}' in your AGI Workforce account"),
+                None => anyhow::bail!("No memory '{memory}' in your AGI account"),
                 Some(refusals) if refusals.is_empty() => {
                     println!(
                         "{}",
@@ -4088,7 +4090,7 @@ async fn handle_memory_command(action: &MemorySubcommand) -> Result<()> {
                 println!("Forgotten in your account, on every client.");
                 Ok(())
             } else {
-                anyhow::bail!("No memory '{memory}' in your AGI Workforce account")
+                anyhow::bail!("No memory '{memory}' in your AGI account")
             }
         }
     }
@@ -7758,7 +7760,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
     };
     if let Some((route, _, _)) = &auto_route {
         eprintln!(
-            "Auto: AGI Workforce picks the model for each message; starting with {}.",
+            "Auto: AGI picks the model for each message; starting with {}.",
             model_catalog::display_name(&route.provider_model_id)
         );
     }

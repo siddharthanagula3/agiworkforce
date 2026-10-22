@@ -95,7 +95,7 @@ describe('AuthEmailStep', () => {
     renderStep();
 
     expect(screen.getByRole('heading', { name: 'Welcome back' })).toBeInTheDocument();
-    expect(screen.getByText('Log in to AGI Workforce.')).toBeInTheDocument();
+    expect(screen.getByText('Log in to AGI.')).toBeInTheDocument();
     expect(screen.getByLabelText('Email address')).toHaveAttribute(
       'placeholder',
       'you@example.com',
@@ -124,7 +124,7 @@ describe('AuthEmailStep', () => {
 
     expect(screen.getByRole('heading', { name: 'Create your account' })).toBeInTheDocument();
     expect(
-      screen.getByText('Get started with AGI Workforce and put AI to work for you.'),
+      screen.getByText('Get started with AGI and put AI to work for you.'),
     ).toBeInTheDocument();
     const agreement = screen.getByTestId('auth-signup-agreement');
     expect(agreement).toHaveTextContent(AGREEMENT_SENTENCE);

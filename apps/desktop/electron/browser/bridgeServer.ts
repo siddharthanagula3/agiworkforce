@@ -37,6 +37,7 @@ import {
   normalizePairCode,
   type BrowserCommand,
   type BrowserCommandRequest,
+  PRODUCT_NAMES,
 } from '@agiworkforce/types';
 import {
   describeLocalClient,
@@ -45,7 +46,12 @@ import {
   publishLocalClientBridge,
   withdrawLocalClientBridge,
 } from './localClient';
-import { installNativeHost, installedManifestPaths, uninstallNativeHost } from './hostInstaller';
+import {
+  installNativeHost,
+  installedManifestPaths,
+  refreshInstalledHost,
+  uninstallNativeHost,
+} from './hostInstaller';
 import { bridgeToken, clearPairing, hostToken, readPairing, savePairing } from './pairingStore';
 
 const MAX_PAIR_BODY_BYTES = 4 * 1024;
@@ -84,6 +90,7 @@ export interface BridgeDependencies {
   port?: number;
   home?: string;
   appVersion?: string;
+  refreshInstalledHost?: boolean;
   /**
    * Injected rather than imported, so this module keeps no dependency on the
    * runtime dispatcher, which imports it.
@@ -317,7 +324,9 @@ function takeConfirmedPairRequest(
       pendingPairRequests.delete(requestId);
       throw new BrowserBridgeError('Too many wrong codes. Start pairing again from Chrome.');
     }
-    throw new BrowserBridgeError('That code does not match the one shown in AGI Cloud.');
+    throw new BrowserBridgeError(
+      `That code does not match the one shown in ${PRODUCT_NAMES.desktop}.`,
+    );
   }
   pendingPairRequests.delete(requestId);
   return request.extensionId;
@@ -572,7 +581,7 @@ function readSelection(message: Record<string, unknown>): BrowserChatHandoff | s
     return 'The selection did not name the page it came from.';
   }
   if (protocol !== 'https:' && protocol !== 'http:') {
-    return 'Only text selected on a web page can be sent to AGI Cloud.';
+    return `Only text selected on a web page can be sent to ${PRODUCT_NAMES.desktop}.`;
   }
   return { kind: 'selection', text: text.trim(), url };
 }
@@ -596,7 +605,10 @@ async function deliverChatHandoff(
   } catch (error) {
     sendJson(response, 200, {
       success: false,
-      error: error instanceof Error ? error.message : 'AGI Cloud could not open the chat.',
+      error:
+        error instanceof Error
+          ? error.message
+          : `${PRODUCT_NAMES.desktop} could not open the chat.`,
     });
   }
 }
@@ -610,7 +622,7 @@ async function handleNativeMessageRoute(
   if (!pairing || !extensionId || extensionId !== pairing.extensionId) {
     sendJson(response, 200, {
       success: false,
-      error: 'This browser is not paired with AGI Cloud. Pair it from Settings, Capabilities.',
+      error: `This browser is not paired with ${PRODUCT_NAMES.desktop}. Pair it from Settings, Capabilities.`,
     });
     return;
   }
@@ -678,7 +690,7 @@ async function handleNativeMessageRoute(
     success: false,
     error:
       typeof type === 'string'
-        ? `AGI Cloud does not handle ${type.slice(0, 64)} messages from the browser.`
+        ? `${PRODUCT_NAMES.desktop} does not handle ${type.slice(0, 64)} messages from the browser.`
         : 'The browser sent a message without a type.',
   });
 }
@@ -694,7 +706,7 @@ export function protocolMismatch(body: Record<string, unknown>): string | null {
   }
   if (version === LOCAL_CLIENT_PROTOCOL_VERSION) return null;
   return version > LOCAL_CLIENT_PROTOCOL_VERSION
-    ? 'This app is older than the program asking it to drive the browser. Update AGI Cloud, then try again.'
+    ? `This app is older than the program asking it to drive the browser. Update ${PRODUCT_NAMES.desktop}, then try again.`
     : 'The program asking this app to drive the browser is older than the app. Update it, then try again.';
 }
 
@@ -956,8 +968,24 @@ export async function startBrowserBridge(dependencies: BridgeDependencies): Prom
   const address = instance.address();
   listeningPort = typeof address === 'object' && address ? address.port : port;
   publishLocalClientBridge(listeningPort, deps.home ? { home: deps.home } : {});
+  if (deps.refreshInstalledHost) refreshHostForPairedExtension();
   publishState();
   return listeningPort;
+}
+
+function refreshHostForPairedExtension(): void {
+  const pairing = readPairing();
+  if (!pairing) return;
+  try {
+    refreshInstalledHost({
+      extensionId: pairing.extensionId,
+      port: listeningPort,
+      ...homeDirectory(),
+      ...(extraDirectories().length > 0 ? { extraManifestDirectories: extraDirectories() } : {}),
+    });
+  } catch {
+    return;
+  }
 }
 
 export async function stopBrowserBridge(): Promise<void> {
@@ -965,7 +993,7 @@ export async function stopBrowserBridge(): Promise<void> {
   for (const waiter of pollWaiters.splice(0)) waiter(null);
   for (const [id] of pendingResults) {
     takePendingResult(id)?.reject(
-      new BrowserBridgeError('AGI Cloud closed the browser bridge.', 'cancelled'),
+      new BrowserBridgeError(`${PRODUCT_NAMES.desktop} closed the browser bridge.`, 'cancelled'),
     );
   }
   pendingResults.clear();
@@ -994,7 +1022,7 @@ export function sendBrowserCommand(
   if (!pairing) {
     return Promise.reject(
       new BrowserBridgeError(
-        'No browser is paired with AGI Cloud yet. Pair one in Settings.',
+        `No browser is paired with ${PRODUCT_NAMES.desktop} yet. Pair one in Settings.`,
         'not-paired',
       ),
     );

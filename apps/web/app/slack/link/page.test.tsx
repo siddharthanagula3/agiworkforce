@@ -48,7 +48,7 @@ describe('/slack/link page', () => {
     render(<SlackLinkPage />);
 
     expect(screen.getByRole('alert')).toHaveTextContent(
-      'Sign in to the AGI Workforce account Slack should answer as. Sign in or create an account.',
+      'Sign in to the AGI account Slack should answer as. Sign in or create an account.',
     );
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
       'href',

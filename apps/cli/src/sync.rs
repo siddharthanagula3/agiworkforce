@@ -1,4 +1,4 @@
-//! Cross-device dotfile sync for AGI Workforce CLI.
+//! Cross-device dotfile sync for AGI CLI.
 //!
 //! Provides file-hash based change detection, export/import bundles, and
 //! a sync manifest that tracks per-file SHA256 hashes and timestamps.

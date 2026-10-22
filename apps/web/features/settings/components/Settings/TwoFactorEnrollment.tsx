@@ -31,7 +31,7 @@ type Stage =
   /** Server confirmed the change · these codes are visible exactly once. */
   | { name: 'backup-codes'; codes: string[]; reason: 'enabled' | 'regenerated' };
 
-const BACKUP_CODES_PRINT_TITLE = 'AGI Workforce backup codes';
+const BACKUP_CODES_PRINT_TITLE = 'AGI backup codes';
 const BACKUP_CODES_PRINT_NOTE =
   'Each code works once, in place of a code from your authenticator app. Keep this page somewhere safe.';
 const BACKUP_CODES_PRINT_FAILED =

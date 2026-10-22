@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # install-native-host.sh
 # Installs the com.agiworkforce.browser native messaging host manifest for the
-# AGI Workforce Chrome extension. Run after installing the desktop app.
+# AGI Extension. Run after installing the desktop app.
 #
 # Usage:
 #   ./install-native-host.sh <EXTENSION_ID> [HOST_PATH]

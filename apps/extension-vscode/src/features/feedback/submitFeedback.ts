@@ -1,3 +1,4 @@
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { getAccountToken, getCloudWebOrigin } from '../../utils/api';
 import { platformRequestHeaders } from '../../platform/platformHeaders';
@@ -50,11 +51,11 @@ async function postFeedback(
     });
     return response.ok
       ? { status: 'sent' }
-      : { status: 'failed', reason: `AGI Workforce answered HTTP ${response.status}` };
+      : { status: 'failed', reason: `${PRODUCT_BRAND} answered HTTP ${response.status}` };
   } catch (error) {
     return {
       status: 'failed',
-      reason: error instanceof Error ? error.message : 'AGI Workforce could not be reached',
+      reason: error instanceof Error ? error.message : `${PRODUCT_BRAND} could not be reached`,
     };
   }
 }

@@ -5,7 +5,7 @@ import type {
   ManagedCloudSchedulesClient,
   ManagedCloudScheduleTask,
 } from '@agiworkforce/cloud-contracts';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { TOOL_APPROVAL_ACTION_LABELS, PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   describeScheduleFailure,
   isRecoverableScheduleFailure,
@@ -86,7 +86,7 @@ async function withScheduleRetry(
       attempt,
     );
   } catch (error) {
-    const message = `AGI Workforce: ${describeScheduleFailure(error)}`;
+    const message = `${PRODUCT_NAMES.code}: ${describeScheduleFailure(error)}`;
     const answer = isRecoverableScheduleFailure(error)
       ? await vscode.window.showErrorMessage(message, RETRY_ACTION)
       : await vscode.window.showErrorMessage(message);
@@ -107,8 +107,8 @@ export async function setScheduleEnabledInteractively(
 ): Promise<void> {
   await withScheduleRetry(
     isActive
-      ? `AGI Workforce: resuming "${scheduleTitle(task)}"…`
-      : `AGI Workforce: pausing "${scheduleTitle(task)}"…`,
+      ? `${PRODUCT_NAMES.code}: resuming "${scheduleTitle(task)}"…`
+      : `${PRODUCT_NAMES.code}: pausing "${scheduleTitle(task)}"…`,
     async () => {
       await client.setScheduleEnabled(task.id, isActive);
     },
@@ -130,13 +130,13 @@ export async function runScheduleNowInteractively(
 
   const idempotencyKey = `agi.vscode.schedule.${randomUUID()}`;
   await withScheduleRetry(
-    `AGI Workforce: running "${scheduleTitle(task)}"…`,
+    `${PRODUCT_NAMES.code}: running "${scheduleTitle(task)}"…`,
     async () => {
       const { run, replay } = await client.runNow(task.id, idempotencyKey);
       void vscode.window.showInformationMessage(
         replay
-          ? `AGI Workforce: this run already happened, it ${scheduleRunLabel(run).toLowerCase()}.`
-          : `AGI Workforce: ${scheduleRunLabel(run).toLowerCase()}.`,
+          ? `${PRODUCT_NAMES.code}: this run already happened, it ${scheduleRunLabel(run).toLowerCase()}.`
+          : `${PRODUCT_NAMES.code}: ${scheduleRunLabel(run).toLowerCase()}.`,
       );
     },
     host,
@@ -166,15 +166,15 @@ export async function resolveScheduleApprovalInteractively(
   const decision = answer === TOOL_APPROVAL_ACTION_LABELS.approve ? 'approved' : 'rejected';
   await withScheduleRetry(
     decision === 'approved'
-      ? `AGI Workforce: approving the step "${scheduleTitle(task)}" is waiting on…`
-      : `AGI Workforce: denying the step "${scheduleTitle(task)}" is waiting on…`,
+      ? `${PRODUCT_NAMES.code}: approving the step "${scheduleTitle(task)}" is waiting on…`
+      : `${PRODUCT_NAMES.code}: denying the step "${scheduleTitle(task)}" is waiting on…`,
     async () => {
       const resolved = await client.resolveRunApproval(task.id, run.id, {
         decision,
         toolCallIds: pending.toolCalls.map((call) => call.id),
       });
       void vscode.window.showInformationMessage(
-        `AGI Workforce: ${scheduleRunLabel(resolved).toLowerCase()}.`,
+        `${PRODUCT_NAMES.code}: ${scheduleRunLabel(resolved).toLowerCase()}.`,
       );
     },
     host,
@@ -191,13 +191,13 @@ export async function showScheduleRuns(
     const page = await vscode.window.withProgress(
       {
         location: vscode.ProgressLocation.Notification,
-        title: `AGI Workforce: reading runs of "${scheduleTitle(task)}"…`,
+        title: `${PRODUCT_NAMES.code}: reading runs of "${scheduleTitle(task)}"…`,
       },
       () => client.listRuns(task.id, { limit: SCHEDULE_RUNS_PAGE_LIMIT, offset: 0 }),
     );
     runs = page.runs;
   } catch (error) {
-    const message = `AGI Workforce: the run history could not be read, ${describeScheduleFailure(error)}`;
+    const message = `${PRODUCT_NAMES.code}: the run history could not be read, ${describeScheduleFailure(error)}`;
     const answer = isRecoverableScheduleFailure(error)
       ? await vscode.window.showErrorMessage(message, RETRY_ACTION)
       : await vscode.window.showErrorMessage(message);
@@ -207,7 +207,7 @@ export async function showScheduleRuns(
 
   if (runs.length === 0) {
     void vscode.window.showInformationMessage(
-      `AGI Workforce: "${scheduleTitle(task)}" has not run yet. It is set to ${scheduleCadence(task)}.`,
+      `${PRODUCT_NAMES.code}: "${scheduleTitle(task)}" has not run yet. It is set to ${scheduleCadence(task)}.`,
     );
     return;
   }

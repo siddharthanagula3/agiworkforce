@@ -84,7 +84,7 @@ export default function FeaturesAgentsPage() {
                 An agent is a session you named and narrowed.
               </h2>
               <Prose>
-                The preview above shows a tool waiting for approval in AGI Web. The agent files,
+                The preview above shows a tool waiting for approval in AGI Chat. The agent files,
                 subagents, hooks and sandbox described below belong to the agi CLI.{' '}
                 {CLI_AVAILABILITY_NOTE} {AGI_WORK_NOTE}
               </Prose>

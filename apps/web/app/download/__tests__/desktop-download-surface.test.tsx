@@ -164,7 +164,7 @@ describe('the Desktop installer section on /desktop', () => {
     expect(
       screen.getByRole('region', { name: 'Desktop installer availability' }),
     ).not.toHaveTextContent('AGI Desktop ships for macOS');
-    expect(within(status).getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
+    expect(within(status).getByRole('link', { name: 'Use AGI Chat' })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );
@@ -234,7 +234,7 @@ describe('the Desktop installer section on /desktop', () => {
     expect(screen.getByRole('heading', { name: 'Unable to load downloads' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(reset).toHaveBeenCalledOnce();
-    expect(screen.getByRole('link', { name: 'Use AGI Web' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Use AGI Chat' })).toHaveAttribute(
       'href',
       WEB_ENTRY_HREF,
     );

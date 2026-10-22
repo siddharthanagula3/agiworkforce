@@ -1,4 +1,5 @@
 import { Suspense, lazy } from 'react';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { TabFallback } from '../TabFallback';
 
 const LazySkillsPluginsSettings = lazy(() =>
@@ -11,7 +12,7 @@ export function PluginsTab() {
       <div className="border-b border-border/80 pb-4">
         <h3 className="text-h3">Plugins</h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Claude Code plugins on this machine. AGI Workforce chat does not load them.
+          Claude Code plugins on this machine. {PRODUCT_NAMES.desktop} chat does not load them.
         </p>
       </div>
       <Suspense fallback={<TabFallback label="Loading plugins..." />}>

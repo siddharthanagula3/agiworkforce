@@ -164,6 +164,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'mobile-app-transaction': {
+    limit: 5,
+    window: '1 m',
+    failClosed: false,
+  },
   'claim-offer': {
     limit: 3,
     window: '1 h', // 3 requests per hour

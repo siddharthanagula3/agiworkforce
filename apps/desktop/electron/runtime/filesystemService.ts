@@ -27,6 +27,7 @@ import {
   MAX_WORKSPACE_WALK_DEPTH,
   toPosixPath,
 } from '@agiworkforce/ide-runtime/workspace';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import {
   assertNotDeniedFile,
   assertWritable,
@@ -64,7 +65,7 @@ function notWhereChecked(relativePath: string): PathRefused {
 function sharedWithAnotherLocation(relativePath: string): PathRefused {
   return new PathRefused(
     'shared-file',
-    `${relativePath} is shared with another location through a hard link, for example a package manager's store, so AGI Cloud will not overwrite it.`,
+    `${relativePath} is shared with another location through a hard link, for example a package manager's store, so ${PRODUCT_NAMES.desktop} will not overwrite it.`,
   );
 }
 

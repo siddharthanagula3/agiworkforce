@@ -70,7 +70,7 @@ const PendingRequestSchema = z.object({
 });
 
 const NOT_YOURS =
-  'Only the person who asked can approve this, from the Slack account linked to their AGI Workforce account.';
+  'Only the person who asked can approve this, from the Slack account linked to their AGI account.';
 
 export async function decideSlackApprovalFromSlack(
   serviceDb: DatabaseAdapter,
@@ -127,7 +127,7 @@ export async function decideSlackApprovalFromSlack(
       message:
         error instanceof Error && error.message
           ? error.message
-          : 'The decision could not be recorded. Try again in AGI Workforce.',
+          : 'The decision could not be recorded. Try again in AGI.',
     };
   }
 }
@@ -135,6 +135,6 @@ export async function decideSlackApprovalFromSlack(
 export function interactionReply(outcome: SlackInteractionOutcome): string {
   if (outcome.kind === 'refused') return outcome.message;
   return outcome.decision === 'approved'
-    ? 'Approved. AGI Workforce is continuing and will answer in this thread.'
-    : 'Denied. Nothing was run, and AGI Workforce will answer without that step.';
+    ? 'Approved. AGI is continuing and will answer in this thread.'
+    : 'Denied. Nothing was run, and AGI will answer without that step.';
 }

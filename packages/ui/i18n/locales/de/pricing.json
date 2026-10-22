@@ -98,7 +98,7 @@
   "heroLedePart1": "{{localLabel}} hält die Arbeit mit offenen Modellen auf Ihrem Gerät. {{byokLabel}} sendet nur die Anfragen, die Sie auswählen, an den von Ihnen gewählten API-Anbieter – zu dessen Abrechnungs- und Datenbedingungen. Beides bleibt kostenlos, ohne Lizenzplatz und ohne Kreditkarte.",
   "installCta": "Benachrichtigen lassen",
   "talkToSalesCta": "Vertrieb kontaktieren",
-  "tryAgiCta": "AGI Web testen",
+  "tryAgiCta": "AGI Chat testen",
   "modeRibbonLabel": "Vertrauensmodi",
   "ribbonLocal": "Lokal, für immer kostenlos",
   "ribbonByok": "BYOK, Ihre eigenen Schlüssel",

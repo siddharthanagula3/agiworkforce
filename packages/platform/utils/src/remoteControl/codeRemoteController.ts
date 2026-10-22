@@ -672,7 +672,7 @@ export function createCodeRemoteController(deps: CodeRemoteDependencies) {
     if (!root) {
       await sendTaskStatus(request.requestId, 'rejected', {
         error:
-          'No folder is approved on this computer. Approve one in AGI Cloud on the computer, then send the task again.',
+          'No folder is approved on this computer. Approve one in AGI Desktop on the computer, then send the task again.',
       });
       return;
     }

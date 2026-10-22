@@ -348,7 +348,7 @@ pub fn usage_mode() -> UsageMode {
     match tier_cache::load_jwt() {
         Some(jwt) if !jwt.is_empty() => UsageMode::Managed(jwt),
         _ => UsageMode::LocalOnly(
-            "no AGI Workforce credential, so this session runs local or BYOK, run `agi login` to see account usage",
+            "no AGI credential, so this session runs local or BYOK, run `agi login` to see account usage",
         ),
     }
 }

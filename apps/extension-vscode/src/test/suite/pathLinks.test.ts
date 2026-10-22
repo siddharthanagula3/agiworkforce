@@ -28,7 +28,7 @@ async function openDocument(filePath: string): Promise<vscode.TextDocument> {
   return vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
 }
 
-suite('AGI Workforce path links', () => {
+suite('AGI Code path links', () => {
   suiteSetup(async () => {
     const extension = vscode.extensions.getExtension('agiworkforce.agi-workforce');
     assert.ok(extension, 'extension agiworkforce.agi-workforce not found');

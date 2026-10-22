@@ -137,7 +137,7 @@ describe('PrivacyTab export and delete on this device', () => {
     expect(dialog).toHaveTextContent('every conversation, memory and project');
     expect(dialog).toHaveTextContent('your saved API keys and credentials');
     expect(dialog).toHaveTextContent(
-      'the files AGI Workforce stored in its own data folders on this device, with its log of the terminal commands it ran',
+      'the files AGI Desktop stored in its own data folders on this device, with its log of the terminal commands it ran',
     );
     expect(dialog).toHaveTextContent(
       'Not removed: installed extensions, downloaded speech models, the settings, hooks, skills and agents shared with the command-line tool, and temporary files',

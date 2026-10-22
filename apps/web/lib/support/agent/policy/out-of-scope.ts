@@ -285,4 +285,4 @@ export function classifyOutOfScope(text: string): OutOfScopeCategory | null {
 }
 
 export const OUT_OF_SCOPE_COPY =
-  "I can only help with AGI Workforce: your account, plans, features, and fixing problems with the product. I can't help with other tasks here.";
+  "I can only help with AGI: your account, plans, features, and fixing problems with the product. I can't help with other tasks here.";

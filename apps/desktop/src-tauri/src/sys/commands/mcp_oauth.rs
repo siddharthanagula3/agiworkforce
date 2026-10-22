@@ -1349,7 +1349,7 @@ async fn run_oauth_loopback_listener(
         Ok((oauth_provider, connector_id, _response)) => {
             let _ = write_http_response(
                 &mut stream,
-                &oauth_result_html(true, "You can return to AGI Workforce."),
+                &oauth_result_html(true, "You can return to AGI Desktop."),
             )
             .await;
 
@@ -1422,7 +1422,7 @@ async fn write_http_response(
 /// provider redirects back to the loopback listener.
 fn oauth_result_html(success: bool, message: &str) -> String {
     let heading = if success {
-        "You can return to AGI Workforce"
+        "You can return to AGI Desktop"
     } else {
         "Something went wrong"
     };
@@ -1431,7 +1431,7 @@ fn oauth_result_html(success: bool, message: &str) -> String {
         .replace('<', "&lt;")
         .replace('>', "&gt;");
     format!(
-        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>AGI Workforce</title>\
+        "<!DOCTYPE html><html><head><meta charset=\"utf-8\"><title>AGI Desktop</title>\
 <style>body{{font-family:-apple-system,BlinkMacSystemFont,sans-serif;background:#0b0b0c;color:#eaeaea;\
 display:flex;align-items:center;justify-content:center;height:100vh;margin:0}}\
 .card{{max-width:420px;text-align:center;padding:32px}}h1{{font-size:20px;margin-bottom:8px}}\

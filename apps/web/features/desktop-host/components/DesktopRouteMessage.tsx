@@ -1,8 +1,9 @@
 import Link from 'next/link';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { AgiMark } from '@shared/components/agi/AgiMark';
 import { PRODUCT_HOME_PATH } from '../lib/deep-links';
 
-const BRAND_NAME = 'AGI Workforce';
+const BRAND_NAME = PRODUCT_NAMES.desktop;
 const ACTION_LABEL = 'Go to chat';
 const BRAND_MARK_SIZE = 20;
 

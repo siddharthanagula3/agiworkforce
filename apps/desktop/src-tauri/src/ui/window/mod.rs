@@ -98,7 +98,7 @@ pub fn initialize_window(window: &WebviewWindow) -> Result<()> {
     })?;
 
     window.set_focus()?;
-    window.set_title("AGI Workforce")?;
+    window.set_title("AGI Desktop")?;
 
     let monitor = resolve_monitor(window)?;
     let scale_factor = monitor.scale_factor();
@@ -471,7 +471,7 @@ pub fn create_floating_window(app: &tauri::AppHandle) -> Result<WebviewWindow> {
         FLOATING_WINDOW_LABEL,
         tauri::WebviewUrl::App("/floating".into()),
     )
-    .title("AGI Workforce - Quick Chat")
+    .title("AGI Desktop - Quick Chat")
     .inner_size(FLOATING_WINDOW_WIDTH, FLOATING_WINDOW_HEIGHT)
     .position(x, y)
     .resizable(true)

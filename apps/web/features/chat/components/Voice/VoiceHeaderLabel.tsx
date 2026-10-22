@@ -1,8 +1,8 @@
 'use client';
 
 import { Settings } from '@agiworkforce/icons';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 
-import { PRODUCT_NAME } from '@/lib/legal-constants';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 
 const LABEL = {
@@ -17,7 +17,7 @@ export function VoiceHeaderLabel() {
     <div className="flex min-w-0 flex-1 items-center gap-2">
       <p data-testid="voice-header-label" className="flex min-w-0 items-baseline gap-1.5 text-sm">
         <span className="truncate font-semibold text-[var(--chat-text-primary)]">
-          {PRODUCT_NAME}
+          {PRODUCT_BRAND}
         </span>
         <span className="shrink-0 font-normal text-[var(--chat-text-muted)]">{LABEL.mode}</span>
       </p>

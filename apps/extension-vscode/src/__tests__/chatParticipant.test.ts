@@ -1203,7 +1203,7 @@ describe('chat participant approval lifecycle', () => {
         name: 'web_search',
         category: 'web-search',
         summary: 'Searching official sources',
-        input: { query: 'AGI Workforce' },
+        input: { query: 'AGI Code' },
       });
       listener({
         type: 'turn_completed',

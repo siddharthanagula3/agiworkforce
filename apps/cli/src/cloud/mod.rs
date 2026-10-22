@@ -259,7 +259,7 @@ pub fn open_in_desktop(session: &crate::agent::AgentSession) -> String {
     if let Some((thread_id, folder)) = saved_thread {
         if opens(&desktop_thread_link(thread_id, &folder)) {
             return format!(
-                "Opened this session in AGI Workforce for desktop, in {}. It is the same session: continue it there, with the same files and tools. If the app asks, add the folder in AGI Code first.",
+                "Opened this session in AGI Desktop, in {}. It is the same session: continue it there, with the same files and tools. If the app asks, add the folder in AGI Code first.",
                 folder.display()
             );
         }
@@ -276,7 +276,7 @@ pub fn open_in_desktop(session: &crate::agent::AgentSession) -> String {
     let link = format!("{DESKTOP_LINK_SCHEME}://chat/{conversation_id}");
     if opens(&link) {
         format!(
-            "Opened this conversation in AGI Workforce for desktop. Turns you add there are saved to your account; `agi resume --cloud {conversation_id}` brings them back here."
+            "Opened this conversation in AGI Desktop. Turns you add there are saved to your account; `agi resume --cloud {conversation_id}` brings them back here."
         )
     } else {
         format!(
@@ -341,7 +341,7 @@ pub async fn send_feedback(kind: feedback::FeedbackKind, message: &str) -> Strin
         Ok(client) => client,
         Err(error) => {
             return format!(
-                "Feedback needs a signed-in AGI Workforce account ({error}). Sign in with `agi login`, then send it again."
+                "Feedback needs a signed-in AGI account ({error}). Sign in with `agi login`, then send it again."
             )
         }
     };

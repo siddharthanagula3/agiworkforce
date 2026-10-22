@@ -185,7 +185,7 @@ function linkButton(text: string, url: string, actionId: string): Record<string,
 
 export function linkPromptMessage(url: string): SlackOutgoingMessage {
   const text =
-    'Connect your AGI Workforce account to use AGI Workforce in Slack. Answers use your own ' +
+    'Connect your AGI account to use AGI in Slack. Answers use your own ' +
     `plan, settings and approvals. The link works once and expires in ${Math.round(
       SLACK_LINK_TTL_SECONDS / 60,
     )} minutes.`;
@@ -197,7 +197,7 @@ export function linkPromptMessage(url: string): SlackOutgoingMessage {
 
 export function linkedMessage(settingsUrl: string): SlackOutgoingMessage {
   const text =
-    'Your Slack account is now connected to AGI Workforce. Send me a message here, or mention ' +
+    'Your Slack account is now connected to AGI. Send me a message here, or mention ' +
     'me in a channel I have been added to, and I will answer in the thread.';
   return {
     text,
@@ -227,8 +227,8 @@ export function approvalMessage(
   if (toolCalls.length > shown.length) lines.push(`• and ${toolCalls.length - shown.length} more`);
   const text = runId
     ? `This ${subject} needs your approval before it can continue. Approve or deny it here, or ` +
-      'review it in AGI Workforce; nothing runs until you decide.'
-    : `This ${subject} needs your approval before it can continue. Review it in AGI Workforce on ` +
+      'review it in AGI; nothing runs until you decide.'
+    : `This ${subject} needs your approval before it can continue. Review it in AGI on ` +
       'the web or desktop app; nothing runs until you decide.';
   return {
     text,
@@ -258,7 +258,7 @@ export function approvalMessage(
             },
           ]
         : []),
-      linkButton('Review in AGI Workforce', settingsUrl, 'slack_review_approval'),
+      linkButton('Review in AGI', settingsUrl, 'slack_review_approval'),
     ],
   };
 }

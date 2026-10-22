@@ -1,4 +1,8 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+
 import type { RateLimitState } from './types';
+
+const LOG_PREFIX = `[${PRODUCT_NAMES.extension}] %s`;
 
 /**
  * Vite materialises `import.meta.env.DEV` in both the worker and the content
@@ -10,18 +14,18 @@ import type { RateLimitState } from './types';
 export const logger = {
   debug: (message: string, data?: unknown) => {
     if (!import.meta.env.DEV) return;
-    console.debug('[AGI Workforce] %s', message, data);
+    console.debug(LOG_PREFIX, message, data);
   },
   info: (message: string, data?: unknown) => {
     if (!import.meta.env.DEV) return;
     // eslint-disable-next-line no-console
-    console.info('[AGI Workforce] %s', message, data);
+    console.info(LOG_PREFIX, message, data);
   },
   warn: (message: string, data?: unknown) => {
-    console.warn('[AGI Workforce] %s', message, data);
+    console.warn(LOG_PREFIX, message, data);
   },
   error: (message: string, error?: unknown) => {
-    console.error('[AGI Workforce] %s', message, error);
+    console.error(LOG_PREFIX, message, error);
   },
 };
 

@@ -73,7 +73,7 @@ describe('testing the CLI in the environment', () => {
     const result = await probeCli('/usr/bin/agi', async () => 'agi 1.4.0');
     expect(result).toEqual({ ok: true, cliPath: '/usr/bin/agi', version: 'agi 1.4.0' });
     expect(cliProbeMessage(result, describeRemoteEnvironment('wsl'))).toBe(
-      'AGI Workforce: agi 1.4.0 runs from /usr/bin/agi in WSL.',
+      'AGI Code: agi 1.4.0 runs from /usr/bin/agi in WSL.',
     );
   });
 

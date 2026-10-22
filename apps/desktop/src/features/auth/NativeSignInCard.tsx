@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useAuthSceneBridge } from '@agiworkforce/ui/auth-scene';
 import type { AuthProviderId } from '@agiworkforce/client-runtime';
+import { PRODUCT_BRAND } from '@agiworkforce/types';
 import { Spinner } from '@/ui/Spinner';
 import { WEB_APP_URL } from '../../api/config';
 import { supportsLocalAppMode } from '../../lib/runtimeEnvironment';
@@ -74,7 +75,7 @@ const SECOND_STEP_STATUSES: ReadonlySet<string> = new Set([
 const WEB_SIGNUP_PATH = '/signup';
 const DESKTOP_SURFACE_QUERY = 'surface=desktop';
 
-const SIGN_IN_DETAIL = 'Log in to AGI Workforce.';
+const SIGN_IN_DETAIL = `Log in to ${PRODUCT_BRAND}.`;
 const HEADINGS: Readonly<Record<Step, string>> = {
   email: 'Welcome back',
   password: 'Enter your password',

@@ -242,7 +242,7 @@ describe('agent notifications', () => {
     await settle();
 
     expect(shown.map((entry) => entry.options.actions)).toEqual([undefined, undefined]);
-    expect(shown[0]?.options.body).toContain('Open AGI Cloud to review it.');
+    expect(shown[0]?.options.body).toContain('Open AGI Desktop to review it.');
     shown[1]?.click();
     expect(deps.openSession).toHaveBeenCalledWith('root-1', 'thread-1');
     expect(deps.answerApproval).not.toHaveBeenCalled();
@@ -287,7 +287,7 @@ describe('agent notifications', () => {
     expect(shown).toHaveLength(reserved.length);
     for (const banner of shown) {
       expect(banner.options.actions).toBeUndefined();
-      expect(banner.options.body).toContain('Open AGI Cloud to review it.');
+      expect(banner.options.body).toContain('Open AGI Desktop to review it.');
     }
     shown[0]?.action(APPROVE_ACTION_INDEX);
     expect(deps.answerApproval).not.toHaveBeenCalled();
@@ -340,7 +340,7 @@ describe('agent notifications', () => {
     expect(shown[0]?.options.body).toContain(`$ ${fits}`);
     expect(shown[1]?.options.actions).toBeUndefined();
     expect(shown[1]?.options.body).not.toContain('rm -rf build');
-    expect(shown[1]?.options.body).toContain('Open AGI Cloud to review it.');
+    expect(shown[1]?.options.body).toContain('Open AGI Desktop to review it.');
 
     shown[1]?.action(APPROVE_ACTION_INDEX);
     expect(deps.answerApproval).not.toHaveBeenCalled();
@@ -390,7 +390,7 @@ describe('agent notifications', () => {
         { summary: 'Delete build/', command: null, riskLevel: null, reversible: false },
         false,
       ),
-    ).toBe('Delete build/\nCannot be undone\nOpen AGI Cloud to review it.');
+    ).toBe('Delete build/\nCannot be undone\nOpen AGI Desktop to review it.');
     expect(
       approvalBody(
         { summary: 'Read a file', command: null, riskLevel: null, reversible: null },

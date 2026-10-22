@@ -97,7 +97,7 @@ static CAPTURE_CONFIRMED_THIS_RUN: AtomicBool = AtomicBool::new(false);
 fn capture_question() -> crate::sys::native_confirm::NativeConfirm {
     crate::sys::native_confirm::NativeConfirm {
         title: "Take a picture of your screen?".to_string(),
-        body: "It goes into the chat you are writing. You will not be asked again until you quit AGI Workforce.".to_string(),
+        body: "It goes into the chat you are writing. You will not be asked again until you quit AGI Desktop.".to_string(),
         confirm_label: CAPTURE_CONFIRM_LABEL.to_string(),
     }
 }

@@ -1,3 +1,4 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { escapeHtml, getNonce } from '../sidebar-webview/webviewContent';
 
@@ -106,7 +107,7 @@ export class ModelMetricsPanel {
         if (msg.type === 'reset') {
           getModelMetrics().reset();
           this.update();
-          vscode.window.showInformationMessage('AGI Workforce: Model metrics reset.');
+          vscode.window.showInformationMessage(`${PRODUCT_NAMES.code}: Model metrics reset.`);
         } else if (msg.type === 'refresh') {
           this.update();
         }

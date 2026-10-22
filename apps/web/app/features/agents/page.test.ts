@@ -46,6 +46,6 @@ describe('/features/agents, which surface each part belongs to', () => {
 
   it('names the web preview as the web app', () => {
     expect(page).toContain('<AgentRunWindow />');
-    expect(page).toContain('The preview above shows a tool waiting for approval in AGI Web.');
+    expect(page).toContain('The preview above shows a tool waiting for approval in AGI Chat.');
   });
 });

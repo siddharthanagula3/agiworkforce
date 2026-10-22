@@ -2,7 +2,7 @@ import { app } from 'electron';
 import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { NATIVE_MESSAGING_HOST_NAME } from '@agiworkforce/types';
+import { NATIVE_MESSAGING_HOST_NAME, PRODUCT_NAMES } from '@agiworkforce/types';
 import { hostToken } from './pairingStore';
 
 const MANIFEST_FILE = `${NATIVE_MESSAGING_HOST_NAME}.json`;
@@ -63,7 +63,7 @@ export function manifestDocument(extensionId: string, hostPath: string): string 
   return `${JSON.stringify(
     {
       name: NATIVE_MESSAGING_HOST_NAME,
-      description: 'AGI Cloud browser bridge',
+      description: `${PRODUCT_NAMES.desktop} browser bridge`,
       path: hostPath,
       type: 'stdio',
       allowed_origins: [`chrome-extension://${extensionId}/`],
@@ -140,6 +140,21 @@ export function installNativeHost(input: {
     throw new Error('No browser profile on this Mac accepted the host manifest.');
   }
   return { manifestPaths, launcher };
+}
+
+/**
+ * Rewrites an installed host so its launcher runs the app that is running now.
+ * The launcher holds this app's executable path, which an update or a renamed
+ * bundle leaves pointing at an app that may no longer exist.
+ */
+export function refreshInstalledHost(input: {
+  extensionId: string;
+  port: number;
+  extraManifestDirectories?: readonly string[];
+  home?: string;
+}): HostInstallResult | null {
+  if (installedManifestPaths(input.extraManifestDirectories, input.home).length === 0) return null;
+  return installNativeHost(input);
 }
 
 export function installedManifestPaths(

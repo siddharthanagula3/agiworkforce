@@ -315,7 +315,7 @@ describe('inline completions, real paywall suppression', () => {
     expect(chatCompletion).toHaveBeenCalledTimes(1);
     expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[1]).toEqual({
-      title: 'AGI Workforce: Inline completions paused',
+      title: 'AGI Code: Inline completions paused',
       secrets: SECRETS,
     });
 
@@ -404,7 +404,7 @@ describe('inline completions, plan usage limits', () => {
     expect(await ask(instance)).toEqual([]);
     expect(vi.mocked(showCloudUtilityErrorActions)).toHaveBeenCalledTimes(1);
     expect(vi.mocked(showCloudUtilityErrorActions).mock.calls[0]?.[1]).toEqual({
-      title: 'AGI Workforce: Inline completions paused',
+      title: 'AGI Code: Inline completions paused',
       secrets: SECRETS,
     });
 

@@ -234,7 +234,7 @@ describe('memory enable/disable controls', () => {
     surface?.hide();
     await pending;
 
-    expect(surface?.title).toBe('AGI Workforce, Memory');
+    expect(surface?.title).toBe('AGI Code, Memory');
     expect(surface?.items).toEqual([expect.objectContaining({ label: 'Prefer Rust' })]);
   });
 

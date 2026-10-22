@@ -58,7 +58,7 @@ export const LOCAL_CODE_COPY = {
   allowSessions: 'Allow running commands',
   allowingSessions: 'Waiting for your answer',
   sessionsRefused:
-    'Running commands in this folder was refused. That lasts until you quit AGI Cloud, or until you withdraw the answer in Settings, under Capabilities.',
+    'Running commands in this folder was refused. That lasts until you quit AGI Desktop, or until you withdraw the answer in Settings, under Capabilities.',
   allowSessionsFailed: 'This folder could not be opened to coding sessions.',
   mcpAwaitingApproval: (name: string): string =>
     `The MCP server ${name} has not started. This project names it, and it waits for your approval.`,
@@ -223,7 +223,7 @@ export const LOCAL_CODE_COPY = {
   removeContextFile: (path: string): string => `Remove ${path}`,
   imagesOnly: 'Only images can be pasted into a coding session. Add other files from this folder.',
   imagesNeedUpdate:
-    'Pasting images into a coding session needs a newer version of AGI Cloud. Update the app, then try again.',
+    'Pasting images into a coding session needs a newer version of AGI Desktop. Update the app, then try again.',
   tooManyImages: (limit: number): string => `A message can carry at most ${limit} images.`,
   tooManyFiles: (limit: number): string => `A message can carry at most ${limit} files.`,
   imageTooLarge: (limit: string): string => `Images must be ${limit} or smaller.`,
@@ -476,7 +476,7 @@ export function localTurnFailureSentence(failure: DeveloperTurnFailure): string 
     (isManagedAccountRoute(failure.provider) &&
       (failure.code === 'provider_auth_missing' || failure.code === 'provider_auth_invalid'))
   ) {
-    return 'This session could not use your AGI Workforce account because its sign-in has ended. Sign out of AGI Workforce and sign back in, then start a new session.';
+    return 'This session could not use your AGI account because its sign-in has ended. Sign out of AGI and sign back in, then start a new session.';
   }
   if (failure.code === 'plan_excludes_model') {
     return 'Your plan does not include this model. Choose another model for the session, or change your plan in Billing.';

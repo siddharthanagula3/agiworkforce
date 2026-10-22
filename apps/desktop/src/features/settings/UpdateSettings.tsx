@@ -8,6 +8,7 @@ import { useUpdater } from '../../features/updates/useUpdater';
 import { useUpdaterStore } from '../../stores/updaterStore';
 import { UpdateDialog } from '../../features/updates';
 import { useUiTranslation } from '@agiworkforce/ui';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 
 export function UpdateSettings() {
   const { plural } = useUiTranslation('common');
@@ -114,7 +115,7 @@ export function UpdateSettings() {
       <div>
         <h3 className="text-h3 mb-4">Software Update</h3>
         <p className="text-sm text-muted-foreground mb-6">
-          Check for updates to the AGI Workforce desktop application
+          Check for updates to {PRODUCT_NAMES.desktop}
         </p>
       </div>
 

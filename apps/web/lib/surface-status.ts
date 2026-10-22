@@ -1,3 +1,5 @@
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+
 export const COMING_SOON_LABEL = 'Coming soon';
 export const AVAILABLE_NOW_LABEL = 'Available now';
 
@@ -54,13 +56,21 @@ export const NOTIFY_CTA = {
 const SURFACE_ACTIONS = {
   desktop: {
     href: '/download#desktop-downloads',
-    releasedLabel: 'Get AGI Desktop',
+    releasedLabel: `Get ${PRODUCT_NAMES.desktop}`,
     onNotifyList: false,
   },
   cli: { href: '/download#cli-downloads', releasedLabel: 'Get the CLI', onNotifyList: false },
-  mobile: { href: '/mobile', releasedLabel: 'Get AGI Mobile', onNotifyList: true },
-  vscode: { href: '/vscode-extension', releasedLabel: 'Get AGI in VS Code', onNotifyList: true },
-  chrome: { href: '/chrome-extension', releasedLabel: 'Get AGI in Chrome', onNotifyList: true },
+  mobile: { href: '/mobile', releasedLabel: `Get ${PRODUCT_NAMES.mobile}`, onNotifyList: true },
+  vscode: {
+    href: '/vscode-extension',
+    releasedLabel: `Get ${PRODUCT_NAMES.code}`,
+    onNotifyList: true,
+  },
+  chrome: {
+    href: '/chrome-extension',
+    releasedLabel: `Get ${PRODUCT_NAMES.extension}`,
+    onNotifyList: true,
+  },
 } as const satisfies Record<
   InstallableSurfaceId,
   { href: string; releasedLabel: string; onNotifyList: boolean }

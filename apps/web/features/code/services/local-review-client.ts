@@ -14,8 +14,7 @@ import type {
   ThreadRevertResponse,
   WorktreeApplyResponse,
 } from '@agiworkforce/types/protocol';
-const NO_HOST_MESSAGE =
-  'Worktrees and checkpoints are only available in the AGI Cloud desktop app.';
+const NO_HOST_MESSAGE = 'Worktrees and checkpoints are only available in AGI Desktop.';
 
 async function invoke<T>(command: string, args: Record<string, unknown>): Promise<T> {
   const host = getHostBridge();

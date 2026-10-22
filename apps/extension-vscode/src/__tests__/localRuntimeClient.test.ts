@@ -502,7 +502,7 @@ describe('LocalRuntimeClient', () => {
 
   it.each([
     [[7], 7, 'Update the AGI CLI or set agiWorkforce.cliPath to a current binary.'],
-    [[10, 9], 9, 'Update AGI for VS Code.'],
+    [[10, 9], 9, 'Update AGI Code.'],
   ])(
     'turns a structured version refusal from a server speaking %j into the side to update',
     async (supportedProtocolVersions, minimumProtocolVersion, action) => {
@@ -535,7 +535,7 @@ describe('LocalRuntimeClient', () => {
   // is a contract change, and this suite should follow it rather than pin a
   // number that quietly becomes the wrong one.
   it.each([
-    [AGENT_EVENT_SCHEMA_VERSION + 1, 'Update AGI for VS Code.'],
+    [AGENT_EVENT_SCHEMA_VERSION + 1, 'Update AGI Code.'],
     [AGENT_EVENT_SCHEMA_VERSION - 1, 'Update the AGI CLI'],
   ])('refuses a handshake declaring agent event schema %i', async (schemaVersion, action) => {
     const runtime = fakeRuntime(8, { initializeExtra: { agentEventSchemaVersion: schemaVersion } });
@@ -770,7 +770,7 @@ describe('LocalRuntimeClient', () => {
             name: 'web_search',
             category: 'web-search',
             summary: 'Searching official sources',
-            input: { query: 'AGI Workforce' },
+            input: { query: 'AGI Code' },
           },
         },
       })}\n`,
@@ -965,10 +965,10 @@ describe('LocalRuntimeClient', () => {
         method: 'turn/failed',
         params: {
           ...terminal,
-          error: 'No AGI Workforce session.',
+          error: 'No AGI Code session.',
           failure: {
             code: 'account_signed_out',
-            message: 'No AGI Workforce session.',
+            message: 'No AGI Code session.',
             retryable: false,
             action: 'sign_in_account',
           },
