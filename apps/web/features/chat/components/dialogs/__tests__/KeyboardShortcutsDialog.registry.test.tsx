@@ -12,7 +12,7 @@ import { KEYBOARD_SHORTCUT_DOCS } from '../../../hooks/use-keyboard-shortcuts';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 
 beforeEach(() => {
-  useSettingsStore.setState({ disabledShortcutIds: [] });
+  useSettingsStore.setState({ disabledShortcutIds: [], shortcutBindings: {} });
 });
 afterEach(cleanup);
 
@@ -29,7 +29,8 @@ describe('KeyboardShortcutsDialog reads the shared registry', () => {
     for (const shortcut of CHAT_SHORTCUTS) {
       expect(screen.getByText(shortcut.description)).toBeInTheDocument();
     }
-    expect(screen.getByRole('heading', { name: 'Message composer' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'App' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Composer' })).toBeInTheDocument();
   });
 
   it('offers an off switch for app shortcuts only', () => {

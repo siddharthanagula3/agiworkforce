@@ -2,7 +2,7 @@
 
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
-import type { FollowUpQueueMode } from '@agiworkforce/unified-chat';
+import type { FollowUpQueueMode, ShortcutChord } from '@agiworkforce/unified-chat';
 import type { CloudWorkMode } from '@agiworkforce/types';
 import { DEFAULT_CODE_THEME, type CodeThemeId } from '@agiworkforce/unified-chat/shiki-highlighter';
 
@@ -48,6 +48,8 @@ interface SettingsState {
   voiceSpeed: VoiceSpeed;
   /** Shortcut ids the user switched off. Read by use-keyboard-shortcuts. */
   disabledShortcutIds: string[];
+  /** Key combinations the user recorded in place of a shortcut's default, by shortcut id. */
+  shortcutBindings: Record<string, ShortcutChord>;
   /** Sidebar destinations the user hid. Chat is never hideable. */
   hiddenNavIds: string[];
   /**
@@ -78,6 +80,7 @@ interface SettingsState {
   setChatFont: (font: ChatFont) => void;
   setVoiceSpeed: (speed: VoiceSpeed) => void;
   setShortcutEnabled: (id: string, enabled: boolean) => void;
+  setShortcutBinding: (id: string, chord: ShortcutChord | null) => void;
   restoreShortcutDefaults: () => void;
   setNavItemVisible: (id: string, visible: boolean) => void;
   setNewChatsTemporary: (temporary: boolean) => void;
@@ -104,6 +107,7 @@ export const useSettingsStore = create<SettingsState>()(
       chatFont: 'default',
       voiceSpeed: 'normal',
       disabledShortcutIds: [],
+      shortcutBindings: {},
       hiddenNavIds: [],
       newChatsTemporary: false,
       dictationEnabled: true,
@@ -130,7 +134,12 @@ export const useSettingsStore = create<SettingsState>()(
               ? s.disabledShortcutIds
               : [...s.disabledShortcutIds, id],
         })),
-      restoreShortcutDefaults: () => set({ disabledShortcutIds: [] }),
+      setShortcutBinding: (id, chord) =>
+        set((s) => {
+          const { [id]: _replaced, ...rest } = s.shortcutBindings ?? {};
+          return { shortcutBindings: chord ? { ...rest, [id]: chord } : rest };
+        }),
+      restoreShortcutDefaults: () => set({ disabledShortcutIds: [], shortcutBindings: {} }),
       setNewChatsTemporary: (temporary) => set({ newChatsTemporary: temporary }),
       setDictationEnabled: (enabled) => set({ dictationEnabled: enabled }),
       setCodeFollowUpQueueMode: (codeFollowUpQueueMode) => set({ codeFollowUpQueueMode }),

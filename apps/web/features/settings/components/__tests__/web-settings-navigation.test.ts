@@ -119,6 +119,7 @@ describe('web settings rail order', () => {
       'notifications',
       'personalization',
       'voice',
+      'keyboard',
       'capabilities',
       'privacy',
       'safety',
@@ -151,6 +152,15 @@ describe('web settings rail order', () => {
     );
     expect(item?.label).toBe('Personalization');
     expect(item?.keywords).toEqual(expect.arrayContaining(['memory', 'custom instructions']));
+  });
+
+  it('labels the Keyboard row and keeps shortcuts findable in settings search', () => {
+    const item = WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find(
+      (entry) => entry.key === 'keyboard',
+    );
+    expect(item?.label).toBe('Keyboard');
+    expect(item?.keywords).toEqual(expect.arrayContaining(['shortcuts', 'keybindings']));
+    expect(settingsSectionFromPath('/settings/keyboard')).toBe('keyboard');
   });
 
   it('places every web-only item exactly once, right after its anchor', () => {

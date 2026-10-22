@@ -1,4 +1,4 @@
-import { Mic, UserRoundPen } from 'lucide-react';
+import { Keyboard, Mic, UserRoundPen } from 'lucide-react';
 import {
   SETTINGS_NAV_GROUPS_WEB,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
@@ -34,6 +34,13 @@ const VOICE_NAV_ITEM: SettingsNavItem = {
   keywords: ['speech', 'tts', 'microphone', 'audio', 'dictation'],
 };
 
+const KEYBOARD_NAV_ITEM: SettingsNavItem = {
+  key: 'keyboard',
+  label: 'Keyboard',
+  icon: Keyboard,
+  keywords: ['shortcuts', 'keyboard shortcuts', 'keybindings', 'hotkeys', 'key combination'],
+};
+
 const GENERAL_NAV_KEY = 'general';
 
 const GENERAL_NAV_FIELDS: NonNullable<SettingsNavItem['fields']> = [
@@ -49,6 +56,7 @@ interface WebSettingsNavPlacement {
 export const WEB_SETTINGS_NAV_PLACEMENTS: readonly WebSettingsNavPlacement[] = [
   { item: PERSONALIZATION_NAV_ITEM, after: 'notifications' },
   { item: VOICE_NAV_ITEM, after: 'personalization' },
+  { item: KEYBOARD_NAV_ITEM, after: 'voice' },
 ];
 
 function placeWebItems(items: SettingsNavItem[]): SettingsNavItem[] {

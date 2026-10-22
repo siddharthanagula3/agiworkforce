@@ -32,6 +32,7 @@ export const WEB_SETTINGS_CONTENT_SECTIONS = [
   'personalization',
   'notifications',
   'voice',
+  'keyboard',
   'reflect',
   'time-focus',
   'slack',

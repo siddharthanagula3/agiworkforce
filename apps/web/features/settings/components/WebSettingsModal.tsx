@@ -50,6 +50,8 @@ import { ReflectSection } from '../sections/ReflectSection';
 import { TimeFocusSection } from '../sections/TimeFocusSection';
 import { HelpSection } from '../sections/HelpSection';
 import { SlackSection } from '../sections/SlackSection';
+import { KeyboardShortcutsPane } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
+import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { SettingsSectionNavigationProvider } from './SettingsSectionLink';
 import { CapabilityDeniedNotice } from './CapabilityDeniedNotice';
 import { useCapabilityDecision } from '@agiworkforce/unified-chat';
@@ -243,6 +245,7 @@ export function WebSettingsModal({
     personalization: <PersonalizationSection />,
     notifications: <NotificationsSection />,
     voice: <VoiceSection />,
+    keyboard: <KeyboardShortcutsPane shortcuts={KEYBOARD_SHORTCUT_DOCS} />,
     reflect: <ReflectSection />,
     'time-focus': <TimeFocusSection />,
     slack: <SlackSection />,

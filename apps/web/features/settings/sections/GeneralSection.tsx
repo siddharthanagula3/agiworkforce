@@ -35,8 +35,6 @@ import {
 } from '@shared/stores/web-settings-store';
 import { CustomCommandsSettings } from '@/features/settings/components/CustomCommandsSettings';
 import { useCloudSettingsSyncStatus } from '@/features/settings/lib/cloud-settings-sync-status';
-import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
-import { KEYBOARD_SHORTCUT_DOCS } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { COMPOSER_FOLLOW_UP_INVERT_SHORTCUT, formatShortcutKeys } from '@agiworkforce/unified-chat';
 import {
   CODE_THEMES,
@@ -926,22 +924,14 @@ function CodeFollowUpModeRow() {
 }
 
 function KeyboardShortcutsRow() {
-  const [open, setOpen] = useState(false);
-
   return (
     <Row label="Keyboard shortcuts">
-      <button
-        type="button"
-        onClick={() => setOpen(true)}
-        className="h-8 rounded-md border border-border px-2.5 text-xs text-foreground transition-colors hover:bg-muted"
+      <SettingsSectionLink
+        section="keyboard"
+        className="text-sm font-medium text-foreground underline"
       >
         View shortcuts
-      </button>
-      <KeyboardShortcutsDialog
-        open={open}
-        onOpenChange={setOpen}
-        shortcuts={KEYBOARD_SHORTCUT_DOCS}
-      />
+      </SettingsSectionLink>
     </Row>
   );
 }
