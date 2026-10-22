@@ -2578,6 +2578,7 @@ impl AutoSetupEntry {
 struct AutoSetupFacts {
     trusted: bool,
     trust_grants_allowed: bool,
+    saved_in_your_config: crate::cli_options::PermissionMode,
     new_sessions_start_in: crate::cli_options::PermissionMode,
     pinned: Option<crate::cli_options::PermissionMode>,
 }
@@ -2590,7 +2591,10 @@ fn auto_setup_entries(facts: &AutoSetupFacts) -> Vec<AutoSetupEntry> {
     if !facts.trusted && facts.trust_grants_allowed {
         entries.push(AutoSetupEntry::TrustRepository);
     }
-    if facts.new_sessions_start_in != auto && auto.within(facts.pinned) == auto {
+    if facts.saved_in_your_config != auto
+        && facts.new_sessions_start_in != auto
+        && auto.within(facts.pinned) == auto
+    {
         entries.push(AutoSetupEntry::StartInAuto);
     }
     entries
@@ -2618,6 +2622,15 @@ fn auto_setup_approval(word: &str, facts: &AutoSetupFacts) -> Result<AutoSetupEn
         {
             "New sessions already start in auto.".to_string()
         }
+        AutoSetupEntry::StartInAuto
+            if facts.saved_in_your_config == crate::cli_options::PermissionMode::AcceptEdits
+                && facts.pinned.is_none() =>
+        {
+            format!(
+                "Your config already saves auto; this repository's config starts sessions here in {}.",
+                mode_word(facts.new_sessions_start_in)
+            )
+        }
         AutoSetupEntry::StartInAuto => format!(
             "Your organization's policy holds tool approval at {}, so new sessions cannot start in auto.",
             facts
@@ -2628,19 +2641,29 @@ fn auto_setup_approval(word: &str, facts: &AutoSetupFacts) -> Result<AutoSetupEn
     })
 }
 
+fn configured_start_mode(
+    config: Option<&crate::config::CliConfig>,
+) -> crate::cli_options::PermissionMode {
+    config
+        .and_then(|config| config.default.permission_mode.as_deref())
+        .and_then(crate::cli_options::persisted_permission_mode)
+        .unwrap_or_default()
+}
+
+fn workspace_fully_trusted(status: &crate::trust::TrustStatus) -> bool {
+    status.state.is_trusted() && status.restrictions().withheld().is_empty()
+}
+
 fn auto_setup_facts(root: &std::path::Path) -> (AutoSetupFacts, crate::trust::TrustStatus) {
     let status = crate::trust::status_for(root);
     let pinned = crate::permissions::managed_permission_mode();
-    let saved = crate::config::CliConfig::load()
-        .ok()
-        .and_then(|config| config.default.permission_mode)
-        .as_deref()
-        .and_then(crate::cli_options::persisted_permission_mode)
-        .unwrap_or_default();
+    let yours = crate::config::CliConfig::load().ok();
+    let layered = crate::config::CliConfig::load_merged().ok();
     let facts = AutoSetupFacts {
-        trusted: status.state.is_trusted(),
+        trusted: workspace_fully_trusted(&status),
         trust_grants_allowed: crate::trust::grants_allowed(),
-        new_sessions_start_in: saved.within(pinned),
+        saved_in_your_config: configured_start_mode(yours.as_ref()),
+        new_sessions_start_in: configured_start_mode(layered.as_ref()).within(pinned),
         pinned,
     };
     (facts, status)
@@ -2668,21 +2691,31 @@ fn auto_mode_setup(session: &AgentSession, arg: &str) -> String {
     match auto_setup_approval(&word, &facts) {
         Err(reason) => reason,
         Ok(AutoSetupEntry::TrustRepository) => match crate::trust::grant(&root) {
-            Ok(granted) => format!(
-                "Trusted {}.\n{}",
-                granted.identity.describe(),
-                crate::terminal_text::sanitize_terminal_text(&granted.render())
-            ),
+            Ok(granted) => granted.granted_message(),
             Err(error) => format!("{error:#}"),
         },
         Ok(AutoSetupEntry::StartInAuto) => {
             match crate::onboarding::update_config_permission_mode(
                 crate::cli_options::PermissionMode::AcceptEdits,
             ) {
-                Ok(()) => "New sessions start in auto. This session keeps its mode; Shift+Tab switches it.".to_string(),
+                Ok(()) => {
+                    let (after, _) = auto_setup_facts(&root);
+                    saved_auto_message(&after)
+                }
                 Err(error) => format!("New sessions were not changed: {error:#}"),
             }
         }
+    }
+}
+
+fn saved_auto_message(after: &AutoSetupFacts) -> String {
+    if after.new_sessions_start_in == crate::cli_options::PermissionMode::AcceptEdits {
+        "Saved auto in your config. New sessions start in auto; this session keeps its mode and Shift+Tab switches it.".to_string()
+    } else {
+        format!(
+            "Saved auto in your config, but sessions here still start in {} because this repository's config or your organization's policy sets it.",
+            mode_word(after.new_sessions_start_in)
+        )
     }
 }
 
@@ -2708,8 +2741,9 @@ fn render_auto_setup_review(
             }
         ),
         format!(
-            "New sessions start in {}",
-            mode_word(facts.new_sessions_start_in)
+            "New sessions here start in {} (your config: {})",
+            mode_word(facts.new_sessions_start_in),
+            mode_word(facts.saved_in_your_config)
         ),
     ];
     let entries = auto_setup_entries(facts);
@@ -3052,9 +3086,62 @@ mod tests {
         AutoSetupFacts {
             trusted,
             trust_grants_allowed,
+            saved_in_your_config: new_sessions_start_in,
             new_sessions_start_in,
             pinned,
         }
+    }
+
+    #[test]
+    fn auto_mode_setup_reads_the_start_mode_through_the_session_config_layers() {
+        use crate::cli_options::PermissionMode::{AcceptEdits, Plan};
+        let mut yours = crate::config::CliConfig::default();
+        yours.default.permission_mode = Some("auto".to_string());
+        let mut repository = crate::config::CliConfig::default();
+        repository.default.permission_mode = Some("plan".to_string());
+        let layered = crate::config::CliConfig::from_layers(
+            yours.clone(),
+            Some(repository),
+            &crate::platform::policy::managed::ManagedPolicyState::Absent,
+        )
+        .expect("layers merge");
+
+        let facts = AutoSetupFacts {
+            trusted: true,
+            trust_grants_allowed: true,
+            saved_in_your_config: configured_start_mode(Some(&yours)),
+            new_sessions_start_in: configured_start_mode(Some(&layered)),
+            pinned: None,
+        };
+
+        assert_eq!(facts.saved_in_your_config, AcceptEdits);
+        assert_eq!(facts.new_sessions_start_in, Plan);
+        assert!(
+            auto_setup_entries(&facts).is_empty(),
+            "saving auto again would change nothing here"
+        );
+        assert!(auto_setup_approval("default", &facts)
+            .expect_err("nothing to save")
+            .contains("this repository's config starts sessions here in plan"));
+        assert!(saved_auto_message(&facts).contains("still start in plan"));
+        assert_eq!(
+            configured_start_mode(None),
+            crate::cli_options::PermissionMode::Default
+        );
+    }
+
+    #[test]
+    fn a_trust_grant_for_another_checkout_is_not_reported_as_trusted() {
+        let dir = tempfile::tempdir().expect("dir");
+        let mut status = crate::trust::status_for(dir.path());
+        status.state = crate::trust::TrustState::Trusted;
+        status.grant_source = Some(crate::trust::TrustGrantSource::NativeHostProcess);
+        status.grant_covers_checkout = false;
+
+        assert!(!workspace_fully_trusted(&status));
+
+        status.grant_covers_checkout = true;
+        assert!(workspace_fully_trusted(&status));
     }
 
     #[test]

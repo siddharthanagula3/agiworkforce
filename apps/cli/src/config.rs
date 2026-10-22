@@ -624,7 +624,7 @@ impl CliConfig {
     /// The user's file, then the repository's, then the environment, then the
     /// organization's managed policy. Each layer overrides only what the
     /// layers beneath it chose, and nothing overrides the managed one.
-    fn from_layers(
+    pub(crate) fn from_layers(
         user: CliConfig,
         repository: Option<CliConfig>,
         managed: &crate::platform::policy::managed::ManagedPolicyState,
