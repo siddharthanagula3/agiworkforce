@@ -129,6 +129,16 @@ export function openSearchShortcutLabel(isMac: boolean = isApplePlatform()): str
   return isMac ? `${shift ? '⇧' : ''}⌘${key}` : `${shift ? 'Shift+' : ''}Ctrl+${key}`;
 }
 
+export const TOGGLE_SIDEBAR_SHORTCUT = { key: 'B', ctrl: true, meta: true } as const;
+
+export function toggleSidebarShortcutLabel(isMac: boolean = isApplePlatform()): string {
+  return isMac ? `⌘${TOGGLE_SIDEBAR_SHORTCUT.key}` : `Ctrl+${TOGGLE_SIDEBAR_SHORTCUT.key}`;
+}
+
+export function toggleSidebarAriaKeyShortcuts(isMac: boolean = isApplePlatform()): string {
+  return `${isMac ? 'Meta' : 'Control'}+${TOGGLE_SIDEBAR_SHORTCUT.key}`;
+}
+
 export function Sidebar(props: SidebarProps) {
   const {
     sessions,
@@ -482,7 +492,13 @@ export function Sidebar(props: SidebarProps) {
         >
           <div data-sidebar-region="rail" className="flex flex-col items-center gap-0 py-2">
             {onToggleCollapse && (
-              <RailButton label={toggleLabel} icon={PanelLeft} onClick={onToggleCollapse} />
+              <RailButton
+                label={toggleLabel}
+                icon={PanelLeft}
+                onClick={onToggleCollapse}
+                shortcut={toggleSidebarShortcutLabel()}
+                ariaKeyShortcuts={toggleSidebarAriaKeyShortcuts()}
+              />
             )}
             <RailButton
               label={t('sidebar.newChatAction', 'New chat')}
@@ -546,17 +562,30 @@ export function Sidebar(props: SidebarProps) {
             className="mb-3 flex items-center justify-between"
           >
             {onToggleCollapse && (
-              <button
-                type="button"
-                onClick={onToggleCollapse}
-                aria-label={t('sidebar.toggleSidebar', 'Toggle sidebar')}
-                className={cn(
-                  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground',
-                  FOCUS_RING,
-                )}
-              >
-                <PanelLeft className="h-4 w-4" />
-              </button>
+              <TooltipProvider delayDuration={SIDEBAR_TOOLTIP_DELAY_MS}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={onToggleCollapse}
+                      aria-label={t('sidebar.toggleSidebar', 'Toggle sidebar')}
+                      aria-keyshortcuts={toggleSidebarAriaKeyShortcuts()}
+                      className={cn(
+                        'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground',
+                        FOCUS_RING,
+                      )}
+                    >
+                      <PanelLeft className="h-4 w-4" />
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom" align="start">
+                    <TooltipLabel
+                      label={t('sidebar.toggleSidebar', 'Toggle sidebar')}
+                      shortcut={toggleSidebarShortcutLabel()}
+                    />
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
             )}
             <div className="ms-auto flex items-center gap-1.5">
               <button
@@ -1149,16 +1178,30 @@ function AllChatsLink({
   );
 }
 
+function TooltipLabel({ label, shortcut }: { label: string; shortcut?: string }) {
+  if (!shortcut) return <>{label}</>;
+  return (
+    <span className="flex items-center gap-2">
+      <span>{label}</span>
+      <kbd className="font-sans text-sm leading-none text-muted-foreground">{shortcut}</kbd>
+    </span>
+  );
+}
+
 function RailButton({
   label,
   icon: Icon,
   onClick,
   isActive = false,
+  shortcut,
+  ariaKeyShortcuts,
 }: {
   label: string;
   icon: SidebarNavItem['icon'];
   onClick?: () => void;
   isActive?: boolean;
+  shortcut?: string;
+  ariaKeyShortcuts?: string;
 }) {
   return (
     <Tooltip>
@@ -1167,6 +1210,7 @@ function RailButton({
           type="button"
           onClick={onClick}
           aria-label={label}
+          aria-keyshortcuts={ariaKeyShortcuts}
           aria-current={isActive ? 'page' : undefined}
           className={cn(
             'flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-accent hover:text-foreground',
@@ -1177,7 +1221,9 @@ function RailButton({
           <Icon className="h-5 w-5" />
         </button>
       </TooltipTrigger>
-      <TooltipContent side="right">{label}</TooltipContent>
+      <TooltipContent side="right">
+        <TooltipLabel label={label} shortcut={shortcut} />
+      </TooltipContent>
     </Tooltip>
   );
 }
