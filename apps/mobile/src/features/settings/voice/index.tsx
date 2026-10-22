@@ -5,6 +5,7 @@ import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { SUPPORTED_LANGUAGES } from '@agiworkforce/i18n';
 import {
+  AudioLines,
   Bot,
   Check,
   Globe,
@@ -15,6 +16,7 @@ import {
   Play,
   Volume2,
   X,
+  type LucideIcon,
 } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Switch } from '@/components/ui/switch';
@@ -69,12 +71,14 @@ const SPEECH_LANGUAGE_OPTIONS: readonly SpeechLanguageOption[] = [
     name: 'Automatic',
     detail: 'Uses your device language',
   },
-  ...SUPPORTED_LANGUAGES.map((language) => ({
-    code: language.code,
-    label: language.nativeName,
-    name: language.name,
-    detail: language.name === language.nativeName ? null : language.name,
-  })),
+  ...[...SUPPORTED_LANGUAGES]
+    .sort((a, b) => a.name.localeCompare(b.name, 'en'))
+    .map((language) => ({
+      code: language.code,
+      label: language.nativeName,
+      name: language.name,
+      detail: language.name === language.nativeName ? null : language.name,
+    })),
 ];
 
 function languageDisplayName(code: string): string {
@@ -92,12 +96,14 @@ function ToggleRow({
   description,
   value,
   onValueChange,
+  icon: Icon = Mic,
   isLast,
 }: {
   label: string;
   description: string;
   value: boolean;
   onValueChange: (value: boolean) => void;
+  icon?: LucideIcon;
   isLast?: boolean;
 }) {
   const colors = useThemeColors();
@@ -115,7 +121,7 @@ function ToggleRow({
         borderBottomColor: colors.border,
       }}
     >
-      <Mic size={19} color={colors.textSecondary} />
+      <Icon size={19} color={colors.textSecondary} />
       <View style={{ flex: 1, gap: 3 }}>
         <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
           {label}
@@ -314,6 +320,9 @@ export default function VoiceSettingsScreen() {
   const pushToTalk = useSettingsStore((s) => s.voicePushToTalk);
   const setPushToTalk = useSettingsStore((s) => s.setVoicePushToTalk);
 
+  const startWithVoice = useLocalSettingsStore((s) => s.startWithVoice);
+  const setStartWithVoice = useLocalSettingsStore((s) => s.setStartWithVoice);
+
   const localAutoListenEnabled = useLocalSettingsStore((s) => s.autoListenEnabled);
   const localSetAutoListenEnabled = useLocalSettingsStore((s) => s.setAutoListenEnabled);
   const cloudAutoListenEnabled = useCloudSettingsStore((s) => s.autoListenEnabled);
@@ -379,6 +388,13 @@ export default function VoiceSettingsScreen() {
           description="Start listening again after AGI finishes speaking."
           value={autoListenEnabled}
           onValueChange={setAutoListenEnabled}
+        />
+        <ToggleRow
+          label="Start with Voice"
+          description="Open AGI in a voice conversation when the app launches."
+          value={startWithVoice}
+          onValueChange={setStartWithVoice}
+          icon={AudioLines}
           isLast
         />
       </SettingsGroup>

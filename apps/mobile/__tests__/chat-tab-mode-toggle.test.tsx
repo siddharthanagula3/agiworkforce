@@ -201,6 +201,11 @@ import {
   activateCloudAccount,
 } from '../src/features/auth/services/cloudAccountSession';
 import { useMobileSkillSelectionStore } from '../src/features/skills/selectionStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import {
+  __resetStartWithVoiceLaunchForTests,
+  useLocalSettingsStore,
+} from '../stores/settings/localSettingsStore';
 import { useCloudUsageStore } from '../src/features/settings/cloud-usage/store';
 import {
   clearPostAuthIntent,
@@ -225,6 +230,9 @@ describe('Chat tab mode toggle', () => {
     mockChatInputExhaustedUsageRecovery = undefined;
     mockChatInputOnStackedChange = undefined;
     mockUsageSnapshot = null;
+    __resetStartWithVoiceLaunchForTests();
+    useLocalSettingsStore.setState({ startWithVoice: false });
+    useSettingsStore.setState({ voiceEnabled: true, voiceOnboardingSeen: true });
     useCloudUsageStore.getState().clear();
     mockChatFeatures = { imageGen: true };
     mockWorkMode = 'chat';
@@ -310,6 +318,30 @@ describe('Chat tab mode toggle', () => {
     expect(mockSetWorkMode).toHaveBeenCalledWith('chat');
     expect(mockChatInputDraftProvenance).toEqual({ scope: 'local' });
     expect(useModelStore.getState().selectedModel).toBe(DEFAULT_LOCAL_MODEL_ID);
+  });
+
+  it('opens voice with an exit when Start with Voice is on, once per launch', async () => {
+    useLocalSettingsStore.setState({ startWithVoice: true });
+    const first = render(<ChatTabScreen />);
+
+    await waitFor(() => expect(first.getByTestId('voice-inline-bar')).toBeTruthy());
+    expect(first.getByLabelText('Exit voice mode')).toBeTruthy();
+    first.unmount();
+
+    const second = render(<ChatTabScreen />);
+    expect(second.queryByTestId('voice-inline-bar')).toBeNull();
+  });
+
+  it('stays on the text composer at launch when Start with Voice is off', () => {
+    const screen = render(<ChatTabScreen />);
+    expect(screen.queryByTestId('voice-inline-bar')).toBeNull();
+  });
+
+  it('does not open voice at launch while Voice Input is off', () => {
+    useLocalSettingsStore.setState({ startWithVoice: true });
+    useSettingsStore.setState({ voiceEnabled: false });
+    const screen = render(<ChatTabScreen />);
+    expect(screen.queryByTestId('voice-inline-bar')).toBeNull();
   });
 
   it('hides the greeting while the composer is stacked', () => {

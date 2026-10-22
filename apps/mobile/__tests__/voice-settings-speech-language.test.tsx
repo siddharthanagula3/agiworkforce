@@ -73,7 +73,7 @@ describe('Voice settings, speech language', () => {
       speechRate: 1,
       speechPitch: 1,
     });
-    useLocalSettingsStore.setState({ speechLanguage: 'en' });
+    useLocalSettingsStore.setState({ speechLanguage: 'en', startWithVoice: false });
     useCloudSettingsStore.setState({ speechLanguage: 'en' });
   });
 
@@ -122,5 +122,29 @@ describe('Voice settings, speech language', () => {
 
     expect(useCloudSettingsStore.getState().speechLanguage).toBe('fr');
     expect(useLocalSettingsStore.getState().speechLanguage).toBe('en');
+  });
+
+  it('lists Automatic first and the languages alphabetically by English name', async () => {
+    const { getByLabelText, getAllByLabelText } = render(<VoiceSettingsScreen />);
+
+    fireEvent.press(await waitFor(() => getByLabelText('Speech language. English')));
+
+    const names = getAllByLabelText(/ speech language$/).map((node) =>
+      String(node.props.accessibilityLabel).replace(/ speech language$/, ''),
+    );
+    expect(names[0]).toBe('Automatic');
+    const languages = names.slice(1);
+    expect(languages).toEqual([...languages].sort((a, b) => a.localeCompare(b, 'en')));
+    expect(languages.length).toBeGreaterThan(1);
+  });
+
+  it('keeps Start with Voice off until it is switched on, on this device', async () => {
+    const { getByLabelText } = render(<VoiceSettingsScreen />);
+
+    const toggle = await waitFor(() => getByLabelText('Start with Voice'));
+    expect(toggle.props.value).toBe(false);
+    fireEvent(toggle, 'valueChange', true);
+
+    expect(useLocalSettingsStore.getState().startWithVoice).toBe(true);
   });
 });

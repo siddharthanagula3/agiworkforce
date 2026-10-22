@@ -47,6 +47,10 @@ import {
 } from '@/src/features/voice/hooks/useVoiceConversation';
 import * as TTS from '@/src/features/voice/services/tts';
 import { useSettingsStore } from '@/stores/settingsStore';
+import {
+  takeStartWithVoiceOnLaunch,
+  useLocalSettingsStore,
+} from '@/stores/settings/localSettingsStore';
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
 import { Text } from '@/components/ui/text';
@@ -743,6 +747,19 @@ export default function ChatTabScreen() {
     }
     startVoiceMode();
   }, [startVoiceMode]);
+
+  useEffect(() => {
+    const openVoiceOnLaunch = () => {
+      if (takeStartWithVoiceOnLaunch() && useSettingsStore.getState().voiceEnabled) {
+        handleOpenVoiceMode();
+      }
+    };
+    if (useLocalSettingsStore.persist.hasHydrated()) {
+      openVoiceOnLaunch();
+      return;
+    }
+    return useLocalSettingsStore.persist.onFinishHydration(openVoiceOnLaunch);
+  }, [handleOpenVoiceMode]);
 
   const handleVoiceIntroContinue = useCallback(() => {
     setVoiceIntroVisible(false);

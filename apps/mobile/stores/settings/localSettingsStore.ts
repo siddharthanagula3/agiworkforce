@@ -22,6 +22,7 @@ export interface LocalSettingsState {
   notificationsEnabled: boolean;
   speechLanguage: string;
   autoListenEnabled: boolean;
+  startWithVoice: boolean;
   memoryEnabled: boolean;
   referencePastChats: boolean;
   generateMemoryFromHistory: boolean;
@@ -35,6 +36,7 @@ export interface LocalSettingsState {
   setNotificationsEnabled: (enabled: boolean) => void;
   setSpeechLanguage: (language: string) => void;
   setAutoListenEnabled: (enabled: boolean) => void;
+  setStartWithVoice: (enabled: boolean) => void;
   setMemoryEnabled: (enabled: boolean) => void;
   setReferencePastChats: (enabled: boolean) => void;
   setGenerateMemoryFromHistory: (enabled: boolean) => void;
@@ -68,6 +70,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       notificationsEnabled: true,
       speechLanguage: SPEECH_LANGUAGE_AUTO,
       autoListenEnabled: true,
+      startWithVoice: false,
       memoryEnabled: true,
       referencePastChats: true,
       generateMemoryFromHistory: true,
@@ -81,6 +84,7 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
       setNotificationsEnabled: (enabled) => set({ notificationsEnabled: enabled }),
       setSpeechLanguage: (language) => set({ speechLanguage: language }),
       setAutoListenEnabled: (enabled) => set({ autoListenEnabled: enabled }),
+      setStartWithVoice: (enabled) => set({ startWithVoice: enabled }),
       setMemoryEnabled: (enabled) => set({ memoryEnabled: enabled }),
       setReferencePastChats: (enabled) => set({ referencePastChats: enabled }),
       setGenerateMemoryFromHistory: (enabled) => set({ generateMemoryFromHistory: enabled }),
@@ -145,3 +149,15 @@ export const useLocalSettingsStore = create<LocalSettingsState>()(
 );
 
 rehydrateWhenMmkvReady(useLocalSettingsStore, 'settings-store-local');
+
+let launchVoiceTaken = false;
+
+export function takeStartWithVoiceOnLaunch(): boolean {
+  if (launchVoiceTaken) return false;
+  launchVoiceTaken = true;
+  return useLocalSettingsStore.getState().startWithVoice;
+}
+
+export function __resetStartWithVoiceLaunchForTests(): void {
+  launchVoiceTaken = false;
+}
