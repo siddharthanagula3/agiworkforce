@@ -104,6 +104,7 @@ export interface LocalChangesPanelProps {
   onReview: () => void;
   onClose: () => void;
   onDirtyChange?: (dirty: boolean) => void;
+  onSendToAgent?: (message: string) => void;
 }
 
 export function LocalChangesPanel({
@@ -115,6 +116,7 @@ export function LocalChangesPanel({
   onReview,
   onClose,
   onDirtyChange,
+  onSendToAgent,
 }: LocalChangesPanelProps) {
   const [changes, setChanges] = useState<WorkingTreeChanges | null>(null);
   const [repository, setRepository] = useState(true);
@@ -292,7 +294,11 @@ export function LocalChangesPanel({
 
         <LocalPullRequest rootId={rootId} title={title} refreshKey={refreshKey} />
 
-        <LocalRunningCommands rootId={rootId} refreshKey={runningCommandsKey} />
+        <LocalRunningCommands
+          rootId={rootId}
+          refreshKey={runningCommandsKey}
+          {...(onSendToAgent ? { onSendToAgent } : {})}
+        />
       </div>
       {dialog}
     </aside>

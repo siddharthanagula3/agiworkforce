@@ -804,6 +804,12 @@ export function LocalSessionPanel({
     images.addFiles(pictures);
   };
 
+  const sendTextToAgent = (text: string) => {
+    const message: LocalMessage = { text, images: [], contextFiles: [] };
+    if (running) state.enqueue(message);
+    else void sendOrRestore(message);
+  };
+
   const requestReview = () => {
     if (busy) return;
     void sendOrRestore(LOCAL_REVIEW_COMMAND);
@@ -1577,6 +1583,7 @@ export function LocalSessionPanel({
               setChangesOpen(false);
             }}
             onDirtyChange={setEditorDirty}
+            onSendToAgent={sendTextToAgent}
           />
         )}
         {filesOpen && (
@@ -1595,11 +1602,7 @@ export function LocalSessionPanel({
             review={review}
             worktree={worktree}
             onClose={() => setReviewOpen(false)}
-            onSendComments={(text) => {
-              const message: LocalMessage = { text, images: [], contextFiles: [] };
-              if (running) state.enqueue(message);
-              else void sendOrRestore(message);
-            }}
+            onSendComments={sendTextToAgent}
           />
         )}
         {showShortcuts && (

@@ -228,7 +228,12 @@ vi.mock('../runtime/applicationLaunch', () => ({
   listInstalledApplications,
 }));
 const openLocalPreview = vi.fn(async (url: string) => ({ url }));
-vi.mock('../previewWindow', () => ({ openLocalPreview }));
+const readPreviewConsoleErrors = vi.fn((_clear: boolean) => ({
+  url: 'http://localhost:5173/',
+  errors: [{ message: 'boom', source: null, line: null, count: 1 }],
+  dropped: 0,
+}));
+vi.mock('../previewWindow', () => ({ openLocalPreview, readPreviewConsoleErrors }));
 vi.mock('../runtime/appsService', () => ({
   editorFileUrl: vi.fn(),
   openInEditor,
@@ -2366,6 +2371,26 @@ describe('previewing what a session serves', () => {
       expect(response, url).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
     }
     expect(openLocalPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe('reading what the preview page logged', () => {
+  it('reads the errors without clearing them unless asked, and asks nothing', async () => {
+    const kept = await dispatch(window, 'app_preview_errors', {});
+    expect(kept).toMatchObject({
+      ok: true,
+      value: { url: 'http://localhost:5173/', errors: [{ message: 'boom' }], dropped: 0 },
+    });
+    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(false);
+
+    await dispatch(window, 'app_preview_errors', { clear: true });
+    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(true);
+    expect(requestPermission).not.toHaveBeenCalled();
+  });
+
+  it('treats anything but true as not clearing', async () => {
+    await dispatch(window, 'app_preview_errors', { clear: 'yes' });
+    expect(readPreviewConsoleErrors).toHaveBeenLastCalledWith(false);
   });
 });
 

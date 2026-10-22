@@ -3,6 +3,7 @@ export const APPLICATION_COMMANDS = [
   'app_reveal_path',
   'app_open_in_editor',
   'app_open_preview',
+  'app_preview_errors',
 ] as const;
 
 export type ApplicationCommand = (typeof APPLICATION_COMMANDS)[number];
@@ -12,6 +13,25 @@ export interface ApplicationOpenResult {
   path: string;
   opened: boolean;
 }
+
+export interface PreviewConsoleError {
+  message: string;
+  source: string | null;
+  line: number | null;
+  /** How many times in a row the page logged this exact error. */
+  count: number;
+}
+
+export interface PreviewConsoleReport {
+  /** The page the preview shows, or null when no preview is open. */
+  url: string | null;
+  errors: PreviewConsoleError[];
+  /** Errors logged since the last read that did not fit in `errors`. */
+  dropped: number;
+}
+
+export const PREVIEW_ERROR_LIMIT = 50;
+export const PREVIEW_ERROR_TEXT_LIMIT = 1_000;
 
 const LOOPBACK_HOSTS: ReadonlySet<string> = new Set(['localhost', '127.0.0.1', '[::1]', '0.0.0.0']);
 

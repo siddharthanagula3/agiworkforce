@@ -102,7 +102,7 @@ import {
   listInstalledApplications,
 } from './applicationLaunch';
 import { openInEditor, openWithDefaultApplication, revealInFileManager } from './appsService';
-import { openLocalPreview } from '../previewWindow';
+import { openLocalPreview, readPreviewConsoleErrors } from '../previewWindow';
 import { WORKSPACE_PICKER_COPY, grantPickedRoot } from './workspacePicker';
 import {
   ComputerUseRefused,
@@ -2044,6 +2044,8 @@ async function execute(
       if (!url) throw new InvalidArguments('Only a page served on this computer can be previewed.');
       return openLocalPreview(url);
     }
+    case 'app_preview_errors':
+      return readPreviewConsoleErrors(args['clear'] === true);
     case 'app_open_in_editor':
       return openInEditor(resolveRoot(args));
     case 'clipboard_read':
@@ -2603,6 +2605,7 @@ const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
  */
 const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   'app_open_preview',
+  'app_preview_errors',
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
   BROWSER_SIGN_IN_STATE,

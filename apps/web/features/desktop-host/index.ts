@@ -77,6 +77,7 @@ export {
   startLocalChat,
   startBackgroundLocalCommand,
   openLocalPreview,
+  readPreviewConsoleErrors,
   startLocalCommand,
   writeLocalCommandPolicy,
   writeWorkspaceText,

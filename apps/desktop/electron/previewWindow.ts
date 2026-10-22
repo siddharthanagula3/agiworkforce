@@ -1,11 +1,13 @@
 import { BrowserWindow, session, shell } from 'electron';
-import { localPreviewUrl } from '@agiworkforce/local-runtime-contract';
+import { localPreviewUrl, type PreviewConsoleReport } from '@agiworkforce/local-runtime-contract';
+import { PreviewConsoleBuffer } from './previewConsole';
 
 const PREVIEW_PARTITION = 'agi-local-preview';
 const PREVIEW_WIDTH = 1_200;
 const PREVIEW_HEIGHT = 820;
 
 let preview: BrowserWindow | null = null;
+const consoleErrors = new PreviewConsoleBuffer();
 
 function isWebAddress(url: string): boolean {
   try {
@@ -34,6 +36,24 @@ function keepLocal(win: BrowserWindow): void {
   });
 }
 
+function watchConsole(win: BrowserWindow): void {
+  consoleErrors.reset();
+  win.webContents.on('console-message', (details) => {
+    if (details.level !== 'error') return;
+    consoleErrors.record({
+      message: details.message,
+      source: details.sourceId,
+      line: details.lineNumber,
+    });
+  });
+  win.webContents.on('render-process-gone', (_event, details) => {
+    consoleErrors.record({ message: `The preview page stopped (${details.reason}).` });
+  });
+  win.webContents.on('did-start-navigation', (details) => {
+    if (details.isMainFrame && !details.isSameDocument) consoleErrors.reset();
+  });
+}
+
 function createPreview(): BrowserWindow {
   const previewSession = session.fromPartition(PREVIEW_PARTITION);
   previewSession.setPermissionRequestHandler((_contents, _permission, callback) => callback(false));
@@ -53,11 +73,13 @@ function createPreview(): BrowserWindow {
     },
   });
   keepLocal(win);
+  watchConsole(win);
   win.once('ready-to-show', () => {
     if (!win.isDestroyed()) win.show();
   });
   win.on('closed', () => {
     preview = null;
+    consoleErrors.reset();
   });
   return win;
 }
@@ -87,4 +109,14 @@ export async function openLocalPreview(raw: unknown): Promise<{ url: string }> {
 export function closeLocalPreview(): void {
   if (preview && !preview.isDestroyed()) preview.destroy();
   preview = null;
+}
+
+/**
+ * The errors the open preview page logged since they were last cleared, so
+ * the agent can see what a page it built does when it runs.
+ */
+export function readPreviewConsoleErrors(clear: boolean): PreviewConsoleReport {
+  const open = preview && !preview.isDestroyed() ? preview : null;
+  const { errors, dropped } = consoleErrors.read(clear);
+  return { url: open ? localPreviewUrl(open.webContents.getURL()) : null, errors, dropped };
 }

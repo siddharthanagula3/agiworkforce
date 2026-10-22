@@ -60,6 +60,7 @@ import {
   type DeveloperUserInputAnswer,
   type LocalBranchPush,
   type LocalBranches,
+  type PreviewConsoleReport,
   type ShellPolicy,
   type ShellRunResult,
   type StartedDeveloperSession,
@@ -311,6 +312,10 @@ export function startBackgroundLocalCommand(input: {
 
 export function openLocalPreview(url: string): Promise<{ url: string }> {
   return invoke<{ url: string }>('app_open_preview', { url });
+}
+
+export function readPreviewConsoleErrors(clear: boolean): Promise<PreviewConsoleReport> {
+  return invoke<PreviewConsoleReport>('app_preview_errors', { clear });
 }
 
 export function openWorkspacePath(rootId: string, path: string): Promise<ApplicationOpenResult> {

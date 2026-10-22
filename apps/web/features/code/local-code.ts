@@ -18,6 +18,7 @@ import {
   type DeveloperTurnFailure,
   type DeveloperTurnOutcome,
   type LocalDeveloperSession,
+  type PreviewConsoleReport,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperMessage, ThreadStatus } from '@agiworkforce/types/protocol';
 import {
@@ -122,6 +123,17 @@ export const LOCAL_CODE_COPY = {
   stopAllCommands: 'Stop all',
   openPreview: 'Preview',
   openPreviewOf: (url: string): string => `Open a preview of ${url}`,
+  sendConsoleErrors: (count: number): string =>
+    count === 1
+      ? 'Send the preview error to the agent'
+      : `Send the ${count} preview errors to the agent`,
+  consoleErrorsFailed: 'The preview errors could not be read.',
+  consoleErrorsIntro: (url: string | null): string =>
+    url === null
+      ? 'The page I opened in the preview logged these errors in its console:'
+      : `The page I opened in the preview, ${url}, logged these errors in its console:`,
+  consoleErrorsDropped: (count: number): string =>
+    count === 1 ? '1 more error was not kept.' : `${count} more errors were not kept.`,
   previewFailed: 'The preview could not be opened.',
   keepRunning: 'Keep running',
   keepRunningHint:
@@ -1556,6 +1568,21 @@ export function localReviewCommentsMessage(comments: readonly LocalReviewComment
     return `${index + 1}. ${where}${quoted}: ${comment.text}`;
   });
   return [LOCAL_REVIEW_COPY.commentsIntro, '', ...items].join('\n');
+}
+
+/** The preview's console errors as one turn, quoting each error and where it came from. */
+export function localPreviewErrorsMessage(report: PreviewConsoleReport): string {
+  const items = report.errors.map((error, index) => {
+    const where =
+      error.source === null
+        ? ''
+        : ` (${error.source}${error.line === null ? '' : `:${error.line}`})`;
+    const repeated = error.count > 1 ? ` [x${error.count}]` : '';
+    return `${index + 1}. ${error.message}${where}${repeated}`;
+  });
+  const dropped =
+    report.dropped > 0 ? ['', LOCAL_CODE_COPY.consoleErrorsDropped(report.dropped)] : [];
+  return [LOCAL_CODE_COPY.consoleErrorsIntro(report.url), '', ...items, ...dropped].join('\n');
 }
 
 export const LOCAL_PANEL_COPY = {

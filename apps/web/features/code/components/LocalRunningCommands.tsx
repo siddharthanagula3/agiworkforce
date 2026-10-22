@@ -7,39 +7,57 @@ import {
   cancelLocalCommand,
   openLocalPreview,
   readBackgroundActivity,
+  readPreviewConsoleErrors,
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
-import { LOCAL_CODE_COPY } from '../local-code';
+import { LOCAL_CODE_COPY, localPreviewErrorsMessage } from '../local-code';
 import styles from '../CloudCodePage.module.css';
 
 const GLYPH_SIZE = 15;
 const POLL_MS = 3000;
 const MINUTE_MS = 60_000;
 
+async function countPreviewErrors(): Promise<number> {
+  try {
+    const report = await readPreviewConsoleErrors(false);
+    return report.errors.length + report.dropped;
+  } catch {
+    return 0;
+  }
+}
+
 export interface LocalRunningCommandsProps {
   rootId: string;
   refreshKey: number;
+  /** Absent where the session cannot take a turn, which leaves preview errors unsent. */
+  onSendToAgent?: (message: string) => void;
   now?: () => number;
 }
 
 export function LocalRunningCommands({
   rootId,
   refreshKey,
+  onSendToAgent,
   now = Date.now,
 }: LocalRunningCommandsProps) {
   const [runs, setRuns] = useState<BackgroundCommandRun[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [errorCount, setErrorCount] = useState(0);
   const [stopping, setStopping] = useState<ReadonlySet<string>>(new Set());
 
   const load = useCallback(async () => {
     try {
       const activity = await readBackgroundActivity();
-      setRuns(activity.commands.filter((run) => run.rootId === rootId));
+      const here = activity.commands.filter((run) => run.rootId === rootId);
+      setRuns(here);
       setError(null);
+      setErrorCount(
+        onSendToAgent && here.some((run) => run.previewUrl) ? await countPreviewErrors() : 0,
+      );
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.runningCommandsFailed));
     }
-  }, [rootId]);
+  }, [rootId, onSendToAgent]);
 
   useEffect(() => {
     void load();
@@ -53,6 +71,19 @@ export function LocalRunningCommands({
       setError(null);
     } catch (cause: unknown) {
       setError(toUserMessage(cause, LOCAL_CODE_COPY.previewFailed));
+    }
+  };
+
+  const sendErrors = async () => {
+    if (!onSendToAgent) return;
+    try {
+      const report = await readPreviewConsoleErrors(true);
+      setErrorCount(0);
+      if (report.errors.length === 0) return;
+      onSendToAgent(localPreviewErrorsMessage(report));
+      setError(null);
+    } catch (cause: unknown) {
+      setError(toUserMessage(cause, LOCAL_CODE_COPY.consoleErrorsFailed));
     }
   };
 
@@ -90,6 +121,15 @@ export function LocalRunningCommands({
         <p className={styles['changesEmpty']} role="alert">
           {error}
         </p>
+      )}
+      {onSendToAgent && errorCount > 0 && (
+        <button
+          type="button"
+          className={styles['secondaryButton']}
+          onClick={() => void sendErrors()}
+        >
+          {LOCAL_CODE_COPY.sendConsoleErrors(errorCount)}
+        </button>
       )}
       <ul className={styles['fileList']}>
         {runs.map((run) => (

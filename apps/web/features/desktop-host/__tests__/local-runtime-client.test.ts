@@ -29,6 +29,7 @@ import {
   steerDeveloperTurn,
   stopComputerUse,
   writeLocalCommandPolicy,
+  readPreviewConsoleErrors,
 } from '../lib/runtime-client';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
 
@@ -171,6 +172,25 @@ describe('local command client', () => {
       allow: ['ls'],
       deny: [],
     });
+  });
+});
+
+describe('reading the preview console errors', () => {
+  it('names the command and whether the errors are cleared by the read', async () => {
+    const calls: Array<{ command: string; args?: Record<string, unknown> }> = [];
+    const report = { url: 'http://localhost:5173/', errors: [], dropped: 0 };
+    installHost(async (command, args) => {
+      calls.push({ command, args });
+      return ok(report);
+    });
+
+    await expect(readPreviewConsoleErrors(false)).resolves.toEqual(report);
+    await readPreviewConsoleErrors(true);
+
+    expect(calls.map((call) => [call.command, call.args])).toEqual([
+      ['app_preview_errors', { clear: false }],
+      ['app_preview_errors', { clear: true }],
+    ]);
   });
 });
 

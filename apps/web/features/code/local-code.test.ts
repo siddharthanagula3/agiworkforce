@@ -43,6 +43,7 @@ import {
   localReviewComment,
   localReviewCommentsMessage,
   localReviewLines,
+  localPreviewErrorsMessage,
   localReviewTotals,
   LOCAL_FILES_SHORTCUT,
   LOCAL_REVIEW_SHORTCUT,
@@ -896,6 +897,50 @@ describe('local session markers', () => {
     expect(localSessionMarker({ ...session, status: 'running' }, null)).toBeNull();
     expect(localSessionMarker(session, 'failed')).toBe('failed');
     expect(localSessionMarker(session, undefined)).toBeNull();
+  });
+});
+
+describe('the preview console errors as a turn', () => {
+  it('numbers each error with its source and repeats, and says how many were not kept', () => {
+    expect(
+      localPreviewErrorsMessage({
+        url: 'http://localhost:5173/',
+        errors: [
+          { message: 'boom', source: 'http://localhost:5173/a.ts', line: 3, count: 2 },
+          { message: 'plain', source: null, line: null, count: 1 },
+          { message: 'no line', source: 'http://localhost:5173/b.ts', line: null, count: 1 },
+        ],
+        dropped: 1,
+      }),
+    ).toBe(
+      [
+        'The page I opened in the preview, http://localhost:5173/, logged these errors in its console:',
+        '',
+        '1. boom (http://localhost:5173/a.ts:3) [x2]',
+        '2. plain',
+        '3. no line (http://localhost:5173/b.ts)',
+        '',
+        '1 more error was not kept.',
+      ].join('\n'),
+    );
+  });
+
+  it('leaves the address out when no page is open', () => {
+    expect(
+      localPreviewErrorsMessage({
+        url: null,
+        errors: [
+          { message: 'The preview page stopped (crashed).', source: null, line: null, count: 1 },
+        ],
+        dropped: 0,
+      }),
+    ).toBe(
+      [
+        'The page I opened in the preview logged these errors in its console:',
+        '',
+        '1. The preview page stopped (crashed).',
+      ].join('\n'),
+    );
   });
 });
 
