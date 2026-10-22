@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const created = vi.hoisted(() => ({ windows: [] as Array<Record<string, unknown>> }));
 
@@ -14,7 +14,13 @@ vi.mock('electron', async () => {
     setAlwaysOnTop = vi.fn();
     setVisibleOnAllWorkspaces = vi.fn();
     setContentProtection = vi.fn();
-    showInactive = vi.fn();
+    visible = false;
+    showInactive = vi.fn(() => {
+      this.visible = true;
+    });
+    isVisible() {
+      return this.visible;
+    }
     loadURL = vi.fn(async () => undefined);
     constructor(options: Record<string, unknown>) {
       super();
@@ -32,14 +38,11 @@ vi.mock('electron', async () => {
   return {
     BrowserWindow: FakeWindow,
     nativeTheme: { shouldUseDarkColors: true },
-    screen: {
-      getCursorScreenPoint: () => ({ x: 0, y: 0 }),
-      getDisplayNearestPoint: () => ({ workArea: { x: 0, y: 25, width: 1440, height: 875 } }),
-    },
   };
 });
 
 const {
+  RECORDER_OVERLAY_SHOW_TIMEOUT_MS,
   RECORDER_OVERLAY_LABEL,
   RECORDER_OVERLAY_STOP_URL,
   openRecorderOverlay,
@@ -51,8 +54,14 @@ type FakeWindow = EventEmitter & {
   options: Record<string, unknown>;
   webContents: EventEmitter;
   setContentProtection: ReturnType<typeof vi.fn>;
+  showInactive: ReturnType<typeof vi.fn>;
+  destroyed: boolean;
   destroy(): void;
 };
+
+const startDisplay = { workArea: { x: 0, y: 25, width: 1440, height: 875 } };
+const open = (onStop: () => void = vi.fn(), display = startDisplay) =>
+  openRecorderOverlay({ startedAt: 0, display, onStop });
 
 function lastWindow(): FakeWindow {
   return created.windows.at(-1) as unknown as FakeWindow;
@@ -60,6 +69,11 @@ function lastWindow(): FakeWindow {
 
 beforeEach(() => {
   created.windows.length = 0;
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 describe('the recording indicator', () => {
@@ -85,7 +99,7 @@ describe('the recording indicator', () => {
   });
 
   it('is kept out of screen capture and never takes focus', () => {
-    openRecorderOverlay({ startedAt: 0, onStop: vi.fn() });
+    open();
     const win = lastWindow();
 
     expect(win.setContentProtection).toHaveBeenCalledWith(true);
@@ -99,7 +113,7 @@ describe('the recording indicator', () => {
 
   it('stops on the Stop control and refuses every other navigation', () => {
     const onStop = vi.fn();
-    openRecorderOverlay({ startedAt: 0, onStop });
+    open(onStop);
     const contents = lastWindow().webContents;
     const navigate = (url: string) => {
       const event = { preventDefault: vi.fn() };
@@ -115,13 +129,60 @@ describe('the recording indicator', () => {
 
   it('stops the recording when it goes away by any route but its owner closing it', () => {
     const onStop = vi.fn();
-    const overlay = openRecorderOverlay({ startedAt: 0, onStop });
+    const overlay = open(onStop);
     lastWindow().destroy();
     expect(onStop).toHaveBeenCalledTimes(1);
 
     const quiet = vi.fn();
-    openRecorderOverlay({ startedAt: 0, onStop: quiet }).close();
+    open(quiet).close();
     expect(quiet).not.toHaveBeenCalled();
     overlay.close();
+  });
+
+  it('opens on the display it is given, not the one under the pointer', () => {
+    open(vi.fn(), { workArea: { x: 1440, y: 0, width: 1920, height: 1080 } });
+
+    expect(lastWindow().options).toMatchObject({ x: 1440 + (1920 - 240) / 2, y: 12 });
+  });
+
+  it('reports shown only once it is visible', async () => {
+    const overlay = open();
+    const win = lastWindow();
+    let settled: boolean | null = null;
+    void overlay.shown.then((visible) => {
+      settled = visible;
+    });
+    await Promise.resolve();
+    expect(settled).toBeNull();
+
+    win.emit('ready-to-show');
+
+    await expect(overlay.shown).resolves.toBe(true);
+    expect(win.showInactive).toHaveBeenCalledTimes(1);
+  });
+
+  it('goes away and stops the recording when it fails to load', async () => {
+    const onStop = vi.fn();
+    const overlay = open(onStop);
+    const win = lastWindow();
+
+    win.webContents.emit('did-fail-load', {}, -2, 'failed', 'data:', true);
+
+    await expect(overlay.shown).resolves.toBe(false);
+    expect(win.destroyed).toBe(true);
+    expect(onStop).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives up when it is not shown in time', async () => {
+    const onStop = vi.fn();
+    const overlay = open(onStop);
+    const win = lastWindow();
+
+    await vi.advanceTimersByTimeAsync(RECORDER_OVERLAY_SHOW_TIMEOUT_MS);
+    win.emit('ready-to-show');
+
+    await expect(overlay.shown).resolves.toBe(false);
+    expect(win.destroyed).toBe(true);
+    expect(win.showInactive).not.toHaveBeenCalled();
   });
 });

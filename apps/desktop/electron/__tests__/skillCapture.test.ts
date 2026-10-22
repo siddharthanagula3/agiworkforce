@@ -5,10 +5,31 @@ import {
   SKILL_CAPTURE_LIMITS,
 } from '@agiworkforce/local-runtime-contract';
 
+type FakeDisplay = {
+  id: number;
+  size: { width: number; height: number };
+  scaleFactor: number;
+  workArea: { x: number; y: number; width: number; height: number };
+};
+
 const electron = vi.hoisted(() => {
   const power = new Map<string, Set<() => void>>();
+  const screenEvents = new Map<string, Set<(event: unknown, display: unknown) => void>>();
+  const display = (id: number, x: number): FakeDisplay => ({
+    id,
+    size: { width: 1440, height: 900 },
+    scaleFactor: 2,
+    workArea: { x, y: 25, width: 1440, height: 875 },
+  });
+  const primary = display(7, 0);
+  const secondary = display(9, 1440);
   return {
     power,
+    screenEvents,
+    primary,
+    secondary,
+    displays: [primary, secondary] as FakeDisplay[],
+    pointerOn: primary as FakeDisplay,
     getSources: vi.fn(),
     powerMonitor: {
       on: vi.fn((event: string, listener: () => void) => {
@@ -27,12 +48,17 @@ vi.mock('electron', () => ({
   desktopCapturer: { getSources: electron.getSources },
   powerMonitor: electron.powerMonitor,
   screen: {
-    getCursorScreenPoint: () => ({ x: 10, y: 10 }),
-    getDisplayNearestPoint: () => ({
-      id: 7,
-      size: { width: 1440, height: 900 },
-      scaleFactor: 2,
-    }),
+    getCursorScreenPoint: () => ({ x: electron.pointerOn.workArea.x + 10, y: 10 }),
+    getDisplayNearestPoint: () => electron.pointerOn,
+    getAllDisplays: () => electron.displays,
+    on: (event: string, listener: (event: unknown, display: unknown) => void) => {
+      const listeners = electron.screenEvents.get(event) ?? new Set();
+      listeners.add(listener);
+      electron.screenEvents.set(event, listeners);
+    },
+    removeListener: (event: string, listener: (event: unknown, display: unknown) => void) => {
+      electron.screenEvents.get(event)?.delete(listener);
+    },
   },
 }));
 
@@ -40,6 +66,7 @@ const overlay = vi.hoisted(() => ({
   close: vi.fn(),
   open: vi.fn(),
   onStop: null as null | (() => void),
+  shown: Promise.resolve(true) as Promise<boolean>,
 }));
 vi.mock('../recorderOverlayWindow', () => ({
   openRecorderOverlay: overlay.open,
@@ -52,6 +79,14 @@ const screenRecording = vi.hoisted(() => ({ status: 'granted' as string }));
 vi.mock('../runtime/systemPermissions', () => ({
   systemPermissionStatus: () => screenRecording.status,
 }));
+
+const secureInputActive = vi.hoisted(() => vi.fn(async () => false));
+vi.mock('../runtime/computerUseService', () => ({ secureInputActive }));
+
+const realPlatform = process.platform;
+function runOn(platform: NodeJS.Platform): void {
+  Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+}
 
 const {
   SkillCaptureRefused,
@@ -75,6 +110,10 @@ function screenShows(...shades: number[]) {
   for (const shade of shades) {
     electron.getSources.mockResolvedValueOnce([{ display_id: '7', thumbnail: image(shade) }]);
   }
+}
+
+function frameShade(frame: { imageBase64: string } | undefined): string {
+  return Buffer.from(frame?.imageBase64 ?? '', 'base64').toString();
 }
 
 function appWindow(id: number) {
@@ -106,6 +145,12 @@ async function nextSample(): Promise<void> {
 
 beforeEach(() => {
   vi.useFakeTimers();
+  runOn('darwin');
+  electron.displays = [electron.primary, electron.secondary];
+  electron.pointerOn = electron.primary;
+  secureInputActive.mockReset();
+  secureInputActive.mockResolvedValue(false);
+  overlay.shown = Promise.resolve(true);
   screenRecording.status = 'granted';
   showDevicePrompt.mockResolvedValue({ response: 1, checkboxChecked: false });
   electron.getSources.mockReset();
@@ -113,13 +158,14 @@ beforeEach(() => {
   overlay.open.mockReset();
   overlay.open.mockImplementation((options: { onStop: () => void }) => {
     overlay.onStop = options.onStop;
-    return { close: overlay.close };
+    return { close: overlay.close, shown: overlay.shown };
   });
 });
 
 afterEach(() => {
   discardSkillCapture();
   vi.useRealTimers();
+  runOn(realPlatform);
 });
 
 describe('starting a skill recording', () => {
@@ -163,13 +209,42 @@ describe('starting a skill recording', () => {
     expect(showDevicePrompt).not.toHaveBeenCalled();
   });
 
-  it('gives up without an indicator when the first frame comes back empty', async () => {
+  it('gives up and removes the indicator when the first frame comes back empty', async () => {
     electron.getSources.mockResolvedValueOnce([{ display_id: '7', thumbnail: image(0, true) }]);
 
     const outcome = await start(appWindow(1));
 
     expect(outcome).toMatchObject({ started: false, reason: 'permission' });
-    expect(overlay.open).not.toHaveBeenCalled();
+    expect(overlay.close).toHaveBeenCalledTimes(1);
+    expect(skillCaptureStatus().phase).toBe('idle');
+  });
+
+  it('takes no frame until the indicator is on screen', async () => {
+    let show: (visible: boolean) => void = () => undefined;
+    overlay.shown = new Promise<boolean>((resolve) => {
+      show = resolve;
+    });
+    screenShows(10);
+
+    const pending = start(appWindow(1));
+    await vi.advanceTimersByTimeAsync(SKILL_CAPTURE_LIMITS.frameIntervalMs * 2);
+    expect(overlay.open).toHaveBeenCalledTimes(1);
+    expect(electron.getSources).not.toHaveBeenCalled();
+
+    show(true);
+    expect(await pending).toMatchObject({ started: true });
+    expect(electron.getSources).toHaveBeenCalledTimes(1);
+  });
+
+  it('records nothing when the indicator fails to show', async () => {
+    overlay.shown = Promise.resolve(false);
+
+    const outcome = await start(appWindow(1));
+    await nextSample();
+
+    expect(outcome).toMatchObject({ started: false, reason: 'unavailable' });
+    expect(electron.getSources).not.toHaveBeenCalled();
+    expect(overlay.close).toHaveBeenCalledTimes(1);
     expect(skillCaptureStatus().phase).toBe('idle');
   });
 
@@ -189,6 +264,16 @@ describe('starting a skill recording', () => {
     });
   });
 
+  it('refuses before prompting when the Mac cannot be checked for password fields', async () => {
+    secureInputActive.mockRejectedValueOnce(new Error('helper missing'));
+
+    const outcome = await start(appWindow(1));
+
+    expect(outcome).toMatchObject({ started: false, reason: 'unavailable' });
+    expect(showDevicePrompt).not.toHaveBeenCalled();
+    expect(overlay.open).not.toHaveBeenCalled();
+  });
+
   it('refuses a second start while one recording is running or unsaved', async () => {
     screenShows(10);
     await start(appWindow(1));
@@ -196,6 +281,114 @@ describe('starting a skill recording', () => {
     await expect(start(appWindow(1))).rejects.toMatchObject({ code: 'conflict' });
     stopSkillCapture('user');
     await expect(start(appWindow(1))).rejects.toMatchObject({ code: 'conflict' });
+  });
+});
+
+describe('the recorded display', () => {
+  it('shows the indicator on the start display and keeps capturing it when the pointer moves', async () => {
+    const owner = appWindow(1);
+    screenShows(10);
+    await start(owner);
+    electron.pointerOn = electron.secondary;
+    electron.getSources.mockResolvedValueOnce([
+      { display_id: '9', thumbnail: image(90) },
+      { display_id: '7', thumbnail: image(70) },
+    ]);
+
+    await nextSample();
+
+    expect(overlay.open.mock.calls[0]?.[0]).toMatchObject({ display: { id: 7 } });
+    expect(skillCaptureStatus()).toMatchObject({ phase: 'recording', displayId: 7 });
+    const recording = saveSkillCapture(owner as never);
+    expect(recording.frames.map(frameShade)).toEqual(['frame-10', 'frame-70']);
+  });
+
+  it('stops instead of capturing another screen when the start display cannot be matched', async () => {
+    screenShows(10);
+    await start(appWindow(1));
+    electron.getSources.mockResolvedValueOnce([{ display_id: '9', thumbnail: image(90) }]);
+
+    await nextSample();
+
+    expect(skillCaptureStatus()).toMatchObject({
+      phase: 'stopped',
+      stoppedBy: 'display-lost',
+      frameCount: 1,
+    });
+  });
+
+  it('stops when the start display is disconnected', async () => {
+    screenShows(10);
+    await start(appWindow(1));
+
+    electron.displays = [electron.secondary];
+    for (const listener of electron.screenEvents.get('display-removed') ?? []) {
+      listener({}, electron.primary);
+    }
+
+    expect(skillCaptureStatus()).toMatchObject({ phase: 'stopped', stoppedBy: 'display-lost' });
+    expect(overlay.close).toHaveBeenCalledTimes(1);
+  });
+
+  it('stops at the next sample when the start display is no longer listed', async () => {
+    screenShows(10);
+    await start(appWindow(1));
+    electron.displays = [electron.secondary];
+    electron.getSources.mockResolvedValueOnce([{ display_id: '9', thumbnail: image(90) }]);
+
+    await nextSample();
+
+    expect(skillCaptureStatus()).toMatchObject({ phase: 'stopped', stoppedBy: 'display-lost' });
+    expect(electron.getSources).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('secure input on macOS', () => {
+  it('drops a frame while secure input is on before the capture, without capturing', async () => {
+    screenShows(10);
+    await start(appWindow(1));
+    secureInputActive.mockResolvedValueOnce(true);
+
+    await nextSample();
+
+    expect(electron.getSources).toHaveBeenCalledTimes(1);
+    expect(skillCaptureStatus()).toMatchObject({ frameCount: 1, secureInputSkips: 1 });
+  });
+
+  it('drops a frame when secure input came on during the capture', async () => {
+    screenShows(10, 200);
+    await start(appWindow(1));
+    secureInputActive.mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+
+    await nextSample();
+
+    expect(electron.getSources).toHaveBeenCalledTimes(2);
+    expect(skillCaptureStatus()).toMatchObject({ frameCount: 1, secureInputSkips: 1 });
+  });
+
+  it('drops the frame when the check cannot answer', async () => {
+    screenShows(10, 200);
+    await start(appWindow(1));
+    secureInputActive.mockRejectedValueOnce(new Error('helper stopped'));
+
+    await nextSample();
+
+    expect(skillCaptureStatus()).toMatchObject({
+      phase: 'recording',
+      frameCount: 1,
+      secureInputSkips: 1,
+    });
+  });
+
+  it('is not consulted on Windows', async () => {
+    runOn('win32');
+    screenShows(10, 200);
+    await start(appWindow(1));
+
+    await nextSample();
+
+    expect(secureInputActive).not.toHaveBeenCalled();
+    expect(skillCaptureStatus()).toMatchObject({ frameCount: 2, secureInputSkips: 0 });
   });
 });
 
@@ -285,6 +478,37 @@ describe('saving or discarding a skill recording', () => {
 
     expect(discardSkillCapture()).toMatchObject({ phase: 'idle', frameCount: 0 });
     expect(overlay.close).toHaveBeenCalled();
+  });
+
+  it('says when an unsaved recording will be dropped, and drops it then', async () => {
+    screenShows(10);
+    await start(appWindow(1));
+
+    const stopped = stopSkillCapture('user');
+    expect(stopped.discardsAt).toBe(
+      (stopped.startedAt ?? 0) + stopped.durationMs + SKILL_CAPTURE_LIMITS.stoppedRetentionMs,
+    );
+
+    await vi.advanceTimersByTimeAsync(SKILL_CAPTURE_LIMITS.stoppedRetentionMs - 1);
+    expect(skillCaptureStatus()).toMatchObject({ phase: 'stopped', frameCount: 1 });
+    await vi.advanceTimersByTimeAsync(1);
+    expect(skillCaptureStatus()).toMatchObject({ phase: 'idle', frameCount: 0, discardsAt: null });
+  });
+
+  it('does not let an earlier recording expiry drop a later one', async () => {
+    const owner = appWindow(1);
+    screenShows(10);
+    await start(owner);
+    stopSkillCapture('user');
+    saveSkillCapture(owner as never);
+    await vi.advanceTimersByTimeAsync(SKILL_CAPTURE_LIMITS.stoppedRetentionMs / 2);
+
+    screenShows(20);
+    await start(owner);
+    stopSkillCapture('user');
+    await vi.advanceTimersByTimeAsync(SKILL_CAPTURE_LIMITS.stoppedRetentionMs / 2 + 1);
+
+    expect(skillCaptureStatus()).toMatchObject({ phase: 'stopped', frameCount: 1 });
   });
 
   it('drops the recording when the window that started it closes', async () => {

@@ -1,15 +1,17 @@
-import { BrowserWindow, nativeTheme, screen } from 'electron';
+import { BrowserWindow, nativeTheme, type Display } from 'electron';
 import { pageBackgroundColor } from './windowChrome';
 
 export const RECORDER_OVERLAY_STOP_URL = 'agi-recorder:stop';
 export const RECORDER_OVERLAY_LABEL = 'Recording';
 export const RECORDER_OVERLAY_STOP_LABEL = 'Stop';
+export const RECORDER_OVERLAY_SHOW_TIMEOUT_MS = 3_000;
 
 const OVERLAY_WIDTH = 240;
 const OVERLAY_HEIGHT = 52;
 const OVERLAY_TOP_GAP = 12;
 
 export interface RecorderOverlay {
+  shown: Promise<boolean>;
   close(): void;
 }
 
@@ -64,17 +66,19 @@ export function recorderOverlayUrl(startedAt: number, prefersDark: boolean): str
 
 /**
  * The indicator is the recording's lifeline: whatever closes it, the Stop
- * button or the window going away for any other reason, stops the recording,
- * so a capture never runs without it on screen. Content protection keeps it
- * out of the frames it is announcing.
+ * button, a failed load, or the window going away for any other reason, stops
+ * the recording, so a capture never runs without it on screen. `shown` settles
+ * true only once it is visible on `display`, and false when it fails to load or
+ * is not visible within the show timeout; the caller captures nothing before
+ * it is true. Content protection keeps it out of the frames it is announcing.
  */
 export function openRecorderOverlay(options: {
   startedAt: number;
+  display: Pick<Display, 'workArea'>;
   onStop: () => void;
 }): RecorderOverlay {
-  const display = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const win = new BrowserWindow({
-    ...recorderOverlayBounds(display.workArea),
+    ...recorderOverlayBounds(options.display.workArea),
     show: false,
     frame: false,
     focusable: false,
@@ -97,6 +101,21 @@ export function openRecorderOverlay(options: {
     },
   });
   let closedByOwner = false;
+  let settleShown: (visible: boolean) => void = () => undefined;
+  const shown = new Promise<boolean>((resolve) => {
+    settleShown = (visible) => {
+      clearTimeout(showTimer);
+      settleShown = () => undefined;
+      resolve(visible);
+    };
+  });
+  const destroy = (): void => {
+    if (!win.isDestroyed()) win.destroy();
+  };
+  const showTimer = setTimeout(() => {
+    settleShown(false);
+    destroy();
+  }, RECORDER_OVERLAY_SHOW_TIMEOUT_MS);
   win.setAlwaysOnTop(true, 'floating');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
   win.setContentProtection(true);
@@ -105,21 +124,34 @@ export function openRecorderOverlay(options: {
     event.preventDefault();
     if (url === RECORDER_OVERLAY_STOP_URL) options.onStop();
   });
+  win.webContents.on('did-fail-load', () => {
+    settleShown(false);
+    destroy();
+  });
   win.webContents.on('render-process-gone', () => {
-    if (!win.isDestroyed()) win.destroy();
+    settleShown(false);
+    destroy();
   });
   win.once('ready-to-show', () => {
-    if (!win.isDestroyed()) win.showInactive();
+    if (win.isDestroyed()) return;
+    win.showInactive();
+    settleShown(win.isVisible());
   });
   win.on('closed', () => {
+    settleShown(false);
     if (!closedByOwner) options.onStop();
   });
-  void win.loadURL(recorderOverlayUrl(options.startedAt, nativeTheme.shouldUseDarkColors));
+  win.loadURL(recorderOverlayUrl(options.startedAt, nativeTheme.shouldUseDarkColors)).catch(() => {
+    settleShown(false);
+    destroy();
+  });
 
   return {
+    shown,
     close() {
       closedByOwner = true;
-      if (!win.isDestroyed()) win.destroy();
+      settleShown(false);
+      destroy();
     },
   };
 }

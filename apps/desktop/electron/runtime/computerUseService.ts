@@ -351,6 +351,26 @@ export async function applicationTakingInput(): Promise<
   return { ...app, secureInput };
 }
 
+/**
+ * Whether the app in front holds macOS secure input, read for screen recording
+ * alone: the helper's `front` answer needs no Accessibility, so this asks for
+ * none. A reply that names no front app cannot vouch for anything and throws,
+ * so a caller that fails closed treats it as secure input on.
+ */
+export async function secureInputActive(): Promise<boolean> {
+  const support = computerUseSupport();
+  if (!support.supported) throw new ComputerUseRefused('unsupported', support.reason);
+  const raw = (await sendToHelper({ action: 'front' }))['front'];
+  if (
+    typeof raw !== 'object' ||
+    raw === null ||
+    typeof (raw as Record<string, unknown>)['app'] !== 'string'
+  ) {
+    throw new ComputerUseRefused('failed', 'The input helper could not read the app in front.');
+  }
+  return (raw as Record<string, unknown>)['secureInput'] === true;
+}
+
 export async function typeForUser(text: string): Promise<void> {
   requireInputAccess();
   await sendToHelper({ action: 'type', text });

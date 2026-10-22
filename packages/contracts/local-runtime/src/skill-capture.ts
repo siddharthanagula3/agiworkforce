@@ -18,7 +18,13 @@ export const SKILL_CAPTURE_PHASES = ['idle', 'recording', 'stopped'] as const;
 
 export type SkillCapturePhase = (typeof SKILL_CAPTURE_PHASES)[number];
 
-export const SKILL_CAPTURE_STOP_CAUSES = ['user', 'limit', 'screen-locked', 'failed'] as const;
+export const SKILL_CAPTURE_STOP_CAUSES = [
+  'user',
+  'limit',
+  'screen-locked',
+  'display-lost',
+  'failed',
+] as const;
 
 export type SkillCaptureStopCause = (typeof SKILL_CAPTURE_STOP_CAUSES)[number];
 
@@ -34,6 +40,7 @@ export const SKILL_CAPTURE_LIMITS = {
   maxDurationMs: 10 * 60_000,
   maxFrames: 200,
   frameMaxWidth: 1_280,
+  stoppedRetentionMs: 15 * 60_000,
 } as const;
 
 export interface SkillCaptureFrame {
@@ -55,6 +62,14 @@ export interface SkillCaptureStatus {
   stoppedBy: SkillCaptureStopCause | null;
   failure: string | null;
   screenRecording: SystemPermissionStatus;
+  displayId: number | null;
+  secureInputSkips: number;
+  /**
+   * When a stopped recording that was neither saved nor discarded is dropped by
+   * the host, `stoppedRetentionMs` after it stopped. The stop UI must say so;
+   * after this time the status reads `idle` and the frames are gone.
+   */
+  discardsAt: number | null;
 }
 
 export interface SkillCaptureRecording {
@@ -68,7 +83,7 @@ export type SkillCaptureStartOutcome =
   | { started: true; status: SkillCaptureStatus }
   | {
       started: false;
-      reason: 'declined' | 'permission';
+      reason: 'declined' | 'permission' | 'unavailable';
       message: string;
       status: SkillCaptureStatus;
     };
