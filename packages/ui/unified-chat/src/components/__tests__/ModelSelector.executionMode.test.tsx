@@ -532,3 +532,73 @@ describe('ModelSelector top-plan badge', () => {
     expect(topRow.contains(badges[0] ?? null)).toBe(true);
   });
 });
+
+describe('ModelSelector new badge', () => {
+  const newMetadata = requireCatalogModel(
+    (model) => model.modelType !== 'image' && model.newUntil !== undefined,
+    'a chat model the catalog marks as new',
+  );
+  const plainMetadata = requireCatalogModel(
+    (model) =>
+      model.modelType !== 'image' && model.newUntil === undefined && model.id !== newMetadata.id,
+    'a chat model the catalog does not mark as new',
+  );
+  const newModel = createChatModelInfo({
+    id: newMetadata.id,
+    name: newMetadata.name,
+    provider: newMetadata.provider,
+    isLocal: false,
+    isByok: true,
+  });
+  const plainModel = createChatModelInfo({
+    id: plainMetadata.id,
+    name: plainMetadata.name,
+    provider: plainMetadata.provider,
+    isLocal: false,
+    isByok: true,
+  });
+
+  const openWithBothModels = () => {
+    useModelStore.setState({
+      models: [newModel, plainModel],
+      selectedModelId: plainModel.id,
+      modelCatalogStatus: 'ready',
+      modelCatalogError: null,
+      recentModelIds: [],
+      lastRoutingDecision: null,
+    });
+    seedConversation('byok', plainModel.id);
+    render(<ModelSelector />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+  };
+
+  afterEach(() => {
+    vi.useRealTimers();
+    cleanup();
+    window.localStorage.clear();
+  });
+
+  it('marks only the model the catalog lists as new while its date holds', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(`${newMetadata.newUntil}T12:00:00Z`));
+    openWithBothModels();
+
+    const badges = screen.getAllByTestId('model-new-badge');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]?.textContent).toBe('New');
+    const newRow = screen.getByRole('button', {
+      name: (accessibleName) => accessibleName.includes(newModel.name),
+    });
+    expect(newRow.contains(badges[0] ?? null)).toBe(true);
+  });
+
+  it('drops the badge once the date has passed', () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    const dayAfter = new Date(`${newMetadata.newUntil}T12:00:00Z`);
+    dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+    vi.setSystemTime(dayAfter);
+    openWithBothModels();
+
+    expect(screen.queryByTestId('model-new-badge')).toBeNull();
+  });
+});

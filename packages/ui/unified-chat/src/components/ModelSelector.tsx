@@ -29,6 +29,7 @@ import {
   getModelReasoning,
   getModelEffortOptions,
   getMinimumRequiredTier,
+  isModelNew,
   PLAN_LABEL,
   canAccessAutoRoutingProfileForTier,
   getAutoRoutingProfiles,
@@ -239,6 +240,19 @@ function TopPlanBadge({ modelId }: { modelId: string }) {
       className="shrink-0 rounded-compact border border-[var(--chat-border-strong)] px-1 py-0.5 text-caption font-medium text-[var(--chat-text-muted)]"
     >
       {PLAN_LABEL[TOP_PLAN_BADGE_TIER]}
+    </span>
+  );
+}
+
+function NewModelBadge({ modelId }: { modelId: string }) {
+  const { t } = useUiTranslation('models');
+  if (!isModelNew(modelId, new Date())) return null;
+  return (
+    <span
+      data-testid="model-new-badge"
+      className="shrink-0 rounded-compact border border-[var(--chat-info)] px-1 py-0.5 text-caption font-medium text-[var(--chat-info-text)]"
+    >
+      {t('selector.new', 'New')}
     </span>
   );
 }
@@ -871,6 +885,7 @@ export function ModelSelector({
                                       local
                                     </span>
                                   )}
+                                  <NewModelBadge modelId={m.id} />
                                   <TopPlanBadge modelId={m.id} />
                                   {!isSelectable && (
                                     <span className="shrink-0 rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-[var(--chat-warning-bg)] text-[var(--chat-warning-fg)]">

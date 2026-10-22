@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "lastUpdated": "2026-10-18",
+  "lastUpdated": "2026-10-22",
   "verificationLog": [
     {
       "date": "2026-09-14",
@@ -535,6 +535,12 @@
       "verifiedBy": "official-openrouter-openapi-and-video-models-listing-no-live-call",
       "status": "CORRECTION",
       "notes": "seedance-2.5 takes imageInput.maxImagesPerRequest 4, which is what lets the managed video route send it input images. OpenRouter's OpenAPI document (https://openrouter.ai/openapi.json, read 2026-10-22) defines VideoGenerationRequest.frame_images (image_url parts with frame_type first_frame or last_frame) and input_references (image references that every provider honours); the public listing https://openrouter.ai/api/v1/videos/models, read the same day, gives bytedance/seedance-2.5 supported_frame_images [first_frame, last_frame], and its model page says each url is an https URL or a base64 data URL. Neither source publishes a maximum number of reference images, so the catalog sets 4, the multi-image-to-video count the reference products show. Image input does not change the price: the listing's with_video_input SKU applies only to a video reference, and the route settles on OpenRouter's reported cost. No live provider call was made for this change."
+    },
+    {
+      "date": "2026-10-22",
+      "verifiedBy": "catalog-verification-log-and-family-slot-history",
+      "status": "ADDITION",
+      "notes": "Models now carry an optional newUntil date (YYYY-MM-DD, inclusive) that the model picker reads to show a New badge, which stops on its own the day after. Release dates in the catalog are often month-only, so the badge is curated rather than computed. It is set to 30 days after the day each model reached the picker, read from this log and the family slot history: claude-opus-5-5, claude-sonnet-5-5, gpt-6.1-sol, gpt-6-luna, grok-4.7 and deepseek-flash took their family slots on 2026-10-07 and claude-haiku-5-5 joined the catalog that day, so they carry 2026-11-06; gemini-4-argon went live on 2026-10-18 and carries 2026-11-17. gpt-6-astra took its slot on 2026-09-05 and is past the window. No provider fact changed."
     }
   ],
   "providers": {
@@ -1105,6 +1111,7 @@
       "apiModelId": "gpt-6.1-sol",
       "openRouterSlug": "openai/gpt-6.1-sol",
       "name": "GPT-6.1 Sol",
+      "newUntil": "2026-11-06",
       "provider": "openai",
       "modelType": "reasoning",
       "openWeight": false,
@@ -1191,6 +1198,7 @@
       "apiModelId": "gpt-6-luna",
       "openRouterSlug": "openai/gpt-6-luna",
       "name": "GPT-6 Luna",
+      "newUntil": "2026-11-06",
       "provider": "openai",
       "modelType": "reasoning",
       "openWeight": false,
@@ -1350,6 +1358,7 @@
       "apiModelId": "claude-opus-5-5",
       "openRouterSlug": "anthropic/claude-opus-5.5",
       "name": "Claude Opus 5.5",
+      "newUntil": "2026-11-06",
       "provider": "anthropic",
       "modelType": "reasoning",
       "openWeight": false,
@@ -1424,6 +1433,7 @@
       "apiModelId": "claude-sonnet-5-5",
       "openRouterSlug": "anthropic/claude-sonnet-5.5",
       "name": "Claude Sonnet 5.5",
+      "newUntil": "2026-11-06",
       "provider": "anthropic",
       "modelType": "code",
       "openWeight": false,
@@ -1499,6 +1509,7 @@
       "apiModelId": "claude-haiku-5-5",
       "openRouterSlug": "anthropic/claude-haiku-5.5",
       "name": "Claude Haiku 5.5",
+      "newUntil": "2026-11-06",
       "provider": "anthropic",
       "modelType": "chat",
       "openWeight": false,
@@ -1626,6 +1637,7 @@
       "apiModelId": "gemini-4-argon",
       "openRouterSlug": "google/gemini-4-argon",
       "name": "Gemini 4 Argon",
+      "newUntil": "2026-11-17",
       "provider": "google",
       "modelType": "reasoning",
       "openWeight": false,
@@ -1948,6 +1960,7 @@
       "apiModelId": "deepseek-flash",
       "openRouterSlug": "deepseek/deepseek-v4.1-flash",
       "name": "DeepSeek V4.1 Flash",
+      "newUntil": "2026-11-06",
       "provider": "deepseek",
       "modelType": "code",
       "openWeight": true,
@@ -2867,6 +2880,7 @@
       "apiModelId": "grok-4.7",
       "openRouterSlug": "x-ai/grok-4.7",
       "name": "Grok 4.7",
+      "newUntil": "2026-11-06",
       "provider": "xai",
       "modelType": "reasoning",
       "openWeight": false,

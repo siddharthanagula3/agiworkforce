@@ -80,6 +80,7 @@ import {
   getMinimumRequiredTier,
   getModelMetadataById,
   isFreeBillingPlanTier,
+  isModelNew,
   normalizeBillingPlanTier,
   type ModelEnvironment,
 } from '@agiworkforce/types';
@@ -167,6 +168,7 @@ const PICKER_ROW_WRAPPED_GUIDANCE_CLASS = 'block text-xs leading-4 text-muted-fo
 const PICKER_BADGE_CLASS =
   'shrink-0 rounded-full px-1.5 py-px text-xs font-semibold uppercase tracking-wide';
 const PICKER_ICON_SIZE = 16;
+const NEW_MODEL_LABEL = 'New';
 const PLAN_LOADING_LABEL = "Loading your plan's models…";
 const PLAN_RETRY_LABEL = "Could not load your plan's models. Try again";
 const PICKER_TRIGGER_ICON_SIZE = 12;
@@ -663,6 +665,7 @@ function ModelRow({
     !isLocked && getMinimumRequiredTier(model.id) === TOP_PLAN_BADGE_TIER
       ? resolvePlanLockLabel(model.id)
       : null;
+  const newLabel = !isHardDisabled && isModelNew(model.id, new Date()) ? NEW_MODEL_LABEL : null;
   const guidance = promotionLabel ?? rowGuidance(model, row, degraded, deprecationWarning);
 
   const handleLockedClick = () => {
@@ -680,6 +683,7 @@ function ModelRow({
         : (promotedAriaLabel ?? model.name);
   const ariaLabel = [
     baseAriaLabel,
+    newLabel,
     topPlanLabel,
     releaseStageLabel,
     deprecationWarning ? `Leaving on ${deprecationWarning.fullLabel}` : null,
@@ -753,6 +757,14 @@ function ModelRow({
       )}
       <span className="ms-auto flex shrink-0 items-center gap-2">
         {row?.priceBand && <PriceBand band={row.priceBand} />}
+        {newLabel && (
+          <span
+            data-testid="model-new-badge"
+            className={`${PICKER_BADGE_CLASS} border border-[var(--chat-info)] normal-case text-[var(--chat-info-text)]`}
+          >
+            {newLabel}
+          </span>
+        )}
         {topPlanLabel && (
           <span
             data-testid="model-plan-badge"

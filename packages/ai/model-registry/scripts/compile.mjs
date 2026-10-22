@@ -130,6 +130,7 @@ const CANONICAL_ORDER = [
   'qualityTier',
   'bestFor',
   'pickerRecommended',
+  'newUntil',
   'released',
   'deprecated',
   'deprecation_date',
@@ -604,6 +605,11 @@ function buildCatalog(curation, synced, familyCatalog, defaultsCatalog) {
       jurisdiction: developers.catalog.developers[developer.id]?.jurisdiction ?? null,
     };
     merged.capabilities = projectCompatCapabilities(normalizeCapabilities(merged));
+    assert.ok(
+      merged.newUntil === undefined ||
+        (typeof merged.newUntil === 'string' && ISO_DATE_PATTERN.test(merged.newUntil)),
+      `${id} newUntil must be a YYYY-MM-DD date`,
+    );
     assert.ok(
       ['fast', 'balanced', 'best'].includes(merged.qualityTier),
       `${id} has invalid qualityTier ${String(merged.qualityTier)}; expected fast, balanced, or best`,

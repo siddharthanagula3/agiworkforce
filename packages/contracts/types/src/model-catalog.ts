@@ -660,6 +660,7 @@ export interface ModelMetadata {
   qualityTier: ModelQualityTier;
   bestFor: string[];
   pickerRecommended?: boolean;
+  newUntil?: string;
   variantPartner?: string;
   released?: string;
   deprecated?: boolean;
@@ -2247,6 +2248,13 @@ export function canAccessModelForSubscriptionTier(
 
 export function listCanonicalModels(): ModelMetadata[] {
   return Object.values(modelsCatalog.models);
+}
+
+export function isModelNew(modelId: string, asOf: Date): boolean {
+  const newUntil = getModelMetadataById(modelId)?.newUntil;
+  if (!newUntil) return false;
+  const day = toIsoDay(asOf);
+  return day !== null && day <= newUntil;
 }
 
 export function listPickerRecommendedModelIds(): string[] {

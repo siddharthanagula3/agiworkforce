@@ -26,10 +26,19 @@ const registryFixtures = await vi.hoisted(async () => {
   });
   if (!locked) throw new Error('catalog exposes no model gated above the entry plan');
   const topPlan = models.find(
-    (entry) => entry.id !== locked.id && getMinimumRequiredTier(entry.id) === 'max',
+    (entry) =>
+      entry.id !== locked.id && getMinimumRequiredTier(entry.id) === 'max' && !entry.newUntil,
   );
   if (!topPlan) throw new Error('catalog exposes no model gated to the top plan');
+  const newModel = models.find((entry) => entry.id !== locked.id && entry.newUntil);
+  if (!newModel?.newUntil) throw new Error('catalog marks no model as new');
   return {
+    newModel: {
+      id: newModel.id,
+      name: newModel.name,
+      provider: newModel.provider,
+      newUntil: newModel.newUntil,
+    },
     topPlan: {
       id: topPlan.id,
       name: topPlan.name,
@@ -325,6 +334,53 @@ describe('ComposerFooter · picker rows', () => {
     expect(within(row).getByTestId('model-plan-badge')).toHaveTextContent(topPlan.planLabel);
     const plain = within(dialog).getByRole('button', { name: 'Primary Fixture' });
     expect(within(plain).queryByTestId('model-plan-badge')).toBeNull();
+  });
+
+  describe('new badge', () => {
+    const newModel = registryFixtures.newModel;
+    const rosterWithNewModel = [
+      ...BASE_MODELS,
+      {
+        id: newModel.id,
+        name: newModel.name,
+        provider: newModel.provider,
+        providerKey: newModel.provider,
+        description: 'new model fixture',
+      },
+    ];
+    const newModelRow = (dialog: HTMLElement) => {
+      const row = modelRows(dialog).find((button) =>
+        (button.getAttribute('aria-label') ?? '').startsWith(newModel.name),
+      );
+      if (!row) throw new Error(`no picker row for ${newModel.name}`);
+      return row;
+    };
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('marks a model the catalog lists as new through its last new day', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(new Date(`${newModel.newUntil}T23:00:00Z`));
+      useRoster(rosterWithNewModel);
+      const dialog = mountAndOpen();
+      const row = newModelRow(dialog);
+      expect(within(row).getByTestId('model-new-badge')).toHaveTextContent('New');
+      expect(row.getAttribute('aria-label')).toContain(' - New');
+      const plain = within(dialog).getByRole('button', { name: 'Primary Fixture' });
+      expect(within(plain).queryByTestId('model-new-badge')).toBeNull();
+    });
+
+    it('drops the badge the day after the catalog date', () => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      const dayAfter = new Date(`${newModel.newUntil}T00:00:00Z`);
+      dayAfter.setUTCDate(dayAfter.getUTCDate() + 1);
+      vi.setSystemTime(dayAfter);
+      useRoster(rosterWithNewModel);
+      const dialog = mountAndOpen();
+      expect(within(newModelRow(dialog)).queryByTestId('model-new-badge')).toBeNull();
+    });
   });
 
   it('opens the catalogue from All models and names the plan on a locked row there', () => {
