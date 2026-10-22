@@ -281,3 +281,83 @@ export async function deleteSpendLimit(
   invalidateSpendDecision(organizationId);
   return rows.length > 0;
 }
+
+export interface PersonalSpendState {
+  configured: boolean;
+  monthlyCapCredits: number | null;
+  spentCredits: number;
+  remainingCredits: number | null;
+  overCap: boolean;
+  resetsAt: string;
+}
+
+interface PersonalSpendRow {
+  monthly_cap_microusd: string | number | null;
+  spent_microusd: string | number | null;
+  resets_at: string | Date;
+}
+
+export async function readPersonalSpendState(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<PersonalSpendState> {
+  const [row] = await db.query<PersonalSpendRow>(
+    `select l.monthly_cap_microusd,
+            public.personal_overage_spent_microusd($1) as spent_microusd,
+            (date_trunc('month', now() at time zone 'UTC') + interval '1 month')
+              at time zone 'UTC' as resets_at
+       from (select 1) as anchor
+       left join public.personal_spend_limits l on l.user_id = $1`,
+    [userId],
+  );
+  if (!row) throw new Error('personal spend state returned no row');
+
+  const spent = toNumber(row.spent_microusd);
+  const resetsAt = row.resets_at instanceof Date ? row.resets_at.toISOString() : row.resets_at;
+  if (row.monthly_cap_microusd === null) {
+    return {
+      configured: false,
+      monthlyCapCredits: null,
+      spentCredits: creditsFromMicrousd(spent),
+      remainingCredits: null,
+      overCap: false,
+      resetsAt,
+    };
+  }
+
+  const cap = toNumber(row.monthly_cap_microusd);
+  return {
+    configured: true,
+    monthlyCapCredits: creditsFromMicrousd(cap),
+    spentCredits: creditsFromMicrousd(spent),
+    remainingCredits: creditsFromMicrousd(Math.max(cap - spent, 0)),
+    overCap: spent >= cap,
+    resetsAt,
+  };
+}
+
+export async function upsertPersonalSpendLimit(
+  db: DatabaseAdapter,
+  userId: string,
+  monthlyCapCredits: number,
+): Promise<void> {
+  const rows = await db.query<{ user_id: string }>(
+    `insert into public.personal_spend_limits (user_id, monthly_cap_microusd)
+     values ($1, $2)
+     on conflict (user_id) do update set monthly_cap_microusd = excluded.monthly_cap_microusd
+     returning user_id`,
+    [userId, Math.round(microusdFromCredits(monthlyCapCredits))],
+  );
+  if (rows.length === 0) throw new Error('personal_spend_limits upsert returned no row');
+}
+
+export async function deletePersonalSpendLimit(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<boolean> {
+  const rows = await db.query<{ user_id: string }>(
+    `delete from public.personal_spend_limits where user_id = $1 returning user_id`,
+    [userId],
+  );
+  return rows.length > 0;
+}

@@ -28,6 +28,8 @@ import {
   type ManagedUsageSummaryResponse,
   type TierUnitUsage,
 } from '@agiworkforce/types';
+import type { PersonalSpendLimitResponse } from '@/app/api/settings/spend-limit/route';
+import { AutoReloadSettingsSchema } from '@/features/billing/lib/billing-account-types';
 import { usageWorkloadLabel } from '@/lib/billing/usage-attribution';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
@@ -48,6 +50,10 @@ const MINUTE_MS = 60 * 1000;
 const HISTORY_ROW_LIMIT = 8;
 const REPORT_WINDOW = 'window';
 const LIMITS_FAILURE = 'Could not load this month’s usage.';
+const SPEND_LIMIT_URL = '/api/settings/spend-limit';
+const SPEND_LIMIT_FAILURE = 'Could not load your monthly spend limit.';
+const AUTO_RELOAD_URL = '/api/billing/auto-reload';
+const AUTO_RELOAD_FAILURE = 'Could not load auto-reload.';
 
 const CARD: CSSProperties = {
   border: '1px solid var(--settings-border)',
@@ -413,6 +419,218 @@ function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
         <BalanceRow label="Bonus credits" value={bonus.value} detail={bonus.detail} />
         <BalanceRow label="Purchased credits" value={purchased.value} detail={purchased.detail} />
       </dl>
+    </section>
+  );
+}
+
+type PersonalSpendState = PersonalSpendLimitResponse['state'];
+
+function parsePersonalSpendState(value: unknown): PersonalSpendState | null {
+  if (!isRecord(value) || !isRecord(value['state'])) return null;
+  const state = value['state'];
+  const cap = state['monthlyCapCredits'];
+  const remaining = state['remainingCredits'];
+  if (
+    typeof state['configured'] !== 'boolean' ||
+    typeof state['spentCredits'] !== 'number' ||
+    typeof state['overCap'] !== 'boolean' ||
+    typeof state['resetsAt'] !== 'string' ||
+    (cap !== null && typeof cap !== 'number') ||
+    (remaining !== null && typeof remaining !== 'number')
+  ) {
+    return null;
+  }
+  return {
+    configured: state['configured'],
+    monthlyCapCredits: cap,
+    spentCredits: state['spentCredits'],
+    remainingCredits: remaining,
+    overCap: state['overCap'],
+    resetsAt: state['resetsAt'],
+  };
+}
+
+function parseAutoReloadEnabled(value: unknown): { enabled: boolean } | null {
+  const parsed = AutoReloadSettingsSchema.safeParse(value);
+  return parsed.success ? { enabled: parsed.data.enabled } : null;
+}
+
+function spendLimitSummary(state: PersonalSpendState): string {
+  if (!state.configured || state.monthlyCapCredits === null) return 'No limit set';
+  return `${formatCreditAmount(state.spentCredits)} of ${formatCreditAmount(state.monthlyCapCredits)} used this month`;
+}
+
+function SpendLimitEditor({
+  state,
+  onSaved,
+  onCancel,
+}: {
+  state: PersonalSpendState;
+  onSaved: () => void;
+  onCancel: () => void;
+}) {
+  const [value, setValue] = useState(
+    state.monthlyCapCredits === null ? '' : String(state.monthlyCapCredits),
+  );
+  const [pending, setPending] = useState<'save' | 'remove' | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const credits = Number(value);
+  const valid = value.trim() !== '' && Number.isInteger(credits) && credits >= 1;
+
+  const send = async (method: 'PUT' | 'DELETE') => {
+    setPending(method === 'PUT' ? 'save' : 'remove');
+    setError(null);
+    try {
+      const response = await fetch(SPEND_LIMIT_URL, {
+        method,
+        credentials: 'include',
+        headers: await addCsrfHeaders({ 'Content-Type': 'application/json' }),
+        ...(method === 'PUT' ? { body: JSON.stringify({ monthlyCapCredits: credits }) } : {}),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const reason =
+          isRecord(payload) && isRecord(payload['error']) ? payload['error']['message'] : null;
+        throw new Error(typeof reason === 'string' ? reason : 'Your limit was not saved.');
+      }
+      onSaved();
+    } catch (sendError) {
+      setError(toUserMessage(sendError, 'Your limit was not saved.'));
+      setPending(null);
+    }
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!valid) {
+      setError('Enter a whole number of credits, 1 or more.');
+      return;
+    }
+    void send('PUT');
+  };
+
+  return (
+    <form
+      onSubmit={submit}
+      noValidate
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
+    >
+      <label
+        htmlFor="usage-spend-limit-input"
+        style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}
+      >
+        Monthly limit in credits
+      </label>
+      <input
+        id="usage-spend-limit-input"
+        type="number"
+        inputMode="numeric"
+        min={1}
+        step={1}
+        value={value}
+        onChange={(event) => setValue(event.target.value)}
+        disabled={pending !== null}
+        aria-invalid={error !== null}
+        aria-describedby={error ? 'usage-spend-limit-error' : undefined}
+        className={`${FIELD_CLASS} max-w-xs`}
+      />
+      {error && (
+        <p id="usage-spend-limit-error" role="alert" style={{ ...CRITICAL_DETAIL, margin: 0 }}>
+          {error}
+        </p>
+      )}
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+        <button type="submit" disabled={pending !== null} className={PRIMARY_BUTTON_CLASS}>
+          {pending === 'save' ? 'Saving…' : 'Save limit'}
+        </button>
+        {state.configured && (
+          <button
+            type="button"
+            disabled={pending !== null}
+            onClick={() => void send('DELETE')}
+            className={QUIET_BUTTON_CLASS}
+          >
+            {pending === 'remove' ? 'Removing…' : 'Remove limit'}
+          </button>
+        )}
+        <button
+          type="button"
+          disabled={pending !== null}
+          onClick={onCancel}
+          className={QUIET_BUTTON_CLASS}
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
+function MonthlySpendLimitCard() {
+  const limit = useUsageResource(SPEND_LIMIT_URL, parsePersonalSpendState, SPEND_LIMIT_FAILURE);
+  const autoReload = useUsageResource(AUTO_RELOAD_URL, parseAutoReloadEnabled, AUTO_RELOAD_FAILURE);
+  const [editing, setEditing] = useState(false);
+  const state = limit.data;
+
+  const autoReloadLabel = autoReload.data
+    ? autoReload.data.enabled
+      ? 'Auto-reload on'
+      : 'Auto-reload off'
+    : 'Auto-reload settings';
+
+  return (
+    <section aria-labelledby="usage-spend-limit-heading" style={CARD}>
+      <div style={CARD_HEADER}>
+        <div style={{ ...ROW, alignItems: 'center' }}>
+          <h2 id="usage-spend-limit-heading" style={CARD_TITLE}>
+            Monthly spend limit
+          </h2>
+          {state && !editing && (
+            <button
+              type="button"
+              onClick={() => setEditing(true)}
+              className={`${QUIET_BUTTON_CLASS} rounded-full`}
+              style={{ padding: '0 var(--space-3)' }}
+            >
+              Manage
+            </button>
+          )}
+        </div>
+        <p style={CARD_NOTE}>Caps the credits used past your plan limits each month.</p>
+      </div>
+      <div style={CARD_BODY}>
+        {limit.error ? (
+          <RetryNotice message={limit.error} onRetry={limit.reload} />
+        ) : !state ? (
+          <LoadingNotice label="Loading spend limit…" />
+        ) : editing ? (
+          <SpendLimitEditor
+            state={state}
+            onSaved={() => {
+              setEditing(false);
+              limit.reload();
+            }}
+            onCancel={() => setEditing(false)}
+          />
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+            <p data-testid="usage-spend-limit-status" style={{ ...DETAIL, margin: 0 }}>
+              {`${spendLimitSummary(state)} · `}
+              <SettingsSectionLink
+                section="billing"
+                className="text-[var(--text-2)] underline underline-offset-4"
+              >
+                {autoReloadLabel}
+              </SettingsSectionLink>
+            </p>
+            {state.overCap && (
+              <p style={{ ...CRITICAL_DETAIL, margin: 0 }}>
+                {`Limit reached. Credits past your plan limits resume ${formatUtcDate(state.resetsAt)}.`}
+              </p>
+            )}
+          </div>
+        )}
+      </div>
     </section>
   );
 }
@@ -1076,6 +1294,8 @@ export function UsageSection() {
       </section>
 
       {credits && !contractPriced && !isFreePlan && <CreditBalancesCard credits={credits} />}
+
+      {usage !== null && !contractPriced && !isFreePlan && <MonthlySpendLimitCard />}
 
       {!isFreePlan && <MonthlyAllowancesCard resource={limits} />}
 

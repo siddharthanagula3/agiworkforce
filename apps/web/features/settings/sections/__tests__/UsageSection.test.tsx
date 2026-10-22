@@ -9,6 +9,13 @@ vi.mock('@agiworkforce/ui', async (importOriginal) => ({
     React.createElement('div', { 'data-testid': 'progress', 'data-value': value }),
 }));
 
+vi.mock('@/lib/client/csrf', () => ({
+  addCsrfHeaders: vi.fn(async (headers: Record<string, string> = {}) => ({
+    ...headers,
+    'x-csrf-token': 'csrf-test',
+  })),
+}));
+
 import { __resetManagedUsageSummaryForTest } from '@/lib/hooks/useManagedUsageSummary';
 import { UsageSection } from '../UsageSection';
 import { SettingsSectionNavigationProvider } from '../../components/SettingsSectionLink';
@@ -117,18 +124,69 @@ function answer(body: unknown): Answer {
 
 const FAILED: Answer = { ok: false, body: {} };
 
+function spendState(over: Record<string, unknown> = {}) {
+  return {
+    state: {
+      configured: false,
+      monthlyCapCredits: null,
+      spentCredits: 0,
+      remainingCredits: null,
+      overCap: false,
+      resetsAt: '2026-11-01T00:00:00.000Z',
+      ...over,
+    },
+  };
+}
+
+function autoReloadSettings(enabled: boolean) {
+  return {
+    enabled,
+    thresholdCredits: 500,
+    amountUsd: 50,
+    paymentMethod: null,
+    lastFailure: null,
+    consent: null,
+  };
+}
+
+interface Write {
+  method: string;
+  body: unknown;
+}
+
 interface UsageApi {
   summary: () => Answer;
   limits?: () => Answer;
   history?: () => Answer;
+  spendLimit?: () => Answer;
+  spendLimitWrite?: (write: Write) => Answer;
+  autoReload?: () => Answer;
 }
+
+const writes: Write[] = [];
 
 function stubUsageApi(api: UsageApi): string[] {
   const requested: string[] = [];
-  global.fetch = vi.fn(async (input: RequestInfo | URL) => {
+  writes.length = 0;
+  const spendLimit = api.spendLimit ?? (() => answer(spendState()));
+  const autoReload = api.autoReload ?? (() => answer(autoReloadSettings(false)));
+  global.fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
-    requested.push(url);
+    const method = init?.method ?? 'GET';
     const path = url.split('?')[0];
+    if (method !== 'GET') {
+      if (path !== '/api/settings/spend-limit' || !api.spendLimitWrite) {
+        throw new Error(`UsageSection sent an unexpected ${method} to ${url}`);
+      }
+      const write = {
+        method,
+        body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+      };
+      writes.push(write);
+      const { ok, body } = api.spendLimitWrite(write);
+      return { ok, json: async () => body } as Response;
+    }
+    requested.push(url);
     const route =
       path === '/api/usage'
         ? api.summary
@@ -136,7 +194,11 @@ function stubUsageApi(api: UsageApi): string[] {
           ? api.limits
           : path === '/api/usage/history'
             ? api.history
-            : undefined;
+            : path === '/api/settings/spend-limit'
+              ? spendLimit
+              : path === '/api/billing/auto-reload'
+                ? autoReload
+                : undefined;
     if (!route) throw new Error(`UsageSection requested an unexpected url: ${url}`);
     const { ok, body } = route();
     return { ok, json: async () => body } as Response;
@@ -195,6 +257,10 @@ describe('UsageSection', () => {
     expect(screen.queryByRole('button', { name: 'Billing history' })).toBeNull();
     expect(screen.queryByTestId('usage-status')).toBeNull();
     expect(requested).not.toContain('/api/usage/limits');
+    expect(screen.queryByText('Monthly spend limit')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Manage' })).toBeNull();
+    expect(requested).not.toContain('/api/settings/spend-limit');
+    expect(requested).not.toContain('/api/billing/auto-reload');
   });
 
   it('says the billing period lapsed instead of showing a full allowance it will not honour', async () => {
@@ -544,4 +610,161 @@ describe('UsageSection status, buy credits and billing links', () => {
     expect(onNavigate).toHaveBeenNthCalledWith(2, 'billing');
     expect(screen.getByText('Learn more about usage limits')).toBeTruthy();
   });
+});
+
+describe('UsageSection monthly spend limit', () => {
+  function stubSpend(api: Partial<UsageApi> = {}) {
+    return stubUsageApi({
+      summary: () => answer(proSummary()),
+      limits: () => answer(monthlyLimits()),
+      history: () => FAILED,
+      ...api,
+    });
+  }
+
+  function spendCard(): HTMLElement {
+    return screen.getByRole('heading', { name: 'Monthly spend limit' }).closest('section')!;
+  }
+
+  it('shows no limit and the auto-reload state as a link to Billing', async () => {
+    stubSpend();
+    const onNavigate = vi.fn();
+    renderSection(vi.fn(), onNavigate);
+
+    const status = await screen.findByTestId('usage-spend-limit-status');
+    expect(status.textContent).toBe('No limit set · Auto-reload off');
+    expect(within(spendCard()).getByRole('button', { name: 'Manage' })).toBeTruthy();
+    fireEvent.click(within(status).getByRole('button', { name: 'Auto-reload off' }));
+    expect(onNavigate).toHaveBeenCalledWith('billing');
+  });
+
+  it('shows credits used against the limit, in credits only, and a reached limit in red', async () => {
+    stubSpend({
+      spendLimit: () =>
+        answer(
+          spendState({
+            configured: true,
+            monthlyCapCredits: 2_000,
+            spentCredits: 2_000,
+            remainingCredits: 0,
+            overCap: true,
+          }),
+        ),
+      autoReload: () => answer(autoReloadSettings(true)),
+    });
+    renderSection();
+
+    const status = await screen.findByTestId('usage-spend-limit-status');
+    expect(status.textContent).toMatch(/^2,000 credits of 2,000 credits used this month · /);
+    expect(status.textContent).toContain('Auto-reload on');
+    const reached = within(spendCard()).getByText(/^Limit reached\./);
+    expect(reached.getAttribute('style')).toContain('var(--chat-destructive-text)');
+    expect(spendCard().textContent).not.toMatch(/\$|USD|dollar/i);
+  });
+
+  it('saves a new limit through Manage and shows what the server saved', async () => {
+    let current = spendState();
+    stubSpend({
+      spendLimit: () => answer(current),
+      spendLimitWrite: (write) => {
+        current = spendState({
+          configured: true,
+          monthlyCapCredits: (write.body as { monthlyCapCredits: number }).monthlyCapCredits,
+          spentCredits: 120,
+          remainingCredits: 1_380,
+        });
+        return answer(current);
+      },
+    });
+    renderSection();
+
+    fireEvent.click(await within(await waitForCard()).findByRole('button', { name: 'Manage' }));
+    fireEvent.change(screen.getByLabelText('Monthly limit in credits'), {
+      target: { value: '1500' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save limit' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('usage-spend-limit-status').textContent).toMatch(
+        /^120 credits of 1,500 credits used this month/,
+      ),
+    );
+    expect(writes).toEqual([{ method: 'PUT', body: { monthlyCapCredits: 1500 } }]);
+  });
+
+  it('refuses a limit that is not a whole number of credits without sending it', async () => {
+    stubSpend({ spendLimitWrite: () => answer(spendState()) });
+    renderSection();
+
+    fireEvent.click(await within(await waitForCard()).findByRole('button', { name: 'Manage' }));
+    fireEvent.change(screen.getByLabelText('Monthly limit in credits'), {
+      target: { value: '12.5' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save limit' }));
+
+    expect(await screen.findByText('Enter a whole number of credits, 1 or more.')).toBeTruthy();
+    expect(writes).toEqual([]);
+  });
+
+  it('keeps the editor open and says why when the server refuses the limit', async () => {
+    stubSpend({
+      spendLimitWrite: () => ({
+        ok: false,
+        body: { error: { message: 'Enter a whole number of credits up to 1,000,000.' } },
+      }),
+    });
+    renderSection();
+
+    fireEvent.click(await within(await waitForCard()).findByRole('button', { name: 'Manage' }));
+    fireEvent.change(screen.getByLabelText('Monthly limit in credits'), {
+      target: { value: '5000000' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save limit' }));
+
+    expect(
+      await screen.findByText('Enter a whole number of credits up to 1,000,000.'),
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Monthly limit in credits')).toBeTruthy();
+  });
+
+  it('removes a saved limit', async () => {
+    let current = spendState({ configured: true, monthlyCapCredits: 800, remainingCredits: 800 });
+    stubSpend({
+      spendLimit: () => answer(current),
+      spendLimitWrite: () => {
+        current = spendState();
+        return answer(current);
+      },
+    });
+    renderSection();
+
+    fireEvent.click(await within(await waitForCard()).findByRole('button', { name: 'Manage' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove limit' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('usage-spend-limit-status').textContent).toMatch(/^No limit set/),
+    );
+    expect(writes).toEqual([{ method: 'DELETE', body: undefined }]);
+  });
+
+  it('admits it could not read the limit and offers a retry instead of showing none', async () => {
+    let spend: Answer = FAILED;
+    stubSpend({ spendLimit: () => spend });
+    renderSection();
+
+    const failure = await screen.findByText('Could not load your monthly spend limit.');
+    expect(screen.queryByText(/No limit set/)).toBeNull();
+    spend = answer(spendState());
+    fireEvent.click(
+      within(failure.closest('section') as HTMLElement).getByRole('button', { name: 'Try again' }),
+    );
+    expect((await screen.findByTestId('usage-spend-limit-status')).textContent).toMatch(
+      /^No limit set/,
+    );
+  });
+
+  async function waitForCard(): Promise<HTMLElement> {
+    await screen.findByTestId('usage-spend-limit-status');
+    return spendCard();
+  }
 });

@@ -12,13 +12,16 @@ vi.mock('@/lib/services/spend-alert-service', () => ({
 }));
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { creditsFromCents, creditsFromMicrousd } from '@agiworkforce/types';
+import { creditsFromCents, creditsFromMicrousd, microusdFromCredits } from '@agiworkforce/types';
 import {
   __clearSpendCacheForTests,
+  deletePersonalSpendLimit,
   evaluateSpendLimit,
   invalidateSpendDecision,
+  readPersonalSpendState,
   readSpendState,
   SPEND_CACHE_TTL_MS,
+  upsertPersonalSpendLimit,
 } from '../spend-limit-service';
 
 const ORG = '11111111-1111-4111-8111-111111111111';
@@ -223,5 +226,98 @@ describe('evaluateSpendLimit admin alerts', () => {
 
     expect(decision.allowed).toBe(false);
     expect(decision.code).toBe('over_cap');
+  });
+});
+
+describe('personal spend limit', () => {
+  const USER = 'user_personal';
+  const RESETS = new Date('2026-11-01T00:00:00.000Z');
+
+  function personal(row: Record<string, unknown> | null, throws = false) {
+    const query = vi.fn(async (_sql?: string, _params?: unknown[]) => {
+      if (throws) throw new Error('billing table unavailable');
+      return row ? [row] : [];
+    });
+    return { db: { query, execute: vi.fn() } as unknown as DatabaseAdapter, query };
+  }
+
+  it('reads the limit and the month spend past the plan from the database owner of both', async () => {
+    const h = personal({
+      monthly_cap_microusd: String(microusdFromCredits(2_000)),
+      spent_microusd: String(microusdFromCredits(500)),
+      resets_at: RESETS,
+    });
+
+    const state = await readPersonalSpendState(h.db, USER);
+
+    expect(h.query).toHaveBeenCalledTimes(1);
+    const [sql, params] = h.query.mock.calls[0]!;
+    expect(String(sql)).toContain('public.personal_overage_spent_microusd($1)');
+    expect(String(sql)).toContain('public.personal_spend_limits');
+    expect(params).toEqual([USER]);
+    expect(state).toEqual({
+      configured: true,
+      monthlyCapCredits: 2_000,
+      spentCredits: 500,
+      remainingCredits: 1_500,
+      overCap: false,
+      resetsAt: RESETS.toISOString(),
+    });
+  });
+
+  it('reports no limit with the month spend when none is saved', async () => {
+    const h = personal({
+      monthly_cap_microusd: null,
+      spent_microusd: String(microusdFromCredits(40)),
+      resets_at: RESETS.toISOString(),
+    });
+
+    expect(await readPersonalSpendState(h.db, USER)).toEqual({
+      configured: false,
+      monthlyCapCredits: null,
+      spentCredits: 40,
+      remainingCredits: null,
+      overCap: false,
+      resetsAt: RESETS.toISOString(),
+    });
+  });
+
+  it('marks the limit reached and never reports negative credits left', async () => {
+    const h = personal({
+      monthly_cap_microusd: microusdFromCredits(100),
+      spent_microusd: microusdFromCredits(130),
+      resets_at: RESETS,
+    });
+
+    const state = await readPersonalSpendState(h.db, USER);
+
+    expect(state.overCap).toBe(true);
+    expect(state.remainingCredits).toBe(0);
+  });
+
+  it('throws when the state cannot be read instead of reporting an unlimited account', async () => {
+    await expect(readPersonalSpendState(personal(null, true).db, USER)).rejects.toThrow();
+    await expect(readPersonalSpendState(personal(null).db, USER)).rejects.toThrow();
+  });
+
+  it('stores the limit in microUSD for the caller only', async () => {
+    const h = personal({ user_id: USER });
+
+    await upsertPersonalSpendLimit(h.db, USER, 2_000);
+
+    const [sql, params] = h.query.mock.calls[0]!;
+    expect(String(sql)).toContain('insert into public.personal_spend_limits');
+    expect(params).toEqual([USER, microusdFromCredits(2_000)]);
+  });
+
+  it('fails a save the database did not confirm', async () => {
+    await expect(upsertPersonalSpendLimit(personal(null).db, USER, 10)).rejects.toThrow();
+  });
+
+  it('removes the caller limit', async () => {
+    const h = personal({ user_id: USER });
+
+    expect(await deletePersonalSpendLimit(h.db, USER)).toBe(true);
+    expect(h.query.mock.calls[0]![1]).toEqual([USER]);
   });
 });
