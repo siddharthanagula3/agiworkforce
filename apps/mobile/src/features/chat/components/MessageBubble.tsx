@@ -1382,6 +1382,7 @@ export const MessageBubble = memo(function MessageBubble({
                 isStreaming={message.isStreaming}
                 duration={message.metadata?.thinkingDuration as number | undefined}
                 startedAtMs={message.metadata?.thinkingStartedAt as number | undefined}
+                activity={canonicalActivity}
               />
             ) : null}
 
