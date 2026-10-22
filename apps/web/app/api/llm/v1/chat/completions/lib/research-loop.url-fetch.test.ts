@@ -576,3 +576,159 @@ describe('research loop runtime web_search', () => {
     expect(raw).toContain('data: [DONE]');
   });
 });
+
+describe('research loop parallel tool calls', () => {
+  const QUERIES = ['alpha reactor', 'beta reactor', 'gamma reactor'];
+  const DELAY_MS: Record<string, number> = {
+    'alpha reactor': 30,
+    'beta reactor': 15,
+    'gamma reactor': 1,
+  };
+
+  function parallelSearchTurns() {
+    streamRequestMock
+      .mockResolvedValueOnce(planStream())
+      .mockResolvedValueOnce(
+        toolCallsTurn(
+          QUERIES.map((query, index) => ({
+            id: `p${index + 1}`,
+            name: 'web_search',
+            args: { query },
+          })),
+        ),
+      )
+      .mockResolvedValueOnce(notesTurn('Three angles gathered. [1][2][3]'))
+      .mockResolvedValueOnce(sseStream([contentEvent('Report. [1][2][3]'), finishEvent()]));
+  }
+
+  function delayedSearchBackend() {
+    const tracker = { inFlight: 0, maxInFlight: 0, completed: [] as string[] };
+    const fetchMock = vi.fn(async (url: unknown, init?: { body?: unknown }) => {
+      if (url !== PERPLEXITY_URL) return new Response('', { status: 404 });
+      const query = QUERIES.find((candidate) => String(init?.body).includes(candidate))!;
+      tracker.inFlight += 1;
+      tracker.maxInFlight = Math.max(tracker.maxInFlight, tracker.inFlight);
+      await new Promise((resolve) => setTimeout(resolve, DELAY_MS[query]));
+      tracker.inFlight -= 1;
+      tracker.completed.push(query);
+      const slug = query.split(' ')[0];
+      return perplexityResponse([
+        { url: `https://${slug}.example/`, title: `${slug} result`, snippet: query },
+      ]);
+    });
+    return { fetchMock, tracker };
+  }
+
+  function lastSearchResults(raw: string): Array<{ url: string; position: number }> {
+    let last: Array<{ url: string; position: number }> = [];
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data: ') || trimmed === 'data: [DONE]') continue;
+      const event = JSON.parse(trimmed.slice(6)) as {
+        choices?: Array<{
+          delta?: { x_search_results?: { content: Array<{ url: string; position: number }> } };
+        }>;
+      };
+      const results = event.choices?.[0]?.delta?.x_search_results?.content;
+      if (results) last = results;
+    }
+    return last;
+  }
+
+  function runningGroups(raw: string): unknown[] {
+    const groups: unknown[] = [];
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed.startsWith('data: ') || trimmed === 'data: [DONE]') continue;
+      const event = JSON.parse(trimmed.slice(6)) as {
+        choices?: Array<{ delta?: { x_tool_status?: Record<string, unknown> } }>;
+      };
+      const status = event.choices?.[0]?.delta?.x_tool_status;
+      const args = status?.['args'] as { query?: unknown } | undefined;
+      if (status?.['status'] === 'running' && typeof args?.query === 'string') {
+        groups.push(status['parallel_group']);
+      }
+    }
+    return groups;
+  }
+
+  it('runs the searches a turn asks for at the same time and keeps citation order by call', async () => {
+    parallelSearchTurns();
+    const { fetchMock, tracker } = delayedSearchBackend();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'test-key');
+
+    try {
+      const raw = await collectRaw(
+        runResearchLoop(
+          makeGenericSearchProcessed([webSearchToolDef(), urlFetchToolDef()]),
+          { userId: 'user-1', token: 't' },
+          SKIP_APPROVALS,
+        ),
+      );
+
+      expect(tracker.maxInFlight).toBe(QUERIES.length);
+      expect(tracker.completed).toEqual([...QUERIES].reverse());
+
+      expect(lastSearchResults(raw).map((result) => [result.url, result.position])).toEqual([
+        ['https://alpha.example/', 1],
+        ['https://beta.example/', 2],
+        ['https://gamma.example/', 3],
+      ]);
+
+      const continuation = streamRequestMock.mock.calls[2]?.[2] as {
+        messages: Array<{ role: string; content: string; tool_call_id?: string }>;
+      };
+      const toolMessages = continuation.messages.filter((m) => m.role === 'tool');
+      expect(toolMessages.map((m) => m.tool_call_id)).toEqual(['p1', 'p2', 'p3']);
+      expect(toolMessages[0]?.content).toContain('alpha reactor');
+      expect(toolMessages[2]?.content).toContain('gamma reactor');
+
+      const groups = runningGroups(raw);
+      expect(groups).toHaveLength(QUERIES.length);
+      expect(typeof groups[0]).toBe('string');
+      expect(new Set(groups).size).toBe(1);
+
+      expect(searchCostMocks.settle).toHaveBeenCalledTimes(QUERIES.length);
+      expect(
+        searchCostMocks.settle.mock.calls
+          .map((call) => (call as unknown as [{ callOrdinal: number }])[0].callOrdinal)
+          .sort(),
+      ).toEqual([1, 2, 3]);
+      expect(researchStatuses(raw).at(-1)?.['searches']).toBe(QUERIES.length);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+
+  it('runs them one at a time when configuration limits the run to a single call', async () => {
+    parallelSearchTurns();
+    const { fetchMock, tracker } = delayedSearchBackend();
+    vi.stubGlobal('fetch', fetchMock);
+    vi.stubEnv('PERPLEXITY_API_KEY', 'test-key');
+    vi.stubEnv('AGI_RESEARCH_MAX_PARALLEL_TOOL_CALLS', '1');
+
+    try {
+      const raw = await collectRaw(
+        runResearchLoop(
+          makeGenericSearchProcessed([webSearchToolDef(), urlFetchToolDef()]),
+          { userId: 'user-1', token: 't' },
+          SKIP_APPROVALS,
+        ),
+      );
+
+      expect(tracker.maxInFlight).toBe(1);
+      expect(tracker.completed).toEqual(QUERIES);
+      expect(lastSearchResults(raw).map((result) => result.url)).toEqual([
+        'https://alpha.example/',
+        'https://beta.example/',
+        'https://gamma.example/',
+      ]);
+      expect(runningGroups(raw)).toEqual([undefined, undefined, undefined]);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.unstubAllEnvs();
+    }
+  });
+});

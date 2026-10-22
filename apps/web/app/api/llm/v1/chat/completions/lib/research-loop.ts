@@ -39,7 +39,8 @@
  *     message content; only the final synthesis turn streams `delta.content`.
  *
  * Bounds (all enforced): max iterations, max total searches, wall-clock
- * budget. Whatever stops the gathering phase, a synthesis turn always runs so
+ * budget, and how many of one turn's searches and page reads run at once
+ * (their results still commit in call order, so citation numbers stay stable). Whatever stops the gathering phase, a synthesis turn always runs so
  * the user gets a cited report from the material collected so far.
  */
 
@@ -167,6 +168,8 @@ export const DEFAULT_RESEARCH_MAX_ITERATIONS = 6;
 export const DEFAULT_RESEARCH_MAX_SEARCHES = 12;
 /** Wall-clock budget for the gathering phase (synthesis always still runs). */
 export const DEFAULT_RESEARCH_BUDGET_MS = 4 * 60_000;
+/** Searches and page reads from one gathering turn that run at the same time. */
+export const DEFAULT_RESEARCH_MAX_PARALLEL_TOOL_CALLS = 3;
 
 /** Research notes appended back into the thread are capped per turn. */
 const MAX_NOTE_CHARS = 6_000;
@@ -1328,10 +1331,10 @@ function gatheringDirective(
         ? `Research phase, round ${round} of up to ${maxRounds}: these planned searches have still not been run.${planned}`
         : `Research phase, round ${round} of up to ${maxRounds}: review your notes so far, identify the biggest remaining gaps or unverified claims, and run more targeted web searches to close them.`;
   const searchNote = runtimeSearch
-    ? ` This model has no built-in search, so every search runs through the ${WEB_SEARCH_TOOL} tool: call it (one query per call, at most ${WEB_SEARCH_MAX_CALLS_PER_TURN} calls this round) and wait for the results before writing any notes.`
+    ? ` This model has no built-in search, so every search runs through the ${WEB_SEARCH_TOOL} tool: call it (one query per call, at most ${WEB_SEARCH_MAX_CALLS_PER_TURN} calls this round, all of them in the same reply so they run at the same time) and wait for the results before writing any notes.`
     : '';
   const fetchNote = canFetch
-    ? ' When a specific page matters (the user provided a URL, or a search result looks central to the question), call the url_fetch tool to read that page in full before writing your notes.'
+    ? ' When a specific page matters (the user provided a URL, or a search result looks central to the question), call the url_fetch tool to read that page in full before writing your notes; request every page you need in the same reply so they are read at the same time.'
     : '';
   const sourceNote =
     sources.size > 0
@@ -1654,6 +1657,22 @@ function progressStatusOf(
   return null;
 }
 
+function boundedConcurrency(limit: number): <T>(task: () => Promise<T>) => Promise<T> {
+  let active = 0;
+  const waiting: Array<() => void> = [];
+  return async <T>(task: () => Promise<T>): Promise<T> => {
+    if (active >= limit) await new Promise<void>((resolve) => waiting.push(resolve));
+    else active += 1;
+    try {
+      return await task();
+    } finally {
+      const next = waiting.shift();
+      if (next) next();
+      else active -= 1;
+    }
+  };
+}
+
 export async function* runResearchLoop(
   processed: ProcessedRequest,
   _billing: { userId: string; token: string },
@@ -1686,6 +1705,12 @@ export async function* runResearchLoop(
   const budgetMs =
     options.budgetMs ??
     envInt('AGI_RESEARCH_BUDGET_MS', DEFAULT_RESEARCH_BUDGET_MS, 30_000, 10 * 60_000);
+  const maxParallelToolCalls = envInt(
+    'AGI_RESEARCH_MAX_PARALLEL_TOOL_CALLS',
+    DEFAULT_RESEARCH_MAX_PARALLEL_TOOL_CALLS,
+    1,
+    8,
+  );
   /**
    * A real planning turn backs the `planning` phase. It costs one model call,
    * so the gathering budget shrinks by one and the run's total provider calls
@@ -2328,20 +2353,25 @@ export async function* runResearchLoop(
   }
 
   async function runToolOperation(
-    kind: 'search' | 'fetch',
     call: ResearchToolCall,
-    execute: (sourceAdds: ResearchSourceEntry[]) => Promise<ResearchToolRecord>,
+    operationKey: string,
+    turnToCommit: Promise<void>,
+    execute: (
+      sourceAdds: ResearchSourceEntry[],
+      turnToCommit: Promise<void>,
+    ) => Promise<ResearchToolRecord>,
   ): Promise<ResearchToolRecord> {
     let executed = false;
     const record = await operations.tool({
-      operationKey: nextOperationKey(kind),
+      operationKey,
       payload: { name: call.name, args: call.args },
       execute: () => {
         executed = true;
-        return execute([]);
+        return execute([], turnToCommit);
       },
     });
     if (!executed) {
+      await turnToCommit;
       for (const added of record.sourceAdds) sources.add(added, true);
     }
     if (record.readsUntrustedContent) untrustedContentInContext = true;
@@ -2397,6 +2427,42 @@ export async function* runResearchLoop(
           (call) => [call.id, researchCallRefusal(call, gateResearchCall(call, calls))] as const,
         ),
     );
+
+    const runConcurrently = boundedConcurrency(maxParallelToolCalls);
+    const parallelGroup =
+      calls.length > 1 && maxParallelToolCalls > 1
+        ? `research:${iteration}:${calls[0]!.id}`
+        : undefined;
+    let previousCommitted: Promise<void> = Promise.resolve();
+    const launch = (
+      kind: 'search' | 'fetch',
+      call: ResearchToolCall,
+      execute: (
+        sourceAdds: ResearchSourceEntry[],
+        turnToCommit: Promise<void>,
+      ) => Promise<ResearchToolRecord>,
+    ): Promise<ResearchToolRecord> => {
+      const operationKey = nextOperationKey(kind);
+      const turnToCommit = previousCommitted;
+      let committed!: () => void;
+      previousCommitted = new Promise<void>((resolve) => {
+        committed = resolve;
+      });
+      const pending = runConcurrently(async () => {
+        try {
+          return await runToolOperation(call, operationKey, turnToCommit, execute);
+        } finally {
+          committed();
+        }
+      });
+      pending.catch(() => undefined);
+      return pending;
+    };
+    const outcomes: Array<{
+      call: ResearchToolCall;
+      kind: 'search' | 'fetch' | null;
+      result: Promise<ResearchToolRecord> | { content: string };
+    }> = [];
 
     for (const call of calls) {
       if (yield* flushCancellationIfRequested()) return true;
@@ -2458,8 +2524,10 @@ export async function* runResearchLoop(
           // Deep research runs unattended and searches in bulk, so its calls
           // are charged at the rate card rather than included.
           const searchOrdinal = totalSearches + roundCounts.searches;
-          yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
-          const record = await runToolOperation('search', call, async (sourceAdds) => {
+          yield encoder.encode(
+            loopToolStatusEvent(call.name, 'running', responseModel, call.args, parallelGroup),
+          );
+          const record = launch('search', call, async (sourceAdds, turnToCommit) => {
             const searchCharge = await admitResearchSearch(searchOrdinal);
             if (!searchCharge.admitted) {
               return {
@@ -2490,6 +2558,7 @@ export async function* runResearchLoop(
               attribution: processed.managedUsage?.attribution,
               db: researchScopedDb(),
             });
+            await turnToCommit;
             if (outcome.ok) {
               const fetched = webSearchResultsToFetchedSources(outcome);
               const ranked = rankSources(
@@ -2517,16 +2586,8 @@ export async function* runResearchLoop(
               outcome: 'ran',
             };
           });
-          content = record.content;
-          isError = record.isError;
-          if (record.outcome === 'ran') {
-            yield encoder.encode(
-              loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),
-            );
-          }
-          yield encoder.encode(
-            toolResultEvent(call.id, call.name, content, isError, responseModel),
-          );
+          outcomes.push({ call, kind: 'search', result: record });
+          continue;
         }
       } else if (!isUrlFetchTool(call.name)) {
         content = await applyToolResultSecretPolicy(
@@ -2560,13 +2621,16 @@ export async function* runResearchLoop(
       } else {
         totalFetches += 1;
         roundCounts.fetches += 1;
-        yield encoder.encode(loopToolStatusEvent(call.name, 'running', responseModel, call.args));
-        const record = await runToolOperation('fetch', call, async (sourceAdds) => {
+        yield encoder.encode(
+          loopToolStatusEvent(call.name, 'running', responseModel, call.args, parallelGroup),
+        );
+        const record = launch('fetch', call, async (sourceAdds, turnToCommit) => {
           const outcome = await executeUrlFetch(call.args, {
             maxContentChars: RESEARCH_FETCH_MAX_CONTENT_CHARS,
             domainPolicy,
             ...toolCallSignalOption(),
           });
+          await turnToCommit;
           if (outcome.ok) {
             recordingAggregator(sources, sourceAdds).add({
               url: outcome.url,
@@ -2589,14 +2653,29 @@ export async function* runResearchLoop(
             outcome: 'ran',
           };
         });
-        content = record.content;
-        isError = record.isError;
-        yield encoder.encode(
-          loopToolStatusEvent(call.name, isError ? 'failed' : 'completed', responseModel),
-        );
-        yield encoder.encode(toolResultEvent(call.id, call.name, content, isError, responseModel));
+        outcomes.push({ call, kind: 'fetch', result: record });
+        continue;
       }
 
+      outcomes.push({ call, kind: null, result: { content } });
+    }
+
+    for (const { call, kind, result } of outcomes) {
+      let content: string;
+      if (result instanceof Promise) {
+        const record = await result;
+        content = record.content;
+        if (kind === 'fetch' || record.outcome === 'ran') {
+          yield encoder.encode(
+            loopToolStatusEvent(call.name, record.isError ? 'failed' : 'completed', responseModel),
+          );
+        }
+        yield encoder.encode(
+          toolResultEvent(call.id, call.name, content, record.isError, responseModel),
+        );
+      } else {
+        content = result.content;
+      }
       turnMessages.push({ role: 'tool', content, tool_call_id: call.id });
     }
     return false;
