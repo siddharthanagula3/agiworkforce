@@ -4,6 +4,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import {
+  SLACK_CHANNEL_TOOLS,
   SlackChannelPolicyListSchema,
   SlackChannelPolicyUpdateSchema,
 } from '@agiworkforce/cloud-contracts';
@@ -66,6 +67,9 @@ async function handleSet(request: NextRequest, context: RouteContext) {
       resourceId: parsed.data.channelId,
       connectorId: 'slack-app',
       status: parsed.data.mode ?? 'default',
+      ...(parsed.data.tools !== undefined && parsed.data.mode !== null
+        ? { scopes: parsed.data.tools ?? [...SLACK_CHANNEL_TOOLS] }
+        : {}),
     },
   });
   return NextResponse.json(

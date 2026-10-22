@@ -17,6 +17,7 @@ import {
   isFlagshipRoutingSlot,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import { slackChannelToolAllowed, type SlackChannelTool } from '@agiworkforce/cloud-contracts';
 
 import { ADAPTER_PROVIDERS } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import {
@@ -143,6 +144,7 @@ export interface SlackTurnInput {
   runId: string;
   surface: SlackAssistantSurface;
   mode: SlackRunMode;
+  channelTools: readonly SlackChannelTool[] | null;
   observer?: SlackTurnObserver;
   conversation: ScheduledMessages;
   channelContext: string | null;
@@ -488,17 +490,21 @@ export async function runSlackAssistantTurn(input: SlackTurnInput): Promise<Slac
     planTier: entitlement.plan,
     provider: dispatchProvider,
     model: route.modelKey,
-    webAllowed: true,
+    webAllowed: slackChannelToolAllowed(input.channelTools, 'web'),
+    codeAllowed: slackChannelToolAllowed(input.channelTools, 'code'),
     connectors: input.surface === 'direct_message' ? null : [],
   });
+  const appsAllowed = slackChannelToolAllowed(input.channelTools, 'apps');
   // Slack has no setting that turns Google connectors on for it, so neither
   // their tools nor a custom, workspace or directory server on a Google API
   // host is ever offered here: Slack messages reach models chosen without
   // regard to Google API Limited Use.
-  const plan: ScheduledToolPlan = {
-    ...fullPlan,
-    mcpTools: await withoutGoogleHostedTools(db, userId, organizationId, fullPlan.mcpTools),
-  };
+  const plan: ScheduledToolPlan = appsAllowed
+    ? {
+        ...fullPlan,
+        mcpTools: await withoutGoogleHostedTools(db, userId, organizationId, fullPlan.mcpTools),
+      }
+    : { ...fullPlan, mcpTools: [] };
   const loopInputs = classifyToolLoopInputs(plan.mcpTools, plan.tools, plan.toolApprovalPolicy);
   const toolLoopRunnable = loopInputs.shouldRun && Boolean(ADAPTER_PROVIDERS[dispatchProvider]);
   if (resume && !toolLoopRunnable) {

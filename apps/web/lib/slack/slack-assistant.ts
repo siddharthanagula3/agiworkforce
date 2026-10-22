@@ -33,7 +33,11 @@ import {
   findSlackInstallationById,
   type SlackInstallationWithToken,
 } from './slack-installations';
-import { readSlackChannelMode, slackRunModeFor } from './slack-channel-policies';
+import {
+  readSlackChannelSetting,
+  readSlackChannelToolsOrNone,
+  slackRunModeFor,
+} from './slack-channel-policies';
 import { issueSlackLinkRequest, resolveSlackAccountLink } from './slack-links';
 import {
   answerMessages,
@@ -338,10 +342,11 @@ async function answerMessage(
     userId: link.userId,
     organizationId: link.organizationId,
   });
-  const channelPolicy =
+  const channelSetting =
     event.surface === 'channel'
-      ? await readSlackChannelMode(db, installation.id, event.channelId)
+      ? await readSlackChannelSetting(db, installation.id, event.channelId)
       : null;
+  const channelPolicy = channelSetting?.mode ?? null;
   const mode = slackRunModeFor(
     channelPolicy,
     event.surface === 'channel' &&
@@ -397,6 +402,7 @@ async function answerMessage(
         runId: run.id,
         surface: event.surface,
         mode: run.mode,
+        channelTools: channelSetting?.tools ?? null,
         ...(task.current ? { observer: task.current.observer } : {}),
         conversation: context.conversation,
         channelContext: context.channelContext,
@@ -473,6 +479,10 @@ export async function claimSlackApproval(input: {
       'This Slack workspace is no longer connected, so the answer cannot continue.',
     );
   }
+  const channelTools =
+    run.surface === 'channel'
+      ? await readSlackChannelToolsOrNone(input.serviceDb, run.installationId, run.channelId)
+      : null;
   const opened = run.mode === 'task' ? await findSlackTask(runScope, run) : null;
   const task: TaskHolder = {
     current: opened ? slackTask({ db: runScope, run, instruction: '', opened }) : null,
@@ -492,6 +502,7 @@ export async function claimSlackApproval(input: {
           runId: run.id,
           surface: run.surface,
           mode: run.mode,
+          channelTools,
           ...(task.current ? { observer: task.current.observer } : {}),
           conversation: [],
           channelContext: null,

@@ -17,11 +17,17 @@ describe('SlackChannelPolicies', () => {
     const send = vi
       .fn()
       .mockResolvedValueOnce(
-        respond([{ channelId: 'C111', mode: null, seen: true, updatedAt: null }]),
+        respond([{ channelId: 'C111', mode: null, tools: null, seen: true, updatedAt: null }]),
       )
       .mockResolvedValueOnce(
         respond([
-          { channelId: 'C111', mode: 'answer', seen: true, updatedAt: '2026-10-19T00:00:00Z' },
+          {
+            channelId: 'C111',
+            mode: 'answer',
+            tools: null,
+            seen: true,
+            updatedAt: '2026-10-19T00:00:00Z',
+          },
         ]),
       );
     render(<SlackChannelPolicies installationId={INSTALLATION} teamName="Acme" send={send} />);
@@ -45,7 +51,7 @@ describe('SlackChannelPolicies', () => {
       .fn()
       .mockResolvedValueOnce(respond([]))
       .mockResolvedValueOnce(
-        respond([{ channelId: 'C222', mode: 'off', seen: false, updatedAt: null }]),
+        respond([{ channelId: 'C222', mode: 'off', tools: null, seen: false, updatedAt: null }]),
       );
     render(<SlackChannelPolicies installationId={INSTALLATION} teamName="Acme" send={send} />);
     const input = await screen.findByLabelText('Turn it off in another channel');
@@ -58,6 +64,86 @@ describe('SlackChannelPolicies', () => {
       expect(send).toHaveBeenLastCalledWith(expect.any(String), {
         method: 'PUT',
         body: { channelId: 'C222', mode: 'off' },
+      }),
+    );
+  });
+
+  it('shows no tool choices for a channel that is off or on the default', async () => {
+    const send = vi.fn().mockResolvedValueOnce(
+      respond([
+        { channelId: 'C111', mode: null, tools: null, seen: true, updatedAt: null },
+        { channelId: 'C222', mode: 'off', tools: null, seen: false, updatedAt: null },
+      ]),
+    );
+    render(<SlackChannelPolicies installationId={INSTALLATION} teamName="Acme" send={send} />);
+    await screen.findByRole('combobox', { name: 'What AGI may do in C111' });
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+  });
+
+  it('turns one tool off for a channel and keeps its mode', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(
+        respond([
+          {
+            channelId: 'C111',
+            mode: 'task',
+            tools: null,
+            seen: true,
+            updatedAt: '2026-10-19T00:00:00Z',
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        respond([
+          {
+            channelId: 'C111',
+            mode: 'task',
+            tools: ['web', 'apps'],
+            seen: true,
+            updatedAt: '2026-10-19T00:00:00Z',
+          },
+        ]),
+      );
+    render(<SlackChannelPolicies installationId={INSTALLATION} teamName="Acme" send={send} />);
+    const code = await screen.findByRole('checkbox', { name: 'Run code' });
+    expect(code).toBeChecked();
+    await userEvent.click(code);
+    await waitFor(() =>
+      expect(send).toHaveBeenLastCalledWith(expect.any(String), {
+        method: 'PUT',
+        body: { channelId: 'C111', mode: 'task', tools: ['web', 'apps'] },
+      }),
+    );
+    expect(await screen.findByRole('checkbox', { name: 'Run code' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Search and read the web' })).toBeChecked();
+  });
+
+  it('goes back to every tool when the last one is allowed again', async () => {
+    const send = vi
+      .fn()
+      .mockResolvedValueOnce(
+        respond([
+          {
+            channelId: 'C111',
+            mode: 'answer',
+            tools: ['web', 'code'],
+            seen: true,
+            updatedAt: null,
+          },
+        ]),
+      )
+      .mockResolvedValueOnce(
+        respond([{ channelId: 'C111', mode: 'answer', tools: null, seen: true, updatedAt: null }]),
+      );
+    render(<SlackChannelPolicies installationId={INSTALLATION} teamName="Acme" send={send} />);
+    await userEvent.click(
+      await screen.findByRole('checkbox', { name: 'Use connected apps and integrations' }),
+    );
+    await waitFor(() =>
+      expect(send).toHaveBeenLastCalledWith(expect.any(String), {
+        method: 'PUT',
+        body: { channelId: 'C111', mode: 'answer', tools: null },
       }),
     );
   });

@@ -53,7 +53,15 @@ const INSTALLATION = '7a1d6c3a-2b4f-4d7e-9a1c-0f2e3d4c5b6a';
 const PATH = `/api/slack/installations/${INSTALLATION}/channels`;
 const POLICIES = {
   teamId: 'T0123',
-  channels: [{ channelId: 'C0456', mode: 'answer', seen: true, updatedAt: '2026-10-19T00:00:00Z' }],
+  channels: [
+    {
+      channelId: 'C0456',
+      mode: 'answer',
+      tools: ['web'],
+      seen: true,
+      updatedAt: '2026-10-19T00:00:00Z',
+    },
+  ],
 };
 
 function request(method = 'GET', body?: unknown) {
@@ -144,5 +152,41 @@ describe('/api/slack/installations/[installationId]/channels', () => {
     expect(response.status).toBe(403);
     expect(mocks.set).not.toHaveBeenCalled();
     expect(mocks.audit).not.toHaveBeenCalled();
+  });
+
+  it('PUT saves the tools a channel allows and audits them', async () => {
+    const response = await PUT(
+      request('PUT', { channelId: 'C0456', mode: 'answer', tools: ['web'] }),
+      context(),
+    );
+
+    expect(response.status).toBe(200);
+    expect(mocks.set).toHaveBeenCalledWith(expect.anything(), 'user-1', {
+      installationId: INSTALLATION,
+      channelId: 'C0456',
+      mode: 'answer',
+      tools: ['web'],
+    });
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({ detail: expect.objectContaining({ scopes: ['web'] }) }),
+    );
+  });
+
+  it('PUT records every tool group when the channel goes back to all tools', async () => {
+    await PUT(request('PUT', { channelId: 'C0456', mode: 'task', tools: null }), context());
+    expect(mocks.audit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({ scopes: ['web', 'code', 'apps'] }),
+      }),
+    );
+  });
+
+  it.each([[['shell']], [['web', 'web']]])('PUT refuses the tool list %j', async (tools) => {
+    const response = await PUT(
+      request('PUT', { channelId: 'C0456', mode: 'task', tools }),
+      context(),
+    );
+    expect(response.status).toBe(400);
+    expect(mocks.set).not.toHaveBeenCalled();
   });
 });

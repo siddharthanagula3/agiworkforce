@@ -1,13 +1,17 @@
 'use client';
 
 import { useCallback, useEffect, useId, useState } from 'react';
-import { Button, Input, Label, Spinner } from '@agiworkforce/ui';
+import { Button, Checkbox, Input, Label, Spinner } from '@agiworkforce/ui';
 import {
+  SLACK_CHANNEL_TOOLS,
   SlackChannelIdSchema,
   SlackChannelPolicyListSchema,
   slackChannelPoliciesPath,
+  slackChannelToolAllowed,
   type SlackChannelMode,
+  type SlackChannelPolicy,
   type SlackChannelPolicyList,
+  type SlackChannelTool,
 } from '@agiworkforce/cloud-contracts';
 
 import { sendAuthorizedJson } from '@features/auth/step-up-fetch';
@@ -19,8 +23,24 @@ const MODE_LABELS: Record<SlackChannelMode, string> = {
   answer: 'Answers only, never starts a task',
   off: 'Off: does not answer here',
 };
+const TOOL_LABELS: Record<SlackChannelTool, string> = {
+  web: 'Search and read the web',
+  code: 'Run code',
+  apps: 'Use connected apps and integrations',
+};
 const SELECT_CLASS =
   'h-9 rounded-md border border-border bg-background px-2 text-sm text-foreground pointer-coarse:min-h-11';
+
+function nextTools(
+  current: readonly SlackChannelTool[] | null,
+  tool: SlackChannelTool,
+  allowed: boolean,
+): SlackChannelTool[] | null {
+  const next = SLACK_CHANNEL_TOOLS.filter((candidate) =>
+    candidate === tool ? allowed : slackChannelToolAllowed(current, candidate),
+  );
+  return next.length === SLACK_CHANNEL_TOOLS.length ? null : next;
+}
 
 export type SlackChannelPoliciesFetch = (
   path: string,
@@ -65,17 +85,24 @@ export function SlackChannelPolicies({
 
   useEffect(load, [load]);
 
-  const setMode = async (channelId: string, mode: SlackChannelMode | null) => {
+  const save = async (channelId: string, body: Record<string, unknown>) => {
     setBusy(channelId);
     setError(null);
     try {
-      setData(await readPolicies(await send(path, { method: 'PUT', body: { channelId, mode } })));
+      setData(
+        await readPolicies(await send(path, { method: 'PUT', body: { channelId, ...body } })),
+      );
     } catch (reason) {
       setError(toUserMessage(reason, 'The channel setting could not be saved.'));
     } finally {
       setBusy(null);
     }
   };
+
+  const setMode = (channelId: string, mode: SlackChannelMode | null) => save(channelId, { mode });
+
+  const setTool = (channel: SlackChannelPolicy, tool: SlackChannelTool, allowed: boolean) =>
+    save(channel.channelId, { mode: channel.mode, tools: nextTools(channel.tools, tool, allowed) });
 
   const channelInput = newChannel.trim().toUpperCase();
   const channelValid = SlackChannelIdSchema.safeParse(channelInput).success;
@@ -100,39 +127,63 @@ export function SlackChannelPolicies({
       {data && data.channels.length > 0 ? (
         <ul className="flex flex-col gap-1.5">
           {data.channels.map((channel) => (
-            <li
-              key={channel.channelId}
-              className="flex flex-wrap items-center justify-between gap-2"
-            >
-              <a
-                href={`https://app.slack.com/client/${encodeURIComponent(data.teamId)}/${encodeURIComponent(channel.channelId)}`}
-                target="_blank"
-                rel="noreferrer"
-                className="font-mono text-xs text-foreground underline underline-offset-2"
-              >
-                {channel.channelId}
-              </a>
-              <select
-                aria-label={`What AGI may do in ${channel.channelId}`}
-                value={channel.mode ?? DEFAULT_MODE}
-                disabled={busy === channel.channelId}
-                onChange={(event) =>
-                  void setMode(
-                    channel.channelId,
-                    event.target.value === DEFAULT_MODE
-                      ? null
-                      : (event.target.value as SlackChannelMode),
-                  )
-                }
-                className={SELECT_CLASS}
-              >
-                <option value={DEFAULT_MODE}>Default: answers and runs tasks</option>
-                {(Object.keys(MODE_LABELS) as SlackChannelMode[]).map((mode) => (
-                  <option key={mode} value={mode}>
-                    {MODE_LABELS[mode]}
-                  </option>
-                ))}
-              </select>
+            <li key={channel.channelId} className="flex flex-col gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <a
+                  href={`https://app.slack.com/client/${encodeURIComponent(data.teamId)}/${encodeURIComponent(channel.channelId)}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="font-mono text-xs text-foreground underline underline-offset-2"
+                >
+                  {channel.channelId}
+                </a>
+                <select
+                  aria-label={`What AGI may do in ${channel.channelId}`}
+                  value={channel.mode ?? DEFAULT_MODE}
+                  disabled={busy === channel.channelId}
+                  onChange={(event) =>
+                    void setMode(
+                      channel.channelId,
+                      event.target.value === DEFAULT_MODE
+                        ? null
+                        : (event.target.value as SlackChannelMode),
+                    )
+                  }
+                  className={SELECT_CLASS}
+                >
+                  <option value={DEFAULT_MODE}>Default: answers and runs tasks</option>
+                  {(Object.keys(MODE_LABELS) as SlackChannelMode[]).map((mode) => (
+                    <option key={mode} value={mode}>
+                      {MODE_LABELS[mode]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {channel.mode === 'answer' || channel.mode === 'task' ? (
+                <fieldset className="flex flex-col gap-1.5" disabled={busy === channel.channelId}>
+                  <legend className="text-sm text-muted-foreground">
+                    Tools AGI may use in {channel.channelId}
+                  </legend>
+                  {SLACK_CHANNEL_TOOLS.map((tool) => {
+                    const inputId = `${id}-${channel.channelId}-${tool}`;
+                    return (
+                      <div key={tool} className="flex items-center gap-2">
+                        <Checkbox
+                          id={inputId}
+                          checked={slackChannelToolAllowed(channel.tools, tool)}
+                          disabled={busy === channel.channelId}
+                          onCheckedChange={(checked) =>
+                            void setTool(channel, tool, checked === true)
+                          }
+                        />
+                        <label htmlFor={inputId} className="text-sm text-foreground">
+                          {TOOL_LABELS[tool]}
+                        </label>
+                      </div>
+                    );
+                  })}
+                </fieldset>
+              ) : null}
             </li>
           ))}
         </ul>

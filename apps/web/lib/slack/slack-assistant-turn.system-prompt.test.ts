@@ -87,6 +87,7 @@ function slackTurn(question: string) {
     runId: 'run-1',
     surface: 'channel',
     mode: 'answer',
+    channelTools: null,
     conversation: [{ role: 'user', content: question }],
     channelContext: null,
     timeZone: null,

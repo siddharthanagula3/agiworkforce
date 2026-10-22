@@ -105,6 +105,7 @@ function turn(overrides: Record<string, unknown> = {}) {
     runId: 'run-1',
     surface: 'direct_message' as const,
     mode: 'answer' as const,
+    channelTools: null,
     conversation: [{ role: 'user' as const, content: 'What is in my inbox?' }],
     channelContext: null,
     timeZone: null,

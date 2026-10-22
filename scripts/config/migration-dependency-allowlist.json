@@ -300,6 +300,11 @@
       "file": "apps/web/lib/services/published-artifact-service.ts",
       "migration": 380,
       "reason": "Reads the live_artifacts table that 0380 adds, to open a first publish of a connector-backed artifact to invited people rather than anyone with the link. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0380 is applied."
+    },
+    {
+      "file": "apps/web/lib/slack/slack-channel-policies.ts",
+      "migration": 385,
+      "reason": "Reads and writes the slack_channel_policies.allowed_tools column that 0385 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0385 is applied."
     }
   ]
 }
