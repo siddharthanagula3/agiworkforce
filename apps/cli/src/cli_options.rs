@@ -89,6 +89,10 @@ impl PermissionMode {
         }
     }
 
+    pub(crate) fn is_looser_than(self, other: PermissionMode) -> bool {
+        self.autonomy() > other.autonomy()
+    }
+
     pub(crate) fn within(self, pinned: Option<PermissionMode>) -> PermissionMode {
         match pinned {
             Some(pinned) if self.autonomy() > pinned.autonomy() => pinned,

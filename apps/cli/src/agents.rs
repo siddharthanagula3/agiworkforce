@@ -89,7 +89,7 @@ impl AgentDefinition {
     /// - `tools`: sets `session.allowed_tools` (whitelist)
     /// - `disallowed_tools`: appends to `session.disallowed_tools`
     /// - `max_turns`: sets `session.max_turns`
-    /// - `permission_mode`: sets `session.permission_mode`
+    /// - `permission_mode`: keeps or narrows the session's mode, never widens it
     /// - `system_prompt`: injects as a "system" context message
     ///
     /// This method does NOT clear the existing conversation history, so callers
@@ -124,21 +124,7 @@ impl AgentDefinition {
         if let Some(max_turns) = self.max_turns {
             session.max_turns = Some(max_turns);
         }
-        if let Some(ref perm) = self.permission_mode {
-            use crate::cli_options::PermissionMode;
-            let mode = match perm.as_str() {
-                "plan" => Some(PermissionMode::Plan),
-                "acceptEdits" | "accept-edits" => Some(PermissionMode::AcceptEdits),
-                "bypassPermissions" | "bypass-permissions" => {
-                    Some(PermissionMode::BypassPermissions)
-                }
-                "dontAsk" | "dont-ask" => Some(PermissionMode::DontAsk),
-                _ => None,
-            };
-            if let Some(m) = mode {
-                session.permission_mode = m;
-            }
-        }
+        self.narrow_permission_mode(session);
         self.cap_spend(session);
         if !self.system_prompt.trim().is_empty() {
             use crate::models::Message;
@@ -152,6 +138,48 @@ impl AgentDefinition {
             ));
         }
         self.preload_skills(session);
+    }
+
+    /// An agent definition is a file anyone can put in a repository, so its
+    /// mode can only hold the session where it is or make it stricter. A
+    /// looser or unknown mode is ignored and the session keeps its own.
+    fn narrow_permission_mode(&self, session: &mut crate::agent::AgentSession) {
+        use crate::cli_options::PermissionMode;
+        let Some(requested) = self
+            .permission_mode
+            .as_deref()
+            .and_then(crate::cli_options::persisted_permission_mode)
+        else {
+            return;
+        };
+        let current = if session.skips_approval() {
+            PermissionMode::BypassPermissions
+        } else {
+            session.governed_permission_mode()
+        };
+        if requested.is_looser_than(current) {
+            eprintln!(
+                "Agent `{}` asks for {} but this session runs in {}; the session keeps {}.",
+                crate::terminal_text::sanitize_terminal_text(&self.name),
+                requested.name(),
+                current.name(),
+                current.name()
+            );
+            return;
+        }
+        if requested == current {
+            return;
+        }
+        session.permission_mode = requested;
+        session.skip_permissions = false;
+        session.auto_approve_safe = matches!(
+            requested,
+            PermissionMode::AcceptEdits | PermissionMode::DontAsk
+        );
+        if requested == PermissionMode::Plan {
+            session.plan_mode = true;
+            session.plan_approved = false;
+        }
     }
 
     /// Apply a named agent to a model-spawned subagent without allowing the
@@ -720,7 +748,8 @@ fn format_agent_validation(agents: &[AgentDefinition]) -> String {
 fn valid_permission_mode(value: &str) -> bool {
     matches!(
         value,
-        "default"
+        "auto"
+            | "default"
             | "plan"
             | "acceptEdits"
             | "accept-edits"
@@ -1815,6 +1844,91 @@ You are a research specialist. Your job is to analyze topics deeply."#;
             has_prompt,
             "apply_to_session should inject system prompt message"
         );
+    }
+
+    fn mode_agent(mode: &str) -> AgentDefinition {
+        AgentDefinition {
+            name: "mode-agent".to_string(),
+            description: "Test".to_string(),
+            model: None,
+            tools: None,
+            disallowed_tools: None,
+            max_turns: None,
+            permission_mode: Some(mode.to_string()),
+            color: None,
+            skills: None,
+            max_budget_usd: None,
+            system_prompt: String::new(),
+            path: PathBuf::from("/repo/.agiworkforce/agents/mode-agent.md"),
+            mcp_servers: None,
+        }
+    }
+
+    #[test]
+    fn an_agent_definition_never_raises_the_session_permission_mode() {
+        use crate::cli_options::PermissionMode;
+        let ctx = make_test_context();
+        for requested in [
+            "auto",
+            "acceptEdits",
+            "accept-edits",
+            "bypassPermissions",
+            "bypass-permissions",
+            "full-auto",
+        ] {
+            let mut session = crate::agent::AgentSession::new("fixture-parent-model", &ctx, None);
+            session.permission_mode = PermissionMode::Default;
+            mode_agent(requested).apply_to_session(&mut session);
+            assert_eq!(
+                session.permission_mode,
+                PermissionMode::Default,
+                "{requested} raised the mode"
+            );
+            assert!(!session.skips_approval() && !session.auto_approve_safe);
+        }
+    }
+
+    #[test]
+    fn an_agent_definition_may_keep_or_lower_the_session_permission_mode() {
+        use crate::cli_options::PermissionMode;
+        let ctx = make_test_context();
+
+        let mut session = crate::agent::AgentSession::new("fixture-parent-model", &ctx, None);
+        session.permission_mode = PermissionMode::AcceptEdits;
+        session.auto_approve_safe = true;
+        mode_agent("auto").apply_to_session(&mut session);
+        assert_eq!(session.permission_mode, PermissionMode::AcceptEdits);
+        assert!(session.auto_approve_safe);
+
+        mode_agent("default").apply_to_session(&mut session);
+        assert_eq!(session.permission_mode, PermissionMode::Default);
+        assert!(!session.auto_approve_safe);
+
+        let mut bypassing = crate::agent::AgentSession::new("fixture-parent-model", &ctx, None);
+        bypassing.permission_mode = PermissionMode::BypassPermissions;
+        bypassing.skip_permissions = true;
+        bypassing.auto_approve_safe = true;
+        mode_agent("auto").apply_to_session(&mut bypassing);
+        assert_eq!(bypassing.permission_mode, PermissionMode::AcceptEdits);
+        assert!(!bypassing.skips_approval(), "lowering must end the bypass");
+
+        mode_agent("plan").apply_to_session(&mut bypassing);
+        assert_eq!(bypassing.permission_mode, PermissionMode::Plan);
+        assert!(bypassing.plan_mode && !bypassing.auto_approve_safe);
+    }
+
+    #[test]
+    fn an_agent_definition_cannot_lift_a_managed_permission_cap() {
+        use crate::cli_options::PermissionMode;
+        let ctx = make_test_context();
+        let mut session = crate::agent::AgentSession::new("fixture-parent-model", &ctx, None);
+        session.permission_mode = PermissionMode::AcceptEdits;
+        session.pinned_permission_mode = Some(PermissionMode::Default);
+
+        mode_agent("auto").apply_to_session(&mut session);
+
+        assert_eq!(session.governed_permission_mode(), PermissionMode::Default);
+        assert!(!session.governed_permission_mode().auto_approves_edits());
     }
 
     #[test]

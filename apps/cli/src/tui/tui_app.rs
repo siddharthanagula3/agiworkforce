@@ -4165,6 +4165,7 @@ fn handle_agent_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
             match crate::agents::find_agent(&agent_name) {
                 Some(def) => {
                     def.apply_to_session(&mut app.session);
+                    app.mode = InteractionMode::for_session(&app.session);
                     app.sync_stats();
                     let model_note = if def.model.is_some() {
                         format!(" (model: {})", app.session.model)
@@ -5130,6 +5131,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 match crate::agents::find_agent(arg) {
                     Some(def) => {
                         def.apply_to_session(&mut app.session);
+                        app.mode = InteractionMode::for_session(&app.session);
                         app.sync_stats();
                         let model_note = if def.model.is_some() {
                             format!(" (model: {})", app.session.model)
