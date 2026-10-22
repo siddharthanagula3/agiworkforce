@@ -1008,3 +1008,85 @@ describe('the model is told how results reached it', () => {
     expect(text).not.toContain('fetched live');
   });
 });
+
+describe('website rules on search and on the pages a search reads', () => {
+  function searchReturning(urls: string[]): typeof fetch {
+    return fetchReturning(
+      jsonResponse({ results: urls.map((url, i) => ({ title: `R${i}`, url, snippet: 's' })) }),
+    );
+  }
+
+  function requestBody(fetchImpl: typeof fetch): Record<string, unknown> {
+    const init = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] as RequestInit;
+    return JSON.parse(String(init.body)) as Record<string, unknown>;
+  }
+
+  it('asks the backend to leave out blocked sites and drops any it returns anyway', async () => {
+    const fetchImpl = searchReturning([
+      'https://allowed.example/a',
+      'https://blocked.example/b',
+      'https://news.blocked.example/c',
+    ]);
+    const outcome = await executeWebSearch(
+      { query: 'x' },
+      { fetchImpl, apiKey: 'k', domainPolicy: { allow: [], deny: ['blocked.example'] } },
+    );
+    expect(requestBody(fetchImpl)['search_domain_filter']).toEqual(['-blocked.example']);
+    expect(outcome.ok && outcome.results.map((r) => r.url)).toEqual(['https://allowed.example/a']);
+  });
+
+  it('keeps only allowed sites, and a block beats an allow', async () => {
+    const fetchImpl = searchReturning([
+      'https://docs.allowed.example/a',
+      'https://other.example/b',
+      'https://bad.allowed.example/c',
+    ]);
+    const outcome = await executeWebSearch(
+      { query: 'x' },
+      {
+        fetchImpl,
+        apiKey: 'k',
+        domainPolicy: { allow: ['allowed.example'], deny: ['bad.allowed.example'] },
+      },
+    );
+    expect(requestBody(fetchImpl)['search_domain_filter']).toEqual(['allowed.example']);
+    expect(outcome.ok && outcome.results.map((r) => r.url)).toEqual([
+      'https://docs.allowed.example/a',
+    ]);
+  });
+
+  it('never reads a cited page that redirects to another site', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(null, { status: 302, headers: { location: 'https://blocked.example/p' } }),
+    ) as unknown as typeof fetch;
+    const enriched = await enrichWebSearchResultTitles(
+      [{ url: 'https://allowed.example/hop-away', title: '', snippet: '' }],
+      { fetchImpl },
+    );
+    expect(enriched[0]?.title).toBe('');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const calls = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
+    expect(calls.some((url) => url.includes('blocked.example'))).toBe(false);
+  });
+
+  it('still follows a redirect that stays on the cited site', async () => {
+    resolvesToPublicAddress();
+    const fetchImpl = vi
+      .fn()
+      .mockResolvedValueOnce(
+        new Response(null, {
+          status: 301,
+          headers: { location: 'https://www.allowed.example/moved' },
+        }),
+      )
+      .mockResolvedValueOnce(htmlResponse('<html><head><title>Moved Page</title></head></html>'));
+    const enriched = await enrichWebSearchResultTitles(
+      [{ url: 'https://allowed.example/old', title: '', snippet: '' }],
+      { fetchImpl: fetchImpl as unknown as typeof fetch },
+    );
+    expect(enriched[0]?.title).toBe('Moved Page');
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+});

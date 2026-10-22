@@ -21,6 +21,7 @@ import {
   type WebSearchProviderRequest,
 } from '@/lib/web-search/search-provider';
 import { sourceDeliveryLabel, type SearchSource } from '@agiworkforce/types';
+import { webHostnameOf } from '@agiworkforce/cloud-contracts';
 import {
   researchDomainAllowed,
   type ResearchDomainPolicy,
@@ -650,6 +651,7 @@ async function fetchPageMetadata(
   } catch {
     return {};
   }
+  const citedHost = webHostnameOf(target.href);
 
   const deadline = createDeadline(timeoutMs);
   try {
@@ -657,6 +659,8 @@ async function fetchPageMetadata(
       deadline,
       maxRedirects: PAGE_METADATA_MAX_REDIRECTS,
       ...(fetchImpl ? { fetchImpl } : {}),
+      // A redirect to another site is never read: only the cited host passed the chat's website rules.
+      followRedirect: (next) => webHostnameOf(next.href) === citedHost,
       headers: {
         Accept: 'text/html',
         'User-Agent': 'AGIWorkforce-TitleEnrichment/1.0 (+https://agiworkforce.com)',

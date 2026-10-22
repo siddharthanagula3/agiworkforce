@@ -443,3 +443,60 @@ describe('truncation', () => {
     }
   });
 });
+
+describe('website rules', () => {
+  const neverFetch = () =>
+    vi.fn(async () => {
+      throw new Error('a refused site must not be requested');
+    }) as unknown as typeof fetch;
+
+  it.each([
+    ['https://blocked.example/page', { allow: [], deny: ['blocked.example'] }],
+    ['https://www.blocked.example/page', { allow: [], deny: ['blocked.example'] }],
+    ['https://news.blocked.example/page', { allow: [], deny: ['blocked.example'] }],
+    ['https://other.example/page', { allow: ['allowed.example'], deny: [] }],
+    [
+      'https://bad.allowed.example/page',
+      { allow: ['allowed.example'], deny: ['bad.allowed.example'] },
+    ],
+  ])('refuses %s before any request and tells the agent why', async (url, domainPolicy) => {
+    const fetchImpl = neverFetch();
+    const outcome = await executeUrlFetch({ url }, { fetchImpl, domainPolicy });
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) {
+      expect(outcome.errorCode).toBe('url_not_allowed');
+      expect(outcome.error).toContain(new URL(url).hostname);
+    }
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(dnsMocks.lookup).not.toHaveBeenCalled();
+  });
+
+  it('reads an allowed site', async () => {
+    resolvePublic();
+    const fetchImpl = fetchReturning(
+      htmlResponse('<html><title>Docs</title><body><p>Allowed content here.</p></body></html>'),
+    );
+    const outcome = await executeUrlFetch(
+      { url: 'https://docs.allowed.example/guide' },
+      { fetchImpl, domainPolicy: { allow: ['allowed.example'], deny: [] } },
+    );
+    expect(outcome.ok).toBe(true);
+  });
+
+  it('stops at a redirect to a blocked site without requesting it', async () => {
+    resolvePublic();
+    const fetchImpl = vi.fn(
+      async () =>
+        new Response(null, { status: 302, headers: { location: 'https://blocked.example/x' } }),
+    ) as unknown as typeof fetch;
+    const outcome = await executeUrlFetch(
+      { url: 'https://allowed.example/start' },
+      { fetchImpl, domainPolicy: { allow: [], deny: ['blocked.example'] } },
+    );
+    expect(outcome.ok).toBe(false);
+    if (!outcome.ok) expect(outcome.errorCode).toBe('url_not_allowed');
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const requested = (fetchImpl as ReturnType<typeof vi.fn>).mock.calls.map((c) => String(c[0]));
+    expect(requested.some((u) => u.includes('blocked.example'))).toBe(false);
+  });
+});
