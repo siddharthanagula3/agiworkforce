@@ -266,10 +266,14 @@ impl MemoryPipeline {
     /// Reads all files in `session_summaries/`, concatenates them, and either
     /// calls the LLM to merge/deduplicate or (if the LLM call fails) writes
     /// the concatenation directly.
-    /// `local_only` MUST be true whenever the active session is in Local privacy
-    /// mode: consolidation then merges summaries on-device (deterministic, no
-    /// network) rather than routing their content to a cloud model.
-    pub async fn consolidate(home: &Path, config: &CliConfig, local_only: bool) -> Result<()> {
+    /// `route` is the active session's own off-device route
+    /// ([`crate::subagent::InheritedRoute::off_device`]). Without one, summaries
+    /// merge on the device and nothing leaves it.
+    pub async fn consolidate(
+        home: &Path,
+        config: &CliConfig,
+        route: Option<&crate::subagent::InheritedRoute>,
+    ) -> Result<()> {
         let summaries_dir = home.join("memories").join("session_summaries");
         let raw_path = home.join("memories").join("raw_memories.md");
 
@@ -311,15 +315,11 @@ impl MemoryPipeline {
             return Ok(());
         }
 
-        // Privacy boundary (locked invariant): never route Local-session summaries
-        // through a cloud model. In Local mode, merge on-device deterministically.
-        let consolidated = if local_only {
-            deduplicate_lines(&all_summaries)
-        } else {
-            let model = resolve_fast_model(config);
+        let consolidated = if let Some(route) = route {
+            let model = consolidation_model(config, route);
             let consolidation = tokio::time::timeout(
                 std::time::Duration::from_secs(LLM_TIMEOUT_SECS * 2), // Allow more time
-                Self::call_consolidation_llm(&all_summaries, &model, config),
+                Self::call_consolidation_llm(&all_summaries, &route.provider, &model, config),
             )
             .await;
 
@@ -330,6 +330,8 @@ impl MemoryPipeline {
                     deduplicate_lines(&all_summaries)
                 }
             }
+        } else {
+            deduplicate_lines(&all_summaries)
         };
 
         let header = format!(
@@ -354,19 +356,10 @@ impl MemoryPipeline {
     /// Call the LLM to merge and deduplicate session summaries.
     async fn call_consolidation_llm(
         all_summaries: &str,
+        provider: &Provider,
         model: &str,
         config: &CliConfig,
     ) -> Result<String> {
-        let provider = models::resolve_selected_provider(
-            model,
-            models::selection_provider_override(
-                model,
-                &config.default.model,
-                &config.default.provider,
-                None,
-            ),
-        )?;
-
         let prompt = format!(
             "Merge and deduplicate these session learnings into a concise, organized \
              memory document. Remove duplicates. Group by topic (e.g., User Preferences, \
@@ -388,7 +381,7 @@ impl MemoryPipeline {
 
         let result = models::stream_completion(
             config,
-            &provider,
+            provider,
             model,
             &messages,
             4096,
@@ -609,12 +602,21 @@ fn collect_recent_messages(messages: &[Message]) -> String {
 }
 
 /// Resolve the fast model from config, falling back to the main model.
-fn resolve_fast_model(config: &CliConfig) -> String {
+/// The configured fast model when it runs on the session's own provider,
+/// otherwise the session's model.
+fn consolidation_model(config: &CliConfig, route: &crate::subagent::InheritedRoute) -> String {
     config
         .default
         .fast_model
-        .clone()
-        .unwrap_or_else(|| config.default.model.clone())
+        .as_deref()
+        .filter(|fast| {
+            models::resolve_selected_provider(
+                fast,
+                Some(&models::provider_persistence_name(&route.provider)),
+            )
+            .is_ok_and(|provider| provider == route.provider)
+        })
+        .map_or_else(|| route.model.clone(), str::to_string)
 }
 
 /// Build a raw summary from message text (used as fallback when LLM is unavailable).
@@ -880,17 +882,97 @@ mod tests {
         assert!(summary.contains("Raw Session Content"));
     }
 
-    #[test]
-    fn test_resolve_fast_model_with_override() {
+    fn config_defaulting_to_the_catalog_vendor() -> CliConfig {
         let mut config = CliConfig::default();
-        config.default.fast_model = Some("fixture-fast-model".to_string());
-        assert_eq!(resolve_fast_model(&config), "fixture-fast-model");
+        config.default.model = crate::model_catalog::default_model().to_string();
+        config.default.provider = crate::model_catalog::default_provider().to_string();
+        config
     }
 
     #[test]
-    fn test_resolve_fast_model_fallback() {
-        let config = CliConfig::default();
-        assert_eq!(resolve_fast_model(&config), config.default.model);
+    fn a_managed_session_consolidates_on_its_own_route_not_the_configured_vendor() {
+        let config = config_defaulting_to_the_catalog_vendor();
+        let session = crate::agent::AgentSession::new_with_provider(
+            crate::model_catalog::default_model(),
+            &crate::context::gather_system_context(),
+            None,
+            Provider::ManagedCloud,
+        );
+        assert_eq!(session.privacy_mode, crate::agent::PrivacyMode::Managed);
+
+        let route = crate::subagent::InheritedRoute::off_device(&session)
+            .expect("a Managed session has an off-device route");
+
+        assert_eq!(route.provider, Provider::ManagedCloud);
+        assert_eq!(consolidation_model(&config, &route), session.model);
+    }
+
+    #[tokio::test]
+    async fn a_local_session_consolidates_on_the_device_whatever_the_configured_vendor() {
+        let config = config_defaulting_to_the_catalog_vendor();
+        let session = crate::agent::AgentSession::new_checked(
+            "fixture-local-model:latest",
+            &crate::context::gather_system_context(),
+            None,
+            Some("ollama"),
+        )
+        .expect("Local session");
+        assert_eq!(session.privacy_mode, crate::agent::PrivacyMode::Local);
+        assert!(crate::subagent::InheritedRoute::off_device(&session).is_none());
+
+        let dir = tempfile::tempdir().unwrap();
+        let summaries = dir.path().join("memories").join("session_summaries");
+        fs::create_dir_all(&summaries).unwrap();
+        fs::write(summaries.join("a.md"), "- Always run cargo check\n").unwrap();
+        fs::write(summaries.join("b.md"), "- Always run cargo check\n").unwrap();
+
+        MemoryPipeline::consolidate(
+            dir.path(),
+            &config,
+            crate::subagent::InheritedRoute::off_device(&session).as_ref(),
+        )
+        .await
+        .expect("on-device consolidation");
+
+        let merged = fs::read_to_string(dir.path().join("memories").join("raw_memories.md"))
+            .expect("raw memories");
+        assert_eq!(
+            merged.matches("Always run cargo check").count(),
+            1,
+            "{merged}"
+        );
+    }
+
+    #[test]
+    fn a_session_whose_route_disagrees_with_its_privacy_mode_consolidates_on_the_device() {
+        let mut session = crate::agent::AgentSession::new_with_provider(
+            "fixture-hosted-model:tag",
+            &crate::context::gather_system_context(),
+            None,
+            Provider::Ollama(models::OllamaMode::Cloud),
+        );
+        session.set_privacy_mode(crate::agent::PrivacyMode::Managed);
+
+        assert!(crate::subagent::InheritedRoute::off_device(&session).is_none());
+    }
+
+    #[test]
+    fn the_configured_fast_model_is_used_only_on_the_session_s_own_provider() {
+        let route = crate::subagent::InheritedRoute {
+            model: "fixture-session-model:latest".to_string(),
+            provider: Provider::Ollama(models::OllamaMode::Local),
+            privacy_mode: crate::agent::PrivacyMode::Local,
+        };
+        let mut config = config_defaulting_to_the_catalog_vendor();
+
+        config.default.fast_model = Some("fixture-fast-model:latest".to_string());
+        assert_eq!(
+            consolidation_model(&config, &route),
+            "fixture-fast-model:latest"
+        );
+
+        config.default.fast_model = Some(crate::model_catalog::default_model().to_string());
+        assert_eq!(consolidation_model(&config, &route), route.model);
     }
 
     #[test]

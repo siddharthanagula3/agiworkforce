@@ -1268,4 +1268,51 @@ mod tests {
         );
         assert_eq!(TaskStatus::from_str_loose("invalid"), None);
     }
+    #[tokio::test]
+    async fn a_teammate_refuses_to_start_on_a_route_that_leaves_the_lead_s_privacy_mode() {
+        let team = TeamManager::new();
+        let mut config = crate::config::CliConfig::default();
+        config.default.model = "fixture-local-model:latest".to_string();
+        config.default.provider = "ollama".to_string();
+        let launch = TeammateLaunch {
+            name: "scout".to_string(),
+            role: "researcher".to_string(),
+            prompt: "look around".to_string(),
+            config,
+            route: crate::subagent::InheritedRoute {
+                model: "fixture-local-model:latest".to_string(),
+                provider: crate::models::Provider::Ollama(crate::models::OllamaMode::Cloud),
+                privacy_mode: crate::agent::PrivacyMode::Local,
+            },
+            sys_context: crate::context::gather_system_context(),
+            skip_permissions: false,
+            permission_mode: crate::cli_options::PermissionMode::Default,
+            allowed_tools: None,
+            disallowed_tools: Vec::new(),
+            max_budget_usd: None,
+            approval: None,
+            definition: None,
+        };
+
+        team.launch(launch).await.expect("launch accepted");
+        let replies = team.wait_for_messages(LEAD, Duration::from_secs(30)).await;
+
+        let reply = replies
+            .iter()
+            .find(|message| message.from == "scout")
+            .expect("the teammate reports why it could not start");
+        assert!(
+            reply.content.starts_with("I could not start:"),
+            "{}",
+            reply.content
+        );
+        assert!(
+            reply
+                .content
+                .contains("never leaves its parent's trust boundary"),
+            "{}",
+            reply.content
+        );
+        team.stop_all().await;
+    }
 }

@@ -35,6 +35,15 @@ impl InheritedRoute {
         }
     }
 
+    /// The route background work for this session may take off the device:
+    /// none for a Local session, or for one whose route disagrees with its
+    /// privacy mode.
+    pub fn off_device(session: &crate::agent::AgentSession) -> Option<Self> {
+        (session.privacy_mode != crate::agent::PrivacyMode::Local
+            && session.provider_privacy_mode() == session.privacy_mode)
+            .then(|| Self::of(session))
+    }
+
     /// Build a child session on this route, refusing one whose provider would
     /// leave the parent's trust boundary.
     pub(crate) fn child_session(

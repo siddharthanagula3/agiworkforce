@@ -1525,13 +1525,12 @@ message -- revise and call `update_plan` again.\n\n",
             {
                 let home_clone = home.clone();
                 let config_clone = config.clone();
-                // Local sessions must consolidate on-device only (no cloud egress).
-                let local_only = self.privacy_mode == super::PrivacyMode::Local;
+                let route = crate::subagent::InheritedRoute::off_device(self);
                 let task = tokio::spawn(async move {
                     if let Err(e) = crate::memory_pipeline::MemoryPipeline::consolidate(
                         &home_clone,
                         &config_clone,
-                        local_only,
+                        route.as_ref(),
                     )
                     .await
                     {
