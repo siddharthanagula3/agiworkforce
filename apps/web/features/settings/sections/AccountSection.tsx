@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { useRouter } from 'next/navigation';
 import { useSignOut } from '@/lib/identity/client';
-import { ChevronLeft, ChevronRight, LogOut, RefreshCw, Undo2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, RefreshCw, Undo2 } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -22,7 +22,7 @@ import { TimeoutPresets } from '@shared/lib/error-utils';
 import { ApiKeysManager } from '../components/Settings/ApiKeys';
 import { EmailAddressChange } from '../components/EmailAddressChange';
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
-import { useStepUp } from '../hooks/use-step-up';
+import { SettingsSectionLink } from '../components/SettingsSectionLink';
 import { RecentActivityPanel } from '@features/settings/components/RecentActivityPanel';
 import { LinkedDevicesPanel } from '../components/LinkedDevicesPanel';
 import { CopyableIdField } from '../components/CopyableIdField';
@@ -47,7 +47,7 @@ function formatDateTime(value: Date | null | undefined): string {
 }
 
 const SESSION_TRUNCATION_HINT =
-  'Use “Log out of all devices” above to end the ones not listed here.';
+  'Use “Log out of all devices” in Security to end the ones not listed here.';
 
 interface AccountSession {
   id: string;
@@ -67,7 +67,7 @@ function formatSessionDateTime(value: string | null): string {
   return Number.isNaN(date.getTime()) ? 'Unknown' : formatDateTime(date);
 }
 
-function readApiError(data: unknown, fallback: string): string {
+export function readApiError(data: unknown, fallback: string): string {
   if (data === null || typeof data !== 'object' || !('error' in data)) return fallback;
   const error = (data as { error?: unknown }).error;
   // The server's words reach the screen, so they pass the same filter the rest
@@ -216,10 +216,7 @@ export function AccountSection() {
   const updateUser = useAuthStore((s) => s.updateUser);
   const currentEmail = user?.email ?? null;
   const [showEmailChange, setShowEmailChange] = useState(false);
-  const { withStepUp: withSessionsStepUp, dialog: sessionsStepUpDialog } = useStepUp();
 
-  const [loggingOut, setLoggingOut] = useState(false);
-  const [logoutError, setLogoutError] = useState<string | null>(null);
   const [showApiKeys, setShowApiKeys] = useState(false);
 
   const [sessions, setSessions] = useState<AccountSession[]>([]);
@@ -270,32 +267,6 @@ export function AccountSection() {
     void loadSessions(controller.signal);
     return () => controller.abort();
   }, [loadSessions]);
-
-  const handleLogOutAll = useCallback(async () => {
-    setLoggingOut(true);
-    setLogoutError(null);
-    let sessionsRevoked = false;
-    try {
-      const response = await withSessionsStepUp(async (stepUpHeaders) =>
-        fetch('/api/settings/sessions', {
-          method: 'DELETE',
-          headers: { ...(await addCsrfHeaders()), ...stepUpHeaders },
-        }),
-      );
-      const data: unknown = await response.json().catch(() => ({}));
-      if (!response.ok) throw new Error(readApiError(data, 'Unable to log out every device.'));
-      sessionsRevoked = true;
-      await logout();
-      await identitySignOut({ redirectUrl: '/login' });
-    } catch (err) {
-      if (sessionsRevoked) {
-        router.replace('/login');
-        return;
-      }
-      if (!isStepUpCancelled(err)) setLogoutError(toUserMessage(err, 'Sign out failed.'));
-      setLoggingOut(false);
-    }
-  }, [logout, identitySignOut, router, withSessionsStepUp]);
 
   const handleRevokeSession = useCallback(
     async (session: AccountSession) => {
@@ -398,35 +369,6 @@ export function AccountSection() {
                 Change
               </button>
             </AccountRow>
-
-            <AccountRow
-              label="Log out of all devices"
-              hint="This will end all active sessions including this one."
-            >
-              <button
-                type="button"
-                aria-label="Log out of all devices"
-                onClick={() =>
-                  confirm({
-                    title: 'Log out of all devices?',
-                    description:
-                      'Every signed-in session on every device ends immediately, including this one. You will need to sign in again.',
-                    confirmLabel: 'Log out everywhere',
-                    onConfirm: () => handleLogOutAll(),
-                  })
-                }
-                disabled={loggingOut}
-                style={{ ...outlineButtonStyle, opacity: loggingOut ? 0.5 : 1 }}
-              >
-                <LogOut size={14} />
-                {loggingOut ? 'Signing out...' : 'Log out'}
-              </button>
-            </AccountRow>
-            {logoutError && (
-              <p role="alert" style={{ ...errorTextStyle, padding: '0 0 var(--space-3)' }}>
-                {logoutError}
-              </p>
-            )}
 
             <button
               type="button"
@@ -727,7 +669,7 @@ export function AccountSection() {
                                 onConfirm: () => handleRevokeSession(row),
                               })
                             }
-                            disabled={revokingSessionId !== null || loggingOut}
+                            disabled={revokingSessionId !== null}
                             aria-label={
                               row.isCurrent
                                 ? 'Log out current session'
@@ -747,8 +689,7 @@ export function AccountSection() {
                               background: 'transparent',
                               border: '1px solid var(--settings-border)',
                               borderRadius: 'var(--radius-md)',
-                              cursor:
-                                revokingSessionId !== null || loggingOut ? 'default' : 'pointer',
+                              cursor: revokingSessionId !== null ? 'default' : 'pointer',
                               opacity:
                                 revokingSessionId !== null && revokingSessionId !== row.id
                                   ? 0.5
@@ -797,7 +738,14 @@ export function AccountSection() {
               }}
             >
               Sessions are reported by your account provider across devices. Revoke anything you do
-              not recognize, or use &ldquo;Log out of all devices&rdquo; above.
+              not recognize, or log out of all devices in{' '}
+              <SettingsSectionLink
+                section="security"
+                style={{ color: 'inherit', textDecoration: 'underline', cursor: 'pointer' }}
+              >
+                Security
+              </SettingsSectionLink>
+              .
             </p>
           </div>
 
@@ -906,7 +854,6 @@ export function AccountSection() {
       </AlertDialog>
 
       {deleteAccountMutation.stepUpDialog}
-      {sessionsStepUpDialog}
       {showEmailChange ? (
         <EmailAddressChange
           currentEmail={currentEmail}

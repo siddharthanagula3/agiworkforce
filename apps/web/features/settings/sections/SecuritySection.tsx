@@ -2,6 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useForm, type Resolver } from 'react-hook-form';
+import { useRouter } from 'next/navigation';
+import { ChevronRight, LogOut } from 'lucide-react';
+import { useConfirmAction } from '@agiworkforce/ui';
 import { zodResolver } from '@hookform/resolvers/zod';
 import {
   useUserSettings,
@@ -22,8 +25,152 @@ import { SignInMethodsPanel } from '@features/settings/components/Settings/SignI
 import { AuditLogPanel } from '@features/settings/components/AuditLogPanel';
 import { DeviceSignInToggle } from '@features/settings/components/DeviceSignInToggle';
 import type { TwoFactorStatus } from '@features/settings/services/user-preferences';
-import { useCurrentUser } from '@/lib/identity/client';
+import { useCurrentUser, useSignOut } from '@/lib/identity/client';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
+import { useAuthStore } from '@shared/stores/authentication-store';
+import { addCsrfHeaders } from '@/lib/client/csrf';
+import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
+import { useStepUp } from '@features/settings/hooks/use-step-up';
+import { SettingsSectionLink } from '@features/settings/components/SettingsSectionLink';
+import { toUserMessage } from '@/lib/user-error-message';
+import { readApiError } from './AccountSection';
+
+const sessionRowStyle = {
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+  gap: 'var(--space-4)',
+  padding: 'var(--space-3) 0',
+  borderTop: '1px solid var(--settings-border)',
+  width: '100%',
+} as const;
+
+const sessionLabelStyle = { margin: 0, fontSize: 14, color: 'var(--text-1)' } as const;
+const sessionHintStyle = { margin: 0, fontSize: 14, color: 'var(--text-3)' } as const;
+
+function SessionsPanel() {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const { withStepUp, dialog: stepUpDialog } = useStepUp();
+  const logout = useAuthStore((s) => s.logout);
+  const identitySignOut = useSignOut();
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  const handleLogOutAll = useCallback(async () => {
+    setLoggingOut(true);
+    setLogoutError(null);
+    let sessionsRevoked = false;
+    try {
+      const response = await withStepUp(async (stepUpHeaders) =>
+        fetch('/api/settings/sessions', {
+          method: 'DELETE',
+          headers: { ...(await addCsrfHeaders()), ...stepUpHeaders },
+        }),
+      );
+      const data: unknown = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(readApiError(data, 'Unable to log out every device.'));
+      sessionsRevoked = true;
+      await logout();
+      await identitySignOut({ redirectUrl: '/login' });
+    } catch (err) {
+      if (sessionsRevoked) {
+        router.replace('/login');
+        return;
+      }
+      if (!isStepUpCancelled(err)) setLogoutError(toUserMessage(err, 'Sign out failed.'));
+      setLoggingOut(false);
+    }
+  }, [identitySignOut, logout, router, withStepUp]);
+
+  return (
+    <section
+      aria-labelledby="settings-sessions-heading"
+      style={{
+        border: '1px solid var(--settings-border)',
+        borderRadius: 'var(--radius-lg)',
+        background: 'var(--bg-elev)',
+        padding: 'var(--space-4) var(--space-5)',
+      }}
+    >
+      {confirmDialog}
+      {stepUpDialog}
+      <h2
+        id="settings-sessions-heading"
+        style={{
+          margin: '0 0 var(--space-3)',
+          fontSize: 14,
+          fontWeight: 600,
+          color: 'var(--text-2)',
+        }}
+      >
+        Sessions
+      </h2>
+      <SettingsSectionLink
+        section="account"
+        style={{ ...sessionRowStyle, textAlign: 'left', cursor: 'pointer', color: 'inherit' }}
+      >
+        <span style={{ minWidth: 0 }}>
+          <span style={{ ...sessionLabelStyle, display: 'block' }}>Active sessions</span>
+          <span style={{ ...sessionHintStyle, display: 'block' }}>
+            Review every signed-in device in Account and revoke any you do not recognize.
+          </span>
+        </span>
+        <ChevronRight size={16} aria-hidden="true" color="var(--text-3)" />
+      </SettingsSectionLink>
+      <div style={{ ...sessionRowStyle, flexWrap: 'wrap' }}>
+        <div style={{ minWidth: 0 }}>
+          <p style={sessionLabelStyle}>Log out of all devices</p>
+          <p style={sessionHintStyle}>Ends every active session, including this one.</p>
+        </div>
+        <button
+          type="button"
+          aria-label="Log out of all devices"
+          onClick={() =>
+            confirm({
+              title: 'Log out of all devices?',
+              description:
+                'Every signed-in session on every device ends immediately, including this one. You will need to sign in again.',
+              confirmLabel: 'Log out everywhere',
+              onConfirm: () => handleLogOutAll(),
+            })
+          }
+          disabled={loggingOut}
+          style={{
+            flexShrink: 0,
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 'var(--space-2)',
+            padding: 'var(--space-2) var(--space-4)',
+            fontSize: 14,
+            fontWeight: 500,
+            color: 'var(--text-1)',
+            background: 'transparent',
+            border: '1px solid var(--settings-border)',
+            borderRadius: 'var(--radius-md)',
+            cursor: loggingOut ? 'default' : 'pointer',
+            opacity: loggingOut ? 0.5 : 1,
+          }}
+        >
+          <LogOut size={14} aria-hidden="true" />
+          {loggingOut ? 'Signing out...' : 'Log out'}
+        </button>
+      </div>
+      {logoutError ? (
+        <p
+          role="alert"
+          style={{
+            margin: 'var(--space-2) 0 0',
+            fontSize: 14,
+            color: 'var(--settings-destructive-text)',
+          }}
+        >
+          {logoutError}
+        </p>
+      ) : null}
+    </section>
+  );
+}
 
 export function SecuritySection() {
   const { data: serverSettings, isLoading, isError: settingsFailed } = useUserSettings();
@@ -53,6 +200,10 @@ export function SecuritySection() {
 
   const authoritativeTwoFactor = useRef<boolean | null>(null);
   const [authenticatorAvailable, setAuthenticatorAvailable] = useState(false);
+
+  const openPasswordForm = useCallback(() => {
+    passwordForm.setFocus(hasPassword ? 'currentPassword' : 'newPassword');
+  }, [hasPassword, passwordForm]);
 
   useEffect(() => {
     if (serverSettings) {
@@ -120,14 +271,14 @@ export function SecuritySection() {
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
           Sign-in methods, passkeys, Advanced Account Security, two-factor authentication, session
-          timeout, and password.
+          timeout, password, and sessions.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="account-security" label="How account security works" />
         </div>
       </div>
 
-      <SignInMethodsPanel />
+      <SignInMethodsPanel onOpenPassword={isLoading ? undefined : openPasswordForm} />
 
       <PasskeysPanel />
 
@@ -165,6 +316,8 @@ export function SecuritySection() {
 
       {changePasswordMutation.stepUpDialog}
 
+      <SessionsPanel />
+
       <AuditLogPanel />
 
       <DeviceSignInToggle />
@@ -196,7 +349,7 @@ export function SecuritySection() {
           {authenticatorAvailable
             ? 'Authenticator app codes (TOTP) with recovery backup codes are the supported second factor.'
             : 'Authenticator app codes (TOTP) and backup codes are temporarily unavailable.'}{' '}
-          To review active sessions or sign out other devices, use Account settings.
+          To review or revoke a single session, use Account settings.
         </p>
       </section>
 

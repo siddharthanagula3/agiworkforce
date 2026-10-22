@@ -1,12 +1,18 @@
 'use client';
 
 import { useEffect, useState, type ReactNode } from 'react';
+import { ChevronRight } from 'lucide-react';
 import type { AuthProvider, AuthProviderId } from '@agiworkforce/client-runtime';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
 import { useStepUp } from '@features/settings/hooks/use-step-up';
-import { useConnectedAccounts, useCurrentUser, usePasskeys } from '@/lib/identity/client';
+import {
+  useConnectedAccounts,
+  useCurrentUser,
+  usePasskeys,
+  type IdentityPasskey,
+} from '@/lib/identity/client';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const IDENTITIES_PATH = '/api/settings/identities';
@@ -45,7 +51,7 @@ const secondaryButtonStyle = {
   gap: 'var(--space-2)',
   flexShrink: 0,
   padding: 'var(--space-2) var(--space-3)',
-  fontSize: 12,
+  fontSize: 14,
   fontWeight: 500,
   background: 'transparent',
   border: '1px solid var(--settings-border)',
@@ -63,11 +69,18 @@ const rowStyle = {
   flexWrap: 'wrap',
 } as const;
 
-function formatDate(value: string | null): string | null {
+function formatDate(value: string | Date | null): string | null {
   if (!value) return null;
-  const date = new Date(value);
+  const date = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(date.getTime())) return null;
   return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
+function describePasskeys(passkeys: readonly IdentityPasskey[]): string {
+  if (passkeys.length === 0) return 'None yet. Add one under Passkeys.';
+  const count = `${passkeys.length} saved. Manage them under Passkeys.`;
+  const newest = newestPasskeyDate(passkeys);
+  return newest ? `${count} Last added on ${newest}.` : count;
 }
 
 async function readIdentities(): Promise<IdentitiesResponse> {
@@ -76,27 +89,86 @@ async function readIdentities(): Promise<IdentitiesResponse> {
   return (await response.json()) as IdentitiesResponse;
 }
 
+function newestPasskeyDate(passkeys: readonly IdentityPasskey[]): string | null {
+  let newest: Date | null = null;
+  for (const passkey of passkeys) {
+    const created = passkey.createdAt;
+    if (Number.isNaN(created.getTime())) continue;
+    if (!newest || created > newest) newest = created;
+  }
+  return formatDate(newest);
+}
+
+function MethodText({ label, detail }: { label: string; detail: string }) {
+  return (
+    <div style={{ minWidth: 0 }}>
+      <p style={{ margin: 0, fontSize: 14, color: 'var(--text-1)' }}>{label}</p>
+      <p style={{ margin: 0, fontSize: 14, color: 'var(--text-3)' }}>{detail}</p>
+    </div>
+  );
+}
+
 function MethodRow({
   label,
   detail,
+  value,
+  onOpen,
   children,
 }: {
   label: string;
   detail: string;
+  value?: string;
+  onOpen?: () => void;
   children?: ReactNode;
 }) {
+  if (onOpen && value) {
+    return (
+      <li style={{ borderTop: '1px solid var(--settings-border)' }}>
+        <button
+          type="button"
+          onClick={onOpen}
+          aria-label={`${value} ${label.toLowerCase()}`}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 'var(--space-4)',
+            padding: 'var(--space-3) 0',
+            width: '100%',
+            background: 'transparent',
+            border: 'none',
+            textAlign: 'left',
+            cursor: 'pointer',
+            font: 'inherit',
+          }}
+        >
+          <MethodText label={label} detail={detail} />
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 'var(--space-1)',
+              flexShrink: 0,
+              fontSize: 14,
+              color: 'var(--text-1)',
+            }}
+          >
+            {value}
+            <ChevronRight size={16} aria-hidden="true" color="var(--text-3)" />
+          </span>
+        </button>
+      </li>
+    );
+  }
   return (
     <li style={rowStyle}>
-      <div style={{ minWidth: 0 }}>
-        <p style={{ margin: 0, fontSize: 13, color: 'var(--text-1)' }}>{label}</p>
-        <p style={{ margin: 0, fontSize: 12, color: 'var(--text-3)' }}>{detail}</p>
-      </div>
+      <MethodText label={label} detail={detail} />
       {children}
     </li>
   );
 }
 
-export function SignInMethodsPanel() {
+export function SignInMethodsPanel({ onOpenPassword }: { onOpenPassword?: () => void } = {}) {
   const { user } = useCurrentUser();
   const { passkeys } = usePasskeys();
   const { isLoaded, accounts, connect, disconnect } = useConnectedAccounts();
@@ -198,14 +270,14 @@ export function SignInMethodsPanel() {
         id="settings-sign-in-methods-heading"
         style={{
           margin: '0 0 var(--space-1)',
-          fontSize: 13,
+          fontSize: 14,
           fontWeight: 600,
           color: 'var(--text-2)',
         }}
       >
         Sign-in methods
       </h2>
-      <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
+      <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--text-3)' }}>
         Every way you can sign in to this account. Keep at least one you can still reach.
       </p>
 
@@ -221,16 +293,11 @@ export function SignInMethodsPanel() {
           />
           <MethodRow
             label="Password"
-            detail={user?.hasPassword ? 'Set. Change it under Password below.' : 'Not set'}
+            detail={user?.hasPassword ? 'Set' : 'Not set'}
+            value={user?.hasPassword ? 'Change' : 'Add'}
+            onOpen={onOpenPassword}
           />
-          <MethodRow
-            label="Passkeys"
-            detail={
-              passkeys.length === 0
-                ? 'None yet. Add one under Passkeys.'
-                : `${passkeys.length} saved. Manage them under Passkeys.`
-            }
-          />
+          <MethodRow label="Passkeys" detail={describePasskeys(passkeys)} />
           {providers.map((provider) => {
             const account = accounts.find((candidate) => candidate.provider === provider.id);
             const key = account ? `disconnect:${account.id}` : `connect:${provider.id}`;
@@ -322,7 +389,7 @@ export function SignInMethodsPanel() {
           role="alert"
           style={{
             margin: 'var(--space-2) 0 0',
-            fontSize: 12,
+            fontSize: 14,
             color: 'var(--settings-destructive-text)',
           }}
         >

@@ -8,6 +8,11 @@ const clerk = vi.hoisted(() => ({
 
 vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({ isLoaded: clerk.isLoaded, user: clerk.user }),
+  useClerk: () => ({ signOut: vi.fn() }),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
 
 const service = vi.hoisted(() => ({

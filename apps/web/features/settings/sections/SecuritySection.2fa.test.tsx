@@ -13,6 +13,11 @@ const service = vi.hoisted(() => ({
 
 vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({ isLoaded: true, user: { publicMetadata: { role: 'member' } } }),
+  useClerk: () => ({ signOut: vi.fn() }),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
 
 vi.mock('@features/settings/services/user-preferences', () => ({

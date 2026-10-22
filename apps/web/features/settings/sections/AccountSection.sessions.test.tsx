@@ -103,37 +103,6 @@ describe('AccountSection active sessions', () => {
     mockSignOut.mockResolvedValue(undefined);
   });
 
-  it('surfaces the partial progress a rate limited log out of all devices reports', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
-        return jsonResponse({ sessions, totalCount: sessions.length });
-      }
-      if (String(input) === '/api/settings/sessions' && init?.method === 'DELETE') {
-        return jsonResponse(
-          {
-            error: 'Ended 120 of 1647 sessions, try again to finish.',
-            revokedCount: 120,
-            failedCount: 1527,
-            currentSessionRevoked: false,
-          },
-          502,
-        );
-      }
-      throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
-    });
-
-    render(<AccountSection />);
-
-    await screen.findByText('Mobile Safari 19');
-    fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Log out everywhere' }));
-
-    expect(
-      await screen.findByText('Ended 120 of 1647 sessions, try again to finish.'),
-    ).toBeInTheDocument();
-    expect(mockSignOut).not.toHaveBeenCalled();
-  });
-
   it('says how many sessions it is showing when the account has more than it can list', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (String(input) === '/api/settings/sessions' && init?.method === 'GET') {
@@ -232,31 +201,6 @@ describe('AccountSection active sessions', () => {
     expect(mockSignOut).not.toHaveBeenCalled();
   });
 
-  it('uses the account-wide endpoint before clearing local state for all-device logout', async () => {
-    const requests: Array<{ url: string; method: string }> = [];
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const request = { url: String(input), method: init?.method ?? 'GET' };
-      requests.push(request);
-      if (request.url === '/api/settings/sessions' && request.method === 'GET') {
-        return jsonResponse({ sessions, totalCount: sessions.length });
-      }
-      if (request.url === '/api/settings/sessions' && request.method === 'DELETE') {
-        return jsonResponse({ message: 'All active sessions revoked', revokedCount: 2 });
-      }
-      throw new Error(`Unexpected request: ${request.url} ${request.method}`);
-    });
-
-    render(<AccountSection />);
-    await screen.findByText('Chrome 140');
-    fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
-    expect(await screen.findByText('Log out of all devices?')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Log out everywhere' }));
-
-    await waitFor(() => expect(mockSignOut).toHaveBeenCalledWith({ redirectUrl: '/login' }));
-    expect(requests).toContainEqual({ url: '/api/settings/sessions', method: 'DELETE' });
-    expect(mockLogout).toHaveBeenCalledOnce();
-  });
-
   it('shows the signed-in account identifier with a way to copy it for support', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       if (String(input) === '/api/settings/sessions' && (init?.method ?? 'GET') === 'GET') {
@@ -271,51 +215,22 @@ describe('AccountSection active sessions', () => {
     expect(screen.getByRole('button', { name: 'Copy user ID' })).toBeEnabled();
   });
 
-  it('ends no session when the all-device confirmation is dismissed', async () => {
-    const requests: Array<{ url: string; method: string }> = [];
+  it('points log out of all devices at Security instead of keeping a second copy', async () => {
     vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const request = { url: String(input), method: init?.method ?? 'GET' };
-      requests.push(request);
-      if (request.url === '/api/settings/sessions' && request.method === 'GET') {
+      if (String(input) === '/api/settings/sessions' && (init?.method ?? 'GET') === 'GET') {
         return jsonResponse({ sessions, totalCount: sessions.length });
       }
-      throw new Error(`Unexpected request: ${request.url} ${request.method}`);
+      throw new Error(`Unexpected request: ${String(input)} ${init?.method ?? 'GET'}`);
     });
 
     render(<AccountSection />);
     await screen.findByText('Chrome 140');
-    fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
-    expect(
-      await screen.findByText(/Every signed-in session on every device ends immediately/),
-    ).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
-    await waitFor(() => expect(screen.queryByText('Log out of all devices?')).toBeNull());
-    expect(requests.filter((request) => request.method === 'DELETE')).toEqual([]);
-    expect(mockSignOut).not.toHaveBeenCalled();
-    expect(mockLogout).not.toHaveBeenCalled();
-  });
-
-  it('announces a failed all-device log out instead of leaving the button idle', async () => {
-    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-      const method = init?.method ?? 'GET';
-      if (String(input) === '/api/settings/sessions' && method === 'GET') {
-        return jsonResponse({ sessions, totalCount: sessions.length });
-      }
-      if (String(input) === '/api/settings/sessions' && method === 'DELETE') {
-        return jsonResponse({ error: { message: 'Unable to log out every device.' } }, 503);
-      }
-      throw new Error(`Unexpected request: ${String(input)} ${method}`);
-    });
-
-    render(<AccountSection />);
-    await screen.findByText('Chrome 140');
-    fireEvent.click(screen.getByRole('button', { name: 'Log out of all devices' }));
-    fireEvent.click(await screen.findByRole('button', { name: 'Log out everywhere' }));
-
-    const failure = await screen.findByText(/log out every device/i);
-    expect(failure).toHaveAttribute('role', 'alert');
-    expect(mockSignOut).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Log out of all devices' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Security' })).toHaveAttribute(
+      'href',
+      '/settings/security',
+    );
   });
 
   it('replaces a timed-out session request with an actionable retry state', async () => {

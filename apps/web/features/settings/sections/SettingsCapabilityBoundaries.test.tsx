@@ -6,6 +6,11 @@ import { SecuritySection } from './SecuritySection';
 
 vi.mock('@clerk/nextjs', () => ({
   useUser: () => ({ isLoaded: true, user: { publicMetadata: { role: 'member' } } }),
+  useClerk: () => ({ signOut: vi.fn() }),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
 
 vi.mock('@shared/stores/web-auth-store', () => ({
@@ -112,6 +117,9 @@ describe('Web Settings capability boundaries', () => {
     render(<SecuritySection />);
 
     expect(screen.queryByText(/cross-device session revocation/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/sign out other devices, use\s+Account settings/i)).toBeInTheDocument();
+    expect(
+      screen.getByText(/revoke a single session, use\s+Account settings/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log out of all devices' })).toBeInTheDocument();
   });
 });
