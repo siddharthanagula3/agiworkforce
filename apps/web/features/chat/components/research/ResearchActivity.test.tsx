@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
@@ -275,5 +275,48 @@ describe('ResearchActivity guidance the run never read', () => {
       guidance: 'Cover the third quarter',
     });
     expect(screen.queryByTestId('research-steer-unread')).not.toBeInTheDocument();
+  });
+});
+
+describe('ResearchActivity completion notification', () => {
+  const originalNotification = globalThis.Notification;
+
+  afterEach(() => {
+    Object.defineProperty(globalThis, 'Notification', {
+      value: originalNotification,
+      configurable: true,
+      writable: true,
+    });
+  });
+
+  function stubNotification(permission: NotificationPermission) {
+    const requestPermission = vi.fn().mockResolvedValue('granted');
+    Object.defineProperty(globalThis, 'Notification', {
+      value: { permission, requestPermission },
+      configurable: true,
+      writable: true,
+    });
+    return requestPermission;
+  }
+
+  it('asks once for permission from the running research view', async () => {
+    const user = userEvent.setup();
+    const requestPermission = stubNotification('default');
+    render(<ResearchActivity isStreaming research={research()} />);
+
+    await user.click(await screen.findByTestId('research-notify-enable'));
+
+    expect(requestPermission).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('research-notify-footer')).toBeNull();
+  });
+
+  it('stays out of the way once permission is decided or the run is not active', () => {
+    stubNotification('granted');
+    const { rerender } = render(<ResearchActivity isStreaming research={research()} />);
+    expect(screen.queryByTestId('research-notify-footer')).toBeNull();
+
+    stubNotification('default');
+    rerender(<ResearchActivity isStreaming={false} research={research({ phase: 'complete' })} />);
+    expect(screen.queryByTestId('research-notify-footer')).toBeNull();
   });
 });

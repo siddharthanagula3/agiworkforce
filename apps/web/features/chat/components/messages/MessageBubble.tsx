@@ -40,6 +40,7 @@ import {
   Pencil,
   Pin,
   RefreshCw,
+  Share2,
   Square,
   ThumbsDown,
   ThumbsUp,
@@ -1966,6 +1967,26 @@ const MessageBubbleComponent = function MessageBubble({
     setTimeout(() => setCopied(false), 2000);
   }, [isUser, message.content]);
 
+  const handleShare = useCallback(async () => {
+    const text = richBlocksAsPlainText(message.content);
+    if (typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ text });
+      } catch (error) {
+        if (!(error instanceof DOMException && error.name === 'AbortError')) {
+          toast.error('This answer could not be shared');
+        }
+      }
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success('Copied to clipboard');
+    } catch {
+      toast.error('This answer could not be shared');
+    }
+  }, [message.content]);
+
   const hasThinkingSteps =
     message.metadata?.thinkingSteps && message.metadata.thinkingSteps.length > 0;
   const voiceModeActive = useVoiceModeActive();
@@ -3579,6 +3600,15 @@ const MessageBubbleComponent = function MessageBubble({
                           >
                             <GitFork className="me-2 h-4 w-4" aria-hidden="true" />
                             {isBranching ? 'Creating branch…' : 'Branch conversation from here'}
+                          </DropdownMenuItem>
+                        )}
+                        {!isUser && hasReadableTurn && !message.isStreaming && (
+                          <DropdownMenuItem
+                            onClick={() => void handleShare()}
+                            data-testid="message-share"
+                          >
+                            <Share2 className="me-2 h-4 w-4" aria-hidden="true" />
+                            Share answer
                           </DropdownMenuItem>
                         )}
                         {!isUser && hasReadableTurn && projectAnswerSave && (

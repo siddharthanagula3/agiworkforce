@@ -42,6 +42,7 @@ import { ResearchPlan } from './ResearchPlan';
 import { useResearchRunControls } from './research-run-controls';
 import type { MessageResearchState } from '@shared/stores/web-chat-store';
 import { useUiTranslation } from '@agiworkforce/ui';
+import { useBrowserReplyReadyPreference } from '../../hooks/use-browser-reply-ready-preference';
 import { isResearchGuidanceStep, researchAnswersGuidance } from '../../utils/research-plan';
 
 function formatElapsed(ms: number): string {
@@ -212,6 +213,37 @@ const CONTROL_BUTTON_CLASS = cn(
 
 const CONTROL_INPUT_CLASS =
   'min-h-7 min-w-0 flex-1 rounded-md border border-border/40 bg-background px-2 py-1 text-foreground outline-none focus-visible:ring-2 focus-visible:ring-ring pointer-coarse:min-h-11';
+
+function ResearchNotifyFooter() {
+  const browserReplyReady = useBrowserReplyReadyPreference();
+  const [permission, setPermission] = useState<NotificationPermission | null>(null);
+  useEffect(() => {
+    setPermission(typeof Notification === 'undefined' ? null : Notification.permission);
+  }, []);
+
+  if (!browserReplyReady || permission !== 'default') return null;
+
+  const enable = async () => {
+    setPermission(await Notification.requestPermission());
+  };
+
+  return (
+    <div
+      className="mt-1 flex items-center justify-between gap-2 rounded-lg border border-border/30 bg-muted/10 px-3 py-2 text-xs text-muted-foreground"
+      data-testid="research-notify-footer"
+    >
+      <span>Get a notification when this research finishes</span>
+      <button
+        type="button"
+        onClick={() => void enable()}
+        className={CONTROL_BUTTON_CLASS}
+        data-testid="research-notify-enable"
+      >
+        Enable
+      </button>
+    </div>
+  );
+}
 
 export function ResearchActivity({
   research,
@@ -783,6 +815,7 @@ export function ResearchActivity({
           </ol>
         )
       )}
+      {isActive && <ResearchNotifyFooter />}
     </div>
   );
 }

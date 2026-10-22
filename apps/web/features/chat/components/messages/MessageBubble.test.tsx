@@ -980,6 +980,35 @@ describe('MessageBubble', () => {
       expect(onReadAloud).toHaveBeenCalledWith(msg.id, msg.content);
     });
 
+    it('shares an answer through the system share sheet when the browser has one', async () => {
+      const user = userEvent.setup();
+      const share = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'share', { value: share, configurable: true });
+      try {
+        render(<MessageBubble message={assistantMsg()} />);
+        await user.click(screen.getByLabelText('More message actions'));
+        await user.click(screen.getByRole('menuitem', { name: 'Share answer' }));
+        expect(share).toHaveBeenCalledWith({ text: assistantMsg().content });
+      } finally {
+        Reflect.deleteProperty(navigator, 'share');
+      }
+    });
+
+    it('copies the answer when the browser has no share sheet, and omits share for user messages', async () => {
+      const user = userEvent.setup();
+      const writeText = vi.fn().mockResolvedValue(undefined);
+      Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+      const { rerender } = render(<MessageBubble message={assistantMsg()} />);
+      await user.click(screen.getByLabelText('More message actions'));
+      await user.click(screen.getByRole('menuitem', { name: 'Share answer' }));
+      expect(writeText).toHaveBeenCalledWith(assistantMsg().content);
+      await user.keyboard('{Escape}');
+
+      rerender(<MessageBubble message={makeMessage({ role: 'user' })} />);
+      await user.click(screen.getByLabelText('More message actions'));
+      expect(screen.queryByRole('menuitem', { name: 'Share answer' })).toBeNull();
+    });
+
     it('does not offer read aloud to user messages or unsupported browsers', async () => {
       const user = userEvent.setup();
       const onReadAloud = vi.fn();

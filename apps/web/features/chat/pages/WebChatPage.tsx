@@ -159,6 +159,7 @@ import { accountInitial, normalizeDisplayName } from '@agiworkforce/utils/displa
 import {
   Menu,
   Share2,
+  Sparkles,
   PanelsTopLeft,
   Bell,
   CircleAlert,
@@ -6782,6 +6783,17 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     <ArtifactsToggleButton onToggle={() => toggleSecondaryPanel('artifacts')} />
                   }
                 />
+                {isWebsiteFreeTrial && (
+                  <button
+                    type="button"
+                    onClick={() => handleOpenUpgradeDialog()}
+                    className="inline-flex h-8 items-center gap-1.5 rounded-full bg-primary px-3 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    data-testid="header-upgrade-pill"
+                  >
+                    <Sparkles className="h-4 w-4" aria-hidden="true" />
+                    Upgrade
+                  </button>
+                )}
               </div>
             </header>
           )}
