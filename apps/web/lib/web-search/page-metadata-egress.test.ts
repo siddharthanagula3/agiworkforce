@@ -100,25 +100,41 @@ describe('filling in a missing result title never becomes a reach inside', () =>
     },
   );
 
-  it('still fills a title in from an ordinary public redirect', async () => {
+  it('still fills a title in from a redirect that stays on the cited site', async () => {
     const result = untitled();
+    const moved = `https://www.${new URL(result.url).host}/moved`;
     const { impl, urls } = recording((call) =>
       call === 1
-        ? new Response(null, { status: 302, headers: { location: 'https://moved.example/story' } })
+        ? new Response(null, { status: 302, headers: { location: moved } })
         : metadataPage('The real headline'),
     );
 
     const [enriched] = await enrichWebSearchResultTitles([result], { fetchImpl: impl });
 
     expect(enriched!.title).toBe('The real headline');
-    expect(urls).toEqual([result.url, 'https://moved.example/story']);
+    expect(urls).toEqual([result.url, moved]);
+  });
+
+  it('never reads a redirect to another site', async () => {
+    const result = untitled();
+    const { impl, urls } = recording((call) =>
+      call === 1
+        ? new Response(null, { status: 302, headers: { location: 'https://moved.example/story' } })
+        : metadataPage('Another site'),
+    );
+
+    const [enriched] = await enrichWebSearchResultTitles([result], { fetchImpl: impl });
+
+    expect(enriched!.title).toBe('');
+    expect(urls).toEqual([result.url]);
   });
 
   it('gives up rather than following a chain past the bound', async () => {
     const result = untitled();
+    const host = new URL(result.url).host;
     const { impl, urls } = recording(
       (call) =>
-        new Response(null, { status: 302, headers: { location: `https://hop${call}.example/` } }),
+        new Response(null, { status: 302, headers: { location: `https://${host}/hop${call}` } }),
     );
 
     const [enriched] = await enrichWebSearchResultTitles([result], { fetchImpl: impl });
@@ -159,12 +175,13 @@ describe('filling in a missing result title never becomes a reach inside', () =>
   it('sends no cookie or authorization header on any hop', async () => {
     const result = untitled();
     const seen: Array<string[]> = [];
+    const onward = `https://${new URL(result.url).host}/onward`;
     const impl = (async (_input: string | URL | Request, init: RequestInit = {}) => {
       seen.push([...new Headers(init.headers).keys()]);
       return seen.length === 1
         ? new Response(null, {
             status: 302,
-            headers: { location: 'https://onward.example/', 'set-cookie': 'session=secret' },
+            headers: { location: onward, 'set-cookie': 'session=secret' },
           })
         : metadataPage('Public headline');
     }) as unknown as typeof fetch;
