@@ -166,8 +166,18 @@ function overageAvailableCreditsOf(body: OverageBody): number {
   return creditsFromMicrousd(Number(body.available_microusd ?? 0));
 }
 
-function describeCard(card: NonNullable<PaymentMethod['card']>): string {
-  return `${card.brand.charAt(0).toUpperCase()}${card.brand.slice(1)} ending in ${card.last4}`;
+type SavedCard = NonNullable<PaymentMethod['card']>;
+
+function cardBrandName(card: SavedCard): string {
+  return `${card.brand.charAt(0).toUpperCase()}${card.brand.slice(1)}`;
+}
+
+function describeCard(card: SavedCard): string {
+  return `${cardBrandName(card)} ending in ${card.last4}`;
+}
+
+function cardExpiry(card: SavedCard): string {
+  return `${String(card.exp_month).padStart(2, '0')}/${card.exp_year}`;
 }
 
 function PlanIcon({ tier }: { tier: string }) {
@@ -538,6 +548,9 @@ export function BillingSection() {
 
   const defaultCard =
     paymentMethods.items.find((pm) => pm.is_default)?.card ?? paymentMethods.items[0]?.card;
+  const savedCards = paymentMethods.items
+    .filter((pm): pm is PaymentMethod & { card: SavedCard } => Boolean(pm.card))
+    .sort((a, b) => Number(b.is_default) - Number(a.is_default));
   const openInvoice: OpenInvoiceLink | null = (() => {
     const invoice = invoices.items.find(
       (candidate) => candidate.status === 'open' && candidate.hosted_invoice_url,
@@ -688,23 +701,46 @@ export function BillingSection() {
             </div>
           </div>
           {canAdjustPlan ? (
-            <SettingsPageLink
-              href="/upgrade"
+            <div
               style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 'var(--space-2)',
                 flexShrink: 0,
-                padding: 'var(--space-2) var(--space-4)',
-                background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary)',
-                border: 'none',
-                borderRadius: 'var(--radius)',
-                color: isFreeTier ? 'var(--bg-base)' : 'var(--chat-accent-on-primary)',
-                fontSize: 13,
-                fontWeight: 600,
-                textDecoration: 'none',
-                cursor: 'pointer',
               }}
             >
-              {isFreeTier ? 'Upgrade plan' : 'Adjust plan'}
-            </SettingsPageLink>
+              {isFreeTier ? null : (
+                <SettingsPageLink
+                  href="/pricing"
+                  style={{
+                    ...OUTLINE_BUTTON_STYLE,
+                    borderRadius: 'var(--corner-pill)',
+                    fontSize: 14,
+                    fontWeight: 600,
+                    textDecoration: 'none',
+                  }}
+                >
+                  Compare plans
+                </SettingsPageLink>
+              )}
+              <SettingsPageLink
+                href="/upgrade"
+                style={{
+                  flexShrink: 0,
+                  padding: 'var(--space-2) var(--space-4)',
+                  background: isFreeTier ? 'var(--text-1)' : 'var(--chat-accent-primary)',
+                  border: 'none',
+                  borderRadius: 'var(--radius)',
+                  color: isFreeTier ? 'var(--bg-base)' : 'var(--chat-accent-on-primary)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  textDecoration: 'none',
+                  cursor: 'pointer',
+                }}
+              >
+                {isFreeTier ? 'Upgrade plan' : 'Adjust plan'}
+              </SettingsPageLink>
+            </div>
           ) : (
             <span
               role="status"
@@ -872,62 +908,92 @@ export function BillingSection() {
               <div className="h-3 w-40 animate-pulse rounded-compact bg-foreground/[0.07]" />
             </div>
           ) : (
-            <div
-              style={{
-                padding: 'var(--space-4) 0',
-                borderBottom: '1px solid var(--settings-border)',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 'var(--space-4)',
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-3)' }}>
+            <div>
+              {savedCards.map((pm) => (
                 <div
+                  key={pm.id}
                   style={{
-                    width: 36,
-                    height: 24,
-                    borderRadius: 'var(--corner-compact)',
-                    background: 'var(--bg-hover)',
-                    border: '1px solid var(--settings-border)',
+                    padding: 'var(--space-4) 0',
+                    borderBottom: '1px solid var(--settings-border)',
                     display: 'flex',
                     alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: 12,
-                    fontWeight: 700,
-                    color: 'var(--text-3)',
-                    fontFamily: 'var(--mono)',
-                    textTransform: 'uppercase',
+                    justifyContent: 'space-between',
+                    gap: 'var(--space-4)',
+                    flexWrap: 'wrap',
                   }}
                 >
-                  {defaultCard ? defaultCard.brand.slice(0, 4) : 'CARD'}
+                  <div
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'var(--space-3)',
+                      flexWrap: 'wrap',
+                    }}
+                  >
+                    <span style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-1)' }}>
+                      {cardBrandName(pm.card)}
+                    </span>
+                    <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
+                      •••• {pm.card.last4}
+                    </span>
+                    {pm.is_default ? (
+                      <span
+                        style={{
+                          padding: 'var(--space-1) var(--space-3)',
+                          background: 'var(--bg-hover)',
+                          border: '1px solid var(--settings-border)',
+                          borderRadius: 'var(--corner-pill)',
+                          color: 'var(--text-2)',
+                          fontSize: 14,
+                          lineHeight: 1.2,
+                        }}
+                      >
+                        Default
+                      </span>
+                    ) : null}
+                  </div>
+                  <span style={{ fontSize: 14, color: 'var(--text-3)' }}>
+                    Expires {cardExpiry(pm.card)}
+                  </span>
                 </div>
-                <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
-                  {paymentMethods.status === 'error'
-                    ? 'Payment method unavailable'
-                    : defaultCard
-                      ? `${describeCard(defaultCard)} · expires ${String(defaultCard.exp_month).padStart(2, '0')}/${defaultCard.exp_year}`
-                      : 'No card on file'}
-                </span>
-              </div>
-              <button
-                type="button"
-                onClick={() => void openPortal()}
-                disabled={portalPending}
+              ))}
+              <div
                 style={{
-                  ...OUTLINE_BUTTON_STYLE,
-                  borderRadius: 'var(--radius-md)',
-                  cursor: portalPending ? 'progress' : 'pointer',
+                  padding: 'var(--space-4) 0',
+                  borderBottom: '1px solid var(--settings-border)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  gap: 'var(--space-4)',
                 }}
               >
-                {portalPending
-                  ? 'Opening…'
-                  : paymentMethods.status === 'error'
-                    ? 'Open billing portal'
-                    : defaultCard
-                      ? 'Update'
-                      : 'Add payment method'}
-              </button>
+                <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
+                  {paymentMethods.status === 'error'
+                    ? 'Payment method unavailable'
+                    : savedCards.length === 0
+                      ? 'No card on file'
+                      : null}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void openPortal()}
+                  disabled={portalPending}
+                  style={{
+                    ...OUTLINE_BUTTON_STYLE,
+                    borderRadius: 'var(--radius-md)',
+                    fontSize: 14,
+                    cursor: portalPending ? 'progress' : 'pointer',
+                  }}
+                >
+                  {portalPending
+                    ? 'Opening…'
+                    : paymentMethods.status === 'error'
+                      ? 'Open billing portal'
+                      : savedCards.length > 0
+                        ? 'Manage cards'
+                        : 'Add payment method'}
+                </button>
+              </div>
             </div>
           )}
           {paymentMethods.status === 'error' && (

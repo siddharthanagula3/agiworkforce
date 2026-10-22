@@ -551,6 +551,109 @@ describe('BillingSection', () => {
   });
 });
 
+describe('BillingSection saved cards and plan comparison', () => {
+  const twoCards = {
+    payment_methods: [
+      {
+        id: 'pm_old',
+        type: 'card',
+        is_default: false,
+        card: { brand: 'mastercard', last4: '4444', exp_month: 3, exp_year: 2027 },
+      },
+      {
+        id: 'pm_main',
+        type: 'card',
+        is_default: true,
+        card: { brand: 'visa', last4: '4242', exp_month: 11, exp_year: 2028 },
+      },
+    ],
+  };
+
+  function mockPaymentMethods(body: unknown) {
+    global.fetch = vi.fn(async (url: RequestInfo | URL) => ({
+      ok: true,
+      json: async () => (String(url).includes('payment-methods') ? body : {}),
+    })) as unknown as typeof fetch;
+  }
+
+  it('lists every saved card with its full brand name, default first, and one Default pill', async () => {
+    mockPaymentMethods(twoCards);
+
+    render(<BillingSection />);
+
+    const visa = await screen.findByText('Visa');
+    const mastercard = screen.getByText('Mastercard');
+    expect(
+      visa.compareDocumentPosition(mastercard) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    expect(screen.getByText('•••• 4242')).toBeTruthy();
+    expect(screen.getByText('•••• 4444')).toBeTruthy();
+    expect(screen.getByText('Expires 11/2028')).toBeTruthy();
+    expect(screen.getByText('Expires 03/2027')).toBeTruthy();
+    const pills = screen.getAllByText('Default');
+    expect(pills).toHaveLength(1);
+    expect(visa.parentElement).toContainElement(pills[0] as HTMLElement);
+    expect(screen.getByRole('button', { name: 'Manage cards' })).toBeTruthy();
+  });
+
+  it('keeps the empty state and Add payment method when no card is saved', async () => {
+    mockPaymentMethods({ payment_methods: [] });
+
+    render(<BillingSection />);
+
+    expect(await screen.findByText('No card on file')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Add payment method' })).toBeTruthy();
+    expect(screen.queryByText('Default')).toBeNull();
+  });
+
+  it('opens the billing portal from Manage cards', async () => {
+    mockPaymentMethods(twoCards);
+    billingMocks.openBillingPortal.mockResolvedValue(undefined);
+
+    render(<BillingSection />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Manage cards' }));
+
+    await waitFor(() => expect(billingMocks.openBillingPortal).toHaveBeenCalledTimes(1));
+  });
+
+  it('offers Compare plans beside Adjust plan on a paid plan', async () => {
+    mockPaymentMethods({ payment_methods: [] });
+
+    render(<BillingSection />);
+
+    const compare = await screen.findByRole('link', { name: 'Compare plans' });
+    expect(compare.getAttribute('href')).toBe('/pricing');
+    expect(screen.getByRole('link', { name: 'Adjust plan' }).getAttribute('href')).toBe('/upgrade');
+  });
+
+  it('keeps a Free account on Upgrade only, without a Compare plans link in the plan row', async () => {
+    mockSubscription = {
+      tier: 'free',
+      display_name: 'Free',
+      status: 'none',
+      current_period_end: null,
+    };
+    mockPaymentMethods({ payment_methods: [] });
+
+    render(<BillingSection />);
+
+    const upgrade = await screen.findByRole('link', { name: 'Upgrade plan' });
+    const planActions = upgrade.parentElement as HTMLElement;
+    expect(within(planActions).getAllByRole('link')).toHaveLength(1);
+  });
+
+  it('shows no Compare plans link when another store owns the subscription', async () => {
+    mockSubscription = { ...mockSubscription, subscription_source: 'apple' };
+    mockPaymentMethods({ payment_methods: [] });
+
+    render(<BillingSection />);
+
+    await screen.findByText('Billed through');
+    expect(screen.queryByRole('link', { name: 'Compare plans' })).toBeNull();
+  });
+});
+
 describe('past-due payment notice', () => {
   // invoice.payment_failed sets the subscription to past_due server-side, but
   // this panel rendered nothing about it, so a user whose card was declined
