@@ -131,6 +131,15 @@ export type ManagedCloudEventTriggerCreated = z.infer<
   typeof ManagedCloudEventTriggerCreatedResponseSchema
 >;
 
+export const ManagedCloudEventTriggerSigningSecretResponseSchema = z.object({
+  trigger: ManagedCloudEventTriggerSchema,
+  signingSecret: z.string().min(1),
+  webhookPath: z.string(),
+});
+export type ManagedCloudEventTriggerSigningSecret = z.infer<
+  typeof ManagedCloudEventTriggerSigningSecretResponseSchema
+>;
+
 export interface ManagedCloudEventTriggerInput {
   taskId: string;
   name: string;
@@ -151,6 +160,10 @@ export function managedCloudTriggerPath(triggerId: string): string {
 
 export function managedCloudTriggerWatchPath(triggerId: string): string {
   return `${managedCloudTriggerPath(triggerId)}/watch`;
+}
+
+export function managedCloudTriggerSigningSecretPath(triggerId: string): string {
+  return `${managedCloudTriggerPath(triggerId)}/signing-secret`;
 }
 
 type ConditionOperator = ManagedCloudScheduleFieldCondition['operator'];

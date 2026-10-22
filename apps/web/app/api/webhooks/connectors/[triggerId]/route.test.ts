@@ -4,7 +4,8 @@ import { createHmac } from 'node:crypto';
 const mocks = vi.hoisted(() => ({
   withRateLimit: vi.fn(),
   ingestTriggerEvent: vi.fn(),
-  getNeonDb: vi.fn(() => ({})),
+  saltQuery: vi.fn(),
+  getNeonDb: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -24,9 +25,12 @@ import { POST } from './route';
 
 const TRIGGER_ID = '11111111-1111-4111-8111-111111111111';
 
-function request(body: string, options: { signature?: string; timestamp?: number } = {}) {
+function request(
+  body: string,
+  options: { signature?: string; timestamp?: number; salt?: string | null } = {},
+) {
   const timestamp = options.timestamp ?? Math.floor(Date.now() / 1000);
-  const secret = connectorTriggerSecret(TRIGGER_ID) ?? 'unset';
+  const secret = connectorTriggerSecret(TRIGGER_ID, options.salt ?? null) ?? 'unset';
   const signature =
     options.signature ??
     `sha256=${createHmac('sha256', secret).update(`${timestamp}.${body}`).digest('hex')}`;
@@ -50,6 +54,8 @@ beforeEach(() => {
   vi.unstubAllEnvs();
   vi.stubEnv(EVENT_TRIGGER_SIGNING_SECRET_ENV, 'deployment-secret');
   mocks.withRateLimit.mockResolvedValue(null);
+  mocks.getNeonDb.mockReturnValue({ query: mocks.saltQuery });
+  mocks.saltQuery.mockResolvedValue([{ signing_salt: null }]);
   mocks.ingestTriggerEvent.mockResolvedValue([
     { triggerId: TRIGGER_ID, outcome: 'enqueued', detail: null },
   ]);
@@ -108,5 +114,48 @@ describe('POST /api/webhooks/connectors/[triggerId]', () => {
         data: { amount: 10 },
       }),
     );
+  });
+
+  it('accepts a trigger that was never rotated with its original secret', async () => {
+    const body = JSON.stringify({ id: 'e2', type: 'invoice.paid' });
+
+    const response = await POST(request(body), params());
+
+    expect(response.status).toBe(200);
+    expect(mocks.saltQuery).toHaveBeenCalledWith(expect.stringContaining('signing_salt'), [
+      TRIGGER_ID,
+    ]);
+  });
+
+  it('rejects the previous secret as soon as the trigger is rotated, and accepts the new one', async () => {
+    const salt = 'a'.repeat(64);
+    mocks.saltQuery.mockResolvedValue([{ signing_salt: salt }]);
+    const body = JSON.stringify({ id: 'e3', type: 'invoice.paid' });
+
+    const withOld = await POST(request(body), params());
+    expect(withOld.status).toBe(401);
+    expect(mocks.ingestTriggerEvent).not.toHaveBeenCalled();
+
+    const withNew = await POST(request(body, { salt }), params());
+    expect(withNew.status).toBe(200);
+    expect(mocks.ingestTriggerEvent).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses every event when the salt cannot be read', async () => {
+    mocks.saltQuery.mockRejectedValue(new Error('connection reset'));
+
+    const response = await POST(request(JSON.stringify({ id: 'e4', type: 'x' })), params());
+
+    expect(response.status).toBe(503);
+    expect(mocks.ingestTriggerEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses a trigger id that names no connector trigger', async () => {
+    mocks.saltQuery.mockResolvedValue([]);
+
+    const response = await POST(request(JSON.stringify({ id: 'e5', type: 'x' })), params());
+
+    expect(response.status).toBe(401);
+    expect(mocks.ingestTriggerEvent).not.toHaveBeenCalled();
   });
 });

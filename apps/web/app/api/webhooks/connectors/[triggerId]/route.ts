@@ -8,6 +8,10 @@ import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { ingestTriggerEvent } from '@/lib/triggers/trigger-ingest';
 import {
+  readConnectorTriggerSalt,
+  type ConnectorTriggerSalt,
+} from '@/lib/triggers/trigger-service';
+import {
   EVENT_TRIGGER_SIGNING_SECRET_ENV,
   verifyConnectorTriggerSignature,
 } from '@/lib/triggers/trigger-signatures';
@@ -23,8 +27,10 @@ const DELIVERY_ID_RE = /^[A-Za-z0-9][A-Za-z0-9_.:-]{0,254}$/;
  * Generic connector event receiver.
  *
  * Each connector trigger has its own signing secret, derived from this
- * deployment's key and the trigger id, so a sender proves it holds the secret
- * for that one trigger. Without the deployment key nothing is accepted.
+ * deployment's key, the trigger id and the trigger's current salt, so a sender
+ * proves it holds the secret for that one trigger as of its last rotation.
+ * Without the deployment key, or when the salt cannot be read, nothing is
+ * accepted.
  */
 async function handleConnectorEvent(
   request: NextRequest,
@@ -43,8 +49,23 @@ async function handleConnectorEvent(
     return NextResponse.json({ error: 'Payload too large' }, { status: 413 });
   }
 
+  let salt: ConnectorTriggerSalt;
+  try {
+    salt = await readConnectorTriggerSalt(getNeonDb(), triggerId);
+  } catch (error) {
+    logger.error({ error, triggerId }, 'Connector trigger salt could not be read');
+    return NextResponse.json(
+      { error: 'Connector events are temporarily unavailable' },
+      { status: 503, headers: { 'Retry-After': '10' } },
+    );
+  }
+  if (!salt.found) {
+    return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+  }
+
   const verification = verifyConnectorTriggerSignature({
     triggerId,
+    signingSalt: salt.signingSalt,
     body,
     timestamp: request.headers.get('x-agi-timestamp'),
     signature: request.headers.get('x-agi-signature'),

@@ -50,6 +50,8 @@ vi.mock('@/lib/triggers/trigger-service', () => ({
   getTrigger: vi.fn(),
   listTriggers: vi.fn(),
   mapTrigger: vi.fn(),
+  readConnectorTriggerSalt: vi.fn(),
+  regenerateConnectorTriggerSecret: vi.fn(),
   triggerListensTo: vi.fn(),
   updateTrigger: vi.fn(),
   validateTriggerInput: vi.fn(),

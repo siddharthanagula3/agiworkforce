@@ -67,6 +67,7 @@ export interface TriggerRow extends Record<string, unknown> {
   watch_history_id?: string | null;
   watch_expires_at?: string | null;
   watch_error?: string | null;
+  signing_salt?: string | null;
   last_fired_at: string | null;
   created_at: string;
   updated_at: string;
@@ -353,6 +354,47 @@ export async function updateTrigger(
   );
   if (!row) throw new TriggerNotFoundError();
   return mapTrigger(row);
+}
+
+export interface RegeneratedConnectorSecret {
+  trigger: EventTrigger;
+  signingSecret: string;
+}
+
+export async function regenerateConnectorTriggerSecret(
+  serviceDb: DatabaseAdapter,
+  owned: EventTrigger,
+): Promise<RegeneratedConnectorSecret> {
+  if (owned.source !== 'connector') {
+    throw new TriggerValidationError('Only a signed webhook trigger has a signing secret');
+  }
+  const signingSalt = secureTokenHex(32);
+  const signingSecret = connectorTriggerSecret(owned.id, signingSalt);
+  if (!signingSecret) {
+    throw new TriggerValidationError('Signed webhook triggers are not configured on this server');
+  }
+  const [row] = await serviceDb.query<TriggerRow>(
+    `update event_triggers
+        set signing_salt = $3, updated_at = now()
+      where id = $1 and user_id = $2 and source = 'connector'
+      returning *`,
+    [owned.id, owned.userId, signingSalt],
+  );
+  if (!row) throw new TriggerNotFoundError();
+  return { trigger: mapTrigger(row), signingSecret };
+}
+
+export type ConnectorTriggerSalt = { found: false } | { found: true; signingSalt: string | null };
+
+export async function readConnectorTriggerSalt(
+  serviceDb: DatabaseAdapter,
+  triggerId: string,
+): Promise<ConnectorTriggerSalt> {
+  const [row] = await serviceDb.query<{ signing_salt: string | null }>(
+    `select signing_salt from event_triggers where id = $1 and source = 'connector' limit 1`,
+    [triggerId],
+  );
+  return row ? { found: true, signingSalt: row.signing_salt ?? null } : { found: false };
 }
 
 export async function getTrigger(

@@ -44,20 +44,28 @@ export function verifySlackSignature(input: {
     : { ok: false, reason: 'invalid' };
 }
 
-export function connectorTriggerSecret(triggerId: string): string | null {
+export function connectorTriggerSecret(
+  triggerId: string,
+  signingSalt: string | null = null,
+): string | null {
   const secret = process.env[EVENT_TRIGGER_SIGNING_SECRET_ENV]?.trim();
   if (!secret) return null;
-  return derive(secret, 'connector-trigger', triggerId);
+  return derive(
+    secret,
+    'connector-trigger',
+    signingSalt ? `${triggerId}:${signingSalt}` : triggerId,
+  );
 }
 
 export function verifyConnectorTriggerSignature(input: {
   triggerId: string;
+  signingSalt: string | null;
   body: string;
   timestamp: string | null;
   signature: string | null;
   nowSeconds: number;
 }): { ok: true } | { ok: false; reason: 'not_configured' | 'stale' | 'invalid' } {
-  const secret = connectorTriggerSecret(input.triggerId);
+  const secret = connectorTriggerSecret(input.triggerId, input.signingSalt);
   if (!secret) return { ok: false, reason: 'not_configured' };
   if (!input.timestamp || !input.signature) return { ok: false, reason: 'invalid' };
   const timestamp = Number(input.timestamp);

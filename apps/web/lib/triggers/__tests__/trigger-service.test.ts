@@ -11,6 +11,9 @@ import {
   createTrigger,
   deleteTrigger,
   listTriggerDeliveries,
+  mapTrigger,
+  readConnectorTriggerSalt,
+  regenerateConnectorTriggerSecret,
   triggerListensTo,
   updateTrigger,
   validateTriggerInput,
@@ -365,11 +368,79 @@ describe('event type matching and signatures', () => {
     expect(
       verifyConnectorTriggerSignature({
         triggerId: row().id as string,
+        signingSalt: null,
         body: '{}',
         timestamp: '1000',
         signature: 'sha256=abc',
         nowSeconds: 1000,
       }),
     ).toEqual({ ok: false, reason: 'not_configured' });
+  });
+});
+
+describe('connector signing secret rotation', () => {
+  const connector = () =>
+    row({ source: 'connector', source_account: null, event_types: ['*'], signing_salt: null });
+
+  beforeEach(() => {
+    vi.stubEnv(EVENT_TRIGGER_SIGNING_SECRET_ENV, 'deployment-secret');
+  });
+
+  it('keeps the original secret for a trigger with no salt and changes it with one', () => {
+    const id = connector().id;
+    expect(connectorTriggerSecret(id, null)).toBe(connectorTriggerSecret(id));
+    expect(connectorTriggerSecret(id, 'b'.repeat(64))).not.toBe(connectorTriggerSecret(id));
+  });
+
+  it('writes a fresh salt for the owner only and returns the secret derived from it', async () => {
+    const query = vi.fn(async (_sql: string, values: unknown[]) => [
+      { ...connector(), signing_salt: values[2] },
+    ]);
+    const owned = mapTrigger(connector());
+
+    const rotated = await regenerateConnectorTriggerSecret(database(query), owned);
+
+    const [sql, values] = query.mock.calls[0] as unknown as [string, unknown[]];
+    expect(sql).toContain("where id = $1 and user_id = $2 and source = 'connector'");
+    expect(values.slice(0, 2)).toEqual([owned.id, owned.userId]);
+    expect(rotated.signingSecret).toBe(connectorTriggerSecret(owned.id, values[2] as string));
+    expect(rotated.signingSecret).not.toBe(connectorTriggerSecret(owned.id));
+  });
+
+  it('refuses a trigger that is not a signed webhook', async () => {
+    const query = vi.fn();
+
+    await expect(
+      regenerateConnectorTriggerSecret(database(query), mapTrigger(row())),
+    ).rejects.toBeInstanceOf(TriggerValidationError);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('reports a row that no longer belongs to the owner as not found', async () => {
+    await expect(
+      regenerateConnectorTriggerSecret(database(vi.fn(async () => [])), mapTrigger(connector())),
+    ).rejects.toBeInstanceOf(TriggerNotFoundError);
+  });
+
+  it('refuses to rotate when the deployment signing key is unset', async () => {
+    vi.stubEnv(EVENT_TRIGGER_SIGNING_SECRET_ENV, '');
+    const query = vi.fn();
+
+    await expect(
+      regenerateConnectorTriggerSecret(database(query), mapTrigger(connector())),
+    ).rejects.toBeInstanceOf(TriggerValidationError);
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('reads the salt of a connector trigger and tells an unknown id apart', async () => {
+    expect(
+      await readConnectorTriggerSalt(
+        database(vi.fn(async () => [{ signing_salt: 'c'.repeat(64) }])),
+        connector().id,
+      ),
+    ).toEqual({ found: true, signingSalt: 'c'.repeat(64) });
+    expect(await readConnectorTriggerSalt(database(vi.fn(async () => [])), connector().id)).toEqual(
+      { found: false },
+    );
   });
 });
