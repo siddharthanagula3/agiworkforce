@@ -786,21 +786,6 @@ export const MANAGED_CLOUD_SCHEDULE_TEMPLATES: readonly ManagedCloudScheduleTemp
     },
   },
   {
-    id: 'daily-briefing',
-    name: 'Daily briefing',
-    cadenceLabel: 'Weekdays at 8:00 AM',
-    description: 'A short start-of-day brief so the first thing you read is the plan.',
-    draft: {
-      name: 'Daily briefing',
-      prompt:
-        'Give me a brief for today. Check my connected calendar for today’s meetings and what to prepare, my connected email for anything that needs a reply today, what I worked on in my recent chats, what you remember about my work, and the web for news that bears on it. Lead with the few things that matter most, flag anything time-sensitive, and end with one thing worth doing early while I have focus. If a calendar or email is not connected, say so in one line and brief from the rest. Keep it under 250 words.',
-      recurrence: 'weekly',
-      daysOfWeek: WEEKDAYS,
-      timeOfDay: '08:00',
-      sources: { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES, recentChats: true },
-    },
-  },
-  {
     id: 'meeting-prep',
     name: 'Meeting prep',
     cadenceLabel: 'Weekdays at 7:30 AM',
@@ -840,6 +825,21 @@ export const MANAGED_CLOUD_SCHEDULE_TEMPLATES: readonly ManagedCloudScheduleTemp
       recurrence: 'weekly',
       daysOfWeek: [1],
       timeOfDay: '10:00',
+    },
+  },
+  {
+    id: 'daily-briefing',
+    name: 'Daily briefing',
+    cadenceLabel: 'Weekdays at 8:00 AM',
+    description: 'A short start-of-day brief so the first thing you read is the plan.',
+    draft: {
+      name: 'Daily briefing',
+      prompt:
+        'Give me a brief for today. Check my connected calendar for today’s meetings and what to prepare, my connected email for anything that needs a reply today, what I worked on in my recent chats, what you remember about my work, and the web for news that bears on it. Lead with the few things that matter most, flag anything time-sensitive, and end with one thing worth doing early while I have focus. If a calendar or email is not connected, say so in one line and brief from the rest. Keep it under 250 words.',
+      recurrence: 'weekly',
+      daysOfWeek: WEEKDAYS,
+      timeOfDay: '08:00',
+      sources: { ...MANAGED_CLOUD_SCHEDULE_DEFAULT_SOURCES, recentChats: true },
     },
   },
   {

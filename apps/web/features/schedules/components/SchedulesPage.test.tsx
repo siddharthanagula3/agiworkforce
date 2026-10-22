@@ -1,7 +1,7 @@
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ComponentProps } from 'react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { describeSweepCadence, SWEEP_INTERVAL_MS } from '@/lib/schedules/schedule-time';
 import { SchedulesPage as ProductionSchedulesPage } from './SchedulesPage';
 
@@ -158,7 +158,7 @@ describe('SchedulesPage', () => {
     await screen.findByText('No schedules yet');
 
     expect(screen.getByRole('heading', { name: 'Schedules' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Create Schedule' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'New task' })).toBeInTheDocument();
     expect(screen.queryByText('Managed Cloud')).not.toBeInTheDocument();
     expect(screen.queryByText('Text Output')).not.toBeInTheDocument();
     expect(screen.queryByText('Managed Models')).not.toBeInTheDocument();
@@ -175,7 +175,8 @@ describe('SchedulesPage', () => {
       screen.getByText(/Scheduled tasks are available on Basic and higher plans/),
     ).toBeVisible();
     expect(screen.getByRole('button', { name: 'Upgrade plan' })).toBeVisible();
-    expect(screen.queryByRole('button', { name: 'Create Schedule' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'New task' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'More ways to create a task' })).toBeNull();
     expect(screen.getByRole('button', { name: `Edit ${schedule.name}` })).toBeDisabled();
     expect(screen.getByRole('switch', { name: `Pause ${schedule.name}` })).toBeDisabled();
     expect(screen.getByRole('button', { name: `View History for ${schedule.name}` })).toBeEnabled();
@@ -960,5 +961,171 @@ describe('SchedulesPage row menu and result panel (slice E item 6)', () => {
         expect.stringContaining('/share/schedules/abcdefghijklmnopqrstuvwx'),
       ),
     );
+  });
+
+  describe('header controls, search and templates', () => {
+    const soonest: ScheduleTask = {
+      ...schedule,
+      id: 'schedule-soonest',
+      name: 'Soonest brief',
+      nextExecutionAt: '2026-07-15T09:00:00.000Z',
+      createdAt: '2026-06-01T00:00:00.000Z',
+    };
+    const newest: ScheduleTask = {
+      ...schedule,
+      id: 'schedule-newest',
+      name: 'Newest digest',
+      description: 'Competitor pricing watch',
+      nextExecutionAt: '2026-07-20T09:00:00.000Z',
+      createdAt: '2026-07-10T00:00:00.000Z',
+    };
+    const cardNames = new Set([soonest.name, newest.name]);
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+    const renderedOrder = () =>
+      screen
+        .getAllByRole('heading')
+        .map((heading) => heading.textContent ?? '')
+        .filter((name) => cardNames.has(name));
+
+    function stubPointer(fine: boolean) {
+      vi.stubGlobal(
+        'matchMedia',
+        vi.fn((query: string) => ({
+          matches: fine && query === '(pointer: fine)',
+          media: query,
+          onchange: null,
+          addListener: vi.fn(),
+          removeListener: vi.fn(),
+          addEventListener: vi.fn(),
+          removeEventListener: vi.fn(),
+          dispatchEvent: vi.fn(),
+        })),
+      );
+    }
+
+    it('sorts by next run by default and by creation date when chosen', async () => {
+      const api = createApi({ listSchedules: vi.fn(async () => page([newest, soonest])) });
+      const user = userEvent.setup();
+      render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+      await screen.findByRole('heading', { name: soonest.name });
+
+      expect(renderedOrder()).toEqual([soonest.name, newest.name]);
+      const sort = screen.getByRole('button', { name: 'Sort by Next run' });
+      expect(sort).toHaveTextContent('Sort byNext run');
+
+      await user.click(sort);
+      await user.click(await screen.findByRole('menuitemradio', { name: 'Recently created' }));
+
+      expect(renderedOrder()).toEqual([newest.name, soonest.name]);
+      expect(screen.getByRole('button', { name: 'Sort by Recently created' })).toBeInTheDocument();
+    });
+
+    it('offers create from scratch and from a template in the new task split menu', async () => {
+      const api = createApi({ listSchedules: vi.fn(async () => page([schedule])) });
+      const user = userEvent.setup();
+      render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+      await screen.findByRole('heading', { name: schedule.name });
+
+      const group = screen.getByRole('group', { name: 'Create a task' });
+      await user.click(within(group).getByRole('button', { name: 'More ways to create a task' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Start from a template' }));
+
+      const gallery = await screen.findByRole('region', { name: 'Start from a template' });
+      const templates = within(gallery).getByRole('list', { name: 'Schedule templates' });
+      await waitFor(() => expect(within(templates).getAllByRole('button')[0]).toHaveFocus());
+
+      await user.click(within(gallery).getByRole('button', { name: 'Close templates' }));
+      expect(screen.queryByRole('region', { name: 'Start from a template' })).toBeNull();
+
+      await user.click(within(group).getByRole('button', { name: 'More ways to create a task' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Create from scratch' }));
+      expect(await screen.findByRole('dialog', { name: 'Create Schedule' })).toBeInTheDocument();
+    });
+
+    it('opens the create dialog from the primary new task button', async () => {
+      const api = createApi();
+      const user = userEvent.setup();
+      render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+      await screen.findByText('No schedules yet');
+
+      await user.click(screen.getByRole('button', { name: 'New task' }));
+      expect(await screen.findByRole('dialog', { name: 'Create Schedule' })).toBeInTheDocument();
+      expect(api.createSchedule).not.toHaveBeenCalled();
+    });
+
+    it('focuses the search on a fine pointer and filters by name and description', async () => {
+      stubPointer(true);
+      const api = createApi({ listSchedules: vi.fn(async () => page([newest, soonest])) });
+      const user = userEvent.setup();
+      render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+      await screen.findByRole('heading', { name: soonest.name });
+
+      const search = screen.getByRole('searchbox', { name: 'Search scheduled tasks' });
+      expect(search).toHaveAttribute('placeholder', 'Search scheduled tasks...');
+      expect(search).toHaveFocus();
+
+      await user.type(search, 'competitor');
+      expect(renderedOrder()).toEqual([newest.name]);
+
+      await user.clear(search);
+      await user.type(search, 'nothing like this');
+      expect(renderedOrder()).toEqual([]);
+      expect(screen.getByText(/No schedules matching "nothing like this"/)).toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: 'Show All Schedules' }));
+      expect(search).toHaveValue('');
+      expect(renderedOrder()).toEqual([soonest.name, newest.name]);
+    });
+
+    it('leaves focus alone on a touch screen and inside a project', async () => {
+      stubPointer(false);
+      const api = createApi();
+      const { unmount } = render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+      const search = await screen.findByRole('searchbox', { name: 'Search scheduled tasks' });
+      expect(search).not.toHaveFocus();
+      unmount();
+
+      stubPointer(true);
+      render(
+        <SchedulesPage
+          api={api}
+          onOpenChat={() => undefined}
+          scope={{ projectId: 'project-1', projectName: 'Launch' }}
+        />,
+      );
+      expect(
+        await screen.findByRole('searchbox', { name: 'Search scheduled tasks' }),
+      ).not.toHaveFocus();
+    });
+
+    it('lays the templates out in two columns in reading order', async () => {
+      const api = createApi();
+      const user = userEvent.setup();
+      render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
+      await screen.findByText('No schedules yet');
+
+      const templates = screen.getByRole('list', { name: 'Schedule templates' });
+      expect(templates).toHaveClass('sm:grid-cols-2');
+      expect(templates.className).not.toMatch(/grid-cols-3/);
+      expect(
+        within(templates)
+          .getAllByRole('button')
+          .map((button) => button.querySelector('span')?.textContent),
+      ).toEqual([
+        'Weekly review',
+        'Meeting prep',
+        'Inbox triage',
+        'Content ideas',
+        'Daily briefing',
+        'Monitor a topic',
+      ]);
+
+      await user.click(screen.getByRole('button', { name: 'More ways to create a task' }));
+      await user.click(await screen.findByRole('menuitem', { name: 'Start from a template' }));
+      await waitFor(() => expect(within(templates).getAllByRole('button')[0]).toHaveFocus());
+    });
   });
 });

@@ -21,6 +21,13 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  SearchInput,
   Sheet,
   SheetContent,
   SheetDescription,
@@ -32,11 +39,13 @@ import {
 } from '@agiworkforce/ui';
 import {
   CalendarClock,
+  ChevronDown,
   Copy,
   LayoutTemplate,
   MessageSquarePlus,
   Plus,
   RotateCcw,
+  X,
 } from 'lucide-react';
 import { ScheduleCard, scheduleCardElementId, type ScheduleOperation } from './ScheduleCard';
 import { ScheduleForm, type ScheduleAgentOption } from './ScheduleForm';
@@ -90,6 +99,33 @@ const STATUS_FILTERS: Array<{ id: ScheduleStatusFilter; label: string }> = [
   { id: 'failed', label: 'Failed' },
   { id: 'expired', label: 'Expired' },
 ];
+
+type ScheduleSortOrder = 'next-run' | 'recently-created';
+
+const SORT_OPTIONS: Array<{ id: ScheduleSortOrder; label: string }> = [
+  { id: 'next-run', label: 'Next run' },
+  { id: 'recently-created', label: 'Recently created' },
+];
+
+const TEMPLATE_GRID_ID = 'schedule-templates';
+
+const FINE_POINTER_QUERY = '(pointer: fine)';
+
+function compareByNextRun(left: ScheduleTask, right: ScheduleTask): number {
+  if (left.isEnabled !== right.isEnabled) return left.isEnabled ? -1 : 1;
+  const leftNext = left.nextExecutionAt ? new Date(left.nextExecutionAt).getTime() : Infinity;
+  const rightNext = right.nextExecutionAt ? new Date(right.nextExecutionAt).getTime() : Infinity;
+  return leftNext - rightNext || right.createdAt.localeCompare(left.createdAt);
+}
+
+function compareByRecentlyCreated(left: ScheduleTask, right: ScheduleTask): number {
+  return right.createdAt.localeCompare(left.createdAt);
+}
+
+function matchesScheduleSearch(schedule: ScheduleTask, query: string): boolean {
+  if (!query) return true;
+  return [schedule.name, schedule.description ?? ''].join(' ').toLocaleLowerCase().includes(query);
+}
 
 /**
  * How often to re-check whether a "due" schedule is actually mid-run.
@@ -177,7 +213,11 @@ function ScheduleTemplateGrid({
   onPick: (template: ScheduleTemplate) => void;
 }) {
   return (
-    <ul className={`grid gap-3 sm:grid-cols-2 lg:grid-cols-3 ${className ?? ''}`}>
+    <ul
+      id={TEMPLATE_GRID_ID}
+      aria-label="Schedule templates"
+      className={`grid gap-3 sm:grid-cols-2 ${className ?? ''}`}
+    >
       {SCHEDULE_TEMPLATES.map((template) => (
         <li key={template.id}>
           <button
@@ -240,6 +280,10 @@ export function SchedulesPage({
   const manualRunKeys = useRef<Record<string, string>>({});
   const [statusFilter, setStatusFilter] = useState<ScheduleStatusFilter>('all');
   const [projectFilter, setProjectFilter] = useState<'all' | string>('all');
+  const [sortOrder, setSortOrder] = useState<ScheduleSortOrder>('next-run');
+  const [searchQuery, setSearchQuery] = useState('');
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const templateFocusPendingRef = useRef(false);
   const modelOptions = useMemo(
     () => getScheduleModelOptions(subscriptionTier, editing?.model),
     [subscriptionTier, editing?.model],
@@ -780,15 +824,10 @@ export function SchedulesPage({
 
   const sortedSchedules = useMemo(
     () =>
-      [...schedules].sort((left, right) => {
-        if (left.isEnabled !== right.isEnabled) return left.isEnabled ? -1 : 1;
-        const leftNext = left.nextExecutionAt ? new Date(left.nextExecutionAt).getTime() : Infinity;
-        const rightNext = right.nextExecutionAt
-          ? new Date(right.nextExecutionAt).getTime()
-          : Infinity;
-        return leftNext - rightNext || right.createdAt.localeCompare(left.createdAt);
-      }),
-    [schedules],
+      [...schedules].sort(
+        sortOrder === 'recently-created' ? compareByRecentlyCreated : compareByNextRun,
+      ),
+    [schedules, sortOrder],
   );
 
   const statusCounts = useMemo(() => {
@@ -817,13 +856,35 @@ export function SchedulesPage({
     return filters;
   }, [sortedSchedules, scope, projectNameById]);
 
+  const normalizedSearch = searchQuery.trim().toLocaleLowerCase();
+
   const filteredSchedules = useMemo(
     () =>
       sortedSchedules
         .filter((schedule) => statusFilter === 'all' || schedule.status === statusFilter)
-        .filter((schedule) => projectFilter === 'all' || schedule.projectId === projectFilter),
-    [sortedSchedules, statusFilter, projectFilter],
+        .filter((schedule) => projectFilter === 'all' || schedule.projectId === projectFilter)
+        .filter((schedule) => matchesScheduleSearch(schedule, normalizedSearch)),
+    [sortedSchedules, statusFilter, projectFilter, normalizedSearch],
   );
+
+  const autofocusSearch = !scope && !focusScheduleId;
+  useEffect(() => {
+    if (!autofocusSearch) return;
+    if (typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia(FINE_POINTER_QUERY).matches) return;
+    searchInputRef.current?.focus({ preventScroll: true });
+  }, [autofocusSearch]);
+
+  const focusFirstTemplate = () => {
+    document.getElementById(TEMPLATE_GRID_ID)?.querySelector<HTMLButtonElement>('button')?.focus();
+  };
+
+  const startFromTemplate = () => {
+    templateFocusPendingRef.current = true;
+    if (sortedSchedules.length > 0) setGalleryOpen(true);
+  };
+
+  const sortLabel = SORT_OPTIONS.find((option) => option.id === sortOrder)?.label ?? 'Next run';
 
   const statusFilterLabel =
     STATUS_FILTERS.find((filter) => filter.id === statusFilter)?.label ?? 'All';
@@ -869,36 +930,104 @@ export function SchedulesPage({
               </p>
             </div>
           )}
-          {canCreateSchedules ? (
-            <div className="flex shrink-0 flex-wrap items-center gap-2">
-              {listStatus === 'success' && sortedSchedules.length > 0 ? (
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            {listStatus === 'success' ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    aria-label={`Sort by ${sortLabel}`}
+                    className="gap-1.5 rounded-full"
+                  >
+                    <span className="text-muted-foreground">Sort by</span>
+                    <span className="text-foreground">{sortLabel}</span>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-44">
+                  <DropdownMenuRadioGroup
+                    value={sortOrder}
+                    onValueChange={(value) => {
+                      const next = SORT_OPTIONS.find((option) => option.id === value);
+                      if (next) setSortOrder(next.id);
+                    }}
+                  >
+                    {SORT_OPTIONS.map((option) => (
+                      <DropdownMenuRadioItem key={option.id} value={option.id}>
+                        {option.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : null}
+            {canCreateSchedules ? (
+              <div
+                role="group"
+                aria-label="Create a task"
+                className="inline-flex overflow-hidden rounded-full"
+              >
                 <Button
                   type="button"
-                  variant="outline"
-                  aria-expanded={galleryOpen}
-                  aria-controls="schedule-template-gallery"
-                  onClick={() => setGalleryOpen((open) => !open)}
+                  className="rounded-none ps-5 focus-visible:ring-inset focus-visible:ring-offset-0"
+                  onClick={openCreate}
                 >
-                  <LayoutTemplate className="me-2 h-4 w-4" aria-hidden="true" />
-                  Templates
+                  {scope ? 'New task in this project' : 'New task'}
                 </Button>
-              ) : null}
-              <Button type="button" onClick={openCreate}>
-                <Plus className="me-2 h-4 w-4" aria-hidden="true" />
-                {scope ? 'New task in this project' : 'Create Schedule'}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      type="button"
+                      aria-label="More ways to create a task"
+                      className="rounded-none border-s border-primary-foreground/20 pe-4 ps-3 focus-visible:ring-inset focus-visible:ring-offset-0"
+                    >
+                      <ChevronDown className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent
+                    align="end"
+                    className="min-w-52"
+                    onCloseAutoFocus={(event) => {
+                      if (!templateFocusPendingRef.current) return;
+                      templateFocusPendingRef.current = false;
+                      event.preventDefault();
+                      focusFirstTemplate();
+                    }}
+                  >
+                    <DropdownMenuItem onSelect={openCreate}>
+                      <Plus className="me-2 h-4 w-4" aria-hidden="true" />
+                      Create from scratch
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      disabled={listStatus !== 'success'}
+                      onSelect={startFromTemplate}
+                    >
+                      <LayoutTemplate className="me-2 h-4 w-4" aria-hidden="true" />
+                      Start from a template
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            ) : (
+              <Button type="button" variant="outline" onClick={() => openSettings('billing')}>
+                Upgrade plan
               </Button>
-            </div>
-          ) : (
-            <Button
-              type="button"
-              variant="outline"
-              className="shrink-0"
-              onClick={() => openSettings('billing')}
-            >
-              Upgrade plan
-            </Button>
-          )}
+            )}
+          </div>
         </header>
+
+        {listStatus !== 'error' && (
+          <SearchInput
+            ref={searchInputRef}
+            aria-label="Search scheduled tasks"
+            placeholder="Search scheduled tasks..."
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            containerClassName="w-full"
+            className="h-11 rounded-xl bg-[var(--chat-input-bg)] placeholder:text-[var(--chat-text-placeholder)]"
+          />
+        )}
 
         {!canCreateSchedules && (
           <p className="rounded-xl border border-border bg-muted/30 px-4 py-3 text-sm text-muted-foreground">
@@ -988,12 +1117,24 @@ export function SchedulesPage({
               aria-labelledby="schedule-template-gallery-heading"
               className="rounded-2xl border border-border bg-muted/20 p-5"
             >
-              <h2
-                id="schedule-template-gallery-heading"
-                className="text-sm font-medium text-foreground"
-              >
-                Start from a template
-              </h2>
+              <div className="flex items-start justify-between gap-3">
+                <h2
+                  id="schedule-template-gallery-heading"
+                  className="text-sm font-medium text-foreground"
+                >
+                  Start from a template
+                </h2>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Close templates"
+                  className="-mt-2 -me-2 h-9 w-9"
+                  onClick={() => setGalleryOpen(false)}
+                >
+                  <X className="h-4 w-4" aria-hidden="true" />
+                </Button>
+              </div>
               <p className="mt-1 text-xs text-muted-foreground">
                 Each template opens the create form filled in, for you to review before saving.
               </p>
@@ -1094,7 +1235,8 @@ export function SchedulesPage({
               <div className="rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-10 text-center">
                 <p className="text-sm text-muted-foreground">
                   No {statusFilter === 'all' ? '' : `${statusFilterLabel.toLowerCase()} `}
-                  schedules{projectFilter === 'all' ? '' : ` in ${projectFilterLabel}`}.
+                  schedules{projectFilter === 'all' ? '' : ` in ${projectFilterLabel}`}
+                  {normalizedSearch ? ` matching "${searchQuery.trim()}"` : ''}.
                 </p>
                 <Button
                   type="button"
@@ -1104,6 +1246,7 @@ export function SchedulesPage({
                   onClick={() => {
                     setStatusFilter('all');
                     setProjectFilter('all');
+                    setSearchQuery('');
                   }}
                 >
                   Show All Schedules
