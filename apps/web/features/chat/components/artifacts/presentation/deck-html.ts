@@ -5,6 +5,7 @@ import {
   documentEditorExtensions,
 } from '../document-editor-markdown';
 import { parseDeck, slideSegments } from './deck-model';
+import { INSIGHTS_TITLE, parseInsights, parseKpiTiles } from './deck-insights';
 import { parseShapes, type DeckShape } from './deck-shapes';
 import { DECK_FONT_STACKS, resolveDeckTheme, type DeckTheme } from './deck-themes';
 
@@ -166,6 +167,25 @@ async function slideHtml(slide: string, index: number, theme: DeckTheme): Promis
       parts.push(
         `<figure class="visual">${await mermaidSvg(segment.source, `deck-html-${index}-${position}`)}</figure>`,
       );
+    } else if (segment.kind === 'kpi') {
+      const tiles = parseKpiTiles(segment.source);
+      if (tiles.length > 0) {
+        parts.push(
+          `<div class="kpi-grid">${tiles
+            .map(
+              (tile) =>
+                `<div class="kpi-tile"><span class="kpi-value">${escapeHtml(tile.value)}</span><span class="kpi-label">${escapeHtml(tile.label)}</span>${tile.note ? `<span class="kpi-note">${escapeHtml(tile.note)}</span>` : ''}</div>`,
+            )
+            .join('')}</div>`,
+        );
+      }
+    } else if (segment.kind === 'insights') {
+      const insights = parseInsights(segment.source);
+      if (insights.length > 0) {
+        parts.push(
+          `<div class="insights"><span class="insights-title">${INSIGHTS_TITLE}</span><ul>${insights.map((insight) => `<li>${escapeHtml(insight)}</li>`).join('')}</ul></div>`,
+        );
+      }
     } else {
       shapes = parseShapes(segment.source);
     }
@@ -194,6 +214,12 @@ table{width:100%;border-collapse:collapse;font-size:1.7cqw}th,td{padding:.7cqw 1
 img{display:block;max-width:100%;max-height:34cqw;margin:0 auto;border-radius:.8cqw;object-fit:contain}
 .visual{margin:0;min-height:0}.visual svg{display:block;width:100%;max-height:30cqw;fill:${theme.text};font-size:14px}
 .chart-title{font-weight:600}.note{color:${theme.muted};font-size:1.4cqw}
+.kpi-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:1.2cqw}
+.kpi-tile{display:flex;flex-direction:column;gap:.3cqw;padding:1.4cqw 1.8cqw;border-radius:1.2cqw;background:${theme.surface}}
+.kpi-value{color:${theme.accent};font-family:${heading};font-size:3.6cqw;font-weight:650;line-height:1.1}
+.kpi-label{font-size:1.9cqw;font-weight:600}.kpi-note{color:${theme.muted};font-size:1.6cqw}
+.insights{display:flex;flex-direction:column;gap:.8cqw;padding:1.4cqw 1.8cqw;border-radius:1.2cqw;border-inline-start:.4cqw solid ${theme.accent};background:${theme.surface}}
+.insights-title{font-family:${heading};font-size:2.2cqw;font-weight:650}.insights ul{font-size:1.9cqw}
 .shapes{position:absolute;inset:0;width:100%;height:100%;pointer-events:none}
 nav{display:flex;align-items:center;justify-content:center;gap:12px;padding:12px;color:white;font:14px system-ui,sans-serif}
 nav button{min-width:44px;min-height:44px;border:1px solid gray;border-radius:999px;background:transparent;color:inherit;font:inherit;cursor:pointer}

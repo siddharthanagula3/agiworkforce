@@ -72,4 +72,32 @@ describe('deck export', () => {
     const pdf = await buildDeckPdf('Pie', pie);
     expect(pdf.getNumberOfPages()).toBe(1);
   });
+
+  it('draws KPI tiles and a Key insights callout in the viewer and the PDF', async () => {
+    const analysis = [
+      '## Review',
+      '',
+      '```kpi',
+      'Approval rate | 57.3% | of 1,200 reviewed',
+      'Reviewed | 1,200',
+      'Median wait | 4 h',
+      'Backlog | <90',
+      'Extra | dropped',
+      '```',
+      '',
+      '```insights',
+      '- 57.3% approval rate indicates strong curation',
+      '- Backlog stays under <90 items',
+      '```',
+    ].join('\n');
+    const html = await buildDeckHtml('Analysis', analysis);
+    expect(html.match(/class="kpi-tile"/g)).toHaveLength(4);
+    expect(html).toContain('<span class="kpi-value">57.3%</span>');
+    expect(html).toContain('Backlog stays under &lt;90 items');
+    expect(html).toContain('Key insights');
+    expect(html).not.toContain('Extra');
+
+    const pdf = await buildDeckPdf('Analysis', analysis);
+    expect(pdf.getNumberOfPages()).toBe(1);
+  });
 });

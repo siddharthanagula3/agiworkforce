@@ -8,12 +8,14 @@ import {
   type PdfSlide,
 } from '@features/chat/services/export-pdf';
 import { parseDeck, slideSegments } from './deck-model';
+import { INSIGHTS_TITLE, parseInsights, parseKpiTiles, type KpiTile } from './deck-insights';
 import { parseShapes, type DeckShape } from './deck-shapes';
 import { resolveDeckTheme, type DeckTheme } from './deck-themes';
 
 const IMAGE_PATTERN = /!\[([^\]]*)\]\(([^)\s]+)(?:\s+"[^"]*")?\)/g;
 const VISUAL_GAP = 10;
 const LABEL_SIZE = 8;
+const KPI_VALUE_SIZE = 20;
 const MERMAID_SCALE = 2;
 const NO_LABELS_DIRECTIVE = '%%{init: {"flowchart": {"htmlLabels": false}} }%%\n';
 
@@ -21,6 +23,8 @@ type Visual =
   | { kind: 'image'; data: string; format: string; width: number; height: number }
   | { kind: 'missing'; label: string }
   | { kind: 'chart'; spec: ChartSpec }
+  | { kind: 'kpi'; tiles: KpiTile[] }
+  | { kind: 'insights'; items: string[] }
   | { kind: 'raster'; data: string; width: number; height: number };
 
 function hexChannels(hex: string): PdfRgb {
@@ -122,6 +126,12 @@ async function collectVisuals(
       );
     } else if (segment.kind === 'mermaid') {
       visuals.push(await renderMermaid(segment.source, `deck-pdf-${slideIndex}-${position}`));
+    } else if (segment.kind === 'kpi') {
+      const tiles = parseKpiTiles(segment.source);
+      if (tiles.length > 0) visuals.push({ kind: 'kpi', tiles });
+    } else if (segment.kind === 'insights') {
+      const items = parseInsights(segment.source);
+      if (items.length > 0) visuals.push({ kind: 'insights', items });
     } else {
       shapes = parseShapes(segment.source);
     }
@@ -345,6 +355,73 @@ function drawShapes(
   }
 }
 
+function drawKpiTiles(pdf: jsPDF, tiles: readonly KpiTile[], box: PdfArea, theme: DeckTheme): void {
+  const [sr, sg, sb] = hexChannels(theme.surface);
+  const [ar, ag, ab] = hexChannels(theme.accent);
+  const [tr, tg, tb] = hexChannels(theme.text);
+  const [mr, mg, mb] = hexChannels(theme.muted);
+  const rows = Math.ceil(tiles.length / 2);
+  const tileWidth = (box.width - VISUAL_GAP) / 2;
+  const tileHeight = Math.min(64, (box.height - VISUAL_GAP * (rows - 1)) / rows);
+  tiles.forEach((tile, index) => {
+    const x = box.x + (index % 2) * (tileWidth + VISUAL_GAP);
+    const y = box.y + Math.floor(index / 2) * (tileHeight + VISUAL_GAP);
+    pdf.setFillColor(sr, sg, sb);
+    pdf.roundedRect(x, y, tileWidth, tileHeight, 6, 6, 'F');
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(KPI_VALUE_SIZE);
+    pdf.setTextColor(ar, ag, ab);
+    pdf.text(tile.value, x + 10, y + 10 + KPI_VALUE_SIZE * 0.8, { maxWidth: tileWidth - 20 });
+    pdf.setFont('helvetica', 'bold');
+    pdf.setFontSize(LABEL_SIZE + 1);
+    pdf.setTextColor(tr, tg, tb);
+    pdf.text(tile.label, x + 10, y + 16 + KPI_VALUE_SIZE + 4, { maxWidth: tileWidth - 20 });
+    if (tile.note) {
+      pdf.setFont('helvetica', 'normal');
+      pdf.setFontSize(LABEL_SIZE);
+      pdf.setTextColor(mr, mg, mb);
+      pdf.text(tile.note, x + 10, y + 16 + KPI_VALUE_SIZE + 4 + LABEL_SIZE + 3, {
+        maxWidth: tileWidth - 20,
+      });
+    }
+  });
+}
+
+function drawInsights(pdf: jsPDF, items: readonly string[], box: PdfArea, theme: DeckTheme): void {
+  const [sr, sg, sb] = hexChannels(theme.surface);
+  const [ar, ag, ab] = hexChannels(theme.accent);
+  const [tr, tg, tb] = hexChannels(theme.text);
+  const textWidth = box.width - 28;
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(LABEL_SIZE + 1);
+  const wrapped = items.map((item) => pdf.splitTextToSize(item, textWidth - 10) as string[]);
+  const lineHeight = LABEL_SIZE + 4;
+  const lineCount = wrapped.reduce((total, lines) => total + lines.length, 0);
+  const height = Math.min(
+    box.height,
+    16 + LABEL_SIZE + 6 + lineCount * lineHeight + items.length * 3,
+  );
+  pdf.setFillColor(sr, sg, sb);
+  pdf.roundedRect(box.x, box.y, box.width, height, 6, 6, 'F');
+  pdf.setFillColor(ar, ag, ab);
+  pdf.rect(box.x, box.y + 4, 3, height - 8, 'F');
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(LABEL_SIZE + 2);
+  pdf.setTextColor(tr, tg, tb);
+  pdf.text(INSIGHTS_TITLE, box.x + 14, box.y + 8 + LABEL_SIZE);
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(LABEL_SIZE + 1);
+  let y = box.y + 8 + LABEL_SIZE + 6 + lineHeight - 3;
+  wrapped.forEach((lines) => {
+    pdf.setFillColor(ar, ag, ab);
+    pdf.circle(box.x + 18, y - 3, 1.5, 'F');
+    lines.forEach((line, lineIndex) => {
+      pdf.text(line, box.x + 26, y + lineIndex * lineHeight);
+    });
+    y += lines.length * lineHeight + 3;
+  });
+}
+
 function drawVisuals(
   pdf: jsPDF,
   visuals: readonly Visual[],
@@ -372,6 +449,10 @@ function drawVisuals(
       );
     } else if (visual.kind === 'chart') {
       drawChart(pdf, visual.spec, box, theme);
+    } else if (visual.kind === 'kpi') {
+      drawKpiTiles(pdf, visual.tiles, box, theme);
+    } else if (visual.kind === 'insights') {
+      drawInsights(pdf, visual.items, box, theme);
     } else {
       drawLabel(pdf, visual.label, { ...box, height: Math.min(box.height, 48) }, theme);
     }

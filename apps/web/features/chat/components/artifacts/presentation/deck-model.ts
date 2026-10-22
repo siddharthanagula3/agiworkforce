@@ -76,14 +76,14 @@ export function slideTitle(slide: string, index: number): string {
   return text || `Slide ${index + 1}`;
 }
 
-export type VisualKind = 'chart' | 'mermaid' | 'shapes';
+export type VisualKind = 'chart' | 'mermaid' | 'shapes' | 'kpi' | 'insights';
 
 export type SlideSegment =
   | { kind: 'markdown'; text: string }
   | { kind: VisualKind; source: string; start: number; end: number };
 
 const FENCE_OPEN = /^(`{3,}|~{3,})\s*([a-z0-9-]*)\s*$/i;
-const VISUAL_LANGUAGES = new Set(['chart', 'mermaid', 'shapes']);
+const VISUAL_LANGUAGES = new Set(['chart', 'mermaid', 'shapes', 'kpi', 'insights']);
 
 export function slideSegments(slide: string): SlideSegment[] {
   const lines = slide.split('\n');

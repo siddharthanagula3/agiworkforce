@@ -31,6 +31,7 @@ import {
 import { toast } from 'sonner';
 import { Button } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
+import { useOverlayDialog } from '@features/chat/hooks/use-overlay-dialog';
 import { normalizeEditInstruction } from '../artifact-edit-request';
 import { DeckMenu, type DeckMenuItem } from './DeckMenu';
 import { ChartDataEditor } from './ChartDataEditor';
@@ -261,10 +262,15 @@ export function PresentationWorkspace({
     sendSlideRequest(instruction);
   };
 
+  const stopPresenting = useCallback(() => setPresenting(false), []);
+  useOverlayDialog(presentRef, presenting, stopPresenting);
+
   useEffect(() => {
     if (!presenting) return;
     const node = presentRef.current;
     node?.focus();
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     if (node?.requestFullscreen) void node.requestFullscreen().catch(() => undefined);
     const onFullscreenChange = () => {
       if (!document.fullscreenElement) setPresenting(false);
@@ -272,6 +278,7 @@ export function PresentationWorkspace({
     document.addEventListener('fullscreenchange', onFullscreenChange);
     return () => {
       document.removeEventListener('fullscreenchange', onFullscreenChange);
+      document.body.style.overflow = previousOverflow;
       if (document.fullscreenElement) void document.exitFullscreen().catch(() => undefined);
     };
   }, [presenting]);
@@ -774,9 +781,6 @@ export function PresentationWorkspace({
             } else if (event.key === 'ArrowLeft' || event.key === 'PageUp') {
               event.preventDefault();
               go(current - 1);
-            } else if (event.key === 'Escape') {
-              event.preventDefault();
-              setPresenting(false);
             }
           }}
           onClick={() => go(current + 1)}

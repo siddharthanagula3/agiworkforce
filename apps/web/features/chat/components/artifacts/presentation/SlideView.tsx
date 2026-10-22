@@ -6,6 +6,7 @@ import remarkGfm from 'remark-gfm';
 import { ChartArtifact, MermaidDiagram } from '@agiworkforce/unified-chat';
 import { cn } from '@shared/lib/utils';
 import { slideSegments } from './deck-model';
+import { INSIGHTS_TITLE, parseInsights, parseKpiTiles } from './deck-insights';
 import { parseShapes, type DeckShape } from './deck-shapes';
 import { DECK_FONT_STACKS, isDarkBackground, type DeckTheme } from './deck-themes';
 import { SlideShapes } from './SlideShapes';
@@ -147,6 +148,35 @@ export function SlideView({
             return (
               <div key={position} className={styles['visual']}>
                 <MermaidDiagram source={segment.source} interactive={interactive} />
+              </div>
+            );
+          }
+          if (segment.kind === 'kpi') {
+            const tiles = parseKpiTiles(segment.source);
+            if (tiles.length === 0) return null;
+            return (
+              <div key={position} className={styles['kpiGrid']} data-testid="deck-kpi-grid">
+                {tiles.map((tile) => (
+                  <div key={tile.label} className={styles['kpiTile']}>
+                    <span className={styles['kpiValue']}>{tile.value}</span>
+                    <span className={styles['kpiLabel']}>{tile.label}</span>
+                    {tile.note ? <span className={styles['kpiNote']}>{tile.note}</span> : null}
+                  </div>
+                ))}
+              </div>
+            );
+          }
+          if (segment.kind === 'insights') {
+            const insights = parseInsights(segment.source);
+            if (insights.length === 0) return null;
+            return (
+              <div key={position} className={styles['insights']} data-testid="deck-insights">
+                <span className={styles['insightsTitle']}>{INSIGHTS_TITLE}</span>
+                <ul>
+                  {insights.map((insight) => (
+                    <li key={insight}>{insight}</li>
+                  ))}
+                </ul>
               </div>
             );
           }

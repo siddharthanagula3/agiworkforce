@@ -149,6 +149,61 @@
   overflow: hidden;
 }
 
+.kpiGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.2cqw;
+}
+
+.kpiTile {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3cqw;
+  padding: 1.4cqw 1.8cqw;
+  border-radius: 1.2cqw;
+  background: var(--deck-surface);
+}
+
+.kpiValue {
+  color: var(--deck-accent);
+  font-family: var(--deck-heading-font);
+  font-size: 3.6cqw;
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.kpiLabel {
+  color: var(--deck-text);
+  font-size: 1.9cqw;
+  font-weight: 600;
+}
+
+.kpiNote {
+  color: var(--deck-muted);
+  font-size: 1.6cqw;
+}
+
+.insights {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8cqw;
+  padding: 1.4cqw 1.8cqw;
+  border-radius: 1.2cqw;
+  border-inline-start: 0.4cqw solid var(--deck-accent);
+  background: var(--deck-surface);
+}
+
+.insightsTitle {
+  color: var(--deck-text);
+  font-family: var(--deck-heading-font);
+  font-size: 2.2cqw;
+  font-weight: 650;
+}
+
+.insights ul {
+  font-size: 1.9cqw;
+}
+
 .visualPlaceholder {
   flex: 1;
   min-height: 8cqw;
