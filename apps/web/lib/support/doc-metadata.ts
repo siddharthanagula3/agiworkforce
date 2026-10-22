@@ -195,6 +195,7 @@ export const SUPPORT_DOC_METADATA: Readonly<Record<string, DocMetadata>> = Objec
   'byok-provider-keys': metadata('beta', 'developer', ['cli', 'vscode'], ALL_DOC_PLANS),
   'chat-basics': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),
   'chrome-extension': metadata('beta', 'user', ['chrome'], CLOUD_DOC_PLANS),
+  'computer-use': metadata('beta', 'user', ['desktop'], CLOUD_DOC_PLANS),
   configuration: metadata('beta', 'developer', ['cli', 'vscode'], ALL_DOC_PLANS),
   'connectors-and-mcp': metadata('ga', 'user', ALL_DOC_PLATFORMS, CLOUD_DOC_PLANS, CONNECTOR_DOC),
   'crisis-resources': metadata('ga', 'user', ALL_DOC_PLATFORMS, ALL_DOC_PLANS),

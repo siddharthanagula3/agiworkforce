@@ -34,6 +34,10 @@
       "indexed": true
     },
     {
+      "doc": "computer-use",
+      "indexed": true
+    },
+    {
       "doc": "configuration",
       "indexed": true
     },
@@ -7166,6 +7170,205 @@
           "kind": "test",
           "file": "apps/web/features/chat/pages/__tests__/WebChatPage.retired-model.test.tsx",
           "name": "tells the user the saved model was retired instead of swapping it silently"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-macos-only",
+      "doc": "computer-use",
+      "section": "What computer use does",
+      "kind": "prose",
+      "sentence": "Controlling the mouse and keyboard is supported on macOS only.",
+      "implementation": ["apps/desktop/electron/runtime/computerUseService.ts#computerUseSupport"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron/runtime/computerUseService.ts",
+          "text": "Controlling the mouse and keyboard is supported on macOS only"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-off-by-default",
+      "doc": "computer-use",
+      "section": "Turning it on",
+      "kind": "prose",
+      "sentence": "Computer use is off by default.",
+      "implementation": [
+        "apps/desktop/electron/garnishCore.ts#computerUseEnabled",
+        "apps/desktop/electron/runtime/computerUseSession.ts#refuseScreenStepEarly"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron/garnishCore.ts",
+          "text": "computerUseEnabled: false"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-needs-accessibility-and-screen-recording",
+      "doc": "computer-use",
+      "section": "Turning it on",
+      "kind": "prose",
+      "sentence": "macOS must also allow AGI Desktop under Accessibility and Screen Recording in System Settings.",
+      "implementation": [
+        "apps/desktop/electron/runtime/computerUseService.ts#computerUseAvailability"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron/runtime/computerUseService.ts",
+          "text": "Screen Recording is off for this app."
+        },
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron/runtime/computerUseService.ts",
+          "text": "Accessibility is off for this app, so it cannot move the pointer or type."
+        }
+      ]
+    },
+    {
+      "id": "computer-use-asks-before-each-app",
+      "doc": "computer-use",
+      "section": "The questions AGI Desktop asks",
+      "kind": "prose",
+      "sentence": "AGI then asks before it controls each app, with **Deny**, **Allow this session** and **Never allow**.",
+      "implementation": [
+        "apps/desktop/electron/runtime/applicationControl.ts#gateApplication",
+        "apps/desktop/electron/runtime/permissionManager.ts#NEVER_ALLOW_LABEL"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/desktop/electron/__tests__/dispatcher.test.ts",
+          "name": "asks about the app it resolved and opens nothing when the user refuses"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron/runtime/applicationControl.ts",
+          "text": "offerNeverAllow: true"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-never-its-own-window",
+      "doc": "computer-use",
+      "section": "The questions AGI Desktop asks",
+      "kind": "prose",
+      "sentence": "AGI does not control the AGI Desktop window itself.",
+      "implementation": ["apps/desktop/electron/runtime/applicationControl.ts#gateApplications"],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron/runtime/applicationControl.ts",
+          "text": "own window, which AGI does not control"
+        },
+        {
+          "kind": "test",
+          "file": "apps/desktop/electron/__tests__/applicationLaunch.test.ts",
+          "name": "refuses AGI Desktop itself, by place and by bundle id"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-page-lists-app-answers",
+      "doc": "computer-use",
+      "section": "Allowed and refused apps",
+      "kind": "prose",
+      "sentence": "The Computer use page lists the apps you allowed and the apps you refused.",
+      "implementation": [
+        "apps/web/features/desktop-host/components/ComputerUseSettings.tsx#REFUSED_APPS_HEADING"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/desktop-host/__tests__/computer-use-settings.test.tsx",
+          "name": "lists allowed and refused apps, and removing one asks the shell"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-add-app-refuses",
+      "doc": "computer-use",
+      "section": "Allowed and refused apps",
+      "kind": "prose",
+      "sentence": "**Add app** refuses an installed app before AGI ever asks about it.",
+      "implementation": [
+        "apps/desktop/electron/runtime/dispatcher.ts#refuseApplication",
+        "apps/web/features/desktop-host/components/RefuseAppPicker.tsx#RefuseAppPicker"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/desktop/electron/__tests__/dispatcher.test.ts",
+          "name": "replaces whatever was decided with a standing refusal named by the shell, and tells the page"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/desktop-host/__tests__/computer-use-settings.test.tsx",
+          "name": "offers installed apps not yet refused, filters by name, and refuses the one picked"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-added-refusal-stands-until-ask-again",
+      "doc": "computer-use",
+      "section": "Allowed and refused apps",
+      "kind": "prose",
+      "sentence": "An app you add stays refused, even after you quit the app, until you choose **Ask again**, which AGI Desktop confirms before clearing the refusal.",
+      "implementation": [
+        "apps/desktop/electron/runtime/dispatcher.ts#confirmClearRefusal",
+        "apps/desktop/electron/runtime/permissionCore.ts#isPersistable"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/desktop/electron/__tests__/dispatcher.test.ts",
+          "name": "clears a refusal only after main confirms it, so a page cannot bring a prompt back by itself"
+        },
+        {
+          "kind": "test",
+          "file": "apps/desktop/electron/__tests__/dispatcher.test.ts",
+          "name": "replaces whatever was decided with a standing refusal named by the shell, and tells the page"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-escape-or-stop",
+      "doc": "computer-use",
+      "section": "Stopping or pausing a run",
+      "kind": "prose",
+      "sentence": "While AGI is using your computer, press Escape or choose **Stop** on the Computer use page to stop it.",
+      "implementation": [
+        "apps/desktop/electron/runtime/computerUseSession.ts#claimStopShortcut",
+        "apps/web/features/desktop-host/components/ComputerUseSettings.tsx#STOP_LABEL"
+      ],
+      "proof": [
+        {
+          "kind": "copy",
+          "file": "packages/contracts/local-runtime/src/computer-use.ts",
+          "text": "COMPUTER_USE_STOP_SHORTCUT = 'Escape'"
+        },
+        {
+          "kind": "copy",
+          "file": "apps/desktop/electron/runtime/computerUseSession.ts",
+          "text": "globalShortcut.register(COMPUTER_USE_STOP_SHORTCUT"
+        }
+      ]
+    },
+    {
+      "id": "computer-use-stop-withdraws-permission",
+      "doc": "computer-use",
+      "section": "Stopping or pausing a run",
+      "kind": "prose",
+      "sentence": "Stopping ends the run and withdraws the permission, so AGI asks again the next time it needs your screen.",
+      "implementation": ["apps/desktop/electron/runtime/computerUseSession.ts#stopComputerUse"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/desktop/electron/__tests__/computerUseSession.test.ts",
+          "name": "withdraws the grant so the next step cannot simply restart it"
         }
       ]
     }

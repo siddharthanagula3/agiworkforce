@@ -1,8 +1,8 @@
 {
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
-  "documentCount": 45,
-  "chunkCount": 254,
+  "documentCount": 46,
+  "chunkCount": 259,
   "documents": [
     {
       "id": "account-security",
@@ -587,6 +587,69 @@
           "heading": "Without the extension",
           "headingPath": "The Chrome extension › Without the extension",
           "text": "The web app runs in the same browser and covers everything except the\npage-capture and side-panel workflow."
+        }
+      ]
+    },
+    {
+      "id": "computer-use",
+      "title": "Computer use in AGI Desktop",
+      "path": "/download",
+      "category": "surfaces",
+      "tags": [
+        "computer use",
+        "control my computer",
+        "mouse",
+        "keyboard",
+        "screen",
+        "allowed apps",
+        "refused apps",
+        "add app",
+        "stop",
+        "take over",
+        "accessibility",
+        "screen recording"
+      ],
+      "platforms": [
+        "desktop",
+        "macos"
+      ],
+      "updated": "2026-10-22",
+      "source": "content/support/computer-use.md",
+      "chunks": [
+        {
+          "id": "computer-use#0",
+          "ordinal": 0,
+          "heading": "What computer use does",
+          "headingPath": "Computer use in AGI Desktop › What computer use does",
+          "text": "With computer use, AGI can look at your screen and use the mouse and keyboard\nin apps on your computer to carry out a task you ask for in a chat.\n\nControlling the mouse and keyboard is supported on macOS only."
+        },
+        {
+          "id": "computer-use#1",
+          "ordinal": 1,
+          "heading": "Turning it on",
+          "headingPath": "Computer use in AGI Desktop › Turning it on",
+          "text": "Computer use is off by default. Turn it on in Settings, under Desktop app,\nComputer use, with the **Any app** switch.\n\nmacOS must also allow AGI Desktop under Accessibility and Screen Recording in\nSystem Settings. Once computer use is on, the Computer use page shows whether\neach one is allowed."
+        },
+        {
+          "id": "computer-use#2",
+          "ordinal": 2,
+          "heading": "The questions AGI Desktop asks",
+          "headingPath": "Computer use in AGI Desktop › The questions AGI Desktop asks",
+          "text": "The first time AGI reaches for your screen, AGI Desktop asks whether to allow\nit. Your answer lasts until you quit the app.\n\nAGI then asks before it controls each app, with **Deny**, **Allow this\nsession** and **Never allow**. For a terminal, a code editor, Finder or System\nSettings, the question also says how much that app can reach.\n\nAGI does not control the AGI Desktop window itself."
+        },
+        {
+          "id": "computer-use#3",
+          "ordinal": 3,
+          "heading": "Allowed and refused apps",
+          "headingPath": "Computer use in AGI Desktop › Allowed and refused apps",
+          "text": "The Computer use page lists the apps you allowed and the apps you refused.\n**Remove** takes an allowed app off the list, so AGI asks about it again next\ntime.\n\n**Add app** refuses an installed app before AGI ever asks about it.\n\nAn app you add stays refused, even after you quit the app, until you choose\n**Ask again**, which AGI Desktop confirms before clearing the refusal."
+        },
+        {
+          "id": "computer-use#4",
+          "ordinal": 4,
+          "heading": "Stopping or pausing a run",
+          "headingPath": "Computer use in AGI Desktop › Stopping or pausing a run",
+          "text": "While AGI is using your computer, press Escape or choose **Stop** on the\nComputer use page to stop it.\n\nStopping ends the run and withdraws the permission, so AGI asks again the next\ntime it needs your screen.\n\nMoving the pointer or typing pauses the run, and **Take over** on the\nComputer use page does the same. **Hand back** lets AGI carry on."
         }
       ]
     },
