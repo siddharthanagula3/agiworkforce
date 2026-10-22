@@ -18,7 +18,6 @@ import { showVoicePermissionAlert } from '@/src/features/voice/components/voiceP
 import { useScheduleStore, type CreateScheduleInput } from '../store';
 import { requestsSubDailySchedule } from '../policy';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
-import { showToast } from '@/src/shared/components/Toast';
 
 interface ParsedSchedule {
   recurrence: 'daily' | 'weekly' | 'monthly' | 'once';
@@ -64,15 +63,13 @@ function parseTime(raw: string): string | null {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-const DEFAULT_TIME_OF_DAY = '09:00';
-
 function findExplicitTime(text: string): string | null {
   const atMatch = text.match(/(?:at|@)\s*([\w:]+(?:\s*(?:am|pm))?)/i);
   return atMatch ? parseTime(atMatch[1]) : null;
 }
 
 function extractTime(text: string): string {
-  return findExplicitTime(text) ?? DEFAULT_TIME_OF_DAY;
+  return findExplicitTime(text) ?? '09:00';
 }
 
 export function parseNaturalLanguage(text: string): ParsedSchedule | null {
@@ -159,8 +156,6 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
   return null;
 }
 
-const SCHEDULE_NAME_CHARS = 40;
-
 const SUGGESTIONS = [
   'Every day at 9am',
   'Weekdays at 8am',
@@ -196,47 +191,17 @@ export function QuickSchedule({
     setVisible(true);
   }, []);
 
+  const handleSend = useCallback(() => {
+    const taskPrompt = prompt.trim();
+    if (!taskPrompt) return;
+    if (parseNaturalLanguage(taskPrompt)) setInput(taskPrompt);
+    handleOpen();
+  }, [prompt, handleOpen]);
+
   const handleClose = useCallback(() => {
     setVisible(false);
     setError('');
   }, []);
-
-  const submitSchedule = useCallback(
-    async (cadence: ParsedSchedule, taskPrompt: string, name: string): Promise<boolean> => {
-      setError('');
-      setLoading(true);
-      try {
-        const scheduleInput: CreateScheduleInput = {
-          name:
-            name.length > SCHEDULE_NAME_CHARS ? name.slice(0, SCHEDULE_NAME_CHARS) + '...' : name,
-          prompt: taskPrompt,
-          model: DEFAULT_AUTO_MODE_ID,
-          recurrence: cadence.recurrence,
-          timeOfDay: cadence.timeOfDay,
-          daysOfWeek: cadence.daysOfWeek,
-          dayOfMonth: cadence.dayOfMonth,
-          scheduledAt: null,
-          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-          isActive: true,
-        };
-        const created = await createSchedule(scheduleInput);
-        if (!created) {
-          setError('Cloud sign-in changed. Sign in again and retry this task.');
-          return false;
-        }
-        setInput('');
-        setPrompt('');
-        onCreated?.();
-        return true;
-      } catch {
-        setError('Failed to create schedule. Please try again.');
-        return false;
-      } finally {
-        setLoading(false);
-      }
-    },
-    [createSchedule, onCreated],
-  );
 
   const handleCreate = useCallback(async () => {
     if (!parsed) {
@@ -247,22 +212,37 @@ export function QuickSchedule({
       setError('Please enter what the AI should do.');
       return;
     }
-    if (await submitSchedule(parsed, prompt.trim(), input)) handleClose();
-  }, [parsed, prompt, input, submitSchedule, handleClose]);
 
-  const handleSend = useCallback(async () => {
-    const taskPrompt = prompt.trim();
-    if (!taskPrompt || loading) return;
-    const cadence = parseNaturalLanguage(taskPrompt);
-    if (!cadence) {
-      handleOpen();
-      return;
+    setError('');
+    setLoading(true);
+    try {
+      const scheduleInput: CreateScheduleInput = {
+        name: input.length > 40 ? input.slice(0, 40) + '...' : input,
+        prompt: prompt.trim(),
+        model: DEFAULT_AUTO_MODE_ID,
+        recurrence: parsed.recurrence,
+        timeOfDay: parsed.timeOfDay,
+        daysOfWeek: parsed.daysOfWeek,
+        dayOfMonth: parsed.dayOfMonth,
+        scheduledAt: null,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        isActive: true,
+      };
+      const created = await createSchedule(scheduleInput);
+      if (!created) {
+        setError('Cloud sign-in changed. Sign in again and retry this task.');
+        return;
+      }
+      handleClose();
+      setInput('');
+      setPrompt('');
+      onCreated?.();
+    } catch {
+      setError('Failed to create schedule. Please try again.');
+    } finally {
+      setLoading(false);
     }
-    Keyboard.dismiss();
-    if (await submitSchedule(cadence, taskPrompt, taskPrompt)) {
-      showToast(`Scheduled. ${cadence.description}.`);
-    }
-  }, [prompt, loading, handleOpen, submitSchedule]);
+  }, [parsed, prompt, input, createSchedule, handleClose, onCreated]);
 
   const handleSuggestion = useCallback((suggestion: string) => {
     setInput(suggestion);
@@ -314,18 +294,14 @@ export function QuickSchedule({
         </View>
         <PressableBox
           onPress={handleSend}
-          disabled={!prompt.trim() || loading}
+          disabled={!prompt.trim()}
           className="h-11 w-11 items-center justify-center rounded-full"
           style={{ backgroundColor: prompt.trim() ? colors.teal : colors.surfaceElevated }}
           accessibilityLabel="Continue scheduling task"
           accessibilityRole="button"
-          accessibilityState={{ disabled: !prompt.trim() || loading, busy: loading }}
+          accessibilityState={{ disabled: !prompt.trim() }}
         >
-          {loading && !visible ? (
-            <ActivityIndicator color={colors.accentText} size="small" />
-          ) : (
-            <ArrowUp size={20} color={prompt.trim() ? colors.white : colors.textMuted} />
-          )}
+          <ArrowUp size={20} color={prompt.trim() ? colors.white : colors.textMuted} />
         </PressableBox>
       </View>
       {error && !visible ? (

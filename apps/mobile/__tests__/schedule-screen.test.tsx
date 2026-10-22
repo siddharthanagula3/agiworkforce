@@ -17,12 +17,6 @@ jest.mock('expo-router', () => ({
   }),
 }));
 
-const mockShowToast = jest.fn();
-
-jest.mock('../src/shared/components/Toast', () => ({
-  showToast: (...args: unknown[]) => mockShowToast(...args),
-}));
-
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => undefined),
   ImpactFeedbackStyle: { Light: 'light' },
@@ -350,39 +344,54 @@ describe('Schedules screen Cloud boundary', () => {
   });
 
   describe('composer send', () => {
+    const SENTENCE = 'Summarize my inbox every day at 8am';
     const typeIntoComposer = (utils: ReturnType<typeof render>, text: string) =>
       fireEvent.changeText(utils.getByLabelText('Schedule a task'), text);
+    const pressCreateInSheet = (utils: ReturnType<typeof render>) =>
+      fireEvent.press(utils.getAllByLabelText('Create schedule').at(-1)!);
 
     beforeEach(() => {
       useChatAppModeStore.setState({ appMode: 'cloud' });
     });
 
-    it('creates the task straight from a cadence in the text and clears the composer', async () => {
+    it('opens the review sheet prefilled with the parsed cadence and creates nothing yet', () => {
       const createSchedule = jest.fn(async () => true);
       useScheduleStore.setState({ createSchedule });
       const utils = render(<SchedulesScreen />);
 
-      typeIntoComposer(utils, 'Summarize my inbox every day at 8am');
+      typeIntoComposer(utils, SENTENCE);
       fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+
+      expect(utils.getByText('Quick Schedule')).toBeTruthy();
+      expect(utils.getByText('Daily at 08:00')).toBeTruthy();
+      expect(utils.getAllByDisplayValue(SENTENCE).length).toBe(3);
+      expect(createSchedule).not.toHaveBeenCalled();
+    });
+
+    it('creates the task with the parsed cadence on the confirm tap and clears the composer', async () => {
+      const createSchedule = jest.fn(async () => true);
+      useScheduleStore.setState({ createSchedule });
+      const utils = render(<SchedulesScreen />);
+
+      typeIntoComposer(utils, SENTENCE);
+      fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+      pressCreateInSheet(utils);
 
       await waitFor(() =>
         expect(createSchedule).toHaveBeenCalledWith(
           expect.objectContaining({
-            prompt: 'Summarize my inbox every day at 8am',
+            prompt: SENTENCE,
             recurrence: 'daily',
             timeOfDay: '08:00',
             isActive: true,
           }),
         ),
       );
-      await waitFor(() =>
-        expect(utils.queryByDisplayValue('Summarize my inbox every day at 8am')).toBeNull(),
-      );
+      await waitFor(() => expect(utils.queryByDisplayValue(SENTENCE)).toBeNull());
       expect(utils.queryByText('Quick Schedule')).toBeNull();
-      expect(mockShowToast).toHaveBeenCalledWith('Scheduled. Daily at 08:00.');
     });
 
-    it('opens the review sheet with the text kept when no cadence can be read', () => {
+    it('opens the sheet with an empty cadence when none can be read', () => {
       const createSchedule = jest.fn(async () => true);
       useScheduleStore.setState({ createSchedule });
       const utils = render(<SchedulesScreen />);
@@ -396,32 +405,30 @@ describe('Schedules screen Cloud boundary', () => {
     });
 
     it('does not read a time out of an unrelated "at" in the text', () => {
-      const createSchedule = jest.fn(async () => true);
-      useScheduleStore.setState({ createSchedule });
       const utils = render(<SchedulesScreen />);
 
       typeIntoComposer(utils, 'Look at my inbox');
       fireEvent.press(utils.getByLabelText('Continue scheduling task'));
 
-      expect(utils.getByText('Quick Schedule')).toBeTruthy();
-      expect(createSchedule).not.toHaveBeenCalled();
+      expect(utils.queryByText('Daily at 09:00')).toBeNull();
+      expect(utils.getAllByDisplayValue('Look at my inbox').length).toBe(2);
     });
 
-    it('keeps the text and shows the failure when creation fails', async () => {
+    it('keeps the text and shows the failure when the confirmed creation fails', async () => {
       const createSchedule = jest.fn(async () => {
         throw new Error('network');
       });
       useScheduleStore.setState({ createSchedule });
       const utils = render(<SchedulesScreen />);
 
-      typeIntoComposer(utils, 'Summarize my inbox every day at 8am');
+      typeIntoComposer(utils, SENTENCE);
       fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+      pressCreateInSheet(utils);
 
       await waitFor(() =>
         expect(utils.getByText('Failed to create schedule. Please try again.')).toBeTruthy(),
       );
-      expect(utils.getByDisplayValue('Summarize my inbox every day at 8am')).toBeTruthy();
-      expect(mockShowToast).not.toHaveBeenCalled();
+      expect(utils.getAllByDisplayValue(SENTENCE).length).toBeGreaterThan(0);
     });
   });
 });
