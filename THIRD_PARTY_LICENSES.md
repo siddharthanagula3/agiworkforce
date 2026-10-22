@@ -286,6 +286,14 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## Playwright CLI skill
+
+- **Upstream**: [`@playwright/cli`](https://www.npmjs.com/package/@playwright/cli/v/0.1.19) 0.1.19, which ships the skill inside its bundled `playwright-core` at `lib/tools/skills/playwright-cli`
+- **License**: Apache-2.0
+- **Copyright**: © Microsoft Corporation
+- **Imported into**: `.agents/skills/playwright-cli/`
+- **Adoption**: Vendored the skill directory as published (`SKILL.md` and `references/`). A top-level `version` frontmatter field set to the package version was added because the loader contract expects one; the files were run through `prettier --write` before hashing. No other text was changed. Locked in `skills-lock.json`.
+
 ## Porting policy
 
 `scripts/check-licenses.mjs` (run via `pnpm check:licenses`) enforces this file:

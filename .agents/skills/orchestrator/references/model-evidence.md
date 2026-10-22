@@ -1,0 +1,121 @@
+# Model evidence
+
+The figures behind the routing defaults. Everything here changes: prices, benchmark scores and model generations. Check the date on a table before leaning on it, and refresh this file rather than editing numbers into `SKILL.md` or `routing.md`.
+
+**Read on 2026-10-08.** The pages were fetched through a summarising tool, so individual numbers may be off; spot-check a figure against its page before a decision rests on it. The source's own model labels are kept in the tables so each row can be traced; the rest of the skill uses family names only.
+
+## Contents
+
+- What the evidence changed in the defaults
+- Artificial Analysis: intelligence, cost per task and speed by effort
+- Anthropic: list prices and stated purpose
+- Anthropic: effort guidance
+- Coding and agent benchmarks
+- What is not established
+- This installation
+- How to refresh
+
+## What the evidence changed in the defaults
+
+1. **Effort moves quality and cost as much as the family does.** On the Artificial Analysis index, each family spans 11 to 20 points between low and max, about the same as the gap between neighbouring families at one effort level. Anthropic says the same: "Tuning effort is often a better lever than switching models." So the routing table picks a pair, not a model.
+2. **Haiku at low effort is weak; at medium or high it overlaps Sonnet at low for a fraction of the cost.** Haiku high scores 38 at $0.08 per task; Sonnet low scores 36 at $0.35. The scout profile therefore defaults to medium, and the first move for a bounded task that fell short is Haiku at high, not Sonnet. Anthropic also warns that Haiku at low "may skip a search or a check" in long agent prompts.
+3. **Do not push Sonnet past high.** Sonnet xhigh (52, $2.01 per task) costs more than Opus medium (51, $1.34) for the same score, and Sonnet max (56, $5.46) costs three times Opus high (54, $1.82). When Sonnet at high is not enough, the next step is Opus at medium.
+4. **Opus leads at every effort level and is Anthropic's stated starting point** ("Most workloads start with" Opus). It scores above Fable on this index at medium and above while costing less per task.
+5. **Fable is the most expensive per token and per task, and slower.** Its measured advantages published by Anthropic (science and terminal tasks, automation, computer use, a hard exam benchmark) are against the previous Opus generation, not the current one. Anthropic's stated trigger for choosing it is that evaluations on Opus at xhigh or max "still fall short". That supports this skill's rule: choose Fable for a reason you can state, never by default. Using it as an independent assessor rests on a different argument (a different model is less likely to share the first one's blind spots), which is reasoning, not a benchmark result.
+6. **Very high effort is slow to start.** Reported time to first output at max is several minutes for every family (the figure looks like total thinking time), and over two minutes for Opus at xhigh. Use xhigh and max where waiting is acceptable.
+7. **Delegation trades quality for cost.** In Anthropic's own measured example (a strong lead with cheaper workers on a 21.6M-token corpus task), the arrangement was 47 to 55 percent cheaper and scored 10 to 12 points lower than the lead model doing it alone. Anthropic also notes that when the work is one dependent chain or fits in a single context, "the coordinator's model alone at lower effort came out ahead." Both support choosing the smallest arrangement.
+
+## Artificial Analysis: intelligence, cost per task and speed by effort
+
+Source: artificialanalysis.ai/leaderboards/models, read 2026-10-08. Columns: Intelligence Index; cost per task in USD; median output tokens per second; seconds to first output chunk. All rows are reasoning (effort) variants; context is listed as 1M tokens for all. Opus, Sonnet and Fable rows were labelled "with fallback".
+
+| Source label      | Index | $ per task | tok/s | First chunk (s) |
+| ----------------- | ----- | ---------- | ----- | --------------- |
+| Opus 5.5 max      | 58    | 5.98       | 95    | 731.5           |
+| Opus 5.5 xhigh    | 56    | 3.46       | 80    | 132.0           |
+| Opus 5.5 high     | 54    | 1.82       | 76    | 37.6            |
+| Opus 5.5 medium   | 51    | 1.34       | 76    | 22.5            |
+| Opus 5.5 low      | 42    | 0.55       | 79    | 8.7             |
+| Sonnet 5.5 max    | 56    | 5.46       | 129   | 460.7           |
+| Sonnet 5.5 xhigh  | 52    | 2.01       | 107   | 35.9            |
+| Sonnet 5.5 high   | 47    | 0.88       | 104   | 13.0            |
+| Sonnet 5.5 medium | 41    | 0.48       | 102   | 2.05            |
+| Sonnet 5.5 low    | 36    | 0.35       | 101   | 1.05            |
+| Fable 5.1 max     | 53    | 7.63       | 66    | 293.7           |
+| Fable 5.1 xhigh   | 53    | 5.98       | 58    | 80.6            |
+| Fable 5.1 high    | 51    | 3.91       | 58    | 22.7            |
+| Fable 5.1 medium  | 49    | 2.98       | 54    | 7.6             |
+| Fable 5.1 low     | 47    | 2.37       | 54    | 3.9             |
+| Haiku 5.5 max     | 43    | 0.21       | 242   | 432.2           |
+| Haiku 5.5 xhigh   | 41    | 0.12       | 187   | 87.0            |
+| Haiku 5.5 high    | 38    | 0.08       | 160   | 28.0            |
+| Haiku 5.5 medium  | 34    | 0.05       | 137   | 13.4            |
+| Haiku 5.5 low     | 29    | 0.02       | 178   | 9.9             |
+
+Not on that page when read: a coding index, an agentic index, per-token prices, and the cost to run the whole index. The per-model pages were not opened.
+
+The index is one general measure. It does not test judgment, synthesis or writing quality directly, so it supports the ordering of the families only loosely for those.
+
+## Anthropic: list prices and stated purpose
+
+Source: platform.claude.com/docs/en/about-claude/models/overview and .../about-claude/pricing, read 2026-10-08. USD per million tokens. Context 1M and maximum output 128K for all four.
+
+| Family (source label)                        | Input | Output | Cache write 5m / 1h | Cache read | Batch in / out | Speed (their word) | Stated purpose                                                                             |
+| -------------------------------------------- | ----- | ------ | ------------------- | ---------- | -------------- | ------------------ | ------------------------------------------------------------------------------------------ |
+| Fable (Fable 5.1)                            | 10    | 50     | 12.50 / 20          | 0.25       | 5 / 25         | Slower             | "For demanding reasoning and long-horizon agentic work"                                    |
+| Opus (Opus 5.5)                              | 4     | 20     | 5 / 8               | 0.20       | 2 / 10         | Moderate           | "For long-running agentic coding and knowledge work"                                       |
+| Sonnet (Sonnet 5.5)                          | 2     | 10     | 2.50 / 4            | 0.10       | 1 / 5          | Fast               | "The best combination of speed and intelligence"                                           |
+| Haiku (Haiku 5.5), prompts up to 100K tokens | 0.10  | 0.50   | 0.125 / 0.20        | 0.01       | 0.05 / 0.25    | Fastest            | "For high-volume, latency-sensitive tasks such as classification, extraction, and routing" |
+| Haiku, prompts over 100K tokens              | 0.50  | 2.50   | 0.625 / 1           | 0.05       | 0.25 / 1.25    |                    |                                                                                            |
+
+Per token, Opus is twice Sonnet, Fable is two and a half times Opus, and Haiku on short prompts is one twentieth of Sonnet. Haiku costs five times more per token once a prompt passes 100K tokens, so keep scout assignments narrow. A cache read costs about a twentieth to a tenth of fresh input, which is why continuing an existing agent is cheaper than starting a new one that rereads the same material.
+
+Other statements from the same pages: batch processing is half price; "Most workloads start with" Opus; move to Fable if "evals at xhigh or max effort still fall short"; Haiku is listed for "sub-agent tasks".
+
+## Anthropic: effort guidance
+
+Source: platform.claude.com/docs/en/build-with-claude/effort, read 2026-10-08. All four current families support low, medium, high, xhigh and max.
+
+| Level  | Anthropic's description                                                                      |
+| ------ | -------------------------------------------------------------------------------------------- |
+| low    | "Simpler tasks that need the best speed and lowest costs, such as subagents"                 |
+| medium | "Agentic tasks that require a balance of speed, cost, and performance"                       |
+| high   | "Complex reasoning, difficult coding problems, agentic tasks"                                |
+| xhigh  | "Long-running agentic and coding tasks (over 30 minutes) with token budgets in the millions" |
+| max    | "Tasks requiring the deepest possible reasoning"                                             |
+
+Per family: for Sonnet, "start with medium for well-specified tasks and move to high for harder or longer ones"; for Haiku, "Start with medium ... including agentic coding". API default effort: Fable high, Opus medium, Sonnet high, Haiku medium. Claude Code's own defaults differ in places (its documentation lists medium for the current Opus, Sonnet and Haiku).
+
+## Coding and agent benchmarks
+
+| Benchmark                                               | Figures                                                                                                                                                                        | Source                                                                                  |
+| ------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
+| Terminal-Bench 4.0                                      | Opus 5.5 66.4% at xhigh (standard error 2.6); Fable 5.1 55.8%                                                                                                                  | anthropic.com/news (Opus 5.5 launch post) and anthropic.com/claude-fable-and-mythos-5-1 |
+| Fable 5.1 against the previous Opus generation (Opus 5) | Terminal-Bench 4.0 55.8 vs 52.3; CursorBench 73.4 vs 70.0; AutomationBench 31.4 vs 26.9; a hard exam benchmark without tools 60.9 vs 56.6; Terminal-Bench-Science 52.6 vs 29.0 | anthropic.com/claude-fable-and-mythos-5-1                                               |
+| Anthropic's summary                                     | The current Opus "performs at the level of" the current Fable "on most work"                                                                                                   | anthropic.com/news (Opus 5.5 launch post)                                               |
+
+Third-party trackers reported effort-by-effort Terminal-Bench figures for Sonnet and a SWE-bench Pro ranking, but the same snippet contradicted itself, so those numbers are left out.
+
+## What is not established
+
+- No official coding benchmark for the current Sonnet or Haiku was found, and no SWE-bench Verified figure for any of the four.
+- Artificial Analysis ranks the current Opus above the current Fable on its index, while Anthropic's overview calls Fable its most capable; they measure different things.
+- Nothing found tests "judgment" or "synthesis" as such. The preference for Opus on that work rests on the general index, Anthropic's positioning, and the user's own experience.
+- The claim that Haiku suits _verifiable_ work is this skill's reading (cheap, fast, lower scoring, so pair it with evidence you can check), not a statement from a source.
+
+## This installation
+
+Checked on 2026-10-08.
+
+- Claude Code 2.1.293. `claude --model` accepts the family aliases `haiku`, `sonnet`, `opus`, `fable`; `claude --effort` accepts `low`, `medium`, `high`, `xhigh`, `max`. The `effortLevel` setting does not accept `max`.
+- Agent definition files accept `model` (an alias, `inherit`, or a full id) and `effort` (the five levels). A `model` passed on the Agent call wins over the file.
+- User settings: main model `opus`, effort `high`; the `haiku` alias is pinned through `ANTHROPIC_DEFAULT_HAIKU_MODEL`; per-model effort overrides exist under `modelSettings`.
+- Agent teams are enabled in one project's settings (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), not for the user account. Workflows are not disabled.
+- The older user skill `intelligent-model-orchestration` (Opus and Sonnet only) was deleted on 2026-10-08 at the user's request, so this skill is the only router.
+
+## How to refresh
+
+1. Reread the Artificial Analysis leaderboard and the Anthropic models, pricing, effort and "choosing a model" pages. Record the date and the source's labels.
+2. Recompute the three comparisons the defaults rest on: Haiku high against Sonnet low; Sonnet xhigh against Opus medium; Fable against Opus at high.
+3. If a comparison flips, change the row in `routing.md` and the table in `SKILL.md`, and note the change at the top of this file.
+4. Check `claude --help` for the model aliases and effort levels, and the sub-agents documentation for frontmatter fields.

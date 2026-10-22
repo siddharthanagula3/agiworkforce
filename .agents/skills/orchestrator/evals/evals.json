@@ -1,0 +1,117 @@
+{
+  "skill_name": "orchestrator",
+  "evals": [
+    {
+      "id": 1,
+      "name": "small-rename",
+      "coordinator_model": "haiku",
+      "prompt": "In this repo, rename the config key `report_timeout` to `report_timeout_seconds`. It is used in three files: config/defaults.yaml, src/config.ts and src/report/run.ts. Update the three places and run the unit tests.",
+      "expected_output": "Direct execution, no workers.",
+      "files": [],
+      "assertions": [
+        "Chooses direct execution with no workers launched",
+        "Rejects sub-agents, agent team and workflow with a reason tied to the size of the task",
+        "Recommends no worker at all, not even an optional reviewer or follow-up check",
+        "Runs the repository's own unit-test command and reports real output; does not assume success",
+        "Searches beyond the three named files for other readers of the old key",
+        "States what is unknown or not verified"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "checklist-audit",
+      "coordinator_model": "sonnet",
+      "prompt": "Audit our 40 API route handlers under src/routes/ for missing authorization. The rule is written down: every handler must call requireSession() and, if it takes an orgId, requireOrgMember(orgId) before touching the database. I want a table of every route with pass or fail and the line that proves it.",
+      "expected_output": "Sub-agents: several Haiku scouts in parallel with fixed route lists and an evidence format; the coordinator re-checks reported failures.",
+      "files": [],
+      "assertions": [
+        "Chooses parallel sub-agents, not direct, a team or a workflow",
+        "Assigns Haiku scouts at medium effort for the per-route checks",
+        "Names model family and effort for every worker, including any verifier or resolver",
+        "Each scout brief gives a fixed list of routes and requires file:line evidence",
+        "Coordinator re-checks the reported FAIL rows itself by opening the cited lines",
+        "Reconciles the row count with the real listing and states what rests on scouts' reports"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "scoped-feature",
+      "coordinator_model": "haiku",
+      "prompt": "Add a CSV export button to the Reports page. The reports API already returns the rows as JSON at GET /api/reports/:id/rows. It should download a file named after the report, and I want tests for the CSV escaping.",
+      "expected_output": "One Sonnet worker at medium effort that plans and delivers it; no separate planner; coordinator reads the diff and runs the tests.",
+      "files": [],
+      "assertions": [
+        "Delegates the whole feature to exactly one worker, not a team or workflow",
+        "The worker is Sonnet at medium effort",
+        "No separate planner, explorer or reviewer agent",
+        "Coordinator runs the tests and lint itself before reporting rather than trusting the worker",
+        "Uses no Opus or Fable worker for a scoped feature",
+        "States what was not verified or is unknown"
+      ]
+    },
+    {
+      "id": 4,
+      "name": "payments-bug",
+      "coordinator_model": "opus",
+      "prompt": "Customers are occasionally charged twice at checkout. It happens maybe once in a few thousand orders and we cannot reproduce it. Find the cause and fix it. The payment code is in services/billing, the order code in services/orders, and there is a webhook handler in api/webhooks/payments.ts.",
+      "expected_output": "Evidence gathering by scouts, diagnosis by Opus at high effort, and an independent assessment of the fix before it is applied because it touches payments.",
+      "files": [],
+      "assertions": [
+        "Evidence gathering is delegated to read-only Haiku scouts that run in parallel",
+        "Diagnosis is assigned to Opus at high effort",
+        "An independent assessment by an agent that did not write the fix happens before the fix reaches the user's branch",
+        "Names an effort level for every worker",
+        "Leaves refunds, production migrations and deploys to the user",
+        "Says plainly what cannot be proven or verified (an unreproducible bug)"
+      ]
+    },
+    {
+      "id": 5,
+      "name": "cross-layer-contract",
+      "coordinator_model": "sonnet",
+      "prompt": "We are changing pagination across the product from page numbers to cursors. The backend API, the TypeScript SDK and the public docs all have to change together and agree on the exact request and response shape, and I want it done in one go today. Agent teams are enabled in this project.",
+      "expected_output": "Contract agreed first by one head (or a team when the layers must keep negotiating while they build); then the three layers built in parallel by workers with distinct file ownership; the lead integrates. A team is acceptable only with a stated reason why the layers must talk during the build.",
+      "files": [],
+      "assertions": [
+        "Chooses the arrangement by whether the layers must negotiate during the build: contract first then parallel sub-agents, or a team with that reason stated",
+        "Three layer workers (backend, SDK, docs) each with distinct file ownership",
+        "A written contract fixing the exact request and response shape exists before any layer worker starts",
+        "The lead integrates: reads the diffs and runs backend and SDK checks itself",
+        "Names model family and effort for every worker",
+        "Treats the fate of the old `page` parameter as an owner decision and does not decide it silently"
+      ]
+    },
+    {
+      "id": 6,
+      "name": "weekly-review",
+      "coordinator_model": "opus",
+      "prompt": "Every Friday I want the same review done on that week's merged pull requests: for each changed file check security, performance and test coverage, then double-check each finding so I only see real ones, and give me one report. Set this up so I can run it each week.",
+      "expected_output": "A saved workflow with stages, a family per stage, a rough agent count, and the cost flagged before running.",
+      "files": [],
+      "assertions": [
+        "Proposes a saved, re-runnable workflow rather than ad hoc sub-agents",
+        "Names stages and a model family per stage",
+        "Gives a rough agent count figure before anything runs",
+        "Flags cost and asks the user before the first paid run",
+        "Separates finding from verification: a different agent checks each finding and only confirmed ones reach the report",
+        "Names an effort level for every stage"
+      ]
+    },
+    {
+      "id": 7,
+      "name": "competing-hypotheses",
+      "coordinator_model": "sonnet",
+      "prompt": "Search is slow in production (p95 around 4 seconds) but fast on every developer machine. We have three plausible causes: a bad query plan on the production database, a cache stampede when popular entries expire, and timeouts calling the ranking service. I want each one chased properly, with the investigators challenging each other's evidence as they go, because last time three separate reports each blamed a different thing and nobody reconciled them. Agent teams are enabled in this project.",
+      "expected_output": "Agent team: one investigator per hypothesis who exchange and challenge evidence while working; the lead reconciles and decides.",
+      "files": [],
+      "assertions": [
+        "Chooses an agent team, not sub-agents or a workflow",
+        "One investigator per hypothesis (three), each with its own notes or scope",
+        "Investigators message each other and must answer challenges with evidence",
+        "The lead reconciles into one diagnosis and allows that causes may combine",
+        "Fixes one shared set of slow requests up front so all investigators' evidence is comparable",
+        "Names model family and effort for every teammate"
+      ]
+    }
+  ]
+}

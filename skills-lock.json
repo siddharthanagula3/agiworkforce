@@ -42,7 +42,7 @@
       "sourceType": "first-party",
       "audience": "developer",
       "declaredVersion": "1.0.0",
-      "computedHash": "sha256-tree-v1:37991bbf98e7ebefbe6007d68c2eb45a3edba0f3e0165f21b658dc9149b24ba4"
+      "computedHash": "sha256-tree-v1:adb7e7fee367b3bec12fe6b7c2c7353a4674e86248ddf78786b92d48625b7f63"
     },
     "ai-seo": {
       "path": ".agents/skills/ai-seo",
@@ -524,14 +524,6 @@
       "declaredVersion": "2d228630ba1446365f614a108cb8252f1feda202",
       "computedHash": "sha256-tree-v1:e76008b0d76032700e296eeff4a6db6c4a3f416d0af156b6dd70bdda7e862d25"
     },
-    "model-orchestration": {
-      "path": ".agents/skills/model-orchestration",
-      "source": "AGI Workforce repository",
-      "sourceType": "first-party",
-      "audience": "developer",
-      "declaredVersion": "2.0.0",
-      "computedHash": "sha256-tree-v1:50f3b46007bbe048abd6b56a31c58e65bd40014792a40824779761667dea5320"
-    },
     "ms-frontend-design-review": {
       "path": ".agents/skills/ms-frontend-design-review",
       "source": "https://github.com/microsoft/skills @ 02e0b2f852b39ea00c43283f999b83fc12079273 (.github/skills/frontend-design-review)",
@@ -580,6 +572,14 @@
       "declaredVersion": "2.0.1",
       "computedHash": "sha256-tree-v1:8a8e7877d13a393d52b71aed34daf92c674680627491e00b08f625a438b3f5e8"
     },
+    "orchestrator": {
+      "path": ".agents/skills/orchestrator",
+      "source": "AGI Workforce repository",
+      "sourceType": "first-party",
+      "audience": "developer",
+      "declaredVersion": null,
+      "computedHash": "sha256-tree-v1:4f1c0dd71b0dc95d60309510998a0b94178a8499951722b1693b43351e3fdd59"
+    },
     "paywalls": {
       "path": ".agents/skills/paywalls",
       "source": "https://github.com/coreyhaines31/marketingskills @ 5b2c0007766c6a1cf1d53fd8fc73e979e0821022 (skills/paywalls)",
@@ -611,6 +611,14 @@
       "audience": "product",
       "declaredVersion": "da38ec1ee89d41e5380e652a97382695003396e7",
       "computedHash": "sha256-tree-v1:b2518fd00f067cf1e3a136cef943d7f0cc2e5d3237cab0d7d0d3ae353a9204bd"
+    },
+    "playwright-cli": {
+      "path": ".agents/skills/playwright-cli",
+      "source": "https://www.npmjs.com/package/@playwright/cli/v/0.1.19 (playwright-core/lib/tools/skills/playwright-cli)",
+      "sourceType": "url",
+      "audience": "developer",
+      "declaredVersion": "0.1.19",
+      "computedHash": "sha256-tree-v1:c63f02b539cf74d9d9fb2f80d14fe9e586c972e84a63c76a57d2c0b0d6afad78"
     },
     "popups": {
       "path": ".agents/skills/popups",

@@ -179,7 +179,7 @@ describe('skills API security contract', () => {
     const names = json.skills.map((skill) => skill.name);
 
     expect(response.status).toBe(200);
-    for (const developerSkill of ['agiworkforce-design', 'model-orchestration', 'antislop']) {
+    for (const developerSkill of ['agiworkforce-design', 'orchestrator', 'antislop']) {
       expect(names).not.toContain(developerSkill);
     }
     expect(names).toContain('code-review');

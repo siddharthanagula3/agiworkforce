@@ -379,7 +379,7 @@ describe('managed Skill catalog service', () => {
     const directory = await getManagedSkillDirectory();
     const listed = new Set(directory.map((skill) => skill.name));
 
-    for (const developerSkill of ['agiworkforce-design', 'model-orchestration', 'antislop']) {
+    for (const developerSkill of ['agiworkforce-design', 'orchestrator', 'antislop']) {
       expect(listed.has(developerSkill)).toBe(false);
       await expect(findManagedSkillByName(developerSkill)).resolves.toBeNull();
       await expect(getBundledSkillDownload(developerSkill)).resolves.toBeNull();
