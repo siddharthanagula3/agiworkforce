@@ -206,5 +206,6 @@
     "memoriesSelected_one": "Importa {{count}} ricordo",
     "memoriesSelected_other": "Importa {{count}} ricordi"
   },
-  "autoCorrectSpelling": "Correzione ortografica automatica"
+  "autoCorrectSpelling": "Correzione ortografica automatica",
+  "defaultEffort": "Impegno predefinito"
 }

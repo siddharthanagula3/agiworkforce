@@ -11,6 +11,13 @@ import { Check, Cpu, Search, X as XIcon } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { ModelRow } from './ModelRow';
+import {
+  DEFAULT_EFFORT_SCOPE,
+  EffortSlider,
+  effortStepsFor,
+  resolveEffortStep,
+  setDefaultEffort,
+} from './EffortSlider';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useFreeQuotaCatalogueStore } from '@/src/features/model-picker/freeQuotaCatalogue';
 import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
@@ -20,8 +27,6 @@ import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAgentControlStore, type PickerEffort } from '@/stores/agentControlStore';
 import {
-  EFFORT_DESCRIPTION,
-  EFFORT_LABEL,
   ROUTING_PROFILE_CHOICE_OPTIONS,
   canAccessAutoRoutingProfileForTier,
   getAutoRoutingProfileTiers,
@@ -58,25 +63,9 @@ function establishedCloudModel(
   return model?.surface === 'cloud_managed' ? model : undefined;
 }
 
-const EFFORT_LADDER_ORDER: readonly string[] = [
-  'none',
-  'minimal',
-  'low',
-  'medium',
-  'high',
-  'xhigh',
-  'max',
-];
-
 const ROUTING_PROFILE_OPTIONS_UNDER_AUTO = ROUTING_PROFILE_CHOICE_OPTIONS.filter(
   (option) => option.choice !== 'auto',
 );
-
-function sortEffortLadder(efforts: readonly string[]): PickerEffort[] {
-  return [...efforts]
-    .sort((a, b) => EFFORT_LADDER_ORDER.indexOf(a) - EFFORT_LADDER_ORDER.indexOf(b))
-    .map((effort) => effort as PickerEffort);
-}
 
 function byModelFamily(models: ModelDef[]): ModelDef[] {
   const firstIndex = new Map<string, number>();
@@ -289,17 +278,15 @@ export function ModelPickerSheet({
 
   const [search, setSearch] = useState('');
   const [expandedModelId, setExpandedModelId] = useState<string | null>(null);
-  const selectedEffort = useAgentControlStore((s) =>
-    conversationId
-      ? s.resolve(conversationId, null).effort
-      : (s.byProject.__default__?.effort ?? 'medium'),
+  const selectedEffort = useAgentControlStore(
+    (s) => s.resolve(conversationId ?? DEFAULT_EFFORT_SCOPE, null).effort,
   );
   const handleSelectEffort = useCallback(
     (effort: PickerEffort) => {
       if (conversationId) {
         useAgentControlStore.getState().setEffort(conversationId, effort);
       } else {
-        useAgentControlStore.getState().setProjectDefault('__default__', { effort });
+        setDefaultEffort(effort);
       }
     },
     [conversationId],
@@ -327,14 +314,8 @@ export function ModelPickerSheet({
     showRoutingProfiles && selectedModel === DEFAULT_AUTO_MODE_ID ? routingProfile : 'auto';
 
   const selectedReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
-  const effortOptions = useMemo(
-    () => sortEffortLadder(selectedReasoning.supportedEfforts ?? []),
-    [selectedReasoning],
-  );
-  const selectedSupportsReasoning =
-    selectedReasoning.capable &&
-    selectedReasoning.control === 'effort_levels' &&
-    effortOptions.length > 0;
+  const effortOptions = useMemo(() => effortStepsFor(selectedReasoning), [selectedReasoning]);
+  const selectedSupportsReasoning = effortOptions.length > 0;
   const selectedRequiresReasoning =
     selectedReasoning.capable && selectedReasoning.canDisableThinking === false;
   const showEffortControl = modelScope === 'cloud' && selectedSupportsReasoning;
@@ -342,9 +323,7 @@ export function ModelPickerSheet({
   useEffect(() => {
     if (!showEffortControl) return;
     if (effortOptions.includes(selectedEffort)) return;
-    const fallback = effortOptions.includes(selectedReasoning.defaultEffort as PickerEffort)
-      ? (selectedReasoning.defaultEffort as PickerEffort)
-      : effortOptions[0];
+    const fallback = resolveEffortStep(effortOptions, selectedEffort, selectedReasoning);
     if (fallback) handleSelectEffort(fallback);
   }, [showEffortControl, effortOptions, selectedEffort, selectedReasoning, handleSelectEffort]);
   const modelList = useMemo(() => {
@@ -753,8 +732,9 @@ export function ModelPickerSheet({
               borderWidth: 1,
               borderColor: colors.border,
               backgroundColor: colors.surfaceElevated,
-              paddingHorizontal: 6,
-              paddingVertical: 6,
+              paddingHorizontal: 10,
+              paddingTop: 8,
+              paddingBottom: 10,
             }}
           >
             <View
@@ -762,8 +742,8 @@ export function ModelPickerSheet({
                 flexDirection: 'row',
                 alignItems: 'center',
                 gap: 8,
-                paddingHorizontal: 8,
-                paddingBottom: 4,
+                paddingHorizontal: 4,
+                paddingBottom: 8,
               }}
             >
               <Text
@@ -777,65 +757,12 @@ export function ModelPickerSheet({
                 </Text>
               ) : null}
             </View>
-            {effortOptions.map((effort) => {
-              const label = EFFORT_LABEL[effort] ?? effort;
-              const tradeoff = EFFORT_DESCRIPTION[effort];
-              const active = effort === selectedEffort;
-              return (
-                <PressableBox
-                  key={effort}
-                  testID={`model-picker-effort-${effort}`}
-                  onPress={() => handleSelectEffort(effort)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`Reasoning effort ${label}`}
-                  accessibilityHint={tradeoff}
-                  accessibilityState={{ selected: active }}
-                >
-                  {({ pressed }) => (
-                    <View
-                      style={{
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 10,
-                        minHeight: 44,
-                        paddingHorizontal: 8,
-                        paddingVertical: 6,
-                        borderRadius: 12,
-                        backgroundColor: active
-                          ? colors.accentSurface
-                          : pressed
-                            ? colors.surfaceHover
-                            : colors.transparent,
-                      }}
-                    >
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <Text
-                          style={{
-                            color: active ? colors.teal : colors.textPrimary,
-                            fontSize: typeScale.subhead,
-                            fontWeight: active ? '600' : '500',
-                          }}
-                        >
-                          {label}
-                        </Text>
-                        {tradeoff ? (
-                          <Text
-                            style={{
-                              color: colors.textMuted,
-                              fontSize: typeScale.caption,
-                              marginTop: 2,
-                            }}
-                          >
-                            {tradeoff}
-                          </Text>
-                        ) : null}
-                      </View>
-                      {active ? <Check size={16} color={colors.teal} /> : null}
-                    </View>
-                  )}
-                </PressableBox>
-              );
-            })}
+            <EffortSlider
+              testID="model-picker-effort"
+              steps={effortOptions}
+              value={effortOptions.includes(selectedEffort) ? selectedEffort : undefined}
+              onChange={handleSelectEffort}
+            />
           </View>
         ) : null}
 

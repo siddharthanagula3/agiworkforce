@@ -206,5 +206,6 @@
     "memoriesSelected_one": "Import {{count}} memory",
     "memoriesSelected_other": "Import {{count}} memories"
   },
-  "autoCorrectSpelling": "Auto-correct spelling"
+  "autoCorrectSpelling": "Auto-correct spelling",
+  "defaultEffort": "Default effort"
 }

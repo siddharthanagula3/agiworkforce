@@ -206,5 +206,6 @@
     "memoriesSelected_one": "Importar {{count}} memória",
     "memoriesSelected_other": "Importar {{count}} memórias"
   },
-  "autoCorrectSpelling": "Correção ortográfica automática"
+  "autoCorrectSpelling": "Correção ortográfica automática",
+  "defaultEffort": "Esforço padrão"
 }

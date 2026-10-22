@@ -410,5 +410,6 @@
     "memoriesSelected_many": "استيراد {{count}} ذكرى",
     "memoriesSelected_other": "استيراد {{count}} ذكرى"
   },
-  "autoCorrectSpelling": "التصحيح التلقائي للإملاء"
+  "autoCorrectSpelling": "التصحيح التلقائي للإملاء",
+  "defaultEffort": "الجهد الافتراضي"
 }

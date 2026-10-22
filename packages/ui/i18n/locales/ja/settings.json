@@ -206,5 +206,6 @@
     "memoriesSelected_one": "{{count}} 件のメモリをインポート",
     "memoriesSelected_other": "{{count}} 件のメモリをインポート"
   },
-  "autoCorrectSpelling": "スペルの自動修正"
+  "autoCorrectSpelling": "スペルの自動修正",
+  "defaultEffort": "デフォルトの推論レベル"
 }

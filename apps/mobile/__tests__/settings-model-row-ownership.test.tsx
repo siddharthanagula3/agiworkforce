@@ -71,6 +71,7 @@ jest.mock('react-i18next', () => ({
         'settings:language': 'Language',
         'settings:storage': 'Storage',
         'settings:autoCorrectSpelling': 'Auto-correct spelling',
+        'settings:defaultEffort': 'Default effort',
       })[key] ?? key,
     i18n: { language: 'en', resolvedLanguage: 'en' },
   }),
@@ -81,6 +82,11 @@ jest.mock('@agiworkforce/i18n', () => ({
 }));
 
 jest.mock('../src/i18n', () => ({}));
+
+const mockSelectionHaptic = jest.fn(async () => undefined);
+jest.mock('expo-haptics', () => ({
+  selectionAsync: () => mockSelectionHaptic(),
+}));
 
 import SettingsTabScreen from '../app/(app)/(tabs)/settings';
 import GeneralSettingsScreen from '../src/features/settings/general';
@@ -94,6 +100,9 @@ import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useAuthStore } from '../src/features/auth/store';
 import { useTierStore } from '../src/features/billing/store';
 import { useLocalSettingsStore } from '../stores/settings/localSettingsStore';
+import { useAgentControlStore } from '../stores/agentControlStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import { EFFORT_DESCRIPTION, EFFORT_LABEL, getModelReasoning } from '@agiworkforce/types';
 
 function collectRenderedStrings(node: unknown, out: string[] = []): string[] {
   if (node == null) return out;
@@ -188,5 +197,69 @@ describe('PAR-M21, getShortDisplayName fallback', () => {
   it('returns "Not set" rather than echoing an unknown id back to the user', () => {
     expect(getShortDisplayName('not-a-real-model-id')).toBe(UNKNOWN_MODEL_LABEL);
     expect(UNKNOWN_MODEL_LABEL).toBe('Not set');
+  });
+});
+
+describe('General settings default effort', () => {
+  const effortModel = getModelListForCloudAccess(true, 'max').find((model) => {
+    const reasoning = getModelReasoning(model.id);
+    return (
+      model.surface === 'cloud_managed' &&
+      reasoning.control === 'effort_levels' &&
+      (reasoning.supportedEfforts?.length ?? 0) > 1
+    );
+  });
+
+  beforeEach(() => {
+    mockSelectionHaptic.mockClear();
+    useAgentControlStore.setState({ byConversation: {}, byProject: {} });
+    useSettingsStore.setState({ hapticsEnabled: true });
+  });
+
+  it('is hidden when the default model offers no effort steps', () => {
+    mockSelectedModel.id = DEFAULT_LOCAL_MODEL_ID;
+    expect(getModelReasoning(DEFAULT_LOCAL_MODEL_ID).supportedEfforts ?? []).toHaveLength(0);
+
+    const { queryByTestId, queryByText } = render(<GeneralSettingsScreen />);
+
+    expect(queryByTestId('settings.general.default-effort')).toBeNull();
+    expect(queryByText('Default effort')).toBeNull();
+  });
+
+  it('offers the default model effort steps and saves the choice as the default for new chats', () => {
+    expect(effortModel).toBeDefined();
+    mockSelectedModel.id = effortModel!.id;
+    const reasoning = getModelReasoning(effortModel!.id);
+    const steps = Object.keys(EFFORT_LABEL).filter((effort) =>
+      (reasoning.supportedEfforts ?? []).includes(effort as never),
+    ) as Array<keyof typeof EFFORT_LABEL>;
+    const shown =
+      reasoning.defaultEffort && steps.includes(reasoning.defaultEffort as never)
+        ? (reasoning.defaultEffort as keyof typeof EFFORT_LABEL)
+        : steps[0]!;
+    const next = steps.find((effort) => effort !== shown)!;
+
+    const { getByTestId, getByText, getByLabelText } = render(<GeneralSettingsScreen />);
+
+    expect(getByText('Default effort')).toBeTruthy();
+    for (const effort of steps) {
+      expect(
+        getByLabelText(`Reasoning effort ${EFFORT_LABEL[effort]}`).props.accessibilityState
+          .selected,
+      ).toBe(effort === shown);
+    }
+    expect(getByTestId('settings.general.default-effort.slider-description').props.children).toBe(
+      EFFORT_DESCRIPTION[shown],
+    );
+
+    fireEvent.press(getByTestId(`settings.general.default-effort.slider-${next}`));
+
+    expect(useAgentControlStore.getState().byProject.__default__?.effort).toBe(next);
+    expect(useAgentControlStore.getState().resolve('new-chat', null).effort).toBe(next);
+    expect(useAgentControlStore.getState().byConversation).toEqual({});
+    expect(
+      getByLabelText(`Reasoning effort ${EFFORT_LABEL[next]}`).props.accessibilityState.selected,
+    ).toBe(true);
+    expect(mockSelectionHaptic).toHaveBeenCalledTimes(1);
   });
 });

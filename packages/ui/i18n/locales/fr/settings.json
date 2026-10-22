@@ -206,5 +206,6 @@
     "memoriesSelected_one": "Importer {{count}} souvenir",
     "memoriesSelected_other": "Importer {{count}} souvenirs"
   },
-  "autoCorrectSpelling": "Correction orthographique automatique"
+  "autoCorrectSpelling": "Correction orthographique automatique",
+  "defaultEffort": "Effort par défaut"
 }

@@ -206,5 +206,6 @@
     "memoriesSelected_one": "导入 {{count}} 条记忆",
     "memoriesSelected_other": "导入 {{count}} 条记忆"
   },
-  "autoCorrectSpelling": "自动更正拼写"
+  "autoCorrectSpelling": "自动更正拼写",
+  "defaultEffort": "默认推理强度"
 }

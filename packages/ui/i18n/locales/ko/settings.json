@@ -206,5 +206,6 @@
     "memoriesSelected_one": "메모리 {{count}}개 가져오기",
     "memoriesSelected_other": "메모리 {{count}}개 가져오기"
   },
-  "autoCorrectSpelling": "맞춤법 자동 수정"
+  "autoCorrectSpelling": "맞춤법 자동 수정",
+  "defaultEffort": "기본 추론 수준"
 }

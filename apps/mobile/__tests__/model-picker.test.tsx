@@ -24,6 +24,7 @@ jest.mock('../lib/mmkv', () => ({
 
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(),
+  selectionAsync: jest.fn(),
   ImpactFeedbackStyle: { Light: 'Light', Medium: 'Medium' },
 }));
 
@@ -190,6 +191,10 @@ function sortedEfforts(reasoning: ModelReasoning): readonly string[] {
 
 function effortLabel(effort: string): string {
   return EFFORT_LABEL[effort as keyof typeof EFFORT_LABEL];
+}
+
+function effortDescription(effort: string): string {
+  return EFFORT_DESCRIPTION[effort as keyof typeof EFFORT_DESCRIPTION];
 }
 
 function resetModelStore() {
@@ -704,24 +709,48 @@ describe('ModelPickerSheet', () => {
     }
   });
 
-  it('explains the trade-off next to every effort tier of a four-step model', () => {
+  it('renders a four-step model as a segmented slider: labelled pill, dots, and the trade-off', () => {
     useWaitlistStore.setState({ cloudUnlocked: true });
     useTierStore.setState({ tier: 'max' });
     useModelStore.getState().setModel(EXACT_EFFORT_MODEL.id);
-    const { getByTestId, getByText, getByLabelText } = renderPicker({ modelScope: 'cloud' });
+    const { getByTestId, getByText, getByLabelText, queryByTestId } = renderPicker({
+      modelScope: 'cloud',
+      conversationId: 'conv-1',
+    });
 
     const efforts = sortedEfforts(getModelReasoning(EXACT_EFFORT_MODEL.id));
+    expect(efforts).toHaveLength(4);
     expect(getByTestId('model-picker-effort-selector')).toBeTruthy();
+    expect(getByTestId('model-picker-effort-capsule')).toBeTruthy();
     expect(getByText('Effort')).toBeTruthy();
+    const selected = useAgentControlStore.getState().resolve('conv-1', null).effort;
+    expect(efforts).toContain(selected);
     for (const effort of efforts) {
       const label = effortLabel(effort);
       const tier = getByLabelText(`Reasoning effort ${label}`);
-      const tradeoff = tier.props.accessibilityHint;
-      expect(typeof tradeoff).toBe('string');
-      expect(tradeoff.length).toBeGreaterThan(0);
-      expect(within(tier).getByText(label)).toBeTruthy();
-      expect(within(tier).getByText(tradeoff)).toBeTruthy();
+      expect(tier.props.accessibilityHint).toBe(effortDescription(effort));
+      if (effort === selected) {
+        expect(within(tier).getByText(label)).toBeTruthy();
+        expect(queryByTestId(`model-picker-effort-${effort}-dot`)).toBeNull();
+      } else {
+        expect(within(tier).queryByText(label)).toBeNull();
+        expect(getByTestId(`model-picker-effort-${effort}-dot`)).toBeTruthy();
+      }
     }
+    expect(getByTestId('model-picker-effort-description').props.children).toBe(
+      EFFORT_DESCRIPTION[selected],
+    );
+
+    const next = efforts.find((effort) => effort !== selected)!;
+    fireEvent.press(getByTestId(`model-picker-effort-${next}`));
+
+    expect(
+      within(getByTestId(`model-picker-effort-${next}`)).getByText(effortLabel(next)),
+    ).toBeTruthy();
+    expect(getByTestId(`model-picker-effort-${selected}-dot`)).toBeTruthy();
+    expect(getByTestId('model-picker-effort-description').props.children).toBe(
+      effortDescription(next),
+    );
   });
 
   it('shows a thinking toggle and no effort selector for a thinking_toggle model', () => {

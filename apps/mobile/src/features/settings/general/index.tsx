@@ -1,3 +1,5 @@
+import { useMemo } from 'react';
+import { View } from 'react-native';
 import {
   BarChart3,
   Box,
@@ -19,6 +21,17 @@ import {
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
+import {
+  EffortSlider,
+  effortStepsFor,
+  resolveEffortStep,
+  setDefaultEffort,
+  useDefaultEffort,
+} from '@/src/features/model-picker/components/EffortSlider';
+import { Text } from '@/components/ui/text';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
+import { getModelReasoning } from '@agiworkforce/types';
 import { useRouter } from 'expo-router';
 import { useTranslation } from 'react-i18next';
 import '@/src/i18n';
@@ -34,6 +47,13 @@ export default function GeneralSettingsScreen() {
   const setAutoCorrectEnabled = useLocalSettingsStore((s) => s.setAutoCorrectEnabled);
   const selectedModel = useModelStore((s) => s.selectedModel);
   const subscriptionTier = useTierStore((s) => s.tier);
+  const colors = useThemeColors();
+  const defaultEffort = useDefaultEffort();
+  const defaultModelReasoning = useMemo(() => getModelReasoning(selectedModel), [selectedModel]);
+  const defaultEffortSteps = useMemo(
+    () => effortStepsFor(defaultModelReasoning),
+    [defaultModelReasoning],
+  );
 
   return (
     <SettingsScreenShell title={t('settings:general')}>
@@ -64,6 +84,24 @@ export default function GeneralSettingsScreen() {
           isLast
         />
       </SettingsGroup>
+      {defaultEffortSteps.length > 0 ? (
+        <SettingsGroup>
+          <View testID="settings.general.default-effort" style={{ padding: 14, gap: 10 }}>
+            <Text
+              accessibilityRole="header"
+              style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+            >
+              {t('settings:defaultEffort')}
+            </Text>
+            <EffortSlider
+              testID="settings.general.default-effort.slider"
+              steps={defaultEffortSteps}
+              value={resolveEffortStep(defaultEffortSteps, defaultEffort, defaultModelReasoning)}
+              onChange={setDefaultEffort}
+            />
+          </View>
+        </SettingsGroup>
+      ) : null}
       <SettingsGroup>
         {/* The active model belongs to the row that changes it. The Settings
             root used to carry this value on "General", a screen that does not
