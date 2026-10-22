@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   effectiveAgentConfig,
+  normalizeAgentWebDomains,
+  updateAgentDraft,
   sameAgentConfig,
   toManagedCloudAgent,
   validateAgentModel,
@@ -64,5 +66,69 @@ describe('custom agent presentation', () => {
     expect(validateAgentModel(null)).toBeNull();
     expect(validateAgentModel('auto')).toBe('auto');
     expect(() => validateAgentModel('not-a-model')).toThrow('Pick a model from the list.');
+  });
+
+  it('keeps the website rules of each agent and reads a version published before them as none', () => {
+    const ruled = agentRow(
+      {},
+      { allowedWebDomains: ['docs.example'], blockedWebDomains: ['ads.example'] },
+    );
+    expect(toManagedCloudAgent(ruled, OWNER, null)).toMatchObject({
+      allowedWebDomains: ['docs.example'],
+      blockedWebDomains: ['ads.example'],
+    });
+    const { allowedWebDomains: _a, blockedWebDomains: _b, ...older } = agentConfig();
+    const published = toManagedCloudAgent(
+      agentRow({ published_version: 1, published_config: older }),
+      OWNER,
+      null,
+    );
+    expect(published?.hasUnpublishedChanges).toBe(false);
+  });
+
+  it('stores website rules as bare, sorted, unique domains and refuses anything else', () => {
+    expect(
+      normalizeAgentWebDomains(['https://www.Docs.example/path', '*.b.example', 'docs.example']),
+    ).toEqual(['b.example', 'docs.example']);
+    expect(() => normalizeAgentWebDomains(['not a site'])).toThrow(
+      'not a site is not a website address.',
+    );
+  });
+});
+
+describe('saving the website rules of an agent', () => {
+  function recordingDb(row = agentRow()) {
+    const executed: Array<{ sql: string; params: unknown[] }> = [];
+    return {
+      executed,
+      db: {
+        query: async () => [row],
+        execute: async (sql: string, params: unknown[]) => {
+          executed.push({ sql, params });
+        },
+      } as never,
+    };
+  }
+
+  it('writes both lists as text arrays', async () => {
+    const { db, executed } = recordingDb();
+    await updateAgentDraft(db, OWNER, agentRow().id, {
+      allowedWebDomains: ['www.docs.example'],
+      blockedWebDomains: ['ads.example'],
+    });
+    expect(executed[0]?.sql).toContain('allowed_web_domains = $2::text[]');
+    expect(executed[0]?.sql).toContain('blocked_web_domains = $3::text[]');
+    expect(executed[0]?.params).toEqual([agentRow().id, ['docs.example'], ['ads.example'], OWNER]);
+  });
+
+  it('refuses a site that is both allowed and blocked', async () => {
+    const { db, executed } = recordingDb();
+    await expect(
+      updateAgentDraft(db, OWNER, agentRow().id, {
+        allowedWebDomains: ['docs.example'],
+        blockedWebDomains: ['www.docs.example'],
+      }),
+    ).rejects.toThrow('docs.example cannot be both allowed and blocked.');
+    expect(executed).toEqual([]);
   });
 });

@@ -19,9 +19,11 @@ export const AGENT_FILE_MAX_BYTES = 512_000;
 export const AGENT_VERSION_NOTE_MAX_CHARS = 300;
 export const AGENT_SHARE_PEOPLE_MAX = 100;
 export const AGENT_USAGE_WINDOW_DAYS = 30;
+export const AGENT_WEB_DOMAINS_MAX = 32;
 
 const IdentifierSchema = z.string().regex(/^[a-z][a-z0-9-]{0,39}$/);
 const SelectionSchema = z.array(z.string().trim().min(1).max(200)).max(AGENT_SELECTION_MAX);
+const WebDomainListSchema = z.array(z.string().trim().min(1).max(253)).max(AGENT_WEB_DOMAINS_MAX);
 
 export const AgentStatusSchema = z.enum(AGENT_STATUSES);
 export type AgentStatus = z.infer<typeof AgentStatusSchema>;
@@ -45,6 +47,8 @@ export const AgentConfigSchema = z.object({
   imageGeneration: z.boolean(),
   connectorIds: SelectionSchema.nullable(),
   skillNames: SelectionSchema.nullable(),
+  allowedWebDomains: WebDomainListSchema.default([]),
+  blockedWebDomains: WebDomainListSchema.default([]),
   dailyTurnLimit: z.number().int().min(1).max(AGENT_DAILY_TURN_LIMIT_MAX).nullable(),
   monthlyCreditLimit: z
     .number()

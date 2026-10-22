@@ -1,7 +1,8 @@
 'use client';
 
-import { useId, useMemo } from 'react';
+import { useId, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { X } from 'lucide-react';
 import {
   Button,
   Checkbox,
@@ -23,6 +24,8 @@ import {
   AGENT_OUTPUT_EXAMPLES_MAX_CHARS,
   AGENT_STARTERS_MAX,
   AGENT_STARTER_MAX_CHARS,
+  AGENT_WEB_DOMAINS_MAX,
+  normalizeWebDomain,
   type AgentConfig,
 } from '@agiworkforce/cloud-contracts';
 import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
@@ -126,6 +129,157 @@ function SelectionField({
           })}
         </ul>
       )}
+    </fieldset>
+  );
+}
+
+function withSite(list: readonly string[], site: string): string[] {
+  return list.includes(site) ? [...list] : [...list, site].sort();
+}
+
+function WebsiteList({
+  label,
+  sites,
+  disabled,
+  onRemove,
+}: {
+  label: string;
+  sites: readonly string[];
+  disabled: boolean;
+  onRemove: (site: string) => void;
+}) {
+  if (sites.length === 0) return null;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <p className="text-sm text-muted-foreground">{label}</p>
+      <ul className="flex flex-wrap gap-2" aria-label={label}>
+        {sites.map((site) => (
+          <li
+            key={site}
+            className="flex items-center gap-1 rounded-full border border-border ps-3 pe-1 text-sm text-foreground"
+          >
+            {site}
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-full pointer-coarse:h-11 pointer-coarse:w-11"
+              disabled={disabled}
+              aria-label={`Remove ${site}`}
+              onClick={() => onRemove(site)}
+            >
+              <X aria-hidden className="h-3.5 w-3.5" />
+            </Button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+export function AgentWebsitesField({
+  allowed,
+  blocked,
+  disabled,
+  onChange,
+}: {
+  allowed: readonly string[];
+  blocked: readonly string[];
+  disabled: boolean;
+  onChange: (next: { allowedWebDomains: string[]; blockedWebDomains: string[] }) => void;
+}) {
+  const id = useId();
+  const [value, setValue] = useState('');
+  const site = normalizeWebDomain(value);
+  const typed = value.trim().length > 0;
+  const allowFull = allowed.length >= AGENT_WEB_DOMAINS_MAX;
+  const blockFull = blocked.length >= AGENT_WEB_DOMAINS_MAX;
+  const allow = () => {
+    if (!site) return;
+    onChange({
+      allowedWebDomains: withSite(allowed, site),
+      blockedWebDomains: blocked.filter((entry) => entry !== site),
+    });
+    setValue('');
+  };
+  const block = () => {
+    if (!site) return;
+    onChange({
+      allowedWebDomains: allowed.filter((entry) => entry !== site),
+      blockedWebDomains: withSite(blocked, site),
+    });
+    setValue('');
+  };
+  return (
+    <fieldset className="flex flex-col gap-2" disabled={disabled}>
+      <legend className={HEADING}>Websites</legend>
+      <p id={`${id}-help`} className="text-sm text-muted-foreground">
+        Allowed sites become the only ones it reads. Blocked sites are never read.
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <Input
+          aria-label="Website"
+          aria-describedby={`${id}-help`}
+          aria-invalid={typed && !site}
+          value={value}
+          placeholder="example.com"
+          autoComplete="off"
+          spellCheck={false}
+          className="min-w-0 flex-1 basis-48"
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              event.preventDefault();
+              if (!allowFull) allow();
+            }
+          }}
+        />
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!site || allowFull}
+          onClick={allow}
+        >
+          Allow
+        </Button>
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          disabled={!site || blockFull}
+          onClick={block}
+        >
+          Block
+        </Button>
+      </div>
+      {typed && !site ? (
+        <p role="alert" className="text-sm text-danger">
+          Enter a website address, like example.com.
+        </p>
+      ) : null}
+      <WebsiteList
+        label="Only reads"
+        sites={allowed}
+        disabled={disabled}
+        onRemove={(entry) =>
+          onChange({
+            allowedWebDomains: allowed.filter((item) => item !== entry),
+            blockedWebDomains: [...blocked],
+          })
+        }
+      />
+      <WebsiteList
+        label="Never reads"
+        sites={blocked}
+        disabled={disabled}
+        onRemove={(entry) =>
+          onChange({
+            allowedWebDomains: [...allowed],
+            blockedWebDomains: blocked.filter((item) => item !== entry),
+          })
+        }
+      />
     </fieldset>
   );
 }
@@ -357,6 +511,14 @@ export function AgentConfigForm({
           disabled={disabled}
           onChange={(webSearch) => onChange({ webSearch })}
         />
+        {draft.webSearch ? (
+          <AgentWebsitesField
+            allowed={draft.allowedWebDomains}
+            blocked={draft.blockedWebDomains}
+            disabled={disabled}
+            onChange={onChange}
+          />
+        ) : null}
         <CapabilitySwitch
           label="Code execution"
           help="Run code and analyse files in a sandbox."

@@ -175,4 +175,42 @@ describe('AgentEditorPage', () => {
     expect(screen.queryByRole('button', { name: 'Delete agent' })).toBeNull();
     expect(api.usage).not.toHaveBeenCalled();
   });
+
+  it('saves the sites the agent may read and never reads', async () => {
+    const api = fakeApi();
+    render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={api} />);
+    await screen.findByRole('heading', { name: 'Release notes writer' });
+    const site = screen.getByRole('textbox', { name: 'Website' });
+
+    await userEvent.type(site, 'not a site');
+    expect(screen.getByRole('alert')).toHaveTextContent('Enter a website address');
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeDisabled();
+
+    await userEvent.clear(site);
+    await userEvent.type(site, 'https://www.docs.example/guide');
+    await userEvent.click(screen.getByRole('button', { name: 'Allow' }));
+    await userEvent.type(site, 'ads.example');
+    await userEvent.click(screen.getByRole('button', { name: 'Block' }));
+    expect(
+      within(screen.getByRole('list', { name: 'Only reads' })).getByText('docs.example'),
+    ).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('list', { name: 'Never reads' })).getByText('ads.example'),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(api.update).toHaveBeenCalled());
+    expect(vi.mocked(api.update).mock.calls[0]?.[1]).toMatchObject({
+      allowedWebDomains: ['docs.example'],
+      blockedWebDomains: ['ads.example'],
+    });
+  });
+
+  it('hides the website rules while web search is off', async () => {
+    render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={fakeApi()} />);
+    await screen.findByRole('heading', { name: 'Release notes writer' });
+    expect(screen.getByRole('textbox', { name: 'Website' })).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('switch', { name: 'Web search' }));
+    expect(screen.queryByRole('textbox', { name: 'Website' })).toBeNull();
+  });
 });

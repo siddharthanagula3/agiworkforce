@@ -7,6 +7,7 @@ import {
   AGENT_FILES_MAX,
   AGENT_USAGE_WINDOW_DAYS,
   AgentConfigSchema,
+  normalizeWebDomain,
   type AgentActivityResponse,
   type AgentConfig,
   type AgentCreateRequest,
@@ -41,6 +42,8 @@ export const DEFAULT_AGENT_CONFIG: Omit<AgentConfig, 'name'> = {
   imageGeneration: true,
   connectorIds: null,
   skillNames: null,
+  allowedWebDomains: [],
+  blockedWebDomains: [],
   dailyTurnLimit: null,
   monthlyCreditLimit: null,
 };
@@ -62,6 +65,8 @@ export interface AgentRow {
   image_generation: boolean;
   connector_ids: string[] | null;
   skill_names: string[] | null;
+  allowed_web_domains: string[];
+  blocked_web_domains: string[];
   daily_turn_limit: number | null;
   monthly_credit_limit: number | null;
   status: AgentStatus;
@@ -77,6 +82,7 @@ export interface AgentRow {
 const AGENT_COLUMNS = `a.id, a.user_id, a.organization_id, a.name, a.description, a.icon,
   a.accent_color, a.instructions, a.output_examples, a.conversation_starters, a.model,
   a.web_search, a.code_execution, a.image_generation, a.connector_ids, a.skill_names,
+  a.allowed_web_domains, a.blocked_web_domains,
   a.daily_turn_limit, a.monthly_credit_limit, a.status, a.visibility, a.published_version, a.paused_at,
   a.retired_at, a.created_at, a.updated_at`;
 
@@ -105,6 +111,8 @@ export function agentConfigOf(row: AgentRow): AgentConfig {
     imageGeneration: row.image_generation,
     connectorIds: row.connector_ids ? [...row.connector_ids] : null,
     skillNames: row.skill_names ? [...row.skill_names] : null,
+    allowedWebDomains: [...row.allowed_web_domains],
+    blockedWebDomains: [...row.blocked_web_domains],
     dailyTurnLimit: row.daily_turn_limit,
     monthlyCreditLimit: row.monthly_credit_limit,
   };
@@ -173,9 +181,32 @@ export function validateAgentModel(model: string | null | undefined): string | n
   return metadata.id;
 }
 
+export function normalizeAgentWebDomains(values: readonly string[]): string[] {
+  const domains = values.map((value) => {
+    const domain = normalizeWebDomain(value);
+    if (!domain) throw createError.validation(`${value.trim()} is not a website address.`);
+    return domain;
+  });
+  return [...new Set(domains)].sort();
+}
+
 function normalizedConfig(patch: AgentUpdateRequest): AgentUpdateRequest {
+  const allowed =
+    patch.allowedWebDomains !== undefined
+      ? normalizeAgentWebDomains(patch.allowedWebDomains)
+      : undefined;
+  const blocked =
+    patch.blockedWebDomains !== undefined
+      ? normalizeAgentWebDomains(patch.blockedWebDomains)
+      : undefined;
+  if (allowed && blocked) {
+    const both = allowed.find((domain) => blocked.includes(domain));
+    if (both) throw createError.validation(`${both} cannot be both allowed and blocked.`);
+  }
   return {
     ...patch,
+    ...(allowed !== undefined ? { allowedWebDomains: allowed } : {}),
+    ...(blocked !== undefined ? { blockedWebDomains: blocked } : {}),
     ...(patch.model !== undefined ? { model: validateAgentModel(patch.model) } : {}),
     ...(patch.connectorIds !== undefined ? { connectorIds: uniqueSorted(patch.connectorIds) } : {}),
     ...(patch.skillNames !== undefined ? { skillNames: uniqueSorted(patch.skillNames) } : {}),
@@ -196,6 +227,8 @@ const COLUMN_FOR: Record<keyof AgentConfig, string> = {
   imageGeneration: 'image_generation',
   connectorIds: 'connector_ids',
   skillNames: 'skill_names',
+  allowedWebDomains: 'allowed_web_domains',
+  blockedWebDomains: 'blocked_web_domains',
   dailyTurnLimit: 'daily_turn_limit',
   monthlyCreditLimit: 'monthly_credit_limit',
 };
@@ -299,9 +332,10 @@ export async function createAgent(
     `insert into public.user_agents (
        user_id, organization_id, name, description, icon, accent_color, instructions,
        output_examples, conversation_starters, model, web_search, code_execution,
-       image_generation, connector_ids, skill_names, daily_turn_limit, monthly_credit_limit
+       image_generation, connector_ids, skill_names, daily_turn_limit, monthly_credit_limit,
+       allowed_web_domains, blocked_web_domains
      ) values ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9::text[], $10, $11, $12, $13,
-       $14::text[], $15::text[], $16, $17)
+       $14::text[], $15::text[], $16, $17, $18::text[], $19::text[])
      returning id`,
     [
       userId,
@@ -321,6 +355,8 @@ export async function createAgent(
       config.skillNames,
       config.dailyTurnLimit,
       config.monthlyCreditLimit,
+      config.allowedWebDomains,
+      config.blockedWebDomains,
     ],
   );
   if (!row) throw createError.internal('The agent could not be saved.');
@@ -342,7 +378,11 @@ export async function updateAgentDraft(
   if (entries.length === 0) return current;
   const assignments = entries.map((key, index) => {
     const cast =
-      key === 'conversationStarters' || key === 'connectorIds' || key === 'skillNames'
+      key === 'conversationStarters' ||
+      key === 'connectorIds' ||
+      key === 'skillNames' ||
+      key === 'allowedWebDomains' ||
+      key === 'blockedWebDomains'
         ? '::text[]'
         : '';
     return `${COLUMN_FOR[key]} = $${index + 2}${cast}`;

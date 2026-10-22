@@ -18,6 +18,8 @@ export const NEW_AGENT_DRAFT: AgentConfig = {
   imageGeneration: true,
   connectorIds: null,
   skillNames: null,
+  allowedWebDomains: [],
+  blockedWebDomains: [],
   dailyTurnLimit: null,
   monthlyCreditLimit: null,
 };
