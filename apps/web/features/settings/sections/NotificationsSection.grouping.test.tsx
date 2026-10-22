@@ -4,6 +4,7 @@ import { StrictMode } from 'react';
 
 import { AVAILABLE_NOW_LABEL, SURFACE_STATUS, type SurfaceStatusMap } from '@/lib/surface-status';
 import { NotificationsSection } from './NotificationsSection';
+import { WEB_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 const MOBILE_RELEASED: SurfaceStatusMap = { ...SURFACE_STATUS, mobile: AVAILABLE_NOW_LABEL };
 
@@ -214,5 +215,18 @@ describe('NotificationsSection grouping', () => {
     render(<NotificationsSection />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
     expect(screen.getByRole('link', { name: 'Manage tasks' })).toHaveAttribute('href', '/tasks');
+  });
+});
+
+describe('NotificationsSection search index', () => {
+  it('renders a control for every notification the settings search lists', async () => {
+    render(<NotificationsSection />);
+    await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
+
+    const fields = WEB_SETTINGS_NAV_FIELDS.notifications ?? [];
+    expect(fields.length).toBeGreaterThan(0);
+    for (const field of fields) {
+      expect(screen.getAllByLabelText(field.label).length).toBeGreaterThan(0);
+    }
   });
 });

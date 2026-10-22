@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } fr
 import { SettingsModal } from '@agiworkforce/ui';
 
 import { GeneralSection } from '../../sections/GeneralSection';
-import { WEB_SETTINGS_NAV_GROUPS } from '../web-settings-navigation';
+import { HOSTED_SETTINGS_NAV_GROUPS, WEB_SETTINGS_NAV_GROUPS } from '../web-settings-navigation';
 
 type SettingsStoreModule = typeof import('@shared/stores/web-settings-store');
 
@@ -121,11 +121,29 @@ function searchSettings(query: string): HTMLElement {
   return screen.getByRole('navigation', { name: 'Settings navigation' });
 }
 
-function resultLabels(nav: HTMLElement): string[] {
+const MATCHED_FIELD_TESTID = 'settings-nav-matched-field';
+
+function resultButtons(nav: HTMLElement): HTMLElement[] {
   return within(nav)
     .queryAllByRole('button')
-    .filter((button) => button.getAttribute('aria-controls') === 'settings-pane')
-    .map((button) => button.textContent ?? '');
+    .filter((button) => button.getAttribute('aria-controls') === 'settings-pane');
+}
+
+function resultLabels(nav: HTMLElement): string[] {
+  return resultButtons(nav).map((button) => {
+    const label = button.cloneNode(true) as HTMLElement;
+    label.querySelector(`[data-testid="${MATCHED_FIELD_TESTID}"]`)?.remove();
+    return label.textContent ?? '';
+  });
+}
+
+function matchedFields(nav: HTMLElement): Record<string, string | null> {
+  return Object.fromEntries(
+    resultButtons(nav).map((button, index) => [
+      resultLabels(nav)[index],
+      within(button).queryByTestId(MATCHED_FIELD_TESTID)?.textContent ?? null,
+    ]),
+  );
 }
 
 const GENERAL_FIELDS =
@@ -172,10 +190,69 @@ describe('web settings search reaches the chat font controls', () => {
   it('indexes only controls the General section really renders', () => {
     render(<GeneralSection />);
 
-    expect(GENERAL_FIELDS.map((field) => field.label)).toEqual(['Chat font', 'Chat text size']);
+    expect(GENERAL_FIELDS.map((field) => field.label)).toEqual(
+      expect.arrayContaining(['Chat font', 'Chat text size']),
+    );
     for (const field of GENERAL_FIELDS) {
-      expect(screen.getByRole('combobox', { name: field.label })).toBeEnabled();
+      expect(screen.getAllByLabelText(field.label).length).toBeGreaterThan(0);
     }
+  });
+
+  it('shows the matched control under its section, and describes the result with it', () => {
+    render(<WebSettingsSearchHarness />);
+    const nav = searchSettings('text size');
+
+    expect(matchedFields(nav)).toEqual({ General: 'Chat text size' });
+    expect(within(nav).getByRole('button', { name: 'General' })).toHaveAccessibleDescription(
+      'Chat text size',
+    );
+  });
+
+  it('shows no matched control when the section itself is what matched', () => {
+    render(<WebSettingsSearchHarness />);
+
+    expect(matchedFields(searchSettings('profile'))).toEqual({ General: null });
+    expect(matchedFields(searchSettings('invoice'))).toEqual({ Billing: null });
+  });
+
+  it('lists each section that holds a matching control, one best match per section', () => {
+    render(<WebSettingsSearchHarness />);
+
+    expect(matchedFields(searchSettings('motion'))).toEqual({ General: 'Motion' });
+    expect(resultLabels(searchSettings('remo'))).toEqual([]);
+    expect(matchedFields(searchSettings('language'))).toEqual({
+      Personalization: 'Response language',
+      Voice: 'Dictation language',
+    });
+  });
+
+  it('finds the desktop controls only where there is a desktop shell', () => {
+    function HostedHarness() {
+      const [section, setSection] = useState('billing');
+      return (
+        <SettingsModal
+          open
+          onClose={vi.fn()}
+          activeSection={section}
+          onSectionChange={setSection}
+          navGroups={HOSTED_SETTINGS_NAV_GROUPS}
+          sectionContent={{ billing: <p>Billing content</p> }}
+        />
+      );
+    }
+    render(<HostedHarness />);
+
+    expect(matchedFields(searchSettings('remo'))).toEqual({ Capabilities: 'Remote Control' });
+    expect(matchedFields(searchSettings('launch at login'))).toEqual({
+      General: 'Run on startup',
+    });
+  });
+
+  it('keeps the desktop-only controls out of the browser index', () => {
+    render(<WebSettingsSearchHarness />);
+
+    expect(resultLabels(searchSettings('launch at login'))).toEqual([]);
+    expect(resultLabels(searchSettings('remote control'))).toEqual([]);
   });
 
   it('leaves searches for other settings as they were', () => {

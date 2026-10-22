@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { savePreferenceNamespace } from '@/app/settings/_lib/preferences-client';
 import { PersonalizationSection } from './PersonalizationSection';
+import { WEB_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 const mocks = vi.hoisted(() => ({ fetchPreferences: vi.fn() }));
 
@@ -265,3 +266,25 @@ describe('PersonalizationSection saving', () => {
     ]);
   });
 });
+
+describe('PersonalizationSection search index', () => {
+  it('renders every style and instructions control the settings search lists', async () => {
+    await renderLoaded();
+
+    const labels = (WEB_SETTINGS_NAV_FIELDS.personalization ?? [])
+      .map((field) => field.label)
+      .filter((label) => !MEMORY_SECTION_LABELS.has(label));
+    expect(labels.length).toBeGreaterThan(0);
+    for (const label of labels) {
+      expect(screen.getAllByLabelText(label).length).toBeGreaterThan(0);
+    }
+  });
+});
+
+const MEMORY_SECTION_LABELS = new Set([
+  'Persistent memory',
+  'Save memories from chats',
+  'Search past chats',
+  'Include sensitive topics in memory',
+  'Allow memory generation from tool-assisted chats',
+]);

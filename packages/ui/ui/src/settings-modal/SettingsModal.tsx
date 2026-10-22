@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useRef, useState, useCallback, useEffect } from 'react';
+import React, { useId, useMemo, useRef, useState, useCallback, useEffect } from 'react';
 import { toUserMessage } from '../lib/network-error';
 import {
   Check,
@@ -103,6 +103,7 @@ interface NavEntry {
 }
 
 export const NAV_GROUP_LABEL_TESTID = 'settings-nav-group-label';
+export const NAV_MATCHED_FIELD_TESTID = 'settings-nav-matched-field';
 
 interface SearchableNavEntry {
   key: string;
@@ -137,10 +138,20 @@ function navFieldToReveal(
   return matchingNavField(entry, filter);
 }
 
+const REVEALABLE_CONTROL_SELECTOR =
+  'input, select, textarea, button, [role="switch"], [role="combobox"], [role="radiogroup"]';
+
 function findControlByLabel(root: HTMLElement | null, label: string): HTMLElement | undefined {
-  return Array.from(root?.querySelectorAll<HTMLElement>('[aria-label]') ?? []).find(
+  if (!root) return undefined;
+  const named = Array.from(root.querySelectorAll<HTMLElement>('[aria-label]')).filter(
     (node) => node.getAttribute('aria-label') === label,
   );
+  const labelled = Array.from(root.querySelectorAll('label'))
+    .filter((node) => node.textContent?.trim() === label)
+    .map((node) => node.control)
+    .filter((control): control is HTMLElement => control instanceof HTMLElement);
+  const candidates = [...named, ...labelled];
+  return candidates.find((node) => node.matches(REVEALABLE_CONTROL_SELECTOR)) ?? candidates[0];
 }
 
 const ALL_NAV_ENTRIES: NavEntry[] = [
@@ -1892,6 +1903,7 @@ function NavButton({
   isActive,
   onClick,
   badge,
+  matchedField,
 }: {
   itemKey: string;
   label: string;
@@ -1899,7 +1911,9 @@ function NavButton({
   isActive: boolean;
   onClick: (key: string) => void;
   badge?: SettingsNavBadge;
+  matchedField?: string;
 }) {
+  const matchedFieldId = useId();
   return (
     <button
       type="button"
@@ -1913,9 +1927,24 @@ function NavButton({
       )}
       aria-current={isActive ? 'page' : undefined}
       aria-controls="settings-pane"
+      aria-describedby={matchedField ? matchedFieldId : undefined}
     >
       <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-90' : 'opacity-60')} />
-      <span className="truncate">{label}</span>
+      {matchedField ? (
+        <span className="flex min-w-0 flex-col">
+          <span className="truncate">{label}</span>
+          <span
+            id={matchedFieldId}
+            aria-hidden="true"
+            data-testid={NAV_MATCHED_FIELD_TESTID}
+            className="truncate text-sm font-normal text-muted-foreground"
+          >
+            {matchedField}
+          </span>
+        </span>
+      ) : (
+        <span className="truncate">{label}</span>
+      )}
       {badge && badge.count > 0 && (
         <span
           className={cn(
@@ -2055,16 +2084,16 @@ export function SettingsModal({
 
   // Grouped nav (preferred): filter items within each group, dropping groups
   // that end up empty so headers never orphan.
+  const navFilter = navSearch.trim().toLowerCase();
   const visibleGroups = useMemo(() => {
     if (!navGroups) return null;
-    const filter = navSearch.trim().toLowerCase();
     return navGroups
       .map((g) => ({
         label: g.label,
-        items: filter ? g.items.filter((i) => matchesNavFilter(i, filter)) : g.items,
+        items: navFilter ? g.items.filter((i) => matchesNavFilter(i, navFilter)) : g.items,
       }))
       .filter((g) => g.items.length > 0);
-  }, [navGroups, navSearch]);
+  }, [navGroups, navFilter]);
 
   // Legacy flat nav (backward compat when navGroups is not provided).
   const visibleEntries = useMemo(() => {
@@ -2215,7 +2244,7 @@ export function SettingsModal({
 
   const selectSection = (key: string) => {
     const item = navGroups?.flatMap((group) => group.items).find((entry) => entry.key === key);
-    const field = navFieldToReveal(item, navSearch.trim().toLowerCase());
+    const field = navFieldToReveal(item, navFilter);
     const openSection = (afterPrompt: boolean) => {
       onSectionChange(key);
       setFieldToReveal(field ? { section: key, label: field.label, afterPrompt } : null);
@@ -2285,7 +2314,7 @@ export function SettingsModal({
                     {group.label && (
                       <div
                         data-testid={NAV_GROUP_LABEL_TESTID}
-                        className="flex shrink-0 items-center whitespace-nowrap px-3 pb-1 pt-1 text-caption font-semibold uppercase tracking-wider text-muted-foreground md:block"
+                        className="flex shrink-0 items-center whitespace-nowrap px-3 pb-1 pt-1 text-sm font-medium text-muted-foreground md:block"
                       >
                         {group.label}
                       </div>
@@ -2299,12 +2328,13 @@ export function SettingsModal({
                         isActive={activeSection === item.key}
                         onClick={selectSection}
                         badge={navBadges?.[item.key]}
+                        matchedField={navFieldToReveal(item, navFilter)?.label}
                       />
                     ))}
                   </div>
                 ))}
                 {visibleGroups.length === 0 && (
-                  <p className="px-3 py-2 text-xs text-muted-foreground">
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
                     {t('modal.noMatches', 'No matches.')}
                   </p>
                 )}

@@ -31,6 +31,7 @@ vi.mock('@agiworkforce/unified-chat', () => ({
 }));
 
 import { MemorySection } from './MemorySection';
+import { WEB_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 const TOGGLES = [
   'Persistent memory',
@@ -212,6 +213,16 @@ describe('MemorySection controls', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Rate limit exceeded');
     expect(click).not.toHaveBeenCalled();
   });
+
+  it('renders every memory control the settings search lists under Personalization', () => {
+    render(<MemorySection />);
+
+    const labels = (WEB_SETTINGS_NAV_FIELDS.personalization ?? []).map((field) => field.label);
+    for (const label of MEMORY_FIELD_LABELS) {
+      expect(labels).toContain(label);
+      expect(screen.getByRole('switch', { name: label })).toBeInTheDocument();
+    }
+  });
 });
 
 describe('MemorySection while persistent memory is off', () => {
@@ -248,3 +259,11 @@ describe('MemorySection while persistent memory is off', () => {
     expect(row).not.toHaveStyle({ borderRadius: 'var(--radius-md)' });
   });
 });
+
+const MEMORY_FIELD_LABELS = [
+  'Persistent memory',
+  'Save memories from chats',
+  'Search past chats',
+  'Include sensitive topics in memory',
+  'Allow memory generation from tool-assisted chats',
+];

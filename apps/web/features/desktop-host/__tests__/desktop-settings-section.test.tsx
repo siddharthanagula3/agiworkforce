@@ -10,6 +10,7 @@ import {
   type HostPreferencesState,
 } from '@agiworkforce/local-runtime-contract';
 import { DesktopSettingsSection } from '../components/DesktopSettingsSection';
+import { HOSTED_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 const DEFAULT_STATE: HostPreferencesState = {
   preferences: {
@@ -401,5 +402,19 @@ describe('the desktop settings section', () => {
 
     await screen.findByLabelText('Quick Ask shortcut');
     expect(screen.queryByText(/Already used by/u)).not.toBeInTheDocument();
+  });
+});
+
+describe('the desktop settings section search index', () => {
+  it('renders every control the settings search lists under the desktop app', async () => {
+    installHost();
+
+    render(<DesktopSettingsSection />);
+
+    const fields = HOSTED_SETTINGS_NAV_FIELDS.desktop ?? [];
+    expect(fields.length).toBeGreaterThan(0);
+    for (const field of fields) {
+      expect(await screen.findByRole('switch', { name: field.label })).toBeInTheDocument();
+    }
   });
 });

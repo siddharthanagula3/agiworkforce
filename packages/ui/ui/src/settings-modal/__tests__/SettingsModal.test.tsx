@@ -2,7 +2,7 @@ import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CreditCard, Settings2 } from 'lucide-react';
-import { NAV_GROUP_LABEL_TESTID, SettingsModal } from '../SettingsModal';
+import { NAV_GROUP_LABEL_TESTID, NAV_MATCHED_FIELD_TESTID, SettingsModal } from '../SettingsModal';
 import { useUnsavedChangesGuard } from '../../primitives/UnsavedChanges';
 import {
   SETTINGS_NAV_GROUPS_WEB,
@@ -580,6 +580,116 @@ describe('SettingsModal nav (web IA)', () => {
       expect(scrollIntoView).not.toHaveBeenCalledWith({ block: 'center' });
     });
 
+    it('shows the control a query matched under its section, as the result description', () => {
+      render(<FieldSearchHarness />);
+      const nav = searchSettings('typeface');
+
+      const general = within(nav).getByRole('button', { name: 'General' });
+      const matched = within(general).getByTestId(NAV_MATCHED_FIELD_TESTID);
+      expect(matched.textContent).toBe('Chat font');
+      expect(general.getAttribute('aria-describedby')).toBe(matched.id);
+      expect(within(nav).getAllByTestId(NAV_MATCHED_FIELD_TESTID)).toHaveLength(1);
+    });
+
+    it('shows no matched control when the section itself matched or the search is empty', () => {
+      render(<FieldSearchHarness />);
+      const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+      expect(within(nav).queryByTestId(NAV_MATCHED_FIELD_TESTID)).toBeNull();
+      searchSettings('general');
+      expect(within(nav).queryByTestId(NAV_MATCHED_FIELD_TESTID)).toBeNull();
+      expect(
+        within(nav).getByRole('button', { name: 'General' }).getAttribute('aria-describedby'),
+      ).toBeNull();
+    });
+
+    it('focuses a control named by a label element rather than an aria-label', () => {
+      const groups: SettingsNavGroupResolved[] = [
+        {
+          label: SETTINGS_NAV_GROUP_SETTINGS,
+          items: [
+            {
+              key: 'general',
+              label: 'General',
+              icon: Settings2,
+              fields: [{ label: 'Response length' }],
+            },
+            { key: 'billing', label: 'Billing', icon: CreditCard },
+          ],
+        },
+      ];
+      function LabelledHarness() {
+        const [section, setSection] = useState('billing');
+        return (
+          <SettingsModal
+            open
+            onClose={vi.fn()}
+            activeSection={section}
+            onSectionChange={setSection}
+            navGroups={groups}
+            sectionContent={{
+              general: (
+                <div>
+                  <label htmlFor="length">Response length</label>
+                  <select id="length" />
+                </div>
+              ),
+              billing: <p>Billing content</p>,
+            }}
+          />
+        );
+      }
+      render(<LabelledHarness />);
+
+      fireEvent.click(within(searchSettings('length')).getByRole('button', { name: 'General' }));
+
+      expect(document.activeElement).toBe(
+        screen.getByRole('combobox', { name: 'Response length' }),
+      );
+    });
+
+    it('focuses the control rather than a region that shares its name', () => {
+      const groups: SettingsNavGroupResolved[] = [
+        {
+          label: SETTINGS_NAV_GROUP_SETTINGS,
+          items: [
+            {
+              key: 'general',
+              label: 'General',
+              icon: Settings2,
+              fields: [{ label: 'Reply ready' }],
+            },
+            { key: 'billing', label: 'Billing', icon: CreditCard },
+          ],
+        },
+      ];
+      function SharedNameHarness() {
+        const [section, setSection] = useState('billing');
+        return (
+          <SettingsModal
+            open
+            onClose={vi.fn()}
+            activeSection={section}
+            onSectionChange={setSection}
+            navGroups={groups}
+            sectionContent={{
+              general: (
+                <section aria-label="Reply ready">
+                  <select aria-label="Reply ready" />
+                </section>
+              ),
+              billing: <p>Billing content</p>,
+            }}
+          />
+        );
+      }
+      render(<SharedNameHarness />);
+
+      fireEvent.click(within(searchSettings('reply')).getByRole('button', { name: 'General' }));
+
+      expect(document.activeElement).toBe(screen.getByRole('combobox', { name: 'Reply ready' }));
+    });
+
     it('still reports no matches for a query nothing is indexed under', () => {
       render(<FieldSearchHarness />);
       const nav = searchSettings('nothing indexed here');
@@ -630,6 +740,20 @@ describe('SettingsModal nav (web IA)', () => {
       expect(label.className).not.toContain('hidden');
       expect(label.className).toContain('whitespace-nowrap');
       expect(label.className).toContain('shrink-0');
+    }
+  });
+
+  it('draws the group headings as sentence-case muted labels at the 14px body size', () => {
+    renderModal();
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+    for (const label of within(nav).getAllByTestId(NAV_GROUP_LABEL_TESTID)) {
+      const classes = label.className.split(/\s+/);
+      expect(classes).toContain('text-sm');
+      expect(classes).toContain('text-muted-foreground');
+      expect(classes).not.toContain('uppercase');
+      expect(classes).not.toContain('text-caption');
+      expect(classes.some((name) => name.startsWith('tracking-'))).toBe(false);
     }
   });
 

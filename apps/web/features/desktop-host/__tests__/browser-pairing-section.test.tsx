@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
 import type { BrowserPairingState } from '@agiworkforce/local-runtime-contract';
 import { hostBridgeStub } from '@/test/host-bridge-stub';
+import { HOSTED_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 type RuntimeClientModule = typeof import('../lib/runtime-client');
 
@@ -81,5 +82,17 @@ describe('BrowserPairingSection', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText('123456')).not.toBeInTheDocument();
     expect(screen.queryByLabelText('Pairing code')).not.toBeInTheDocument();
+  });
+});
+
+describe('BrowserPairingSection search index', () => {
+  it('is the Capabilities region the desktop settings search lists as Chrome', async () => {
+    readBrowserPairing.mockResolvedValue(NOT_LISTENING);
+
+    render(<BrowserPairingSection />);
+
+    const labels = (HOSTED_SETTINGS_NAV_FIELDS.capabilities ?? []).map((field) => field.label);
+    expect(labels).toContain('Chrome');
+    expect(await screen.findByRole('region', { name: 'Chrome' })).toBeInTheDocument();
   });
 });

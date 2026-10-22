@@ -7,6 +7,7 @@ import {
   type DesktopRuntimeEvent,
   type RemoteControlState,
 } from '@agiworkforce/local-runtime-contract';
+import { HOSTED_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 const readRemoteControl = vi.fn<() => Promise<RemoteControlState>>();
 const startRemoteControl = vi.fn();
@@ -199,5 +200,17 @@ describe('Remote Control in the desktop shell', () => {
     );
     const view = render(<RemoteControlSection />);
     await waitFor(() => expect(view.container).toBeEmptyDOMElement());
+  });
+});
+
+describe('Remote Control search index', () => {
+  it('is the Capabilities region the desktop settings search lists as Remote Control', async () => {
+    readRemoteControl.mockResolvedValue(IDLE_REMOTE_CONTROL_STATE);
+
+    render(<RemoteControlSection />);
+
+    const labels = (HOSTED_SETTINGS_NAV_FIELDS.capabilities ?? []).map((field) => field.label);
+    expect(labels).toContain('Remote Control');
+    expect(await screen.findByRole('region', { name: 'Remote Control' })).toBeInTheDocument();
   });
 });

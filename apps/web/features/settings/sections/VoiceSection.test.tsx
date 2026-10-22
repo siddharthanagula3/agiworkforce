@@ -6,6 +6,7 @@ import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
 import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
 import { LIVE_VOICES } from '@features/chat/lib/live-voices';
 import { VoiceSection } from './VoiceSection';
+import { WEB_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 describe('VoiceSection', () => {
   beforeEach(() => {
@@ -109,5 +110,17 @@ describe('VoiceSection', () => {
 
       expect(screen.queryByRole('combobox', { name: 'Microphone' })).toBeNull();
     });
+  });
+});
+
+describe('VoiceSection search index', () => {
+  it('renders every control the settings search lists under Voice', () => {
+    render(<VoiceSection />);
+
+    const labels = (WEB_SETTINGS_NAV_FIELDS.voice ?? []).map((field) => field.label);
+    expect(labels).toEqual(['Dictation', 'Dictation language']);
+    for (const label of labels) {
+      expect(screen.getAllByLabelText(label).length).toBeGreaterThan(0);
+    }
   });
 });

@@ -11,6 +11,7 @@ const preferences = vi.hoisted(() => ({
 vi.mock('@/app/settings/_lib/preferences-client', () => preferences);
 
 import { ToolApprovalDefaultsPanel } from './ToolApprovalDefaultsPanel';
+import { WEB_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 const SKIP_APPROVALS = /Skip approvals/i;
 
@@ -109,6 +110,18 @@ describe('ToolApprovalDefaultsPanel', () => {
 
     expect(
       await screen.findByRole('radio', { name: /Skip approvals\s*Default/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('renders the approval default the settings search lists under Capabilities', async () => {
+    preferences.fetchPreferenceNamespace.mockResolvedValue({ defaultPolicy: 'autonomous' });
+
+    render(<ToolApprovalDefaultsPanel />);
+
+    const labels = (WEB_SETTINGS_NAV_FIELDS.capabilities ?? []).map((field) => field.label);
+    expect(labels).toContain('Default approval for tool actions');
+    expect(
+      await screen.findByRole('radiogroup', { name: 'Default approval for tool actions' }),
     ).toBeInTheDocument();
   });
 });

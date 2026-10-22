@@ -34,6 +34,7 @@ vi.mock('@/features/settings/components/LockdownModePanel', () => ({
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { CLI_AVAILABILITY_NOTE } from '@/lib/surface-status';
 import { CapabilitiesSection } from '../CapabilitiesSection';
+import { WEB_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 
 describe('CapabilitiesSection', () => {
   beforeEach(() => {
@@ -108,5 +109,17 @@ describe('CapabilitiesSection', () => {
       expect.objectContaining({ merge: true }),
     );
     await waitFor(() => expect(screen.queryByRole('alert')).toBeNull());
+  });
+});
+
+describe('CapabilitiesSection search index', () => {
+  it('renders the code execution switch the settings search lists', () => {
+    render(<CapabilitiesSection />);
+
+    const labels = (WEB_SETTINGS_NAV_FIELDS.capabilities ?? []).map((field) => field.label);
+    expect(labels).toContain('Cloud code execution and file creation');
+    expect(
+      screen.getByRole('switch', { name: 'Cloud code execution and file creation' }),
+    ).toBeInTheDocument();
   });
 });
