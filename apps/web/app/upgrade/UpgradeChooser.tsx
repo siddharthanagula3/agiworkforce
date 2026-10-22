@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { getNextUpgradeTier, isFreeBillingPlanTier, isMax15xPlanTier } from '@agiworkforce/types';
-import { Progress, Spinner } from '@agiworkforce/ui';
+import { Badge, Progress, Spinner } from '@agiworkforce/ui';
 import { useBillingData } from '@features/billing/hooks/use-billing-queries';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useBillingStore } from '@shared/stores/web-auth-store';
@@ -191,17 +191,17 @@ export function UpgradeChooser() {
                 aria-labelledby="upgrade-recommended-title"
                 className="flex flex-col rounded-2xl border border-primary/40 bg-card p-6"
               >
-                <p className="text-xs font-medium uppercase tracking-wide text-primary">
-                  Recommended next step
-                </p>
-                <div className="mt-3 flex items-baseline justify-between gap-4">
+                <div className="flex items-start justify-between gap-4">
                   <h2 id="upgrade-recommended-title" className="text-h2">
                     {nextDisplay.pricing.label}
                   </h2>
-                  <span className="text-lg font-semibold tracking-tight">
-                    {priceLabel(nextDisplay.monthlyPriceUsd)}
-                  </span>
+                  <Badge variant="secondary" className="shrink-0 text-sm uppercase tracking-wide">
+                    Recommended
+                  </Badge>
                 </div>
+                <p className="mt-1 text-lg font-semibold tracking-tight">
+                  {priceLabel(nextDisplay.monthlyPriceUsd)}
+                </p>
                 {nextUsageComparison ? (
                   <p className="mt-1 text-sm text-muted-foreground">{nextUsageComparison}</p>
                 ) : null}

@@ -5,6 +5,7 @@ import { Check } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import {
   BILLING_PLAN_PRICING,
+  getNextUpgradeTier,
   isBillingPlanTier,
   isEnterprisePlanTier,
   isFreeBillingPlanTier,
@@ -20,6 +21,7 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
+  Badge,
   Button,
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
@@ -196,6 +198,7 @@ function FeatureRow({ label }: { label: string }) {
 interface PlanCardViewProps {
   plan: PlanCardModel;
   relationship: Relationship;
+  recommended: boolean;
   checkoutBlocked: boolean;
   upgradeAccess: UpgradeAccess;
   waitlisted: boolean;
@@ -294,11 +297,25 @@ function PlanCardAction({
 }
 
 function PlanCardView(props: PlanCardViewProps) {
-  const { plan } = props;
+  const { plan, recommended } = props;
   return (
-    <div className="relative flex flex-col rounded-2xl border border-border/60 bg-background p-5">
+    <div
+      data-testid={`plan-card-${plan.id}`}
+      data-recommended={recommended || undefined}
+      className={cn(
+        'relative flex flex-col rounded-2xl border bg-background p-5',
+        recommended ? 'border-primary/40' : 'border-border/60',
+      )}
+    >
       <div className="mb-4">
-        <h3 className="text-h4 text-foreground">{plan.name}</h3>
+        <div className="flex items-start justify-between gap-2">
+          <h3 className="text-h4 text-foreground">{plan.name}</h3>
+          {recommended ? (
+            <Badge variant="secondary" className="shrink-0 text-sm uppercase tracking-wide">
+              Recommended
+            </Badge>
+          ) : null}
+        </div>
         {plan.price === null ? null : (
           <div className="mt-1 flex flex-wrap items-baseline gap-x-1">
             <span className="text-2xl font-bold text-foreground">{plan.price}</span>
@@ -415,6 +432,9 @@ export function UpgradePlanDialog({
           plan !== undefined && list.findIndex((candidate) => candidate?.id === plan.id) === index,
       );
 
+  const recommendedTier: string | null =
+    targetTier ?? (tierKnown ? getNextUpgradeTier(currentTier) : null);
+
   const checkoutBlocked = (plan: PlanCard) =>
     !CHECKOUT_ENABLED ||
     (!hasPaidPlan &&
@@ -504,18 +524,22 @@ export function UpgradePlanDialog({
                   : 'grid-cols-1 sm:grid-cols-2',
             )}
           >
-            {visibleCards.map((plan) => (
-              <PlanCardView
-                key={plan.id}
-                plan={plan}
-                relationship={planRelationship(tierKnown ? currentTier : undefined, plan.id)}
-                checkoutBlocked={checkoutBlocked(plan.id)}
-                upgradeAccess={upgradeAccess}
-                waitlisted={waitlistedPlans.some((joined) => joined === plan.id)}
-                t={t}
-                onUpgrade={onUpgrade}
-              />
-            ))}
+            {visibleCards.map((plan) => {
+              const relationship = planRelationship(tierKnown ? currentTier : undefined, plan.id);
+              return (
+                <PlanCardView
+                  key={plan.id}
+                  plan={plan}
+                  relationship={relationship}
+                  recommended={plan.id === recommendedTier && relationship === 'upgrade'}
+                  checkoutBlocked={checkoutBlocked(plan.id)}
+                  upgradeAccess={upgradeAccess}
+                  waitlisted={waitlistedPlans.some((joined) => joined === plan.id)}
+                  t={t}
+                  onUpgrade={onUpgrade}
+                />
+              );
+            })}
           </div>
 
           {tierKnown ? (

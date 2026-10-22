@@ -9,6 +9,7 @@ import {
   DialogHeader,
   DialogTitle,
   Button,
+  Spinner,
 } from '@agiworkforce/ui';
 import { getPublishedPlanPriceUsd } from '@agiworkforce/types';
 import {
@@ -159,6 +160,13 @@ export function UpgradeConfirmDialog({
       ? `the ${request.billingInterval} ${planLabel} price`
       : `${formatCatalogPrice(unitPriceUsd * (request.seats ?? 1))}/${intervalWord}`;
 
+  const summaryPrice = unitPriceUsd === null ? null : recurringPrice;
+  const summaryBillingLine = checkoutRequired?.trial
+    ? `First charge ${formatRenewalDate(checkoutRequired.trial.convertsAt)}`
+    : amountDue?.charge?.renewsAt
+      ? `Renews ${formatRenewalDate(amountDue.charge.renewsAt)}`
+      : `Billed ${request.billingInterval}`;
+
   async function applyPromotion(code: string) {
     if (!request) return;
     setPromotionPending(true);
@@ -253,6 +261,19 @@ export function UpgradeConfirmDialog({
                     : 'Review your upgrade before it is charged to your saved card.'}
           </DialogDescription>
         </DialogHeader>
+
+        {previewing ? null : (
+          <section
+            aria-label="Plan summary"
+            className="flex items-start justify-between gap-4 rounded-lg bg-muted/40 p-4 text-sm"
+          >
+            <div>
+              <p className="font-semibold">{planLabel}</p>
+              <p className="mt-0.5 text-[color:var(--text-2)]">{summaryBillingLine}</p>
+            </div>
+            {summaryPrice ? <p className="font-semibold tabular-nums">{summaryPrice}</p> : null}
+          </section>
+        )}
 
         {/*
           An itemized receipt rather than one number in a sentence. Every row is
@@ -369,17 +390,23 @@ export function UpgradeConfirmDialog({
           </Button>
           <Button
             onClick={handleConfirm}
+            isLoading={confirming}
             disabled={previewing || confirming || (!amountDue && !checkoutRequired)}
           >
-            {confirming
-              ? 'Upgrading…'
-              : checkoutRequired?.trial
-                ? 'Start free trial'
-                : checkoutRequired
-                  ? `Start ${planLabel} · pay ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)}`
-                  : amountDue
-                    ? `Confirm · pay ${formatMoney(amountDue.cents, amountDue.currency)}`
-                    : 'Confirm'}
+            {confirming ? (
+              <>
+                <Spinner size="sm" aria-hidden="true" />
+                Upgrading…
+              </>
+            ) : checkoutRequired?.trial ? (
+              'Start free trial'
+            ) : checkoutRequired ? (
+              `Start ${planLabel} · pay ${formatMoney(checkoutRequired.cents, checkoutRequired.currency)}`
+            ) : amountDue ? (
+              `Confirm · pay ${formatMoney(amountDue.cents, amountDue.currency)}`
+            ) : (
+              'Confirm'
+            )}
           </Button>
         </DialogFooter>
       </DialogContent>

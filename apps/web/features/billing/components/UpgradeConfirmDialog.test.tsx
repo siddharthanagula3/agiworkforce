@@ -10,10 +10,11 @@ const paymentMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const { translateUiPlural } = await importOriginal<ScanModule0>();
+  const { translateUiPlural, Spinner } = await importOriginal<ScanModule0>();
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   return {
     translateUiPlural,
+    Spinner,
     Dialog: Passthrough,
     DialogContent: Passthrough,
     DialogDescription: Passthrough,

@@ -1,5 +1,6 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { getPublishedPlanPriceUsd } from '@agiworkforce/types';
 type ScanModule0 = typeof import('../../services/stripe-payments');
 
 const paymentMocks = vi.hoisted(() => ({
@@ -14,6 +15,8 @@ vi.mock('../../services/stripe-payments', async () => {
 });
 
 import { UpgradeConfirmDialog } from '../UpgradeConfirmDialog';
+import { formatBillingDate } from '../../lib/billing-format';
+import { formatCatalogPrice, getBillingPlanDisplay } from '../../lib/plan-display';
 
 describe('UpgradeConfirmDialog order details', () => {
   beforeEach(() => vi.clearAllMocks());
@@ -126,5 +129,81 @@ describe('UpgradeConfirmDialog order details', () => {
     expect(await screen.findByRole('region', { name: 'Order details' })).toHaveTextContent(
       '$85.96',
     );
+  });
+  const previewWithRenewal = (renewsAt: string | null) => ({
+    amountDueNowCents: 8_596,
+    currency: 'usd',
+    previewToken: 'tok_preview',
+    charge: {
+      lineItems: [{ description: 'Max plan - 5x', amountCents: 10_000 }],
+      subtotalCents: 8_064,
+      discountCents: 0,
+      taxCents: 532,
+      totalCents: 8_596,
+      appliedBalanceCents: 0,
+      totalDueTodayCents: 8_596,
+      renewsAt,
+    },
+  });
+
+  it('leads with the new plan name, its price and when it renews', async () => {
+    paymentMocks.previewUpgrade.mockResolvedValue(previewWithRenewal('2026-03-26T00:00:00.000Z'));
+
+    render(
+      <UpgradeConfirmDialog
+        request={{ plan: 'max', billingInterval: 'monthly' }}
+        onCancel={() => {}}
+        onConfirmed={() => {}}
+      />,
+    );
+
+    const summary = await screen.findByRole('region', { name: 'Plan summary' });
+    const price = getPublishedPlanPriceUsd('max', 'monthly');
+    expect(summary).toHaveTextContent(getBillingPlanDisplay('max').pricing.label);
+    expect(summary).toHaveTextContent(`${formatCatalogPrice(price!)}/month`);
+    expect(summary).toHaveTextContent(`Renews ${formatBillingDate('2026-03-26T00:00:00.000Z')}`);
+    expect(
+      screen.getByRole('region', { name: 'Order details' }).compareDocumentPosition(summary) &
+        Node.DOCUMENT_POSITION_PRECEDING,
+    ).toBeTruthy();
+  });
+
+  it('states the billing cadence when Stripe returns no renewal date', async () => {
+    paymentMocks.previewUpgrade.mockResolvedValue(previewWithRenewal(null));
+
+    render(
+      <UpgradeConfirmDialog
+        request={{ plan: 'max', billingInterval: 'yearly' }}
+        onCancel={() => {}}
+        onConfirmed={() => {}}
+      />,
+    );
+
+    expect(await screen.findByRole('region', { name: 'Plan summary' })).toHaveTextContent(
+      'Billed yearly',
+    );
+  });
+
+  it('shows a spinner in the Confirm button while the upgrade is in progress', async () => {
+    paymentMocks.previewUpgrade.mockResolvedValue(previewWithRenewal(null));
+    paymentMocks.upgradePlanMidCycle.mockReturnValue(new Promise(() => {}));
+
+    render(
+      <UpgradeConfirmDialog
+        request={{ plan: 'max', billingInterval: 'monthly' }}
+        onCancel={() => {}}
+        onConfirmed={() => {}}
+      />,
+    );
+
+    const confirm = await screen.findByRole('button', { name: /pay \$85\.96/i });
+    expect(confirm.querySelector('.animate-spin')).toBeNull();
+    fireEvent.click(confirm);
+
+    const busy = await screen.findByRole('button', { name: /Upgrading/ });
+    expect(busy).toHaveAttribute('aria-busy', 'true');
+    expect(busy).toBeDisabled();
+    expect(busy.querySelector('.animate-spin')).not.toBeNull();
+    expect(within(busy).getByText(/Upgrading/)).toBeTruthy();
   });
 });

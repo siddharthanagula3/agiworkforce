@@ -4,6 +4,7 @@ import React from 'react';
 import { FREE_QUOTA_MEDIA_OFFER_PATH } from '@agiworkforce/cloud-contracts';
 import {
   BILLING_PLAN_PRICING,
+  getNextUpgradeTier,
   getPublishedPlanPriceCents,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
@@ -41,10 +42,11 @@ vi.mock('react-i18next', async (importOriginal) => {
 });
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
-  const { translateUiPlural } = await importOriginal<ScanModule0>();
+  const { translateUiPlural, Badge } = await importOriginal<ScanModule0>();
   const Passthrough = ({ children }: { children?: React.ReactNode }) => <div>{children}</div>;
   return {
     translateUiPlural,
+    Badge,
     Dialog: Passthrough,
     DialogContent: Passthrough,
     DialogDescription: Passthrough,
@@ -417,6 +419,58 @@ describe('UpgradePlanDialog tells the pricing page story', () => {
     expect(screen.queryByRole('button', { name: 'See all plans' })).toBeNull();
     expect(card('Free').queryByRole('button')).toBeNull();
     expect(screen.getByRole('button', { name: planCtaLabel('pro', t()) })).toBeEnabled();
+  });
+});
+
+describe('UpgradePlanDialog recommended plan', () => {
+  const recommendedCards = () =>
+    screen
+      .getAllByTestId(/^plan-card-/)
+      .filter((element) => element.getAttribute('data-recommended') === 'true');
+
+  it('marks only the next plan up the ladder with a Recommended pill', async () => {
+    renderDialog({ currentTier: 'free' });
+    await showAllPlans();
+
+    const next = getNextUpgradeTier('free');
+    const marked = recommendedCards();
+    expect(marked).toHaveLength(1);
+    expect(marked[0]?.getAttribute('data-testid')).toBe(`plan-card-${next}`);
+    expect(within(marked[0]!).getByText('Recommended')).toBeTruthy();
+    expect(screen.getAllByText('Recommended')).toHaveLength(1);
+  });
+
+  it('moves the pill up with the current plan and never marks the current plan', async () => {
+    renderDialog({ currentTier: 'pro' });
+    await showAllPlans();
+
+    const marked = recommendedCards();
+    expect(marked).toHaveLength(1);
+    expect(marked[0]?.getAttribute('data-testid')).toBe(`plan-card-${getNextUpgradeTier('pro')}`);
+    expect(card('Pro').queryByText('Recommended')).toBeNull();
+  });
+
+  it('marks the exact tier a transcript refusal asked for', async () => {
+    renderDialog({ currentTier: 'pro', targetTier: 'max_15x' });
+    await pricingSettled();
+
+    const marked = recommendedCards();
+    expect(marked).toHaveLength(1);
+    expect(marked[0]?.getAttribute('data-testid')).toBe('plan-card-max_15x');
+  });
+
+  it('recommends nothing while the plan is unknown', async () => {
+    renderDialog({ currentTier: undefined });
+    await pricingSettled();
+
+    expect(screen.queryByText('Recommended')).toBeNull();
+  });
+
+  it('recommends no individual plan to a Team member', async () => {
+    renderDialog({ currentTier: 'team' });
+    await showAllPlans();
+
+    expect(screen.queryByText('Recommended')).toBeNull();
   });
 });
 
