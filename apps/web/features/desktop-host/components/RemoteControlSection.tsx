@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import QRCode from 'qrcode';
 import { Maximize2, RefreshCw } from 'lucide-react';
 import {
@@ -104,6 +104,7 @@ export function RemoteControlSection() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [qrEnlarged, setQrEnlarged] = useState(false);
   const { confirm, dialog } = useConfirmAction();
+  const refreshRequested = useRef<() => void>(() => undefined);
 
   useEffect(() => {
     if (!host) return undefined;
@@ -118,6 +119,7 @@ export function RemoteControlSection() {
       });
     return getHostBridge()?.onRuntimeEvent((event) => {
       if (event.kind === 'remote-control-changed') setState(event.state);
+      else if (event.kind === 'remote-control-refresh-requested') refreshRequested.current();
     });
   }, [host]);
 
@@ -179,6 +181,13 @@ export function RemoteControlSection() {
       setBusy(false);
     }
   }, [beginPairing]);
+
+  const waiting = state?.status === 'waiting';
+  useEffect(() => {
+    refreshRequested.current = () => {
+      if (waiting) void onRefreshCode();
+    };
+  }, [waiting, onRefreshCode]);
 
   const onCopyLink = useCallback(async () => {
     if (!qrPayload) return;

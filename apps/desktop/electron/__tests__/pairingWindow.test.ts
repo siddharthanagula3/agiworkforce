@@ -52,7 +52,7 @@ beforeEach(() => {
 
 describe('the pairing window main draws the QR code in', () => {
   it('runs no script, has no preload, and shows a data: page main drew', async () => {
-    await showPairingWindow(null, PAIRING, vi.fn());
+    await showPairingWindow(null, PAIRING, vi.fn(), () => true);
 
     const preferences = created[0]?.options['webPreferences'] as Record<string, unknown>;
     expect(preferences).toMatchObject({
@@ -71,7 +71,7 @@ describe('the pairing window main draws the QR code in', () => {
   });
 
   it('can neither navigate away nor open another window', async () => {
-    await showPairingWindow(null, PAIRING, vi.fn());
+    await showPairingWindow(null, PAIRING, vi.fn(), () => true);
 
     const { setWindowOpenHandler, on } = created[0]!.webContents;
     const openHandler = setWindowOpenHandler.mock.calls[0]?.[0] as (details: { url: string }) => {
@@ -91,7 +91,7 @@ describe('the pairing window main draws the QR code in', () => {
   });
 
   it('copies the code, never the QR secret, and says so on the page', async () => {
-    await showPairingWindow(null, PAIRING, vi.fn());
+    await showPairingWindow(null, PAIRING, vi.fn(), () => true);
     const first = decodeURIComponent(created[0]?.loaded ?? '');
     expect(first).toContain('Copy code');
     const href = /href="([^"]+)"/u.exec(first)?.[1] ?? '';
@@ -112,19 +112,43 @@ describe('the pairing window main draws the QR code in', () => {
     expect(decodeURIComponent(created[0]?.loaded ?? '')).toContain('Code copied');
   });
 
+  it('asks the app for a new code, and tells the user to open the app when none can answer', async () => {
+    const refresh = vi.fn(() => true);
+    await showPairingWindow(null, PAIRING, vi.fn(), refresh);
+    const href = /href="(agi-pairing:refresh-code)"/u.exec(
+      decodeURIComponent(created[0]?.loaded ?? ''),
+    )?.[1];
+    expect(href).toBeDefined();
+    const navigation = created[0]!.webContents.on.mock.calls.find(
+      ([event]) => event === 'will-navigate',
+    );
+    const willNavigate = navigation?.[1] as (event: {
+      url: string;
+      preventDefault: () => void;
+    }) => void;
+
+    willNavigate({ url: href!, preventDefault: vi.fn() });
+    expect(refresh).toHaveBeenCalledTimes(1);
+    expect(decodeURIComponent(created[0]?.loaded ?? '')).not.toContain('to refresh the code');
+
+    refresh.mockReturnValue(false);
+    willNavigate({ url: href!, preventDefault: vi.fn() });
+    expect(decodeURIComponent(created[0]?.loaded ?? '')).toContain('to refresh the code');
+  });
+
   it('cancels pairing when the user closes it, and not when main closes it', async () => {
     const dismissed = vi.fn();
-    await showPairingWindow(null, PAIRING, dismissed);
+    await showPairingWindow(null, PAIRING, dismissed, () => true);
     closePairingWindow();
     expect(dismissed).not.toHaveBeenCalled();
 
-    await showPairingWindow(null, PAIRING, dismissed);
+    await showPairingWindow(null, PAIRING, dismissed, () => true);
     created[1]?.close();
     expect(dismissed).toHaveBeenCalledTimes(1);
   });
 
   it('does not open a window for a pairing that was cancelled while the code was drawn', async () => {
-    const shown = showPairingWindow(null, PAIRING, vi.fn());
+    const shown = showPairingWindow(null, PAIRING, vi.fn(), () => true);
     closePairingWindow();
     await shown;
     expect(created).toEqual([]);

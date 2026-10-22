@@ -116,6 +116,7 @@ export type DesktopRuntimeEvent =
   | { kind: 'local-chat-delta'; runId: string; channel: 'text' | 'thinking'; delta: string }
   | { kind: 'developer-session'; rootId: string; event: DeveloperSessionEvent }
   | { kind: 'remote-control-changed'; state: RemoteControlState }
+  | { kind: 'remote-control-refresh-requested' }
   | { kind: 'computer-use-changed'; status: ComputerUseStatus }
   | { kind: 'update-ready'; version: string }
   | { kind: 'dispatch-task'; task: DispatchTaskAssignment }

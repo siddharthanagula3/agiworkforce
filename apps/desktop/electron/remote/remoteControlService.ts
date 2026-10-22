@@ -51,6 +51,7 @@ import {
 import { readWorkingTreeDiff } from '../runtime/gitService';
 import { authorizeRemoteCommand } from '../runtime/permissionManager';
 import { getRoot, listRoots } from '../runtime/workspaceStore';
+import { showsTrustedPage } from '../permissionPolicy';
 import { closePairingWindow, showPairingWindow } from './pairingWindow';
 
 type WebSocketWithHeaders = new (
@@ -265,7 +266,12 @@ export function configureRemoteControl(
         closePairingWindow();
         return;
       }
-      void showPairingWindow(pairingParent, pairing, () => host?.stop()).catch((error: unknown) => {
+      void showPairingWindow(
+        pairingParent,
+        pairing,
+        () => host?.stop(),
+        requestPairingRefresh,
+      ).catch((error: unknown) => {
         console.warn('[remote-control] could not show the pairing code:', error);
         host?.stop();
       });
@@ -273,6 +279,15 @@ export function configureRemoteControl(
     confirmPhone,
     dispatchPages: { current: currentDispatchPage, deliver: deliverToDispatchPage },
   });
+}
+
+function requestPairingRefresh(): boolean {
+  const parent = pairingParent;
+  if (!parent || parent.isDestroyed() || !showsTrustedPage(parent.webContents)) return false;
+  parent.webContents.send(DESKTOP_RUNTIME_EVENT_CHANNEL, {
+    kind: 'remote-control-refresh-requested',
+  });
+  return true;
 }
 
 function currentDispatchPage(): number | null {

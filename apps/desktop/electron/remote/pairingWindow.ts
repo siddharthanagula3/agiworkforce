@@ -12,7 +12,10 @@ const TITLE = 'Pair a phone';
 const HOW_TO_PAIR = `Open ${PRODUCT_NAMES.mobile} on your phone, choose Pair with Desktop, and scan this code. It works once and expires in a few minutes.`;
 const COPY_CODE = 'Copy code';
 const CODE_COPIED = 'Code copied';
+const REFRESH_CODE = 'Refresh code';
+const OPEN_APP_TO_REFRESH = `Open ${PRODUCT_NAMES.desktop} to refresh the code.`;
 const COPY_ACTION_URL = 'agi-pairing:copy-code';
+const REFRESH_ACTION_URL = 'agi-pairing:refresh-code';
 const CLOSE_TO_CANCEL = 'Closing this window cancels pairing.';
 
 let current: BrowserWindow | null = null;
@@ -26,7 +29,12 @@ function escapeHtml(value: string): string {
     .replace(/"/gu, '&quot;');
 }
 
-function pairingPage(qrSvg: string, code: string, copied: boolean): string {
+interface PageState {
+  copied: boolean;
+  appClosed: boolean;
+}
+
+function pairingPage(qrSvg: string, code: string, { copied, appClosed }: PageState): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -40,7 +48,8 @@ function pairingPage(qrSvg: string, code: string, copied: boolean): string {
   p { margin: 0 0 16px; }
   .qr { display: inline-block; padding: 12px; border-radius: 12px; background: white; line-height: 0; }
   .qr svg { width: ${QR_SIZE}px; height: ${QR_SIZE}px; }
-  .copy { display: inline-block; margin: 0 0 16px; padding: 6px 14px; border: 1px solid GrayText; border-radius: 999px; font-size: 14px; color: inherit; text-decoration: none; }
+  .actions { margin: 0 0 16px; }
+  .action { display: inline-block; margin: 0 4px; padding: 6px 14px; border: 1px solid GrayText; border-radius: 999px; font-size: 14px; color: inherit; text-decoration: none; }
   .code { margin: 16px 0 8px; font: 18px/1.2 ui-monospace, Menlo, monospace; letter-spacing: 0.2em; }
 </style>
 </head>
@@ -49,7 +58,11 @@ function pairingPage(qrSvg: string, code: string, copied: boolean): string {
 <p>${HOW_TO_PAIR}</p>
 <div class="qr">${qrSvg}</div>
 <div class="code">${escapeHtml(code)}</div>
-<a class="copy" href="${COPY_ACTION_URL}" role="button">${copied ? CODE_COPIED : COPY_CODE}</a>
+<div class="actions">
+<a class="action" href="${COPY_ACTION_URL}" role="button">${copied ? CODE_COPIED : COPY_CODE}</a>
+<a class="action" href="${REFRESH_ACTION_URL}" role="button">${REFRESH_CODE}</a>
+</div>
+${appClosed ? `<p>${OPEN_APP_TO_REFRESH}</p>` : ''}
 <p>${CLOSE_TO_CANCEL}</p>
 </body>
 </html>`;
@@ -72,6 +85,7 @@ export async function showPairingWindow(
   parent: BrowserWindow | null,
   pairing: RemotePairingDisplay,
   onDismissed: () => void,
+  onRefreshRequested: () => boolean,
 ): Promise<void> {
   closePairingWindow();
   const shown = generation;
@@ -99,15 +113,19 @@ export async function showPairingWindow(
   current = win;
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  const loadPage = (copied: boolean) =>
+  const loadPage = (state: PageState) =>
     win.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(pairingPage(qrSvg, pairing.code, copied))}`,
+      `data:text/html;charset=utf-8,${encodeURIComponent(pairingPage(qrSvg, pairing.code, state))}`,
     );
   win.webContents.on('will-navigate', (event) => {
     event.preventDefault();
-    if (event.url !== COPY_ACTION_URL || current !== win) return;
-    clipboard.writeText(pairing.code);
-    void loadPage(true);
+    if (current !== win) return;
+    if (event.url === COPY_ACTION_URL) {
+      clipboard.writeText(pairing.code);
+      void loadPage({ copied: true, appClosed: false });
+    } else if (event.url === REFRESH_ACTION_URL && !onRefreshRequested()) {
+      void loadPage({ copied: false, appClosed: true });
+    }
   });
   win.once('ready-to-show', () => {
     if (!win.isDestroyed()) win.show();
@@ -118,5 +136,5 @@ export async function showPairingWindow(
     onDismissed();
   });
 
-  void loadPage(false);
+  void loadPage({ copied: false, appClosed: false });
 }

@@ -92,22 +92,35 @@ const presentWindow = vi.fn<() => typeof presentedWindow>(() => presentedWindow)
 let code: Omit<CodeRemoteDependencies, 'send'> | null = null;
 let phoneName: string | null = 'Pixel 9';
 const handleSessionEvent = vi.fn();
+let hostOptions: { presentPairing: (pairing: unknown) => void } | null = null;
 vi.mock('@agiworkforce/utils/remote-control', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  createRemoteControlHost: vi.fn((options: { code: Omit<CodeRemoteDependencies, 'send'> }) => {
-    code = options.code;
-    return {
-      start: vi.fn(),
-      stop: vi.fn(),
-      state: () => ({ status: 'connected', phoneName }),
-      handleSessionEvent,
-    };
-  }),
+  createRemoteControlHost: vi.fn(
+    (options: {
+      code: Omit<CodeRemoteDependencies, 'send'>;
+      presentPairing: (pairing: unknown) => void;
+    }) => {
+      code = options.code;
+      hostOptions = options;
+      return {
+        start: vi.fn(),
+        stop: vi.fn(),
+        state: () => ({ status: 'connected', phoneName }),
+        handleSessionEvent,
+      };
+    },
+  ),
 }));
 
 const { RemoteCommandRefused } = await import('@agiworkforce/utils/remote-control');
-const { APPROVAL_CONFIRM_TIMEOUT_MS, configureRemoteControl, relayDeveloperSessionEvent } =
-  await import('../remote/remoteControlService');
+const {
+  APPROVAL_CONFIRM_TIMEOUT_MS,
+  configureRemoteControl,
+  relayDeveloperSessionEvent,
+  startRemoteControl,
+} = await import('../remote/remoteControlService');
+const { showPairingWindow } = await import('../remote/pairingWindow');
+const { CLOUD_APP_ORIGIN } = await import('../config');
 const { grantRoot, listRoots, revokeRoot } = await import('../runtime/workspaceStore');
 const { recordDecision, revokePermission } = await import('../runtime/permissionManager');
 const { dialog } = await import('electron');
@@ -558,5 +571,40 @@ describe('an approval answered from the paired phone', () => {
     expect(readPendingApproval).not.toHaveBeenCalled();
     expect(showMessageBox).not.toHaveBeenCalled();
     expect(answerDeveloperApproval).toHaveBeenCalledWith(answer('deny'));
+  });
+});
+
+describe('refreshing the code from the pairing window', () => {
+  function parentShowing(url: string, destroyed = false) {
+    return {
+      isDestroyed: () => destroyed,
+      webContents: { isDestroyed: () => false, getURL: () => url, send: vi.fn() },
+    };
+  }
+
+  async function refreshRequest(parent: ReturnType<typeof parentShowing> | null) {
+    vi.mocked(showPairingWindow).mockClear();
+    startRemoteControl(parent as never, {});
+    hostOptions?.presentPairing({ code: 'ABCD1234WXYZ', qrPayload: 'payload', expiresAt: 1 });
+    const call = vi.mocked(showPairingWindow).mock.calls[0];
+    return (call?.[3] as () => boolean)();
+  }
+
+  it('asks the app page that started the pairing, and reports that it did', async () => {
+    const parent = parentShowing(`${CLOUD_APP_ORIGIN}/settings`);
+
+    expect(await refreshRequest(parent)).toBe(true);
+    expect(parent.webContents.send).toHaveBeenCalledWith(expect.any(String), {
+      kind: 'remote-control-refresh-requested',
+    });
+  });
+
+  it('reports that no app can answer when its window is gone or shows another site', async () => {
+    const elsewhere = parentShowing('https://accounts.example.com/signin');
+
+    expect(await refreshRequest(elsewhere)).toBe(false);
+    expect(elsewhere.webContents.send).not.toHaveBeenCalled();
+    expect(await refreshRequest(parentShowing(CLOUD_APP_ORIGIN, true))).toBe(false);
+    expect(await refreshRequest(null)).toBe(false);
   });
 });
