@@ -6,8 +6,10 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
   useHostShortcuts: () => [],
 }));
 
+type BrowserUtilsModule = typeof import('@shared/utils/browser-utils');
+
 vi.mock('@shared/utils/browser-utils', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@shared/utils/browser-utils')>();
+  const actual = await importOriginal<BrowserUtilsModule>();
   return { ...actual, safePlatform: { ...actual.safePlatform, isMac: () => false } };
 });
 
