@@ -187,9 +187,11 @@ vi.mock('@/features/chat/components/dialogs/GlobalSearchDialog', () => ({
     ) : null,
 }));
 
-vi.mock('@agiworkforce/ui', async () => {
+vi.mock('@agiworkforce/ui', async (importOriginal) => {
   const React = await import('react');
+  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
   return {
+    ...actual,
     confirmNavigation: (proceed: () => void) => proceed(),
     MOBILE_NAV_DRAWER_WIDTH: 280,
     OPEN_SEARCH_SHORTCUT: { key: 'F', ctrl: true, meta: true, shift: true },

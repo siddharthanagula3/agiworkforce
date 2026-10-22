@@ -5,6 +5,7 @@ export const DYNAMIC_PAGE_ROUTES = [
   '/chat/projects/[id]',
   '/chat/sites/[token]',
   '/code/[sessionId]',
+  '/code/[sessionId]/security',
   '/code/shared/[token]',
   '/connect/[deviceType]',
   '/connectors/mcp-directory/[...id]',
