@@ -87,7 +87,7 @@ async function handleSave(request: NextRequest): Promise<Response> {
     });
     return NextResponse.json(
       {
-        fileName: parsed.data.fileName,
+        fileName: created.name,
         ...(created.webUrl ? { url: created.webUrl } : {}),
       } satisfies ArtifactCloudSaveResponse,
       { status: 201 },

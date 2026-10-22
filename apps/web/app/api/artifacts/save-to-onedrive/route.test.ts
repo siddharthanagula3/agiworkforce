@@ -49,6 +49,28 @@ function reply(status: number, body: unknown = {}) {
   return { ok: true, response: new Response(JSON.stringify(body), { status }) };
 }
 
+type GraphCall = [URL, { method: string; headers: Record<string, string>; body?: Uint8Array }];
+
+function folderPath(target: URL): string {
+  return decodeURIComponent(target.pathname)
+    .split('approot:/')[1]!
+    .replace(/:\/content$/, '');
+}
+
+function graphFolder(taken: readonly string[], putReply: ReturnType<typeof reply>) {
+  mocks.credentialedFetch.mockImplementation(async (target: URL, init: { method: string }) =>
+    init.method === 'GET'
+      ? reply(taken.includes(folderPath(target)) ? 200 : 404, { id: 'existing' })
+      : putReply,
+  );
+}
+
+function putCall(): GraphCall {
+  return mocks.credentialedFetch.mock.calls.find(
+    ([, init]) => (init as { method: string }).method === 'PUT',
+  ) as unknown as GraphCall;
+}
+
 function call(body: unknown = markdownFile) {
   return POST(
     new NextRequest('http://localhost/api/artifacts/save-to-onedrive', {
@@ -66,8 +88,13 @@ beforeEach(() => {
 describe('POST /api/artifacts/save-to-onedrive', () => {
   it('puts the file into the OneDrive app folder through Microsoft Graph', async () => {
     mocks.access.mockResolvedValue(granted);
-    mocks.credentialedFetch.mockResolvedValue(
-      reply(201, { id: 'item-1', webUrl: 'https://onedrive.live.com/?id=item-1' }),
+    graphFolder(
+      [],
+      reply(201, {
+        id: 'item-1',
+        name: 'Q3 plan.md',
+        webUrl: 'https://onedrive.live.com/?id=item-1',
+      }),
     );
     const response = await call();
     expect(response.status).toBe(201);
@@ -75,10 +102,7 @@ describe('POST /api/artifacts/save-to-onedrive', () => {
       fileName: 'Q3 plan.md',
       url: 'https://onedrive.live.com/?id=item-1',
     });
-    const [target, init] = mocks.credentialedFetch.mock.calls[0] as [
-      URL,
-      { method: string; headers: Record<string, string>; body: Uint8Array },
-    ];
+    const [target, init] = putCall();
     expect(target.href).toBe(
       'https://graph.microsoft.com/v1.0/me/drive/special/approot:/Q3%20plan.md:/content',
     );
@@ -86,11 +110,12 @@ describe('POST /api/artifacts/save-to-onedrive', () => {
     expect(init.headers['Authorization']).toBe('Bearer tok');
     expect(init.headers['Content-Type']).toBe('text/markdown');
     expect(new TextDecoder().decode(init.body)).toBe('# Plan');
+    expect(target.search).toBe('');
   });
 
   it('sends the original bytes of a base64 file', async () => {
     mocks.access.mockResolvedValue(granted);
-    mocks.credentialedFetch.mockResolvedValue(reply(201, { id: 'item-2' }));
+    graphFolder([], reply(201, { id: 'item-2', name: 'report.pdf' }));
     const bytes = Uint8Array.from([0x25, 0x50, 0x44, 0x46, 0xff, 0x00]);
     const response = await call({
       fileName: 'report.pdf',
@@ -99,8 +124,7 @@ describe('POST /api/artifacts/save-to-onedrive', () => {
       content: Buffer.from(bytes).toString('base64'),
     });
     expect(await response.json()).toEqual({ fileName: 'report.pdf' });
-    const init = (mocks.credentialedFetch.mock.calls[0] as [URL, { body: Uint8Array }])[1];
-    expect(Array.from(init.body)).toEqual(Array.from(bytes));
+    expect(Array.from(putCall()[1].body!)).toEqual(Array.from(bytes));
   });
 
   it('asks to connect OneDrive when it is not connected', async () => {
@@ -128,8 +152,43 @@ describe('POST /api/artifacts/save-to-onedrive', () => {
 
   it('reports a Graph refusal as a conflict', async () => {
     mocks.access.mockResolvedValue(granted);
-    mocks.credentialedFetch.mockResolvedValue(reply(403, { error: { message: 'denied' } }));
+    graphFolder([], reply(403, { error: { message: 'denied' } }));
     expect((await call()).status).toBe(409);
+  });
+
+  it('keeps an existing file by saving under the next free numbered name', async () => {
+    mocks.access.mockResolvedValue(granted);
+    graphFolder(
+      ['Q3 plan.md', 'Q3 plan (2).md'],
+      reply(201, { id: 'item-3', name: 'Q3 plan (3).md' }),
+    );
+    const response = await call();
+    expect(response.status).toBe(201);
+    expect(await response.json()).toEqual({ fileName: 'Q3 plan (3).md' });
+    const [target] = putCall();
+    expect(folderPath(target)).toBe('Q3 plan (3).md');
+    const probed = mocks.credentialedFetch.mock.calls
+      .filter(([, init]) => (init as { method: string }).method === 'GET')
+      .map(([probe]) => folderPath(probe as URL));
+    expect(probed).toEqual(['Q3 plan.md', 'Q3 plan (2).md', 'Q3 plan (3).md']);
+  });
+
+  it('numbers a name without an extension after the name', async () => {
+    mocks.access.mockResolvedValue(granted);
+    graphFolder(['README'], reply(201, { id: 'item-4', name: 'README (2)' }));
+    await call({ ...markdownFile, fileName: 'README' });
+    expect(folderPath(putCall()[0])).toBe('README (2)');
+  });
+
+  it('writes nothing when the existence check is refused', async () => {
+    mocks.access.mockResolvedValue(granted);
+    mocks.credentialedFetch.mockResolvedValue(reply(403, {}));
+    expect((await call()).status).toBe(409);
+    expect(
+      mocks.credentialedFetch.mock.calls.some(
+        ([, init]) => (init as { method: string }).method === 'PUT',
+      ),
+    ).toBe(false);
   });
 
   it('reports an unanswered Graph request as a conflict', async () => {
