@@ -206,6 +206,15 @@
       "open": "Set up {{name}}",
       "dismiss": "Hide app suggestions",
       "optionalLink": "Connect your apps (optional)"
+    },
+    "agiWorkExamples": "Example tasks",
+    "agiWorkIntro": "Describe a task and it keeps running in the cloud until it's done.",
+    "agiWorkExampleHint": "Puts this example in the message box",
+    "agiWork": {
+      "p1": "Summarize this week's GitHub pull requests for the team",
+      "p2": "Build a mobile release checklist from our open issues",
+      "p3": "Turn my unread Slack threads into a to-do list",
+      "p4": "Update the project deck with the latest numbers from Drive"
     }
   }
 }

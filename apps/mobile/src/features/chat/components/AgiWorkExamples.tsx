@@ -6,7 +6,19 @@ import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
-const PROMPT_SLOTS = ['p1', 'p2', 'p3', 'p4'] as const;
+export const AGI_WORK_EXAMPLE_PROMPT_KEYS = [
+  'newChat.agiWork.p1',
+  'newChat.agiWork.p2',
+  'newChat.agiWork.p3',
+  'newChat.agiWork.p4',
+] as const;
+
+export const AGI_WORK_EXAMPLE_KEYS = [
+  'newChat.agiWorkExamples',
+  'newChat.agiWorkIntro',
+  'newChat.agiWorkExampleHint',
+  ...AGI_WORK_EXAMPLE_PROMPT_KEYS,
+] as const;
 
 export function AgiWorkExamples({ onChoose }: { onChoose: (prompt: string) => void }) {
   const colors = useThemeColors();
@@ -17,29 +29,29 @@ export function AgiWorkExamples({ onChoose }: { onChoose: (prompt: string) => vo
         <ListChecks size={15} color={colors.textSecondary} />
         <Text
           accessibilityRole="header"
-          style={{ fontSize: typeScale.footnote, fontWeight: '600', color: colors.textSecondary }}
+          style={{ fontSize: typeScale.subhead, fontWeight: '600', color: colors.textSecondary }}
         >
           {t('newChat.agiWorkExamples')}
         </Text>
       </View>
       <Text
         style={{
-          fontSize: typeScale.footnote,
-          lineHeight: 18,
+          fontSize: typeScale.subhead,
+          lineHeight: 19,
           color: colors.textMuted,
           marginBottom: 6,
         }}
       >
         {t('newChat.agiWorkIntro')}
       </Text>
-      {PROMPT_SLOTS.map((slot) => {
-        const prompt = t(`newChat.agiWork.${slot}`);
+      {AGI_WORK_EXAMPLE_PROMPT_KEYS.map((key) => {
+        const prompt = t(key);
         return (
           <PressableBox
-            key={slot}
+            key={key}
             onPress={() => onChoose(prompt)}
             accessibilityRole="button"
-            accessibilityHint="Puts this example in the message box"
+            accessibilityHint={t('newChat.agiWorkExampleHint')}
             style={({ pressed }) => ({
               minHeight: 44,
               justifyContent: 'center',

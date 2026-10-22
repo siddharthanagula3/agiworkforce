@@ -206,6 +206,15 @@
       "open": "Configurar {{name}}",
       "dismiss": "Ocultar sugerencias de apps",
       "optionalLink": "Conecta tus apps (opcional)"
+    },
+    "agiWorkExamples": "Tareas de ejemplo",
+    "agiWorkIntro": "Describe una tarea y seguirá ejecutándose en la nube hasta terminar.",
+    "agiWorkExampleHint": "Pone este ejemplo en el cuadro de mensaje",
+    "agiWork": {
+      "p1": "Resume las pull requests de GitHub de esta semana para el equipo",
+      "p2": "Crea una lista de verificación del lanzamiento móvil a partir de nuestras incidencias abiertas",
+      "p3": "Convierte mis hilos de Slack sin leer en una lista de tareas",
+      "p4": "Actualiza la presentación del proyecto con las cifras más recientes de Drive"
     }
   }
 }

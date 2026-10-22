@@ -206,6 +206,15 @@
       "open": "Configura {{name}}",
       "dismiss": "Nascondi i suggerimenti di app",
       "optionalLink": "Collega le tue app (facoltativo)"
+    },
+    "agiWorkExamples": "Attività di esempio",
+    "agiWorkIntro": "Descrivi un'attività e continuerà nel cloud fino al termine.",
+    "agiWorkExampleHint": "Inserisce questo esempio nella casella del messaggio",
+    "agiWork": {
+      "p1": "Riassumi per il team le pull request GitHub di questa settimana",
+      "p2": "Crea una checklist per il rilascio mobile dalle nostre issue aperte",
+      "p3": "Trasforma i miei thread Slack non letti in una lista di cose da fare",
+      "p4": "Aggiorna la presentazione del progetto con i dati più recenti di Drive"
     }
   }
 }

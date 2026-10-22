@@ -206,6 +206,15 @@
       "open": "{{name}} einrichten",
       "dismiss": "App-Vorschläge ausblenden",
       "optionalLink": "Apps verbinden (optional)"
+    },
+    "agiWorkExamples": "Beispielaufgaben",
+    "agiWorkIntro": "Beschreibe eine Aufgabe, und sie läuft in der Cloud weiter, bis sie erledigt ist.",
+    "agiWorkExampleHint": "Fügt dieses Beispiel in das Nachrichtenfeld ein",
+    "agiWork": {
+      "p1": "Fasse die GitHub-Pull-Requests dieser Woche für das Team zusammen",
+      "p2": "Erstelle aus unseren offenen Issues eine Checkliste für das Mobile-Release",
+      "p3": "Mach aus meinen ungelesenen Slack-Threads eine To-do-Liste",
+      "p4": "Aktualisiere die Projektpräsentation mit den neuesten Zahlen aus Drive"
     }
   }
 }
