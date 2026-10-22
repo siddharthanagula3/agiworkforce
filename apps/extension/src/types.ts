@@ -58,11 +58,13 @@ export type NativeMessageType =
   | 'AGI_CU_APPROVE_RESPONSE'
   | 'PAUSE_COMPUTER_USE'
   | 'RESUME_COMPUTER_USE'
+  | 'ADD_COMPUTER_USE_GUIDANCE'
   | 'AGI_CU_USER_INPUT'
   | 'AGI_CU_SHOW_ACTION'
   | 'AGI_CU_WATCH_INPUT'
   | 'IN_PAGE_PROMPT'
   | 'OPEN_SIDE_PANEL'
+  | 'OPEN_EXTENSION_SETTINGS'
   | 'GET_SIDE_PANEL_OPEN'
   | 'GET_ACCESSIBILITY_TREE'
   | 'START_RECORDING'
@@ -626,6 +628,10 @@ export interface OpenSidePanelMessage extends BaseMessage {
   type: 'OPEN_SIDE_PANEL';
 }
 
+export interface OpenExtensionSettingsMessage extends BaseMessage {
+  type: 'OPEN_EXTENSION_SETTINGS';
+}
+
 export interface GetSidePanelOpenMessage extends BaseMessage {
   type: 'GET_SIDE_PANEL_OPEN';
 }
@@ -973,6 +979,12 @@ export interface ComputerUseTakeoverMessage extends BaseMessage {
   runId: string;
 }
 
+export interface ComputerUseGuidanceMessage extends BaseMessage {
+  type: 'ADD_COMPUTER_USE_GUIDANCE';
+  runId: string;
+  text: string;
+}
+
 export interface ComputerUseCommandResponse {
   success: boolean;
   runId?: string;
@@ -1119,6 +1131,7 @@ export type ExtensionMessage =
   | RevokeSiteOnceMessage
   | InPagePromptMessage
   | OpenSidePanelMessage
+  | OpenExtensionSettingsMessage
   | GetSidePanelOpenMessage
   | GetAccessibilityTreeMessage
   | BuildAccessibilityTreeMessage
@@ -1164,6 +1177,7 @@ export type ExtensionMessage =
   | CancelComputerUseMessage
   | GetComputerUseStateMessage
   | ComputerUseTakeoverMessage
+  | ComputerUseGuidanceMessage
   | ApproveContextHandoffMessage
   | CancelContextHandoffMessage
   | StartDownloadMessage

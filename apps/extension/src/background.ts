@@ -91,7 +91,11 @@ import {
   memoryDelete,
   type MemoryWriteResult,
 } from './background/memory-bridge';
-import { APPROVAL_TIMEOUT_MS, runAgentLoop } from './features/computer-use/agentLoop';
+import {
+  APPROVAL_TIMEOUT_MS,
+  MAX_RUN_GUIDANCE_CHARS,
+  runAgentLoop,
+} from './features/computer-use/agentLoop';
 import {
   ASK_BEFORE_ACTING_KEY,
   actionNeedsApproval,
@@ -553,6 +557,7 @@ const SCHEDULED_RECOVERY_MAX_ATTEMPTS = 3;
 const SCHEDULED_HEARTBEAT_INTERVAL_MS = 20_000;
 
 const computerUseRuns = new ComputerUseRunCoordinator();
+const computerUseGuidance = new Map<string, string[]>();
 const computerUseStarts = new ComputerUseStartCoordinator();
 let computerUseStartGeneration = 0;
 
@@ -5322,6 +5327,8 @@ async function handleMessageAsync(
               },
             })
           : undefined;
+      const guidanceQueue: string[] = [];
+      computerUseGuidance.set(lease.runId, guidanceQueue);
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
         siteTools,
@@ -5363,6 +5370,7 @@ async function handleMessageAsync(
         },
         pendingTakeover: () => (lease.takeover ? untilHandedBack(lease, lease.takeover) : null),
         isTakenOver: () => lease.takeover !== null,
+        takeUserGuidance: () => guidanceQueue.splice(0, guidanceQueue.length),
         onBeforeAction,
         resolveUploadFile,
         onProgress: (step) => {
@@ -5373,6 +5381,12 @@ async function handleMessageAsync(
         },
       });
       computerUseRuns.trackCompletion(lease, completion);
+      void completion
+        .finally(() => {
+          if (computerUseGuidance.get(lease.runId) === guidanceQueue)
+            computerUseGuidance.delete(lease.runId);
+        })
+        .catch(() => undefined);
       watchComputerUseUserInput(cuTabId, true);
       void completion.finally(() => watchComputerUseUserInput(cuTabId, false));
       const unmarkTab = markComputerUseTab(cuTabId);
@@ -5558,6 +5572,65 @@ async function handleMessageAsync(
       ) {
         void handComputerUseTabToUser(lease, USER_INPUT_TAKEOVER_REASON).catch(() => undefined);
       }
+      return { success: true } as ExtensionResponse;
+    }
+
+    case 'ADD_COMPUTER_USE_GUIDANCE': {
+      if (
+        !isTrustedExtensionPageSender(
+          {
+            id: sender.id,
+            url: sender.url,
+            origin: sender.origin,
+            tabUrl: sender.tab?.url,
+            hasTab: sender.tab != null,
+          },
+          chrome.runtime.id,
+          chrome.runtime.getURL('/').replace(/\/+$/, ''),
+        )
+      ) {
+        return {
+          success: false,
+          error: 'This action requires the extension UI.',
+        } as ExtensionResponse;
+      }
+      const guidanceMessage = message as import('./types').ComputerUseGuidanceMessage;
+      const lease = computerUseRuns.getActive();
+      const queue = lease ? computerUseGuidance.get(lease.runId) : undefined;
+      if (!lease || lease.runId !== guidanceMessage.runId || !queue) {
+        return {
+          success: false,
+          running: lease !== null,
+          error: 'This task is no longer running, so the details were not added.',
+        } as ExtensionResponse;
+      }
+      const text = typeof guidanceMessage.text === 'string' ? guidanceMessage.text.trim() : '';
+      if (!text) {
+        return {
+          success: false,
+          running: true,
+          error: 'Type the details to add.',
+        } as ExtensionResponse;
+      }
+      const queued = queue.reduce((total, note) => total + note.length, 0);
+      if (queued + text.length > MAX_RUN_GUIDANCE_CHARS) {
+        return {
+          success: false,
+          running: true,
+          error: `Details are limited to ${MAX_RUN_GUIDANCE_CHARS.toLocaleString()} characters until AGI reads them.`,
+        } as ExtensionResponse;
+      }
+      queue.push(text);
+      return {
+        success: true,
+        running: true,
+        runId: lease.runId,
+        runGeneration: lease.generation,
+      } as ExtensionResponse;
+    }
+
+    case 'OPEN_EXTENSION_SETTINGS': {
+      await chrome.runtime.openOptionsPage();
       return { success: true } as ExtensionResponse;
     }
 

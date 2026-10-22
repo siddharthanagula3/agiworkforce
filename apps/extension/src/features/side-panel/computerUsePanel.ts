@@ -1,10 +1,15 @@
 import type {
   CancelComputerUseMessage,
   ComputerUseCommandResponse,
+  ComputerUseGuidanceMessage,
   GetComputerUseStateMessage,
 } from '../../types';
 import type { AgentLoopStep, AgentLoopUsage } from '../computer-use/agentLoop';
-import { APPROVAL_TIMEOUT_MS, DEFAULT_MAX_AGENT_STEPS } from '../computer-use/agentLoop';
+import {
+  APPROVAL_TIMEOUT_MS,
+  DEFAULT_MAX_AGENT_STEPS,
+  MAX_RUN_GUIDANCE_CHARS,
+} from '../computer-use/agentLoop';
 import {
   ASK_BEFORE_ACTING_KEY,
   browserPermissionModeToStored,
@@ -372,6 +377,39 @@ export const COMPUTER_USE_PANEL_CSS = `
     outline-offset: -2px;
   }
 
+  .sp-cu-guidance {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+    padding: 10px 14px;
+    border-top: 1px solid var(--agi-ext-border);
+    flex-shrink: 0;
+  }
+
+  .sp-cu-guidance[hidden] {
+    display: none;
+  }
+
+  #sp-cu-guidance-input {
+    flex: 1;
+    min-width: 0;
+    box-sizing: border-box;
+    resize: none;
+    padding: 7px 12px;
+    border: 1px solid var(--agi-ext-border);
+    border-radius: var(--corner-control);
+    background: var(--agi-ext-bg);
+    color: var(--agi-ext-text);
+    font: inherit;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
+  }
+
+  #sp-cu-guidance-input:focus-visible {
+    outline: 2px solid var(--agi-ext-focus);
+    outline-offset: -2px;
+  }
+
   .sp-cu-task-row {
     display: flex;
     align-items: center;
@@ -702,6 +740,7 @@ const KIND_EMOJI: Record<string, string> = {
   error: '\u{26A0}', // warning
   final: '\u{2713}\u{2713}', // double check
   screenshot: '\u{1F4F8}', // camera
+  user_guidance: '+',
 };
 
 export type AutofillOutcome = 'escalation' | 'success' | 'error';
@@ -779,6 +818,7 @@ const RUN_COMMAND_TIMEOUT_MS = 15_000;
 
 const STOP_REFUSED_MESSAGE =
   'The run could not be stopped and may still be driving the tab. Close the tab to be certain.';
+const GUIDANCE_REFUSED_MESSAGE = 'The details could not be added. Try again, or use Stop.';
 const RUN_LOST_MESSAGE =
   'The background service stopped reporting on this run, so it is no longer being tracked here.';
 const RUN_STATE_UNAVAILABLE_MESSAGE =
@@ -1205,6 +1245,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     stopBtn.classList.toggle('visible', running);
     if (running) paused = false;
     renderTakeover();
+    renderGuidance();
     controlsLabel.textContent = running
       ? 'AGI Cloud • agent running'
       : 'AGI Cloud • powered by AGI';
@@ -1626,7 +1667,70 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     setStepsOpen(logEl.hidden);
   });
 
-  panelEl.append(stepsToggle, logEl);
+  const guidanceForm = document.createElement('form');
+  guidanceForm.className = 'sp-cu-guidance';
+  guidanceForm.noValidate = true;
+  guidanceForm.hidden = true;
+  const guidanceInput = document.createElement('textarea');
+  guidanceInput.id = 'sp-cu-guidance-input';
+  guidanceInput.rows = 1;
+  guidanceInput.maxLength = MAX_RUN_GUIDANCE_CHARS;
+  guidanceInput.placeholder = 'Add details to this task…';
+  guidanceInput.setAttribute('aria-label', 'Add details to this task');
+  const guidanceBtn = document.createElement('button');
+  guidanceBtn.type = 'submit';
+  guidanceBtn.className = 'sp-cu-run-btn';
+  guidanceBtn.textContent = 'Add';
+  guidanceBtn.disabled = true;
+  guidanceForm.append(guidanceInput, guidanceBtn);
+  let guidanceInFlight = false;
+
+  function renderGuidance(): void {
+    guidanceForm.hidden = activeRunId === null;
+    guidanceInput.disabled = guidanceInFlight;
+    guidanceBtn.disabled = guidanceInFlight || guidanceInput.value.trim().length === 0;
+  }
+
+  async function submitGuidance(): Promise<void> {
+    const runId = activeRunId;
+    const text = guidanceInput.value.trim();
+    if (!runId || !text || guidanceInFlight) return;
+    guidanceInFlight = true;
+    renderGuidance();
+    const message: ComputerUseGuidanceMessage = {
+      type: 'ADD_COMPUTER_USE_GUIDANCE',
+      runId,
+      text,
+    };
+    let response: ComputerUseCommandResponse | null = null;
+    try {
+      response = (await chrome.runtime.sendMessage(message)) as ComputerUseCommandResponse;
+    } catch {
+      response = null;
+    }
+    guidanceInFlight = false;
+    if (response?.success === true && activeRunId === runId) {
+      guidanceInput.value = '';
+      noteRunActivity();
+    } else if (response?.success !== true) {
+      showHandoffBanner(response?.error ?? GUIDANCE_REFUSED_MESSAGE, 'error');
+    }
+    renderGuidance();
+    if (!guidanceForm.hidden) guidanceInput.focus();
+  }
+
+  guidanceForm.addEventListener('submit', (event) => {
+    event.preventDefault();
+    void submitGuidance();
+  });
+  guidanceInput.addEventListener('input', renderGuidance);
+  guidanceInput.addEventListener('keydown', (event) => {
+    if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    void submitGuidance();
+  });
+
+  panelEl.append(stepsToggle, logEl, guidanceForm);
 
   function fmtTime(): string {
     const d = new Date();
@@ -1749,6 +1853,13 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
         detailEl.textContent = step.errorMessage ?? '';
         if (detailEl.textContent) makeExpandable();
         stepEl.style.background = 'color-mix(in srgb, var(--agi-ext-danger) 5%, transparent)';
+        break;
+      }
+      case 'user_guidance': {
+        iconEl.textContent = KIND_EMOJI['user_guidance'] ?? '';
+        titleEl.textContent = 'You added details';
+        detailEl.textContent = step.guidance ?? '';
+        if (detailEl.textContent) detailEl.classList.add('expanded');
         break;
       }
       case 'screenshot': {

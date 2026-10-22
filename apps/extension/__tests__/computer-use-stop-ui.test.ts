@@ -311,3 +311,84 @@ describe('computer-use Assistant steps disclosure', () => {
     expect(log.hidden).toBe(false);
   });
 });
+
+describe('computer-use Add details input', () => {
+  beforeEach(() => {
+    sendMessage.mockReset();
+    sendMessage.mockResolvedValue({ success: true, running: false });
+    stubChrome();
+  });
+
+  function guidanceControls(api: ReturnType<typeof buildComputerUsePanel>) {
+    const form = api.panelEl.querySelector<HTMLFormElement>('.sp-cu-guidance')!;
+    const input = form.querySelector<HTMLTextAreaElement>('#sp-cu-guidance-input')!;
+    const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
+    return { form, input, button };
+  }
+
+  it('appears only while a run is active and stays usable during it', () => {
+    const api = buildComputerUsePanel();
+    const { form, input, button } = guidanceControls(api);
+    expect(form.hidden).toBe(true);
+    expect(input.placeholder).toBe('Add details to this task…');
+
+    api.setRunState(true, 'run-guide');
+    expect(form.hidden).toBe(false);
+    expect(input.disabled).toBe(false);
+    expect(button.disabled).toBe(true);
+    expect(api.panelEl.querySelector<HTMLTextAreaElement>('#sp-cu-goal')!.disabled).toBe(true);
+
+    api.setRunState(false, 'run-guide');
+    expect(form.hidden).toBe(true);
+  });
+
+  it('sends the typed details to the owned run and clears the input', async () => {
+    const api = buildComputerUsePanel();
+    api.setRunState(true, 'run-guide');
+    sendMessage.mockReset();
+    sendMessage.mockResolvedValue({ success: true, running: true, runId: 'run-guide' });
+    const { form, input, button } = guidanceControls(api);
+    input.value = '  Use the work address  ';
+    input.dispatchEvent(new Event('input'));
+    expect(button.disabled).toBe(false);
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(sendMessage).toHaveBeenCalledWith({
+        type: 'ADD_COMPUTER_USE_GUIDANCE',
+        runId: 'run-guide',
+        text: 'Use the work address',
+      });
+      expect(input.value).toBe('');
+    });
+  });
+
+  it('keeps the text and says why when the background refuses it', async () => {
+    const api = buildComputerUsePanel();
+    api.setRunState(true, 'run-guide');
+    sendMessage.mockReset();
+    sendMessage.mockResolvedValue({
+      success: false,
+      running: false,
+      error: 'This task is no longer running, so the details were not added.',
+    });
+    const { form, input } = guidanceControls(api);
+    input.value = 'Use the work address';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+
+    await vi.waitFor(() => {
+      expect(api.panelEl.querySelector('.sp-cu-banner-sub')?.textContent).toBe(
+        'This task is no longer running, so the details were not added.',
+      );
+    });
+    expect(input.value).toBe('Use the work address');
+  });
+
+  it('logs the details once the agent takes them', () => {
+    const api = buildComputerUsePanel();
+    api.appendStep({ kind: 'user_guidance', stepNumber: 2, guidance: 'Use the work address' });
+    const row = api.panelEl.querySelector('.sp-cu-step.kind-user_guidance');
+    expect(row?.querySelector('.sp-cu-step-title')?.textContent).toBe('You added details');
+    expect(row?.querySelector('.sp-cu-step-detail')?.textContent).toBe('Use the work address');
+  });
+});

@@ -241,7 +241,7 @@ describe('in-page panel host and closed state', () => {
       const panel = shadow.querySelector('.agi-panel')!;
       const controls = shadow.querySelectorAll('button, textarea');
 
-      expect(controls).toHaveLength(9);
+      expect(controls).toHaveLength(10);
       expect(panel.hasAttribute('inert')).toBe(true);
       expect(panel.getAttribute('aria-hidden')).toBe('true');
       expect(panel.classList.contains('agi-panel--hidden')).toBe(true);
@@ -397,5 +397,35 @@ describe('in-page panel header and context chip', () => {
     shadow.querySelector<HTMLButtonElement>('[aria-label="New question"]')!.click();
     expect(shadow.querySelector('.agi-response-area')?.textContent).toBe('');
     expect(textarea.value).toBe('');
+  });
+
+  it('opens the extension settings through the background and closes the panel', async () => {
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    const header = shadow.querySelector('.agi-header')!;
+    const labels = [...header.querySelectorAll('button')].map((button) =>
+      button.getAttribute('aria-label'),
+    );
+    expect(labels).toEqual(['New question', 'Settings', 'Close panel']);
+    header.querySelector<HTMLButtonElement>('[aria-label="Settings"]')!.click();
+    expect(chromeHarness.sendMessage).toHaveBeenCalledWith({ type: 'OPEN_EXTENSION_SETTINGS' });
+    await vi.waitFor(() => {
+      expect(shadow.querySelector('.agi-panel')?.classList.contains('open')).toBe(false);
+    });
+  });
+
+  it('says so when settings could not be opened', async () => {
+    chromeHarness.sendMessage.mockImplementationOnce(() =>
+      Promise.resolve({ success: false, error: 'Options page unavailable' }),
+    );
+    const { controller, shadow } = createInspectablePanel();
+    controller.open();
+    shadow.querySelector<HTMLButtonElement>('[aria-label="Settings"]')!.click();
+    await vi.waitFor(() => {
+      expect(shadow.querySelector('.agi-response-area')?.textContent).toBe(
+        'Options page unavailable',
+      );
+    });
+    expect(shadow.querySelector('.agi-panel')?.classList.contains('open')).toBe(true);
   });
 });

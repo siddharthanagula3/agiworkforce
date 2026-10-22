@@ -56,6 +56,8 @@ import type { TaskTabs, TaskTabPlan, TaskWindowResizePlan } from '../browser-too
 import type { BrowserAgentSiteTools, BrowserSiteToolPlan } from '../tools/browserAgentSiteTools';
 
 export const DEFAULT_MAX_AGENT_STEPS = 20;
+export const MAX_RUN_GUIDANCE_CHARS = 4_096;
+export const RUN_GUIDANCE_HEADING = 'More details from me for this task';
 
 export interface AgentLoopOptions {
   maxSteps?: number;
@@ -102,6 +104,8 @@ export interface AgentLoopOptions {
   /** The hand-back the user asked for between steps, when there is one. */
   pendingTakeover?: () => Promise<void> | null;
   isTakenOver?: () => boolean;
+  /** Details the user typed while the run was working, drained once per step. */
+  takeUserGuidance?: () => readonly string[];
   /**
    * The lease this run holds. Every action's receipt is grouped under it, so a
    * run the host cannot name leaves a trail nobody can tie back to it.
@@ -116,7 +120,13 @@ export interface AgentLoopUsage {
 }
 
 export type AgentLoopStepKind =
-  'screenshot' | 'tool_call' | 'tool_result' | 'final' | 'error' | 'injection_blocked';
+  | 'screenshot'
+  | 'tool_call'
+  | 'tool_result'
+  | 'final'
+  | 'error'
+  | 'injection_blocked'
+  | 'user_guidance';
 
 export interface AgentLoopStep {
   kind: AgentLoopStepKind;
@@ -128,6 +138,22 @@ export interface AgentLoopStep {
   errorMessage?: string;
   actionOutcome?: AutomationOutcome;
   screenshotDataUrl?: string;
+  guidance?: string;
+}
+
+function appendUserGuidance(
+  history: AgentMessage[],
+  options: AgentLoopOptions,
+  stepNumber: number,
+): boolean {
+  const notes = (options.takeUserGuidance?.() ?? [])
+    .map((note) => note.trim())
+    .filter((note) => note.length > 0);
+  if (notes.length === 0) return false;
+  history.push({ role: 'user', content: `${RUN_GUIDANCE_HEADING}:\n${notes.join('\n\n')}` });
+  for (const guidance of notes)
+    options.onProgress?.({ kind: 'user_guidance', stepNumber, guidance });
+  return true;
 }
 
 const SCREENSHOT_PREVIEW_WIDTH = 640;
@@ -1095,6 +1121,7 @@ export async function runAgentLoop(
             `${DOM_SUMMARY_HEADING}:\n${await readGuardedPageContent(drivenTabId, options)}`,
         });
       }
+      appendUserGuidance(history, options, stepNumber);
       stepNumber++;
 
       await options.refreshSiteTools?.();
@@ -1124,6 +1151,7 @@ export async function runAgentLoop(
       options.onUsageUpdate?.({ stepsUsed: stepNumber, maxSteps, totalTokens });
 
       if (!message.tool_calls || message.tool_calls.length === 0) {
+        if (appendUserGuidance(history, options, stepNumber)) continue;
         finalMessage = typeof message.content === 'string' ? message.content : '';
         throwIfCancelled(options.signal);
         options.onProgress?.({

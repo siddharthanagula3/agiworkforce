@@ -38,6 +38,7 @@ import {
   Globe,
   MessageSquare,
   Search,
+  Settings,
   renderIcon,
 } from '../../../assets/icons';
 
@@ -45,6 +46,7 @@ interface PanelElements {
   panel: HTMLElement;
   closeBtn: HTMLButtonElement;
   newBtn: HTMLButtonElement;
+  settingsBtn: HTMLButtonElement;
   contextChip: HTMLElement;
   actionsRow: HTMLElement;
   textarea: HTMLTextAreaElement;
@@ -83,6 +85,13 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   newBtn.setAttribute('type', 'button');
   newBtn.textContent = '+';
 
+  const settingsBtn = document.createElement('button');
+  settingsBtn.className = 'agi-icon-btn';
+  settingsBtn.setAttribute('aria-label', 'Settings');
+  settingsBtn.setAttribute('title', 'Settings');
+  settingsBtn.setAttribute('type', 'button');
+  settingsBtn.appendChild(renderIcon(Settings, 16));
+
   const closeBtn = document.createElement('button');
   closeBtn.className = 'agi-close-btn';
   closeBtn.setAttribute('aria-label', 'Close panel');
@@ -92,6 +101,7 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
   header.appendChild(logo);
   header.appendChild(providerLabel);
   header.appendChild(newBtn);
+  header.appendChild(settingsBtn);
   header.appendChild(closeBtn);
 
   const actionsRow = document.createElement('div');
@@ -157,6 +167,7 @@ function buildPanelDOM(shadow: ShadowRoot): PanelElements {
     panel,
     closeBtn,
     newBtn,
+    settingsBtn,
     contextChip,
     actionsRow,
     textarea,
@@ -612,6 +623,23 @@ export function createPanel(): {
   }
 
   els.openSidePanelBtn.addEventListener('click', openSidePanel);
+
+  els.settingsBtn.addEventListener('click', () => {
+    void chrome.runtime
+      .sendMessage({ type: 'OPEN_EXTENSION_SETTINGS' })
+      .then((response: { success?: boolean; error?: string } | undefined) => {
+        if (response?.success === true) {
+          closePanel(false);
+          return;
+        }
+        els.responseArea.textContent =
+          response?.error ?? 'Settings could not be opened. Open them from the extension menu.';
+      })
+      .catch(() => {
+        els.responseArea.textContent =
+          'Settings could not be opened. Open them from the extension menu.';
+      });
+  });
 
   host.addEventListener('keydown', (e: Event) => {
     if ((e as KeyboardEvent).key === 'Escape') close();
