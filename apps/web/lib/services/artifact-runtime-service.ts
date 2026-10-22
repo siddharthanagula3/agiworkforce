@@ -375,6 +375,7 @@ function artifactToolStanding(
     tool.qualifiedName,
     access.toolApprovalPolicy,
     access.connectorPermissions,
+    tool.annotations,
   )
     ? 'available'
     : 'needs_approval';

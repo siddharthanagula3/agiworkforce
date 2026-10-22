@@ -245,6 +245,7 @@ async function approvalRequest(
   tools: WebMcpToolDef[],
   connectorPermissions?: ConnectorToolPermissions,
   sessionGrantRefusal?: ToolLoopOptions['sessionGrantRefusal'],
+  runOptions: Partial<ToolLoopOptions> = {},
 ): Promise<{
   request: Record<string, unknown> | undefined;
   executions: number;
@@ -269,6 +270,7 @@ async function approvalRequest(
         checkpoint = value;
       },
       ...(connectorPermissions ? { connectorPermissions } : {}),
+      ...runOptions,
     }),
   );
   for (const line of output.split('\n')) {
@@ -364,6 +366,33 @@ describe('runToolLoop, approval review on x_tool_approval_request', () => {
       permissions,
     );
     expect(allowed.request).toBeUndefined();
+    expect(allowed.executions).toBe(1);
+  });
+
+  it('pauses a scheduled run at a critical tool under a saved allow instead of running it unasked', async () => {
+    const critical = { ...CONNECTOR_TOOL, annotations: { destructiveHint: true } };
+    const permissions = connectorToolPermissionsFromEntries([
+      { connectorId: critical.serverId, toolName: critical.toolName, level: 'allow' },
+    ]);
+    const scheduled = { unattended: true, unattendedEscalationPauses: true };
+    const criticalResult = await approvalRequest(
+      critical.qualifiedName,
+      [critical],
+      permissions,
+      undefined,
+      scheduled,
+    );
+    expect(criticalResult.executions).toBe(0);
+    expect(criticalResult.checkpoint?.pendingToolCalls[0]?.qualifiedName).toBe(
+      critical.qualifiedName,
+    );
+    const allowed = await approvalRequest(
+      CONNECTOR_TOOL.qualifiedName,
+      [CONNECTOR_TOOL],
+      permissions,
+      undefined,
+      scheduled,
+    );
     expect(allowed.executions).toBe(1);
   });
 

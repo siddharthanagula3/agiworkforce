@@ -79,8 +79,10 @@ import {
   type ToolCallGate,
 } from './tool-call-gate';
 import { classifyToolLoopInputs } from './tool-loop-routing';
+import { toolRiskTier } from './tool-metadata';
 import { retargetMessagesToModel } from './managed-failover';
 import {
+  decisionTimeConnectorLevel,
   EMPTY_CONNECTOR_TOOL_PERMISSIONS,
   LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS,
   type ConnectorToolPermissions,
@@ -2102,7 +2104,11 @@ export async function* runResearchLoop(
     return resolveToolCallGate(
       {
         qualifiedName: call.name,
-        savedLevel: connectorPermissions.levelFor(call.name),
+        savedLevel: decisionTimeConnectorLevel(
+          connectorPermissions,
+          call.name,
+          toolRiskTier(call.name),
+        ),
         batchIntroducesUntrustedContent: batchIntroducesUntrustedContent(
           call.id,
           batch.map((other) => ({ id: other.id, qualifiedName: other.name })),

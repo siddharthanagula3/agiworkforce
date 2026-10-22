@@ -127,6 +127,26 @@ describe('liveArtifactMissingConnectors', () => {
     expect(options.isConnectorDenied('slack')).toBe(false);
     expect(options.isConnectorDenied('notion')).toBe(true);
   });
+
+  it('judges each bound tool on the annotations its connector published', async () => {
+    mocks.allowedWithoutRequest.mockResolvedValue(true);
+    const annotated = { ...tool('notes', 'archive_note'), annotations: { destructiveHint: true } };
+    mocks.loadCatalog.mockResolvedValue({ tools: [annotated], dropped: [], limit: null });
+
+    await liveArtifactMissingConnectors({
+      db: {} as never,
+      userId: 'user-1',
+      organizationId: null,
+      connectors: ['notes'],
+    });
+
+    expect(mocks.unattended).toHaveBeenCalledWith(
+      annotated.qualifiedName,
+      expect.anything(),
+      expect.anything(),
+      { destructiveHint: true },
+    );
+  });
 });
 
 describe('readOwnedRunnableArtifact', () => {
