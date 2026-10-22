@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import type { OrganizationActivityDay } from '@agiworkforce/types';
 
 import { withErrorHandler } from '@/lib/error-handler';
 import { SETTINGS_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
@@ -15,6 +16,7 @@ import {
   readOrganizationUsage,
   type OrganizationUsage,
 } from '@/lib/services/organization-usage-service';
+import { readOrganizationActivityDays } from '@/lib/services/organization-activity-service';
 import { resolveUsageWindow } from '@/lib/services/usage-aggregation';
 
 export const runtime = 'nodejs';
@@ -22,6 +24,7 @@ export const runtime = 'nodejs';
 export interface OrganizationUsageResponse {
   currentUserRole: 'owner' | 'admin' | 'member' | 'viewer';
   usage: OrganizationUsage;
+  activity: OrganizationActivityDay[];
 }
 
 /**
@@ -48,7 +51,10 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const params = new URL(request.url).searchParams;
   const window = resolveUsageWindow(params.get('from'), params.get('to'));
 
-  const usage = await readOrganizationUsage(db, membership.organizationId, window);
+  const [usage, activity] = await Promise.all([
+    readOrganizationUsage(db, membership.organizationId, window),
+    readOrganizationActivityDays(db, membership.organizationId, window),
+  ]);
 
   await logAdminDataAccess(request, {
     userId,
@@ -56,7 +62,11 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     role: membership.role,
     resourceType: 'organization_usage',
   });
-  const payload: OrganizationUsageResponse = { currentUserRole: membership.role, usage };
+  const payload: OrganizationUsageResponse = {
+    currentUserRole: membership.role,
+    usage,
+    activity,
+  };
   return NextResponse.json(payload);
 }
 

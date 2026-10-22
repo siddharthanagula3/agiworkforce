@@ -372,3 +372,20 @@ export interface ProductMetricValue {
   readonly numerator: number;
   readonly denominator: number;
 }
+
+export interface OrganizationToolDecisions {
+  readonly accepted: number;
+  readonly rejected: number;
+}
+
+export interface OrganizationActivityDay {
+  readonly day: string;
+  readonly codeSessions: number;
+  readonly toolDecisions: OrganizationToolDecisions;
+  readonly toolAcceptanceRate: number | null;
+}
+
+export function toolAcceptanceRate(decisions: OrganizationToolDecisions): number | null {
+  const decided = decisions.accepted + decisions.rejected;
+  return decided > 0 ? decisions.accepted / decided : null;
+}

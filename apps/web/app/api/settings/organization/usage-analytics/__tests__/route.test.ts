@@ -9,17 +9,23 @@ vi.mock('@/lib/services/organization-permission-service', async () =>
   ).organizationPermissionServiceMock(permissionRole),
 );
 
-const { mockQuery, mockGetUserScopedDb, mockRequireTeamAdminAccess } = vi.hoisted(() => ({
-  mockQuery: vi.fn(),
-  mockGetUserScopedDb: vi.fn(),
-  mockRequireTeamAdminAccess: vi.fn(async () => ({ plan: 'enterprise', canManageTeam: true })),
-}));
+const { mockQuery, mockGetUserScopedDb, mockRequireTeamAdminAccess, mockActivity } = vi.hoisted(
+  () => ({
+    mockQuery: vi.fn(),
+    mockGetUserScopedDb: vi.fn(),
+    mockRequireTeamAdminAccess: vi.fn(async () => ({ plan: 'enterprise', canManageTeam: true })),
+    mockActivity: vi.fn(async (..._args: unknown[]): Promise<unknown[]> => []),
+  }),
+);
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
+vi.mock('@/lib/services/organization-activity-service', () => ({
+  readOrganizationActivityDays: (...args: unknown[]) => mockActivity(...args),
+}));
 vi.mock('@/app/api/settings/team/team-admin-access', () => ({
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
@@ -110,5 +116,32 @@ describe('GET /api/settings/organization/usage-analytics', () => {
       new AppError('SUBSCRIPTION_REQUIRED' as never, 'Upgrade required', 403),
     );
     expect((await GET(req() as never)).status).toBe(403);
+  });
+
+  it('serves an admin the per-day code sessions and tool acceptance for the same window', async () => {
+    bind({ role: 'admin' });
+    const day = {
+      day: '2026-10-20T00:00:00.000Z',
+      codeSessions: 4,
+      toolDecisions: { accepted: 3, rejected: 1 },
+      toolAcceptanceRate: 0.75,
+    };
+    mockActivity.mockResolvedValueOnce([day]);
+
+    const res = await GET(req() as never);
+    const body = (await res.json()) as OrganizationUsageResponse;
+
+    expect(body.activity).toEqual([day]);
+    expect(mockActivity).toHaveBeenCalledWith(expect.anything(), ORG, {
+      from: body.usage.from,
+      to: body.usage.to,
+    });
+  });
+
+  it('never reads activity for someone who is not an administrator', async () => {
+    bind({ role: 'member' });
+
+    expect((await GET(req() as never)).status).toBe(403);
+    expect(mockActivity).not.toHaveBeenCalled();
   });
 });
