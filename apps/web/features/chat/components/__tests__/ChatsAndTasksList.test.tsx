@@ -19,6 +19,8 @@ const state = vi.hoisted(() => ({
   deleteConversation: vi.fn<(id: string) => Promise<boolean>>(),
   unread: new Set<string>(),
   toastError: vi.fn(),
+  toastSuccess: vi.fn(),
+  projects: [] as Array<{ id: string; name: string }>,
 }));
 
 vi.mock('@shared/hooks/use-guarded-router', () => ({
@@ -46,7 +48,11 @@ vi.mock('@shared/hooks/use-unread-conversations', () => ({
   }),
 }));
 
-vi.mock('sonner', () => ({ toast: { error: state.toastError } }));
+vi.mock('sonner', () => ({ toast: { error: state.toastError, success: state.toastSuccess } }));
+
+vi.mock('@/features/projects', () => ({
+  useManagedCloudProjects: () => ({ projects: state.projects }),
+}));
 
 function at(offsetMs: number): string {
   return new Date(NOW - offsetMs).toISOString();
@@ -96,6 +102,11 @@ beforeEach(() => {
   state.updateConversation.mockReset().mockResolvedValue(true);
   state.deleteConversation.mockReset().mockResolvedValue(true);
   state.toastError.mockReset();
+  state.toastSuccess.mockReset();
+  state.projects = [
+    { id: 'project-site', name: 'Website redesign' },
+    { id: 'project-ops', name: 'Operations' },
+  ];
   state.fetchConversations.mockReset();
   seed();
   useChatStore.setState({
@@ -220,6 +231,68 @@ describe('Chats and tasks page', () => {
     expect(state.updateConversation).toHaveBeenCalledWith('chat-greeting', { archived: true });
     expect(state.updateConversation).toHaveBeenCalledWith('chat-old', { archived: true });
     expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy();
+  });
+
+  it('moves every selected row into the project picked from Move to project', async () => {
+    render(<ChatsAndTasksList />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Greeting/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Budget review/ }));
+
+    const trigger = screen.getByRole('button', { name: 'Move to project' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const menu = await screen.findByRole('menu');
+    expect(
+      within(menu)
+        .getAllByRole('menuitem')
+        .map((item) => item.textContent),
+    ).toEqual(['Website redesign', 'Operations']);
+
+    await act(async () => {
+      fireEvent.click(within(menu).getByRole('menuitem', { name: 'Website redesign' }));
+    });
+
+    expect(state.updateConversation).toHaveBeenCalledTimes(2);
+    expect(state.updateConversation).toHaveBeenCalledWith('chat-greeting', {
+      projectId: 'project-site',
+    });
+    expect(state.updateConversation).toHaveBeenCalledWith('chat-old', {
+      projectId: 'project-site',
+    });
+    expect(state.toastSuccess).toHaveBeenCalledWith('Moved 2 conversations to Website redesign');
+    expect(screen.getByRole('button', { name: 'Select' })).toBeTruthy();
+  });
+
+  it('reports the rows that could not be moved and still confirms the ones that were', async () => {
+    state.updateConversation.mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    render(<ChatsAndTasksList />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Greeting/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Budget review/ }));
+
+    const trigger = screen.getByRole('button', { name: 'Move to project' });
+    trigger.focus();
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    const menu = await screen.findByRole('menu');
+    await act(async () => {
+      fireEvent.click(within(menu).getByRole('menuitem', { name: 'Operations' }));
+    });
+
+    expect(state.toastError).toHaveBeenCalledWith('Could not move 1 of 2 conversations');
+    expect(state.toastSuccess).toHaveBeenCalledWith('Moved 1 conversation to Operations');
+  });
+
+  it('keeps Move to project disabled until something is selected and absent without projects', () => {
+    const { unmount } = render(<ChatsAndTasksList />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.getByRole('button', { name: 'Move to project' })).toBeDisabled();
+    unmount();
+
+    state.projects = [];
+    render(<ChatsAndTasksList />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    expect(screen.queryByRole('button', { name: 'Move to project' })).toBeNull();
   });
 
   it('asks before deleting selected rows, naming that it cannot be undone', async () => {

@@ -2,11 +2,19 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { toast } from 'sonner';
-import { Archive, ChevronDown, ListChecks, MessageSquare, Trash2 } from '@agiworkforce/icons';
+import {
+  Archive,
+  ChevronDown,
+  Folder,
+  ListChecks,
+  MessageSquare,
+  Trash2,
+} from '@agiworkforce/icons';
 import {
   Button,
   DropdownMenu,
   DropdownMenuContent,
+  DropdownMenuItem,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
@@ -20,6 +28,7 @@ import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { useUnreadConversations } from '@shared/hooks/use-unread-conversations';
 import { AGI_WORK_MODE, useChatStore, type Conversation } from '@shared/stores/web-chat-store';
 import { useConversations } from '@/lib/hooks/useConversations';
+import { useManagedCloudProjects } from '@/features/projects';
 import {
   conversationDeleteConfirm,
   conversationHref,
@@ -99,6 +108,7 @@ export function ChatsAndTasksList() {
   const workModeByConversation = useChatStore((state) => state.workModeByConversation);
   const loadingConversationIds = useChatStore((state) => state.loadingConversationIds);
   const streamingConversationIds = useChatStore((state) => state.streamingConversationIds);
+  const { projects } = useManagedCloudProjects();
   const { isUnread } = useUnreadConversations();
   const { confirm, dialog } = useConfirmAction();
 
@@ -172,6 +182,7 @@ export function ChatsAndTasksList() {
       targets: readonly ListRow[],
       run: (id: string) => Promise<boolean>,
       failureVerb: string,
+      successMessage?: (moved: number) => string,
     ) => {
       setBulkBusy(true);
       try {
@@ -184,6 +195,9 @@ export function ChatsAndTasksList() {
               : `Could not ${failureVerb} ${failed} of ${targets.length} conversations`,
           );
         }
+        if (successMessage && failed < targets.length) {
+          toast.success(successMessage(targets.length - failed));
+        }
         exitSelection();
       } finally {
         setBulkBusy(false);
@@ -195,6 +209,19 @@ export function ChatsAndTasksList() {
   const archiveSelected = useCallback(() => {
     void runBulk(selectedRows, (id) => updateConversation(id, { archived: true }), 'archive');
   }, [runBulk, selectedRows, updateConversation]);
+
+  const moveSelected = useCallback(
+    (project: { id: string; name: string }) => {
+      void runBulk(
+        selectedRows,
+        (id) => updateConversation(id, { projectId: project.id }),
+        'move',
+        (moved) =>
+          `Moved ${moved === 1 ? '1 conversation' : `${moved} conversations`} to ${project.name}`,
+      );
+    },
+    [runBulk, selectedRows, updateConversation],
+  );
 
   const deleteSelected = useCallback(() => {
     const targets = selectedRows;
@@ -277,6 +304,28 @@ export function ChatsAndTasksList() {
               ? 'Select chats and tasks'
               : `${selectedRows.length} selected`}
           </p>
+          {projects.length > 0 && (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className={cn(PILL, 'gap-1.5')}
+                  disabled={selectedRows.length === 0 || bulkBusy}
+                >
+                  <Folder className="h-4 w-4" aria-hidden="true" />
+                  Move to project
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="max-h-64 w-56 overflow-y-auto">
+                {projects.map((project) => (
+                  <DropdownMenuItem key={project.id} onSelect={() => moveSelected(project)}>
+                    <span className="truncate">{project.name}</span>
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          )}
           <Button
             type="button"
             variant="secondary"
