@@ -6,9 +6,9 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { Button } from '@/components/ui/button';
 import { Text } from '@/components/ui/text';
-import { API_URL } from '@/lib/constants';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { helpArticleUrl } from '@/src/features/support/HelpArticleLink';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 
@@ -17,10 +17,6 @@ const PROMO_STORE_NAME = 'library-feature-promo';
 export const LIBRARY_PROMO_TITLE = 'Reuse files from any chat';
 export const LIBRARY_PROMO_BODY =
   'Everything you upload or generate is saved here, ready to attach again.';
-
-export function libraryHelpUrl(): string {
-  return `${API_URL.replace(/\/+$/, '')}/help/library?from=mobile`;
-}
 
 interface LibraryPromoState {
   hydrated: boolean;
@@ -57,7 +53,7 @@ export function LibraryFeaturePromoSheet() {
 
   const handleLearnMore = useCallback(() => {
     markSeen();
-    void openUntrustedUrlInAppBrowser(libraryHelpUrl());
+    void openUntrustedUrlInAppBrowser(helpArticleUrl('library'));
   }, [markSeen]);
 
   return (

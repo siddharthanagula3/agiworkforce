@@ -33,11 +33,11 @@ jest.mock('@/lib/safeOpenURL', () => ({
 }));
 
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
+import { helpArticleUrl } from '@/src/features/support/HelpArticleLink';
 import {
   LibraryFeaturePromoSheet,
   LIBRARY_PROMO_BODY,
   LIBRARY_PROMO_TITLE,
-  libraryHelpUrl,
   useLibraryPromoStore,
 } from '../src/features/library/LibraryFeaturePromoSheet';
 
@@ -92,8 +92,8 @@ describe('Library feature promo sheet', () => {
 
     fireEvent.press(screen.getByLabelText('Learn more'));
 
-    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(libraryHelpUrl());
-    expect(libraryHelpUrl()).toMatch(/\/help\/library\?from=mobile$/);
+    expect(openUntrustedUrlInAppBrowser).toHaveBeenCalledWith(helpArticleUrl('library'));
+    expect(helpArticleUrl('library')).toMatch(/\/help\/library\?from=mobile$/);
     expect(screen.queryByText(LIBRARY_PROMO_TITLE)).toBeNull();
   });
 

@@ -12,6 +12,7 @@ export const MOBILE_HELP_ARTICLE_IDS = [
   'billing-and-plans',
   'connectors-and-mcp',
   'crisis-resources',
+  'library',
   'local-mode',
   'memory',
   'privacy-controls',
