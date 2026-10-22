@@ -120,3 +120,50 @@ describe('CodeRail account footer', () => {
     expect(screen.queryByTestId('code-rail-account-footer')).toBeNull();
   });
 });
+
+describe('CodeRail session groups', () => {
+  function renderSessions(sessions: CloudCodeSession[]) {
+    render(
+      <CodeRail
+        sessions={sessions}
+        hiddenSessionsExist={false}
+        selectedId={null}
+        loading={false}
+        filters={DEFAULT_CODE_FILTERS}
+        onFiltersChange={vi.fn()}
+        onNewSession={vi.fn()}
+        onSelectSession={vi.fn()}
+      />,
+    );
+  }
+
+  const sessionIn = (
+    id: string,
+    title: string,
+    state: CloudCodeSession['state'],
+    repositoryUrl: string | null,
+  ): CloudCodeSession =>
+    ({ ...session(id, title), state, repositoryUrl, archivedAt: null }) as CloudCodeSession;
+
+  it('lists sessions under Ready and Idle with the repository under each title', () => {
+    renderSessions([
+      sessionIn('a', 'Refactor billing', 'ready', 'https://github.com/acme/billing.git'),
+      sessionIn('b', 'Old spike', 'closed', 'https://github.com/acme/spike'),
+    ]);
+
+    const ready = screen.getByRole('region', { name: CODE_COPY.sessionsReady });
+    const idle = screen.getByRole('region', { name: CODE_COPY.sessionsIdle });
+    expect(within(ready).getByText('Refactor billing')).toBeInTheDocument();
+    expect(within(ready).getByText('acme/billing')).toBeInTheDocument();
+    expect(within(idle).getByText('Old spike')).toBeInTheDocument();
+    expect(within(idle).getByText('acme/spike')).toBeInTheDocument();
+    expect(screen.queryByText(CODE_COPY.sessionOpenBadge)).toBeNull();
+  });
+
+  it('marks a running session with the Open badge and shows no empty group', () => {
+    renderSessions([sessionIn('a', 'Build the page', 'running', null)]);
+
+    expect(screen.getByText(CODE_COPY.sessionOpenBadge)).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: CODE_COPY.sessionsIdle })).toBeNull();
+  });
+});

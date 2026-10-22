@@ -33,6 +33,7 @@ import {
 import {
   CLOUD_CODE_SESSION_STATE_LABELS,
   CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
+  cloudCodeRepositoryLabel,
   cloudCodeSessionIsBusy,
   type CloudCodeNetworkAccess,
   type CloudCodeSession,
@@ -48,6 +49,7 @@ import {
   DEFAULT_CODE_FILTERS,
   codeRailItemPinned,
   filtersAreDefault,
+  groupCodeSessions,
   type CodeRailItemId,
   type CodeSessionFilters,
   type CodeSortOption,
@@ -64,6 +66,7 @@ const RAIL_GLYPH_SIZE = 16;
 const SECTION_GLYPH_SIZE = 14;
 const SEGMENT_GLYPH_SIZE = 15;
 const ENVIRONMENT_FILTER_ALL = 'all';
+const RAIL_SESSION_DETAIL_PREFIX = 'code-rail-session-detail-';
 
 const RAIL_ITEMS: Readonly<Record<CodeRailItemId, Omit<CodeRailItem, 'id'>>> = {
   artifacts: { href: CODE_ROUTES.artifacts, label: CODE_COPY.artifacts, glyph: LibraryBig },
@@ -403,35 +406,80 @@ export function CodeRail({
         )}
 
         {!loading &&
-          sessions.map((session) => (
-            <button
-              key={session.id}
-              type="button"
-              className={`${styles['railRow']} ${
-                selectedId === session.id ? styles['railRowActive'] : ''
-              }`}
-              aria-current={selectedId === session.id ? 'true' : undefined}
-              onClick={(event) =>
-                onSelectSession(session.id, { split: event.metaKey || event.ctrlKey })
-              }
+          groupCodeSessions(sessions).map((group) => (
+            <section
+              key={group.id}
+              className="mb-2 flex flex-col gap-0.5"
+              aria-label={group.label}
+              data-testid={`code-rail-group-${group.id}`}
             >
-              <span className={styles['railRowGlyph']}>
-                {cloudCodeSessionIsBusy(session) ? (
-                  <span
-                    className={styles['railRunningDot']}
-                    aria-label={CODE_COPY.runningSession}
-                  />
-                ) : (
-                  <Archive size={RAIL_GLYPH_SIZE} aria-hidden="true" />
-                )}
-              </span>
-              <span className={styles['railRowLabel']}>{session.title}</span>{' '}
-              {session.state === 'failed' && (
-                <span className={styles['railRowState']}>
-                  {CLOUD_CODE_SESSION_STATE_LABELS[session.state]}
-                </span>
-              )}
-            </button>
+              <h3 className="m-0 px-2 pb-0.5 pt-1 text-[14px] font-medium text-[var(--chat-text-secondary)]">
+                {group.label}
+              </h3>
+              {group.sessions.map((session) => {
+                const repositoryId = `${RAIL_SESSION_DETAIL_PREFIX}repository-${session.id}`;
+                const badgeId = `${RAIL_SESSION_DETAIL_PREFIX}open-${session.id}`;
+                const busy = cloudCodeSessionIsBusy(session);
+                const failed = session.state === 'failed';
+                const details = [session.repositoryUrl ? repositoryId : null, busy ? badgeId : null]
+                  .filter(Boolean)
+                  .join(' ');
+                return (
+                  <button
+                    key={session.id}
+                    type="button"
+                    className={`${styles['railRow']} ${
+                      selectedId === session.id ? styles['railRowActive'] : ''
+                    }`}
+                    aria-label={
+                      failed
+                        ? `${session.title} ${CLOUD_CODE_SESSION_STATE_LABELS[session.state]}`
+                        : session.title
+                    }
+                    aria-describedby={details || undefined}
+                    aria-current={selectedId === session.id ? 'true' : undefined}
+                    onClick={(event) =>
+                      onSelectSession(session.id, { split: event.metaKey || event.ctrlKey })
+                    }
+                  >
+                    <span className={styles['railRowGlyph']}>
+                      {busy ? (
+                        <span
+                          className={styles['railRunningDot']}
+                          aria-label={CODE_COPY.runningSession}
+                        />
+                      ) : (
+                        <Archive size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+                      )}
+                    </span>
+                    <span className="flex min-w-0 flex-1 flex-col py-1">
+                      <span className={styles['railRowLabel']}>{session.title}</span>
+                      {session.repositoryUrl && (
+                        <span
+                          id={repositoryId}
+                          className="truncate font-[family-name:var(--chat-font-mono)] text-[14px] text-[var(--chat-text-muted)]"
+                        >
+                          {cloudCodeRepositoryLabel(session.repositoryUrl)}
+                        </span>
+                      )}
+                    </span>
+                    {busy && (
+                      <span
+                        id={badgeId}
+                        className="shrink-0 rounded-[var(--chat-radius-sm)] bg-[color-mix(in_srgb,var(--chat-success)_16%,transparent)] px-2 font-[family-name:var(--chat-font-mono)] text-[14px] text-[var(--chat-success-text)]"
+                      >
+                        {CODE_COPY.sessionOpenBadge}
+                      </span>
+                    )}
+                    {failed && (
+                      <span className={styles['railRowState']}>
+                        {CLOUD_CODE_SESSION_STATE_LABELS[session.state]}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </section>
           ))}
 
         {!loading && sessions.length === 0 && searching && (

@@ -9,6 +9,7 @@ import {
   filterAndSortSessions,
   filtersAreDefault,
   formatTokenCount,
+  groupCodeSessions,
   sessionTitleMatches,
 } from './code-surface';
 import type { CloudCodeSession } from '@agiworkforce/types';
@@ -88,5 +89,30 @@ describe('session search', () => {
 
   it('leaves the filter menu at its default while only a search is typed', () => {
     expect(filtersAreDefault({ ...DEFAULT_CODE_FILTERS, query: 'login' })).toBe(true);
+  });
+});
+
+describe('groupCodeSessions', () => {
+  const session = (id: string, state: string, archivedAt: string | null = null): CloudCodeSession =>
+    ({ id, state, archivedAt }) as CloudCodeSession;
+
+  it('puts open sessions under Ready and failed, closed or archived ones under Idle, keeping order', () => {
+    const groups = groupCodeSessions([
+      session('a', 'closed'),
+      session('b', 'ready'),
+      session('c', 'running'),
+      session('d', 'failed'),
+      session('e', 'ready', '2026-10-01T00:00:00Z'),
+      session('f', 'provisioning'),
+    ]);
+    expect(groups.map((group) => [group.label, group.sessions.map((item) => item.id)])).toEqual([
+      ['Ready', ['b', 'c', 'f']],
+      ['Idle', ['a', 'd', 'e']],
+    ]);
+  });
+
+  it('leaves out a group with no sessions', () => {
+    expect(groupCodeSessions([session('a', 'ready')]).map((group) => group.id)).toEqual(['ready']);
+    expect(groupCodeSessions([])).toEqual([]);
   });
 });

@@ -211,6 +211,9 @@ export const CODE_COPY = {
   sortCreated: 'Created',
   sortTitle: 'Title',
   runningSession: 'Running',
+  sessionsReady: 'Ready',
+  sessionsIdle: 'Idle',
+  sessionOpenBadge: 'Open',
 
   modeMenu: 'Mode',
   planMode: 'Plan',
@@ -564,6 +567,36 @@ export function filterAndSortSessions(
     sorted.sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
   return sorted;
+}
+
+export const CODE_SESSION_GROUP_IDS = ['ready', 'idle'] as const;
+export type CodeSessionGroupId = (typeof CODE_SESSION_GROUP_IDS)[number];
+
+export const CODE_SESSION_GROUP_LABELS: Record<CodeSessionGroupId, string> = {
+  ready: CODE_COPY.sessionsReady,
+  idle: CODE_COPY.sessionsIdle,
+};
+
+export interface CodeSessionGroup {
+  id: CodeSessionGroupId;
+  label: string;
+  sessions: CloudCodeSession[];
+}
+
+const IDLE_SESSION_STATES: ReadonlySet<CloudCodeSession['state']> = new Set(['failed', 'closed']);
+
+export function codeSessionGroupId(
+  session: Pick<CloudCodeSession, 'state' | 'archivedAt'>,
+): CodeSessionGroupId {
+  return session.archivedAt || IDLE_SESSION_STATES.has(session.state) ? 'idle' : 'ready';
+}
+
+export function groupCodeSessions(sessions: readonly CloudCodeSession[]): CodeSessionGroup[] {
+  return CODE_SESSION_GROUP_IDS.map((id) => ({
+    id,
+    label: CODE_SESSION_GROUP_LABELS[id],
+    sessions: sessions.filter((session) => codeSessionGroupId(session) === id),
+  })).filter((group) => group.sessions.length > 0);
 }
 
 export type CodeStepState = 'done' | 'skipped' | 'failed';
