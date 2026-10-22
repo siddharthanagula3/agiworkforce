@@ -1,6 +1,6 @@
 'use client';
 
-import { Lock } from 'lucide-react';
+import { LibraryBig, Lock, Upload } from 'lucide-react';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 
@@ -71,6 +71,10 @@ import {
   UPLOAD_PLUGIN_LABEL,
   UPLOAD_SKILL_ACCEPT,
   UPLOAD_SKILL_ACTION_ID,
+  UPLOAD_SKILL_DESCRIPTION,
+  BROWSE_SKILLS_ACTION_ID,
+  BROWSE_SKILLS_DESCRIPTION,
+  BROWSE_SKILLS_LABEL,
   UPLOAD_SKILL_FAILED_COPY,
   UPLOAD_SKILL_INTRO,
   UPLOAD_SKILL_LABEL,
@@ -468,7 +472,18 @@ function DirectorySectionPanel({
       trailingActions.push({
         id: UPLOAD_SKILL_ACTION_ID,
         label: UPLOAD_SKILL_LABEL,
+        description: UPLOAD_SKILL_DESCRIPTION,
+        icon: Upload,
         onSelect: () => setUploadSkillOpen(true),
+      });
+    }
+    if (section === 'skills' && (manage.actions?.length ?? 0) + trailingActions.length > 0) {
+      trailingActions.push({
+        id: BROWSE_SKILLS_ACTION_ID,
+        label: BROWSE_SKILLS_LABEL,
+        description: BROWSE_SKILLS_DESCRIPTION,
+        icon: LibraryBig,
+        onSelect: () => setBrowsing(true),
       });
     }
     const setSkillEnabled = adapter.setSkillEnabled;

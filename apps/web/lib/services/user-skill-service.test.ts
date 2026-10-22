@@ -55,6 +55,15 @@ describe('user skill service', () => {
     expect(db.query).toHaveBeenCalledWith(expect.stringContaining('from user_skills'), ['user_1']);
   });
 
+  it('reports when each listed skill was last saved', async () => {
+    const db = makeDb({
+      query: vi.fn(async () => [{ ...ROW, updated_at: '2026-10-02T09:30:00.000Z' }]),
+    });
+    const [listed] = await listUserSkills(db as never, 'user_1');
+    expect(db.query).toHaveBeenCalledWith(expect.stringContaining('updated_at'), ['user_1']);
+    expect(listed?.updatedAt).toBe('2026-10-02T09:30:00.000Z');
+  });
+
   it('finds one skill by user and name', async () => {
     const db = makeDb();
     const found = await findUserSkillByName(db as never, 'user_1', 'release-notes');

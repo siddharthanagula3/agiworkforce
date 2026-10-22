@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 
 export type DirectorySectionKey = 'skills' | 'connectors' | 'plugins';
 
@@ -112,6 +112,8 @@ export interface DirectoryManageRow {
 export interface DirectoryManageAction {
   id: string;
   label: string;
+  description?: string;
+  icon?: ComponentType<{ className?: string }>;
   onSelect: () => void;
 }
 

@@ -988,6 +988,10 @@ describe('the skills installed table', () => {
         'Create a skill',
       ]),
     );
+    expect(result.current.skills?.manage?.actions?.map((action) => action.description)).toEqual([
+      'Describe it in a chat and get a draft.',
+      'Write the instructions yourself.',
+    ]);
     expect(result.current.uploadSkillFile).toBeDefined();
     result.current.skills?.manage?.actions?.[1]?.onSelect();
     expect(onCreateSkill).toHaveBeenCalledTimes(1);

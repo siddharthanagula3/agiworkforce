@@ -226,6 +226,7 @@ export function toSkillManageRows(
         name: skill.name,
         slashName: true,
         author: skill.origin?.pluginName ?? skillAuthor(skill.source),
+        ...(skill.updatedAt ? { updatedAt: skill.updatedAt } : {}),
         groupId,
         ...(groupId === SKILL_GROUP_AGI ? { enabled: installed.has(skill.name) } : {}),
       };

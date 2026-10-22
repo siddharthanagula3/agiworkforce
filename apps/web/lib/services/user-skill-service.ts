@@ -41,6 +41,7 @@ export interface UserSkillSummary {
   downloadable: false;
   editable: true;
   origin: ManagedSkillOrigin;
+  updatedAt?: string;
 }
 
 interface UserSkillRow {
@@ -56,6 +57,7 @@ interface UserSkillSummaryRow {
   name: string;
   description: string;
   created_at: string | Date | null;
+  updated_at: string | Date | null;
 }
 
 function personalOrigin(createdAt: string | Date | null): ManagedSkillOrigin {
@@ -197,21 +199,25 @@ export async function listUserSkills(
 ): Promise<UserSkillSummary[]> {
   if (!userSkillAuthoringEnabled()) return [];
   const rows = await db.query<UserSkillSummaryRow>(
-    `select name, description, created_at
+    `select name, description, created_at, updated_at
        from user_skills
       where user_id = $1
       order by name asc`,
     [userId],
   );
-  return rows.map((row) => ({
-    name: row.name,
-    description: row.description,
-    source: 'personal',
-    lifecycle: 'included',
-    downloadable: false,
-    editable: true,
-    origin: personalOrigin(row.created_at),
-  }));
+  return rows.map((row) => {
+    const updatedAt = isoTimestamp(row.updated_at);
+    return {
+      name: row.name,
+      description: row.description,
+      source: 'personal',
+      lifecycle: 'included',
+      downloadable: false,
+      editable: true,
+      origin: personalOrigin(row.created_at),
+      ...(updatedAt ? { updatedAt } : {}),
+    };
+  });
 }
 
 export async function findUserSkillByName(

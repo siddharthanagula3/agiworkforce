@@ -298,7 +298,7 @@ export const DIRECTORY_MANAGE_COLUMNS: Record<
   DirectorySectionKey,
   readonly DirectoryManageColumn[]
 > = {
-  skills: ['name', 'author'],
+  skills: ['name', 'author', 'updated'],
   connectors: ['name', 'updated'],
   plugins: ['name', 'author', 'skills', 'updated'],
 };
@@ -404,6 +404,10 @@ export const UPLOAD_PLUGIN_ACCEPT = '.zip,application/zip';
 export const UPLOAD_PLUGIN_FAILED_COPY = 'The plugin could not be uploaded.';
 
 export const UPLOAD_SKILL_LABEL = 'Upload skill';
+export const UPLOAD_SKILL_DESCRIPTION = 'A .zip, .skill or SKILL.md file.';
+export const BROWSE_SKILLS_ACTION_ID = 'browse-skills';
+export const BROWSE_SKILLS_LABEL = 'Add from the catalog';
+export const BROWSE_SKILLS_DESCRIPTION = 'Ready-made skills you can turn on.';
 export const UPLOAD_SKILL_INTRO =
   'Zip the skill folder (named the same as the skill, with SKILL.md inside) and upload the .zip or .skill file.';
 export const UPLOAD_SKILL_ACCEPT = '.zip,.skill,.md,application/zip,text/markdown';

@@ -1,5 +1,6 @@
 'use client';
 
+import { MessageSquarePlus, PenLine } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 import { createElement, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
@@ -246,7 +247,9 @@ const PLUGIN_CREATE_WITH_AGI_PROMPT = 'Build a plugin for me: ';
 const SKILL_CREATE_WITH_AGI_LABEL = 'Create with AGI';
 const SKILL_CREATE_WITH_AGI_PROMPT = 'Help me create a skill that ';
 const PAYLOAD_TOO_LARGE_STATUS = 413;
+const SKILL_CREATE_WITH_AGI_DESCRIPTION = 'Describe it in a chat and get a draft.';
 const SKILL_CREATE_LABEL = 'Create a skill';
+const SKILL_CREATE_DESCRIPTION = 'Write the instructions yourself.';
 const SKILL_CREATE_ACTION_ID = 'create-skill';
 const SKILL_COMPOSE_ACTION_ID = 'compose-skill';
 const EMPTY_SKILL_NAMES: readonly string[] = [];
@@ -386,9 +389,17 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
             {
               id: SKILL_COMPOSE_ACTION_ID,
               label: SKILL_CREATE_WITH_AGI_LABEL,
+              description: SKILL_CREATE_WITH_AGI_DESCRIPTION,
+              icon: MessageSquarePlus,
               onSelect: createSkillWithAgi,
             },
-            { id: SKILL_CREATE_ACTION_ID, label: SKILL_CREATE_LABEL, onSelect: onCreateSkill },
+            {
+              id: SKILL_CREATE_ACTION_ID,
+              label: SKILL_CREATE_LABEL,
+              description: SKILL_CREATE_DESCRIPTION,
+              icon: PenLine,
+              onSelect: onCreateSkill,
+            },
           ]
         : [],
     [onCreateSkill, createSkillWithAgi],

@@ -740,8 +740,9 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="skills" />);
     const { fireEvent } = await import('@testing-library/react');
     fireEvent.click(await screen.findByRole('button', { name: 'Add' }));
-    expect(await screen.findByRole('menuitem', { name: 'Create a skill' })).toBeTruthy();
-    expect(screen.getByRole('menuitem', { name: 'Create with AGI' })).toBeTruthy();
+    expect(await screen.findByRole('menuitem', { name: /^Create a skill/ })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /^Create with AGI/ })).toBeTruthy();
+    expect(screen.getByRole('menuitem', { name: /^Add from the catalog/ })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Add' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Browse' }));

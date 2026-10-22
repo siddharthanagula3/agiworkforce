@@ -11,6 +11,7 @@ import {
   skillPublisher,
   removeSkill,
   toSkillEntry,
+  toSkillManageRows,
   toSkillSection,
   uninstallSkill,
 } from '../services/skills-directory';
@@ -124,6 +125,26 @@ describe('toSkillSection', () => {
 
   it('offers only the sorts the data supports', () => {
     expect(toSkillSection([skill()], installedAll).sortOptions).toEqual(['name']);
+  });
+});
+
+describe('toSkillManageRows', () => {
+  it('carries the saved date of a skill the account wrote and none for a built-in one', () => {
+    const rows = toSkillManageRows(
+      [
+        skill({
+          name: 'mine',
+          source: 'personal',
+          downloadable: false,
+          editable: true,
+          updatedAt: '2026-10-02T09:30:00.000Z',
+        }),
+        skill({ name: 'docx' }),
+      ],
+      new Set(['docx']),
+    );
+    expect(rows.find((row) => row.id === 'mine')?.updatedAt).toBe('2026-10-02T09:30:00.000Z');
+    expect(rows.find((row) => row.id === 'docx')).not.toHaveProperty('updatedAt');
   });
 });
 

@@ -144,6 +144,7 @@ export function DirectoryManageView({
     [view.rows, needle],
   );
   const actions = view.actions ?? [];
+  const describedActions = actions.some((action) => action.description);
   const grouped = useMemo(() => groupRows(rows, view.groups), [rows, view.groups]);
   const switchable = onSetEnabled !== undefined && rows.some((row) => row.enabled !== undefined);
 
@@ -245,6 +246,7 @@ export function DirectoryManageView({
           {actions.length > 0 ? (
             <Menu
               align="end"
+              {...(describedActions ? { menuClassName: 'w-72 max-w-[calc(100vw-2rem)]' } : {})}
               trigger={({ open, toggle }) => (
                 <button
                   type="button"
@@ -260,11 +262,29 @@ export function DirectoryManageView({
               )}
             >
               {({ close }) =>
-                actions.map((action) => (
-                  <MenuItem key={action.id} onSelect={action.onSelect} close={close}>
-                    {action.label}
-                  </MenuItem>
-                ))
+                actions.map((action) => {
+                  const Icon = action.icon;
+                  return (
+                    <MenuItem
+                      key={action.id}
+                      onSelect={action.onSelect}
+                      close={close}
+                      {...(Icon ? { icon: <Icon className="size-4" /> } : {})}
+                      {...(action.description ? { className: 'items-start py-2' } : {})}
+                    >
+                      {action.description ? (
+                        <>
+                          <span className="block truncate">{action.label}</span>
+                          <span className="block whitespace-normal text-sm text-muted-foreground">
+                            {action.description}
+                          </span>
+                        </>
+                      ) : (
+                        action.label
+                      )}
+                    </MenuItem>
+                  );
+                })
               }
             </Menu>
           ) : null}

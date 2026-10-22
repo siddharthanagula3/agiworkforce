@@ -2,6 +2,11 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { DirectoryActionConfirmation } from '../action-notice';
+import {
+  BROWSE_SKILLS_DESCRIPTION,
+  BROWSE_SKILLS_LABEL,
+  UPLOAD_SKILL_DESCRIPTION,
+} from '../constants';
 import { DirectoryPanel } from '../DirectoryPanel';
 import type { DirectoryAdapter, DirectoryManageSection } from '../types';
 
@@ -297,7 +302,71 @@ describe('the Add menu offers what the account can actually do', () => {
     const items = within(openAddMenu())
       .getAllByRole('menuitem')
       .map((item) => item.textContent);
-    expect(items).toEqual(['Create a skill', 'Upload skill']);
+    expect(items).toEqual([
+      'Create a skill',
+      `Upload skill${UPLOAD_SKILL_DESCRIPTION}`,
+      `${BROWSE_SKILLS_LABEL}${BROWSE_SKILLS_DESCRIPTION}`,
+    ]);
+  });
+
+  it('describes each way to add a skill in one line beside its icon', () => {
+    const adapter: DirectoryAdapter = {
+      sections: ['skills'],
+      skills: {
+        installable: true,
+        entries: [],
+        manage: {
+          rows: [{ id: 'summarise', name: 'summarise' }],
+          actions: [
+            {
+              id: 'create',
+              label: 'Create a skill',
+              description: 'Write the instructions yourself.',
+              icon: (props) => <svg data-testid="create-icon" {...props} />,
+              onSelect: vi.fn(),
+            },
+          ],
+        },
+      },
+    };
+    render(<DirectoryPanel section="skills" adapter={adapter} />);
+    const create = within(openAddMenu()).getByRole('menuitem', { name: /^Create a skill/ });
+    expect(within(create).getByText('Write the instructions yourself.')).toBeTruthy();
+    expect(within(create).getByTestId('create-icon')).toBeTruthy();
+  });
+
+  it('opens the skill catalog from Add from the catalog', () => {
+    const adapter: DirectoryAdapter = {
+      sections: ['skills'],
+      skills: {
+        installable: true,
+        entries: [{ id: 'docx', name: 'docx', description: 'Write Word documents' }],
+        manage: {
+          rows: [{ id: 'summarise', name: 'summarise' }],
+          actions: [{ id: 'create', label: 'Create a skill', onSelect: vi.fn() }],
+        },
+      },
+    };
+    render(<DirectoryPanel section="skills" adapter={adapter} />);
+    expect(screen.getByRole('table')).toBeTruthy();
+    fireEvent.click(
+      within(openAddMenu()).getByRole('menuitem', { name: new RegExp(`^${BROWSE_SKILLS_LABEL}`) }),
+    );
+    expect(screen.queryByRole('table')).toBeNull();
+    expect(screen.getByText('Write Word documents')).toBeTruthy();
+  });
+
+  it('adds no catalog item to a skills menu that would hold nothing else', () => {
+    const adapter: DirectoryAdapter = {
+      sections: ['skills'],
+      skills: {
+        installable: true,
+        entries: [],
+        manage: { rows: [{ id: 'summarise', name: 'summarise' }], actions: [] },
+      },
+    };
+    render(<DirectoryPanel section="skills" adapter={adapter} />);
+    expect(screen.queryByRole('button', { name: /Add/ })).toBeNull();
   });
 });
 
@@ -331,6 +400,26 @@ describe('the skills list grouped like the leaders', () => {
     render(<DirectoryPanel section="skills" adapter={adapter} />);
     return adapter;
   }
+
+  it('dates each skill the account saved and leaves the others blank', () => {
+    renderSkills({
+      skills: {
+        installable: true,
+        entries: [],
+        manage: {
+          rows: rows.map((row) =>
+            row.id === 'mine' ? { ...row, updatedAt: '2026-10-02T12:00:00.000Z' } : row,
+          ),
+          groups,
+        },
+      },
+    });
+    const mine = screen.getByRole('table', { name: 'Created by you' });
+    expect(within(mine).getByRole('columnheader', { name: 'Last updated' })).toBeTruthy();
+    expect(
+      within(mine).getByText(new Date('2026-10-02T12:00:00.000Z').toLocaleDateString()),
+    ).toBeTruthy();
+  });
 
   it('heads each group and skips the ones with nothing in them', () => {
     renderSkills();
@@ -369,7 +458,7 @@ describe('the skills list grouped like the leaders', () => {
         manage: { rows, groups, actions: [] },
       },
     });
-    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: 'Upload skill' }));
+    fireEvent.click(within(openAddMenu()).getByRole('menuitem', { name: /^Upload skill/ }));
     expect(
       screen.getByText(
         'Zip the skill folder (named the same as the skill, with SKILL.md inside) and upload the .zip or .skill file.',

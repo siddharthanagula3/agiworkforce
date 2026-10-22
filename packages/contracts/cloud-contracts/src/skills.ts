@@ -72,6 +72,7 @@ export const ManagedSkillSummarySchema = z
      * Absent when none did, so a consumer never renders a zero or a guess.
      */
     installs: z.number().int().positive().optional().catch(undefined),
+    updatedAt: z.string().trim().min(1).max(40).optional().catch(undefined),
   })
   .superRefine((skill, context) => {
     if (skill.downloadable && (skill.source !== 'bundled' || skill.lifecycle !== 'included')) {
