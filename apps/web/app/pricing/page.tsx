@@ -890,7 +890,7 @@ export default function PricingPage() {
         <p className="agi-tier-body">{planTierBody(plan, t)}</p>
         <div className="agi-tier-cta-group">
           {isFreeBillingPlanTier(plan) ? (
-            <Link href={freeHref} className="agi-tier-cta">
+            <Link href={freeHref} className="agi-tier-cta agi-tier-cta--ghost">
               {t('freeCta')}
             </Link>
           ) : (

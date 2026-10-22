@@ -458,11 +458,13 @@ describe('PricingPage', () => {
       card.querySelector('.agi-tier-cta-group > .agi-tier-cta'),
     );
     expect(planButtons.every(Boolean)).toBe(true);
-    for (const button of [...planButtons, planCard('Team').querySelector('.agi-tier-cta')]) {
+    const paidButtons = [...planButtons.slice(1), planCard('Team').querySelector('.agi-tier-cta')];
+    for (const button of paidButtons) {
       expect(button?.className).toBe('agi-tier-cta');
     }
     expect(within(planCard('Free')).getByRole('link', { name: 'freeCta' })).toHaveClass(
       'agi-tier-cta',
+      'agi-tier-cta--ghost',
     );
   });
 

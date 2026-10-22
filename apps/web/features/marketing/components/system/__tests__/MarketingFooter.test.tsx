@@ -64,6 +64,14 @@ describe('MarketingFooter', () => {
     ).toEqual(FOOTER_LEGAL.map((link) => link.href));
   });
 
+  it('opens the legal row with Privacy choices, linked to the privacy requests page', () => {
+    render(<MarketingFooter />);
+    const first = within(screen.getByRole('navigation', { name: 'Legal' })).getAllByRole('link')[0];
+
+    expect(first).toHaveTextContent('Privacy choices');
+    expect(first).toHaveAttribute('href', '/privacy/requests');
+  });
+
   it('lists surfaces by name only, with availability left to the release status page', () => {
     render(<MarketingFooter />);
     const footer = screen.getByRole('navigation', { name: 'Footer' });

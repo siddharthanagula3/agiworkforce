@@ -65,7 +65,11 @@ export default async function HelpPage({
               <Ledger
                 caption="Help collections"
                 rows={collections.map((collection) => ({
-                  label: collection.label,
+                  label: (
+                    <Link href={`/help/collections/${collection.id}`} className="agi-ds-link">
+                      {collection.label}
+                    </Link>
+                  ),
                   value: (
                     <ul className="agi-ds-linkgrid">
                       {collection.articles.map((article) => (

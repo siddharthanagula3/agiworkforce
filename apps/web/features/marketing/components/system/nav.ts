@@ -284,6 +284,7 @@ export const FOOTER_COLUMNS = [
 ] as const;
 
 export const FOOTER_LEGAL = [
+  { href: '/privacy/requests', label: 'Privacy choices' },
   { href: '/legal', label: 'Legal' },
   { href: '/privacy', label: 'Privacy' },
   { href: '/terms', label: 'Terms' },
