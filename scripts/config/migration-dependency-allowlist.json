@@ -240,6 +240,21 @@
       "file": "apps/web/lib/server/account-erasure.ts",
       "migration": 380,
       "reason": "Erases the live_artifacts table(s) that 0380 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0380 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 378,
+      "reason": "Erases the personal_spend_limits table that 0378 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0378 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 378,
+      "reason": "Classifies the personal_spend_limits table that 0378 adds in the retention matrix. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0378 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 380,
+      "reason": "Classifies the live_artifacts table that 0380 adds in the retention matrix. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0380 is applied."
     }
   ]
 }

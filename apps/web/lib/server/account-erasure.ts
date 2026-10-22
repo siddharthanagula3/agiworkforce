@@ -73,6 +73,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'work_plans', column: 'user_id' },
   { table: 'user_memories', column: 'user_id' },
   { table: 'user_settings', column: 'user_id' },
+  { table: 'personal_spend_limits', column: 'user_id' },
   { table: 'user_projects', column: 'user_id' },
   { table: 'external_resource_references', column: 'user_id' },
   { table: 'user_shortcuts', column: 'user_id' },

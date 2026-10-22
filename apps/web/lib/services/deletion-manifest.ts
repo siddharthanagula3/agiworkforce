@@ -207,6 +207,7 @@ const OPERATIONAL_RECORD = [
   'organization_subscription_state_transitions',
   'organization_usage_ledger',
   'organizations',
+  'personal_spend_limits',
   'plugin_installations',
   'plugin_marketplace_installations',
   'plugin_marketplace_sources',
