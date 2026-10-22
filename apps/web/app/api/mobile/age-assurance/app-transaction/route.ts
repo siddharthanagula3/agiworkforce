@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
+import type {
+  MobileAppTransactionRegistrationRequest,
+  MobileAppTransactionRegistrationResponse,
+} from '@agiworkforce/types';
 import { requireCsrfToken } from '@/lib/csrf';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -11,15 +15,18 @@ import { registerAppleAppTransaction } from '@/lib/services/mobile-iap-notificat
 
 const AppTransactionSchema = z
   .object({ signedAppTransaction: z.string().trim().min(20).max(32_000) })
-  .strict();
+  .strict() satisfies z.ZodType<MobileAppTransactionRegistrationRequest>;
 
-async function handleAppTransaction(request: NextRequest): Promise<NextResponse> {
+async function handleAppTransaction(
+  request: NextRequest,
+): Promise<NextResponse<MobileAppTransactionRegistrationResponse>> {
   const rateLimitResponse = await withRateLimit(request, 'mobile-app-transaction');
-  if (rateLimitResponse) return rateLimitResponse as NextResponse;
+  if (rateLimitResponse)
+    return rateLimitResponse as NextResponse<MobileAppTransactionRegistrationResponse>;
 
   const userId = await requireCurrentUserId(request);
   const csrfResponse = await requireCsrfToken(request, userId);
-  if (csrfResponse) return csrfResponse as NextResponse;
+  if (csrfResponse) return csrfResponse as NextResponse<MobileAppTransactionRegistrationResponse>;
 
   const parsed = AppTransactionSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) throw createError.badRequest('Invalid app transaction payload.');

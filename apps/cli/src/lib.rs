@@ -3332,9 +3332,9 @@ async fn handle_projects_command(
             let cache = cloud::refresh_projects(privacy)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let found = cache.find(project).ok_or_else(|| {
-                anyhow::anyhow!("No project '{project}' in your AGI account")
-            })?;
+            let found = cache
+                .find(project)
+                .ok_or_else(|| anyhow::anyhow!("No project '{project}' in your AGI account"))?;
             let (id, name) = (found.id.clone(), found.name.clone());
             if !confirm_destructive(
                 &format!(
@@ -3365,9 +3365,9 @@ async fn handle_projects_command(
             let cache = cloud::refresh_projects(privacy)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let found = cache.find(project).ok_or_else(|| {
-                anyhow::anyhow!("No project '{project}' in your AGI account")
-            })?;
+            let found = cache
+                .find(project)
+                .ok_or_else(|| anyhow::anyhow!("No project '{project}' in your AGI account"))?;
             let (id, name) = (found.id.clone(), found.name.clone());
             cloud::set_project_archived(privacy, &id, !*undo)
                 .await
@@ -3587,9 +3587,9 @@ async fn handle_projects_command(
             let cache = cloud::refresh_projects(privacy)
                 .await
                 .map_err(|error| anyhow::anyhow!("{error}"))?;
-            let found = cache.find(project).ok_or_else(|| {
-                anyhow::anyhow!("No project '{project}' in your AGI account")
-            })?;
+            let found = cache
+                .find(project)
+                .ok_or_else(|| anyhow::anyhow!("No project '{project}' in your AGI account"))?;
             let cwd = std::env::current_dir()?;
             let home = config::CliConfig::config_dir()?;
             let mut registry = project_registry::ProjectRegistry::load(&home)?;

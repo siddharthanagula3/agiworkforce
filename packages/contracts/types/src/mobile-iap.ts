@@ -227,6 +227,15 @@ export interface MobileIapVerifyResponse {
   storeAcknowledged?: boolean;
 }
 
+export interface MobileAppTransactionRegistrationRequest {
+  signedAppTransaction: string;
+}
+
+export interface MobileAppTransactionRegistrationResponse {
+  registered: true;
+  consentWithdrawn: boolean;
+}
+
 export const BASIS_POINTS_PER_WHOLE = 10_000;
 
 export interface MobileIapOneTimeMarketRate {

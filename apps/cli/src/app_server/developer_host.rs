@@ -3842,8 +3842,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                         match account::recover_rejected_session(&jwt).await {
                             Recovery::Renewed => {
                                 failure.message =
-                                    "Your AGI session was renewed. Send it again."
-                                        .to_string();
+                                    "Your AGI session was renewed. Send it again.".to_string();
                                 failure.retryable = true;
                                 failure.action =
                                     agiworkforce_protocol::developer_session::TurnFailureAction::Retry;

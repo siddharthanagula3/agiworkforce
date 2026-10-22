@@ -16,8 +16,10 @@ vi.mock('@/lib/logger', () => ({
 }));
 vi.mock('@/lib/server/neon-chat', () => ({ requireCurrentUserId: mocks.requireUser }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({}) }));
+type StoreVerificationModule = typeof import('@/lib/server/mobile-iap-store-verification');
+
 vi.mock('@/lib/server/mobile-iap-store-verification', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/mobile-iap-store-verification')>()),
+  ...(await importOriginal<StoreVerificationModule>()),
   verifyAppleAppTransaction: mocks.verify,
 }));
 vi.mock('@/lib/services/mobile-iap-notification-service', () => ({

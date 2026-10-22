@@ -82,9 +82,7 @@ impl ManagedApprovalPause {
         }
         let calls = std::mem::take(&mut self.calls);
         let run_id = self.run_id.take().ok_or_else(|| {
-            anyhow!(
-                "AGI paused this turn for approval but did not say which run to resume."
-            )
+            anyhow!("AGI paused this turn for approval but did not say which run to resume.")
         })?;
         Ok(Some((run_id, calls)))
     }

@@ -192,6 +192,9 @@
     "messaging_connections": {
       "createdAt": "connected_at"
     },
+    "mobile_app_consent_rescissions": {
+      "createdAt": "consent_rescinded_at"
+    },
     "mobile_iap_notification_receipts": {
       "createdAt": "received_at",
       "updatedAt": "processed_at"

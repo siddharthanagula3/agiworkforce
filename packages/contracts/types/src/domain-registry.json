@@ -169,6 +169,8 @@
         "credit_transactions",
         "enterprise_offline_payment_records",
         "expiring_credit_purchases",
+        "mobile_app_consent_rescissions",
+        "mobile_app_transactions",
         "mobile_iap_accounts",
         "mobile_iap_notification_receipts",
         "mobile_iap_transactions",

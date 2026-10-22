@@ -2,6 +2,7 @@ import 'server-only';
 
 import { randomUUID } from 'node:crypto';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { readBillingOwnerRow, resolveBillingCustomerId } from '@/lib/server/billing-owner-row';
 import { logger } from '@/lib/logger';
 import { deleteStoredMediaObjects } from '@/lib/server/media-storage';
 import {
@@ -1052,21 +1053,11 @@ export interface StripeBillingOwner {
 }
 
 export async function readStripeBillingOwner(userId: string): Promise<StripeBillingOwner> {
-  const [owner] = await getNeonDb().query<{
-    stripe_subscription_id: string | null;
-    stripe_customer_id: string | null;
-  }>(
-    `select subscription.stripe_subscription_id,
-            coalesce(subscription.stripe_customer_id, profile.stripe_customer_id) as stripe_customer_id
-       from public.${PROFILE_TABLE} profile
-       left join public.subscriptions subscription on subscription.user_id = profile.id
-      where profile.id = $1
-      limit 1`,
-    [userId],
-  );
+  const db = getNeonDb();
+  const row = await readBillingOwnerRow(db, userId);
   return {
-    subscriptionReference: owner?.stripe_subscription_id ?? null,
-    customerReference: owner?.stripe_customer_id ?? null,
+    subscriptionReference: row?.stripe_subscription_id ?? null,
+    customerReference: await resolveBillingCustomerId(db, userId, row),
   };
 }
 

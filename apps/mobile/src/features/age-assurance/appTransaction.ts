@@ -1,4 +1,5 @@
 import { NativeModules, Platform } from 'react-native';
+import type { MobileAppTransactionRegistrationRequest } from '@agiworkforce/types';
 import { storage } from '@/lib/mmkv';
 import { api } from '@/services/api';
 
@@ -32,7 +33,8 @@ export async function registerAppTransactionForAccount(userId: string): Promise<
   if (!module?.signedAppTransaction) return;
   try {
     const signedAppTransaction = await module.signedAppTransaction();
-    await api.post(APP_TRANSACTION_PATH, { signedAppTransaction });
+    const body: MobileAppTransactionRegistrationRequest = { signedAppTransaction };
+    await api.post(APP_TRANSACTION_PATH, body);
     storage.set(registeredKey(userId), new Date().toISOString());
   } catch (error) {
     console.warn('[AgeAssurance] App transaction not registered, retrying next sign-in', error);

@@ -341,11 +341,7 @@ impl fmt::Display for CliError {
                 write!(f, "[{}] Stream error: {}", provider, message)
             }
             CliError::AccountSignedOut { model } => {
-                write!(
-                    f,
-                    "No AGI session, and no provider key for '{}'.",
-                    model
-                )
+                write!(f, "No AGI session, and no provider key for '{}'.", model)
             }
             CliError::PlanExcludesModel { model, tier, .. } => {
                 write!(
@@ -1218,9 +1214,9 @@ mod tests {
         .context("while running the turn");
         let text = terminal_text(&error);
         assert!(text.starts_with("while running the turn: No AGI session"));
-        assert!(text.ends_with(
-            "Run `agi login` to use your AGI plan, or set the provider's own key."
-        ));
+        assert!(
+            text.ends_with("Run `agi login` to use your AGI plan, or set the provider's own key.")
+        );
         assert_eq!(terminal_text(&anyhow::anyhow!("plain")), "plain");
     }
 
@@ -1509,10 +1505,7 @@ mod tests {
     #[test]
     fn a_missing_managed_session_hint_names_only_the_plan_sign_in() {
         let err = CliError::auth_missing("managed_cloud", "No AGI session found.");
-        assert_eq!(
-            err.hint(),
-            "Run `agi login` to use your AGI plan."
-        );
+        assert_eq!(err.hint(), "Run `agi login` to use your AGI plan.");
     }
 
     #[test]

@@ -495,11 +495,7 @@ pub fn install_manifests(extension_id: Option<&str>) -> Result<Vec<PathBuf>> {
         .to_str()
         .ok_or_else(|| anyhow!("Invalid executable path"))?;
 
-    let mut manifest = NativeHostManifest::new(
-        host_name,
-        "AGI Desktop browser host",
-        exe_path_str,
-    );
+    let mut manifest = NativeHostManifest::new(host_name, "AGI Desktop browser host", exe_path_str);
 
     for ext_id in DEFAULT_BROWSER_EXTENSION_IDS {
         manifest.add_extension(ext_id);

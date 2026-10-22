@@ -334,8 +334,7 @@ pub enum RejectedSessionRecovery {
     Unavailable,
 }
 
-pub const SESSION_ENDED_MESSAGE: &str =
-    "Your AGI session ended. Sign in again to continue.";
+pub const SESSION_ENDED_MESSAGE: &str = "Your AGI session ended. Sign in again to continue.";
 
 fn stored_managed_grant(store: &AuthStore) -> Option<(String, String)> {
     match store.entries.get("agiworkforce") {
@@ -408,8 +407,7 @@ pub async fn recover_rejected_session(rejected_access: &str) -> RejectedSessionR
         crate::oauth::DeviceSessionRenewal::Revoked => forget_session(),
         crate::oauth::DeviceSessionRenewal::Refused(reason) => {
             RejectedSessionRecovery::Refused(reason.unwrap_or_else(|| {
-                "AGI did not renew this session. Sign in again on agiworkforce.com."
-                    .to_string()
+                "AGI did not renew this session. Sign in again on agiworkforce.com.".to_string()
             }))
         }
         crate::oauth::DeviceSessionRenewal::Unavailable => RejectedSessionRecovery::Unavailable,

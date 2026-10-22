@@ -694,9 +694,7 @@ fn print_status(status: RemoteControlStatus) {
             println!("Remote Control: the phone disconnected. Waiting for it to come back.")
         }
         RemoteControlStatus::PhoneNeedsUpdate => {
-            eprintln!(
-                "The phone runs an older AGI Mobile build. Update the app, then pair again."
-            )
+            eprintln!("The phone runs an older AGI Mobile build. Update the app, then pair again.")
         }
         RemoteControlStatus::Reconnecting => {
             println!("Remote Control: the relay connection dropped. Reconnecting.")
