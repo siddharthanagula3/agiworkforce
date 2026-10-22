@@ -22,6 +22,13 @@ what is specific to Claude Code.
   only; public-page design options run on Fable. Unconfigured sub-agents default
   to Sonnet (`CLAUDE_CODE_SUBAGENT_MODEL` in `.claude/settings.json`), and agent
   teams are off unless a session turns them on.
+- On the owner's machine the limit is RAM, not tokens: the plan (Max 20x) may
+  spend a five-hour window in one hour, the laptop has 16 GB. Run reading,
+  thinking and editing agents in parallel freely, but local heavy jobs one at a
+  time through `scripts/dev/heavy-job.sh` (builds, full suites, `tsc`, cargo,
+  dev servers, browsers, emulators, `git push`) and scoped tests or lint through
+  `scripts/dev/light-job.sh`. `.claude/hooks/heavy-job-gate.py` denies an
+  unwrapped heavy command on machines with 24 GB or less.
 - Give each agent a narrow scope and an explicit expected output. Never let two
   agents write the same file concurrently: one spec file per agent, deleted when
   it finishes.
@@ -53,7 +60,9 @@ its symlink there; never put a skill's files directly in `.claude/skills/`.
 Personal permissions, output style and MCP servers stay in user scope or the
 ignored `.claude/settings.local.json`; never let a rule depend on them.
 
-The hooks are conveniences over rules enforced elsewhere:
+`.claude/hooks/heavy-job-gate.py` is the one hook that enforces a rule of its
+own (heavy jobs through the locks, above). The other two are conveniences over
+rules enforced elsewhere:
 `.claude/hooks/block-lock-files.sh` blocks writes to `pnpm-lock.yaml` and
 `Cargo.lock` (AGENTS.md §12), and `.claude/hooks/prettier-format.sh` formats on
 write (`lint-staged` covers the committed path, so do not hand-format or fight
