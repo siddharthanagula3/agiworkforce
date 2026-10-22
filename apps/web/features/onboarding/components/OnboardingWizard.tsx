@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useCurrentUser } from '@/lib/identity/client';
 import {
@@ -22,6 +23,7 @@ import {
 } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 import { toUserMessage } from '@/lib/user-error-message';
+import { CANONICAL_POLICY_ROUTES } from '@/lib/legal-constants';
 import { WORK_DESCRIPTIONS } from '@/features/settings/constants/work-descriptions';
 import { ONBOARDING_USE_CASES } from '../lib/use-cases';
 import {
@@ -35,6 +37,7 @@ const TOTAL_STEPS = 2;
 const CHAT_PATH = '/chat';
 const USE_CASE_DISCLOSURE =
   'This picks the suggestions below and nothing else. It is not saved to your account, and it does not label you or change which models you can use.';
+const DATA_USE_LINK_LABEL = 'Learn more';
 const EXPLANATION_SUMMARY = 'How this works';
 const EXPLANATION_POINTS: readonly string[] = [
   'Every chat starts with a model you pick, from any provider we support. Change it per message in the composer.',
@@ -228,7 +231,15 @@ export function OnboardingWizard() {
                   ))}
                 </RadioGroup>
               </fieldset>
-              <p className="text-xs text-muted-foreground">{USE_CASE_DISCLOSURE}</p>
+              <p className="text-sm text-muted-foreground">
+                {USE_CASE_DISCLOSURE}{' '}
+                <Link
+                  href={CANONICAL_POLICY_ROUTES.dataUse}
+                  className="rounded-sm text-foreground underline underline-offset-2 hover:no-underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  {DATA_USE_LINK_LABEL}
+                </Link>
+              </p>
               <StarterPrompts
                 useCase={primaryUseCase || null}
                 onSelect={(prompt) => void finish(prompt)}

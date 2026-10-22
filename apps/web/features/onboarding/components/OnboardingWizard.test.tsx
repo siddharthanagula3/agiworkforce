@@ -175,6 +175,20 @@ describe('OnboardingWizard', () => {
     expect(screen.getByText(/not saved to your account, and it does not label you/i)).toBeVisible();
   });
 
+  it('links the use-case disclosure to the data-use page', async () => {
+    const user = userEvent.setup();
+    render(<OnboardingWizard />);
+
+    await screen.findByDisplayValue('Ada');
+    await user.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: 'What do you want to do first?' });
+
+    const link = screen.getByRole('link', { name: 'Learn more' });
+    expect(link).toHaveAttribute('href', '/data-use');
+    expect(link).toHaveClass('underline');
+    expect(link.closest('p')).toHaveTextContent(/not saved to your account/i);
+  });
+
   it('offers the explanation collapsed, so nobody has to read it to get started', async () => {
     render(<OnboardingWizard />);
 
