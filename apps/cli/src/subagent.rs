@@ -16,6 +16,51 @@ use crate::terminal_style as ts;
 // Types
 // ---------------------------------------------------------------------------
 
+/// The route a parent session runs on. A child runs on exactly this provider
+/// and privacy mode: re-deriving a route from process defaults let a Local
+/// session's child reach a cloud provider (AGENTS.md section 6).
+#[derive(Debug, Clone)]
+pub struct InheritedRoute {
+    pub model: String,
+    pub provider: crate::models::Provider,
+    pub privacy_mode: crate::agent::PrivacyMode,
+}
+
+impl InheritedRoute {
+    pub fn of(session: &crate::agent::AgentSession) -> Self {
+        Self {
+            model: session.model.clone(),
+            provider: session.provider.clone(),
+            privacy_mode: session.privacy_mode,
+        }
+    }
+
+    /// Build a child session on this route, refusing one whose provider would
+    /// leave the parent's trust boundary.
+    pub(crate) fn child_session(
+        &self,
+        sys_context: &SystemContext,
+    ) -> Result<crate::agent::AgentSession> {
+        let mut session = crate::agent::AgentSession::new_with_provider(
+            &self.model,
+            sys_context,
+            None,
+            self.provider.clone(),
+        );
+        session.set_privacy_mode(self.privacy_mode);
+        let route_mode = session.provider_privacy_mode();
+        if route_mode != self.privacy_mode {
+            bail!(
+                "A subagent cannot start: this session is {}, but model `{}` routes through {} mode. A subagent never leaves its parent's trust boundary.",
+                self.privacy_mode.trust_word(),
+                self.model,
+                route_mode.trust_word()
+            );
+        }
+        Ok(session)
+    }
+}
+
 /// Status of a running or completed subagent.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SubagentStatus {
@@ -277,8 +322,8 @@ pub struct SubagentManager {
     next_id: Arc<RwLock<u64>>,
     /// Cloned config for subagent sessions.
     config: CliConfig,
-    /// Model for subagents (inherited from parent).
-    model: String,
+    /// Route every subagent inherits from the parent session.
+    route: InheritedRoute,
     /// System context for subagent sessions.
     sys_context: SystemContext,
     /// Whether subagents skip tool confirmation prompts.
@@ -298,7 +343,7 @@ pub struct SubagentManager {
 
 struct SubagentRunConfig {
     config: CliConfig,
-    model: String,
+    route: InheritedRoute,
     /// Depth the spawned child session runs at (owning manager's depth + 1).
     depth: usize,
     /// Per-child spend cap, distinct from the parent's own budget.
@@ -319,7 +364,7 @@ impl SubagentManager {
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         config: CliConfig,
-        model: String,
+        route: InheritedRoute,
         sys_context: SystemContext,
         skip_permissions: bool,
         permission_mode: crate::cli_options::PermissionMode,
@@ -333,7 +378,7 @@ impl SubagentManager {
             depth,
             next_id: Arc::new(RwLock::new(1)),
             config,
-            model,
+            route,
             sys_context,
             skip_permissions,
             permission_mode,
@@ -366,13 +411,13 @@ impl SubagentManager {
     /// interactive session before the next spawn.
     pub fn sync_parent_authority(
         &mut self,
-        model: String,
+        route: InheritedRoute,
         skip_permissions: bool,
         permission_mode: crate::cli_options::PermissionMode,
         allowed_tools: Option<Vec<String>>,
         disallowed_tools: Vec<String>,
     ) {
-        self.model = model;
+        self.route = route;
         self.skip_permissions = skip_permissions;
         self.permission_mode = permission_mode;
         self.allowed_tools = allowed_tools;
@@ -486,7 +531,7 @@ impl SubagentManager {
         let task_prompt = prompt.to_string();
         let task_run_config = SubagentRunConfig {
             config: self.config.clone(),
-            model: self.model.clone(),
+            route: self.route.clone(),
             depth: self.depth + 1,
             max_budget_usd: child_budget_usd,
             sys_context: self.sys_context.clone(),
@@ -840,17 +885,7 @@ async fn run_subagent(
     prompt: &str,
     cancelled: &std::sync::atomic::AtomicBool,
 ) -> Result<(String, crate::agent::TurnResult, Vec<String>)> {
-    let mut session = crate::agent::AgentSession::new_checked(
-        &run_config.model,
-        &run_config.sys_context,
-        None,
-        crate::models::selection_provider_override(
-            &run_config.model,
-            &run_config.config.default.model,
-            &run_config.config.default.provider,
-            None,
-        ),
-    )?;
+    let mut session = run_config.route.child_session(&run_config.sys_context)?;
     if let Some(authority) = run_config.workspace_authority.clone() {
         session.install_workspace_file_authority(authority);
     }
@@ -1151,7 +1186,7 @@ mod tests {
             crate::path_security::WorkspaceFileAuthority::new(&granted).expect("authority");
         let mut manager = SubagentManager::new(
             CliConfig::default(),
-            "fixture-local-model:latest".into(),
+            local_route("fixture-local-model:latest"),
             crate::context::gather_system_context(),
             false,
             crate::cli_options::PermissionMode::Default,
@@ -1193,7 +1228,7 @@ mod tests {
     fn manager_refreshes_parent_authority_before_spawn() {
         let mut manager = SubagentManager::new(
             CliConfig::default(),
-            "fixture-local-model:latest".to_string(),
+            local_route("fixture-local-model:latest"),
             crate::context::gather_system_context(),
             false,
             crate::cli_options::PermissionMode::Default,
@@ -1203,14 +1238,14 @@ mod tests {
         );
 
         manager.sync_parent_authority(
-            "fixture-subagent-model".to_string(),
+            local_route("fixture-subagent-model"),
             true,
             crate::cli_options::PermissionMode::AcceptEdits,
             Some(vec!["read_file".to_string()]),
             vec!["web_fetch".to_string()],
         );
 
-        assert_eq!(manager.model, "fixture-subagent-model");
+        assert_eq!(manager.route.model, "fixture-subagent-model");
         assert!(manager.skip_permissions);
         assert_eq!(
             manager.permission_mode,
@@ -1220,10 +1255,90 @@ mod tests {
         assert_eq!(manager.disallowed_tools, vec!["web_fetch".to_string()]);
     }
 
+    fn local_route(model: &str) -> InheritedRoute {
+        InheritedRoute {
+            model: model.to_string(),
+            provider: crate::models::Provider::Ollama(crate::models::OllamaMode::Local),
+            privacy_mode: crate::agent::PrivacyMode::Local,
+        }
+    }
+
+    #[test]
+    fn a_local_session_s_subagent_stays_on_the_local_route_whatever_the_process_default() {
+        let context = crate::context::gather_system_context();
+        let parent = crate::agent::AgentSession::new_checked(
+            "fixture-local-model:latest",
+            &context,
+            None,
+            Some("ollama"),
+        )
+        .expect("Local parent");
+        assert_eq!(parent.privacy_mode, crate::agent::PrivacyMode::Local);
+
+        let mut config = CliConfig::default();
+        config.default.model = parent.model.clone();
+        config.default.provider = "ollama-cloud".to_string();
+        let manager = SubagentManager::new(
+            config,
+            InheritedRoute::of(&parent),
+            context.clone(),
+            false,
+            crate::cli_options::PermissionMode::Default,
+            None,
+            Vec::new(),
+            0,
+        );
+
+        let child = manager
+            .route
+            .child_session(&manager.sys_context)
+            .expect("child on the parent's route");
+        assert_eq!(child.provider, parent.provider);
+        assert_eq!(child.privacy_mode, crate::agent::PrivacyMode::Local);
+        assert!(child.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn a_subagent_refuses_to_start_when_the_route_leaves_the_parent_s_privacy_mode() {
+        let route = InheritedRoute {
+            model: "fixture-hosted-model".to_string(),
+            provider: crate::models::Provider::Ollama(crate::models::OllamaMode::Cloud),
+            privacy_mode: crate::agent::PrivacyMode::Local,
+        };
+
+        let error = route
+            .child_session(&crate::context::gather_system_context())
+            .expect_err("a Local parent's child must not run on a cloud route");
+        let message = format!("{error:#}");
+        assert!(
+            message.contains("never leaves its parent's trust boundary"),
+            "{message}"
+        );
+        assert!(message.contains("Local"), "{message}");
+    }
+
+    #[test]
+    fn a_byok_session_s_subagent_keeps_the_parent_s_provider_and_privacy_mode() {
+        let route = InheritedRoute {
+            model: "fixture-hosted-model".to_string(),
+            provider: crate::models::Provider::Ollama(crate::models::OllamaMode::Cloud),
+            privacy_mode: crate::agent::PrivacyMode::Byok,
+        };
+
+        let child = route
+            .child_session(&crate::context::gather_system_context())
+            .expect("child on the parent's BYOK route");
+        assert_eq!(
+            child.provider,
+            crate::models::Provider::Ollama(crate::models::OllamaMode::Cloud)
+        );
+        assert_eq!(child.privacy_mode, crate::agent::PrivacyMode::Byok);
+    }
+
     fn root_manager() -> SubagentManager {
         SubagentManager::new(
             CliConfig::default(),
-            "fixture-local-model:latest".to_string(),
+            local_route("fixture-local-model:latest"),
             crate::context::gather_system_context(),
             false,
             crate::cli_options::PermissionMode::Default,
@@ -1332,7 +1447,7 @@ mod tests {
     async fn spawn_refused_at_max_depth() {
         let manager = SubagentManager::new(
             CliConfig::default(),
-            "fixture-local-model:latest".to_string(),
+            local_route("fixture-local-model:latest"),
             crate::context::gather_system_context(),
             false,
             crate::cli_options::PermissionMode::Default,
@@ -1359,7 +1474,7 @@ mod tests {
     async fn manager_shutdown_cancels_and_joins_background_threads() {
         let manager = SubagentManager::new(
             CliConfig::default(),
-            "fixture-local-model:latest".to_string(),
+            local_route("fixture-local-model:latest"),
             crate::context::gather_system_context(),
             false,
             crate::cli_options::PermissionMode::Default,
@@ -1404,7 +1519,7 @@ mod tests {
     async fn wait_all_yields_so_an_aborted_turn_releases_its_session() {
         let manager = Arc::new(SubagentManager::new(
             CliConfig::default(),
-            "fixture-local-model:latest".to_string(),
+            local_route("fixture-local-model:latest"),
             crate::context::gather_system_context(),
             false,
             crate::cli_options::PermissionMode::Default,

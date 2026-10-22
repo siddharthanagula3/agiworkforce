@@ -1779,7 +1779,7 @@ impl TurnHostAdapter<'_> {
             name,
             prompt,
             config: self.config.clone(),
-            model: self.session.model.clone(),
+            route: crate::subagent::InheritedRoute::of(self.session),
             sys_context: crate::context::gather_system_context(),
             skip_permissions: self.session.skips_approval(),
             permission_mode: self.session.governed_permission_mode(),
@@ -2737,7 +2737,7 @@ impl TurnHost for TurnHostAdapter<'_> {
             if self.session.subagent_manager.is_none() {
                 self.session.subagent_manager = Some(crate::subagent::SubagentManager::new(
                     self.config.clone(),
-                    self.session.model.clone(),
+                    crate::subagent::InheritedRoute::of(self.session),
                     crate::context::gather_system_context(),
                     self.session.skips_approval(),
                     self.session.governed_permission_mode(),
@@ -2760,7 +2760,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 manager.set_workspace_authority(workspace_authority);
                 manager.set_cost_budget(cost_budget);
             }
-            let parent_model = self.session.model.clone();
+            let parent_route = crate::subagent::InheritedRoute::of(self.session);
             let parent_skip_permissions = self.session.skips_approval();
             let parent_permission_mode = self.session.governed_permission_mode();
             let parent_allowed_tools = self.session.allowed_tools.clone();
@@ -2770,7 +2770,7 @@ impl TurnHost for TurnHostAdapter<'_> {
                 .as_mut()
                 .expect("subagent_manager was just initialized above")
                 .sync_parent_authority(
-                    parent_model,
+                    parent_route,
                     parent_skip_permissions,
                     parent_permission_mode,
                     parent_allowed_tools,

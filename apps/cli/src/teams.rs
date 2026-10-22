@@ -146,7 +146,7 @@ pub struct TeammateLaunch {
     pub role: String,
     pub prompt: String,
     pub config: crate::config::CliConfig,
-    pub model: String,
+    pub route: crate::subagent::InheritedRoute,
     pub sys_context: crate::context::SystemContext,
     pub skip_permissions: bool,
     pub permission_mode: crate::cli_options::PermissionMode,
@@ -558,17 +558,7 @@ async fn wait_for_stop(stop: &AtomicBool) {
 
 async fn run_teammate(team: TeamManager, launch: TeammateLaunch, stop: Arc<AtomicBool>) {
     let name = launch.name.clone();
-    let mut session = match crate::agent::AgentSession::new_checked(
-        &launch.model,
-        &launch.sys_context,
-        None,
-        crate::models::selection_provider_override(
-            &launch.model,
-            &launch.config.default.model,
-            &launch.config.default.provider,
-            None,
-        ),
-    ) {
+    let mut session = match launch.route.child_session(&launch.sys_context) {
         Ok(session) => session,
         Err(error) => {
             let _ = team

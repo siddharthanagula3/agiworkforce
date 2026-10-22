@@ -10637,9 +10637,8 @@ mod tests {
         base.default.provider = crate::model_catalog::default_provider().to_string();
         base.default.model = crate::model_catalog::default_model().to_string();
 
-        // This is the derivation `subagent::run_subagent` performs for its own
-        // session. Against the process defaults it resolves to nothing, so the
-        // child re-derives a route the parent never authorized.
+        // Against the process defaults the session's model resolves to no
+        // provider, so a route derived from them is not the one this session runs.
         assert!(crate::models::selection_provider_override(
             &agent.model,
             &base.default.model,
