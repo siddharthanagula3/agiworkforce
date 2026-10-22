@@ -67,17 +67,24 @@ const CARD_BODY: CSSProperties = {
   margin: 0,
 };
 const CARD_TITLE: CSSProperties = {
-  fontSize: 13,
+  fontSize: 14,
   fontWeight: 600,
   color: 'var(--text-2)',
   margin: 0,
 };
 const CARD_NOTE: CSSProperties = {
-  fontSize: 12,
+  fontSize: 14,
   color: 'var(--text-3)',
   margin: 'var(--space-1) 0 0',
 };
-const DETAIL: CSSProperties = { fontSize: 12, color: 'var(--text-3)' };
+const DETAIL: CSSProperties = { fontSize: 14, color: 'var(--text-3)' };
+const CRITICAL_DETAIL: CSSProperties = { fontSize: 14, color: 'var(--chat-destructive-text)' };
+const STATUS_LINE: CSSProperties = {
+  fontSize: 18,
+  fontWeight: 500,
+  color: 'var(--text-1)',
+  margin: 0,
+};
 const ROW: CSSProperties = {
   display: 'flex',
   alignItems: 'baseline',
@@ -86,11 +93,11 @@ const ROW: CSSProperties = {
 };
 
 const QUIET_BUTTON_CLASS =
-  'inline-flex min-h-8 items-center gap-1.5 rounded-md border border-[var(--settings-border)] px-2.5 text-xs font-medium text-[var(--text-2)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 pointer-coarse:min-h-11';
+  'inline-flex min-h-8 items-center gap-1.5 rounded-md border border-[var(--settings-border)] px-2.5 text-sm font-medium text-[var(--text-2)] transition-colors hover:bg-[var(--bg-hover)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-default disabled:opacity-50 pointer-coarse:min-h-11';
 const PRIMARY_BUTTON_CLASS =
-  'inline-flex min-h-8 items-center justify-center rounded-md bg-primary px-3 text-xs font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 pointer-coarse:min-h-11';
+  'inline-flex min-h-8 items-center justify-center rounded-md bg-primary px-3 text-sm font-medium text-primary-foreground transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 pointer-coarse:min-h-11';
 const FIELD_CLASS =
-  'w-full rounded-md border border-[var(--settings-border)] bg-background px-3 py-2 text-[13px] text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring disabled:opacity-60';
+  'w-full rounded-md border border-[var(--settings-border)] bg-background px-3 py-2 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-1 focus:ring-ring disabled:opacity-60';
 
 const GRANULARITY_OPTIONS: readonly { value: Granularity; label: string }[] = [
   { value: 'day', label: 'Days' },
@@ -118,6 +125,34 @@ function formatAbsolute(value: string): string {
     hour: 'numeric',
     minute: '2-digit',
   });
+}
+
+function formatResetMoment(value: string, nowMs: number): string {
+  const at = new Date(value);
+  const sameDay = at.toDateString() === new Date(nowMs).toDateString();
+  return at.toLocaleString(
+    undefined,
+    sameDay
+      ? { hour: 'numeric', minute: '2-digit' }
+      : { weekday: 'short', hour: 'numeric', minute: '2-digit' },
+  );
+}
+
+type UsageStatus = 'none' | 'on-track' | 'close' | 'limit';
+
+const USAGE_STATUS_COPY: Record<UsageStatus, string> = {
+  none: 'No usage yet. Your full limits are available.',
+  'on-track': 'On track. You should reach the next reset with room to spare.',
+  close: 'Getting close. Some limits are nearly used up.',
+  limit: 'Limit reached. Use credits or wait for the reset below.',
+};
+
+function usageStatus(percents: readonly number[]): UsageStatus {
+  const highest = Math.max(...percents);
+  if (highest >= 100) return 'limit';
+  if (highest >= 90) return 'close';
+  if (highest <= 0) return 'none';
+  return 'on-track';
 }
 
 function formatCreditAmount(value: number): string {
@@ -223,7 +258,7 @@ function useUsageResource<T>(
 function RetryNotice({ message, onRetry }: { message: string; onRetry: () => void }) {
   return (
     <div role="alert" style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <span style={{ fontSize: 12, color: 'var(--text-2)' }}>{message}</span>
+      <span style={{ fontSize: 14, color: 'var(--text-2)' }}>{message}</span>
       <button type="button" onClick={onRetry} className={`${QUIET_BUTTON_CLASS} self-start`}>
         Try again
       </button>
@@ -263,8 +298,8 @@ function UsageBar({
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
       <div style={ROW}>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
-        <span style={DETAIL}>
+        <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>{label}</span>
+        <span style={urgency === 'critical' && !unknown ? CRITICAL_DETAIL : DETAIL}>
           {unknown ? 'Unavailable' : `${Math.max(0, Math.min(100, Math.round(percent)))}% used`}
         </span>
       </div>
@@ -293,6 +328,7 @@ function usageDetail(
   nowMs: number,
   window?: ManagedUsageCreditWindow | null,
 ): string {
+  if (percentRemaining <= 0 && resetAt) return `Resets at ${formatResetMoment(resetAt, nowMs)}`;
   const remaining = window
     ? formatCreditWindowUsage(window.used, window.allowance)
     : formatUsageRemaining(percentRemaining);
@@ -305,8 +341,8 @@ function BalanceRow({ label, value, detail }: { label: string; value: string; de
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
       <div style={ROW}>
-        <dt style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{label}</dt>
-        <dd style={{ fontSize: 13, color: 'var(--text-1)', margin: 0 }}>{value}</dd>
+        <dt style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>{label}</dt>
+        <dd style={{ fontSize: 14, color: 'var(--text-1)', margin: 0 }}>{value}</dd>
       </div>
       <dd style={{ ...DETAIL, margin: 0 }}>{detail}</dd>
     </div>
@@ -356,9 +392,18 @@ function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
   return (
     <section aria-labelledby="usage-balances-heading" style={CARD}>
       <div style={CARD_HEADER}>
-        <h2 id="usage-balances-heading" style={CARD_TITLE}>
-          Credit balances
-        </h2>
+        <div style={{ ...ROW, alignItems: 'center' }}>
+          <h2 id="usage-balances-heading" style={CARD_TITLE}>
+            Credit balances
+          </h2>
+          <SettingsSectionLink
+            section="billing"
+            className={`${QUIET_BUTTON_CLASS} rounded-full`}
+            style={{ border: '1px solid var(--settings-border)', padding: '0 var(--space-3)' }}
+          >
+            Buy credits
+          </SettingsSectionLink>
+        </div>
         <p style={CARD_NOTE}>
           Once a plan limit is reached, bonus credits are used first, soonest to expire, then
           purchased credits.
@@ -380,7 +425,7 @@ function AllowanceRow({ unit }: { unit: TierUnitUsage }) {
   if (limit === null) {
     return (
       <div style={ROW}>
-        <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>{copy.label}</span>
+        <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>{copy.label}</span>
         <span style={DETAIL}>{`${used}, no monthly cap`}</span>
       </div>
     );
@@ -410,7 +455,7 @@ function VoiceEstimateRow({
   if (minutes === null) return null;
   return (
     <div style={ROW} data-testid="usage-voice-estimate">
-      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>Voice</span>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>Voice</span>
       <span style={DETAIL}>
         {minutes > 0
           ? `About ${formatCount(minutes, 'counts.usageMinutes', 'minute', 'minutes')} of voice left at today's price`
@@ -424,7 +469,7 @@ function RunningResponsesRow({ reading }: { reading: AccountUsageLimitsResponse[
   if (!reading) return null;
   return (
     <div style={ROW}>
-      <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
+      <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>
         Responses running now
       </span>
       <span style={DETAIL}>{`${reading.active} of ${reading.limit} at a time`}</span>
@@ -461,7 +506,7 @@ function MonthlyAllowancesCard({ resource }: { resource: Loadable<AccountUsageLi
             ))}
             {showImages && (
               <div style={ROW}>
-                <span style={{ fontSize: 13, fontWeight: 500, color: 'var(--text-2)' }}>
+                <span style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-2)' }}>
                   Images
                 </span>
                 <span style={DETAIL}>
@@ -490,7 +535,7 @@ function HistoryRows({
   if (rows.length === 0) return null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
-      <h3 style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>
+      <h3 style={{ fontSize: 14, fontWeight: 600, color: 'var(--text-2)', margin: 0 }}>
         {caption}
       </h3>
       {rows.slice(0, limit).map((row) => (
@@ -574,7 +619,7 @@ function DiscrepancyReportForm({
         role="status"
         style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
       >
-        <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+        <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
           {`Report filed as “${filed.subject}”, with the usage record for that period attached.`}
         </span>
         <span style={DETAIL}>
@@ -585,7 +630,7 @@ function DiscrepancyReportForm({
         <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
           <SettingsSectionLink
             section="help"
-            className="text-xs text-primary underline underline-offset-4"
+            className="text-sm text-primary underline underline-offset-4"
           >
             Open Help
           </SettingsSectionLink>
@@ -603,7 +648,7 @@ function DiscrepancyReportForm({
       style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-3)' }}
     >
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-foreground">Period</span>
+        <span className="text-sm font-medium text-foreground">Period</span>
         <select
           className={FIELD_CLASS}
           value={periodKey}
@@ -619,7 +664,7 @@ function DiscrepancyReportForm({
         </select>
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-foreground">Request ID (optional)</span>
+        <span className="text-sm font-medium text-foreground">Request ID (optional)</span>
         <input
           className={FIELD_CLASS}
           value={requestId}
@@ -631,7 +676,7 @@ function DiscrepancyReportForm({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-foreground">
+        <span className="text-sm font-medium text-foreground">
           Invoice or charge reference (optional)
         </span>
         <input
@@ -644,7 +689,7 @@ function DiscrepancyReportForm({
         />
       </label>
       <label className="flex flex-col gap-1">
-        <span className="text-xs font-medium text-foreground">What looks wrong</span>
+        <span className="text-sm font-medium text-foreground">What looks wrong</span>
         <textarea
           className={`${FIELD_CLASS} resize-y`}
           rows={4}
@@ -654,7 +699,7 @@ function DiscrepancyReportForm({
         />
       </label>
       {error && (
-        <span role="alert" style={{ fontSize: 12, color: 'var(--chat-destructive-text)' }}>
+        <span role="alert" style={{ fontSize: 14, color: 'var(--chat-destructive-text)' }}>
           {error}
         </span>
       )}
@@ -735,7 +780,7 @@ function UsageHistorySection({ enabled }: { enabled: boolean }) {
 
         {shown && shown.totals.requests > 0 && (
           <>
-            <span style={{ fontSize: 13, color: 'var(--text-2)' }}>
+            <span style={{ fontSize: 14, color: 'var(--text-2)' }}>
               {`${formatCount(shown.totals.requests, 'counts.usageRequests', 'request', 'requests')} · ${formatCreditAmount(shown.totals.credits)}`}
             </span>
             <HistoryRows
@@ -837,6 +882,18 @@ export function UsageSection() {
     LIMITS_FAILURE,
   );
 
+  const statusLine =
+    usageUnknown || periodLapsed
+      ? null
+      : USAGE_STATUS_COPY[
+          usageStatus([
+            sessionUsedPercent,
+            weeklyUsedPercent,
+            usedPercent,
+            ...(showFlagship ? [flagshipWeeklyUsedPercent] : []),
+          ])
+        ];
+
   const planAllowanceLine = useMemo(() => {
     if (!usage || !credits) return null;
     const tier = usage.plan_tier.trim().toLowerCase();
@@ -875,14 +932,24 @@ export function UsageSection() {
           Your plan limits in credits, when each one resets, and where your credits went.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
-          <HelpArticleLink docId="usage-and-credits" label="How credits and limits work" />
+          <HelpArticleLink docId="usage-and-credits" label="Learn more about usage limits" />
         </div>
+        {!isFreePlan && (
+          <div style={{ marginTop: 'var(--space-2)' }}>
+            <SettingsSectionLink
+              section="billing"
+              className="text-primary underline underline-offset-4"
+            >
+              Billing history
+            </SettingsSectionLink>
+          </div>
+        )}
       </div>
 
       {error && (
         <div
           role="alert"
-          style={{ ...CARD, padding: 'var(--space-4)', color: 'var(--text-2)', fontSize: 13 }}
+          style={{ ...CARD, padding: 'var(--space-4)', color: 'var(--text-2)', fontSize: 14 }}
         >
           {error}
         </div>
@@ -920,6 +987,11 @@ export function UsageSection() {
             </div>
           ) : (
             <>
+              {statusLine && (
+                <p data-testid="usage-status" style={STATUS_LINE}>
+                  {statusLine}
+                </p>
+              )}
               <UsageBar
                 unknown={usageUnknown}
                 label={managedUsageBucketLabel('session')}

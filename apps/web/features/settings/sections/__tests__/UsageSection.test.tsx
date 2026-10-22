@@ -144,9 +144,9 @@ function stubUsageApi(api: UsageApi): string[] {
   return requested;
 }
 
-function renderSection(onExit = vi.fn()) {
+function renderSection(onExit = vi.fn(), onNavigate = vi.fn()) {
   return render(
-    <SettingsSectionNavigationProvider onNavigate={vi.fn()} onExit={onExit}>
+    <SettingsSectionNavigationProvider onNavigate={onNavigate} onExit={onExit}>
       <UsageSection />
     </SettingsSectionNavigationProvider>,
   );
@@ -191,6 +191,9 @@ describe('UsageSection', () => {
     expect(screen.queryByText('Responses running now')).toBeNull();
     expect(screen.queryByText('Credit balances')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Refresh usage data' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Buy credits' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Billing history' })).toBeNull();
+    expect(screen.queryByTestId('usage-status')).toBeNull();
     expect(requested).not.toContain('/api/usage/limits');
   });
 
@@ -481,5 +484,64 @@ describe('UsageSection contract-priced plans', () => {
     expect(requested).toEqual(['/api/usage']);
     fireEvent.click(screen.getByRole('link', { name: 'View workspace usage' }));
     expect(onExit).toHaveBeenCalledOnce();
+  });
+});
+
+describe('UsageSection status, buy credits and billing links', () => {
+  function stubWith(summary: Record<string, unknown>) {
+    stubUsageApi({
+      summary: () => answer(summary),
+      limits: () => answer(monthlyLimits()),
+      history: () => FAILED,
+    });
+  }
+
+  it('says the account is on track while usage is below the warning level', async () => {
+    stubWith(proSummary());
+    renderSection();
+    expect((await screen.findByTestId('usage-status')).textContent).toMatch(/^On track\./);
+  });
+
+  it('says there is no usage yet when every limit is untouched', async () => {
+    stubWith({
+      ...proSummary(),
+      usage_percentage: 0,
+      session_usage_percentage: 0,
+      weekly_usage_percentage: 0,
+      flagship_weekly_usage_percentage: 0,
+    });
+    renderSection();
+    expect((await screen.findByTestId('usage-status')).textContent).toMatch(/^No usage yet\./);
+  });
+
+  it('warns near a limit and reports a reached one', async () => {
+    stubWith({ ...proSummary(), weekly_usage_percentage: 92 });
+    const first = renderSection();
+    expect((await screen.findByTestId('usage-status')).textContent).toMatch(/^Getting close\./);
+    first.unmount();
+    __resetManagedUsageSummaryForTest();
+
+    stubWith({ ...proSummary(), session_usage_percentage: 100 });
+    renderSection();
+    expect((await screen.findByTestId('usage-status')).textContent).toMatch(/^Limit reached\./);
+  });
+
+  it('shows a full session as red text with the reset time', async () => {
+    stubWith({ ...proSummary(), session_usage_percentage: 100 });
+    renderSection();
+    const label = (await screen.findAllByText('100% used'))[0]!;
+    expect(label.getAttribute('style')).toContain('var(--chat-destructive-text)');
+    expect(screen.getAllByText(/^Resets at /).length).toBeGreaterThan(0);
+  });
+
+  it('opens Billing from the Buy credits pill and the billing history link', async () => {
+    stubWith(proSummary());
+    const onNavigate = vi.fn();
+    renderSection(vi.fn(), onNavigate);
+    fireEvent.click(await screen.findByRole('button', { name: 'Buy credits' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Billing history' }));
+    expect(onNavigate).toHaveBeenNthCalledWith(1, 'billing');
+    expect(onNavigate).toHaveBeenNthCalledWith(2, 'billing');
+    expect(screen.getByText('Learn more about usage limits')).toBeTruthy();
   });
 });
