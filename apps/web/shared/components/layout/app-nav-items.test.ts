@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { describe, expect, it, vi } from 'vitest';
@@ -131,6 +131,30 @@ describe('app rail · workspace feature controls', () => {
   it('keeps every destination when no feature is turned off', () => {
     const ids = buildAppNavItems({ pathname: '/chat', navigate: vi.fn() }).map((item) => item.id);
     expect(ids).toContain('schedules');
+  });
+});
+
+describe('app rail · Scheduled', () => {
+  const englishCommon = JSON.parse(
+    readFileSync(
+      path.resolve(__dirname, '../../../../../packages/ui/i18n/locales/en/common.json'),
+      'utf8',
+    ),
+  ) as Record<string, string>;
+
+  it('names the schedules destination Scheduled, matching the experience contract', () => {
+    const scheduled = APP_NAV_DESTINATIONS.find((destination) => destination.id === 'schedules');
+    expect(scheduled).toMatchObject({ label: 'Scheduled', href: '/chat/schedules' });
+    expect(englishCommon[scheduled?.labelKey ?? '']).toBe('Scheduled');
+  });
+
+  it('renders Scheduled through the English dictionary', () => {
+    const scheduled = buildAppNavItems({
+      pathname: '/chat/schedules',
+      navigate: vi.fn(),
+      translate: (key, fallback) => englishCommon[key] ?? fallback,
+    }).find((item) => item.id === 'schedules');
+    expect(scheduled).toMatchObject({ label: 'Scheduled', isActive: true });
   });
 });
 

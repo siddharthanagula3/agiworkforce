@@ -148,7 +148,7 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
   },
   {
     id: 'schedules',
-    label: 'Schedules',
+    label: 'Scheduled',
     labelKey: 'navSchedules',
     icon: CalendarClock,
     href: '/chat/schedules',
