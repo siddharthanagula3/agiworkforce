@@ -233,6 +233,7 @@ const OPERATIONAL_RECORD = [
   'user_agent_access',
   'user_connectors',
   'user_custom_connectors',
+  'connector_account_states',
   'user_settings',
   'user_two_factor',
   'waitlist',

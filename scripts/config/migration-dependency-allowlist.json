@@ -255,6 +255,26 @@
       "file": "apps/web/lib/services/deletion-manifest.ts",
       "migration": 380,
       "reason": "Classifies the live_artifacts table that 0380 adds in the retention matrix. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0380 is applied."
+    },
+    {
+      "file": "apps/web/app/api/connectors/account-state/route.ts",
+      "migration": 381,
+      "reason": "Reads or writes connector_account_states that 0381 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0381 is applied."
+    },
+    {
+      "file": "apps/web/app/api/llm/v1/chat/completions/lib/connector-tool-permissions.ts",
+      "migration": 381,
+      "reason": "Reads or writes connector_account_states that 0381 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0381 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 381,
+      "reason": "Reads or writes connector_account_states that 0381 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0381 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 381,
+      "reason": "Reads or writes connector_account_states that 0381 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0381 is applied."
     }
   ]
 }
