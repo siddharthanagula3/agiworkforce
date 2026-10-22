@@ -269,6 +269,7 @@ impl WebSearchLocation {
 pub struct WebSearchToolConfig {
     pub context_size: Option<WebSearchContextSize>,
     pub allowed_domains: Option<Vec<String>>,
+    pub blocked_domains: Option<Vec<String>>,
     pub location: Option<WebSearchLocation>,
 }
 
@@ -280,6 +281,10 @@ impl WebSearchToolConfig {
                 .allowed_domains
                 .clone()
                 .or_else(|| self.allowed_domains.clone()),
+            blocked_domains: other
+                .blocked_domains
+                .clone()
+                .or_else(|| self.blocked_domains.clone()),
             location: match (&self.location, &other.location) {
                 (Some(location), Some(other_location)) => Some(location.merge(other_location)),
                 (Some(location), None) => Some(location.clone()),
@@ -294,6 +299,7 @@ impl WebSearchToolConfig {
 #[schemars(deny_unknown_fields)]
 pub struct WebSearchFilters {
     pub allowed_domains: Option<Vec<String>>,
+    pub blocked_domains: Option<Vec<String>>,
 }
 
 #[derive(
@@ -340,10 +346,10 @@ impl From<WebSearchLocation> for WebSearchUserLocation {
 impl From<WebSearchToolConfig> for WebSearchConfig {
     fn from(config: WebSearchToolConfig) -> Self {
         Self {
-            filters: config
-                .allowed_domains
-                .map(|allowed_domains| WebSearchFilters {
-                    allowed_domains: Some(allowed_domains),
+            filters: (config.allowed_domains.is_some() || config.blocked_domains.is_some())
+                .then_some(WebSearchFilters {
+                    allowed_domains: config.allowed_domains,
+                    blocked_domains: config.blocked_domains,
                 }),
             user_location: config.location.map(Into::into),
             search_context_size: config.context_size,
@@ -740,6 +746,7 @@ mod tests {
         let base = WebSearchToolConfig {
             context_size: Some(WebSearchContextSize::Low),
             allowed_domains: Some(vec!["openai.com".to_string()]),
+            blocked_domains: Some(vec!["ads.openai.com".to_string()]),
             location: Some(WebSearchLocation {
                 country: Some("US".to_string()),
                 region: Some("CA".to_string()),
@@ -750,6 +757,7 @@ mod tests {
         let overlay = WebSearchToolConfig {
             context_size: Some(WebSearchContextSize::High),
             allowed_domains: None,
+            blocked_domains: None,
             location: Some(WebSearchLocation {
                 country: None,
                 region: Some("WA".to_string()),
@@ -761,6 +769,7 @@ mod tests {
         let expected = WebSearchToolConfig {
             context_size: Some(WebSearchContextSize::High),
             allowed_domains: Some(vec!["openai.com".to_string()]),
+            blocked_domains: Some(vec!["ads.openai.com".to_string()]),
             location: Some(WebSearchLocation {
                 country: Some("US".to_string()),
                 region: Some("WA".to_string()),
@@ -770,5 +779,74 @@ mod tests {
         };
 
         assert_eq!(expected, base.merge(&overlay));
+    }
+
+    #[test]
+    fn web_search_tool_config_merge_takes_overlay_blocked_domains() {
+        let base = WebSearchToolConfig {
+            blocked_domains: Some(vec!["a.example".to_string()]),
+            ..Default::default()
+        };
+        let overlay = WebSearchToolConfig {
+            blocked_domains: Some(vec!["b.example".to_string()]),
+            ..Default::default()
+        };
+        assert_eq!(
+            Some(vec!["b.example".to_string()]),
+            base.merge(&overlay).blocked_domains
+        );
+        assert_eq!(
+            Some(vec!["a.example".to_string()]),
+            base.merge(&WebSearchToolConfig::default()).blocked_domains
+        );
+    }
+
+    #[test]
+    fn web_search_config_carries_both_domain_lists_into_filters() {
+        let blocked_only = WebSearchConfig::from(WebSearchToolConfig {
+            blocked_domains: Some(vec!["blocked.example".to_string()]),
+            ..Default::default()
+        });
+        assert_eq!(
+            Some(WebSearchFilters {
+                allowed_domains: None,
+                blocked_domains: Some(vec!["blocked.example".to_string()]),
+            }),
+            blocked_only.filters
+        );
+
+        let both = WebSearchConfig::from(WebSearchToolConfig {
+            allowed_domains: Some(vec!["allowed.example".to_string()]),
+            blocked_domains: Some(vec!["bad.allowed.example".to_string()]),
+            ..Default::default()
+        });
+        assert_eq!(
+            Some(WebSearchFilters {
+                allowed_domains: Some(vec!["allowed.example".to_string()]),
+                blocked_domains: Some(vec!["bad.allowed.example".to_string()]),
+            }),
+            both.filters
+        );
+
+        assert_eq!(
+            None,
+            WebSearchConfig::from(WebSearchToolConfig::default()).filters
+        );
+    }
+
+    #[test]
+    fn web_search_tool_config_reads_blocked_domains_and_tolerates_their_absence() {
+        let parsed: WebSearchToolConfig =
+            serde_json::from_str(r#"{"blocked_domains":["blocked.example"]}"#)
+                .expect("deserialize blocked_domains");
+        assert_eq!(
+            Some(vec!["blocked.example".to_string()]),
+            parsed.blocked_domains
+        );
+
+        let legacy: WebSearchToolConfig =
+            serde_json::from_str(r#"{"allowed_domains":["allowed.example"]}"#)
+                .expect("deserialize without blocked_domains");
+        assert_eq!(None, legacy.blocked_domains);
     }
 }
