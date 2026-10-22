@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useSession } from '@/lib/identity/client';
 import {
+  ChevronDown,
   CircleHelp,
   X,
   Code,
@@ -28,7 +29,16 @@ import { ArtifactPreview } from '@/features/chat/components/artifacts/ArtifactPr
 import type { ArtifactData } from '@/features/chat/components/artifacts/ArtifactPreview';
 import { TypeIcon } from '@/features/chat/components/artifacts/artifact-labels';
 import { Eyebrow, Prose } from '@/features/marketing/components/system';
-import { useDialogKeyboard } from '@agiworkforce/ui';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+  useDialogKeyboard,
+} from '@agiworkforce/ui';
 import { MermaidDiagram } from '@agiworkforce/unified-chat';
 import { useMounted } from '@shared/hooks/useMounted';
 import { escapeHTML } from '@shared/utils/html-sanitizer';
@@ -965,7 +975,7 @@ function ArtifactDrawer({ artifact, onClose }: ArtifactDrawerProps) {
   );
 }
 
-function TabButton({
+function ScopeButton({
   active,
   onClick,
   children,
@@ -977,17 +987,19 @@ function TabButton({
   return (
     <button
       type="button"
+      aria-pressed={active}
       onClick={onClick}
       style={{
-        padding: 'var(--space-2) var(--space-4)',
+        minHeight: 36,
+        padding: '0 var(--space-3)',
         borderRadius: 'var(--corner-field)',
         border: 'none',
         fontFamily: 'inherit',
         fontSize: 'var(--agi-text-sm)',
         fontWeight: 500,
         cursor: 'pointer',
-        background: active ? 'var(--agi-ink)' : 'transparent',
-        color: active ? 'var(--agi-bg)' : 'var(--agi-ink-2)',
+        background: active ? 'var(--agi-bg-3)' : 'transparent',
+        color: active ? 'var(--agi-ink)' : 'var(--agi-ink-quiet)',
         transition: 'background 150ms ease, color 150ms ease',
       }}
     >
@@ -996,7 +1008,22 @@ function TabButton({
   );
 }
 
-type TabId = 'yours' | 'inspiration';
+function SectionHeading({ children }: { children: React.ReactNode }) {
+  return (
+    <h2
+      style={{
+        fontSize: 'var(--agi-text-md)',
+        fontWeight: 500,
+        color: 'var(--agi-ink-2)',
+        margin: 'var(--space-8) 0 var(--space-4)',
+      }}
+    >
+      {children}
+    </h2>
+  );
+}
+
+type ScopeId = 'all' | 'yours';
 type OverlayState =
   { kind: 'none' } | { kind: 'category' } | { kind: 'wizard'; category: ArtifactCategory };
 
@@ -1045,17 +1072,25 @@ export interface GalleryClientProps {
 
 export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
   const router = useRouter();
-  const [activeTab, setActiveTab] = useState<TabId>('yours');
+  const [scope, setScope] = useState<ScopeId>('all');
   const [query, setQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('all');
   const [dateFilter, setDateFilter] = useState<DateFilter>('all');
   const [mounted, setMounted] = useState(false);
   const [selectedArtifact, setSelectedArtifact] = useState<Artifact | InspirationCard | null>(null);
   const [overlay, setOverlay] = useState<OverlayState>({ kind: 'none' });
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
+
+  useEffect(() => {
+    if (chrome !== 'app') return;
+    if (typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+    searchInputRef.current?.focus();
+  }, [chrome]);
 
   const { isLoaded: authLoaded, isSignedIn } = useSession();
   const artifacts = useArtifactsStore((s) => s.artifacts);
@@ -1107,16 +1142,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
     return [...byId.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }, [artifacts, indexedArtifacts]);
 
-  const [tabDefaulted, setTabDefaulted] = useState(false);
-
-  // Decided once, after auth and the index settle, so it never overrides a tab the visitor picked.
-  useEffect(() => {
-    if (tabDefaulted || !mounted || !authLoaded || !indexLoaded) return;
-    if (!isSignedIn || sortedArtifacts.length === 0) {
-      setActiveTab('inspiration');
-    }
-    setTabDefaulted(true);
-  }, [tabDefaulted, mounted, authLoaded, indexLoaded, isSignedIn, sortedArtifacts.length]);
+  const yoursLoading = !mounted || !authLoaded || (isSignedIn === true && !indexLoaded);
 
   const normalizedQuery = query.trim().toLowerCase();
 
@@ -1133,6 +1159,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
   const visibleInspiration = useMemo(
     () =>
       INSPIRATION.filter((card) => {
+        if (dateFilter !== 'all') return false;
         if (typeFilter !== 'all' && card.type !== typeFilter) return false;
         return matchesSearch(normalizedQuery, [
           card.title,
@@ -1141,16 +1168,24 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
           card.description,
         ]);
       }),
-    [normalizedQuery, typeFilter],
+    [normalizedQuery, typeFilter, dateFilter],
   );
 
-  // Offering a type the current tab has none of would silently empty the grid,
-  // so the options come from the data the tab actually shows.
   const typeOptions = useMemo(() => {
-    const source: ArtifactData['type'][] =
-      activeTab === 'yours' ? sortedArtifacts.map((a) => a.type) : INSPIRATION.map((c) => c.type);
+    const source: ArtifactData['type'][] = sortedArtifacts.map((a) => a.type);
+    if (scope === 'all') source.push(...INSPIRATION.map((c) => c.type));
     return [...new Set(source)].sort();
-  }, [activeTab, sortedArtifacts]);
+  }, [scope, sortedArtifacts]);
+
+  const filterSummary =
+    [
+      typeFilter === 'all' ? null : languageLabel(typeFilter),
+      dateFilter === 'all'
+        ? null
+        : (DATE_FILTER_OPTIONS.find((option) => option.value === dateFilter)?.label ?? null),
+    ]
+      .filter(Boolean)
+      .join(', ') || 'All';
 
   const filtersActive = normalizedQuery !== '' || typeFilter !== 'all' || dateFilter !== 'all';
 
@@ -1160,11 +1195,15 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
     setDateFilter('all');
   };
 
-  const selectTab = (tab: TabId) => {
-    setActiveTab(tab);
-    // The two tabs carry different type sets; keeping a type the new tab lacks
-    // would show an empty grid under a filter the user cannot see the cause of.
-    setTypeFilter('all');
+  const selectScope = (next: ScopeId) => {
+    setScope(next);
+    if (
+      next === 'yours' &&
+      typeFilter !== 'all' &&
+      !sortedArtifacts.some((artifact) => artifact.type === typeFilter)
+    ) {
+      setTypeFilter('all');
+    }
   };
 
   const handleCategorySelect = (category: ArtifactCategory) => {
@@ -1219,7 +1258,6 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
       >
         {/* Page header */}
         <div className="agi-ds-container" style={{ paddingTop: 'var(--space-8)' }}>
-          {/* Title row with New Artifact button */}
           <div
             style={{
               display: 'flex',
@@ -1234,15 +1272,57 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
               <Eyebrow>Gallery</Eyebrow>
               <h1 className="agi-ds-h1">Artifacts</h1>
             </div>
-            <button
-              type="button"
-              onClick={() => setOverlay({ kind: 'category' })}
-              className="agi-ds-btn"
-              data-variant="secondary"
-            >
-              <Plus size={14} />
-              New Artifact
-            </button>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <button
+                    type="button"
+                    className="agi-ds-btn"
+                    aria-label={`Filter by: ${filterSummary}`}
+                    style={{ background: 'var(--agi-bg-3)', color: 'var(--agi-ink)' }}
+                  >
+                    <span style={{ color: 'var(--agi-ink-quiet)' }}>Filter by</span>
+                    <span>{filterSummary}</span>
+                    <ChevronDown size={14} aria-hidden="true" />
+                  </button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="min-w-[200px]">
+                  <DropdownMenuLabel>Type</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={typeFilter}
+                    onValueChange={(value) => setTypeFilter(value as TypeFilter)}
+                  >
+                    <DropdownMenuRadioItem value="all">All types</DropdownMenuRadioItem>
+                    {typeOptions.map((type) => (
+                      <DropdownMenuRadioItem key={type} value={type}>
+                        {languageLabel(type)}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>Created</DropdownMenuLabel>
+                  <DropdownMenuRadioGroup
+                    value={dateFilter}
+                    onValueChange={(value) => setDateFilter(value as DateFilter)}
+                  >
+                    {DATE_FILTER_OPTIONS.map((option) => (
+                      <DropdownMenuRadioItem key={option.value} value={option.value}>
+                        {option.label}
+                      </DropdownMenuRadioItem>
+                    ))}
+                  </DropdownMenuRadioGroup>
+                </DropdownMenuContent>
+              </DropdownMenu>
+              <button
+                type="button"
+                onClick={() => setOverlay({ kind: 'category' })}
+                className="agi-ds-btn"
+                data-variant="primary"
+              >
+                <Plus size={14} aria-hidden="true" />
+                New artifact
+              </button>
+            </div>
           </div>
 
           <div style={{ marginBottom: 'var(--space-6)' }}>
@@ -1252,73 +1332,20 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
             </Prose>
           </div>
 
-          {/* Tabs */}
-          <div
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 'var(--space-1)',
-              padding: 'var(--space-1)',
-              background: 'var(--agi-bg-2)',
-              border: '1px solid var(--agi-rule)',
-              borderRadius: 'var(--corner-menu)',
-              marginBottom: 'var(--space-5)',
-            }}
-          >
-            <TabButton active={activeTab === 'yours'} onClick={() => selectTab('yours')}>
-              Your artifacts
-            </TabButton>
-            <TabButton
-              active={activeTab === 'inspiration'}
-              onClick={() => selectTab('inspiration')}
-            >
-              Inspiration
-            </TabButton>
-          </div>
-
-          {/* Search + filters */}
           <div
             className="agi-ds-form-row"
-            style={{ alignItems: 'center', marginBottom: 'var(--space-6)' }}
+            style={{ alignItems: 'center', marginBottom: 'var(--space-4)' }}
           >
             <input
+              ref={searchInputRef}
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
-              placeholder="Search artifacts"
+              placeholder="Search artifacts..."
               aria-label="Search artifacts"
               className="agi-ds-input"
               style={{ flex: '1 1 240px', minWidth: 200, boxSizing: 'border-box' }}
             />
-            <select
-              value={typeFilter}
-              onChange={(e) => setTypeFilter(e.target.value as TypeFilter)}
-              aria-label="Filter by type"
-              className="agi-ds-input"
-              style={{ width: 'auto' }}
-            >
-              <option value="all">All types</option>
-              {typeOptions.map((type) => (
-                <option key={type} value={type}>
-                  {languageLabel(type)}
-                </option>
-              ))}
-            </select>
-            {activeTab === 'yours' && (
-              <select
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value as DateFilter)}
-                aria-label="Filter by date"
-                className="agi-ds-input"
-                style={{ width: 'auto' }}
-              >
-                {DATE_FILTER_OPTIONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-            )}
             {filtersActive && (
               <button
                 type="button"
@@ -1338,106 +1365,110 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
               </button>
             )}
           </div>
+
+          <div
+            role="group"
+            aria-label="Show artifacts"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: 'var(--space-1)',
+              marginBottom: 'var(--space-6)',
+            }}
+          >
+            <ScopeButton active={scope === 'all'} onClick={() => selectScope('all')}>
+              All
+            </ScopeButton>
+            <ScopeButton active={scope === 'yours'} onClick={() => selectScope('yours')}>
+              Yours
+            </ScopeButton>
+          </div>
         </div>
 
-        {/* Tab content */}
         <div className="agi-ds-container" style={{ paddingBottom: 'var(--space-9)' }}>
-          {/* Your artifacts tab */}
-          {activeTab === 'yours' && (
-            <>
-              {/* Loading skeleton */}
-              {!mounted ? (
-                <div style={cardGridStyle}>
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <SkeletonCard key={i} />
-                  ))}
-                </div>
-              ) : sortedArtifacts.length === 0 ? (
-                <div
-                  style={{
-                    display: 'flex',
-                    flexDirection: 'column',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 'var(--space-3)',
-                    padding: 'var(--space-9) var(--space-5)',
-                    border: '1px dashed var(--agi-rule)',
-                    borderRadius: 'var(--corner-panel)',
-                    textAlign: 'center',
+          {yoursLoading ? (
+            <div style={cardGridStyle}>
+              {Array.from({ length: 6 }).map((_, i) => (
+                <SkeletonCard key={i} />
+              ))}
+            </div>
+          ) : sortedArtifacts.length === 0 && !filtersActive ? (
+            <div
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 'var(--space-3)',
+                padding: 'var(--space-9) var(--space-5)',
+                textAlign: 'center',
+              }}
+            >
+              <LibraryBig size={32} color="var(--agi-ink-faint)" />
+              <p
+                style={{
+                  fontSize: 'var(--agi-text-md)',
+                  fontWeight: 500,
+                  color: 'var(--agi-ink-2)',
+                  margin: 0,
+                }}
+              >
+                Artifacts you create in conversations will appear here.
+              </p>
+              <p
+                style={{
+                  fontSize: 'var(--agi-text-sm)',
+                  color: 'var(--agi-ink-quiet)',
+                  margin: 0,
+                }}
+              >
+                Try asking AGI to build an HTML component, write a script, or create a diagram.
+              </p>
+              <button
+                type="button"
+                onClick={() => setOverlay({ kind: 'category' })}
+                className="agi-ds-btn"
+                data-testid="gallery-empty-new-artifact"
+                style={{
+                  marginTop: 'var(--space-2)',
+                  borderRadius: 'var(--agi-radius-pill)',
+                  background: 'var(--agi-bg-3)',
+                  color: 'var(--agi-ink)',
+                }}
+              >
+                New artifact
+              </button>
+            </div>
+          ) : visibleArtifacts.length === 0 &&
+            (scope === 'yours' || visibleInspiration.length === 0) ? (
+            <NoMatchesState onClear={clearFilters} />
+          ) : visibleArtifacts.length > 0 ? (
+            <div style={cardGridStyle}>
+              {visibleArtifacts.map((artifact) => (
+                <ArtifactCard
+                  key={artifact.id}
+                  title={artifact.title}
+                  language={artifact.language ?? artifact.type}
+                  subtitle={`Created ${relativeTime(artifact.createdAt)}`}
+                  type={artifact.type}
+                  content={artifact.content}
+                  onClick={() => {
+                    if (artifact.local) {
+                      setSelectedArtifact(artifact.local);
+                      return;
+                    }
+                    if (artifact.conversationId) {
+                      router.push(`/chat/${artifact.conversationId}`);
+                    }
                   }}
-                >
-                  <LibraryBig size={32} color="var(--agi-ink-faint)" />
-                  <p
-                    style={{
-                      fontSize: 'var(--agi-text-md)',
-                      fontWeight: 500,
-                      color: 'var(--agi-ink-2)',
-                      margin: 0,
-                    }}
-                  >
-                    Artifacts you create in conversations will appear here.
-                  </p>
-                  <p
-                    style={{
-                      fontSize: 'var(--agi-text-sm)',
-                      color: 'var(--agi-ink-quiet)',
-                      margin: 0,
-                    }}
-                  >
-                    Try asking AGI to build an HTML component, write a script, or create a diagram.
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setOverlay({ kind: 'category' })}
-                    style={{
-                      marginTop: 'var(--space-2)',
-                      fontSize: 'var(--agi-text-sm)',
-                      fontWeight: 600,
-                      color: 'var(--agi-ink)',
-                      textDecoration: 'underline',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0,
-                      fontFamily: 'inherit',
-                    }}
-                  >
-                    Create your first artifact
-                  </button>
-                </div>
-              ) : visibleArtifacts.length === 0 ? (
-                <NoMatchesState onClear={clearFilters} />
-              ) : (
-                <div style={cardGridStyle}>
-                  {visibleArtifacts.map((artifact) => (
-                    <ArtifactCard
-                      key={artifact.id}
-                      title={artifact.title}
-                      language={artifact.language ?? artifact.type}
-                      subtitle={`Created ${relativeTime(artifact.createdAt)}`}
-                      type={artifact.type}
-                      content={artifact.content}
-                      onClick={() => {
-                        if (artifact.local) {
-                          setSelectedArtifact(artifact.local);
-                          return;
-                        }
-                        if (artifact.conversationId) {
-                          router.push(`/chat/${artifact.conversationId}`);
-                        }
-                      }}
-                    />
-                  ))}
-                </div>
-              )}
-            </>
-          )}
+                />
+              ))}
+            </div>
+          ) : null}
 
-          {/* Inspiration tab */}
-          {activeTab === 'inspiration' &&
-            (visibleInspiration.length === 0 ? (
-              <NoMatchesState onClear={clearFilters} />
-            ) : (
+          {scope === 'all' && visibleInspiration.length > 0 && (
+            <section aria-label="Inspiration">
+              <SectionHeading>Inspiration</SectionHeading>
               <div style={cardGridStyle}>
                 {visibleInspiration.map((card) => (
                   <ArtifactCard
@@ -1451,7 +1482,8 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
                   />
                 ))}
               </div>
-            ))}
+            </section>
+          )}
         </div>
       </div>
 

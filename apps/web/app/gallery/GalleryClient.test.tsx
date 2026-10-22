@@ -1,5 +1,5 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { IndexedArtifact } from '@/features/chat/hooks/use-artifact-index';
@@ -104,6 +104,101 @@ function thumbnailOf(title: string): HTMLElement {
   );
 }
 
+function openFilterMenu() {
+  fireEvent.pointerDown(screen.getByRole('button', { name: /^Filter by/ }), {
+    button: 0,
+    ctrlKey: false,
+    pointerType: 'mouse',
+  });
+}
+
+function inspirationSection(): HTMLElement {
+  return screen.getByRole('region', { name: 'Inspiration' });
+}
+
+describe('GalleryClient header', () => {
+  it('puts the filter menu before a primary New artifact button', () => {
+    render(<GalleryClient />);
+
+    const filter = screen.getByRole('button', { name: 'Filter by: All' });
+    const create = screen.getByRole('button', { name: 'New artifact' });
+
+    expect(create).toHaveAttribute('data-variant', 'primary');
+    expect(filter.compareDocumentPosition(create) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('shows the search placeholder with an ellipsis', () => {
+    render(<GalleryClient />);
+
+    expect(screen.getByLabelText('Search artifacts')).toHaveAttribute(
+      'placeholder',
+      'Search artifacts...',
+    );
+  });
+
+  it('focuses the search on load in the app on a fine pointer, never on the public page', () => {
+    const original = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(pointer: fine)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const { unmount } = render(<GalleryClient />);
+      expect(screen.getByLabelText('Search artifacts')).not.toHaveFocus();
+      unmount();
+
+      render(<GalleryClient chrome="app" />);
+      expect(screen.getByLabelText('Search artifacts')).toHaveFocus();
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+});
+
+describe('GalleryClient scope', () => {
+  it('starts on All, which shows your artifacts and the inspiration examples', () => {
+    render(<GalleryClient />);
+
+    expect(screen.getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: 'Yours' })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.getByText('Payroll script')).toBeInTheDocument();
+    expect(within(inspirationSection()).getByText('Animated gradient button')).toBeInTheDocument();
+  });
+
+  it('narrows to your own artifacts when Yours is selected', async () => {
+    const user = userEvent.setup();
+    render(<GalleryClient />);
+
+    await user.click(screen.getByRole('button', { name: 'Yours' }));
+
+    expect(screen.getByRole('button', { name: 'Yours' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('Payroll script')).toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Inspiration' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Animated gradient button')).not.toBeInTheDocument();
+  });
+
+  it('shows the empty state with a pill New artifact button above the examples', async () => {
+    const user = userEvent.setup();
+    storeArtifacts = [];
+    render(<GalleryClient />);
+
+    expect(
+      screen.getByText('Artifacts you create in conversations will appear here.'),
+    ).toBeInTheDocument();
+    const cta = screen.getByTestId('gallery-empty-new-artifact');
+    expect(cta).toHaveTextContent('New artifact');
+    expect(cta).toHaveClass('agi-ds-btn');
+    expect(cta.style.textDecoration).toBe('');
+    expect(cta.style.borderRadius).toBe('var(--agi-radius-pill)');
+    expect(within(inspirationSection()).getByText('Animated gradient button')).toBeInTheDocument();
+
+    await user.click(cta);
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+  });
+});
+
 describe('GalleryClient search and filters', () => {
   it('narrows the grid to artifacts whose title matches the search text', async () => {
     const user = userEvent.setup();
@@ -118,29 +213,35 @@ describe('GalleryClient search and filters', () => {
     expect(screen.queryByText('Onboarding flow chart')).not.toBeInTheDocument();
   });
 
-  it('filters by artifact type, offering only types the tab actually holds', async () => {
+  it('filters by type from the Filter by menu, offering only types the scope holds', async () => {
     const user = userEvent.setup();
     render(<GalleryClient />);
+    await user.click(screen.getByRole('button', { name: 'Yours' }));
 
-    const typeFilter = screen.getByLabelText('Filter by type');
-    expect(
-      [...typeFilter.querySelectorAll('option')].map((o) => (o as HTMLOptionElement).value),
-    ).toEqual(['all', 'code', 'html', 'mermaid']);
+    openFilterMenu();
+    const typeOptions = screen
+      .getAllByRole('menuitemradio')
+      .map((item) => item.textContent)
+      .filter((label) => !['Any time', 'Last 7 days', 'Last 30 days'].includes(label ?? ''));
+    expect(typeOptions).toEqual(['All types', 'Code', 'HTML', 'Mermaid']);
 
-    await user.selectOptions(typeFilter, 'mermaid');
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Mermaid' }));
 
+    expect(screen.getByRole('button', { name: 'Filter by: Mermaid' })).toBeInTheDocument();
     expect(screen.getByText('Onboarding flow chart')).toBeInTheDocument();
     expect(screen.queryByText('Budget dashboard')).not.toBeInTheDocument();
   });
 
-  it('filters by recency', async () => {
-    const user = userEvent.setup();
+  it('filters by recency and hides the undated examples', () => {
     render(<GalleryClient />);
 
-    await user.selectOptions(screen.getByLabelText('Filter by date'), '30d');
+    openFilterMenu();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'Last 30 days' }));
 
+    expect(screen.getByRole('button', { name: 'Filter by: Last 30 days' })).toBeInTheDocument();
     expect(screen.getByText('Budget dashboard')).toBeInTheDocument();
     expect(screen.queryByText('Onboarding flow chart')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Inspiration' })).not.toBeInTheDocument();
   });
 
   it('explains an empty result as a filter, not as an empty account, and clears it', async () => {
@@ -160,15 +261,18 @@ describe('GalleryClient search and filters', () => {
     expect(screen.getByLabelText('Search artifacts')).toHaveValue('');
   });
 
-  it('drops a type filter when switching tabs so the new tab is never silently empty', async () => {
+  it('drops a type filter that Yours does not hold so the grid is never silently empty', async () => {
     const user = userEvent.setup();
     render(<GalleryClient />);
 
-    await user.selectOptions(screen.getByLabelText('Filter by type'), 'code');
-    await user.click(screen.getByRole('button', { name: 'Inspiration' }));
+    openFilterMenu();
+    fireEvent.click(screen.getByRole('menuitemradio', { name: 'SVG' }));
+    expect(screen.getByRole('button', { name: 'Filter by: SVG' })).toBeInTheDocument();
 
-    expect(screen.getByLabelText('Filter by type')).toHaveValue('all');
-    expect(screen.getByText('Animated gradient button')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Yours' }));
+
+    expect(screen.getByRole('button', { name: 'Filter by: All' })).toBeInTheDocument();
+    expect(screen.getByText('Payroll script')).toBeInTheDocument();
   });
 });
 
@@ -232,6 +336,7 @@ describe('GalleryClient card thumbnails', () => {
       },
     ];
     render(<GalleryClient />);
+    fireEvent.click(screen.getByRole('button', { name: 'Yours' }));
 
     const remote = thumbnailOf('Quarterly forecast');
 
