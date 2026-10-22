@@ -539,6 +539,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
 
   const sharedSidebarProps = {
     sessions: sidebarSessions,
+    hasUnreadConversations: sidebarSessions.some((session) => session.unread && !session.archived),
     projects: sidebarProjects,
     // The conversations hook cannot start until auth settles. Treat that
     // bootstrap interval as loading too, otherwise a signed-in reload briefly

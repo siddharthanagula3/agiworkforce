@@ -6486,6 +6486,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const sharedSidebarProps = {
     sessions: sidebarSessions,
+    hasUnreadConversations: sidebarSessions.some((session) => session.unread && !session.archived),
     projects: sidebarProjects,
     activeSessionId: displayedConversationId ?? undefined,
     isLoading: isConversationSidebarPending,

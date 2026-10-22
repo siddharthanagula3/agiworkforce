@@ -83,6 +83,11 @@ export interface SidebarProps extends SessionItemHandlers {
   onOpenAllChats?: () => void;
   allChatsHref?: string;
   onToggleCollapse?: () => void;
+  /**
+   * A conversation is unread. Marks the collapsed rail's toggle with a dot so
+   * the unread state stays visible while the list is hidden.
+   */
+  hasUnreadConversations?: boolean;
   onOpenSearch: () => void;
   onOpenUsage?: () => void;
 
@@ -159,6 +164,7 @@ export function Sidebar(props: SidebarProps) {
     onOpenAllChats,
     allChatsHref,
     onToggleCollapse,
+    hasUnreadConversations = false,
     onOpenSearch,
     onOpenUsage,
     onProjectOpen,
@@ -492,8 +498,14 @@ export function Sidebar(props: SidebarProps) {
             {onToggleCollapse && (
               <RailButton
                 label={toggleLabel}
+                accessibleName={
+                  hasUnreadConversations
+                    ? `${toggleLabel}, ${t('sidebar.unread', 'Unread')}`
+                    : undefined
+                }
                 icon={PanelLeft}
                 onClick={onToggleCollapse}
+                showsDot={hasUnreadConversations}
                 shortcut={toggleSidebarShortcutLabel()}
                 ariaKeyShortcuts={toggleSidebarAriaKeyShortcuts()}
               />
@@ -1188,13 +1200,17 @@ function TooltipLabel({ label, shortcut }: { label: string; shortcut?: string })
 
 function RailButton({
   label,
+  accessibleName,
   icon: Icon,
   onClick,
   isActive = false,
+  showsDot = false,
   shortcut,
   ariaKeyShortcuts,
 }: {
   label: string;
+  accessibleName?: string;
+  showsDot?: boolean;
   icon: SidebarNavItem['icon'];
   onClick?: () => void;
   isActive?: boolean;
@@ -1207,16 +1223,23 @@ function RailButton({
         <button
           type="button"
           onClick={onClick}
-          aria-label={label}
+          aria-label={accessibleName ?? label}
           aria-keyshortcuts={ariaKeyShortcuts}
           aria-current={isActive ? 'page' : undefined}
           className={cn(
-            'flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-accent hover:text-foreground',
+            'relative flex h-9 w-9 items-center justify-center rounded-lg transition-colors hover:bg-accent hover:text-foreground',
             FOCUS_RING,
             isActive ? 'bg-accent text-foreground' : 'text-muted-foreground',
           )}
         >
           <Icon className="h-5 w-5" />
+          {showsDot && (
+            <span
+              data-testid="rail-unread-dot"
+              className="pointer-events-none absolute end-1.5 top-1.5 h-2 w-2 rounded-full bg-[var(--chat-info)] ring-2 ring-[var(--chat-sidebar-bg)]"
+              aria-hidden="true"
+            />
+          )}
         </button>
       </TooltipTrigger>
       <TooltipContent side="right">
