@@ -85,6 +85,7 @@ jest.mock('@/src/features/companion/components/ConnectionStateViews', () => {
     DisconnectedView: ({ onShowSetupSteps }: { onShowSetupSteps: () => void }) => (
       <RN.Pressable testID="disconnected-view" onPress={onShowSetupSteps} />
     ),
+    OfflineDesktopView: () => null,
     ConnectingView: () => null,
     ErrorView: () => null,
     SessionExpiredView: () => null,

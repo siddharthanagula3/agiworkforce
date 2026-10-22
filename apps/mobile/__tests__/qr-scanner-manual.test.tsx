@@ -51,7 +51,7 @@ jest.mock('@/src/ui/theme', () => {
     accentText: '#000000',
     white: '#ffffff',
   };
-  return { colors, useThemeColors: () => colors };
+  return { colors, useThemeColors: () => colors, useTheme: () => ({ colors, isDark: true }) };
 });
 
 jest.mock('@/stores/settingsStore', () => ({

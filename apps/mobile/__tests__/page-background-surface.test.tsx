@@ -123,7 +123,14 @@ jest.mock('@/src/features/companion/components/StatusBanners', () => ({
   ReconnectingBanner: () => null,
 }));
 jest.mock('@/src/features/companion/components/ConnectionStateViews', () => ({
-  DisconnectedView: () => null,
+  DisconnectedView: () => {
+    const RN = require('react-native');
+    return <RN.View testID="pairing-view" />;
+  },
+  OfflineDesktopView: () => {
+    const RN = require('react-native');
+    return <RN.View testID="offline-desktop-view" />;
+  },
   ConnectingView: () => null,
   ErrorView: () => null,
   SessionExpiredView: () => null,
@@ -160,6 +167,7 @@ import CompanionScreen from '../app/(app)/companion/index';
 import SettingsTabScreen from '@/src/features/settings';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
+import { useConnectionStore } from '@/stores/connectionStore';
 
 const screens: Array<[string, React.ComponentType]> = [
   ['Remote', CompanionScreen],
@@ -185,5 +193,35 @@ describe('page background surface', () => {
   it.each(screens)('%s keeps the light surfaceBase in light mode', (_name, Screen) => {
     useLocalSettingsStore.setState({ themeMode: 'light' });
     expect(pageBackground(Screen)).toBe(agiMobileColors.light.surfaceBase);
+  });
+});
+
+describe('Remote header and offline state', () => {
+  beforeEach(() => {
+    useChatAppModeStore.setState({ appMode: 'local' });
+    useConnectionStore.setState({ status: 'disconnected', pairingCode: null, desktopName: null });
+  });
+
+  it('centres the title between equal sides with 44pt header buttons', () => {
+    const { getByTestId, getByLabelText } = render(<CompanionScreen />);
+    expect(getByTestId('remote-header-title').props.className).toContain('text-center');
+    for (const label of ['Go back', 'Show companion walkthrough']) {
+      const style = StyleSheet.flatten(getByLabelText(label).props.style);
+      expect(style.width).toBeGreaterThanOrEqual(44);
+      expect(style.height).toBeGreaterThanOrEqual(44);
+    }
+  });
+
+  it('shows the offline view while a pairing is kept and the pairing view after it ends', () => {
+    useConnectionStore.setState({ pairingCode: 'ABC123', desktopName: 'Studio-Mac.local' });
+    const first = render(<CompanionScreen />);
+    expect(first.getByTestId('offline-desktop-view')).toBeTruthy();
+    expect(first.queryByTestId('pairing-view')).toBeNull();
+    first.unmount();
+
+    useConnectionStore.setState({ pairingCode: null });
+    const second = render(<CompanionScreen />);
+    expect(second.getByTestId('pairing-view')).toBeTruthy();
+    expect(second.queryByTestId('offline-desktop-view')).toBeNull();
   });
 });

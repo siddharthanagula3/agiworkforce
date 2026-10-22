@@ -4,8 +4,17 @@ import { PressableBox } from '@/components/ui/pressable-box';
 import { AlertTriangle, SignalZero, Clock, RotateCcw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors, motion } from '@/src/ui/theme';
+import { formatRelativeTime } from '@/src/lib/time';
 
 const STALE_THRESHOLD_MS = 90_000;
+
+export function formatLastSeen(lastSeenAt: number): string {
+  return `Last seen ${formatRelativeTime(new Date(lastSeenAt).toISOString())}`;
+}
+
+export function offlineStatusLine(lastSeenAt: number | null): string {
+  return lastSeenAt === null ? 'Offline' : `Offline · ${formatLastSeen(lastSeenAt)}`;
+}
 
 interface StaleApprovalBannerProps {
   lastHeartbeatAt: number;
@@ -38,9 +47,13 @@ export function StaleApprovalBanner({ lastHeartbeatAt }: StaleApprovalBannerProp
 
 interface DisconnectedDesktopBannerProps {
   onReconnect: () => void;
+  lastSeenAt?: number | null;
 }
 
-export function DisconnectedDesktopBanner({ onReconnect }: DisconnectedDesktopBannerProps) {
+export function DisconnectedDesktopBanner({
+  onReconnect,
+  lastSeenAt = null,
+}: DisconnectedDesktopBannerProps) {
   const colors = useThemeColors();
   return (
     <Animated.View entering={FadeIn.duration(motion.moved)}>
@@ -48,11 +61,16 @@ export function DisconnectedDesktopBanner({ onReconnect }: DisconnectedDesktopBa
         <SignalZero size={14} color={colors.agentError} />
         <View className="flex-1">
           <Text className="text-sm font-semibold text-red-400 mb-0.5">Desktop unreachable</Text>
-          <Text className="text-sm text-red-400/70">Heartbeat missed. Auto-reconnecting.</Text>
+          <Text className="text-sm text-red-400/70">
+            {lastSeenAt === null
+              ? 'Reconnecting automatically.'
+              : `${formatLastSeen(lastSeenAt)}. Reconnecting automatically.`}
+          </Text>
         </View>
         <PressableBox
           onPress={onReconnect}
-          className="px-2.5 py-1.5 rounded-lg bg-red-500/20 active:bg-red-500/30"
+          className="px-3 rounded-lg bg-red-500/20 active:bg-red-500/30"
+          style={{ minHeight: 44, justifyContent: 'center' }}
           accessibilityLabel="Reconnect to desktop"
           accessibilityRole="button"
         >

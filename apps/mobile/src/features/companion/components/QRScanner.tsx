@@ -13,7 +13,7 @@ import Animated, {
 import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
 import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { isValidPairingCode } from '@/services/companion';
 
@@ -26,7 +26,8 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const VIEWFINDER_SIZE = Math.min(SCREEN_WIDTH * 0.7, 280);
 
 export function QRScanner({ onScan, onClose }: QRScannerProps) {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const [permission, requestPermission] = useCameraPermissions();
   const [flashEnabled, setFlashEnabled] = useState(false);
   const [showManualEntry, setShowManualEntry] = useState(false);
@@ -96,7 +97,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     return (
       <View
         className="flex-1 items-center justify-center"
-        style={{ backgroundColor: colors.surfaceBase }}
+        style={{ backgroundColor: pageBackground }}
       >
         <Text style={{ color: colors.textSecondary }}>Requesting camera access...</Text>
       </View>
@@ -107,7 +108,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
     return (
       <View
         className="flex-1 items-center justify-center px-8 gap-6"
-        style={{ backgroundColor: colors.surfaceBase }}
+        style={{ backgroundColor: pageBackground }}
       >
         <View
           className="w-20 h-20 rounded-full items-center justify-center"
@@ -137,7 +138,7 @@ export function QRScanner({ onScan, onClose }: QRScannerProps) {
 
   if (showManualEntry) {
     return (
-      <View className="flex-1 px-6 pt-16 gap-6" style={{ backgroundColor: colors.surfaceBase }}>
+      <View className="flex-1 px-6 pt-16 gap-6" style={{ backgroundColor: pageBackground }}>
         <View className="flex-row items-center justify-between">
           <Text variant="subheading">Enter Pairing Code</Text>
           <PressableBox

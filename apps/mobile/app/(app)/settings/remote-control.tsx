@@ -1,0 +1,164 @@
+import { useCallback } from 'react';
+import { Alert, View } from 'react-native';
+import { useRouter } from 'expo-router';
+import { Laptop, MonitorSmartphone, QrCode, RotateCcw, Unlink } from 'lucide-react-native';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { Text } from '@/components/ui/text';
+import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
+import { SettingsGroup, SettingsRow, SettingsScreenShell } from '@/src/features/settings/common';
+import { offlineStatusLine } from '@/src/features/companion/components/StatusBanners';
+import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
+import { manualReconnect } from '@/services/companion';
+
+type Tone = 'success' | 'warning' | 'error' | 'muted';
+
+function connectionSummary(
+  status: ConnectionStatus,
+  paired: boolean,
+  lastSeenAt: number | null,
+): { label: string; tone: Tone } {
+  switch (status) {
+    case 'connected':
+      return { label: 'Connected', tone: 'success' };
+    case 'connecting':
+      return { label: 'Connecting…', tone: 'warning' };
+    case 'stale':
+    case 'reconnecting':
+      return { label: 'Reconnecting…', tone: 'warning' };
+    case 'session_expired':
+      return { label: 'Session expired', tone: 'error' };
+    case 'error':
+      return { label: 'Connection error', tone: 'error' };
+    case 'disconnected':
+    default:
+      return paired
+        ? { label: offlineStatusLine(lastSeenAt), tone: 'muted' }
+        : { label: 'Not connected', tone: 'muted' };
+  }
+}
+
+function SectionHeader({ children }: { children: string }) {
+  const colors = useThemeColors();
+  return (
+    <Text
+      accessibilityRole="header"
+      style={{
+        color: colors.textMuted,
+        fontSize: typeScale.footnote,
+        fontWeight: '600',
+        marginBottom: 8,
+        paddingHorizontal: 2,
+      }}
+    >
+      {children}
+    </Text>
+  );
+}
+
+export default function RemoteControlSettingsScreen() {
+  const colors = useThemeColors();
+  const router = useRouter();
+  const status = useConnectionStore((s) => s.status);
+  const desktopName = useConnectionStore((s) => s.desktopName);
+  const pairingCode = useConnectionStore((s) => s.pairingCode);
+  const lastHeartbeatAt = useConnectionStore((s) => s.lastHeartbeatAt);
+  const disconnect = useConnectionStore((s) => s.disconnect);
+
+  const paired = pairingCode !== null;
+  const active = status === 'connected' || status === 'stale' || status === 'reconnecting';
+  const summary = connectionSummary(status, paired, lastHeartbeatAt);
+  const toneColor: Record<Tone, string> = {
+    success: colors.agentSuccess,
+    warning: colors.agentWarning,
+    error: colors.agentError,
+    muted: colors.textMuted,
+  };
+  const name = desktopName ?? (paired ? 'Desktop' : 'No computer paired');
+
+  const openRemote = useCallback(() => {
+    router.push('/(app)/companion' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const confirmDisconnect = useCallback(() => {
+    Alert.alert(
+      `Disconnect from ${desktopName ?? 'Desktop'}?`,
+      'This ends the pairing. To connect again, scan a new QR code on the computer.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Disconnect', style: 'destructive', onPress: disconnect },
+      ],
+    );
+  }, [desktopName, disconnect]);
+
+  return (
+    <SettingsScreenShell title="Remote control">
+      <SectionHeader>Connection</SectionHeader>
+      <SettingsGroup>
+        <View
+          testID="remote-control-device"
+          accessibilityLabel={`${PRODUCT_NAMES.desktop}, ${name}, ${summary.label}`}
+          style={{
+            minHeight: 72,
+            paddingHorizontal: 14,
+            paddingVertical: 12,
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 12,
+            borderBottomWidth: 1,
+            borderBottomColor: colors.border,
+          }}
+        >
+          <Laptop size={22} color={colors.textSecondary} />
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+              {PRODUCT_NAMES.desktop}
+            </Text>
+            <Text
+              numberOfLines={1}
+              ellipsizeMode="tail"
+              style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+            >
+              {name}
+            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 }}>
+              <View
+                testID="remote-control-status-dot"
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: 4,
+                  backgroundColor: toneColor[summary.tone],
+                }}
+              />
+              <Text
+                numberOfLines={1}
+                style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+              >
+                {summary.label}
+              </Text>
+            </View>
+          </View>
+        </View>
+        <SettingsRow
+          label={paired || active ? 'Open Remote' : 'Pair a computer'}
+          icon={paired || active ? MonitorSmartphone : QrCode}
+          onPress={openRemote}
+          isLast={!(paired || active)}
+        />
+        {status === 'disconnected' && paired ? (
+          <SettingsRow label="Reconnect" icon={RotateCcw} onPress={manualReconnect} />
+        ) : null}
+        {paired || active ? (
+          <SettingsRow
+            label="Disconnect"
+            icon={Unlink}
+            onPress={confirmDisconnect}
+            destructive
+            isLast
+          />
+        ) : null}
+      </SettingsGroup>
+    </SettingsScreenShell>
+  );
+}

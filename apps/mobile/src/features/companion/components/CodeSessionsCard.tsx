@@ -2,8 +2,22 @@ import { useEffect, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
-import { Check, ChevronRight, Code2, Play, RefreshCw } from 'lucide-react-native';
-import { REMOTE_CODE_LIMITS, type RemoteCodeSessionStatus } from '@agiworkforce/types';
+import {
+  Check,
+  ChevronDown,
+  ChevronRight,
+  Code2,
+  Folder,
+  FolderOpen,
+  Play,
+  RefreshCw,
+} from 'lucide-react-native';
+import {
+  REMOTE_CODE_LIMITS,
+  type RemoteCodeRoot,
+  type RemoteCodeSessionStatus,
+  type RemoteCodeSessionSummary,
+} from '@agiworkforce/types';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Text } from '@/components/ui/text';
@@ -179,26 +193,147 @@ export function codeSessionStatusColor(
   return STATUS_COLORS[status];
 }
 
-export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
+export interface CodeProject {
+  rootId: string;
+  name: string;
+  sessions: RemoteCodeSessionSummary[];
+}
+
+export function groupSessionsByProject(
+  sessions: readonly RemoteCodeSessionSummary[],
+  roots: readonly RemoteCodeRoot[],
+): CodeProject[] {
+  const projects = new Map<string, CodeProject>(
+    roots.map((root) => [root.rootId, { rootId: root.rootId, name: root.name, sessions: [] }]),
+  );
+  for (const session of sessions) {
+    const project = projects.get(session.rootId) ?? {
+      rootId: session.rootId,
+      name: session.folder,
+      sessions: [],
+    };
+    project.sessions.push(session);
+    projects.set(session.rootId, project);
+  }
+  return [...projects.values()];
+}
+
+function SessionRow({ session }: { session: RemoteCodeSessionSummary }) {
   const colors = useThemeColors();
   const router = useRouter();
+  return (
+    <PressableBox
+      onPress={() =>
+        router.push(
+          codeSessionHref(session.rootId, session.threadId) as Parameters<typeof router.push>[0],
+        )
+      }
+      className="flex-row items-center gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 active:bg-white/5"
+      accessibilityRole="button"
+      accessibilityLabel={`Open ${session.title}`}
+    >
+      <View className="flex-1">
+        <Text className="text-sm font-medium text-white" numberOfLines={1}>
+          {session.title}
+        </Text>
+        <Text className="text-sm text-white/45" numberOfLines={1}>
+          {[
+            session.location === 'cloud' ? CLOUD_SESSION_LABEL : null,
+            session.origin ? REMOTE_SESSION_ORIGIN_LABELS[session.origin] : null,
+            session.folder,
+            session.branch,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
+        </Text>
+      </View>
+      <Badge label={STATUS_LABELS[session.status]} color={STATUS_COLORS[session.status]} />
+      <ChevronRight size={14} color={colors.textMuted} />
+    </PressableBox>
+  );
+}
+
+function ProjectRow({
+  project,
+  expanded,
+  onToggle,
+}: {
+  project: CodeProject;
+  expanded: boolean;
+  onToggle: () => void;
+}) {
+  const colors = useThemeColors();
+  const FolderIcon = expanded ? FolderOpen : Folder;
+  const Chevron = expanded ? ChevronDown : ChevronRight;
+  const count = project.sessions.length;
+  return (
+    <View>
+      <PressableBox
+        onPress={onToggle}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`${project.name}, ${count === 1 ? '1 session' : `${count} sessions`}`}
+        className="flex-row items-center gap-3 rounded-lg px-1 active:bg-white/5"
+        style={{ minHeight: 44 }}
+      >
+        <FolderIcon size={18} color={colors.textPrimary} />
+        <Text className="flex-1 text-base text-white" numberOfLines={1}>
+          {project.name}
+        </Text>
+        <Chevron size={16} color={colors.textMuted} />
+      </PressableBox>
+      {expanded ? (
+        <View className="gap-2 pb-2" style={{ paddingLeft: 30 }}>
+          {count === 0 ? (
+            <Text className="text-sm text-white/40">No sessions in this project yet.</Text>
+          ) : (
+            project.sessions.map((session) => (
+              <SessionRow key={`${session.rootId}:${session.threadId}`} session={session} />
+            ))
+          )}
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
+  const colors = useThemeColors();
   const sessions = useRemoteCodeStore((state) => state.sessions);
+  const roots = useRemoteCodeStore((state) => state.roots);
   const unavailable = useRemoteCodeStore((state) => state.unavailable);
   const syncedAt = useRemoteCodeStore((state) => state.sessionsSyncedAt);
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const projects = groupSessionsByProject(sessions, roots);
+  const grouped = projects.length > 1;
 
   useEffect(() => {
     void listCodeSessions();
   }, []);
+
+  const toggleProject = (rootId: string) =>
+    setExpanded((current) => {
+      const next = new Set(current);
+      if (next.has(rootId)) next.delete(rootId);
+      else next.add(rootId);
+      return next;
+    });
 
   return (
     <View className="px-4 mb-3">
       <Card variant="elevated">
         <View className="flex-row items-center gap-2 mb-2">
           <Code2 size={15} color={colors.teal} />
-          <Text className="flex-1 text-sm font-medium text-white">AGI Code sessions</Text>
+          <Text
+            className={`flex-1 text-white ${grouped ? 'text-base font-semibold' : 'text-sm font-medium'}`}
+            accessibilityRole="header"
+          >
+            {grouped ? 'Projects' : 'AGI Code sessions'}
+          </Text>
           <PressableBox
             onPress={() => void listCodeSessions()}
-            className="p-2 rounded-lg active:bg-white/5"
+            className="items-center justify-center rounded-lg active:bg-white/5"
+            style={{ width: 44, height: 44 }}
             accessibilityRole="button"
             accessibilityLabel="Refresh AGI Code sessions"
           >
@@ -208,6 +343,17 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
 
         {syncedAt === null ? (
           <Text className="text-sm text-white/40">Asking Desktop for its sessions…</Text>
+        ) : grouped ? (
+          <View>
+            {projects.map((project) => (
+              <ProjectRow
+                key={project.rootId}
+                project={project}
+                expanded={expanded.has(project.rootId)}
+                onToggle={() => toggleProject(project.rootId)}
+              />
+            ))}
+          </View>
         ) : sessions.length === 0 ? (
           <Text className="text-sm text-white/40">
             {canStart
@@ -217,40 +363,7 @@ export function CodeSessionsCard({ canStart }: { canStart: boolean }) {
         ) : (
           <View className="gap-2">
             {sessions.map((session) => (
-              <PressableBox
-                key={`${session.rootId}:${session.threadId}`}
-                onPress={() =>
-                  router.push(
-                    codeSessionHref(session.rootId, session.threadId) as Parameters<
-                      typeof router.push
-                    >[0],
-                  )
-                }
-                className="flex-row items-center gap-2 rounded-lg border border-white/8 bg-white/[0.03] px-3 py-2 active:bg-white/5"
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${session.title}`}
-              >
-                <View className="flex-1">
-                  <Text className="text-sm font-medium text-white" numberOfLines={1}>
-                    {session.title}
-                  </Text>
-                  <Text className="text-sm text-white/45" numberOfLines={1}>
-                    {[
-                      session.location === 'cloud' ? CLOUD_SESSION_LABEL : null,
-                      session.origin ? REMOTE_SESSION_ORIGIN_LABELS[session.origin] : null,
-                      session.folder,
-                      session.branch,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ')}
-                  </Text>
-                </View>
-                <Badge
-                  label={STATUS_LABELS[session.status]}
-                  color={STATUS_COLORS[session.status]}
-                />
-                <ChevronRight size={14} color={colors.textMuted} />
-              </PressableBox>
+              <SessionRow key={`${session.rootId}:${session.threadId}`} session={session} />
             ))}
           </View>
         )}

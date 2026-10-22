@@ -10,11 +10,14 @@ import {
   ShieldCheck,
   ChevronDown,
   ChevronRight,
+  Laptop,
 } from 'lucide-react-native';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
+import { offlineStatusLine } from './StatusBanners';
 
 export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
   const colors = useThemeColors();
@@ -41,6 +44,58 @@ export function SessionExpiredView({ onRePair }: { onRePair: () => void }) {
         onPress={onRePair}
         className="w-full"
       />
+    </Animated.View>
+  );
+}
+
+export function OfflineDesktopView({
+  desktopName,
+  lastSeenAt,
+  onReconnect,
+  onScanPress,
+}: {
+  desktopName: string | null;
+  lastSeenAt: number | null;
+  onReconnect: () => void;
+  onScanPress: () => void;
+}) {
+  const colors = useThemeColors();
+  return (
+    <Animated.View
+      entering={FadeIn.duration(motion.moved)}
+      className="flex-1 items-center justify-center px-8"
+      testID="offline-desktop-view"
+    >
+      <Laptop size={72} color={colors.textMuted} strokeWidth={1.5} />
+      <Text variant="heading" className="text-center mt-5">
+        {desktopName ?? 'Desktop'}
+      </Text>
+      <Text className="text-center mt-1" style={{ color: colors.textSecondary }}>
+        {offlineStatusLine(lastSeenAt)}
+      </Text>
+      <Text className="text-center mt-5" style={{ color: colors.textSecondary }}>
+        {`Make sure ${PRODUCT_NAMES.desktop} is running on this computer.`}
+      </Text>
+      <PressableBox
+        onPress={onReconnect}
+        accessibilityRole="button"
+        accessibilityLabel="Reconnect to desktop"
+        className="mt-6 items-center justify-center rounded-full border px-7"
+        style={{ minHeight: 44, minWidth: 160, borderColor: colors.border }}
+      >
+        <Text className="font-medium" style={{ color: colors.textPrimary }}>
+          Reconnect
+        </Text>
+      </PressableBox>
+      <PressableBox
+        onPress={onScanPress}
+        accessibilityRole="button"
+        accessibilityLabel="Scan a new pairing code"
+        className="mt-2 items-center justify-center px-4"
+        style={{ minHeight: 44 }}
+      >
+        <Text style={{ color: colors.textSecondary }}>Scan a new code</Text>
+      </PressableBox>
     </Animated.View>
   );
 }

@@ -10,7 +10,7 @@ import { Text } from '@/components/ui/text';
 import { listAccountComputers, type AccountComputer } from '@/src/features/device-registry';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { useConnectionStore } from '@/stores/connectionStore';
 import { QRScanner } from './QRScanner';
 import { NewCodeSession } from './CodeSessionsCard';
@@ -58,10 +58,13 @@ function capabilityLine(computer: AccountComputer): string | null {
 type ComputerAction = 'start' | 'pair';
 
 function SessionSheet({ name, onClose }: { name: string; onClose: () => void }) {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
   return (
     <Modal visible animationType="slide" onRequestClose={onClose}>
-      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
+      <SafeAreaView
+        className="flex-1"
+        style={{ backgroundColor: isDark ? colors.background : colors.surfaceBase }}
+      >
         <View className="flex-row items-center gap-2 px-4" style={{ minHeight: 48 }}>
           <Text className="flex-1 text-sm font-medium text-white" accessibilityRole="header">
             {`New session on ${name}`}

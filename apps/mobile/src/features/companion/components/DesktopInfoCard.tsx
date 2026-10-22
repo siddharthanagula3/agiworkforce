@@ -37,7 +37,13 @@ export function DesktopInfoCard({
               <Monitor size={20} color={colors.teal} />
             </View>
             <View className="flex-1">
-              <Text className="text-sm font-medium text-white">{desktopName ?? 'Desktop'}</Text>
+              <Text
+                className="text-sm font-medium text-white"
+                numberOfLines={1}
+                ellipsizeMode="tail"
+              >
+                {desktopName ?? 'Desktop'}
+              </Text>
               <Text className="text-sm text-white/40">
                 {desktopMetadata?.platform ? `${desktopMetadata.platform}` : 'Connected'}
                 {desktopMetadata?.version ? ` v${desktopMetadata.version}` : ''}

@@ -18,6 +18,7 @@ import {
 } from '@/src/features/companion/components/StatusBanners';
 import {
   DisconnectedView,
+  OfflineDesktopView,
   ConnectingView,
   ErrorView,
   SessionExpiredView,
@@ -41,6 +42,9 @@ import { setupCompanionNotifications } from '@/services/companionNotifications';
 import { useTheme } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
+
+const HEADER_BUTTON = { width: 44, height: 44 } as const;
+const HEADER_SIDE_WIDTH = HEADER_BUTTON.width * 2;
 
 export default function CompanionScreen() {
   const { colors, isDark } = useTheme();
@@ -166,35 +170,48 @@ export default function CompanionScreen() {
 
   return (
     <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }}>
-      <View className="flex-row items-center px-3 h-12">
-        <PressableBox
-          onPress={handleBack}
-          className="p-2 rounded-lg active:bg-white/5"
-          accessibilityLabel="Go back"
-          accessibilityRole="button"
+      <View className="flex-row items-center px-2" style={{ minHeight: 52 }}>
+        <View className="flex-row items-center" style={{ width: HEADER_SIDE_WIDTH }}>
+          <PressableBox
+            onPress={handleBack}
+            className="items-center justify-center rounded-full active:bg-white/5"
+            style={HEADER_BUTTON}
+            accessibilityLabel="Go back"
+            accessibilityRole="button"
+          >
+            <ArrowLeft size={20} color={colors.textSecondary} />
+          </PressableBox>
+        </View>
+        <Text
+          variant="subheading"
+          className="flex-1 text-center font-semibold"
+          numberOfLines={1}
+          testID="remote-header-title"
         >
-          <ArrowLeft size={20} color={colors.textSecondary} />
-        </PressableBox>
-        <Text variant="subheading" className="ml-2 flex-1">
           Remote
         </Text>
-        <PressableBox
-          onPress={() => setShowDemo(true)}
-          className="p-2 rounded-lg active:bg-white/5"
-          accessibilityLabel="Show companion walkthrough"
-          accessibilityRole="button"
-        >
-          <HelpCircle size={18} color={colors.textSecondary} />
-        </PressableBox>
-        {status === 'connected' && (
+        <View className="flex-row items-center justify-end" style={{ width: HEADER_SIDE_WIDTH }}>
           <PressableBox
-            onPress={() => requestAgentRefresh()}
-            className="p-2 rounded-lg active:bg-white/5"
-            accessibilityLabel="Refresh agents"
+            onPress={() => setShowDemo(true)}
+            className="items-center justify-center rounded-full active:bg-white/5"
+            style={HEADER_BUTTON}
+            accessibilityLabel="Show companion walkthrough"
+            accessibilityRole="button"
           >
-            <RefreshCw size={18} color={colors.textSecondary} />
+            <HelpCircle size={18} color={colors.textSecondary} />
           </PressableBox>
-        )}
+          {status === 'connected' && (
+            <PressableBox
+              onPress={() => requestAgentRefresh()}
+              className="items-center justify-center rounded-full active:bg-white/5"
+              style={HEADER_BUTTON}
+              accessibilityLabel="Refresh agents"
+              accessibilityRole="button"
+            >
+              <RefreshCw size={18} color={colors.textSecondary} />
+            </PressableBox>
+          )}
+        </View>
       </View>
 
       <View className="px-4 mb-3">
@@ -213,7 +230,7 @@ export default function CompanionScreen() {
 
       {status === 'stale' && (
         <View className="mx-4 mb-3">
-          <DisconnectedDesktopBanner onReconnect={manualReconnect} />
+          <DisconnectedDesktopBanner onReconnect={manualReconnect} lastSeenAt={lastHeartbeatAt} />
         </View>
       )}
 
@@ -226,7 +243,14 @@ export default function CompanionScreen() {
       <AccountComputersCard connectedName={isConnectedOrActive ? (desktopName ?? null) : null} />
 
       {status === 'disconnected' &&
-        (hasSeenDispatchSetup && !showSetupAgain ? (
+        (pairingCode !== null && !showSetupAgain ? (
+          <OfflineDesktopView
+            desktopName={desktopName}
+            lastSeenAt={lastHeartbeatAt}
+            onReconnect={manualReconnect}
+            onScanPress={() => setShowScanner(true)}
+          />
+        ) : hasSeenDispatchSetup && !showSetupAgain ? (
           <DisconnectedView
             onScanPress={() => setShowScanner(true)}
             onShowSetupSteps={() => setShowSetupAgain(true)}

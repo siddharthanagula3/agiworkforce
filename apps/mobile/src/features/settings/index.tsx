@@ -567,7 +567,7 @@ export default function SettingsTabScreen() {
                     remoteStatus === 'connected' && remoteDesktopName
                       ? remoteDesktopName
                       : remoteConnectionLabel(remoteStatus),
-                  onPress: push('/(app)/companion'),
+                  onPress: push('/(app)/settings/remote-control'),
                 },
               ],
             },

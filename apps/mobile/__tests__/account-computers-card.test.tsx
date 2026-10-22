@@ -40,6 +40,7 @@ const mockComputers = [
 jest.mock('lucide-react-native', () => new Proxy({}, { get: () => () => null }));
 jest.mock('@/src/ui/theme', () => ({
   useThemeColors: () => new Proxy({}, { get: () => '#888888' }),
+  useTheme: () => ({ colors: new Proxy({}, { get: () => '#888888' }), isDark: true }),
 }));
 jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: unknown }) => children,

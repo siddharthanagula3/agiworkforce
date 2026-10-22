@@ -76,7 +76,7 @@ function getStatusConfig(
     default:
       return {
         color: colors.textMuted,
-        label: 'Not connected',
+        label: desktopName ? `${desktopName}, offline` : 'Not connected',
         animate: false,
       };
   }
