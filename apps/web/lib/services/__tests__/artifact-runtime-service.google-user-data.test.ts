@@ -100,7 +100,7 @@ describe('completeArtifactPrompt and Google user data', () => {
       db,
       userId: 'user-1',
       organizationId: null,
-      artifact: { publishedArtifactId: 'artifact-1', ownerUserId: 'owner-1' },
+      subject: { kind: 'published' as const, publishedArtifactId: 'artifact-1' },
       prompt: 'summarise my inbox',
       route: ROUTE,
       planTier: 'pro',

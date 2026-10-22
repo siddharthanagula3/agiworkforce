@@ -23,7 +23,7 @@
     },
     "connector-sync": {
       "role": "connector-sync",
-      "note": "The connector and plugin directories are refreshed on a schedule; a user's own connector calls run in their request."
+      "note": "The connector and plugin directories are refreshed on a schedule, and live-artifacts-refresh re-checks which of the connected apps a live artifact is bound to are still usable; every other call to a user's own connector runs in their request."
     },
     "search-index": {
       "role": "search-index",
@@ -386,6 +386,24 @@
           "version": "1.0.0",
           "date": "2026-09-17",
           "change": "Registered as a deployable component with its queue and in-flight-work contract."
+        }
+      ]
+    },
+    {
+      "name": "live-artifacts-refresh",
+      "role": "connector-sync",
+      "version": "1.0.0",
+      "produces": [],
+      "consumes": [],
+      "inFlightWork": {
+        "holds": "Up to 50 live artifacts claimed with a 15 minute lease on next_check_at; a replaced run leaves them to be claimed again once the lease passes, and each check overwrites the same readiness columns, so a repeat is harmless.",
+        "recovery": "next-tick"
+      },
+      "changelog": [
+        {
+          "version": "1.0.0",
+          "date": "2026-10-22",
+          "change": "Re-checks each live artifact's bound connected apps on a backoff and records which ones need connecting."
         }
       ]
     },

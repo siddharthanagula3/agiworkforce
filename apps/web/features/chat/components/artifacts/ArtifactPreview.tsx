@@ -142,6 +142,8 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { formatRelativeTime } from '@shared/utils/format';
 import { SiteViewersEditor } from '@features/sites/components/SiteViewersEditor';
 import { readPublishedTokenFromUrl, type PublishedArtifactAudience } from './publishArtifactClient';
+import { useLiveArtifactRuntime } from '@/app/chat/live-artifacts/useLiveArtifactRuntime';
+import { LiveArtifactControls } from '@/app/chat/live-artifacts/LiveArtifactControls';
 
 /**
  * `navigator.clipboard` does not exist in an insecure context and `writeText`
@@ -246,6 +248,8 @@ interface ArtifactPreviewProps {
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
   onRequestEdits?: (prompt: string) => boolean;
+  /** The artifact came from a managed-cloud chat, so it may use AI and the owner's connected apps. */
+  liveRuntime?: boolean;
 }
 
 const OUTLINE_MIN_HEADINGS = 3;
@@ -460,8 +464,14 @@ export function ArtifactPreview({
   projectLink,
   projectSave,
   onRequestEdits,
+  liveRuntime = false,
 }: ArtifactPreviewProps) {
   const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
+  const live = useLiveArtifactRuntime(
+    liveRuntime && variant === 'panel' && (artifact.type === 'html' || artifact.type === 'react')
+      ? artifact.id
+      : null,
+  );
   const [copied, setCopied] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [renderError, setRenderError] = useState<string | null>(null);
@@ -2599,6 +2609,8 @@ export function ArtifactPreview({
           </div>
         )}
 
+        {live.host && <LiveArtifactControls live={live} />}
+
         {/* Content area, fills remaining height. min-h-0 prevents a flex-child
             from refusing to shrink below its content height (iframe collapse). */}
         <div
@@ -2754,9 +2766,10 @@ export function ArtifactPreview({
                   fallbackSrcDoc={getPreviewHTML()}
                   title={artifact.title || 'Artifact Preview'}
                   className="h-full w-full border-0"
-                  refreshKey={refreshKey}
+                  refreshKey={refreshKey + live.refreshKey}
                   onRenderError={(err) => setRenderError(err)}
                   picker={editRequestPicker}
+                  {...(live.host ? { runtime: live.host } : {})}
                 />
               </div>
             ))}

@@ -498,7 +498,7 @@ describe('POST /api/artifacts/runtime/[token]/complete', () => {
       expect.objectContaining({
         userId: 'user-1',
         organizationId: 'org-1',
-        artifact: ARTIFACT,
+        subject: { kind: 'published', publishedArtifactId: ARTIFACT.publishedArtifactId },
         prompt: 'Summarize [redacted]',
         route: ROUTE,
         planTier: 'pro',

@@ -18,6 +18,7 @@ import {
   Globe,
   LibraryBig,
   MessageSquare,
+  PanelsTopLeft,
   ShieldCheck,
   Sparkles,
 } from '@agiworkforce/icons';
@@ -38,6 +39,7 @@ const CHAT_SECTION_PREFIXES = [
   '/chat/finance',
   '/chat/health',
   '/chat/schedules',
+  '/chat/live-artifacts',
   '/chat/agents',
   '/chat/customize',
   '/chat/study',
@@ -155,6 +157,15 @@ export const APP_NAV_DESTINATIONS: readonly AppNavDestination[] = [
     isActive: (pathname) => isUnder(pathname, '/chat/schedules'),
     hideable: true,
     feature: 'schedules',
+  },
+  {
+    id: 'live-artifacts',
+    label: 'Live artifacts',
+    labelKey: 'navLiveArtifacts',
+    icon: PanelsTopLeft,
+    href: '/chat/live-artifacts',
+    isActive: (pathname) => isUnder(pathname, '/chat/live-artifacts'),
+    hideable: true,
   },
   {
     id: 'agents',

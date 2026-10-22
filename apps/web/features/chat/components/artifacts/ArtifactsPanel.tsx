@@ -149,6 +149,7 @@ function ArtifactViewer({
   projectLink,
   projectSave,
   onRequestEdits,
+  liveRuntime,
 }: {
   artifact: Artifact;
   versionHistory: SharedArtifact[];
@@ -159,6 +160,7 @@ function ArtifactViewer({
   projectLink?: ArtifactProjectLink;
   projectSave?: ArtifactProjectSave;
   onRequestEdits?: (prompt: string) => boolean;
+  liveRuntime: boolean;
 }) {
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -174,6 +176,7 @@ function ArtifactViewer({
         {...(projectLink ? { projectLink } : {})}
         {...(projectSave ? { projectSave } : {})}
         {...(onRequestEdits ? { onRequestEdits } : {})}
+        liveRuntime={liveRuntime}
       />
     </div>
   );
@@ -640,6 +643,7 @@ export function ArtifactsPanel({
                   {...(projectLink ? { projectLink } : {})}
                   projectSave={projectSave}
                   {...(onRequestEdits ? { onRequestEdits: requestEdits } : {})}
+                  liveRuntime={selectedArtifactKey === selectedArtifact.id}
                 />
               ) : (
                 <ArtifactsEmptyState />

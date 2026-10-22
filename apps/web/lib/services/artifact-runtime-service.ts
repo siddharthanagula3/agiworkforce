@@ -2,7 +2,11 @@ import 'server-only';
 
 import type { NextRequest } from 'next/server';
 
-import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
+import {
+  connectorsAllowedForTurn,
+  connectorsAllowedWithoutRequest,
+} from '@/lib/connectors/connector-capability';
+import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { randomUUID } from 'node:crypto';
 import { managedUsageIdempotencyKey } from '@/lib/services/managed-usage-idempotency';
@@ -70,6 +74,11 @@ import {
   type ArtifactRuntimeConnectorTool,
 } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
+import type {
+  LiveArtifact,
+  LiveArtifactReadiness,
+  LiveArtifactRefreshPolicy,
+} from '@/app/chat/live-artifacts/live-artifact-contract';
 
 const ARTIFACT_STORAGE_LIST_LIMIT = 1_000;
 
@@ -81,6 +90,21 @@ export interface RunnableArtifact {
   publishedArtifactId: string;
   ownerUserId: string;
 }
+
+export type ArtifactRuntimeSubject =
+  { kind: 'published'; publishedArtifactId: string } | { kind: 'owned'; artifactId: string };
+
+export const LIVE_ARTIFACT_RUNTIME_TYPES = ['html', 'react'] as const;
+
+export interface OwnedRunnableArtifact {
+  artifactId: string;
+  conversationId: string;
+  messageId: string;
+  title: string | null;
+  type: string;
+}
+
+export type LiveArtifactBinding = LiveArtifact;
 
 export interface ArtifactRuntimeRoute {
   provider: string;
@@ -309,6 +333,13 @@ async function loadArtifactConnectorAccess(
   ) {
     return null;
   }
+  return readArtifactConnectorAccess(input, { dialOnlyListed: false });
+}
+
+async function readArtifactConnectorAccess(
+  input: Omit<ArtifactConnectorScope, 'request'>,
+  options: { dialOnlyListed: boolean },
+): Promise<ArtifactConnectorAccess> {
   const [toolApprovalPolicy, connectorPermissions] = await Promise.all([
     loadToolApprovalPolicy(input.db, input.userId),
     loadConnectorToolPermissions(input.db, input.userId, input.organizationId),
@@ -318,6 +349,9 @@ async function loadArtifactConnectorAccess(
     planTier: input.planTier,
     organizationId: input.organizationId,
     isToolDenied: connectorPermissions.isConnectorToolDenied,
+    ...(options.dialOnlyListed
+      ? { isConnectorDenied: (connectorId: string) => !input.connectors.includes(connectorId) }
+      : {}),
   });
   return {
     toolApprovalPolicy,
@@ -540,11 +574,17 @@ async function runArtifactToolLoop(input: {
 
 const ARTIFACT_RUNTIME_USAGE_NAMESPACE = 'agi.artifact.runtime';
 
+function subjectIdentity(subject: ArtifactRuntimeSubject): Record<string, string> {
+  return subject.kind === 'published'
+    ? { publishedArtifactId: subject.publishedArtifactId }
+    : { artifactId: subject.artifactId };
+}
+
 export async function completeArtifactPrompt(input: {
   db: DatabaseAdapter;
   userId: string;
   organizationId: string | null;
-  artifact: RunnableArtifact;
+  subject: ArtifactRuntimeSubject;
   prompt: string;
   route: ArtifactRuntimeRoute;
   planTier: string;
@@ -572,7 +612,7 @@ export async function completeArtifactPrompt(input: {
   }
   const identity = {
     kind: 'artifact_runtime_completion',
-    publishedArtifactId: input.artifact.publishedArtifactId,
+    ...subjectIdentity(input.subject),
     prompt: input.prompt,
     provider: route.provider,
     model: route.modelKey,
@@ -625,7 +665,7 @@ export async function completeArtifactPrompt(input: {
       actualCostMicrousd: completion.costMicrousd,
       usage: {
         type: 'artifact_runtime_completion',
-        publishedArtifactId: input.artifact.publishedArtifactId,
+        ...subjectIdentity(input.subject),
         provider: route.provider,
         model: route.modelKey,
         promptTokens: completion.promptTokens,
@@ -646,7 +686,7 @@ export async function completeArtifactPrompt(input: {
         actualCostMicrousd: observedCostMicrousd,
         usage: {
           type: 'artifact_runtime_completion',
-          publishedArtifactId: input.artifact.publishedArtifactId,
+          ...subjectIdentity(input.subject),
           reason: error instanceof Error ? error.message : String(error),
         },
       }).catch((releaseError: unknown) => {
@@ -658,4 +698,281 @@ export async function completeArtifactPrompt(input: {
     }
     throw error;
   }
+}
+
+const LIVE_ARTIFACT_LIST_LIMIT = 200;
+
+export interface LiveArtifactOwner {
+  userId: string;
+  organizationId: string | null;
+}
+const LIVE_ARTIFACT_FIRST_CHECK_DELAY = '1 hour';
+
+interface OwnedArtifactRow {
+  id: string;
+  conversation_id: string;
+  message_id: string;
+  title: string | null;
+  artifact_type: string;
+}
+
+export async function readOwnedRunnableArtifact(
+  db: DatabaseAdapter,
+  owner: LiveArtifactOwner,
+  artifactId: string,
+): Promise<OwnedRunnableArtifact | null> {
+  const rows = await db.query<OwnedArtifactRow>(
+    `select artifacts.id,
+            artifacts.conversation_id,
+            artifacts.message_id,
+            artifacts.title,
+            artifacts.artifact_type
+       from public.web_artifact_index artifacts
+       join public.web_conversations conversations
+         on conversations.id = artifacts.conversation_id
+        and conversations.deleted_at is null
+        and conversations.organization_id is not distinct from $4::uuid
+       join public.web_messages messages
+         on messages.id = artifacts.message_id
+        and messages.deleted_at is null
+      where artifacts.id = $1::uuid
+        and artifacts.user_id = $2::text
+        and artifacts.artifact_type = any($3::text[])
+      limit 1`,
+    [artifactId, owner.userId, [...LIVE_ARTIFACT_RUNTIME_TYPES], owner.organizationId],
+  );
+  const row = rows[0];
+  return row
+    ? {
+        artifactId: row.id,
+        conversationId: row.conversation_id,
+        messageId: row.message_id,
+        title: row.title,
+        type: row.artifact_type,
+      }
+    : null;
+}
+
+interface LiveArtifactRow {
+  artifact_id: string;
+  conversation_id: string;
+  title: string | null;
+  artifact_type: string;
+  connectors: string[];
+  allowed_tools: string[];
+  refresh_policy: LiveArtifactRefreshPolicy;
+  last_refreshed_at: Date | string | null;
+  readiness: LiveArtifactReadiness;
+  missing_connectors: string[];
+  created_at: Date | string;
+  updated_at: Date | string;
+}
+
+function isoTimestamp(value: Date | string): string {
+  return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+}
+
+function toLiveArtifact(row: LiveArtifactRow): LiveArtifactBinding {
+  return {
+    artifactId: row.artifact_id,
+    conversationId: row.conversation_id,
+    title: row.title,
+    type: row.artifact_type,
+    connectors: row.connectors,
+    allowedTools: row.allowed_tools,
+    refreshPolicy: row.refresh_policy,
+    lastRefreshedAt: row.last_refreshed_at ? isoTimestamp(row.last_refreshed_at) : null,
+    readiness: row.readiness,
+    missingConnectors: row.missing_connectors,
+    createdAt: isoTimestamp(row.created_at),
+    updatedAt: isoTimestamp(row.updated_at),
+  };
+}
+
+const LIVE_ARTIFACT_COLUMNS = `live.artifact_id,
+            live.conversation_id,
+            artifacts.title,
+            artifacts.artifact_type,
+            live.connectors,
+            live.allowed_tools,
+            live.refresh_policy,
+            live.last_refreshed_at,
+            live.readiness,
+            live.missing_connectors,
+            live.created_at,
+            live.updated_at`;
+
+const LIVE_ARTIFACT_SOURCE = `public.live_artifacts live
+       join public.web_artifact_index artifacts
+         on artifacts.id = live.artifact_id
+        and artifacts.user_id = live.user_id
+       join public.web_conversations conversations
+         on conversations.id = live.conversation_id
+        and conversations.deleted_at is null
+        and conversations.organization_id is not distinct from $2::uuid`;
+
+export async function listLiveArtifacts(
+  db: DatabaseAdapter,
+  owner: LiveArtifactOwner,
+): Promise<LiveArtifactBinding[]> {
+  const rows = await db.query<LiveArtifactRow>(
+    `select ${LIVE_ARTIFACT_COLUMNS}
+       from ${LIVE_ARTIFACT_SOURCE}
+      where live.user_id = $1::text
+      order by coalesce(live.last_refreshed_at, live.created_at) desc
+      limit $3::integer`,
+    [owner.userId, owner.organizationId, LIVE_ARTIFACT_LIST_LIMIT],
+  );
+  return rows.map(toLiveArtifact);
+}
+
+export async function readLiveArtifact(
+  db: DatabaseAdapter,
+  owner: LiveArtifactOwner,
+  artifactId: string,
+): Promise<LiveArtifactBinding | null> {
+  const rows = await db.query<LiveArtifactRow>(
+    `select ${LIVE_ARTIFACT_COLUMNS}
+       from ${LIVE_ARTIFACT_SOURCE}
+      where live.user_id = $1::text
+        and live.artifact_id = $3::uuid
+      limit 1`,
+    [owner.userId, owner.organizationId, artifactId],
+  );
+  const row = rows[0];
+  return row ? toLiveArtifact(row) : null;
+}
+
+export async function saveLiveArtifact(
+  db: DatabaseAdapter,
+  input: {
+    owner: LiveArtifactOwner;
+    artifact: OwnedRunnableArtifact;
+    connectors: readonly string[];
+    allowedTools: readonly string[];
+    refreshPolicy: LiveArtifactRefreshPolicy | null;
+  },
+): Promise<LiveArtifactBinding | null> {
+  await db.query(
+    `insert into public.live_artifacts
+       (user_id, artifact_id, conversation_id, message_id, connectors, allowed_tools,
+        refresh_policy, next_check_at)
+     values ($1::text, $2::uuid, $3::uuid, $4::uuid, $5::text[], $6::text[],
+             coalesce($7::text, 'on_open'), now() + $8::interval)
+     on conflict (user_id, artifact_id) do update
+       set conversation_id = excluded.conversation_id,
+           message_id = excluded.message_id,
+           connectors = excluded.connectors,
+           allowed_tools = excluded.allowed_tools,
+           refresh_policy = coalesce($7::text, live_artifacts.refresh_policy),
+           readiness = 'ready',
+           missing_connectors = '{}',
+           check_failures = 0,
+           next_check_at = excluded.next_check_at`,
+    [
+      input.owner.userId,
+      input.artifact.artifactId,
+      input.artifact.conversationId,
+      input.artifact.messageId,
+      [...new Set(input.connectors)],
+      [...new Set(input.allowedTools)],
+      input.refreshPolicy,
+      LIVE_ARTIFACT_FIRST_CHECK_DELAY,
+    ],
+  );
+  return readLiveArtifact(db, input.owner, input.artifact.artifactId);
+}
+
+export async function setLiveArtifactRefreshPolicy(
+  db: DatabaseAdapter,
+  owner: LiveArtifactOwner,
+  artifactId: string,
+  refreshPolicy: LiveArtifactRefreshPolicy,
+): Promise<LiveArtifactBinding | null> {
+  const rows = await db.query<{ artifact_id: string }>(
+    `update public.live_artifacts
+        set refresh_policy = $3::text
+      where user_id = $1::text
+        and artifact_id = $2::uuid
+      returning artifact_id`,
+    [owner.userId, artifactId, refreshPolicy],
+  );
+  return rows.length > 0 ? readLiveArtifact(db, owner, artifactId) : null;
+}
+
+export async function removeLiveArtifact(
+  db: DatabaseAdapter,
+  userId: string,
+  artifactId: string,
+): Promise<boolean> {
+  const rows = await db.query<{ artifact_id: string }>(
+    `delete from public.live_artifacts
+      where user_id = $1::text
+        and artifact_id = $2::uuid
+      returning artifact_id`,
+    [userId, artifactId],
+  );
+  return rows.length > 0;
+}
+
+export async function recordLiveArtifactRefresh(
+  db: DatabaseAdapter,
+  userId: string,
+  artifactId: string,
+): Promise<void> {
+  await db.execute(
+    `update public.live_artifacts
+        set last_refreshed_at = now(),
+            readiness = 'ready',
+            missing_connectors = '{}'
+      where user_id = $1::text
+        and artifact_id = $2::uuid`,
+    [userId, artifactId],
+  );
+}
+
+export function bindingCovers(
+  binding: Pick<LiveArtifactBinding, 'connectors'> | null,
+  connectors: readonly string[],
+): boolean {
+  if (connectors.length === 0) return true;
+  if (!binding) return false;
+  const bound = new Set(binding.connectors);
+  return connectors.every((connector) => bound.has(connector));
+}
+
+export async function liveArtifactMissingConnectors(input: {
+  db: DatabaseAdapter;
+  userId: string;
+  connectors: readonly string[];
+}): Promise<string[]> {
+  const entitlement = await resolveEntitlementBundle(input.db, input.userId);
+  const policy = getTierPolicy(entitlement.plan);
+  if (
+    policy.allowToolUse === false ||
+    policy.allowMCP === false ||
+    !(await connectorsAllowedWithoutRequest({
+      userId: input.userId,
+      organizationId: null,
+      planTier: entitlement.plan,
+    }))
+  ) {
+    return [...input.connectors];
+  }
+  const access = await readArtifactConnectorAccess(
+    {
+      db: input.db,
+      userId: input.userId,
+      organizationId: null,
+      planTier: entitlement.plan,
+      connectors: input.connectors,
+    },
+    { dialOnlyListed: true },
+  );
+  const usable = new Set(
+    access.tools
+      .filter((tool) => artifactToolStanding(tool, access) === 'available')
+      .map((tool) => tool.serverId),
+  );
+  return input.connectors.filter((connector) => !usable.has(connector));
 }

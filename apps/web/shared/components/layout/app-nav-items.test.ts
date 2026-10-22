@@ -219,3 +219,29 @@ describe('app rail · Models', () => {
     }
   });
 });
+
+describe('app rail · Live artifacts', () => {
+  it('follows Scheduled, as the leaders order it', () => {
+    const ids = APP_NAV_DESTINATIONS.map((destination) => destination.id);
+    expect(ids.indexOf('live-artifacts')).toBe(ids.indexOf('schedules') + 1);
+  });
+
+  it('opens the live artifacts page and is the active entry there, not Chat', () => {
+    const navigate = vi.fn();
+    const items = buildAppNavItems({ pathname: '/chat/live-artifacts', navigate });
+    const live = items.find((item) => item.id === 'live-artifacts');
+    expect(live).toMatchObject({ label: 'Live artifacts', isActive: true });
+    expect(items.find((item) => item.id === 'chat-home')?.isActive).toBe(false);
+    live?.onClick();
+    expect(navigate).toHaveBeenCalledWith('/chat/live-artifacts');
+  });
+
+  it('can be hidden from the rail', () => {
+    const ids = buildAppNavItems({
+      pathname: '/chat',
+      navigate: vi.fn(),
+      hiddenIds: ['live-artifacts'],
+    }).map((item) => item.id);
+    expect(ids).not.toContain('live-artifacts');
+  });
+});
