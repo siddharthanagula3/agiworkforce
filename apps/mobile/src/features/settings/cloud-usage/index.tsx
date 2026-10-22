@@ -6,6 +6,7 @@ import {
   formatPlanCreditAllowanceLine,
   formatUsageResetIn,
   getModelMetadataById,
+  getUsageUrgency,
   managedUsageBucketLabel,
   usageWorkloadLabel,
   type AccountUsageLimitsResponse,
@@ -64,7 +65,13 @@ function UsagePercentBar({
 }) {
   const colors = useThemeColors();
   const clamped = Math.min(100, Math.max(0, percentage));
-  const isNearLimit = clamped >= 90;
+  const urgency = getUsageUrgency(clamped);
+  const fillColor =
+    urgency === 'critical'
+      ? colors.agentError
+      : urgency === 'warning'
+        ? colors.agentWarning
+        : colors.teal;
 
   return (
     <View style={{ gap: 8 }}>
@@ -80,10 +87,11 @@ function UsagePercentBar({
         }}
       >
         <View
+          testID="usage-meter-fill"
           style={{
             height: 8,
             borderRadius: 4,
-            backgroundColor: isNearLimit ? colors.agentError : colors.teal,
+            backgroundColor: fillColor,
             width: `${clamped}%`,
           }}
         />

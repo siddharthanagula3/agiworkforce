@@ -1,7 +1,9 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
+import { lightColors } from '../src/ui/theme/tokens';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
+import { StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 const mockAuthState = {
@@ -143,6 +145,21 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     });
     expect(getByText('Pro plan')).toBeTruthy();
     expect(queryByText(/\$\d/)).toBeNull();
+  });
+
+  it.each([
+    [40, lightColors.teal],
+    [91, lightColors.agentWarning],
+    [97, lightColors.agentError],
+  ])('paints the meter at %i%% with the shared urgency colour', async (percent, expected) => {
+    mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'pro', usagePercentage: percent }));
+
+    const { getAllByTestId } = render(<CloudUsageScreen />);
+
+    await waitFor(() => expect(getAllByTestId('usage-meter-fill').length).toBeGreaterThan(0));
+    const fill = StyleSheet.flatten(getAllByTestId('usage-meter-fill')[0].props.style);
+    expect(fill.backgroundColor).toBe(expected);
+    expect(fill.width).toBe(`${percent}%`);
   });
 
   it('keeps server diagnostics private and recovers on retry', async () => {
