@@ -520,6 +520,7 @@ export interface ConnectorSectionInput {
   connectedIds: ReadonlySet<string>;
   curated: readonly SettingsConnector[];
   setup?: Readonly<Record<string, ConnectorSetupRequirement>>;
+  pending?: ReadonlySet<string>;
   request: ConnectorDirectoryRequest;
   total: number;
   nextCursor: string | null;
@@ -540,6 +541,18 @@ export function withPopularRanks(
     const popularRank = rankOf.get(entry.id);
     return popularRank === undefined ? entry : { ...entry, popularRank };
   });
+}
+
+export function withSetupPending(
+  entries: readonly DirectoryEntry[],
+  pending: ReadonlySet<string> | undefined,
+): DirectoryEntry[] {
+  if (!pending || pending.size === 0) return [...entries];
+  return entries.map((entry) =>
+    entry.installed !== true && entry.installable !== false && pending.has(entry.id)
+      ? { ...entry, setupPending: true }
+      : entry,
+  );
 }
 
 function sortByPopularRank(entries: readonly DirectoryEntry[]): DirectoryEntry[] {
@@ -572,6 +585,7 @@ export function toConnectorSection({
   connectedIds,
   curated,
   setup = {},
+  pending,
   request,
   total,
   nextCursor,
@@ -604,7 +618,10 @@ export function toConnectorSection({
     ...categories,
     ...curated.map((connector) => curatedDirectoryCategory(connector)),
   ]);
-  const ranked = withPopularRanks([...curatedEntries, ...registryEntries], popularity);
+  const ranked = withSetupPending(
+    withPopularRanks([...curatedEntries, ...registryEntries], popularity),
+    pending,
+  );
   const loaded = request.sort === DIRECTORY_SORT_POPULAR ? sortByPopularRank(ranked) : ranked;
   /*
    * The directory request has no connected facet, so this is decided here.

@@ -470,3 +470,48 @@ describe('DirectoryGrid card type and badge placement', () => {
     expect(screen.queryByText('Community')).toBeNull();
   });
 });
+
+describe('DirectoryGrid connector whose setup was not finished', () => {
+  const gmail: DirectoryEntry = {
+    id: 'gmail',
+    name: 'Gmail',
+    publisher: 'Google',
+    description: 'Mail',
+    connectableMode: 'connect',
+    setupPending: true,
+  };
+
+  it('offers Finish setup, which resumes the connect flow for that connector', () => {
+    const onInstall = vi.fn();
+    render(
+      <DirectoryGrid
+        section="connectors"
+        entries={[gmail]}
+        onOpen={vi.fn()}
+        onInstall={onInstall}
+      />,
+    );
+    const finish = screen.getByRole('button', { name: 'Finish setup Gmail' });
+    expect(finish.textContent).toBe('Finish setup');
+    expect(screen.queryByRole('button', { name: 'Connect Gmail' })).toBeNull();
+    fireEvent.click(finish);
+    expect(onInstall).toHaveBeenCalledWith('gmail');
+  });
+
+  it('keeps the manage control once the connector is connected', () => {
+    render(
+      <DirectoryGrid
+        section="connectors"
+        entries={[{ ...gmail, installed: true }]}
+        onOpen={vi.fn()}
+        onInstall={vi.fn()}
+      />,
+    );
+    expect(screen.queryByRole('button', { name: 'Finish setup Gmail' })).toBeNull();
+  });
+
+  it('shows no Finish setup when the surface cannot start the connect flow', () => {
+    render(<DirectoryGrid section="connectors" entries={[gmail]} onOpen={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Finish setup Gmail' })).toBeNull();
+  });
+});

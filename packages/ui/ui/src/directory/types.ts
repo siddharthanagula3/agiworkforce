@@ -82,6 +82,8 @@ export interface DirectoryEntry {
   installable?: boolean;
   editable?: boolean;
   connectableMode?: DirectoryConnectableMode;
+  /** The account started connecting this entry and never finished. */
+  setupPending?: boolean;
   statusLabel?: string;
   installNotice?: string;
   mutating?: boolean;

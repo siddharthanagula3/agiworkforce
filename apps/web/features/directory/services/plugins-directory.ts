@@ -64,7 +64,9 @@ import type {
 import type { PluginUpdateOffer } from '@/lib/services/plugin-lifecycle';
 import {
   PLUGIN_TARGET_BUILTIN,
+  PLUGIN_TARGET_COMMUNITY,
   PLUGIN_TARGET_MARKETPLACE,
+  PLUGIN_TARGET_WORKSPACE,
   type PluginInstallationTarget,
 } from '@/features/plugins/routes';
 
@@ -802,6 +804,7 @@ function findRecord(input: PluginManageInput, id: string): PluginDirectoryEntry 
 function recordManageRow(
   record: PluginDirectoryEntry,
   updatedAt: string | undefined,
+  enabled: boolean,
 ): DirectoryManageRow {
   return {
     id: record.id,
@@ -809,74 +812,111 @@ function recordManageRow(
     author: record.publisher.name,
     skillCount: record.runtime.components.skills.length,
     ...((updatedAt ?? record.updatedAt) ? { updatedAt: updatedAt ?? record.updatedAt } : {}),
+    enabled,
   };
 }
 
-export function toPluginManageRows(input: PluginManageInput): DirectoryManageRow[] {
-  const rows: DirectoryManageRow[] = [];
+interface PluginManageItem {
+  row: DirectoryManageRow;
+  target: PluginInstallationTarget;
+}
+
+function pluginManageItems(input: PluginManageInput): PluginManageItem[] {
+  const items: PluginManageItem[] = [];
   const seen = new Set<string>();
-  const push = (row: DirectoryManageRow) => {
+  const push = (row: DirectoryManageRow, target: PluginInstallationTarget) => {
     if (seen.has(row.id)) return;
     seen.add(row.id);
-    rows.push(row);
+    items.push({ row, target });
   };
 
   for (const installation of input.installs.builtin) {
     const record = findRecord(input, installation.pluginId);
+    const enabled = installation.enabled !== false;
     push(
       record
-        ? recordManageRow(record, installation.updatedAt)
+        ? recordManageRow(record, installation.updatedAt, enabled)
         : {
             id: installation.pluginId,
             name: installation.pluginId,
             updatedAt: installation.updatedAt,
+            enabled,
           },
+      { kind: PLUGIN_TARGET_BUILTIN, pluginId: installation.pluginId },
     );
   }
 
   for (const installation of input.installs.byPluginKey.values()) {
+    const target: PluginInstallationTarget = {
+      kind: PLUGIN_TARGET_MARKETPLACE,
+      installationId: installation.id,
+    };
+    const enabled = installation.enabled !== false;
     const record = findRecord(input, installation.pluginKey);
     if (record) {
-      push(recordManageRow(record, installation.updatedAt));
+      push(recordManageRow(record, installation.updatedAt, enabled), target);
       continue;
     }
     const entry = input.user.entries.find((candidate) => candidate.id === installation.entryId);
     const source = entry
       ? input.user.sources.find((candidate) => candidate.id === entry.sourceId)
       : undefined;
-    push({
-      id: entry?.id ?? installation.entryId,
-      name: entry?.name ?? installation.pluginKey,
-      ...(source ? { author: source.name } : {}),
-      skillCount: entry?.declaredSkills.length ?? installation.enabledSkills.length,
-      updatedAt: installation.updatedAt,
-    });
+    push(
+      {
+        id: entry?.id ?? installation.entryId,
+        name: entry?.name ?? installation.pluginKey,
+        ...(source ? { author: source.name } : {}),
+        skillCount: entry?.declaredSkills.length ?? installation.enabledSkills.length,
+        updatedAt: installation.updatedAt,
+        enabled,
+      },
+      target,
+    );
   }
 
   for (const plugin of input.community ?? []) {
     if (!plugin.installed) continue;
-    push({
-      id: plugin.id,
-      name: plugin.name,
-      author: plugin.publisherName,
-      skillCount: plugin.skills.length,
-      ...(plugin.approvedAt ? { updatedAt: plugin.approvedAt } : {}),
-    });
+    push(
+      {
+        id: plugin.id,
+        name: plugin.name,
+        author: plugin.publisherName,
+        skillCount: plugin.skills.length,
+        ...(plugin.approvedAt ? { updatedAt: plugin.approvedAt } : {}),
+        enabled: plugin.enabled,
+      },
+      { kind: PLUGIN_TARGET_COMMUNITY, pluginId: plugin.id },
+    );
   }
 
   const workspace = input.workspace ?? EMPTY_WORKSPACE_PLUGINS;
   for (const plugin of workspace.plugins) {
     if (!plugin.installed) continue;
-    push({
-      id: plugin.id,
-      name: plugin.name,
-      author: workspacePublisher(workspace),
-      skillCount: plugin.skills.length,
-      updatedAt: plugin.updatedAt,
-    });
+    push(
+      {
+        id: plugin.id,
+        name: plugin.name,
+        author: workspacePublisher(workspace),
+        skillCount: plugin.skills.length,
+        updatedAt: plugin.updatedAt,
+        enabled: plugin.enabled,
+      },
+      { kind: PLUGIN_TARGET_WORKSPACE, pluginId: plugin.id },
+    );
   }
 
-  return rows.sort((left, right) => left.name.localeCompare(right.name));
+  return items.sort((left, right) => left.row.name.localeCompare(right.row.name));
+}
+
+export function toPluginManageRows(input: PluginManageInput): DirectoryManageRow[] {
+  return pluginManageItems(input).map((item) => item.row);
+}
+
+export function pluginManageTarget(
+  input: PluginManageInput,
+  id: string,
+): PluginInstallationTarget | null {
+  return pluginManageItems(input).find((item) => item.row.id === id)?.target ?? null;
 }
 
 function worksWithLabels(values: readonly string[]): string[] {

@@ -15,6 +15,7 @@ import {
   DIRECTORY_EMPTY_COPY,
   DIRECTORY_LOADING_LABEL,
   DIRECTORY_RETRY_LABEL,
+  FINISH_SETUP_LABEL,
   NEW_BADGE_LABEL,
   SETTINGS_LABEL,
   formatInstallCount,
@@ -25,6 +26,7 @@ import { DirectoryBadge, DirectoryBadges, splitDirectoryBadges } from './Directo
 import {
   DIRECTORY_ADD_BUTTON,
   DIRECTORY_CARD,
+  DIRECTORY_CREATE_BUTTON,
   DIRECTORY_FOCUS_RING,
   DIRECTORY_ICON_BUTTON,
   ENTRY_ICON_SHAPE,
@@ -123,6 +125,7 @@ export function DirectoryCard({
       : onInstall;
   const TrailingIcon = entry.installed ? SettingsIcon : Plus;
   const comingSoon = entry.connectableMode === 'coming-soon';
+  const finishSetup = entry.setupPending === true && !entry.installed && !comingSoon;
   const { glyphs, pills } = splitDirectoryBadges(entry.badges);
   const metaPills = pills.filter((badge) => badge !== COMMUNITY_BADGE);
   const community = pills.includes(COMMUNITY_BADGE);
@@ -194,6 +197,20 @@ export function DirectoryCard({
             )}
           >
             <Lock aria-hidden className="size-4" />
+          </button>
+        ) : finishSetup && trailingAction ? (
+          <button
+            type="button"
+            onClick={() => trailingAction(entry.id)}
+            disabled={entry.mutating}
+            aria-label={`${FINISH_SETUP_LABEL} ${entry.name}`}
+            className={cn('relative z-[var(--z-control)]', DIRECTORY_CREATE_BUTTON, 'rounded-full')}
+          >
+            {entry.mutating ? (
+              <Spinner size="sm" aria-label={FINISH_SETUP_LABEL} />
+            ) : (
+              FINISH_SETUP_LABEL
+            )}
           </button>
         ) : trailingAction ? (
           <button
@@ -326,9 +343,11 @@ export function DirectoryQuickAddChip({
   onOpen: (id: string) => void;
   onInstall: (id: string) => void;
 }) {
-  const addLabel = entry.connectableMode
-    ? CONNECTOR_CARD_ACTION_LABELS[entry.connectableMode]
-    : CARD_INSTALL_LABELS[section];
+  const addLabel = entry.setupPending
+    ? FINISH_SETUP_LABEL
+    : entry.connectableMode
+      ? CONNECTOR_CARD_ACTION_LABELS[entry.connectableMode]
+      : CARD_INSTALL_LABELS[section];
   return (
     <div className="relative flex min-h-12 min-w-0 items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2 transition-colors motion-reduce:transition-none hover:bg-muted">
       <EntryIcon entry={entry} compact />

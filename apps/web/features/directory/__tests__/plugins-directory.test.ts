@@ -20,6 +20,7 @@ import {
   toDirectoryShape,
   toPluginDetail,
   toPluginEntry,
+  pluginManageTarget,
   toPluginManageRows,
   toPluginRequest,
   toPluginSection,
@@ -778,6 +779,7 @@ describe('the installed table rows', () => {
         author: 'AGI',
         skillCount: 1,
         updatedAt: '2026-09-04T00:00:00.000Z',
+        enabled: true,
       },
     ]);
   });
@@ -791,6 +793,7 @@ describe('the installed table rows', () => {
         author: 'Anthropic',
         skillCount: 1,
         updatedAt: '2026-09-06T00:00:00.000Z',
+        enabled: true,
       },
     ]);
   });
@@ -814,6 +817,7 @@ describe('the installed table rows', () => {
         author: 'Team marketplace',
         skillCount: 1,
         updatedAt: '2026-09-06T00:00:00.000Z',
+        enabled: true,
       },
     ]);
   });
@@ -838,6 +842,37 @@ describe('the installed table rows', () => {
       }),
     );
     expect(rows.map((row) => row.id)).toEqual(['data-pack', 'frontend-design']);
+  });
+
+  it('carries each installation enable position and the target that changes it', () => {
+    const input = manageInput({
+      installs: installs({
+        builtin: [
+          {
+            pluginId: 'data-pack',
+            installedVersion: '1.0.0',
+            enabled: false,
+            installedAt: '2026-09-01T00:00:00.000Z',
+            updatedAt: '2026-09-01T00:00:00.000Z',
+          },
+        ],
+        builtinIds: new Map([['data-pack', false]]),
+        byPluginKey: new Map([['frontend-design', installation({ id: 'inst-7' })]]),
+      }),
+    });
+    expect(toPluginManageRows(input).map(({ id, enabled }) => ({ id, enabled }))).toEqual([
+      { id: 'data-pack', enabled: false },
+      { id: 'frontend-design', enabled: true },
+    ]);
+    expect(pluginManageTarget(input, 'data-pack')).toEqual({
+      kind: 'builtin',
+      pluginId: 'data-pack',
+    });
+    expect(pluginManageTarget(input, 'frontend-design')).toEqual({
+      kind: 'marketplace',
+      installationId: 'inst-7',
+    });
+    expect(pluginManageTarget(input, 'not-installed')).toBeNull();
   });
 });
 
@@ -919,6 +954,7 @@ describe('a source the account supplied is read honestly by every consumer', () 
         author: 'release-notes-pack',
         skillCount: 1,
         updatedAt: expect.any(String),
+        enabled: true,
       },
     ]);
   });

@@ -1060,3 +1060,26 @@ describe('measured connector popularity', () => {
     await expect(fetchConnectorPopularity()).resolves.toEqual([]);
   });
 });
+
+describe('a connector whose authorization was started and never finished', () => {
+  it('is marked for Finish setup only while it is still connectable and not connected', () => {
+    const records = [
+      record({ id: 'gmail', name: 'Gmail' }),
+      record({ id: 'drive', name: 'Drive' }),
+      record({ id: 'slack', name: 'Slack' }),
+      record({ id: 'local', name: 'Local', connectable: 'unavailable' }),
+    ];
+    const built = section(records, new Set(['drive']), [], {
+      pending: new Set(['gmail', 'drive', 'local']),
+    });
+    const pendingIds = built.entries
+      .filter((entry) => entry.setupPending === true)
+      .map((entry) => entry.id);
+    expect(pendingIds).toEqual(['gmail']);
+  });
+
+  it('marks nothing when no authorization is pending', () => {
+    const built = section([record({ id: 'gmail' })], new Set());
+    expect(built.entries.some((entry) => entry.setupPending === true)).toBe(false);
+  });
+});

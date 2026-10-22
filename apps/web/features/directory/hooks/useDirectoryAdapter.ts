@@ -62,7 +62,10 @@ import { invalidateSkillsCatalog } from '@features/skills/services/skills-catalo
 import { announceSkillCatalogChanged } from '@shared/events/skill-catalog-events';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { getCsrfToken } from '@/lib/client/csrf';
-import { PluginDependentsError } from '@features/plugins/client/installation-settings';
+import {
+  PluginDependentsError,
+  setPluginInstallationEnabled,
+} from '@features/plugins/client/installation-settings';
 import { usePluginsSettingsAdapter } from '@features/plugins/hooks/use-plugins-settings-adapter';
 import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
 import {
@@ -188,7 +191,9 @@ import {
   marketplaceRequest,
   pluginDirectoryHref,
   toPluginDetail,
+  pluginManageTarget,
   toPluginManageRows,
+  type PluginManageInput,
   toPluginRequest,
   toPluginSection,
   toCommunityPluginDetail,
@@ -513,6 +518,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         connectedIds: connectedIds(),
         curated: curatedRef.current,
         setup: connectorSetup.current,
+        pending: connectorPending.current,
         request: toDirectoryRequest(connectorQueryRef.current),
         connectionState: connectorConnectionState(connectorQueryRef.current),
         total: page.total,
@@ -686,6 +692,20 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
     await retryPluginsRef.current?.();
   }, []);
 
+  const pluginManageInput = useCallback((): PluginManageInput => {
+    const page = pluginPageRef.current;
+    return {
+      builtin: page.builtin,
+      partner: page.partner,
+      marketplace: page.marketplace?.entries ?? [],
+      details: [...pluginDetails.current.values()],
+      user: page.user,
+      installs: page.installs,
+      workspace: page.workspace,
+      community: page.community,
+    };
+  }, []);
+
   const publishPlugins = useCallback(
     (patch: Partial<DirectorySection>) => {
       const page = pluginPageRef.current;
@@ -709,16 +729,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         ...patch,
       };
       const manage: DirectoryManageSection = {
-        rows: toPluginManageRows({
-          builtin: page.builtin,
-          partner: page.partner,
-          marketplace: page.marketplace?.entries ?? [],
-          details: [...pluginDetails.current.values()],
-          user: page.user,
-          installs: page.installs,
-          workspace: page.workspace,
-          community: page.community,
-        }),
+        rows: toPluginManageRows(pluginManageInput()),
         loading: next.loading === true,
         error: next.error ?? null,
         actions: pluginManageActions,
@@ -726,7 +737,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       };
       setPlugins({ ...next, manage });
     },
-    [retryPlugins, pluginManageActions],
+    [retryPlugins, pluginManageActions, pluginManageInput],
   );
 
   const primePlugins = useCallback((): Promise<void> => {
@@ -1813,9 +1824,13 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
 
   const setPluginEnabled = useCallback(
     async (id: string, enabled: boolean, withDependents = false): Promise<void> => {
-      if (settingsPluginId !== id || !settingsTarget) throw new Error(PLUGIN_ENABLE_FAILED_COPY);
+      const open = settingsPluginId === id && settingsTarget !== null;
+      const target = open ? settingsTarget : pluginManageTarget(pluginManageInput(), id);
+      if (!target) throw new Error(PLUGIN_ENABLE_FAILED_COPY);
       try {
-        await pluginSettingsState.setEnabled(enabled, withDependents);
+        if (open) await pluginSettingsState.setEnabled(enabled, withDependents);
+        else
+          await setPluginInstallationEnabled(target, enabled, await getCsrfToken(), withDependents);
       } catch (caught: unknown) {
         if (!(caught instanceof PluginDependentsError)) throw caught;
         const names = dependentNames(caught.dependents);
@@ -1828,14 +1843,15 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       }
       invalidateSkillsCatalog();
       announceSkillCatalogChanged();
-      if (settingsTarget.kind === PLUGIN_TARGET_WORKSPACE) await refreshWorkspacePlugins();
-      else if (settingsTarget.kind === PLUGIN_TARGET_COMMUNITY) await refreshCommunity();
+      if (target.kind === PLUGIN_TARGET_WORKSPACE) await refreshWorkspacePlugins();
+      else if (target.kind === PLUGIN_TARGET_COMMUNITY) await refreshCommunity();
       else await refreshPluginInstalls();
     },
     [
       settingsPluginId,
       settingsTarget,
       pluginSettingsState,
+      pluginManageInput,
       refreshPluginInstalls,
       refreshWorkspacePlugins,
       refreshCommunity,

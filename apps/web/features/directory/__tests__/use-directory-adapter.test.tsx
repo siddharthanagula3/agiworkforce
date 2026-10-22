@@ -1433,6 +1433,83 @@ describe('useDirectoryAdapter plugin settings and enable', () => {
     expect(calls).toContain('PATCH /api/plugins/installations/data-pack');
   });
 
+  it('gives each installed row its enable position and turns it on without opening it', async () => {
+    const calls = stubInstalledBuiltin({
+      'PATCH /api/plugins/installations/data-pack': () =>
+        json({ installation: { pluginId: 'data-pack', enabled: true } }),
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+    await waitFor(() =>
+      expect(result.current.plugins?.manage?.rows).toEqual([
+        expect.objectContaining({ id: 'data-pack', enabled: false }),
+      ]),
+    );
+
+    await act(async () => {
+      await result.current.setPluginEnabled?.('data-pack', true);
+    });
+
+    expect(calls).toContain('PATCH /api/plugins/installations/data-pack');
+    expect(calls).not.toContain('GET /api/plugins/data-pack/settings');
+  });
+
+  it('asks before a row switch turns off plugins that depend on this one', async () => {
+    const bodies: unknown[] = [];
+    const conflict = {
+      error: {
+        code: 'PLUGIN_HAS_DEPENDENTS',
+        message: 'Review Kit needs Data Pack.',
+        dependents: [{ id: 'review-kit', name: 'Review Kit' }],
+      },
+    };
+    stubInstalledBuiltin({
+      'GET /api/plugins/installations': () =>
+        json({
+          installations: [
+            {
+              pluginId: 'data-pack',
+              installedVersion: '1.0.0',
+              enabled: true,
+              installedAt: '2026-09-06T00:00:00.000Z',
+              updatedAt: '2026-09-06T00:00:00.000Z',
+            },
+          ],
+        }),
+      'PATCH /api/plugins/installations/data-pack': (_url, init) => {
+        const body = JSON.parse(String(init?.body)) as { withDependents?: boolean };
+        bodies.push(body);
+        if (body.withDependents) {
+          return json({ installation: { pluginId: 'data-pack', enabled: false } });
+        }
+        const response = json(conflict, 409);
+        return Object.assign(response, { clone: () => response });
+      },
+    });
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('plugins', DEFAULT_PLUGIN_QUERY);
+    });
+
+    let confirmation: unknown;
+    await act(async () => {
+      try {
+        await result.current.setPluginEnabled?.('data-pack', false);
+      } catch (caught: unknown) {
+        confirmation = caught;
+      }
+    });
+    expect(confirmation).toBeInstanceOf(DirectoryActionConfirmation);
+    expect((confirmation as DirectoryActionConfirmation).message).toContain('Review Kit');
+
+    await act(async () => {
+      await (confirmation as DirectoryActionConfirmation).run();
+    });
+    expect(bodies).toEqual([{ enabled: false }, { enabled: false, withDependents: true }]);
+  });
+
   it('patches the settings route when a skill is turned off', async () => {
     const calls = stubInstalledBuiltin({
       'PATCH /api/plugins/data-pack/settings': () =>

@@ -112,6 +112,7 @@ export const NEW_BADGE_LABEL = 'New';
 export const ADD_LABEL = 'Add';
 export const SETTINGS_LABEL = 'Settings';
 export const MANAGE_LABEL = 'Manage';
+export const FINISH_SETUP_LABEL = 'Finish setup';
 export const REMOVE_LABEL = 'Remove';
 export const INSTALL_LABEL = 'Install';
 export const UNINSTALL_LABEL = 'Uninstall';
