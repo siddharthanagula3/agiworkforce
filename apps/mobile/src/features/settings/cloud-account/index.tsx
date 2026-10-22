@@ -54,6 +54,17 @@ import { DELETE_ACCOUNT_CONFIRMATION } from './deleteAccountConfirmation';
 import { useCloudProfilePhoto } from './useCloudProfilePhoto';
 import { useCloudProfileStore } from './cloudProfileStore';
 
+const ORGANIZATION_PATH = '/api/settings/organization';
+
+function parseOrganizationId(body: unknown): string | null {
+  if (typeof body !== 'object' || body === null || !('organization' in body)) return null;
+  const organization = body.organization;
+  if (typeof organization !== 'object' || organization === null || !('id' in organization)) {
+    return null;
+  }
+  return typeof organization.id === 'string' && organization.id ? organization.id : null;
+}
+
 const ACCOUNT_DELETE_FAILED =
   'We could not delete your account. Check your connection and try again, ' +
   `or contact ${SUPPORT_EMAIL}.`;
@@ -101,6 +112,8 @@ export default function CloudAccountScreen() {
     value: AccountDeletionStatus;
   } | null>(null);
   const [deletionStatusError, setDeletionStatusError] = useState(false);
+  const [organization, setOrganization] = useState<{ ownerId: string; id: string } | null>(null);
+  const [organizationCopied, setOrganizationCopied] = useState(false);
 
   useLayoutEffect(() => {
     setCopied(false);
@@ -110,6 +123,8 @@ export default function CloudAccountScreen() {
     setCancellingDeletion(false);
     setDeletionStatus(null);
     setDeletionStatusError(false);
+    setOrganization(null);
+    setOrganizationCopied(false);
     setEditingName(false);
     setNameDraft('');
   }, [userId]);
@@ -143,6 +158,20 @@ export default function CloudAccountScreen() {
     void refreshDeletionStatus();
   }, [refreshDeletionStatus]);
 
+  useEffect(() => {
+    const account = captureCloudAccountEpoch();
+    if (!account || !userId || account.ownerId !== userId) return;
+    void api
+      .get<unknown>(ORGANIZATION_PATH)
+      .then((body) => {
+        const id = parseOrganizationId(body);
+        if (id && isCloudAccountEpochCurrent(account)) {
+          setOrganization({ ownerId: account.ownerId, id });
+        }
+      })
+      .catch(() => undefined);
+  }, [userId]);
+
   const captureVisibleAccount = useCallback((): CloudAccountEpoch | null => {
     const account = captureCloudAccountEpoch();
     if (!account || !userId || account.ownerId !== userId) {
@@ -161,6 +190,15 @@ export default function CloudAccountScreen() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }, [userId]);
+
+  const organizationId = organization?.ownerId === userId ? organization.id : null;
+
+  const handleCopyOrganizationId = useCallback(() => {
+    if (!organizationId) return;
+    Clipboard.setString(organizationId);
+    setOrganizationCopied(true);
+    setTimeout(() => setOrganizationCopied(false), 2000);
+  }, [organizationId]);
 
   const handleChangeEmail = useCallback(() => {
     const account = captureVisibleAccount();
@@ -586,8 +624,17 @@ export default function CloudAccountScreen() {
             icon={copied ? Check : Copy}
             onPress={handleCopyId}
             value={userId.slice(0, 8) + '…'}
-            isLast
+            isLast={!organizationId}
           />
+          {organizationId ? (
+            <SettingsRow
+              label={organizationCopied ? 'Copied!' : 'Copy Organization ID'}
+              icon={organizationCopied ? Check : Copy}
+              onPress={handleCopyOrganizationId}
+              value={organizationId.slice(0, 8) + '…'}
+              isLast
+            />
+          ) : null}
         </SettingsGroup>
       )}
 
@@ -685,6 +732,7 @@ export default function CloudAccountScreen() {
           <SettingsRow
             label={deleting ? 'Deleting…' : 'Delete Account'}
             icon={Trash2}
+            destructive
             onPress={
               deleting || deletionStatusError || deletionStatus?.ownerId !== userId
                 ? undefined

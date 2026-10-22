@@ -240,6 +240,12 @@ export default function AboutScreen() {
             onPress={() => void openWebPage('https://agiworkforce.com/terms')}
           />
           <Separator />
+          <LinkRow
+            icon={ExternalLink}
+            label="Acceptable Use Policy"
+            onPress={() => void openWebPage('https://agiworkforce.com/acceptable-use')}
+          />
+          <Separator />
           {/* In-app, not a web page: there is no /licenses route on the site,
               and store review expects the attribution inside the app. */}
           <LinkRow

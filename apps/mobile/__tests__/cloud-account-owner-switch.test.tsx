@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Clipboard } from 'react-native';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 jest.mock('../lib/mmkv', () => ({
@@ -36,12 +36,16 @@ jest.mock('../src/features/auth/store', () => ({
 const mockDeleteAccount = jest.fn();
 const mockGetDeletionStatus = jest.fn();
 const mockGetMe = jest.fn();
+const mockGetOrganization = jest.fn();
 const mockPatchMe = jest.fn();
 const mockCancelDeletion = jest.fn();
 jest.mock('../services/api', () => ({
   api: {
-    get: (path: string) =>
-      path === '/api/me?surface=mobile' ? mockGetMe(path) : mockGetDeletionStatus(path),
+    get: (path: string) => {
+      if (path === '/api/me?surface=mobile') return mockGetMe(path);
+      if (path === '/api/settings/organization') return mockGetOrganization(path);
+      return mockGetDeletionStatus(path);
+    },
     patch: (...args: unknown[]) => mockPatchMe(...args),
     post: (...args: unknown[]) => mockCancelDeletion(...args),
     delete: (...args: unknown[]) => mockDeleteAccount(...args),
@@ -113,8 +117,17 @@ jest.mock('../src/features/settings/common', () => {
     SettingsGroup: ({ children }: { children: React.ReactNode }) =>
       ReactRuntime.createElement(View, null, children),
     SettingsInfo: () => null,
-    SettingsRow: ({ label, onPress }: { label: string; onPress?: () => void }) =>
+    SettingsRow: ({
+      label,
+      onPress,
+      destructive,
+    }: {
+      label: string;
+      onPress?: () => void;
+      destructive?: boolean;
+    }) =>
       ReactRuntime.createElement(Pressable, {
+        testID: destructive ? `destructive:${label}` : undefined,
         accessibilityRole: 'button',
         accessibilityLabel: label,
         onPress,
@@ -183,6 +196,7 @@ describe('Cloud Account destructive action ownership', () => {
       requestedAt: null,
       scheduledFor: null,
     });
+    mockGetOrganization.mockResolvedValue({ organization: null });
     mockGetMe.mockResolvedValue({
       id: 'account-a',
       email: 'a@example.com',
@@ -452,6 +466,30 @@ describe('Cloud Account destructive action ownership', () => {
 
     expect(Alert.alert).toHaveBeenLastCalledWith('Could not delete account', refusal, undefined);
     expect(mockSignOut).not.toHaveBeenCalled();
+  });
+
+  it('marks Delete Account as destructive', async () => {
+    render(<CloudAccountScreen />);
+    await waitFor(() => expect(screen.getByTestId('destructive:Delete Account')).toBeTruthy());
+  });
+
+  it('copies the organization id when the account belongs to an organization', async () => {
+    mockGetOrganization.mockResolvedValue({ organization: { id: 'org-1234567890' } });
+    const setString = jest.spyOn(Clipboard, 'setString').mockImplementation(jest.fn());
+    render(<CloudAccountScreen />);
+
+    await waitFor(() => expect(screen.getByLabelText(/Copy Organization ID/)).toBeTruthy());
+    fireEvent.press(screen.getByLabelText(/Copy Organization ID/));
+    expect(setString).toHaveBeenCalledWith('org-1234567890');
+  });
+
+  it('shows no organization row for an account without an organization', async () => {
+    render(<CloudAccountScreen />);
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockGetOrganization).toHaveBeenCalledWith('/api/settings/organization');
+    expect(screen.queryByLabelText(/Copy Organization ID/)).toBeNull();
   });
 
   it('lets the signed-in owner cancel a pending deletion after confirmation', async () => {

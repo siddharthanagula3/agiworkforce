@@ -409,6 +409,29 @@ describe('PerformanceScreen rendering', () => {
     expect(btn).toBeTruthy();
   });
 
+  it('disables Run Benchmark and hints at a download while no model is selected', async () => {
+    const { useModelStore } = require('@/src/features/model-picker/store');
+    useModelStore.setState({ selectedModel: null });
+    const { getByRole, getByText } = await renderSettledPerformanceScreen();
+    expect(getByRole('button', { name: 'Run Benchmark' }).props.accessibilityState).toMatchObject({
+      disabled: true,
+    });
+    expect(getByText('Download a model to run a benchmark.')).toBeTruthy();
+  });
+
+  it('enables Run Benchmark once a model is selected', async () => {
+    const { useModelStore } = require('@/src/features/model-picker/store');
+    useModelStore.setState({ selectedModel: DEFAULT_LOCAL_MODEL_ID });
+    const { getByRole, queryByText } = await renderSettledPerformanceScreen();
+    expect(getByRole('button', { name: 'Run Benchmark' }).props.accessibilityState).toMatchObject({
+      disabled: false,
+    });
+    expect(queryByText('Download a model to run a benchmark.')).toBeNull();
+    await act(async () => {
+      useModelStore.setState({ selectedModel: null });
+    });
+  });
+
   it('switches have accessibilityRole switch (1 total)', async () => {
     const { getAllByRole } = await renderSettledPerformanceScreen();
     const switches = getAllByRole('switch');

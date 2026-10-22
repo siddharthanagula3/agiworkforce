@@ -17,4 +17,12 @@ describe('Help & About', () => {
       expect(openInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/status'),
     );
   });
+
+  it('opens the acceptable use policy', async () => {
+    render(<AboutScreen />);
+    fireEvent.press(screen.getByLabelText('Acceptable Use Policy'));
+    await waitFor(() =>
+      expect(openInAppBrowser).toHaveBeenCalledWith('https://agiworkforce.com/acceptable-use'),
+    );
+  });
 });

@@ -25,7 +25,6 @@ import { useModelStore } from '@/src/features/model-picker/store';
 import { storage } from '@/lib/mmkv';
 import {
   getCapabilities,
-  getDefaultModel as getDefaultLocalModel,
   getModelById as getLocalModelById,
   loadLocalModel,
   loadedLocalModel,
@@ -367,14 +366,16 @@ export default function PerformanceScreen() {
     writeBool(PERF_CHIP_SHOW_KEY, v);
   }, []);
 
+  const benchmarkDisabled = isBenchmarking || !selectedModelId;
+
   const handleBenchmark = useCallback(async () => {
-    if (isBenchmarking) return;
+    if (isBenchmarking || !selectedModelId) return;
     setIsBenchmarking(true);
 
     AccessibilityInfo.announceForAccessibility('Running benchmark. Please wait.');
 
     try {
-      const activeModelId = selectedModelId ?? getDefaultLocalModel().id;
+      const activeModelId = selectedModelId;
       const localModel = getLocalModelById(activeModelId);
       const backend: BackendName = caps?.tier1Runtime ?? 'llama_rn';
 
@@ -874,9 +875,9 @@ export default function PerformanceScreen() {
           </Text>
           <Pressable
             onPress={handleBenchmark}
-            disabled={isBenchmarking}
+            disabled={benchmarkDisabled}
             style={({ pressed }) => ({
-              backgroundColor: isBenchmarking ? c.surfaceOverlay : c.teal,
+              backgroundColor: benchmarkDisabled ? c.surfaceOverlay : c.teal,
               borderRadius: 10,
               paddingVertical: 12,
               alignItems: 'center',
@@ -884,7 +885,7 @@ export default function PerformanceScreen() {
             })}
             accessibilityLabel="Run Benchmark"
             accessibilityRole="button"
-            accessibilityState={{ disabled: isBenchmarking }}
+            accessibilityState={{ disabled: benchmarkDisabled }}
           >
             {isBenchmarking ? (
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -896,11 +897,22 @@ export default function PerformanceScreen() {
                 </Text>
               </View>
             ) : (
-              <Text style={{ fontSize: typeScale.subhead, fontWeight: '600', color: c.accentText }}>
+              <Text
+                style={{
+                  fontSize: typeScale.subhead,
+                  fontWeight: '600',
+                  color: benchmarkDisabled ? c.textMuted : c.accentText,
+                }}
+              >
                 Run Benchmark
               </Text>
             )}
           </Pressable>
+          {selectedModelId ? null : (
+            <Text style={{ fontSize: typeScale.footnote, color: c.textMuted, marginTop: 8 }}>
+              Download a model to run a benchmark.
+            </Text>
+          )}
         </Card>
 
         <Card>
