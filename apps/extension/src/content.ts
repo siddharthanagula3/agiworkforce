@@ -1054,7 +1054,7 @@ function showRecordingIndicator(): void {
       display:inline-flex;align-items:center;gap:6px;
       background:${bgColor};color:${accentColor};
       font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-      font-size:12px;font-weight:600;letter-spacing:0.04em;
+      font-size:14px;font-weight:600;letter-spacing:0.04em;
       padding:5px 12px;border-radius:20px;
       border:1px solid ${borderColor};
       user-select:none;

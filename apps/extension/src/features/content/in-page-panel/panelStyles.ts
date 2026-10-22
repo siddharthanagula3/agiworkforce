@@ -49,7 +49,7 @@ export function buildPanelStyles(): string {
     }
 
     .agi-provider-pill {
-      font-size:11px; font-weight:600;
+      font-size:14px; font-weight:600;
       background:var(--agi-ext-surface);
       border:1px solid var(--agi-ext-border);
       color:var(--agi-ext-text-muted);
@@ -98,7 +98,7 @@ export function buildPanelStyles(): string {
       padding:5px 11px;
       background:var(--agi-ext-surface); border:1px solid var(--agi-ext-border-control);
       border-radius:20px;
-      font-size:12px; font-weight:500; color:var(--agi-ext-text-muted);
+      font-size:14px; font-weight:500; color:var(--agi-ext-text-muted);
       cursor:pointer;
       transition:background 0.15s,border-color 0.15s,color 0.15s;
       white-space:nowrap;
@@ -112,7 +112,7 @@ export function buildPanelStyles(): string {
     .agi-response-area {
       flex:1; overflow-y:auto;
       padding:14px;
-      font-size:13.5px; line-height:1.6; color:var(--agi-ext-text);
+      font-size:14px; line-height:1.6; color:var(--agi-ext-text);
       word-break:break-word;
     }
 
@@ -136,7 +136,7 @@ export function buildPanelStyles(): string {
     }
 
     .agi-access-state {
-      color:var(--agi-ext-text); font-size:13px;
+      color:var(--agi-ext-text); font-size:14px;
       background:var(--agi-ext-surface); border:1px solid var(--agi-ext-border-strong);
       border-radius:12px; padding:12px;
       margin-top:6px;
@@ -160,7 +160,7 @@ export function buildPanelStyles(): string {
     .agi-state-action:disabled { color:var(--agi-ext-text-muted); cursor:wait; }
 
     .agi-disclosure {
-      color:var(--agi-ext-text-muted); font-size:11px;
+      color:var(--agi-ext-text-muted); font-size:14px;
       background:var(--agi-ext-bg); border-top:1px solid var(--agi-ext-border);
       padding:8px 14px 0;
       line-height:1.4; flex-shrink:0;
@@ -192,7 +192,7 @@ export function buildPanelStyles(): string {
       flex:1;
       resize:none; border:1px solid var(--agi-ext-border-control);
       border-radius:16px; padding:10px 12px;
-      font-size:13px; font-family:inherit; color:var(--agi-ext-text);
+      font-size:14px; font-family:inherit; color:var(--agi-ext-text);
       background:var(--agi-ext-surface); outline:none;
       min-height:40px; max-height:120px;
       line-height:1.5;
@@ -229,7 +229,7 @@ export function buildPanelStyles(): string {
     .agi-open-side-panel {
       background:transparent; border:1px solid var(--agi-ext-border-control);
       border-radius:6px; padding:5px 12px;
-      font-size:12px; font-weight:500; color:var(--agi-ext-text-muted); cursor:pointer;
+      font-size:14px; font-weight:500; color:var(--agi-ext-text-muted); cursor:pointer;
       transition:background 0.15s,border-color 0.15s,color 0.15s;
       white-space:nowrap;
     }

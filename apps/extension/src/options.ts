@@ -71,7 +71,7 @@ function injectStyles(): void {
 
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 13px;
+      font-size: 14px;
       color: var(--agi-ext-text);
       background: var(--agi-ext-bg);
       min-height: 100vh;
@@ -101,7 +101,7 @@ function injectStyles(): void {
     }
 
     .opt-header-sub {
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text-muted);
       margin-top: 2px;
     }
@@ -135,7 +135,7 @@ function injectStyles(): void {
     }
 
     .opt-section-title {
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 600;
       color: var(--agi-ext-text-muted);
       text-transform: uppercase;
@@ -154,20 +154,20 @@ function injectStyles(): void {
     .opt-row:last-child { border-bottom: none; }
 
     .opt-row-label {
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 500;
       color: var(--agi-ext-text);
     }
 
     .opt-row-hint {
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text-muted);
       margin-top: 2px;
       line-height: 1.4;
     }
 
     .opt-link {
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 500;
       color: var(--agi-ext-accent-text);
       text-decoration: none;
@@ -221,7 +221,7 @@ function injectStyles(): void {
       border: 1px solid var(--agi-ext-border-control);
       border-radius: 6px;
       padding: 6px 10px;
-      font-size: 12px;
+      font-size: 14px;
       color: var(--agi-ext-text);
       font-family: inherit;
       outline: none;
@@ -254,7 +254,7 @@ function injectStyles(): void {
     }
 
     .opt-allowlist-help {
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text-muted);
       margin-bottom: 10px;
       line-height: 1.45;
@@ -269,7 +269,7 @@ function injectStyles(): void {
 
     .opt-allowlist-origin {
       flex: 1;
-      font-size: 12px;
+      font-size: 14px;
       color: var(--agi-ext-text-muted);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -282,7 +282,7 @@ function injectStyles(): void {
       border: none;
       border-radius: 6px;
       padding: 4px 12px;
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 500;
       cursor: pointer;
       flex-shrink: 0;
@@ -317,7 +317,7 @@ function injectStyles(): void {
     }
 
     .opt-allowlist-consent-headline {
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 600;
       color: var(--agi-ext-danger-text);
       margin-bottom: 4px;
@@ -348,7 +348,7 @@ function injectStyles(): void {
 
     .opt-allowlist-item-origin {
       flex: 1;
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text);
       overflow: hidden;
       text-overflow: ellipsis;
@@ -370,7 +370,7 @@ function injectStyles(): void {
     .opt-allowlist-item-remove:hover { color: var(--agi-ext-danger-text); }
 
     .opt-allowlist-empty {
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text-muted);
       padding: 4px 0;
     }
@@ -382,7 +382,7 @@ function injectStyles(): void {
       color: var(--agi-ext-danger-text);
       border-radius: 6px;
       padding: 5px 14px;
-      font-size: 12px;
+      font-size: 14px;
       cursor: pointer;
       transition: background 0.12s;
     }
@@ -397,7 +397,7 @@ function injectStyles(): void {
       color: var(--agi-ext-text);
       border-radius: 6px;
       padding: 5px 14px;
-      font-size: 12px;
+      font-size: 14px;
       cursor: pointer;
       transition: background 0.12s;
     }
@@ -437,7 +437,7 @@ function injectStyles(): void {
       flex: 1;
       min-width: 0;
       gap: 6px;
-      font-size: 12px;
+      font-size: 14px;
       color: var(--agi-ext-text);
     }
 
@@ -451,7 +451,7 @@ function injectStyles(): void {
       border: none;
       background: none;
       color: var(--agi-ext-accent-text);
-      font-size: 12px;
+      font-size: 14px;
       text-decoration: underline;
       cursor: pointer;
     }
@@ -470,7 +470,7 @@ function injectStyles(): void {
     .opt-shortcuts-table td,
     .opt-shortcuts-table th {
       padding: 10px 16px;
-      font-size: 12px;
+      font-size: 14px;
       border-bottom: 1px solid var(--agi-ext-border);
       text-align: left;
     }
@@ -500,7 +500,7 @@ function injectStyles(): void {
       border-radius: 4px;
       padding: 2px 6px;
       font-family: monospace;
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text);
     }
 
@@ -568,7 +568,7 @@ function injectStyles(): void {
       border-radius: 6px;
       color: var(--agi-ext-text);
       font-family: monospace;
-      font-size: 12px;
+      font-size: 14px;
       min-height: 28px;
       padding: 4px 10px;
       width: 120px;
@@ -594,7 +594,7 @@ function injectStyles(): void {
     ${SCHEDULES_SECTION_CSS}
 
     .opt-version {
-      font-size: 10px;
+      font-size: 14px;
       color: var(--agi-ext-text-muted);
       text-align: center;
     }
@@ -618,7 +618,7 @@ function injectStyles(): void {
     }
 
     .opt-field label {
-      font-size: 11px;
+      font-size: 14px;
       font-weight: 500;
       color: var(--agi-ext-text-muted);
     }
@@ -630,7 +630,7 @@ function injectStyles(): void {
       border: 1px solid var(--agi-ext-border);
       border-radius: 6px;
       padding: 6px 10px;
-      font-size: 12px;
+      font-size: 14px;
       color: var(--agi-ext-text);
       font-family: inherit;
       outline: none;
@@ -682,7 +682,7 @@ function injectStyles(): void {
       border: none;
       border-radius: 6px;
       padding: 6px 16px;
-      font-size: 12px;
+      font-size: 14px;
       font-weight: 500;
       cursor: pointer;
       transition: background 0.12s;
@@ -701,7 +701,7 @@ function injectStyles(): void {
     }
 
     .opt-save-status {
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text-muted);
     }
 
@@ -734,7 +734,7 @@ function injectStyles(): void {
     }
 
     .opt-bearer-help {
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text-muted);
       line-height: 1.5;
     }
@@ -751,7 +751,7 @@ function injectStyles(): void {
       border: 1px solid var(--agi-ext-border-control);
       border-radius: 6px;
       padding: 6px 10px;
-      font-size: 11px;
+      font-size: 14px;
       color: var(--agi-ext-text);
       font-family: monospace;
       outline: none;
@@ -759,7 +759,7 @@ function injectStyles(): void {
 
     .opt-blocked-sites-body { flex: 1; min-width: 0; }
     .opt-blocked-sites-form { display: flex; gap: 8px; align-items: center; margin: 10px 0 6px; }
-    .opt-blocked-sites-input { font-family: inherit; font-size: 12px; }
+    .opt-blocked-sites-input { font-family: inherit; font-size: 14px; }
 
     .opt-bearer-input:focus {
       border-color: var(--agi-ext-accent);
@@ -884,7 +884,7 @@ function injectStyles(): void {
 
     .opt-header-sub {
       margin-top: 7px;
-      font-size: 13px;
+      font-size: 14px;
       line-height: 1.5;
     }
 
@@ -932,8 +932,8 @@ function injectStyles(): void {
       border-bottom-color: var(--agi-ext-border);
     }
 
-    .opt-row-label { font-size: 13px; font-weight: 550; }
-    .opt-row-hint { max-width: 680px; margin-top: 4px; font-size: 12px; line-height: 1.5; }
+    .opt-row-label { font-size: 14px; font-weight: 550; }
+    .opt-row-hint { max-width: 680px; margin-top: 4px; font-size: 14px; line-height: 1.5; }
 
     .opt-toggle {
       width: 42px;
@@ -956,7 +956,7 @@ function injectStyles(): void {
     .opt-bearer-body { padding: 17px 22px 20px; }
 
     .opt-allowlist-help,
-    .opt-bearer-help { max-width: 720px; font-size: 12px; }
+    .opt-bearer-help { max-width: 720px; font-size: 14px; }
 
     .opt-allowlist-current-row { margin-top: 14px; }
 
@@ -985,7 +985,7 @@ function injectStyles(): void {
     }
 
     .opt-field { gap: 7px; }
-    .opt-field label { font-size: 11.5px; }
+    .opt-field label { font-size: 14px; }
     .opt-field input,
     .opt-field textarea,
     .opt-field select,
@@ -1000,11 +1000,11 @@ function injectStyles(): void {
     .opt-shortcuts-table td,
     .opt-shortcuts-table th {
       padding: 14px 22px;
-      font-size: 12.5px;
+      font-size: 14px;
     }
 
     kbd { min-width: 25px; padding: 3px 7px; border-radius: 7px; text-align: center; }
-    .opt-link { font-size: 12px; text-decoration: none; }
+    .opt-link { font-size: 14px; text-decoration: none; }
     button.opt-link {
       appearance: none;
       padding: 0;
@@ -1113,7 +1113,7 @@ function injectStyles(): void {
       .opt-nav-item {
         min-height: 34px;
         padding-inline: 5px;
-        font-size: 10px;
+        font-size: 14px;
         letter-spacing: -0.02em;
         text-align: center;
       }

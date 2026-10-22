@@ -58,7 +58,7 @@ export function buildLauncherStyles(): string {
       background:var(--agi-ext-surface); color:var(--agi-ext-text);
       border:1px solid var(--agi-ext-border);
       box-shadow:0 8px 24px var(--agi-ext-modal-shadow);
-      font-size:12px;
+      font-size:14px;
       font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
       padding:6px 10px; border-radius:10px;
       white-space:nowrap; pointer-events:none;

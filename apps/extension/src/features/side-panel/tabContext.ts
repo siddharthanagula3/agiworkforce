@@ -8,13 +8,13 @@ export const TAB_CONTEXT_PICKER_CSS = `
   .sp-tab-picker-overlay { position: fixed; inset: 0; z-index: 110; display: flex; align-items: center; justify-content: center; padding: 12px; background: var(--agi-ext-bg); }
   .sp-tab-picker { display: flex; flex-direction: column; width: 100%; max-width: 440px; max-height: 80vh; min-height: 0; padding: 16px; gap: 12px; background: var(--agi-ext-surface); color: var(--agi-ext-text); border: 1px solid var(--agi-ext-border-control); border-radius: 14px; }
   .sp-tab-picker h2 { margin: 0; font-size: 16px; }
-  .sp-tab-picker p { margin: 0; color: var(--agi-ext-text-muted); font-size: 12px; line-height: 1.5; }
+  .sp-tab-picker p { margin: 0; color: var(--agi-ext-text-muted); font-size: 14px; line-height: 1.5; }
   .sp-tab-picker-list { display: flex; flex-direction: column; gap: 4px; overflow: auto; min-height: 0; }
   .sp-tab-picker-row { display: flex; align-items: center; gap: 10px; min-height: 44px; padding: 8px; border: 1px solid var(--agi-ext-border); border-radius: 8px; cursor: pointer; }
   .sp-tab-picker-row input { accent-color: var(--agi-ext-accent); flex-shrink: 0; }
   .sp-tab-picker-row-copy { display: flex; flex-direction: column; min-width: 0; gap: 3px; }
-  .sp-tab-picker-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }
-  .sp-tab-picker-row-origin { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--agi-ext-text-muted); font-size: 11px; }
+  .sp-tab-picker-row-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+  .sp-tab-picker-row-origin { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--agi-ext-text-muted); font-size: 14px; }
   .sp-tab-picker-actions { display: flex; justify-content: flex-end; gap: 8px; }
   .sp-tab-picker-actions button { padding: 8px 12px; min-height: 36px; border: 1px solid var(--agi-ext-border-control); border-radius: 8px; background: var(--agi-ext-bg); color: var(--agi-ext-text); cursor: pointer; }
   .sp-tab-picker-actions button[data-primary='true'] { background: var(--agi-ext-primary); color: var(--agi-ext-on-primary); border-color: var(--agi-ext-primary); }
