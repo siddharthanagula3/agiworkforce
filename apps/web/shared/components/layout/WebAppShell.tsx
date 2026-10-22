@@ -20,7 +20,7 @@ import { usePathname } from 'next/navigation';
 import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSignOut } from '@/lib/identity/client';
-import { ChevronUp, Menu } from '@agiworkforce/icons';
+import { ChevronUp, Download, Menu } from '@agiworkforce/icons';
 import {
   Sheet,
   SheetContent,
@@ -80,6 +80,8 @@ import {
 } from '@agiworkforce/types';
 import { accountInitial, resolveAccountDisplayName } from '@agiworkforce/utils/display-name';
 import { CODE_ROUTES } from '@/features/code/code-surface';
+import { CHATS_AND_TASKS_ROUTE } from '@/features/chat/components/ChatsAndTasksList';
+import { isReleased, surfaceCta } from '@/lib/surface-status';
 import { useSettingsModal } from '@/features/settings/components/SettingsModalProvider';
 import { GlobalSearchDialog } from '@/features/chat/components/dialogs/GlobalSearchDialog';
 import { getWorstUsagePercent, useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
@@ -289,6 +291,7 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   // ---- Session row handlers (navigation-focused) ----
   const handleNewChat = useCallback(() => router.push('/chat'), [router]);
   const handleOpenCode = useCallback(() => router.push(CODE_ROUTES.root), [router]);
+  const handleOpenAllChats = useCallback(() => router.push(CHATS_AND_TASKS_ROUTE), [router]);
   const handleOpenSearch = useCallback(() => {
     openAfterMobileNavClose(() => setSearchDialogOpen(true));
   }, [openAfterMobileNavClose]);
@@ -471,6 +474,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     await identitySignOut({ redirectUrl: '/login' });
   }, [identitySignOut, logout]);
 
+  const desktopDownload = isReleased('desktop') ? surfaceCta('desktop') : null;
+
   const isAccountLoading =
     !isAuthInitialized || isAuthLoading || !isBillingInitialized || isBillingLoading;
 
@@ -511,32 +516,47 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
   ) : (
     <div className="w-full">
       {isFreeTier && <SidebarFreePlanNudge onUpgrade={() => openShellSettings('billing')} />}
-      <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <button
-            type="button"
-            aria-label={`Account menu for ${displayName}`}
-            className="flex w-full items-center gap-2 px-3 py-3 text-start transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-          >
-            <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-              {userInitial}
-            </div>
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-1.5">
-                <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
-                <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={isFreeTier} />
+      <div className="flex items-center">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <button
+              type="button"
+              aria-label={`Account menu for ${displayName}`}
+              className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 text-start transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
+            >
+              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                {userInitial}
               </div>
-              {accountUser?.email && (
-                <p className="truncate text-caption text-muted-foreground">{accountUser.email}</p>
-              )}
-            </div>
-            <ChevronUp className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden="true" />
-          </button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
-          {accountMenuItems}
-        </DropdownMenuContent>
-      </DropdownMenu>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
+                  <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={isFreeTier} />
+                </div>
+                {accountUser?.email && (
+                  <p className="truncate text-caption text-muted-foreground">{accountUser.email}</p>
+                )}
+              </div>
+              <ChevronUp
+                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
+                aria-hidden="true"
+              />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
+            {accountMenuItems}
+          </DropdownMenuContent>
+        </DropdownMenu>
+        {desktopDownload && (
+          <a
+            href={desktopDownload.href}
+            aria-label={desktopDownload.label}
+            title={desktopDownload.label}
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring pointer-coarse:h-11 pointer-coarse:w-11"
+          >
+            <Download className="h-4 w-4" aria-hidden="true" />
+          </a>
+        )}
+      </div>
     </div>
   );
 
@@ -586,6 +606,8 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     getSessionHref: (session: SidebarSession) => conversationHref(session.id),
     onNewChat: handleNewChat,
     onOpenCode: disabledFeatures.includes('code') ? undefined : handleOpenCode,
+    onOpenAllChats: handleOpenAllChats,
+    allChatsHref: CHATS_AND_TASKS_ROUTE,
     onOpenSearch: handleOpenSearch,
     showUsageWidget: currentTier !== undefined && !isFreeTier && managedUsageSummary !== null,
     budgetPercent: managedBudgetPercent,

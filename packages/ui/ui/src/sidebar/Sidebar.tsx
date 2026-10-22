@@ -18,6 +18,7 @@ import {
   Plus,
   Search,
   Settings,
+  SlidersHorizontal,
   SquarePen,
   TerminalSquare,
   Trash2,
@@ -75,6 +76,12 @@ export interface SidebarProps extends SessionItemHandlers {
    * that has no Code destination omits this and the control does not render.
    */
   onOpenCode?: () => void;
+  /**
+   * Opens the full list of chats and tasks. A host with no such page omits it
+   * and the Recents header carries no link.
+   */
+  onOpenAllChats?: () => void;
+  allChatsHref?: string;
   onToggleCollapse?: () => void;
   onOpenSearch: () => void;
   onOpenUsage?: () => void;
@@ -110,6 +117,11 @@ export const SIDEBAR_TOOLTIP_DELAY_MS = 200;
 const FOCUS_RING =
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--focus-ring)]';
 
+const SURFACE_SEGMENT = cn(
+  'flex h-8 items-center justify-center rounded-md px-3 text-sm font-medium transition-colors pointer-coarse:h-11',
+  FOCUS_RING,
+);
+
 export { OPEN_SEARCH_SHORTCUT };
 
 export function openSearchShortcutLabel(isMac: boolean = isApplePlatform()): string {
@@ -136,6 +148,8 @@ export function Sidebar(props: SidebarProps) {
     showUsageWidget = false,
     onNewChat,
     onOpenCode,
+    onOpenAllChats,
+    allChatsHref,
     onToggleCollapse,
     onOpenSearch,
     onOpenUsage,
@@ -179,7 +193,7 @@ export function Sidebar(props: SidebarProps) {
   const [projectsSectionCollapsed, setProjectsSectionCollapsed] = useState(false);
   const [expandedProjectIds, setExpandedProjectIds] = useState<Set<string>>(new Set());
   const [projectShowAllChats, setProjectShowAllChats] = useState<Set<string>>(new Set());
-  const [projectsHeaderMenuOpen, setProjectsHeaderMenuOpen] = useState(false);
+  const [recentsHeaderMenuOpen, setRecentsHeaderMenuOpen] = useState(false);
   const [organizeMode, setOrganizeMode] = useState<'by-project' | 'one-list'>('by-project');
 
   const projectListEnabled = Boolean(
@@ -197,6 +211,9 @@ export function Sidebar(props: SidebarProps) {
   );
 
   const PROJECTS_SHOW_LIMIT = 5;
+  const showOrganizeMenu =
+    projectListEnabled && (pinnedProjects.length > 0 || unpinnedProjects.length > 0);
+
   const visibleUnpinnedProjects = showAllProjects
     ? unpinnedProjects
     : unpinnedProjects.slice(0, PROJECTS_SHOW_LIMIT);
@@ -554,28 +571,35 @@ export function Sidebar(props: SidebarProps) {
                 <SquarePen className="h-4 w-4" />
                 {t('newChat', 'New Chat')}
               </button>
-              {onOpenCode && (
-                <TooltipProvider delayDuration={SIDEBAR_TOOLTIP_DELAY_MS}>
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={onOpenCode}
-                        aria-label={codeLabel}
-                        className={cn(
-                          'flex h-8 w-8 items-center justify-center rounded-lg bg-muted text-foreground transition-colors hover:bg-accent',
-                          FOCUS_RING,
-                        )}
-                      >
-                        <TerminalSquare className="h-4 w-4" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">{codeLabel}</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              )}
             </div>
           </div>
+          {onOpenCode && (
+            <div
+              role="group"
+              aria-label={t('sidebar.surfaceSwitch', 'Switch between Home and Code')}
+              className="mb-3 grid grid-cols-2 gap-0.5 rounded-lg border border-border p-0.5"
+            >
+              <button
+                type="button"
+                onClick={onNewChat}
+                aria-current="page"
+                className={cn(SURFACE_SEGMENT, 'bg-accent text-foreground')}
+              >
+                {t('sidebar.home', 'Home')}
+              </button>
+              <button
+                type="button"
+                onClick={onOpenCode}
+                aria-label={codeLabel}
+                className={cn(
+                  SURFACE_SEGMENT,
+                  'text-muted-foreground hover:bg-accent hover:text-foreground',
+                )}
+              >
+                {t('sidebar.codeSegment', 'Code')}
+              </button>
+            </div>
+          )}
           <button
             type="button"
             onClick={onOpenSearch}
@@ -595,7 +619,7 @@ export function Sidebar(props: SidebarProps) {
         {/* Nav rows, filters and the conversation list share one scroll region.
             They used to be siblings of the pinned footer, so on a short viewport
             (1280x600) the fixed header, nav and footer left the `flex-1` list a
-            20px window that could not fit even its own "Chats" heading. */}
+            20px window that could not fit even its own "Recents" heading. */}
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto [scrollbar-gutter:stable]">
           {/* Nav rows (Projects / Skills / surface-provided) */}
           {!isSimpleMode && resolvedNavItems.length > 0 && (
@@ -674,14 +698,11 @@ export function Sidebar(props: SidebarProps) {
                     </button>
                     {/* Right-side actions (ChatGPT pattern): hidden at rest, revealed
                       on header hover or keyboard focus-within (a11y: hover-only
-                      affordances must also appear on focus), and pinned visible
-                      while the "…" menu is open. Rendered only when the relevant
-                      handlers are present. */}
+                      affordances must also appear on focus). */}
                     <div
                       className={cn(
                         'flex shrink-0 items-center gap-0.5 transition-opacity',
                         'opacity-0 group-hover/projhdr:opacity-100 group-focus-within/projhdr:opacity-100 [@media(hover:none)]:opacity-100',
-                        projectsHeaderMenuOpen && 'opacity-100',
                       )}
                     >
                       {onProjectCreate && (
@@ -701,63 +722,6 @@ export function Sidebar(props: SidebarProps) {
                           <Plus className="h-3 w-3" aria-hidden="true" />
                         </button>
                       )}
-                      {/* "..." opens the ChatGPT-style "Organize chats" menu */}
-                      <Menu
-                        align="end"
-                        onOpenChange={setProjectsHeaderMenuOpen}
-                        trigger={({ toggle }) => (
-                          <button
-                            type="button"
-                            aria-label={t('sidebar.organizeChats', 'Organize chats')}
-                            title={t('sidebar.organizeChats', 'Organize chats')}
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              toggle();
-                            }}
-                            className={cn(
-                              'flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
-                              FOCUS_RING,
-                            )}
-                          >
-                            <MoreHorizontal className="h-3 w-3" aria-hidden="true" />
-                          </button>
-                        )}
-                        menuClassName="w-52"
-                      >
-                        {({ close }) => (
-                          <>
-                            {/* Non-interactive section label */}
-                            <div className="px-2 py-1 text-caption font-semibold uppercase tracking-wider text-muted-foreground">
-                              {t('sidebar.organizeChats', 'Organize chats')}
-                            </div>
-                            <MenuSeparator />
-                            <MenuItem
-                              close={close}
-                              onSelect={() => setOrganizeMode('one-list')}
-                              icon={<List className="h-4 w-4" />}
-                              trailing={
-                                organizeMode === 'one-list' ? (
-                                  <Check className="h-3.5 w-3.5 text-foreground" />
-                                ) : undefined
-                              }
-                            >
-                              {t('sidebar.organizeOneList', 'In one list')}
-                            </MenuItem>
-                            <MenuItem
-                              close={close}
-                              onSelect={() => setOrganizeMode('by-project')}
-                              icon={<Folder className="h-4 w-4" />}
-                              trailing={
-                                organizeMode === 'by-project' ? (
-                                  <Check className="h-3.5 w-3.5 text-foreground" />
-                                ) : undefined
-                              }
-                            >
-                              {t('sidebar.organizeByProject', 'By project')}
-                            </MenuItem>
-                          </>
-                        )}
-                      </Menu>
                     </div>
                   </div>
 
@@ -844,10 +808,88 @@ export function Sidebar(props: SidebarProps) {
                 </div>
               )}
 
-              {/* Chats section header + pinned sessions */}
-              {(pinned.length > 0 || grouped.size > 0) && (
-                <div className="mb-1 px-3 py-1 text-[13px] font-semibold text-muted-foreground">
-                  {t('sidebar.chats', 'Chats')}
+              {(pinned.length > 0 || grouped.size > 0 || showOrganizeMenu) && (
+                <div
+                  data-sidebar-region="recents-header"
+                  className="group/recentshdr mb-1 flex items-center gap-1 px-3 py-0.5"
+                >
+                  <h2 className="min-w-0 flex-1 text-[13px] font-semibold text-muted-foreground">
+                    {t('sidebar.recents', 'Recents')}
+                  </h2>
+                  {showOrganizeMenu && (
+                    <div
+                      className={cn(
+                        'flex shrink-0 items-center transition-opacity',
+                        'opacity-0 group-hover/recentshdr:opacity-100 group-focus-within/recentshdr:opacity-100 [@media(hover:none)]:opacity-100',
+                        recentsHeaderMenuOpen && 'opacity-100',
+                      )}
+                    >
+                      <Menu
+                        align="end"
+                        onOpenChange={setRecentsHeaderMenuOpen}
+                        trigger={({ toggle }) => (
+                          <button
+                            type="button"
+                            aria-label={t('sidebar.organizeChats', 'Organize chats')}
+                            title={t('sidebar.organizeChats', 'Organize chats')}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggle();
+                            }}
+                            className={cn(
+                              'flex h-6 w-6 items-center justify-center rounded-compact text-muted-foreground transition-colors hover:bg-accent hover:text-foreground [@media(hover:none)]:h-9 [@media(hover:none)]:w-9',
+                              FOCUS_RING,
+                            )}
+                          >
+                            <SlidersHorizontal className="h-3.5 w-3.5" aria-hidden="true" />
+                          </button>
+                        )}
+                        menuClassName="w-52"
+                      >
+                        {({ close }) => (
+                          <>
+                            {/* Non-interactive section label */}
+                            <div className="px-2 py-1 text-caption font-semibold uppercase tracking-wider text-muted-foreground">
+                              {t('sidebar.organizeChats', 'Organize chats')}
+                            </div>
+                            <MenuSeparator />
+                            <MenuItem
+                              close={close}
+                              onSelect={() => setOrganizeMode('one-list')}
+                              icon={<List className="h-4 w-4" />}
+                              trailing={
+                                organizeMode === 'one-list' ? (
+                                  <Check className="h-3.5 w-3.5 text-foreground" />
+                                ) : undefined
+                              }
+                            >
+                              {t('sidebar.organizeOneList', 'In one list')}
+                            </MenuItem>
+                            <MenuItem
+                              close={close}
+                              onSelect={() => setOrganizeMode('by-project')}
+                              icon={<Folder className="h-4 w-4" />}
+                              trailing={
+                                organizeMode === 'by-project' ? (
+                                  <Check className="h-3.5 w-3.5 text-foreground" />
+                                ) : undefined
+                              }
+                            >
+                              {t('sidebar.organizeByProject', 'By project')}
+                            </MenuItem>
+                          </>
+                        )}
+                      </Menu>
+                    </div>
+                  )}
+                  {onOpenAllChats && (
+                    <AllChatsLink
+                      href={allChatsHref}
+                      onOpen={onOpenAllChats}
+                      label={t('sidebar.viewAllChats', 'View all')}
+                      accessibleLabel={t('sidebar.viewAllChatsLabel', 'View all chats and tasks')}
+                    />
+                  )}
                 </div>
               )}
 
@@ -1059,6 +1101,52 @@ function useTitleTruncated<T extends HTMLElement>(
   }, [node, dependency]);
 
   return { ref: setNode, truncated };
+}
+
+function AllChatsLink({
+  href,
+  onOpen,
+  label,
+  accessibleLabel,
+}: {
+  href?: string;
+  onOpen: () => void;
+  label: string;
+  accessibleLabel: string;
+}) {
+  const className = cn(
+    'inline-flex min-h-6 shrink-0 items-center rounded-compact px-1.5 text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground pointer-coarse:min-h-11',
+    FOCUS_RING,
+  );
+  if (!href) {
+    return (
+      <button type="button" onClick={onOpen} aria-label={accessibleLabel} className={className}>
+        {label}
+      </button>
+    );
+  }
+  return (
+    <a
+      href={href}
+      aria-label={accessibleLabel}
+      onClick={(event) => {
+        if (
+          event.button !== 0 ||
+          event.metaKey ||
+          event.ctrlKey ||
+          event.shiftKey ||
+          event.altKey
+        ) {
+          return;
+        }
+        event.preventDefault();
+        onOpen();
+      }}
+      className={className}
+    >
+      {label}
+    </a>
+  );
 }
 
 function RailButton({

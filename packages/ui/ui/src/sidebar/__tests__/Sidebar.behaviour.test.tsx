@@ -65,7 +65,7 @@ describe('sidebar sections carry the destinations the rail promises', () => {
 
     expect(screen.getAllByText('Projects').length).toBeGreaterThan(0);
     expect(screen.getByText('Atlas')).toBeTruthy();
-    expect(screen.getByText('Chats')).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Recents' })).toBeTruthy();
     expect(screen.getAllByText('Pinned').length).toBeGreaterThan(0);
     expect(screen.getByText('Recent thread')).toBeTruthy();
   });
@@ -138,8 +138,8 @@ describe('sidebar behaviour', () => {
       (button) => button.getAttribute('aria-label') ?? button.textContent?.trim() ?? '',
     );
 
-    expect(labels.slice(0, 3)).toEqual(['Toggle sidebar', 'New chat', 'AGI Code']);
-    expect(labels[3]).toContain('Search');
+    expect(labels.slice(0, 4)).toEqual(['Toggle sidebar', 'New chat', 'Home', 'AGI Code']);
+    expect(labels[4]).toContain('Search');
   });
 
   it('leaves every header and rail control in the natural tab order', () => {

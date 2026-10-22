@@ -75,6 +75,27 @@ const providerState = vi.hoisted(() => ({
 }));
 
 const settingsModalState = vi.hoisted(() => ({ openSettings: vi.fn() }));
+const surfaceState = vi.hoisted(() => ({ desktopReleased: false }));
+
+vi.mock('@/lib/surface-status', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/surface-status')>();
+  return {
+    ...actual,
+    isReleased: (surface: Parameters<typeof actual.isReleased>[0]) =>
+      surface === 'desktop' ? surfaceState.desktopReleased : actual.isReleased(surface),
+    surfaceCta: (surface: Parameters<typeof actual.surfaceCta>[0]) =>
+      surface === 'desktop' && surfaceState.desktopReleased
+        ? actual.surfaceCta('desktop', {
+            ...actual.SURFACE_STATUS,
+            desktop: actual.AVAILABLE_NOW_LABEL,
+          })
+        : actual.surfaceCta(surface),
+  };
+});
+
+vi.mock('@/features/chat/components/ChatsAndTasksList', () => ({
+  CHATS_AND_TASKS_ROUTE: '/chat/chats',
+}));
 const upgradeFlowState = vi.hoisted(() => ({ openUpgradeDialog: vi.fn() }));
 
 /** Stable stub for the shared `useConfirmAction` destructive-confirm hook. */
@@ -177,6 +198,8 @@ vi.mock('@agiworkforce/ui', async () => {
       onRetryLoad?: () => void;
       onNewChat?: () => void;
       onOpenCode?: () => void;
+      onOpenAllChats?: () => void;
+      allChatsHref?: string;
       onOpenSearch?: () => void;
       onToggleCollapse?: () => void;
       onRename?: (id: string, title: string) => void;
@@ -211,6 +234,11 @@ vi.mock('@agiworkforce/ui', async () => {
         {props.onOpenCode && (
           <button type="button" onClick={props.onOpenCode}>
             Code
+          </button>
+        )}
+        {props.onOpenAllChats && (
+          <button type="button" data-href={props.allChatsHref ?? ''} onClick={props.onOpenAllChats}>
+            View all chats and tasks
           </button>
         )}
         <button type="button" onClick={props.onOpenSearch}>
@@ -479,6 +507,7 @@ beforeEach(() => {
   shellState.deleteConversation = vi.fn().mockResolvedValue(true);
   shellState.projects = [];
   shellState.usage = null;
+  surfaceState.desktopReleased = false;
   toastState.error.mockReset();
   confirmStub.confirm.mockClear();
   useUIStore.getState().setSidebarCollapsed(false);
@@ -675,6 +704,43 @@ describe('WebAppShell responsive navigation', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Code' }));
 
     expect(routerState.push).toHaveBeenCalledWith('/code');
+  });
+
+  it('links the Recents header to the chats and tasks page', () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    const viewAll = screen.getByRole('button', { name: 'View all chats and tasks' });
+    expect(viewAll).toHaveAttribute('data-href', '/chat/chats');
+    fireEvent.click(viewAll);
+    expect(routerState.push).toHaveBeenCalledWith('/chat/chats');
+  });
+
+  it('offers no desktop download in the account row while the desktop app is unreleased', () => {
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    expect(screen.queryByRole('link', { name: /AGI Desktop/ })).toBeNull();
+  });
+
+  it('puts the desktop download beside the account menu once the desktop app is released', () => {
+    surfaceState.desktopReleased = true;
+    render(
+      <WebAppShell>
+        <main>content</main>
+      </WebAppShell>,
+    );
+
+    const download = screen.getByRole('link', { name: 'Get AGI Desktop' });
+    expect(download).toHaveAttribute('href', '/download#desktop-downloads');
+    const account = screen.getByRole('button', { name: /^Account menu for/ });
+    expect(account.parentElement).toBe(download.parentElement);
   });
 
   it('narrow: hides the persistent sidebar behind an Open navigation control', () => {

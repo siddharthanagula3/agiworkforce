@@ -47,17 +47,25 @@ function revealContract(el: HTMLElement, group: string) {
 }
 
 describe('Sidebar projects section (hover pattern)', () => {
-  it('hides the header "+" and "…" at rest, revealing on hover/focus-within', () => {
+  it('hides the header "+" at rest, revealing on hover/focus-within', () => {
     renderSidebar();
 
     const newProject = screen.getByRole('button', { name: 'New project' });
-    const organize = screen.getByRole('button', { name: 'Organize chats' });
     const container = newProject.parentElement as HTMLElement;
-    expect(container.contains(organize.parentElement as HTMLElement)).toBe(true);
     revealContract(container, 'projhdr');
 
     const headerRow = container.closest('.group\\/projhdr');
     expect(headerRow).not.toBeNull();
+  });
+
+  it('keeps the Organize chats control on the Recents header, revealed on hover/focus-within', () => {
+    renderSidebar();
+
+    const organize = screen.getByRole('button', { name: 'Organize chats' });
+    const container = organize.closest('.group\\/recentshdr') as HTMLElement;
+    expect(container).not.toBeNull();
+    expect(container.querySelector('h2')?.textContent).toBe('Recents');
+    revealContract(organize.parentElement?.parentElement as HTMLElement, 'recentshdr');
   });
 
   it('hides project-row compose and "…" at rest, revealing on hover/focus-within', () => {

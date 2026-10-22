@@ -4,8 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Sidebar } from '../Sidebar';
 
 // The Code surface owns its own left column, so it left the app rail. The one
-// control that reaches it from every other surface is this button beside New
-// chat, and it has to survive both sidebar widths. A caller with no Code
+// control that reaches it from every other surface is the Home/Code switch
+// under the header, and it has to survive both sidebar widths. A caller with no Code
 // destination (desktop, the extension) passes no handler and gets no button,
 // rather than a control that navigates nowhere.
 afterEach(() => {
@@ -30,28 +30,42 @@ function renderSidebar(props: { collapsed?: boolean; onOpenCode?: () => void }) 
 }
 
 describe('sidebar Code control', () => {
-  it('renders beside New chat in the expanded header and routes to Code', () => {
+  it('renders Home and Code as one two-segment control under the header, Home selected', () => {
     const onOpenCode = vi.fn();
     renderSidebar({ onOpenCode });
 
+    const group = screen.getByRole('group', { name: 'Switch between Home and Code' });
+    const home = screen.getByRole('button', { name: 'Home' });
     const code = screen.getByRole('button', { name: 'AGI Code' });
     const newChat = screen.getByRole('button', { name: 'New chat' });
 
-    expect(newChat.parentElement).toBe(code.parentElement);
-    expect(newChat.compareDocumentPosition(code) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(home.parentElement).toBe(group);
+    expect(code.parentElement).toBe(group);
+    expect(code.textContent).toBe('Code');
+    expect(home.getAttribute('aria-current')).toBe('page');
+    expect(code.getAttribute('aria-current')).toBeNull();
+    expect(newChat.compareDocumentPosition(group) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
 
     code.click();
     expect(onOpenCode).toHaveBeenCalledTimes(1);
   });
 
-  it('keeps the New chat pill height so the two controls read as one pair', () => {
-    renderSidebar({ onOpenCode: vi.fn() });
+  it('takes Home to the composer home through the host new-chat handler', () => {
+    const onNewChat = vi.fn();
+    render(
+      <Sidebar
+        sessions={[]}
+        onNewChat={onNewChat}
+        onOpenSearch={vi.fn()}
+        onSelect={vi.fn()}
+        onRename={vi.fn()}
+        onDelete={vi.fn()}
+        onOpenCode={vi.fn()}
+      />,
+    );
 
-    const code = screen.getByRole('button', { name: 'AGI Code' });
-    expect(code.className).toContain('h-8');
-    expect(code.className).toContain('w-8');
-    expect(code.className).toContain('rounded-lg');
-    expect(code.className).toContain('bg-muted');
+    screen.getByRole('button', { name: 'Home' }).click();
+    expect(onNewChat).toHaveBeenCalledTimes(1);
   });
 
   it('renders in the collapsed icon rail, immediately after New chat', () => {
@@ -72,6 +86,7 @@ describe('sidebar Code control', () => {
   it('renders nothing when the surface has no Code destination', () => {
     renderSidebar({});
     expect(screen.queryByRole('button', { name: 'AGI Code' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Switch between Home and Code' })).toBeNull();
 
     cleanup();
 
