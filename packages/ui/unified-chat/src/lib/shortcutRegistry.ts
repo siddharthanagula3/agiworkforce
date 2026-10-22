@@ -14,6 +14,8 @@ export interface ShortcutChord {
   key: string;
   ctrl?: boolean;
   meta?: boolean;
+  /** The Control key itself on every platform, where `ctrl`/`meta` mean Cmd on a Mac. */
+  control?: boolean;
   shift?: boolean;
   alt?: boolean;
 }
@@ -244,6 +246,7 @@ const KEY_LABELS: Readonly<Record<string, string>> = {
 
 export function formatShortcutKeys(shortcut: ShortcutChord, isMac: boolean): string[] {
   const keys: string[] = [];
+  if (shortcut.control) keys.push(isMac ? '⌃' : 'Ctrl');
   if (shortcut.ctrl || shortcut.meta) keys.push(isMac ? '⌘' : 'Ctrl');
   if (shortcut.shift) keys.push(isMac ? '⇧' : 'Shift');
   if (shortcut.alt) keys.push(isMac ? '⌥' : 'Alt');
@@ -257,7 +260,7 @@ function hasPlatformModifier(chord: ShortcutChord): boolean {
 
 export function shortcutChordKey(chord: ShortcutChord): string {
   return [
-    hasPlatformModifier(chord) ? 'mod' : '',
+    hasPlatformModifier(chord) || chord.control ? 'mod' : '',
     chord.shift ? 'shift' : '',
     chord.alt ? 'alt' : '',
     chord.key.toLowerCase(),
@@ -278,8 +281,14 @@ export function matchesShortcut(
   shortcut: ShortcutChord,
   isMac: boolean,
 ): boolean {
-  const modifierPressed = isMac ? event.metaKey : event.ctrlKey;
-  if (hasPlatformModifier(shortcut) !== modifierPressed) return false;
+  if (shortcut.control) {
+    if (!event.ctrlKey || event.metaKey !== Boolean(isMac && hasPlatformModifier(shortcut))) {
+      return false;
+    }
+  } else {
+    const modifierPressed = isMac ? event.metaKey : event.ctrlKey;
+    if (hasPlatformModifier(shortcut) !== modifierPressed) return false;
+  }
   if (Boolean(shortcut.shift) !== event.shiftKey) return false;
   if (Boolean(shortcut.alt) !== event.altKey) return false;
   return shortcut.key.length === 1
@@ -289,7 +298,12 @@ export function matchesShortcut(
 
 /** An unmodified app binding is skipped while the user types, so it cannot reach the composer. */
 export function firesInTextFields(shortcut: ShortcutDefinition): boolean {
-  return shortcut.scope === 'composer' || hasPlatformModifier(shortcut) || Boolean(shortcut.alt);
+  return (
+    shortcut.scope === 'composer' ||
+    hasPlatformModifier(shortcut) ||
+    Boolean(shortcut.control) ||
+    Boolean(shortcut.alt)
+  );
 }
 
 function scopesOverlap(left: ShortcutDefinition, right: ShortcutDefinition): boolean {

@@ -96,6 +96,12 @@ describe('recorded shortcut keys', () => {
     ).toEqual({ ok: true });
   });
 
+  it('refuse Ctrl+`, which opens the terminal in Code', () => {
+    expect(
+      checkShortcutBinding(copyDoc, { key: '`', ctrl: true, meta: true }, KEYBOARD_SHORTCUT_DOCS),
+    ).toEqual({ ok: false, reason: 'taken', by: 'Terminal in Code' });
+  });
+
   it('reserve nothing a default binding already uses', () => {
     expect(findShortcutConflicts(KEYBOARD_SHORTCUT_DOCS, RESERVED_SHORTCUTS)).toEqual([]);
   });

@@ -144,6 +144,25 @@ describe('matchesShortcut', () => {
     const copy = CHAT_SHORTCUTS.find((shortcut) => shortcut.id === 'copy-last-message')!;
     expect(matchesShortcut(keyEvent('C', { meta: true, shift: true }), copy, true)).toBe(true);
   });
+
+  it('takes the Control key itself for a control chord, on a Mac as elsewhere', () => {
+    const terminal = { key: '`', control: true };
+    expect(matchesShortcut(keyEvent('`', { ctrl: true }), terminal, true)).toBe(true);
+    expect(matchesShortcut(keyEvent('`', { ctrl: true }), terminal, false)).toBe(true);
+    expect(matchesShortcut(keyEvent('`', { meta: true }), terminal, true)).toBe(false);
+    expect(matchesShortcut(keyEvent('`', { meta: true, ctrl: true }), terminal, true)).toBe(false);
+    expect(matchesShortcut(keyEvent('`'), terminal, false)).toBe(false);
+  });
+});
+
+describe('a control chord', () => {
+  it('collides with a Cmd or Ctrl binding on the same key, since they are one key off a Mac', () => {
+    const conflicts = findShortcutConflicts(
+      [appBinding({ id: 'planted', key: '`' })],
+      [{ id: 'terminal', key: '`', control: true }],
+    );
+    expect(conflicts.map((conflict) => conflict.ids)).toEqual([['planted', 'terminal']]);
+  });
 });
 
 describe('formatShortcutKeys', () => {
@@ -151,5 +170,11 @@ describe('formatShortcutKeys', () => {
     const invert = CHAT_SHORTCUTS.find((shortcut) => shortcut.id === 'composer-follow-up-invert')!;
     expect(formatShortcutKeys(invert, true)).toEqual(['⌘', '⇧', 'Enter']);
     expect(formatShortcutKeys(invert, false)).toEqual(['Ctrl', 'Shift', 'Enter']);
+  });
+
+  it('prints the Control key as ⌃ on a Mac', () => {
+    const terminal = { key: '`', control: true };
+    expect(formatShortcutKeys(terminal, true)).toEqual(['⌃', '`']);
+    expect(formatShortcutKeys(terminal, false)).toEqual(['Ctrl', '`']);
   });
 });
