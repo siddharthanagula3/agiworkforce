@@ -295,6 +295,11 @@
       "file": "apps/web/lib/services/cloud-code-session-service.ts",
       "migration": 382,
       "reason": "Reads or writes cloud_code_sessions.security_scan_id and security_scan_issued_at that 0382 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0382 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/published-artifact-service.ts",
+      "migration": 380,
+      "reason": "Reads the live_artifacts table that 0380 adds, to open a first publish of a connector-backed artifact to invited people rather than anyone with the link. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0380 is applied."
     }
   ]
 }

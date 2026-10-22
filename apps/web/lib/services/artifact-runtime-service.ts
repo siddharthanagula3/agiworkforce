@@ -57,11 +57,16 @@ import {
   type ProviderUsagePricingContext,
 } from '@/lib/services/managed-usage-accounting-service';
 import {
+  ManagedUsageRequestError,
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
   markManagedUsageProviderStarted,
   reserveManagedUsageRequest,
 } from '@/lib/services/managed-usage-request-service';
+import {
+  CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE,
+  publishedArtifactAllowsConnectors,
+} from '@/lib/services/published-artifact-service';
 import {
   buildServerProviderAdapter,
   toGenericUpstreamError,
@@ -606,6 +611,17 @@ export async function completeArtifactPrompt(input: {
     MAX_OUTPUT_TOKENS,
   );
   const plan = input.plan && input.plan.mcpTools.length > 0 ? input.plan : null;
+  if (
+    plan &&
+    input.subject.kind === 'published' &&
+    !(await publishedArtifactAllowsConnectors(input.db, input.subject.publishedArtifactId))
+  ) {
+    throw new ManagedUsageRequestError(
+      CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE,
+      403,
+      'connectors_not_on_public_share',
+    );
+  }
   // Fail closed whatever route the caller picked: a run offered any Google
   // connector tool only runs on a model that keeps inputs out of training.
   if (

@@ -10,7 +10,11 @@ import {
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
-import { createError } from '@/lib/errors';
+import { AppError, createError } from '@/lib/errors';
+import {
+  getWorkspaceArtifactSharingErrorMessage,
+  organizationCanShareArtifacts,
+} from '@/lib/services/org-entitlements';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { moderateManagedPrompt } from '@/lib/moderation';
@@ -26,8 +30,10 @@ import {
   unshareArtifactFromOrganization,
 } from '@/lib/services/org-shared-artifact-service';
 import {
+  CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE,
   PUBLISHED_TOKEN_REGEX,
   buildPublishedArtifactUrl,
+  publicationUsesConnectors,
   renamePublishedArtifact,
   setPublishedArtifactVisibility,
   unpublishArtifactRecord,
@@ -74,6 +80,13 @@ async function moveToAudience(
   db: DatabaseAdapter,
   input: { userId: string; token: string; visibility: ManagedCloudPublishedArtifactVisibility },
 ): Promise<{ updated: PublishedArtifact | null; organizationId: string | null }> {
+  if (
+    input.visibility === 'public' &&
+    (await publicationUsesConnectors(db, { userId: input.userId, token: input.token }))
+  ) {
+    throw createError.conflict(CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE);
+  }
+
   if (input.visibility !== 'organization') {
     const membership = await resolveOrgMembership(db, input.userId);
     if (membership) {
@@ -87,6 +100,9 @@ async function moveToAudience(
   }
 
   const target = await resolveArtifactShareTarget(db, { userId: input.userId, token: input.token });
+  if (!(await organizationCanShareArtifacts(target.organizationId))) {
+    throw new AppError('SUBSCRIPTION_REQUIRED', getWorkspaceArtifactSharingErrorMessage(), 403);
+  }
   await requireOrganizationPermission(
     input.userId,
     target.organizationId,

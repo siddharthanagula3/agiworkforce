@@ -7,6 +7,8 @@ const mocks = vi.hoisted(() => ({
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   scopedDb: vi.fn(),
   permissions: new Set<string>(['content.read', 'content.share']),
+  canShareArtifacts: vi.fn(async (..._args: unknown[]) => true),
+  usesConnectors: false,
 }));
 
 vi.mock('server-only', () => ({}));
@@ -27,6 +29,10 @@ vi.mock('@/lib/services/organization-permission-service', async () => {
     resolveOrganizationPermissions: vi.fn(async () => new Set(mocks.permissions)),
   };
 });
+vi.mock('@/lib/services/org-entitlements', () => ({
+  organizationCanShareArtifacts: (...a: unknown[]) => mocks.canShareArtifacts(...a),
+  getWorkspaceArtifactSharingErrorMessage: () => 'Upgrade to share with your workspace.',
+}));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
@@ -96,6 +102,9 @@ function respond(visibility: 'public' | 'organization' | 'invited') {
         },
       ];
     }
+    if (text.includes('live_artifacts')) {
+      return [{ uses_connectors: mocks.usesConnectors }];
+    }
     if (text.includes('update public.published_artifacts')) {
       return [artifactRow(visibility)];
     }
@@ -111,6 +120,8 @@ beforeEach(() => {
   mocks.csrf.mockResolvedValue(null);
   mocks.rateLimit.mockResolvedValue(null);
   mocks.permissions = new Set(['content.read', 'content.share']);
+  mocks.canShareArtifacts.mockResolvedValue(true);
+  mocks.usesConnectors = false;
   mocks.query.mockImplementation(async (sql: string) => respond('organization')(sql));
   mocks.scopedDb.mockResolvedValue({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
@@ -221,5 +232,42 @@ describe('PATCH /api/artifacts/publish/[token]', () => {
       throw new Error('connection terminated');
     });
     expect((await call({ visibility: 'organization' })).status).toBe(500);
+  });
+
+  it('refuses workspace sharing when the workspace plan does not include it', async () => {
+    mocks.canShareArtifacts.mockResolvedValue(false);
+
+    const response = await call({ visibility: 'organization' });
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error).toMatchObject({ code: 'SUBSCRIPTION_REQUIRED' });
+    expect(mocks.canShareArtifacts).toHaveBeenCalledWith(ORG);
+    const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
+    expect(
+      statements.some((sql) => sql.includes('insert into public.organization_shared_artifacts')),
+    ).toBe(false);
+    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(false);
+  });
+
+  it('refuses to make an artifact with connected apps public and changes nothing', async () => {
+    mocks.usesConnectors = true;
+    mocks.query.mockImplementation(async (sql: string) => respond('public')(sql));
+
+    const response = await call({ visibility: 'public' });
+
+    expect(response.status).toBe(409);
+    expect(JSON.stringify(await response.json())).toContain(
+      'not available on publicly shared artifacts',
+    );
+    const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
+    expect(statements.some((sql) => sql.includes('organization_shared_artifacts'))).toBe(false);
+    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(false);
+  });
+
+  it('lets an artifact with connected apps move to invited people', async () => {
+    mocks.usesConnectors = true;
+    mocks.query.mockImplementation(async (sql: string) => respond('invited')(sql));
+
+    expect((await call({ visibility: 'invited' })).status).toBe(200);
   });
 });

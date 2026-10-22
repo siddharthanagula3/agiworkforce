@@ -97,7 +97,7 @@ describe('selectArtifactRuntimeRoute and Google user data', () => {
 describe('completeArtifactPrompt and Google user data', () => {
   function input(serverId: string) {
     return {
-      db,
+      db: { query: async () => [{ allowed: true }] } as never,
       userId: 'user-1',
       organizationId: null,
       subject: { kind: 'published' as const, publishedArtifactId: 'artifact-1' },

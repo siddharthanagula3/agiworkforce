@@ -2,6 +2,8 @@ import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
+  billingPlanCapabilityPlanLabels,
+  canUseBillingPlanCapability,
   getBillingPlanProductLimits,
   normalizeBillingPlanTier,
   toEnforceableBillingPlanLimit,
@@ -16,6 +18,8 @@ export interface OrganizationEntitlements {
   sharedProjectLimit: number | null;
   sharedConnectorLimit: number | null;
 }
+
+const WORKSPACE_ARTIFACT_SHARING_CAPABILITY = 'team_admin';
 
 /**
  * Resolves what a single user's OWN subscription entitles them to, on
@@ -124,6 +128,19 @@ export async function getOrganizationEntitlements(
     sharedProjectLimit: toEnforceableBillingPlanLimit(limits?.projects),
     sharedConnectorLimit: toEnforceableBillingPlanLimit(limits?.customMcpServers),
   };
+}
+
+export async function organizationCanShareArtifacts(organizationId: string): Promise<boolean> {
+  return canUseBillingPlanCapability(
+    await resolveOrganizationEntitlementPlan(organizationId),
+    WORKSPACE_ARTIFACT_SHARING_CAPABILITY,
+  );
+}
+
+export function getWorkspaceArtifactSharingErrorMessage(): string {
+  return `Sharing a published artifact with your workspace is available on ${billingPlanCapabilityPlanLabels(
+    WORKSPACE_ARTIFACT_SHARING_CAPABILITY,
+  )} plans.`;
 }
 
 export function isOrgResourceLimitError(error: unknown): boolean {

@@ -14,6 +14,7 @@ import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
+import { organizationCanShareArtifacts } from '@/lib/services/org-entitlements';
 import {
   MAX_CONTENT_CHARS,
   PUBLISHABLE_KINDS,
@@ -53,14 +54,14 @@ function refuseModeratedPublication(userId: string, title: string, content: stri
 
 /**
  * The workspace the publisher could share this with, or null when they belong
- * to none. The panel renders its audience control from this rather than
+ * to none or its plan does not include workspace sharing. The panel renders its audience control from this rather than
  * offering a workspace option that would answer 403.
  */
 async function describeWorkspaceAudience(
   db: DatabaseAdapter,
   organizationId: string | null,
 ): Promise<{ memberCount: number } | null> {
-  if (!organizationId) return null;
+  if (!organizationId || !(await organizationCanShareArtifacts(organizationId))) return null;
   const [row] = await db.query<{ member_count: number | string | null }>(
     `select count(*) as member_count
        from public.organization_members

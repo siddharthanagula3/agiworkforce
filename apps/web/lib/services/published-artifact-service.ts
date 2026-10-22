@@ -104,6 +104,16 @@ export function requiresSandboxedRender(kind: PublishableKind): boolean {
 
 export const PUBLISHED_TOKEN_REGEX = /^[A-Za-z0-9_-]{24}$/;
 
+export const CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE =
+  'This artifact uses connected apps, which are not available on publicly shared artifacts. Share it with your workspace or with people you invite.';
+
+export class PublishedArtifactConnectorShareError extends Error {
+  constructor() {
+    super(CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE);
+    this.name = 'PublishedArtifactConnectorShareError';
+  }
+}
+
 export class PublishedArtifactValidationError extends Error {
   constructor(message: string) {
     super(message);
@@ -342,8 +352,14 @@ export async function publishArtifactRecord(
   try {
     rows = await db.query<PublishedArtifactRow>(
       `insert into public.published_artifacts (
-       token, user_id, artifact_id, conversation_id, title, kind, language, content
-     ) values ($1, $2, $3, $4, $5, $6, $7, $8)
+       token, user_id, artifact_id, conversation_id, title, kind, language, content, visibility
+     ) values (
+       $1, $2, $3, $4, $5, $6, $7, $8,
+       case when exists (
+         select 1 from public.live_artifacts live
+          where live.user_id = $2 and live.artifact_id::text = $3
+       ) then 'invited' else 'public' end
+     )
      on conflict (user_id, artifact_id) do update set
        conversation_id = coalesce(excluded.conversation_id, published_artifacts.conversation_id),
        title = case when published_artifacts.title = '' then excluded.title
@@ -419,6 +435,38 @@ export async function unpublishArtifactsForConversations(
     [userId, conversationIds],
   );
   return rows.map((row) => row.token);
+}
+
+export async function publicationUsesConnectors(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string },
+): Promise<boolean> {
+  const userId = input.userId?.trim();
+  const token = input.token?.trim();
+  if (!userId || !token || !PUBLISHED_TOKEN_REGEX.test(token)) return false;
+  const [row] = await db.query<{ uses_connectors: boolean }>(
+    `select exists (
+       select 1
+         from public.published_artifacts publication
+         join public.live_artifacts live
+           on live.user_id = publication.user_id
+          and live.artifact_id::text = publication.artifact_id
+        where publication.token = $1 and publication.user_id = $2
+     ) as uses_connectors`,
+    [token, userId],
+  );
+  return row?.uses_connectors === true;
+}
+
+export async function publishedArtifactAllowsConnectors(
+  db: DatabaseAdapter,
+  publishedArtifactId: string,
+): Promise<boolean> {
+  const [row] = await db.query<{ allowed: boolean | null }>(
+    `select public.app_published_artifact_allows_connectors($1::uuid) as allowed`,
+    [publishedArtifactId],
+  );
+  return row?.allowed === true;
 }
 
 /**

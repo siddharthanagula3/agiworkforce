@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
     organizationId: null,
   })),
   recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
+  canShareArtifacts: vi.fn(async (..._args: unknown[]) => true),
   secretMode: vi.fn(
     async (
       ..._args: unknown[]
@@ -55,6 +56,10 @@ vi.mock('@/lib/security-audit', () => ({
 vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   resolveSecretHandlingPolicy: (...a: unknown[]) => mocks.secretMode(...a),
+}));
+
+vi.mock('@/lib/services/org-entitlements', () => ({
+  organizationCanShareArtifacts: (...a: unknown[]) => mocks.canShareArtifacts(...a),
 }));
 
 const { POST, GET } = await import('./route');
@@ -493,6 +498,50 @@ describe('published artifact version history', () => {
       mocks.query.mock.calls.some(([sql]) =>
         String(sql).includes('insert into public.published_artifact_versions'),
       ),
+    ).toBe(false);
+  });
+});
+
+describe('POST /api/artifacts/publish workspace audience', () => {
+  const ORG = '11111111-1111-4111-8111-111111111111';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.csrf.mockResolvedValue(null);
+    mocks.rateLimit.mockResolvedValue(null);
+    mocks.secretMode.mockResolvedValue({ mode: 'warn', organizationId: null });
+    mocks.query.mockImplementation(async (sql: unknown) =>
+      String(sql).includes('organization_members') ? [{ member_count: 7 }] : [publishRow()],
+    );
+    mocks.scopedDb.mockResolvedValue({
+      db: {
+        query: (...args: unknown[]) => mocks.query(...args),
+        execute: (...args: unknown[]) => mocks.execute(...args),
+      },
+      userId: 'user-1',
+      organizationId: ORG,
+    });
+  });
+
+  it('offers the workspace when its plan includes workspace sharing', async () => {
+    mocks.canShareArtifacts.mockResolvedValue(true);
+
+    const response = await POST(postRequest(VALID_BODY));
+
+    expect(response.status).toBe(201);
+    expect((await response.json()).workspace).toEqual({ memberCount: 7 });
+    expect(mocks.canShareArtifacts).toHaveBeenCalledWith(ORG);
+  });
+
+  it('withholds the workspace option when its plan does not include workspace sharing', async () => {
+    mocks.canShareArtifacts.mockResolvedValue(false);
+
+    const response = await POST(postRequest(VALID_BODY));
+
+    expect(response.status).toBe(201);
+    expect((await response.json()).workspace).toBeNull();
+    expect(
+      mocks.query.mock.calls.some(([sql]) => String(sql).includes('organization_members')),
     ).toBe(false);
   });
 });
