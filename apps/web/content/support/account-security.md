@@ -124,8 +124,8 @@ you are using. **Revoke** signs that device out immediately; it has to sign in
 again to regain access. If the list is truncated it says how many of the total
 it is showing.
 
-**Log out of all devices** ends every session including this one, so you will
-need to sign in again. It asks first and names that consequence.
+**Log out of all devices**, in Settings, Security, ends every session including
+this one, so you will need to sign in again. It asks first and names that consequence.
 
 A session also ends on its own once it reaches its maximum age, counted from
 when you signed in rather than from your last request, so a session that is in

@@ -101,7 +101,7 @@ export function SafetySection() {
             }}
           >
             Refuse explicit or harmful how-to prompts before they reach a Managed Cloud model,
-            without monitoring your chats or alerting anyone.{' '}
+            without monitoring your chats, alerting anyone or replacing emergency services.{' '}
             <a
               href={helpArticlePath(SAFETY_HELP_ARTICLE)}
               target="_blank"

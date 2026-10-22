@@ -82,7 +82,7 @@ describe('Web Safety settings', () => {
 
     const toggle = await screen.findByRole('switch', { name: 'Reduce sensitive content' });
     expect(toggle).toHaveAccessibleDescription(
-      /Refuse explicit or harmful how-to prompts .* without monitoring your chats or alerting anyone\. Learn more/,
+      /Refuse explicit or harmful how-to prompts .* without monitoring your chats, alerting anyone or replacing emergency services\. Learn more/,
     );
     const link = screen.getByRole('link', { name: 'Learn more' });
     expect(link).toHaveAttribute('href', '/help/crisis-resources');
