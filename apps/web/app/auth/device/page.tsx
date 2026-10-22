@@ -3,6 +3,7 @@
 import { useCurrentUser, useSignOut } from '@/lib/identity/client';
 import { Suspense, useEffect, useState } from 'react';
 import Link from 'next/link';
+import { X } from 'lucide-react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useTranslation } from 'react-i18next';
 import { Header } from '@shared/components/layout/Header';
@@ -51,9 +52,11 @@ function DeviceForm() {
   const [lookupState, setLookupState] = useState<'idle' | 'loading' | 'ready' | 'error'>('idle');
   const [lookupError, setLookupError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [declining, setDeclining] = useState(false);
   const [switchingAccount, setSwitchingAccount] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: 'error' | 'info' } | null>(null);
   const [approved, setApproved] = useState(false);
+  const [declined, setDeclined] = useState(false);
   const router = useRouter();
   const [termsReviewHref, setTermsReviewHref] = useState<string | null>(null);
   const redirectParams = new URLSearchParams();
@@ -117,8 +120,12 @@ function DeviceForm() {
     return () => controller.abort();
   }, [code, hasCompleteCode, isLoaded, isSignedIn, i18n]);
 
-  async function onSubmit(e: React.FormEvent) {
+  function onSubmit(e: React.FormEvent) {
     e.preventDefault();
+    return submitDecision('approve');
+  }
+
+  async function submitDecision(action: 'approve' | 'deny') {
     if (!isLoaded) return;
     if (!isSignedIn) {
       setMessage({
@@ -135,7 +142,11 @@ function DeviceForm() {
       return;
     }
 
+    const failureText = t(
+      action === 'deny' ? 'auth:device.declineFailed' : 'auth:device.approvalFailed',
+    );
     setLoading(true);
+    setDeclining(action === 'deny');
     setMessage(null);
     setTermsReviewHref(null);
     try {
@@ -151,22 +162,25 @@ function DeviceForm() {
         credentials: 'include',
         body: JSON.stringify({
           user_code: code.trim().toUpperCase(),
+          ...(action === 'deny' ? { action } : {}),
           ...(isDesktopSurface ? { surface: 'desktop' } : {}),
         }),
       });
       if (!res.ok) {
         const body = await res.json().catch(() => null);
         setTermsReviewHref(getTermsAcceptanceUrl(body));
-        throw new Error(apiErrorMessage(body, t('auth:device.approvalFailed')));
+        throw new Error(apiErrorMessage(body, failureText));
       }
-      setApproved(true);
+      if (action === 'deny') setDeclined(true);
+      else setApproved(true);
     } catch (err) {
       setMessage({
-        text: toUserMessage(err, t('auth:device.approvalFailed')),
+        text: toUserMessage(err, failureText),
         type: 'error',
       });
     } finally {
       setLoading(false);
+      setDeclining(false);
     }
   }
 
@@ -196,6 +210,21 @@ function DeviceForm() {
               router.push('/settings#account');
             },
           }}
+        />
+      </section>
+    );
+  }
+
+  if (declined) {
+    return (
+      <section aria-labelledby="device-auth-title" style={cardStyle}>
+        <h1 id="device-auth-title" className="sr-only">
+          {t('auth:device.declinedTitle')}
+        </h1>
+        <SuccessState
+          icon={X}
+          title={t('auth:device.declinedTitle')}
+          description={t('auth:device.declinedDetail')}
         />
       </section>
     );
@@ -366,7 +395,7 @@ function DeviceForm() {
             {!isLoaded
               ? t('auth:device.checking')
               : isSignedIn
-                ? loading
+                ? loading && !declining
                   ? t('auth:device.approving')
                   : lookupState === 'loading'
                     ? t('auth:device.verifyingRequest')
@@ -387,13 +416,23 @@ function DeviceForm() {
           ) : null}
         </Prose>
         <p style={{ fontSize: 'var(--agi-text-sm)', textAlign: 'center' }}>
-          {isDesktopSurface ? (
-            t('auth:device.closeToCancel')
-          ) : (
-            <Link href="/" className="agi-ds-link">
-              {t('common:cancel')}
-            </Link>
-          )}
+          <button
+            type="button"
+            className="agi-ds-link"
+            onClick={() => void submitDecision('deny')}
+            disabled={
+              loading || !hasCompleteCode || !isLoaded || !isSignedIn || lookupState !== 'ready'
+            }
+            style={{
+              background: 'none',
+              border: 0,
+              padding: 0,
+              font: 'inherit',
+              cursor: 'pointer',
+            }}
+          >
+            {declining ? t('auth:device.declining') : t('common:decline')}
+          </button>
         </p>
         <p
           style={{ fontSize: 'var(--agi-text-xs)', color: 'var(--agi-ink-2)', textAlign: 'center' }}

@@ -215,7 +215,7 @@ describe('/auth/device page', () => {
     expect(screen.getByTestId('desktop-device-auth-shell')).toBeVisible();
     expect(screen.queryByTestId('header')).not.toBeInTheDocument();
     expect(screen.queryByText('Footer')).not.toBeInTheDocument();
-    expect(screen.getByText('Close this window to cancel.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeDisabled();
     expect(screen.queryByRole('link', { name: /compare plans/i })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
       'href',
@@ -272,6 +272,84 @@ describe('/auth/device page', () => {
     expect(screen.queryByRole('button', { name: 'Approve device' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Manage linked devices/ }));
     expect(routerPush).toHaveBeenCalledWith('/settings#account');
+  });
+
+  it('declines the request with the same CSRF token and shows the declined state', async () => {
+    const lookup = {
+      user_code: 'ABCD-1234',
+      client: { name: 'AGI Code', type: 'vscode' },
+      scopes: [{ id: 'account:read', label: 'Account identity', description: 'Read identity.' }],
+      expires_at: '2099-08-01T00:00:00.000Z',
+    };
+    const fetchMock = vi.fn((url: string) => {
+      if (url.startsWith('/api/auth/device/code?')) {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(lookup),
+        } as Partial<Response>);
+      }
+      if (url === '/api/csrf') {
+        return Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve({ token: 'csrf-token' }),
+        } as Partial<Response>);
+      }
+      if (url === '/api/auth/device/approve') {
+        return Promise.resolve({ ok: true } as Partial<Response>);
+      }
+      return Promise.reject(new Error(`Unexpected request: ${url}`));
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    render(<AuthDevicePage />);
+    await screen.findByRole('heading', { name: 'AGI Code' });
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('status')).toHaveTextContent('Request declined.');
+    });
+    expect(screen.queryByRole('button', { name: 'Approve device' })).toBeNull();
+    const post = fetchMock.mock.calls.find(
+      ([url]) => url === '/api/auth/device/approve',
+    ) as unknown as [string, RequestInit];
+    expect(post[1].headers).toMatchObject({ 'x-csrf-token': 'csrf-token' });
+    expect(JSON.parse(String(post[1].body))).toEqual({ user_code: 'ABCD-1234', action: 'deny' });
+  });
+
+  it('keeps the form and shows an error when declining fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation((url: string) => {
+        if (url.startsWith('/api/auth/device/code?')) {
+          return Promise.resolve({
+            ok: true,
+            json: () =>
+              Promise.resolve({
+                user_code: 'ABCD-1234',
+                client: { name: 'AGI Code', type: 'vscode' },
+                scopes: [{ id: 'account:read', label: 'Account identity', description: 'Read.' }],
+                expires_at: '2099-08-01T00:00:00.000Z',
+              }),
+          } as Partial<Response>);
+        }
+        if (url === '/api/csrf') {
+          return Promise.resolve({
+            ok: true,
+            json: () => Promise.resolve({ token: 'csrf-token' }),
+          } as Partial<Response>);
+        }
+        return Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Partial<Response>);
+      }),
+    );
+
+    render(<AuthDevicePage />);
+    await screen.findByRole('heading', { name: 'AGI Code' });
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('alert')).toHaveTextContent('Decline failed');
+    });
+    expect(screen.getByRole('button', { name: 'Approve device' })).toBeVisible();
   });
 
   it('renders structured approval errors without object text', async () => {
