@@ -51,7 +51,7 @@ import {
   billingManagementTarget,
   getSubscriptionOwnerGuard,
 } from '@/src/features/billing/subscriptionSource';
-import { useMobileIap } from '@/src/features/billing/useMobileIap';
+import { useMobileIap, type MobileIapRestoreOutcome } from '@/src/features/billing/useMobileIap';
 import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLinks';
 import { storeDisplayName } from '@/src/features/release-state';
 import { ApiHttpError } from '@/services/apiErrors';
@@ -93,6 +93,21 @@ function PlanBadge() {
     </View>
   );
 }
+
+const RESTORE_OUTCOME_COPY: Record<MobileIapRestoreOutcome, { title: string; body: string }> = {
+  'nothing-to-restore': {
+    title: 'No purchases to restore',
+    body: 'The store has no active subscriptions or unfinished purchases for this account.',
+  },
+  'already-restored': {
+    title: 'Purchases already restored',
+    body: 'Everything the store returned is already on your account.',
+  },
+  'store-unavailable': {
+    title: 'Restore purchases needs the store',
+    body: 'Sign in to AGI Cloud and connect to the store before restoring purchases.',
+  },
+};
 
 export default function CloudBillingScreen() {
   const colors = useThemeColors();
@@ -669,7 +684,7 @@ export default function CloudBillingScreen() {
           value="Subscriptions and unfinished purchases"
           icon={RefreshCw}
           onPress={
-            nativeIap.connected && !nativeIap.restoring && !nativeIap.purchasingKey
+            !nativeIap.restoring && !nativeIap.purchasingKey
               ? () => void nativeIap.restore()
               : undefined
           }
@@ -694,6 +709,12 @@ export default function CloudBillingScreen() {
                 : 'Your subscription was verified and your plan has been refreshed.'
           }
           icon={Check}
+        />
+      ) : nativeIap.restoreOutcome ? (
+        <SettingsInfo
+          title={RESTORE_OUTCOME_COPY[nativeIap.restoreOutcome].title}
+          body={RESTORE_OUTCOME_COPY[nativeIap.restoreOutcome].body}
+          icon={nativeIap.restoreOutcome === 'store-unavailable' ? CreditCard : ShoppingBag}
         />
       ) : null}
 

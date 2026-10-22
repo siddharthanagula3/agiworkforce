@@ -40,6 +40,9 @@ class PurchasePreflightError extends Error {
   }
 }
 
+export type MobileIapRestoreOutcome =
+  'nothing-to-restore' | 'already-restored' | 'store-unavailable';
+
 export interface MobileIapState {
   connected: boolean;
   loading: boolean;
@@ -51,6 +54,7 @@ export interface MobileIapState {
   priceFor: (key: MobileIapProductKey) => StorePrice;
   error: string | null;
   lastResult: MobileIapVerifyResponse | null;
+  restoreOutcome: MobileIapRestoreOutcome | null;
   /** Purchases the store is holding for payment or for a family organiser's approval. */
   awaitingApproval: ReadonlySet<MobileIapProductKey>;
   /** The plan the store will switch to at the next renewal, when it has told us. */
@@ -122,6 +126,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
   const restoringAccount = useRef<CloudAccountEpoch | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [lastResult, setLastResult] = useState<MobileIapVerifyResponse | null>(null);
+  const [restoreOutcome, setRestoreOutcome] = useState<MobileIapRestoreOutcome | null>(null);
   const [askedApproval, setAskedApproval] = useState<readonly MobileIapProductKey[]>([]);
   const pendingPurchaseKey = useRef<MobileIapProductKey | null>(null);
   const catalogRef = useRef<MobileIapCatalogResponse | null>(null);
@@ -433,8 +438,10 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     const restoreAccount = restoring && restoreFetchCompleted ? restoringAccount.current : null;
     const restoreScan = isCloudAccountEpochCurrent(restoreAccount);
     const dispatched: Promise<void>[] = [];
+    let tokenedPurchases = 0;
     for (const purchase of iap.availablePurchases) {
       const token = purchase.purchaseToken?.trim();
+      if (token) tokenedPurchases += 1;
       if (!token || acknowledgedTokens.current.has(token)) continue;
       const stranded =
         awaitingStoreAcknowledgement(purchase) ||
@@ -444,6 +451,11 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       dispatched.push(processPurchase(purchase, iap.finishTransaction));
     }
     if (!restoreAccount) return;
+    if (restoreScan && iap.availablePurchases.length === 0) {
+      setRestoreOutcome('nothing-to-restore');
+    } else if (restoreScan && dispatched.length === 0 && tokenedPurchases > 0) {
+      setRestoreOutcome('already-restored');
+    }
     if (restoreScan && dispatched.length > 0) {
       void Promise.allSettled(dispatched).then(() => finishRestore(restoreAccount));
     } else {
@@ -505,6 +517,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
       pendingPurchaseAccount.current = account;
       setError(null);
       setLastResult(null);
+      setRestoreOutcome(null);
       setPurchasingKey(key);
       try {
         const currentCatalog = await fetchMobileIapCatalog();
@@ -615,12 +628,13 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
 
   const restore = useCallback(async () => {
     const account = captureCloudAccountEpoch();
-    if (!iap.connected || !enabled || !account) {
-      setError('Sign in to AGI Cloud and connect to the store before restoring purchases.');
-      return;
-    }
     setError(null);
     setLastResult(null);
+    if (!iap.connected || !enabled || !account) {
+      setRestoreOutcome('store-unavailable');
+      return;
+    }
+    setRestoreOutcome(null);
     restoringAccount.current = account;
     setRestoreFetchCompleted(false);
     setRestoring(true);
@@ -673,6 +687,7 @@ export function useMobileIap({ enabled }: { enabled: boolean }): MobileIapState 
     priceFor,
     error,
     lastResult,
+    restoreOutcome,
     awaitingApproval,
     scheduledProductKey,
     purchase,

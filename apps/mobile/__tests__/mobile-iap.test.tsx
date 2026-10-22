@@ -712,6 +712,60 @@ describe('native mobile IAP hook', () => {
       expect(mockFinishTransaction).toHaveBeenCalledTimes(1);
     });
 
+    it('reports nothing to restore when the store returns no purchases', async () => {
+      const { result } = await renderBilling();
+
+      await act(async () => result.current.restore());
+
+      expect(result.current.restoring).toBe(false);
+      expect(result.current.error).toBeNull();
+      expect(result.current.lastResult).toBeNull();
+      expect(result.current.restoreOutcome).toBe('nothing-to-restore');
+      expect(mockVerifyPurchase).not.toHaveBeenCalled();
+    });
+
+    it('reports a restored purchase as verified, not as nothing to restore', async () => {
+      const { result } = await renderBilling();
+      Object.assign(mockIapState, {
+        availablePurchases: [storeReceipt('fixture-restore-outcome-token')],
+      });
+
+      await act(async () => result.current.restore());
+      await waitFor(() => expect(result.current.restoring).toBe(false));
+
+      expect(result.current.lastResult).toEqual(verified);
+      expect(result.current.restoreOutcome).toBeNull();
+    });
+
+    it('reports purchases already restored when tapped again', async () => {
+      const { result } = await renderBilling();
+      Object.assign(mockIapState, {
+        availablePurchases: [storeReceipt('fixture-restore-again-outcome-token')],
+      });
+      await act(async () => result.current.restore());
+      await waitFor(() => expect(result.current.restoring).toBe(false));
+
+      await act(async () => result.current.restore());
+
+      expect(result.current.restoreOutcome).toBe('already-restored');
+      expect(mockVerifyPurchase).toHaveBeenCalledTimes(1);
+    });
+
+    it('answers a tap while the store is not connected instead of ignoring it', async () => {
+      Object.assign(mockIapState, { connected: false });
+      const { result } = renderHook(() => useMobileIap({ enabled: true }));
+      act(() => {
+        mockCallbacks['onError']?.(new Error('connection dropped'));
+      });
+
+      await act(async () => result.current.restore());
+
+      expect(result.current.restoreOutcome).toBe('store-unavailable');
+      expect(result.current.error).toBeNull();
+      expect(mockGetAvailablePurchases).not.toHaveBeenCalled();
+      expect(result.current.restoring).toBe(false);
+    });
+
     it('only after every restored purchase is confirmed', async () => {
       let resolveSlowVerification: ((value: unknown) => void) | undefined;
       mockVerifyPurchase.mockResolvedValueOnce(verified).mockReturnValueOnce(

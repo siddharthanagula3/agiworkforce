@@ -628,6 +628,7 @@ function iapState(
     priceFor: (key) => ({ label: `price:${key}`, currency: 'USD', offerToken: null }),
     error: null,
     lastResult: null,
+    restoreOutcome: null,
     awaitingApproval: new Set(),
     scheduledProductKey: null,
     purchase: jest.fn().mockResolvedValue(undefined),
@@ -784,6 +785,25 @@ describe('buying and changing plans in the app', () => {
     expect(
       screen.getByText('Your change to Basic is confirmed and starts at your next renewal.'),
     ).toBeTruthy();
+  });
+
+  it('keeps Restore purchases tappable while the store is not connected', () => {
+    const state = iapState({ connected: false, loading: true, catalog: null });
+    const screen = renderWith(state);
+
+    fireEvent.press(screen.getByLabelText('Restore purchases'));
+    expect(state.restore).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['nothing-to-restore', 'No purchases to restore'],
+    ['already-restored', 'Purchases already restored'],
+    ['store-unavailable', 'Restore purchases needs the store'],
+  ] as const)('reports the %s restore outcome', (restoreOutcome, title) => {
+    const screen = renderWith(iapState({ restoreOutcome }));
+
+    expect(screen.getByText(title)).toBeTruthy();
+    expect(screen.queryByText('Purchase verified')).toBeNull();
   });
 
   it('sells top-ups in the app when the catalog returns them', () => {
