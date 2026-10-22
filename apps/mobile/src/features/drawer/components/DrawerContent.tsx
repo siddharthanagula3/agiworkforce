@@ -24,6 +24,7 @@ import {
   Pin,
   Search,
   Settings,
+  SlidersHorizontal,
   SquarePen,
   Telescope,
   UserCircle,
@@ -32,6 +33,7 @@ import {
 import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
+import { useSettingsStore } from '@/stores/settingsStore';
 import { useNotificationCenter } from '@/services/notifications';
 import { useProjectStore } from '@/src/features/projects/store';
 import { CLOUD_CODE_SCREEN_TITLE } from '@/src/features/cloud-code/presentation';
@@ -51,6 +53,7 @@ import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
 import {
   ActionMenuSheet,
+  type ConversationMenuState,
   InlineRenameField,
   RenameConversationModal,
   useConversationActions,
@@ -129,41 +132,6 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     route: '/(app)/library',
   },
   {
-    key: 'reports',
-    label: 'Reports',
-    icon: Telescope,
-    route: '/(app)/reports',
-    cloud: true,
-  },
-  {
-    key: 'agents',
-    label: 'Agents',
-    icon: Bot,
-    route: '/(app)/agents',
-    cloud: true,
-  },
-  {
-    key: 'customize',
-    label: 'Customize',
-    icon: BookOpen,
-    route: '/(app)/customize',
-    cloud: true,
-  },
-  {
-    key: 'sites',
-    label: 'Published sites',
-    icon: Globe,
-    route: '/(app)/sites',
-    cloud: true,
-  },
-  {
-    key: 'schedules',
-    label: 'Schedules',
-    icon: CalendarClock,
-    route: '/(app)/schedules',
-    cloud: true,
-  },
-  {
     key: 'code',
     label: CLOUD_CODE_SCREEN_TITLE,
     icon: Code2,
@@ -185,6 +153,41 @@ const PRIMARY_ITEMS: PrimaryItem[] = [
     label: 'AGI Work',
     icon: Bot,
     route: '/(app)/tasks',
+    cloud: true,
+  },
+  {
+    key: 'sites',
+    label: 'Published sites',
+    icon: Globe,
+    route: '/(app)/sites',
+    cloud: true,
+  },
+  {
+    key: 'schedules',
+    label: 'Schedules',
+    icon: CalendarClock,
+    route: '/(app)/schedules',
+    cloud: true,
+  },
+  {
+    key: 'agents',
+    label: 'Agents',
+    icon: Bot,
+    route: '/(app)/agents',
+    cloud: true,
+  },
+  {
+    key: 'reports',
+    label: 'Reports',
+    icon: Telescope,
+    route: '/(app)/reports',
+    cloud: true,
+  },
+  {
+    key: 'customize',
+    label: 'Customize',
+    icon: BookOpen,
+    route: '/(app)/customize',
     cloud: true,
   },
 ];
@@ -333,6 +336,32 @@ export function DrawerContent(props: DrawerContentComponentProps) {
     (drawerOpen || usesPersistentDrawer) && appMode === 'cloud' && isClerkSignedIn,
     t('navPersonalWorkspace'),
   );
+  const listArrangement = useSettingsStore((s) => s.listArrangement);
+  const setListArrangement = useSettingsStore((s) => s.setListArrangement);
+  const [organizeOpen, setOrganizeOpen] = useState(false);
+  const organizeMenu = useMemo<ConversationMenuState>(
+    () => ({
+      visible: organizeOpen,
+      title: 'Organize chats',
+      close: () => setOrganizeOpen(false),
+      actions: [
+        {
+          key: 'organize-one-list',
+          label: 'In one list',
+          selected: listArrangement === 'one-list',
+          run: () => setListArrangement('one-list'),
+        },
+        {
+          key: 'organize-by-project',
+          label: 'By project',
+          selected: listArrangement === 'by-project',
+          run: () => setListArrangement('by-project'),
+        },
+      ],
+    }),
+    [listArrangement, organizeOpen, setListArrangement],
+  );
+  const groupedByProject = listArrangement === 'by-project';
   const [expandedProjectIds, setExpandedProjectIds] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -414,7 +443,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   }, [appMode, cloudConversations, conversations]);
 
   const displayedProjects = useMemo(() => {
-    if (!FEATURES.projects) return [];
+    if (!FEATURES.projects || !groupedByProject) return [];
     if (appMode === 'cloud') {
       const source = cloudProjects.filter((p) => p.deletedAt === null && !p.isArchived);
       return source
@@ -423,7 +452,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
         .slice(0, 6);
     }
     return localProjects.slice(0, 6);
-  }, [appMode, cloudProjects, localProjects]);
+  }, [appMode, cloudProjects, groupedByProject, localProjects]);
 
   const displayedProjectIds = useMemo(
     () => new Set(displayedProjects.map((project) => project.id)),
@@ -575,6 +604,11 @@ export function DrawerContent(props: DrawerContentComponentProps) {
           <HeaderIconButton label="Search" icon={Search} onPress={handleOpenSearch} />
           {/* New-chat sits in the header beside the profile symbol (its original,
               thumb-and-eye-level home), not dropped to a bottom pill. */}
+          <HeaderIconButton
+            label="Organize chats"
+            icon={SlidersHorizontal}
+            onPress={() => setOrganizeOpen(true)}
+          />
           <HeaderIconButton label="New chat" icon={SquarePen} onPress={handleNewChat} />
           <HeaderIconButton
             label="Open profile"
@@ -804,6 +838,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
       </View>
       <RenameConversationModal rename={rename} inline />
       <ActionMenuSheet menu={workspace.menu} />
+      <ActionMenuSheet menu={organizeMenu} />
     </SafeAreaView>
   );
 }

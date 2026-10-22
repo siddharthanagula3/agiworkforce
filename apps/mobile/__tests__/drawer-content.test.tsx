@@ -1,6 +1,7 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
 import React from 'react';
-import { render, fireEvent } from '@testing-library/react-native';
+import { Modal } from 'react-native';
+import { act, render, fireEvent } from '@testing-library/react-native';
 
 const mockPush = jest.fn();
 const mockNavigate = jest.fn();
@@ -85,6 +86,7 @@ import {
   DEFAULT_LOCAL_MODEL_ID,
   getDefaultCloudModelIdForTier,
 } from '../src/features/model-picker/service';
+import { useSettingsStore } from '../stores/settingsStore';
 import { useTierStore } from '../src/features/billing/store';
 import { useCloudUsageStore } from '../src/features/settings/cloud-usage/store';
 import {
@@ -186,6 +188,7 @@ describe('DrawerContent', () => {
       favorites: [],
     } as never);
     useChatAppModeStore.setState({ appMode: 'local' });
+    useSettingsStore.setState({ listArrangement: 'by-project' });
     useCloudUsageStore.getState().clear();
     clearPostAuthIntent();
   });
@@ -253,6 +256,61 @@ describe('DrawerContent', () => {
     expect(getByText('Settings')).toBeTruthy();
     expect(getAllByLabelText('Open profile')).toHaveLength(1);
     expect(queryByText(/byok/i)).toBeNull();
+  });
+
+  it('lists the primary destinations in the shared order', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useTierStore.setState({ tier: 'max', grantedCapabilities: ['canUseAgiWork'] });
+    const { toJSON } = renderDrawer();
+    const tree = JSON.stringify(toJSON());
+    const labels = [
+      'Chats',
+      'Projects',
+      'Library',
+      'AGI Code',
+      'Remote',
+      'AGI Work',
+      'Published sites',
+      'Schedules',
+      'Agents',
+      'Reports',
+      'Customize',
+    ];
+    const positions = labels.map((label) => tree.indexOf(`"${label}`));
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect([...positions].sort((a, b) => a - b)).toEqual(positions);
+  });
+
+  it('organizes chats by project by default and in one list on request', () => {
+    useChatStore.setState({
+      conversations: [
+        {
+          id: 'conv-in-project',
+          title: 'Project Chat',
+          updatedAt: new Date().toISOString(),
+          createdAt: new Date().toISOString(),
+          messageCount: 1,
+          pinned: false,
+          projectId: 'proj-1',
+        },
+      ],
+    } as never);
+    const { getByLabelText, getByText, queryByText, UNSAFE_getAllByType } = renderDrawer();
+
+    expect(getByText('Launch demo')).toBeTruthy();
+    expect(queryByText('Project Chat')).toBeNull();
+
+    fireEvent.press(getByLabelText('Organize chats'));
+    fireEvent.press(getByText('In one list'));
+    act(() => {
+      UNSAFE_getAllByType(Modal).forEach((node) =>
+        (node.props.onDismiss as (() => void) | undefined)?.(),
+      );
+    });
+
+    expect(useSettingsStore.getState().listArrangement).toBe('one-list');
+    expect(queryByText('Launch demo')).toBeNull();
+    expect(getByText('Project Chat')).toBeTruthy();
   });
 
   it('shows cloud-only drawer items (AGI Work, Schedules, Projects) while in Cloud mode', () => {

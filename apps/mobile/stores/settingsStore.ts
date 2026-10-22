@@ -13,6 +13,13 @@ import { isAudioRoute, type AudioRoute } from '@/src/features/voice/services/aud
 export type ThemeMode = 'dark' | 'light' | 'system';
 export type AccentColor = 'neutral' | 'green' | 'blue' | 'violet' | 'rose' | 'amber';
 export type FontPreference = 'default' | 'system' | 'dyslexic';
+export const LIST_ARRANGEMENTS = ['by-project', 'one-list'] as const;
+export type ListArrangement = (typeof LIST_ARRANGEMENTS)[number];
+
+export function isListArrangement(value: unknown): value is ListArrangement {
+  return LIST_ARRANGEMENTS.some((arrangement) => arrangement === value);
+}
+
 export type PersonalizationStyle = 'default' | 'concise' | 'explanatory' | 'formal';
 
 export interface Personalization {
@@ -49,6 +56,7 @@ export interface SettingsState {
   audioRoute: AudioRoute;
   isTemporaryChat: boolean;
   temporaryChatPersonalized: boolean;
+  listArrangement: ListArrangement;
 
   setToolApprovalPolicy: (policy: ToolApprovalPolicy) => void;
   setHapticsEnabled: (enabled: boolean) => void;
@@ -66,6 +74,7 @@ export interface SettingsState {
   setAudioRoute: (route: AudioRoute) => void;
   setTemporaryChat: (enabled: boolean) => void;
   setTemporaryChatPersonalized: (personalized: boolean) => void;
+  setListArrangement: (arrangement: ListArrangement) => void;
 }
 
 /**
@@ -119,6 +128,7 @@ export const useSettingsStore = create<SettingsState>()(
       audioRoute: 'auto',
       isTemporaryChat: false,
       temporaryChatPersonalized: true,
+      listArrangement: 'by-project',
 
       setToolApprovalPolicy: (policy) => set({ toolApprovalPolicy: policy }),
       setHapticsEnabled: (enabled) => set({ hapticsEnabled: enabled }),
@@ -137,6 +147,7 @@ export const useSettingsStore = create<SettingsState>()(
       setTemporaryChat: (enabled) => set({ isTemporaryChat: enabled }),
       setTemporaryChatPersonalized: (personalized) =>
         set({ temporaryChatPersonalized: personalized }),
+      setListArrangement: (arrangement) => set({ listArrangement: arrangement }),
     }),
     {
       name: 'settings-store',
@@ -151,6 +162,7 @@ export const useSettingsStore = create<SettingsState>()(
             state.toolApprovalPolicy = DEFAULT_TOOL_APPROVAL_POLICY;
           }
           if (!isAudioRoute(state.audioRoute)) state.audioRoute = 'auto';
+          if (!isListArrangement(state.listArrangement)) state.listArrangement = 'by-project';
         }
       },
     },
