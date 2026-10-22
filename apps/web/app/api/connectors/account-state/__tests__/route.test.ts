@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { CONNECTOR_ACCOUNT_STATE_MAX_ENTRIES } from '@agiworkforce/cloud-contracts';
 
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+
 const { mockGetUserScopedDb, mockQuery, mockCsrf, mockAudit } = vi.hoisted(() => ({
   mockGetUserScopedDb: vi.fn(),
   mockQuery: vi.fn(),
@@ -13,7 +15,7 @@ vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(nu
 vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: mockAudit,
 }));
 

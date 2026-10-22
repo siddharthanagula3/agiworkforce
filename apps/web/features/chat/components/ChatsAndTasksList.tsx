@@ -436,7 +436,7 @@ function ChatsAndTasksRow({
           type="checkbox"
           checked={selected}
           onChange={() => onToggleSelected(conversation.id)}
-          className="h-4 w-4 shrink-0 accent-[hsl(var(--primary))]"
+          className="h-4 w-4 shrink-0 accent-primary"
         />
         {body}
       </label>
