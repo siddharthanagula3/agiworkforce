@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
 import { Plus, Search } from 'lucide-react';
 import {
   DEFAULT_PROJECT_ICON_ID,
@@ -42,6 +42,7 @@ export interface ProjectGalleryProps {
   limit?: number;
   moreAvailable?: boolean;
   layout?: 'grid' | 'list';
+  autoFocusSearch?: boolean;
   className?: string;
 }
 
@@ -77,6 +78,7 @@ export function ProjectGallery({
   limit,
   moreAvailable = false,
   layout = 'grid',
+  autoFocusSearch = true,
   className,
 }: ProjectGalleryProps) {
   const projects = useProjectStore((s) => s.projects);
@@ -135,6 +137,13 @@ export function ProjectGallery({
   const hasQuery = query.trim().length > 0;
   const hasActiveProjects = projects.some((p) => !p.isArchived);
   const filteredEmpty = hasQuery && hasActiveProjects;
+
+  useEffect(() => {
+    if (!autoFocusSearch) return;
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    if (!window.matchMedia('(pointer: fine)').matches) return;
+    searchInputRef.current?.focus();
+  }, [autoFocusSearch]);
 
   const clearSearch = useCallback(() => {
     setQuery('');
@@ -238,7 +247,7 @@ export function ProjectGallery({
             aria-label="Search projects"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search projects"
+            placeholder="Search projects..."
             className="w-full rounded-md border bg-[var(--chat-surface-base)] py-1.5 ps-8 pe-3 text-sm text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-placeholder)] focus:outline-none focus:ring-2 focus:ring-[var(--chat-focus-ring)]"
             style={{ borderColor: 'var(--chat-border)' }}
           />
@@ -249,10 +258,10 @@ export function ProjectGallery({
             setCreateError(null);
             setCreating((v) => !v);
           }}
-          className="flex items-center gap-1.5 rounded-md bg-[var(--chat-accent-primary)] px-3 py-1.5 text-sm font-medium text-[var(--chat-accent-on-primary)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-[var(--chat-text-primary)] px-3.5 py-1.5 text-sm font-medium text-[var(--chat-bg)] transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
         >
-          <Plus size={14} strokeWidth={2} />
-          New
+          <Plus size={14} strokeWidth={2} aria-hidden="true" />
+          New project
         </button>
       </div>
 

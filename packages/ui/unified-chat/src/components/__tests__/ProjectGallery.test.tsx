@@ -14,6 +14,63 @@ describe('ProjectGallery, enhanced create UX', () => {
     expect(screen.getByRole('searchbox', { name: 'Search projects' })).toBeDefined();
   });
 
+  it('labels the create button New project with the neutral ink fill', () => {
+    render(<ProjectGallery />);
+    const button = screen.getByRole('button', { name: 'New project' });
+    expect(button.className).toContain('bg-[var(--chat-text-primary)]');
+    expect(button.className).not.toContain('chat-accent-primary');
+  });
+
+  it('shows the search placeholder with an ellipsis', () => {
+    render(<ProjectGallery />);
+    expect(screen.getByPlaceholderText('Search projects...')).toBeDefined();
+  });
+
+  it('focuses the search box on mount when the pointer is fine', () => {
+    const original = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: query === '(pointer: fine)',
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      render(<ProjectGallery />);
+      expect(document.activeElement).toBe(
+        screen.getByRole('searchbox', { name: 'Search projects' }),
+      );
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
+  it('leaves focus alone on a coarse pointer or when autofocus is off', () => {
+    const original = window.matchMedia;
+    window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+      matches: false,
+      media: query,
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    })) as unknown as typeof window.matchMedia;
+    try {
+      const { unmount } = render(<ProjectGallery />);
+      expect(document.activeElement).not.toBe(
+        screen.getByRole('searchbox', { name: 'Search projects' }),
+      );
+      unmount();
+      window.matchMedia = vi.fn().mockImplementation((query: string) => ({
+        matches: true,
+        media: query,
+      })) as unknown as typeof window.matchMedia;
+      render(<ProjectGallery autoFocusSearch={false} />);
+      expect(document.activeElement).not.toBe(
+        screen.getByRole('searchbox', { name: 'Search projects' }),
+      );
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
   it('opens the create form when New is clicked', async () => {
     render(<ProjectGallery />);
     await userEvent.click(screen.getByRole('button', { name: /new/i }));
