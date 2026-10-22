@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+type AuditModule = typeof import('@/lib/security-audit');
+
 const mocks = vi.hoisted(() => ({
   recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
   query: vi.fn(),
@@ -18,7 +20,8 @@ vi.mock('@/lib/server/rls-db', () => ({
     organizationId: null,
   }),
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<AuditModule>()),
   recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
 }));
 vi.mock('@/lib/logger', () => ({

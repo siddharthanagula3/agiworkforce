@@ -157,6 +157,10 @@ vi.mock('../../hooks/use-keyboard-shortcuts', () => ({
   formatShortcutKeys: vi.fn(() => []),
   KEYBOARD_SHORTCUT_DOCS: [],
   useKeyboardShortcuts: vi.fn(),
+  checkShortcutBinding: vi.fn(),
+  chordFromKeyboardEvent: vi.fn(),
+  isRebindableShortcut: vi.fn(() => false),
+  withShortcutBindings: vi.fn((docs: unknown) => docs),
 }));
 
 vi.mock('@/features/settings/components/SettingsModalProvider', async (importOriginal) => ({
