@@ -53,7 +53,7 @@ const STATUS_NOTICE_TTL: Duration = Duration::from_secs(2);
 
 /// Permission modes available in the TUI, cycling with Shift+Tab.
 ///
-/// Cycle order: Default → Plan → AcceptEdits → BypassPermissions → FullAuto → Default,
+/// Cycle order: Default → Plan → Auto → BypassPermissions → FullAuto → Default,
 /// where the two approval-skipping modes join only a session launched with them available.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 enum InteractionMode {
@@ -61,7 +61,7 @@ enum InteractionMode {
     Chat,
     /// Plan mode, read-only tools, no file edits.
     Plan,
-    /// Auto-accept file edits; commands still prompt.
+    /// Auto (`PermissionMode::AcceptEdits`): edits run, commands go through the safety classifier.
     AcceptEdits,
     /// Bypass all tool permission prompts.
     BypassPermissions,
@@ -129,7 +129,7 @@ impl InteractionMode {
         match self {
             Self::Chat => "Default",
             Self::Plan => "Plan",
-            Self::AcceptEdits => "AcceptEdits",
+            Self::AcceptEdits => "Auto",
             Self::BypassPermissions => "Bypass",
             Self::FullAuto => "FullAuto",
         }
@@ -4354,6 +4354,8 @@ fn detect_mode_intent(text: &str) -> Option<InteractionMode> {
         exact,
         "accept edits"
             | "accept-edits"
+            | "auto mode"
+            | "auto-mode"
             | "auto accept"
             | "auto-accept"
             | "accept all edits"
@@ -4463,7 +4465,7 @@ fn mode_description(mode: InteractionMode) -> &'static str {
             "Plan mode, read-only tools only, no file edits. Model will plan before acting."
         }
         InteractionMode::AcceptEdits => {
-            "File edits and read-only operations run automatically; commands still require approval."
+            "Auto, file edits, read-only tools and commands the safety classifier clears run; everything else asks. /auto-mode-setup reviews this repository."
         }
         InteractionMode::BypassPermissions => {
             "Bypass, all tool prompts skipped. Use with caution!"
@@ -7748,10 +7750,33 @@ mod tests {
     }
 
     #[test]
-    fn accept_edits_description_matches_safe_tool_approval_behavior() {
+    fn auto_mode_is_entered_only_by_the_bare_phrase() {
+        for phrase in ["auto mode", "/auto-mode", "  Auto Mode  "] {
+            assert_eq!(
+                detect_mode_intent(phrase),
+                Some(InteractionMode::AcceptEdits),
+                "{phrase}"
+            );
+        }
+        for prose in ["should we use auto mode here?", "/auto-mode-setup"] {
+            assert_ne!(
+                detect_mode_intent(prose),
+                Some(InteractionMode::AcceptEdits),
+                "{prose}"
+            );
+        }
+    }
+
+    #[test]
+    fn auto_description_matches_the_classifier_gated_approval_behavior() {
+        assert_eq!(InteractionMode::AcceptEdits.label(), "Auto");
+        assert_eq!(
+            InteractionMode::AcceptEdits.permission_mode().name(),
+            "acceptEdits"
+        );
         assert_eq!(
             mode_description(InteractionMode::AcceptEdits),
-            "File edits and read-only operations run automatically; commands still require approval."
+            "Auto, file edits, read-only tools and commands the safety classifier clears run; everything else asks. /auto-mode-setup reviews this repository."
         );
     }
 

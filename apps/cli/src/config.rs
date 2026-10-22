@@ -158,7 +158,8 @@ pub struct DefaultConfig {
     pub keep_history: Option<bool>,
 
     /// Permission posture applied when no flag or client names one:
-    /// `default`, `plan`, `acceptEdits` or `dontAsk`.
+    /// `default`, `plan`, `auto` (also spelled `acceptEdits`) or `dontAsk`.
+    /// Unset means `default`.
     ///
     /// `bypassPermissions` is deliberately not storable here. A persisted
     /// setting that disables every approval would follow a synced dotfile or a
@@ -2531,6 +2532,21 @@ model = "fixture-config-model"
             project.providers["local"].base_url.as_deref(),
             Some("http://localhost:11434")
         );
+    }
+
+    #[test]
+    fn a_saved_auto_default_mode_loads_as_the_auto_posture() {
+        let config: CliConfig =
+            toml::from_str("[default]\npermission_mode = \"auto\"\n").expect("config parses");
+        assert_eq!(
+            config
+                .default
+                .permission_mode
+                .as_deref()
+                .and_then(crate::cli_options::persisted_permission_mode),
+            Some(crate::cli_options::PermissionMode::AcceptEdits)
+        );
+        assert_eq!(CliConfig::default().default.permission_mode, None);
     }
 
     #[test]
