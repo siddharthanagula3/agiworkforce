@@ -1267,3 +1267,64 @@ describe('the changes and review panes', () => {
     expect(screen.getAllByRole('complementary', { name: 'Changes' })).toHaveLength(1);
   });
 });
+
+describe('local session subagents', () => {
+  it('groups the subagents a turn ran under a count, with each one’s state', async () => {
+    readDeveloperSession.mockResolvedValue({
+      session,
+      messages: [],
+      truncated: false,
+      activeTurn: null,
+      childTasks: [
+        {
+          id: 'subagent_a',
+          parentSessionId: 'thread-1',
+          title: 'Read the tests',
+          state: 'running',
+        },
+        { id: 'subagent_b', parentSessionId: 'thread-1', title: 'Map the API', state: 'completed' },
+        { id: 'subagent_c', parentSessionId: 'thread-1', title: 'Check the docs', state: 'failed' },
+      ],
+    });
+    renderPanel();
+
+    const group = await screen.findByTestId('local-subagents');
+    expect(within(group).getByText('Subagents (3) · 1 running · 1 done · 1 failed')).toBeTruthy();
+    expect((group as HTMLDetailsElement).open).toBe(true);
+    expect(group.querySelector('#local-child-subagent_a')?.textContent).toBe(
+      'Read the tests · Running',
+    );
+    expect(group.querySelector('#local-child-subagent_b')?.textContent).toBe('Map the API · Done');
+    expect(group.querySelector('#local-child-subagent_c')?.textContent).toBe(
+      'Check the docs · Failed',
+    );
+  });
+
+  it('stays folded once every subagent has finished', async () => {
+    readDeveloperSession.mockResolvedValue({
+      session,
+      messages: [],
+      truncated: false,
+      activeTurn: null,
+      childTasks: [
+        {
+          id: 'subagent_a',
+          parentSessionId: 'thread-1',
+          title: 'Read the tests',
+          state: 'completed',
+        },
+      ],
+    });
+    renderPanel();
+
+    const group = await screen.findByTestId('local-subagents');
+    expect((group as HTMLDetailsElement).open).toBe(false);
+    expect(within(group).getByText('Subagents (1) · 1 done')).toBeTruthy();
+  });
+
+  it('shows no subagent group when the turn ran none', async () => {
+    renderPanel();
+    await waitFor(() => expect(readDeveloperSession).toHaveBeenCalled());
+    expect(screen.queryByTestId('local-subagents')).toBeNull();
+  });
+});

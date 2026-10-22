@@ -48,7 +48,12 @@ import {
   type LocalDeveloperSession,
   type DeveloperSessionGroup,
 } from '@agiworkforce/local-runtime-contract';
-import type { ThreadDeleteResponse, WorktreeCleanupFailure } from '@agiworkforce/types/protocol';
+import type {
+  DeveloperChildTask,
+  DeveloperChildTaskState,
+  ThreadDeleteResponse,
+  WorktreeCleanupFailure,
+} from '@agiworkforce/types/protocol';
 import {
   COMPOSER_FOLLOW_UP_INVERT_SHORTCUT,
   matchesShortcut,
@@ -145,6 +150,55 @@ const MODE_GLYPH_SIZE = 14;
 const SUBMIT_KEY = 'Enter';
 const IMAGE_TYPE_PREFIX = 'image/';
 const MEGABYTE = 1_000_000;
+
+const SUBAGENT_STATE_LABELS: Record<DeveloperChildTaskState, string> = {
+  queued: 'Queued',
+  running: 'Running',
+  awaiting_input: 'Waiting for input',
+  paused: 'Interrupted',
+  completed: 'Done',
+  cancelled: 'Stopped',
+  failed: 'Failed',
+};
+
+const SUBAGENT_STATE_ORDER = Object.keys(SUBAGENT_STATE_LABELS) as DeveloperChildTaskState[];
+
+function subagentCounts(tasks: readonly DeveloperChildTask[]): string {
+  return SUBAGENT_STATE_ORDER.map((state) => {
+    const count = tasks.filter((task) => task.state === state).length;
+    return count > 0 ? `${count} ${SUBAGENT_STATE_LABELS[state].toLowerCase()}` : null;
+  })
+    .filter((part): part is string => part !== null)
+    .join(' · ');
+}
+
+function LocalSubagents({ tasks }: { tasks: readonly DeveloperChildTask[] }) {
+  if (tasks.length === 0) return null;
+  const active = tasks.some(
+    (task) =>
+      task.state === 'running' || task.state === 'queued' || task.state === 'awaiting_input',
+  );
+  return (
+    <details className={styles['notice']} data-testid="local-subagents" open={active}>
+      <summary>
+        Subagents ({tasks.length}) · {subagentCounts(tasks)}
+      </summary>
+      <ul className="space-y-2">
+        {tasks.map((task) => (
+          <li key={task.id} id={`local-child-${task.id}`} data-state={task.state}>
+            <span>{task.title}</span>
+            <span className="text-muted-foreground"> · {SUBAGENT_STATE_LABELS[task.state]}</span>
+            {task.state === 'paused' && (
+              <p className="text-muted-foreground">
+                Interrupted work is kept for review and will not restart on its own.
+              </p>
+            )}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
+}
 
 function fileDataUrl(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -1237,31 +1291,7 @@ export function LocalSessionPanel({
                   </div>
                 ))}
 
-              {(state.childTasks?.length ?? 0) > 0 && (
-                <details className={styles['notice']}>
-                  <summary>Recent child tasks ({state.childTasks.length})</summary>
-                  <ul className="space-y-2">
-                    {state.childTasks.map((task) => (
-                      <li key={task.id} id={`local-child-${task.id}`}>
-                        <details>
-                          <summary>
-                            {task.title} · {task.state.replaceAll('_', ' ')}
-                          </summary>
-                          <p className="break-all text-xs text-muted-foreground">
-                            Task {task.id} · Parent session {task.parentSessionId}
-                          </p>
-                          {task.state === 'paused' && (
-                            <p className="text-xs text-muted-foreground">
-                              Interrupted work is retained for review and will not restart
-                              automatically.
-                            </p>
-                          )}
-                        </details>
-                      </li>
-                    ))}
-                  </ul>
-                </details>
-              )}
+              <LocalSubagents tasks={state.childTasks} />
 
               <LocalQueuedMessages
                 queued={state.queued}
