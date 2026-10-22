@@ -70,6 +70,14 @@ Source: platform.claude.com/docs/en/about-claude/models/overview and .../about-c
 
 Per token, Opus is twice Sonnet, Fable is two and a half times Opus, and Haiku on short prompts is one twentieth of Sonnet. Haiku costs five times more per token once a prompt passes 100K tokens, so keep scout assignments narrow. The pricing page, reread 2026-10-21: "A request's prompt length counts all of its input tokens, including cache reads and cache writes. Each request is priced on its own: a request over the threshold pays the higher prices even when part of its prompt is a cache hit". Every other current family, Sonnet 5.5 ($2/$10), Opus 5.5 ($4/$20) and Fable, bills the full 1M window at its standard rate, so Haiku over 100K ($0.50/$2.50) is still a quarter of Sonnet and an eighth of Opus per token. A cache read costs about a twentieth to a tenth of fresh input, which is why continuing an existing agent is cheaper than starting a new one that rereads the same material.
 
+Worked comparison from the table above (list prices, 1-hour cache, rounded; Claude Code subscription usage is metered differently and was not checked). A Haiku worker holding 120K tokens of context needs about ten more turns producing 5K tokens of output in all:
+
+- Keep the same Haiku worker past the line: reads 10 x 125K x $0.05/M = $0.06, output 5K x $2.50/M = $0.01; about $0.08.
+- Hand the material to Sonnet: write 120K x $4/M = $0.48, reads 10 x 125K x $0.10/M = $0.13, output 5K x $10/M = $0.05; about $0.65.
+- Start a fresh Haiku batch from a 20K summary instead of the material: about $0.01 to $0.02, if the summary is enough.
+
+The 5x tier mostly matters when a Haiku worker is planned too large; once it holds the material, a family switch costs more than the tier.
+
 Other statements from the same pages: batch processing is half price; "Most workloads start with" Opus; move to Fable if "evals at xhigh or max effort still fall short"; Haiku is listed for "sub-agent tasks".
 
 ## Anthropic: effort guidance

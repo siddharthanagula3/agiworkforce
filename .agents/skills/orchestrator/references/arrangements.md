@@ -44,7 +44,10 @@ A script that runs agents in stages (pipelines, parallel fan-out, checkpoints) i
 When comparing arrangements, count all of it:
 
 - **Cold start**: each new agent rereads what it needs. Point it at paths instead of pasting content, and pass verified findings so it does not rediscover them.
-- **Caching**: your own conversation is cached and cheap to continue; a new agent's context is not. Many short-lived agents can cost more than one longer one.
+- **Caching**: your own conversation is cached and cheap to continue; a new agent's context is not. Many short-lived agents can cost more than one longer one. Cache writes cost more than plain input (1.25 times for the 5-minute cache, 2 times for the 1-hour one), so a worker that runs two turns pays the write premium and gets little back.
+- **Model switches**: a cache is per model, so moving material from one family to another pays the write again at the new family's price. Keep one model per body of material; continue the worker that already holds it.
+- **Report size**: a report enters your context once as a write and is reread on every later turn at your own model's rate. Ask for findings, evidence and coverage, not narration.
+- **Cache lifetime**: a worker left idle past its cache lifetime rebuilds its context on the next message; after a long gap, a fresh worker started from a summary can be cheaper than continuing.
 - **Briefing and integration**: your tokens and time to write the brief, read the report and merge the result.
 - **Verification**: the check you must run before trusting the output. If verifying costs as much as doing, do it yourself.
 - **Retries**: a cheap worker that needs three attempts is not cheap. A worker at the wrong effort level pays on every turn.
