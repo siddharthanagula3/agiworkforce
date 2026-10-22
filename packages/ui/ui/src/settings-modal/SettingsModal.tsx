@@ -619,7 +619,7 @@ function AddCustomConnectorForm({
       <div>
         <h2 className="flex items-center gap-2 text-h4 text-foreground">
           Add custom connector
-          <span className="rounded-full bg-accent px-2 py-0.5 text-caption font-semibold uppercase tracking-wider text-accent-foreground">
+          <span className="rounded-full bg-accent px-2 py-0.5 text-sm font-semibold uppercase tracking-wider text-accent-foreground">
             Beta
           </span>
         </h2>
@@ -1958,7 +1958,7 @@ function NavButton({
           aria-hidden="true"
           data-testid={NAV_MATURITY_LABEL_TESTID}
           className={cn(
-            'shrink-0 rounded-full px-2 py-0.5 text-caption font-semibold uppercase tracking-wider',
+            'shrink-0 rounded-full px-2 py-0.5 text-sm font-semibold uppercase tracking-wider',
             isActive ? 'bg-background text-foreground' : 'bg-accent text-accent-foreground',
           )}
         >
