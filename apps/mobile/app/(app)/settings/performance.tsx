@@ -36,6 +36,7 @@ import {
   getThermalState,
   getRollingStats,
   getPerfEventsLastDays,
+  getBenchmarkHistory,
   runBenchmark,
   type ThermalState,
   type BackendName,
@@ -315,7 +316,9 @@ export default function PerformanceScreen() {
   const thermalTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const [isBenchmarking, setIsBenchmarking] = useState(false);
-  const [lastBenchmark, setLastBenchmark] = useState<BenchmarkResult | null>(null);
+  const [lastBenchmark, setLastBenchmark] = useState<BenchmarkResult | null>(
+    () => getBenchmarkHistory()[0] ?? null,
+  );
 
   const [chartWidth, setChartWidth] = useState(280);
   const [memoryNowMB, setMemoryNowMB] = useState<number | null>(null);
@@ -777,7 +780,7 @@ export default function PerformanceScreen() {
                   marginBottom: 6,
                 }}
               >
-                Last benchmark result
+                Last benchmark result, {new Date(lastBenchmark.ts).toLocaleDateString()}
               </Text>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 <StatChip

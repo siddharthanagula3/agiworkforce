@@ -147,7 +147,6 @@ export default function FeedbackScreen() {
                   color: colors.textMuted,
                   fontSize: typeScale.caption,
                   fontWeight: '700',
-                  textTransform: 'uppercase',
                   letterSpacing: 0,
                 }}
               >
@@ -204,7 +203,6 @@ export default function FeedbackScreen() {
                 color: colors.textMuted,
                 fontSize: typeScale.caption,
                 fontWeight: '700',
-                textTransform: 'uppercase',
                 letterSpacing: 0,
               }}
             >

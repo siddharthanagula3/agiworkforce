@@ -109,6 +109,12 @@ describe('Capabilities settings screen', () => {
   const WEB_SEARCH_LABEL =
     'Web search. Let Cloud models search the web when they need current information.';
 
+  it('lets a long capability title wrap instead of truncating', () => {
+    const { getByText } = render(<CapabilitiesScreen />);
+
+    expect(getByText('Code execution and file creation').props.numberOfLines).toBeUndefined();
+  });
+
   it('renders real Cloud preference switches and keeps automatic capabilities as status rows', () => {
     const { getByText, getByLabelText, queryAllByRole, queryByText } = render(
       <CapabilitiesScreen />,

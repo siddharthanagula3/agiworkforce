@@ -33,6 +33,11 @@ jest.mock('@/services/notificationChannels', () => ({
   androidChannelVibrates: jest.fn().mockResolvedValue(null),
 }));
 
+jest.mock('@/services/preferences', () => ({
+  fetchPreferenceNamespace: jest.fn().mockResolvedValue({}),
+  savePreferenceNamespace: jest.fn().mockResolvedValue(undefined),
+}));
+
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 
 jest.mock('react-native-safe-area-context', () => {
@@ -66,11 +71,15 @@ jest.mock('lucide-react-native', () => {
 import NotificationPreferencesScreen from '../src/features/settings/notifications';
 import NotificationCategoryDetailScreen from '../src/features/settings/notifications/NotificationCategoryDetailScreen';
 import { useNotificationPrefsStore } from '../stores/notificationPrefsStore';
+import { useAuthStore } from '../src/features/auth/store';
+import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 
 describe('notification category settings', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     act(() => {
+      useChatAppModeStore.setState({ appMode: 'local' });
+      useAuthStore.setState({ isClerkSignedIn: false });
       useNotificationPrefsStore.setState({
         categoryEnabled: {
           chat_replies: true,
@@ -107,6 +116,28 @@ describe('notification category settings', () => {
       pathname: '/(app)/settings/notifications/[category]',
       params: { category: 'tasks' },
     });
+  });
+
+  it('blocks the per-device category rows while the device denies notifications', async () => {
+    const { getPushDeliveryStatus } = require('@/services/notifications');
+    (getPushDeliveryStatus as jest.Mock).mockResolvedValueOnce('denied');
+    act(() => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useAuthStore.setState({ isClerkSignedIn: true });
+    });
+    const screen = render(<NotificationPreferencesScreen />);
+    await screen.findByText('Your device is blocking notifications');
+
+    const row = screen.getByLabelText('Task and approval updates. Blocked');
+    expect(row).toBeDisabled();
+    fireEvent.press(row);
+    expect(mockPush).not.toHaveBeenCalled();
+    expect(screen.getAllByText('Blocked')).toHaveLength(3);
+    expect(
+      await screen.findByText(
+        'Saved to your account, but this device stays silent until notifications are allowed in Settings.',
+      ),
+    ).toBeTruthy();
   });
 
   it('changes the live Push preference without creating an inert Email preference', () => {

@@ -439,13 +439,6 @@ export default function AccountSecurityScreen() {
         <SettingsRow
           label="Advanced Account Security"
           icon={ShieldCheck}
-          value="Set up on web"
-          onPress={() => openOwnedWebPage(WEB_SECURITY_URL)}
-        />
-        <SettingsRow
-          label="Open Web security"
-          icon={ExternalLink}
-          value="Web"
           onPress={() => openOwnedWebPage(WEB_SECURITY_URL)}
           isLast
         />

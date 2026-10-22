@@ -11,6 +11,7 @@ export const MOBILE_HELP_ARTICLE_IDS = [
   'artifacts',
   'billing-and-plans',
   'connectors-and-mcp',
+  'crisis-resources',
   'local-mode',
   'memory',
   'privacy-controls',

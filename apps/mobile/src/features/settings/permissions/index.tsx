@@ -190,8 +190,7 @@ export default function PermissionsScreen() {
         }}
       >
         <Text style={{ color: c.textMuted, fontSize: typeScale.footnote, lineHeight: 18 }}>
-          AGI asks only when a feature you started needs one, like the microphone for voice, and
-          nothing is read in the background.
+          AGI asks only when a feature you started needs access.
         </Text>
         <Pressable
           onPress={() => void openInAppBrowser(PERMISSIONS_HELP_URL)}

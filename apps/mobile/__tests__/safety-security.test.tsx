@@ -41,6 +41,11 @@ jest.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: React.ReactNode }) => children,
 }));
 
+const mockOpenUntrustedUrl = jest.fn().mockResolvedValue(true);
+jest.mock('@/lib/safeOpenURL', () => ({
+  openUntrustedUrlInAppBrowser: (...args: unknown[]) => mockOpenUntrustedUrl(...args),
+}));
+
 jest.mock('../src/features/auth/services/ageGate', () => ({
   isMinorMode: () => mockMinorMode,
 }));
@@ -52,6 +57,7 @@ jest.mock('lucide-react-native', () => {
     ArrowLeft: icon,
     ChevronRight: icon,
     EyeOff: icon,
+    CircleHelp: icon,
     Fingerprint: icon,
     Shield: icon,
     Smartphone: icon,
@@ -105,6 +111,7 @@ jest.mock('@/components/ui/switch', () => {
 
 import SafetySecurityScreen from '../src/features/settings/safety-security';
 import { useBiometricFlag } from '../lib/biometricFlagStore';
+import { helpArticleUrl } from '../src/features/support/HelpArticleLink';
 
 describe('Safety & Security settings', () => {
   let alertSpy: jest.SpyInstance;
@@ -121,6 +128,14 @@ describe('Safety & Security settings', () => {
 
   afterEach(() => {
     alertSpy.mockRestore();
+  });
+
+  it('opens the safety help article from a standalone Learn more link', () => {
+    const { getByRole } = render(<SafetySecurityScreen />);
+
+    fireEvent.press(getByRole('link', { name: 'Learn more' }));
+
+    expect(mockOpenUntrustedUrl).toHaveBeenCalledWith(helpArticleUrl('crisis-resources'));
   });
 
   it('shows the app-lock toggle with Face ID and passcode copy', () => {

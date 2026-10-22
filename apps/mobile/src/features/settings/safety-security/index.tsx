@@ -12,6 +12,7 @@ import {
   SettingsScreenShell,
   SettingsSwitchRow,
 } from '@/src/features/settings/common';
+import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useRouter } from 'expo-router';
 
 export default function SafetySecurityScreen() {
@@ -86,6 +87,7 @@ export default function SafetySecurityScreen() {
           isLast
         />
       </SettingsGroup>
+      <HelpArticleLink docId="crisis-resources" label="Learn more" />
       <SettingsInfo
         title="Device boundary"
         body="Local chats stay on this device unless you choose AGI Cloud."

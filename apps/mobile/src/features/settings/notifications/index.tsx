@@ -536,6 +536,8 @@ export default function NotificationPreferencesScreen() {
       <Card>
         {CATEGORIES.map((cat, idx) => {
           const Icon = cat.icon;
+          const blocked = pushPermission === 'denied';
+          const stateLabel = blocked ? 'Blocked' : categoryEnabled[cat.id] ? 'Push' : 'Off';
           return (
             <View key={cat.id}>
               {idx > 0 && <Separator />}
@@ -546,11 +548,14 @@ export default function NotificationPreferencesScreen() {
                     params: { category: cat.id },
                   } as unknown as Parameters<typeof router.push>[0])
                 }
-                accessibilityLabel={`${cat.label}. ${categoryEnabled[cat.id] ? 'Push' : 'Off'}`}
+                disabled={blocked}
+                accessibilityLabel={`${cat.label}. ${stateLabel}`}
                 accessibilityRole="button"
+                accessibilityState={{ disabled: blocked }}
                 className="flex-row items-center justify-between py-3 px-1 rounded-lg"
                 style={({ pressed }) => ({
                   backgroundColor: pressed ? colors.surfaceHover : colors.transparent,
+                  opacity: blocked ? 0.5 : 1,
                 })}
               >
                 <View className="flex-row items-center gap-3 flex-1 mr-3">
@@ -565,9 +570,9 @@ export default function NotificationPreferencesScreen() {
                   </View>
                 </View>
                 <Text className="text-sm font-medium mr-1" style={{ color: colors.textSecondary }}>
-                  {categoryEnabled[cat.id] ? 'Push' : 'Off'}
+                  {stateLabel}
                 </Text>
-                <ChevronRight size={17} color={colors.textMuted} />
+                {blocked ? null : <ChevronRight size={17} color={colors.textMuted} />}
               </Pressable>
             </View>
           );
@@ -615,7 +620,9 @@ export default function NotificationPreferencesScreen() {
               ? 'Saving to your account…'
               : agentActivityPush.status === 'error'
                 ? (agentActivityPush.error ?? 'Could not reach your account settings.')
-                : 'Applied by the server before it sends, on every device on this account.'}
+                : pushPermission === 'denied'
+                  ? 'Saved to your account, but this device stays silent until notifications are allowed in Settings.'
+                  : 'Applied by the server before it sends, on every device on this account.'}
       </Text>
 
       <View className="mt-6 mb-2">

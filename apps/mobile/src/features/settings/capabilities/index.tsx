@@ -373,10 +373,7 @@ function CapabilityRow({
       </View>
 
       <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
-        <Text
-          numberOfLines={1}
-          style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
-        >
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}>
           {row.label}
         </Text>
         <Text

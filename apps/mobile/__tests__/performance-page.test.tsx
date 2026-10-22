@@ -341,6 +341,31 @@ describe('PerformanceScreen rendering', () => {
     expect(getAllByText('Performance').length).toBeGreaterThanOrEqual(1);
   });
 
+  it('shows the last stored benchmark from an earlier session on mount', async () => {
+    recordBenchmark({
+      ts: new Date(2026, 5, 3, 12).getTime(),
+      modelId: DEFAULT_LOCAL_MODEL_ID,
+      backend: 'llama_rn',
+      tokensPerSecond: 31.4,
+      firstTokenLatencyMs: 212,
+      peakMemoryMB: 0,
+      thermalState: 'nominal',
+      promptTokens: 12,
+      outputTokens: 60,
+    });
+    const { getByText } = await renderSettledPerformanceScreen();
+    expect(
+      getByText(`Last benchmark result, ${new Date(2026, 5, 3, 12).toLocaleDateString()}`),
+    ).toBeTruthy();
+    expect(getByText('31')).toBeTruthy();
+    expect(getByText('212ms')).toBeTruthy();
+  });
+
+  it('shows no benchmark block when none has been stored', async () => {
+    const { queryByText } = await renderSettledPerformanceScreen();
+    expect(queryByText(/Last benchmark result/)).toBeNull();
+  });
+
   it('renders the Device Tier card heading', async () => {
     const { getByText } = await renderSettledPerformanceScreen();
     expect(getByText('Device Tier')).toBeTruthy();

@@ -207,7 +207,8 @@ describe('Mobile Account Security screen', () => {
     await waitFor(() => expect(screen.getByLabelText('Work laptop. Passkey')).toBeTruthy());
     expect(screen.getByLabelText('Add or remove a sign-in method. Web')).toBeTruthy();
 
-    fireEvent.press(screen.getByLabelText('Open Web security. Web'));
+    expect(screen.queryByLabelText('Open Web security. Web')).toBeNull();
+    fireEvent.press(screen.getByLabelText('Advanced Account Security'));
     fireEvent.press(screen.getByLabelText('Open Web account. Web'));
     fireEvent.press(screen.getByLabelText('App Lock. Off'));
 
