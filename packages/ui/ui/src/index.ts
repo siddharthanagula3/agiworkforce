@@ -231,6 +231,7 @@ export {
   type ProjectAccentEntry,
   OPEN_SEARCH_SHORTCUT,
   openSearchShortcutLabel,
+  TOGGLE_SIDEBAR_SHORTCUT,
 } from './sidebar';
 export {
   SETTINGS_NAV,

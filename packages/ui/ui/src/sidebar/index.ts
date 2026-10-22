@@ -3,6 +3,7 @@ export {
   MOBILE_NAV_DRAWER_WIDTH,
   OPEN_SEARCH_SHORTCUT,
   openSearchShortcutLabel,
+  TOGGLE_SIDEBAR_SHORTCUT,
   type SidebarProps,
 } from './Sidebar';
 export { SessionItem, type SessionItemProps, type SessionItemHandlers } from './SessionItem';

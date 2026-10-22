@@ -8,7 +8,7 @@ afterEach(() => {
   cleanup();
 });
 
-describe('the sidebar toggle advertises the chord the registry binds', () => {
+describe('the sidebar toggle renders the registry chord as its aria-keyshortcuts', () => {
   it.each([false, true])('matches toggle-sidebar when collapsed is %s', (collapsed) => {
     const binding = CHAT_SHORTCUTS.find((shortcut) => shortcut.id === 'toggle-sidebar');
     expect(binding).toBeDefined();

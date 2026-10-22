@@ -1,3 +1,4 @@
+import { TOGGLE_SIDEBAR_SHORTCUT } from '@agiworkforce/ui';
 import { OPEN_SEARCH_SHORTCUT } from '@agiworkforce/ui/search-shortcut';
 
 export type ShortcutCategory = 'navigation' | 'conversation' | 'message' | 'ui' | 'composer';
@@ -70,9 +71,7 @@ export const CHAT_SHORTCUTS: readonly ShortcutDefinition[] = [
     scope: 'app',
   },
   {
-    key: 'B',
-    ctrl: true,
-    meta: true,
+    ...TOGGLE_SIDEBAR_SHORTCUT,
     id: 'toggle-sidebar',
     description: 'Toggle sidebar',
     category: 'ui',
