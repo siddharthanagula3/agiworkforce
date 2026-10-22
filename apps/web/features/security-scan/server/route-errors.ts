@@ -4,7 +4,10 @@ import { createError } from '@/lib/errors';
 import { rethrowCloudCodeError } from '@/lib/services/cloud-code-session-errors';
 
 import { SecurityScanBudgetError, SecurityScanNoRouteError } from './model';
-import { SecurityScanSigningUnavailableError } from './report-signing';
+import {
+  SecurityScanReportReplayError,
+  SecurityScanSigningUnavailableError,
+} from './report-signing';
 import { SecurityScanScopeError } from './selection';
 
 export function rethrowSecurityScanError(error: unknown): never {
@@ -13,6 +16,7 @@ export function rethrowSecurityScanError(error: unknown): never {
   if (error instanceof SecurityScanNoRouteError) {
     throw createError.capabilityUnavailable(error.message);
   }
+  if (error instanceof SecurityScanReportReplayError) throw createError.conflict(error.message);
   if (error instanceof SecurityScanSigningUnavailableError) {
     throw createError.serviceUnavailable(error.message);
   }

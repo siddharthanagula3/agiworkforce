@@ -49,6 +49,7 @@ import {
   buildScanPrompt,
   buildVerificationPrompt,
 } from './prompts';
+import { SecurityScanReportReplayError } from './report-signing';
 import { packScanBatches, parseGitLsFilesStage, rankCandidateFiles } from './selection';
 import { shellQuote, withSecurityScanWorkspace, type SecurityScanWorkspace } from './workspace';
 
@@ -100,6 +101,26 @@ function presentReport(report: SecurityScanReport | null, now: number): Security
     };
   }
   return report;
+}
+
+async function readReportOrNullWhenReplayed(
+  workspace: SecurityScanWorkspace,
+): Promise<SecurityScanReport | null> {
+  try {
+    return await workspace.readReport();
+  } catch (error) {
+    if (error instanceof SecurityScanReportReplayError) return null;
+    throw error;
+  }
+}
+
+function replayedReport(error: SecurityScanReportReplayError): SecurityScanReport {
+  return {
+    status: SECURITY_SCAN_STATUS.failed,
+    scanId: error.scanId,
+    startedAt: error.issuedAt,
+    error: error.message,
+  };
 }
 
 function parseFileSizes(output: string): Map<string, number> {
@@ -335,7 +356,7 @@ export async function runSecurityScan(
     context.sessionId,
     context.planTier,
     async (workspace) => {
-      if (isFreshRun(await workspace.readReport(), Date.now())) {
+      if (isFreshRun(await readReportOrNullWhenReplayed(workspace), Date.now())) {
         throw new CloudCodeConflictError('A security scan is already running in this session');
       }
       const sources = await collectSources(workspace, scope);
@@ -425,7 +446,14 @@ export async function readSecurityScanState(
     context.owner,
     context.sessionId,
     context.planTier,
-    (workspace) => workspace.readReport(),
+    async (workspace) => {
+      try {
+        return await workspace.readReport();
+      } catch (error) {
+        if (error instanceof SecurityScanReportReplayError) return replayedReport(error);
+        throw error;
+      }
+    },
   );
   return { session: summary, report: presentReport(report, Date.now()) };
 }

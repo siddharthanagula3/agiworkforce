@@ -58,16 +58,37 @@ export interface SecurityScanReportBinding {
   sessionId: string;
 }
 
+export interface OpenedSecurityScanReport {
+  report: SecurityScanReport;
+  issuedAt: string;
+}
+
+export const SECURITY_SCAN_REPLAY_MESSAGE =
+  'This scan report is not the latest one saved for this session. Run the scan again.';
+
+export class SecurityScanReportReplayError extends Error {
+  readonly scanId: string;
+  readonly issuedAt: string;
+
+  constructor(opened: { scanId: string; issuedAt: string }) {
+    super(SECURITY_SCAN_REPLAY_MESSAGE);
+    this.name = 'SecurityScanReportReplayError';
+    this.scanId = opened.scanId;
+    this.issuedAt = opened.issuedAt;
+  }
+}
+
 export function sealSecurityScanReport(
   binding: SecurityScanReportBinding,
   report: SecurityScanReport,
+  issuedAt: string = new Date().toISOString(),
 ): string {
   const payload = JSON.stringify(
     PayloadSchema.parse({
       ...binding,
       scanId: report.scanId,
       nonce: randomBytes(NONCE_BYTES).toString('base64url'),
-      issuedAt: new Date().toISOString(),
+      issuedAt,
       report,
     }),
   );
@@ -77,7 +98,7 @@ export function sealSecurityScanReport(
 export function openSecurityScanReport(
   binding: SecurityScanReportBinding,
   sealed: string,
-): SecurityScanReport | null {
+): OpenedSecurityScanReport | null {
   let envelopeValue: unknown;
   try {
     envelopeValue = JSON.parse(sealed);
@@ -100,5 +121,5 @@ export function openSecurityScanReport(
   if (payload.data.userId !== binding.userId || payload.data.sessionId !== binding.sessionId) {
     return null;
   }
-  return payload.data.report;
+  return { report: payload.data.report, issuedAt: payload.data.issuedAt };
 }

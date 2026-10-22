@@ -50,7 +50,8 @@ import type {
   SecurityScanReport,
 } from '@agiworkforce/cloud-contracts';
 import type { SecurityScanModel, SecurityScanModelCall } from '../model';
-import { decideSecurityScanFinding, runSecurityScan } from '../service';
+import { SECURITY_SCAN_REPLAY_MESSAGE, SecurityScanReportReplayError } from '../report-signing';
+import { decideSecurityScanFinding, readSecurityScanState, runSecurityScan } from '../service';
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const COMMIT = 'a'.repeat(40);
@@ -86,6 +87,7 @@ const INVENTED_CANDIDATE = {
 
 interface FakeWorkspace {
   report: SecurityScanReport | null;
+  replayed: SecurityScanReportReplayError | null;
   writes: SecurityScanReport[];
   commands: string[];
   reads: string[];
@@ -104,6 +106,7 @@ function fakeWorkspace(): FakeWorkspace {
   ]);
   const state: FakeWorkspace = {
     report: null,
+    replayed: null,
     writes: [],
     commands: [],
     reads: [],
@@ -153,7 +156,10 @@ function fakeWorkspace(): FakeWorkspace {
       state.reads.push(path);
       return files.get(path) ?? null;
     },
-    readReport: async () => state.report,
+    readReport: async () => {
+      if (state.replayed) throw state.replayed;
+      return state.report;
+    },
     async writeReport(report: SecurityScanReport) {
       state.report = report;
       state.writes.push(report);
@@ -210,6 +216,27 @@ beforeEach(() => {
     url: 'https://github.com/acme/app/pull/7',
     number: 7,
     alreadyOpen: false,
+  });
+});
+
+const REPLAYED = new SecurityScanReportReplayError({
+  scanId: '22222222-2222-4222-8222-222222222222',
+  issuedAt: '2026-10-22T09:00:00.000Z',
+});
+
+describe('readSecurityScanState', () => {
+  it('shows a stored report that is not the latest one as a failed scan to run again', async () => {
+    const workspace = fakeWorkspace();
+    workspace.replayed = REPLAYED;
+
+    const state = await readSecurityScanState(context(scriptedModel({ scan: {} })));
+
+    expect(state.report).toEqual({
+      status: 'failed',
+      scanId: REPLAYED.scanId,
+      startedAt: REPLAYED.issuedAt,
+      error: SECURITY_SCAN_REPLAY_MESSAGE,
+    });
   });
 });
 
@@ -277,6 +304,17 @@ describe('runSecurityScan', () => {
       CloudCodeConflictError,
     );
     expect(model.calls).toEqual([]);
+  });
+
+  it('starts a new scan over a stored report that is not the latest one', async () => {
+    const workspace = fakeWorkspace();
+    workspace.replayed = REPLAYED;
+    const model = scriptedModel({ scan: { findings: [] } });
+
+    const report = await runSecurityScan(context(model), null);
+
+    expect(report.status).toBe('completed');
+    expect(workspace.writes.map((write) => write.status)).toEqual(['running', 'completed']);
   });
 
   it('records a failed scan when the model cannot be reached', async () => {
@@ -358,6 +396,22 @@ async function scannedWorkspace(): Promise<{
 }
 
 describe('decideSecurityScanFinding', () => {
+  it('refuses a decision on a report that is not the latest one, and changes nothing', async () => {
+    const { workspace, report } = await scannedWorkspace();
+    workspace.replayed = REPLAYED;
+    workspace.commands.length = 0;
+
+    await expect(
+      decideSecurityScanFinding(context(scriptedModel({ scan: {} })), {
+        scanId: report.scanId,
+        findingId: report.findings[0]!.id,
+        decision: 'approve',
+      }),
+    ).rejects.toBe(REPLAYED);
+    expect(workspace.commands).toEqual([]);
+    expect(mocks.commitAndPush).not.toHaveBeenCalled();
+  });
+
   it('applies an approved fix, then commits only that file and opens the pull request', async () => {
     const { workspace, report } = await scannedWorkspace();
     const finding = report.findings[0]!;

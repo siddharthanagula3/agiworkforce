@@ -1475,6 +1475,57 @@ export async function readCloudCodeSessionContinuation(
   };
 }
 
+export interface CloudCodeSessionScanHead {
+  scanId: string;
+  issuedAt: string;
+}
+
+export async function readCloudCodeSessionScanHead(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+): Promise<CloudCodeSessionScanHead | null> {
+  validateCloudCodeSessionId(sessionId);
+  const scoped = ownerSql(owner, 2);
+  const rows = await db.query<{
+    security_scan_id: string | null;
+    security_scan_issued_at: string | Date | null;
+  }>(
+    `select security_scan_id, security_scan_issued_at
+       from cloud_code_sessions
+      where id = $1 and ${scoped.clause}
+      limit 1`,
+    [sessionId, ...scoped.params],
+  );
+  const row = rows[0];
+  if (!row) throw new CloudCodeNotFoundError();
+  if (!row.security_scan_id || !row.security_scan_issued_at) return null;
+  return { scanId: row.security_scan_id, issuedAt: iso(row.security_scan_issued_at) };
+}
+
+export async function recordCloudCodeSessionScanHead(
+  db: DatabaseAdapter,
+  owner: CloudCodeOwner,
+  sessionId: string,
+  leaseToken: string,
+  head: CloudCodeSessionScanHead,
+): Promise<void> {
+  validateCloudCodeSessionId(sessionId);
+  const scoped = ownerSql(owner, 5);
+  const rows = await db.query<{ id: string }>(
+    `update cloud_code_sessions
+        set security_scan_id = $2,
+            security_scan_issued_at = $3
+      where id = $1
+        and state = 'running'
+        and run_lease_token = $4
+        and ${scoped.clause}
+      returning id`,
+    [sessionId, head.scanId, head.issuedAt, leaseToken, ...scoped.params],
+  );
+  if (!rows[0]) throw new CloudCodeConflictError('Code session is busy; wait and try again');
+}
+
 export async function releaseCloudCodeSessionAfterRun(
   db: DatabaseAdapter,
   owner: CloudCodeOwner,

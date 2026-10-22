@@ -46,9 +46,9 @@ describe('security scan report signing', () => {
   });
 
   it('opens what it sealed for the same user and session', () => {
-    expect(openSecurityScanReport(BINDING, sealSecurityScanReport(BINDING, REPORT))).toEqual(
-      REPORT,
-    );
+    expect(
+      openSecurityScanReport(BINDING, sealSecurityScanReport(BINDING, REPORT))?.report,
+    ).toEqual(REPORT);
   });
 
   it('refuses a report written for another user or session', () => {
@@ -89,6 +89,15 @@ describe('security scan report signing', () => {
     expect(Number.isNaN(Date.parse(String(first.issuedAt)))).toBe(false);
     expect(first.nonce).toMatch(/^[A-Za-z0-9_-]{22}$/);
     expect(second.nonce).not.toBe(first.nonce);
+  });
+
+  it('returns the issue time it signed, so a caller can pin the latest report', () => {
+    const issuedAt = '2026-10-22T11:00:00.000Z';
+    const opened = openSecurityScanReport(
+      BINDING,
+      sealSecurityScanReport(BINDING, REPORT, issuedAt),
+    );
+    expect(opened?.issuedAt).toBe(issuedAt);
   });
 
   it('refuses an envelope from before scan binding', () => {

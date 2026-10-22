@@ -13,12 +13,18 @@ import {
   CloudCodeValidationError,
   claimCloudCodeSessionForRun,
   getCloudCodeSession,
+  readCloudCodeSessionScanHead,
+  recordCloudCodeSessionScanHead,
   releaseCloudCodeSessionAfterRun,
   type CloudCodeOwner,
 } from '@/lib/services/cloud-code-session-service';
 
 import type { SecurityScanReport } from '@agiworkforce/cloud-contracts';
-import { openSecurityScanReport, sealSecurityScanReport } from './report-signing';
+import {
+  SecurityScanReportReplayError,
+  openSecurityScanReport,
+  sealSecurityScanReport,
+} from './report-signing';
 
 const SCAN_STATE_DIRECTORY = '.agi-security-scan';
 const REPORT_FILE = 'report.json';
@@ -126,18 +132,37 @@ export async function withSecurityScanWorkspace<T>(
         const bytes = await tools.readFileBytes(reportPath);
         const sealed = bytes ? decodeText(bytes) : null;
         if (sealed === null) return null;
-        const report = openSecurityScanReport(binding, sealed);
-        if (!report) {
+        const opened = openSecurityScanReport(binding, sealed);
+        if (!opened) {
           logger.warn({ sessionId }, '[security-scan] stored report failed verification');
+          return null;
         }
-        return report;
+        const head = await readCloudCodeSessionScanHead(db, owner, sessionId);
+        if (
+          !head ||
+          head.scanId !== opened.report.scanId ||
+          Date.parse(head.issuedAt) !== Date.parse(opened.issuedAt)
+        ) {
+          logger.warn({ sessionId }, '[security-scan] stored report is not the latest one');
+          throw new SecurityScanReportReplayError({
+            scanId: opened.report.scanId,
+            issuedAt: opened.issuedAt,
+          });
+        }
+        return opened.report;
       },
       async writeReport(report) {
+        const issuedAt = new Date().toISOString();
+        const sealed = sealSecurityScanReport(binding, report, issuedAt);
+        await recordCloudCodeSessionScanHead(db, owner, sessionId, claim.leaseToken, {
+          scanId: report.scanId,
+          issuedAt,
+        });
         const folder = await tools.createFolder({ path: directory });
         if (!folder.ok) throw new CloudCodeUnavailableError('The scan report could not be saved');
         const written = await tools.writeFile({
           path: reportPath,
-          content: sealSecurityScanReport(binding, report),
+          content: sealed,
         });
         if (!written.ok) throw new CloudCodeUnavailableError('The scan report could not be saved');
       },
