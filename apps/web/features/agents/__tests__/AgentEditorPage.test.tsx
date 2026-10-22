@@ -71,6 +71,49 @@ describe('AgentEditorPage', () => {
     expect(replace).toHaveBeenCalledWith('/chat/agents/0190a000-0000-7000-8000-0000000000a1');
   });
 
+  it('shows the agent header with an Active pill and its description', async () => {
+    render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={fakeApi()} />);
+    const heading = await screen.findByRole('heading', { name: 'Release notes writer' });
+    const header = heading.closest('header')!;
+    expect(within(header).getByText('Active')).toBeInTheDocument();
+    expect(
+      within(header).getByText('Turns merged pull requests into release notes'),
+    ).toBeInTheDocument();
+  });
+
+  it('splits the agent into Agent, Sessions and Deployments tabs', async () => {
+    const api = fakeApi({
+      activity: vi.fn(async () => ({
+        conversations: [
+          {
+            id: '0190a000-0000-7000-8000-0000000000c1',
+            title: 'Draft the v2 notes',
+            updatedAt: '2026-10-20T00:00:00.000Z',
+          },
+        ],
+        routines: [],
+      })),
+    });
+    render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={api} />);
+    await screen.findByRole('heading', { name: 'Release notes writer' });
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs.map((tab) => tab.textContent)).toEqual(['Agent', 'Sessions', 'Deployments']);
+    expect(tabs[0]).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByLabelText('Name')).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Sessions' }));
+    expect(await screen.findByText('Draft the v2 notes')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Name')).toBeNull();
+
+    await userEvent.click(screen.getByRole('tab', { name: 'Deployments' }));
+    expect(await screen.findByText('No deployments yet.')).toBeInTheDocument();
+  });
+
+  it('shows no tabs while the agent is not saved yet', () => {
+    render(<AgentEditorPage agentId={null} api={fakeApi()} />);
+    expect(screen.queryByRole('tab')).toBeNull();
+  });
+
   it('limits the agent to the connectors and skills ticked', async () => {
     const api = fakeApi();
     render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={api} />);

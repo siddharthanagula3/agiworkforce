@@ -1,6 +1,5 @@
-import { fireEvent, render, screen } from '@testing-library/react';
-import { describe, expect, it, vi } from 'vitest';
-import { formatRelativeTime } from '@shared/utils/format';
+import { fireEvent, render, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ScheduleCard } from './ScheduleCard';
 import type { ScheduleHistoryState } from './ScheduleRunHistory';
 import type { ScheduleTask } from '../types';
@@ -120,26 +119,45 @@ describe('ScheduleCard timing', () => {
   });
 });
 
-describe('ScheduleCard summary line (slice E item 6)', () => {
-  it('shows the next run as relative time under the title, not the absolute date', () => {
+describe('ScheduleCard next-run chips', () => {
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date('2026-07-19T00:00:00.000Z'));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('shows one chip for a weekly schedule inside the lookahead, labelled Next', () => {
     renderCard(baseSchedule);
 
-    const expected = `Next run ${formatRelativeTime(baseSchedule.nextExecutionAt as string)}`;
-    expect(screen.getByText(expected)).toBeInTheDocument();
+    expect(screen.getByText('Next:')).toBeInTheDocument();
+    expect(screen.getByText('Times are shown in America/Chicago')).toBeInTheDocument();
+    const chips = within(screen.getByRole('list', { name: 'Next runs for Weekly digest' }));
+    expect(chips.getAllByRole('listitem')).toHaveLength(1);
     expect(screen.getByText('Next Run').nextElementSibling).toHaveTextContent(/2026/);
   });
 
-  it('shows Paused instead of a relative time when disabled', () => {
+  it('computes upcoming runs from the cron and shows overflow as +N', () => {
+    renderCard({ ...baseSchedule, cronExpression: '0 9 * * *' });
+
+    const chips = within(screen.getByRole('list', { name: 'Next runs for Weekly digest' }));
+    expect(chips.getAllByRole('listitem')).toHaveLength(5);
+    expect(chips.getByText('+2')).toHaveAccessibleName('2 more upcoming runs');
+  });
+
+  it('shows Paused instead of chips when disabled', () => {
     renderCard({ ...baseSchedule, isEnabled: false });
 
     expect(screen.getAllByText('Paused')).toHaveLength(2);
-    expect(screen.queryByText(/^Next run /)).toBeNull();
+    expect(screen.queryByText('Next:')).toBeNull();
   });
 
-  it('renders no summary line when enabled with no next run scheduled', () => {
+  it('renders no chips when enabled with no next run scheduled', () => {
     renderCard({ ...baseSchedule, nextExecutionAt: null });
 
-    expect(screen.queryByText(/^Next run /)).toBeNull();
+    expect(screen.queryByText('Next:')).toBeNull();
     expect(screen.queryByText('Paused')).toBeNull();
   });
 });

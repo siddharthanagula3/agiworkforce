@@ -4,7 +4,16 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Button, Skeleton, Spinner } from '@agiworkforce/ui';
+import {
+  Badge,
+  Button,
+  Skeleton,
+  Spinner,
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@agiworkforce/ui';
 import {
   ManagedSkillsResponseSchema,
   type AgentConfig,
@@ -23,10 +32,26 @@ import { NEW_AGENT_DRAFT, draftFromAgent, draftProblem, draftsEqual } from '../l
 import { AgentAvatar } from './AgentAvatar';
 import { AgentConfigForm, type AgentChoice, type AgentChoiceList } from './AgentConfigForm';
 import { AgentKnowledgePanel } from './AgentKnowledgePanel';
+import { AgentDeploymentsPanel } from './AgentDeploymentsPanel';
 import { AgentActivityPanel, AgentManagePanel } from './AgentManagePanel';
 import { AgentPublishPanel } from './AgentPublishPanel';
 
 const SKILLS_PATH = '/api/skills';
+
+const AGENT_TABS = [
+  { value: 'agent', label: 'Agent' },
+  { value: 'sessions', label: 'Sessions' },
+  { value: 'deployments', label: 'Deployments' },
+] as const;
+
+const STATUS_PILL: Record<ManagedCloudAgent['status'], { label: string; className: string }> = {
+  active: {
+    label: 'Active',
+    className: 'border-success-fill bg-success-fill text-success-on-fill',
+  },
+  paused: { label: 'Paused', className: 'border-border bg-muted text-foreground' },
+  retired: { label: 'Retired', className: 'border-border bg-muted text-muted-foreground' },
+};
 
 type LoadState =
   | { status: 'loading' }
@@ -226,6 +251,24 @@ export function AgentEditorPage({
     );
   }
 
+  const stateLine = [
+    agent ? (agent.status === 'active' ? agentStateLabel(agent) : null) : 'Not saved yet',
+    dirty && !readOnly ? 'Unsaved changes' : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  const configForm = (
+    <AgentConfigForm
+      draft={draft}
+      disabled={readOnly}
+      modelOptions={modelOptions}
+      connectors={connectors}
+      skills={skills}
+      onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
+    />
+  );
+
   return (
     <div className="min-h-full bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
@@ -239,13 +282,20 @@ export function AgentEditorPage({
           <div className="flex min-w-0 items-center gap-3">
             <AgentAvatar icon={draft.icon} accentColor={draft.accentColor} size="lg" />
             <div className="min-w-0">
-              <h1 className="truncate text-[24px] font-medium text-foreground">
-                {agent ? agent.name : 'New agent'}
-              </h1>
-              <p className="text-sm text-muted-foreground">
-                {agent ? agentStateLabel(agent) : 'Not saved yet'}
-                {dirty && !readOnly ? ' · Unsaved changes' : ''}
-              </p>
+              <div className="flex min-w-0 items-center gap-2">
+                <h1 className="truncate text-[24px] font-medium text-foreground">
+                  {agent ? agent.name : 'New agent'}
+                </h1>
+                {agent ? (
+                  <Badge variant="outline" className={STATUS_PILL[agent.status].className}>
+                    {STATUS_PILL[agent.status].label}
+                  </Badge>
+                ) : null}
+              </div>
+              {agent?.description ? (
+                <p className="truncate text-sm text-muted-foreground">{agent.description}</p>
+              ) : null}
+              {stateLine ? <p className="text-sm text-muted-foreground">{stateLine}</p> : null}
             </div>
           </div>
           <div className="flex shrink-0 flex-wrap items-center gap-2">
@@ -286,39 +336,54 @@ export function AgentEditorPage({
           </p>
         ) : null}
 
-        <AgentConfigForm
-          draft={draft}
-          disabled={readOnly}
-          modelOptions={modelOptions}
-          connectors={connectors}
-          skills={skills}
-          onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
-        />
-
         {agent ? (
-          <>
-            <AgentKnowledgePanel api={api} agentId={agent.id} editable={!readOnly} />
-            {agent.isOwner ? (
-              <AgentPublishPanel
-                api={api}
-                agent={agent}
-                dirty={dirty}
-                onAgentChange={acceptAgentState}
-                onRestored={acceptAgent}
-              />
-            ) : null}
-            <AgentActivityPanel api={api} agent={agent} />
-            {agent.isOwner ? (
-              <AgentManagePanel
-                api={api}
-                agent={agent}
-                onAgentChange={acceptAgentState}
-                onDeleted={() => router.push(AGENTS_HREF)}
-                onTransferred={() => setAttempt((value) => value + 1)}
-              />
-            ) : null}
-          </>
-        ) : null}
+          <Tabs defaultValue="agent" className="flex flex-col gap-4">
+            <TabsList
+              aria-label="Agent sections"
+              className="h-auto w-full justify-start gap-6 rounded-none border-b border-border bg-transparent p-0"
+            >
+              {AGENT_TABS.map((tab) => (
+                <TabsTrigger
+                  key={tab.value}
+                  value={tab.value}
+                  className="rounded-none border-b-2 border-transparent px-1 py-2 text-base data-[state=active]:border-foreground data-[state=active]:bg-transparent data-[state=active]:shadow-none pointer-coarse:min-h-11"
+                >
+                  {tab.label}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+            <TabsContent value="agent" className="mt-0 flex flex-col gap-6">
+              {configForm}
+              <AgentKnowledgePanel api={api} agentId={agent.id} editable={!readOnly} />
+              {agent.isOwner ? (
+                <AgentPublishPanel
+                  api={api}
+                  agent={agent}
+                  dirty={dirty}
+                  onAgentChange={acceptAgentState}
+                  onRestored={acceptAgent}
+                />
+              ) : null}
+              {agent.isOwner ? (
+                <AgentManagePanel
+                  api={api}
+                  agent={agent}
+                  onAgentChange={acceptAgentState}
+                  onDeleted={() => router.push(AGENTS_HREF)}
+                  onTransferred={() => setAttempt((value) => value + 1)}
+                />
+              ) : null}
+            </TabsContent>
+            <TabsContent value="sessions" className="mt-0">
+              <AgentActivityPanel api={api} agent={agent} />
+            </TabsContent>
+            <TabsContent value="deployments" className="mt-0">
+              <AgentDeploymentsPanel api={api} agent={agent} />
+            </TabsContent>
+          </Tabs>
+        ) : (
+          configForm
+        )}
       </div>
     </div>
   );

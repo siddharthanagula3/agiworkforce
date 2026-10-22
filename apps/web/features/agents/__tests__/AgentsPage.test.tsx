@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -34,6 +34,15 @@ describe('AgentsPage', () => {
     const shared = screen.getByRole('region', { name: 'Shared with you' });
     expect(shared.textContent).toContain('Shared by Ada');
     expect(screen.getAllByRole('link', { name: /^Edit / })).toHaveLength(1);
+  });
+
+  it('lays the agents out as a two-column grid of tiles with one-line descriptions', async () => {
+    render(<AgentsPage api={fakeApi()} />);
+    const own = await screen.findByRole('region', { name: 'Your agents' });
+    expect(within(own).getByRole('list')).toHaveClass('grid', 'grid-cols-1', 'sm:grid-cols-2');
+    const description = within(own).getByText('Turns merged pull requests into release notes');
+    expect(description).toHaveClass('truncate');
+    expect(description).not.toHaveClass('line-clamp-2');
   });
 
   it('starts a chat that runs as the agent and opens it', async () => {

@@ -29,13 +29,13 @@ function AgentListRow({
   onChat: (agent: ManagedCloudAgent) => void;
 }) {
   return (
-    <li className="flex flex-col gap-3 rounded-xl border border-border bg-card p-4 sm:flex-row sm:items-center">
+    <li className="flex min-w-0 flex-col gap-3 rounded-xl border border-border bg-card p-4">
       <div className="flex min-w-0 flex-1 items-start gap-3">
         <AgentAvatar icon={agent.icon} accentColor={agent.accentColor} />
         <div className="min-w-0">
           <h3 className="truncate text-sm font-medium text-foreground">{agent.name}</h3>
           {agent.description ? (
-            <p className="mt-0.5 line-clamp-2 text-sm text-muted-foreground">{agent.description}</p>
+            <p className="mt-0.5 truncate text-sm text-muted-foreground">{agent.description}</p>
           ) : null}
           <p className="mt-1 text-xs text-muted-foreground">{agentStateLabel(agent)}</p>
         </div>
@@ -79,7 +79,7 @@ function AgentSection({
   return (
     <section aria-label={title} className="flex flex-col gap-3">
       <h2 className="text-sm font-medium text-muted-foreground">{title}</h2>
-      <ul className="flex flex-col gap-2">
+      <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {agents.map((agent) => (
           <AgentListRow
             key={agent.id}
@@ -156,7 +156,7 @@ export function AgentsPage({ api = agentsApi }: { api?: AgentsApi }) {
 
   return (
     <div className="min-h-full bg-background text-foreground">
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-8 px-4 py-10 sm:px-6">
+      <div className="mx-auto flex w-full max-w-4xl flex-col gap-8 px-4 py-10 sm:px-6">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
           <div className="space-y-1">
             <h1 className="text-[28px] font-medium text-foreground">Agents</h1>

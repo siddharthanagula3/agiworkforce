@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Badge,
   Button,
@@ -15,6 +15,7 @@ import {
   CalendarClock,
   FolderOpen,
   History,
+  Info,
   MoreHorizontal,
   Pause,
   Pencil,
@@ -43,6 +44,7 @@ import {
   type ScheduleHistoryState,
 } from './ScheduleRunHistory';
 import { scheduleErrorMessage } from '../lib/schedule-error-message';
+import { formatUpcomingRun, upcomingRuns } from '../lib/upcoming-runs';
 
 export type ScheduleOperation = 'toggle' | 'run' | 'delete' | 'approval' | null;
 
@@ -81,6 +83,8 @@ interface ScheduleCardProps {
     decision: ScheduleApprovalDecision,
   ) => void;
 }
+
+const VISIBLE_UPCOMING_RUNS = 4;
 
 const TERMINAL_STATUSES = new Set<ScheduleTask['status']>(['completed', 'expired']);
 
@@ -168,6 +172,7 @@ export function ScheduleCard({
   const canToggle =
     !readOnly && !terminal && (!schedule.isEnabled ? supported : true) && !operation;
   const headingId = `schedule-title-${schedule.id}`;
+  const upcoming = useMemo(() => upcomingRuns(schedule), [schedule]);
   const rawCron =
     taskRecurrence(schedule) === 'custom' && schedule.cronExpression
       ? schedule.cronExpression
@@ -235,12 +240,42 @@ export function ScheduleCard({
               {!supported && <Badge variant="destructive">Unsupported action type</Badge>}
             </div>
 
-            {(schedule.isEnabled ? schedule.nextExecutionAt : true) && (
-              <p className="text-sm text-muted-foreground">
-                {schedule.isEnabled
-                  ? `Next run ${formatRelativeTime(schedule.nextExecutionAt as string)}`
-                  : 'Paused'}
-              </p>
+            {schedule.isEnabled ? (
+              upcoming.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-2 text-sm">
+                  <span className="inline-flex items-center gap-1 text-muted-foreground">
+                    Next:
+                    <span title={`Times are shown in ${schedule.timezone}`}>
+                      <Info className="h-4 w-4" aria-hidden="true" />
+                      <span className="sr-only">{`Times are shown in ${schedule.timezone}`}</span>
+                    </span>
+                  </span>
+                  <ul
+                    className="flex flex-wrap items-center gap-2"
+                    aria-label={`Next runs for ${schedule.name}`}
+                    title={`Next run ${formatRelativeTime(upcoming[0]!.toISOString())}`}
+                  >
+                    {upcoming.slice(0, VISIBLE_UPCOMING_RUNS).map((run) => (
+                      <li
+                        key={run.toISOString()}
+                        className="rounded-full border border-border px-2.5 py-0.5 text-foreground"
+                      >
+                        {formatUpcomingRun(run, schedule.timezone)}
+                      </li>
+                    ))}
+                    {upcoming.length > VISIBLE_UPCOMING_RUNS ? (
+                      <li
+                        className="rounded-full border border-border px-2.5 py-0.5 text-muted-foreground"
+                        aria-label={`${upcoming.length - VISIBLE_UPCOMING_RUNS} more upcoming runs`}
+                      >
+                        +{upcoming.length - VISIBLE_UPCOMING_RUNS}
+                      </li>
+                    ) : null}
+                  </ul>
+                </div>
+              ) : null
+            ) : (
+              <p className="text-sm text-muted-foreground">Paused</p>
             )}
 
             {schedule.description && (
