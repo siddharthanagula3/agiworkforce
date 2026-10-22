@@ -4096,7 +4096,7 @@
       "doc": "account-security",
       "section": "Active sessions",
       "kind": "prose",
-      "sentence": "**Log out of all devices** ends every session including this one, so you will need to sign in again.",
+      "sentence": "**Log out of all devices**, in Settings, Security, ends every session including this one, so you will need to sign in again.",
       "implementation": ["apps/web/app/api/settings/sessions/route.ts"],
       "proof": [
         {
@@ -5142,7 +5142,7 @@
       "doc": "keyboard-shortcuts",
       "section": "The list",
       "kind": "rows",
-      "rows": 13,
+      "rows": 20,
       "implementation": [
         "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts#KEYBOARD_SHORTCUT_DOCS"
       ],
