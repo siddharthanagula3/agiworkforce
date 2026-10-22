@@ -43,6 +43,7 @@ import { MermaidDiagram } from '@agiworkforce/unified-chat';
 import { useMounted } from '@shared/hooks/useMounted';
 import { escapeHTML } from '@shared/utils/html-sanitizer';
 import { INSPIRATION, inspirationPath, type InspirationCard } from './inspiration';
+import { useSharedWithYou } from './use-shared-with-you';
 
 interface ArtifactCategory {
   id: string;
@@ -1023,7 +1024,106 @@ function SectionHeading({ children }: { children: React.ReactNode }) {
   );
 }
 
-type ScopeId = 'all' | 'yours';
+type ScopeId = 'all' | 'yours' | 'shared';
+
+const SHARED_KIND_TYPES: Record<string, ArtifactData['type']> = {
+  html: 'html',
+  react: 'react',
+  svg: 'svg',
+  mermaid: 'mermaid',
+  code: 'code',
+  markdown: 'document',
+  text: 'document',
+};
+
+interface SharedGalleryArtifact {
+  token: string;
+  title: string;
+  type: ArtifactData['type'];
+  updatedAt: Date;
+}
+
+function SharedArtifactGrid({
+  artifacts,
+  gridStyle,
+  onOpen,
+}: {
+  artifacts: SharedGalleryArtifact[];
+  gridStyle: React.CSSProperties;
+  onOpen: (token: string) => void;
+}) {
+  return (
+    <div style={gridStyle}>
+      {artifacts.map((artifact) => (
+        <ArtifactCard
+          key={artifact.token}
+          title={artifact.title}
+          language={artifact.type}
+          subtitle={`Updated ${relativeTime(artifact.updatedAt)}`}
+          type={artifact.type}
+          onClick={() => onOpen(artifact.token)}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SharedNotice({
+  title,
+  detail,
+  action,
+}: {
+  title: string;
+  detail?: string;
+  action?: { label: string; onClick: () => void };
+}) {
+  return (
+    <div
+      role="status"
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        gap: 'var(--space-3)',
+        padding: 'var(--space-9) var(--space-5)',
+        textAlign: 'center',
+      }}
+    >
+      <LibraryBig size={32} color="var(--agi-ink-faint)" />
+      <p
+        style={{
+          fontSize: 'var(--agi-text-md)',
+          fontWeight: 500,
+          color: 'var(--agi-ink-2)',
+          margin: 0,
+        }}
+      >
+        {title}
+      </p>
+      {detail && (
+        <p style={{ fontSize: 'var(--agi-text-sm)', color: 'var(--agi-ink-quiet)', margin: 0 }}>
+          {detail}
+        </p>
+      )}
+      {action && (
+        <button
+          type="button"
+          onClick={action.onClick}
+          className="agi-ds-btn"
+          style={{
+            marginTop: 'var(--space-2)',
+            borderRadius: 'var(--agi-radius-pill)',
+            background: 'var(--agi-bg-3)',
+            color: 'var(--agi-ink)',
+          }}
+        >
+          {action.label}
+        </button>
+      )}
+    </div>
+  );
+}
 type OverlayState =
   { kind: 'none' } | { kind: 'category' } | { kind: 'wizard'; category: ArtifactCategory };
 
@@ -1142,6 +1242,20 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
     return [...byId.values()].sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
   }, [artifacts, indexedArtifacts]);
 
+  const shared = useSharedWithYou();
+  const activeScope: ScopeId = scope === 'shared' && isSignedIn !== true ? 'all' : scope;
+
+  const sharedArtifacts = useMemo<SharedGalleryArtifact[]>(
+    () =>
+      shared.items.map((item) => ({
+        token: item.token,
+        title: item.title || 'Untitled artifact',
+        type: SHARED_KIND_TYPES[item.kind] ?? 'document',
+        updatedAt: new Date(item.updatedAt),
+      })),
+    [shared.items],
+  );
+
   const yoursLoading = !mounted || !authLoaded || (isSignedIn === true && !indexLoaded);
 
   const normalizedQuery = query.trim().toLowerCase();
@@ -1155,6 +1269,16 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
       return matchesSearch(normalizedQuery, [artifact.title, artifact.language, artifact.type]);
     });
   }, [sortedArtifacts, normalizedQuery, typeFilter, dateFilter]);
+
+  const visibleShared = useMemo(() => {
+    const window = dateFilter === 'all' ? null : DATE_WINDOW_MS[dateFilter];
+    const cutoff = window === null ? null : Date.now() - window;
+    return sharedArtifacts.filter((artifact) => {
+      if (typeFilter !== 'all' && artifact.type !== typeFilter) return false;
+      if (cutoff !== null && artifact.updatedAt.getTime() < cutoff) return false;
+      return matchesSearch(normalizedQuery, [artifact.title, artifact.type]);
+    });
+  }, [sharedArtifacts, normalizedQuery, typeFilter, dateFilter]);
 
   const visibleInspiration = useMemo(
     () =>
@@ -1171,11 +1295,15 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
     [normalizedQuery, typeFilter, dateFilter],
   );
 
-  const typeOptions = useMemo(() => {
-    const source: ArtifactData['type'][] = sortedArtifacts.map((a) => a.type);
-    if (scope === 'all') source.push(...INSPIRATION.map((c) => c.type));
+  const typesInScope = (target: ScopeId): ArtifactData['type'][] => {
+    const source: ArtifactData['type'][] = [];
+    if (target !== 'shared') source.push(...sortedArtifacts.map((a) => a.type));
+    if (target === 'all') source.push(...INSPIRATION.map((c) => c.type));
+    if (target !== 'yours') source.push(...sharedArtifacts.map((a) => a.type));
     return [...new Set(source)].sort();
-  }, [scope, sortedArtifacts]);
+  };
+
+  const typeOptions = typesInScope(activeScope);
 
   const filterSummary =
     [
@@ -1197,11 +1325,7 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
 
   const selectScope = (next: ScopeId) => {
     setScope(next);
-    if (
-      next === 'yours' &&
-      typeFilter !== 'all' &&
-      !sortedArtifacts.some((artifact) => artifact.type === typeFilter)
-    ) {
+    if (typeFilter !== 'all' && !typesInScope(next).includes(typeFilter)) {
       setTypeFilter('all');
     }
   };
@@ -1212,6 +1336,10 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
       return;
     }
     setOverlay({ kind: 'wizard', category });
+  };
+
+  const openShared = (token: string) => {
+    router.push(`/shared-artifact/${encodeURIComponent(token)}`);
   };
 
   const handleLaunch = (prompt: string) => {
@@ -1376,17 +1504,92 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
               marginBottom: 'var(--space-6)',
             }}
           >
-            <ScopeButton active={scope === 'all'} onClick={() => selectScope('all')}>
+            <ScopeButton active={activeScope === 'all'} onClick={() => selectScope('all')}>
               All
             </ScopeButton>
-            <ScopeButton active={scope === 'yours'} onClick={() => selectScope('yours')}>
+            <ScopeButton active={activeScope === 'yours'} onClick={() => selectScope('yours')}>
               Yours
             </ScopeButton>
+            {isSignedIn === true && (
+              <ScopeButton active={activeScope === 'shared'} onClick={() => selectScope('shared')}>
+                Shared with you
+              </ScopeButton>
+            )}
           </div>
         </div>
 
         <div className="agi-ds-container" style={{ paddingBottom: 'var(--space-9)' }}>
-          {yoursLoading ? (
+          {activeScope === 'shared' ? (
+            !shared.loaded ? (
+              <div style={cardGridStyle}>
+                {Array.from({ length: 6 }).map((_, i) => (
+                  <SkeletonCard key={i} />
+                ))}
+              </div>
+            ) : shared.error && sharedArtifacts.length === 0 ? (
+              <SharedNotice
+                title={shared.error}
+                action={{ label: 'Try again', onClick: shared.retry }}
+              />
+            ) : !shared.emailVerified ? (
+              <SharedNotice
+                title="Verify your email to see artifacts shared with you."
+                detail="Sharing matches the confirmed email on your account."
+              />
+            ) : sharedArtifacts.length === 0 ? (
+              <SharedNotice
+                title="Artifacts people share with you will appear here."
+                detail="When someone invites your email to a published artifact, it shows up here."
+              />
+            ) : visibleShared.length === 0 && !shared.hasMore ? (
+              <NoMatchesState onClear={clearFilters} />
+            ) : (
+              <>
+                <SharedArtifactGrid
+                  artifacts={visibleShared}
+                  gridStyle={cardGridStyle}
+                  onOpen={openShared}
+                />
+                {shared.error && (
+                  <p
+                    role="alert"
+                    style={{
+                      fontSize: 'var(--agi-text-sm)',
+                      color: 'var(--agi-ink-quiet)',
+                      margin: 'var(--space-4) 0 0',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {shared.error}
+                  </p>
+                )}
+                {shared.hasMore && (
+                  <div
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'center',
+                      marginTop: 'var(--space-6)',
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={shared.loadMore}
+                      disabled={shared.loadingMore}
+                      aria-busy={shared.loadingMore}
+                      className="agi-ds-btn"
+                      style={{
+                        borderRadius: 'var(--agi-radius-pill)',
+                        background: 'var(--agi-bg-3)',
+                        color: 'var(--agi-ink)',
+                      }}
+                    >
+                      {shared.loadingMore ? 'Loading...' : 'Load more'}
+                    </button>
+                  </div>
+                )}
+              </>
+            )
+          ) : yoursLoading ? (
             <div style={cardGridStyle}>
               {Array.from({ length: 6 }).map((_, i) => (
                 <SkeletonCard key={i} />
@@ -1440,7 +1643,8 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
               </button>
             </div>
           ) : visibleArtifacts.length === 0 &&
-            (scope === 'yours' || visibleInspiration.length === 0) ? (
+            (activeScope === 'yours' ||
+              (visibleInspiration.length === 0 && visibleShared.length === 0)) ? (
             <NoMatchesState onClear={clearFilters} />
           ) : visibleArtifacts.length > 0 ? (
             <div style={cardGridStyle}>
@@ -1466,7 +1670,18 @@ export function GalleryClient({ chrome = 'marketing' }: GalleryClientProps) {
             </div>
           ) : null}
 
-          {scope === 'all' && visibleInspiration.length > 0 && (
+          {activeScope === 'all' && visibleShared.length > 0 && (
+            <section aria-label="Shared with you">
+              <SectionHeading>Shared with you</SectionHeading>
+              <SharedArtifactGrid
+                artifacts={visibleShared}
+                gridStyle={cardGridStyle}
+                onOpen={openShared}
+              />
+            </section>
+          )}
+
+          {activeScope === 'all' && visibleInspiration.length > 0 && (
             <section aria-label="Inspiration">
               <SectionHeading>Inspiration</SectionHeading>
               <div style={cardGridStyle}>

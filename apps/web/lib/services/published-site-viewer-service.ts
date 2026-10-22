@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { ManagedCloudPublishedArtifactViewer } from '@agiworkforce/cloud-contracts';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { buildPage, keysetSql, type KeysetCursor, type Page } from '@/lib/identity/pagination';
 import {
   PUBLISHED_TOKEN_REGEX,
   rowToPublishedArtifact,
@@ -101,4 +102,78 @@ export async function getInvitedReadableArtifactByToken(
     [token],
   );
   return row ? rowToPublishedArtifact(row) : null;
+}
+
+export interface ArtifactSharedWithViewer {
+  token: string;
+  title: string;
+  kind: string;
+  updatedAt: string;
+}
+
+interface SharedWithViewerRow {
+  id: string;
+  token: string;
+  title: string;
+  kind: string;
+  updated_at: string | Date;
+  page_sort_key: string;
+}
+
+const SHARED_SORT_COLUMN = 'page_sort_key';
+const SHARED_SORT_KEY_FORMAT = `'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'`;
+const SHARED_SORT_KEY_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{6}Z$/;
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+export function isSharedWithViewerCursor(cursor: KeysetCursor): boolean {
+  return SHARED_SORT_KEY_PATTERN.test(cursor.sortValue) && UUID_PATTERN.test(cursor.id);
+}
+
+export async function listArtifactsSharedWithViewer(
+  db: DatabaseAdapter,
+  input: { userId: string; verifiedEmail: string; limit: number; cursor: KeysetCursor | null },
+): Promise<Page<ArtifactSharedWithViewer>> {
+  const params: unknown[] = [
+    input.verifiedEmail.trim().toLowerCase(),
+    input.userId,
+    input.limit + 1,
+  ];
+  const keyset = keysetSql({
+    sortColumn: SHARED_SORT_COLUMN,
+    idColumn: 'id',
+    cursor: input.cursor,
+    firstParamIndex: params.length + 1,
+  });
+  params.push(...keyset.params);
+  const rows = await db.query<SharedWithViewerRow>(
+    `select id, token, title, kind, updated_at, ${SHARED_SORT_COLUMN} from (
+       select artifact.id, artifact.token, artifact.title, artifact.kind, artifact.updated_at,
+              to_char(artifact.updated_at at time zone 'utc', ${SHARED_SORT_KEY_FORMAT})
+                as ${SHARED_SORT_COLUMN}
+         from public.published_artifact_viewers viewer
+         join public.published_artifacts artifact
+           on artifact.id = viewer.published_artifact_id
+        where viewer.email = $1
+          and artifact.visibility = 'invited'
+          and artifact.user_id <> $2
+     ) shared
+     ${keyset.where ? `where ${keyset.where}` : ''}
+     ${keyset.orderBy}
+     limit $3`,
+    params,
+  );
+  const page = buildPage(rows, input.limit, (row) => ({
+    sortValue: row.page_sort_key,
+    id: row.id,
+  }));
+  return {
+    items: page.items.map((row) => ({
+      token: row.token,
+      title: row.title,
+      kind: row.kind,
+      updatedAt: iso(row.updated_at),
+    })),
+    hasMore: page.hasMore,
+    nextCursor: page.nextCursor,
+  };
 }

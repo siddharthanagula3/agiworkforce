@@ -4,6 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import type { IndexedArtifact } from '@/features/chat/hooks/use-artifact-index';
 import type { Artifact } from '@/features/chat/stores/artifacts-store';
+import type { SharedWithYouArtifact } from './use-shared-with-you';
 import type { MermaidDiagramProps, MermaidRenderResult } from '@agiworkforce/unified-chat';
 
 type UnifiedChatModule = typeof import('@agiworkforce/unified-chat');
@@ -25,6 +26,21 @@ vi.mock('@/features/chat/hooks/use-artifact-index', () => ({
 }));
 
 let storeArtifacts: Artifact[] = [];
+
+const sharedState = {
+  items: [] as SharedWithYouArtifact[],
+  loaded: true,
+  error: null as string | null,
+  emailVerified: true,
+  hasMore: false,
+  loadingMore: false,
+  loadMore: vi.fn(),
+  retry: vi.fn(),
+};
+
+vi.mock('./use-shared-with-you', () => ({
+  useSharedWithYou: () => sharedState,
+}));
 
 vi.mock('@/features/chat/stores/artifacts-store', () => ({
   isGeneratedFileArtifactId: (id: string) => id.startsWith('genfile-'),
@@ -76,6 +92,13 @@ const SCRIPT_SOURCE = 'rate = hours < 40\nprint("<script>alert(1)</script>")';
 
 beforeEach(() => {
   push.mockReset();
+  sharedState.items = [];
+  sharedState.loaded = true;
+  sharedState.error = null;
+  sharedState.emailVerified = true;
+  sharedState.hasMore = false;
+  sharedState.loadMore.mockReset();
+  sharedState.retry.mockReset();
   indexedArtifacts = [];
   mermaidResult = { svg: '<svg></svg>' };
   storeArtifacts = [
@@ -364,5 +387,87 @@ describe('GalleryClient card thumbnails', () => {
     expect(styles).toMatch(
       /\.agi-gallery-card:hover,\s*\.agi-gallery-card:focus-visible\s*\{\s*border-color:\s*var\(--agi-rule-strong\)/,
     );
+  });
+});
+
+describe('GalleryClient shared with you', () => {
+  const SHARED: SharedWithYouArtifact = {
+    token: 'AbCdEfGhIjKlMnOpQrStUvWx',
+    title: 'Quarterly plan',
+    kind: 'markdown',
+    updatedAt: new Date().toISOString(),
+  };
+
+  it('offers a third Shared with you segment after All and Yours', () => {
+    render(<GalleryClient />);
+    const group = screen.getByRole('group', { name: 'Show artifacts' });
+    expect(
+      within(group)
+        .getAllByRole('button')
+        .map((b) => b.textContent),
+    ).toEqual(['All', 'Yours', 'Shared with you']);
+  });
+
+  it('lists only shared artifacts and opens one at its invite page', async () => {
+    const user = userEvent.setup();
+    sharedState.items = [SHARED];
+    render(<GalleryClient />);
+
+    await user.click(screen.getByRole('button', { name: 'Shared with you' }));
+
+    expect(screen.getByRole('button', { name: 'Shared with you' })).toHaveAttribute(
+      'aria-pressed',
+      'true',
+    );
+    expect(screen.queryByText('Payroll script')).not.toBeInTheDocument();
+    expect(screen.queryByRole('region', { name: 'Inspiration' })).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /Quarterly plan/ }));
+    expect(push).toHaveBeenCalledWith('/shared-artifact/AbCdEfGhIjKlMnOpQrStUvWx');
+  });
+
+  it('shows shared artifacts as their own section under All', () => {
+    sharedState.items = [SHARED];
+    render(<GalleryClient />);
+    const section = screen.getByRole('region', { name: 'Shared with you' });
+    expect(within(section).getByText('Quarterly plan')).toBeInTheDocument();
+  });
+
+  it('says plainly when nothing has been shared', async () => {
+    const user = userEvent.setup();
+    render(<GalleryClient />);
+    await user.click(screen.getByRole('button', { name: 'Shared with you' }));
+    expect(
+      screen.getByText('Artifacts people share with you will appear here.'),
+    ).toBeInTheDocument();
+  });
+
+  it('asks for a verified email instead of showing an empty list', async () => {
+    const user = userEvent.setup();
+    sharedState.emailVerified = false;
+    render(<GalleryClient />);
+    await user.click(screen.getByRole('button', { name: 'Shared with you' }));
+    expect(
+      screen.getByText('Verify your email to see artifacts shared with you.'),
+    ).toBeInTheDocument();
+  });
+
+  it('shows a failed read with a retry', async () => {
+    const user = userEvent.setup();
+    sharedState.error = 'Shared artifacts could not be loaded';
+    render(<GalleryClient />);
+    await user.click(screen.getByRole('button', { name: 'Shared with you' }));
+    expect(screen.getByText('Shared artifacts could not be loaded')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(sharedState.retry).toHaveBeenCalledTimes(1);
+  });
+
+  it('loads the next page on request', async () => {
+    const user = userEvent.setup();
+    sharedState.items = [SHARED];
+    sharedState.hasMore = true;
+    render(<GalleryClient />);
+    await user.click(screen.getByRole('button', { name: 'Shared with you' }));
+    await user.click(screen.getByRole('button', { name: 'Load more' }));
+    expect(sharedState.loadMore).toHaveBeenCalledTimes(1);
   });
 });
