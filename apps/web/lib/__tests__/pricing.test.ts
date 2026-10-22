@@ -111,7 +111,7 @@ describe('getPlanFromPriceId', () => {
     const { PRICING_CONFIG } = await importPricingWithEnv({
       STRIPE_PRICE_PRO_MONTHLY: 'price_pro_monthly_abc',
       STRIPE_PRICE_MAX_MONTHLY: 'price_max_monthly_abc',
-      STRIPE_PRICE_MAX_15X_MONTHLY: 'price_max_15x_monthly_abc',
+      STRIPE_PRICE_MAX_20X_MONTHLY: 'price_max_15x_monthly_abc',
     });
     expect(PRICING_CONFIG.getPlanFromPriceId('price_pro_monthly_abc')).toBe('pro');
     expect(PRICING_CONFIG.getPlanFromPriceId('price_max_monthly_abc')).toBe('max');
@@ -253,7 +253,7 @@ describe('getConfiguredPriceId', () => {
       STRIPE_PRICE_PRO_MONTHLY: 'price_pro_monthly',
       STRIPE_PRICE_PRO_YEARLY: 'price_pro_yearly',
       STRIPE_PRICE_MAX_MONTHLY: 'price_max_monthly',
-      STRIPE_PRICE_MAX_15X_MONTHLY: 'price_max_15x_monthly',
+      STRIPE_PRICE_MAX_20X_MONTHLY: 'price_max_15x_monthly',
     });
 
     expect(getConfiguredPriceId('basic', 'monthly')).toBe('price_basic_usd');

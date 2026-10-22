@@ -59,8 +59,8 @@ function buildPriceIdMapping(): Record<string, PriceMappingEntry> {
   registerPrice(mapping, maxMonthly, { tier: 'max', interval: 'monthly' });
   registerPrice(mapping, maxMonthlyInr, { tier: 'max', interval: 'monthly' });
 
-  const max15xMonthly = process.env['STRIPE_PRICE_MAX_15X_MONTHLY'];
-  const max15xMonthlyInr = process.env['STRIPE_PRICE_MAX_15X_MONTHLY_INR'];
+  const max15xMonthly = process.env['STRIPE_PRICE_MAX_20X_MONTHLY'];
+  const max15xMonthlyInr = process.env['STRIPE_PRICE_MAX_20X_MONTHLY_INR'];
   registerPrice(mapping, max15xMonthly, { tier: 'max_15x', interval: 'monthly' });
   registerPrice(mapping, max15xMonthlyInr, { tier: 'max_15x', interval: 'monthly' });
 

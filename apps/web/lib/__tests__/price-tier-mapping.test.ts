@@ -9,7 +9,7 @@ describe('price tier mapping', () => {
     'STRIPE_PRICE_PRO_MONTHLY',
     'STRIPE_PRICE_PRO_YEARLY',
     'STRIPE_PRICE_MAX_MONTHLY',
-    'STRIPE_PRICE_MAX_15X_MONTHLY',
+    'STRIPE_PRICE_MAX_20X_MONTHLY',
     'STRIPE_PRICE_TEAM_MONTHLY_USD',
     'STRIPE_PRICE_TEAM_MONTHLY_INR',
     'STRIPE_PRICE_TEAM_YEARLY_USD',
@@ -29,7 +29,7 @@ describe('price tier mapping', () => {
   });
 
   it('maps and validates the Max 20x Stripe price as the canonical tier', async () => {
-    process.env['STRIPE_PRICE_MAX_15X_MONTHLY'] = 'price_max_15x_monthly';
+    process.env['STRIPE_PRICE_MAX_20X_MONTHLY'] = 'price_max_15x_monthly';
     const { getPlanTierFromPriceId, isValidPlanTier } = await import('../price-tier-mapping');
 
     expect(getPlanTierFromPriceId('price_max_15x_monthly')).toBe('max_15x');

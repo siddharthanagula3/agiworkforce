@@ -80,7 +80,7 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_PRICE_BASIC_MONTHLY_INR',
     'STRIPE_PRICE_PRO_MONTHLY',
     'STRIPE_PRICE_MAX_MONTHLY',
-    'STRIPE_PRICE_MAX_15X_MONTHLY',
+    'STRIPE_PRICE_MAX_20X_MONTHLY',
   ];
 
   const optionalPriceVars = [
@@ -90,7 +90,7 @@ export function validateRequiredEnvVars(): ValidationResult {
     'STRIPE_PRICE_TEAM_YEARLY_INR',
     'STRIPE_PRICE_PRO_MONTHLY_INR',
     'STRIPE_PRICE_MAX_MONTHLY_INR',
-    'STRIPE_PRICE_MAX_15X_MONTHLY_INR',
+    'STRIPE_PRICE_MAX_20X_MONTHLY_INR',
     'STRIPE_PRICE_TEAM_PREMIUM_MONTHLY_USD',
     'STRIPE_PRICE_TEAM_PREMIUM_YEARLY_USD',
     'STRIPE_PRICE_ENTERPRISE_MONTHLY',
@@ -1294,14 +1294,14 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     requiredIn: [],
     description: 'the GST-inclusive Stripe price the max monthly plan is charged at in INR',
   }),
-  published('STRIPE_PRICE_MAX_15X_MONTHLY_INR', {
+  published('STRIPE_PRICE_MAX_20X_MONTHLY_INR', {
     type: 'string',
     owner: 'apps/web/lib/billing',
     defaultValue: null,
     requiredIn: [],
     description: 'the GST-inclusive Stripe price the higher max monthly tier is charged at in INR',
   }),
-  published('STRIPE_PRICE_MAX_15X_MONTHLY', {
+  published('STRIPE_PRICE_MAX_20X_MONTHLY', {
     type: 'string',
     owner: 'apps/web/lib/billing',
     defaultValue: null,

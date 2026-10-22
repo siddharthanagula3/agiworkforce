@@ -180,7 +180,7 @@ describe('public billing truth', () => {
       'STRIPE_PRICE_PRO_MONTHLY',
       'STRIPE_PRICE_PRO_YEARLY',
       'STRIPE_PRICE_MAX_MONTHLY',
-      'STRIPE_PRICE_MAX_15X_MONTHLY',
+      'STRIPE_PRICE_MAX_20X_MONTHLY',
     ];
 
     for (const variable of expected) expect(example).toContain(`${variable}=price_...`);
