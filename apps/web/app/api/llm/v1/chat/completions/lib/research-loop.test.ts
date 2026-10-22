@@ -291,6 +291,49 @@ describe('SourceAggregator', () => {
 
     expect(agg.add({ url: '/api/files/abc', title: 'My saved notes' })).toBe(true);
   });
+
+  it('drops a search redirect that resolves to a blocked site and never reads that site', async () => {
+    dnsMocks.lookup.mockResolvedValue([{ address: '93.184.216.34', family: 4 }]);
+    const requested: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: unknown) => {
+        const url = String(input instanceof Request ? input.url : input);
+        requested.push(url);
+        if (url.includes('grounding-api-redirect/blocked-hop')) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: 'https://news.blocked.example/story' },
+          });
+        }
+        if (url.includes('grounding-api-redirect/open-hop')) {
+          return new Response(null, {
+            status: 302,
+            headers: { location: 'https://open.example/story' },
+          });
+        }
+        return new Response('<html><head><title>Open story</title></head></html>', {
+          status: 200,
+          headers: { 'content-type': 'text/html' },
+        });
+      }),
+    );
+    try {
+      const agg = new SourceAggregator(createResearchDomainPolicy({ deny: ['blocked.example'] }));
+      const router = 'https://vertexaisearch.cloud.google.com/grounding-api-redirect';
+      agg.add({ url: `${router}/blocked-hop`, title: 'blocked.example' });
+      agg.add({ url: `${router}/open-hop`, title: 'open.example' });
+
+      await agg.enrichTitles();
+
+      expect(agg.list().map((source) => source.url)).toEqual(['https://open.example/story']);
+      expect(agg.list()[0]).toMatchObject({ position: 1, title: 'Open story' });
+      expect(agg.toPromptList()).not.toContain('blocked.example');
+      expect(requested.some((url) => url.includes('blocked.example'))).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 });
 
 describe('rankResearchResults', () => {

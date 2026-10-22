@@ -920,7 +920,21 @@ export class SourceAggregator {
     // the one ingestion hop that may make a network call, and written back
     // under the ORIGINAL key: positions are already visible to the model, and
     // re-keying could merge two entries and renumber markers already written.
-    const publisherUrls = await resolveRoutingRedirectUrls(entries.map(([, value]) => value));
+    const resolvedUrls = await resolveRoutingRedirectUrls(entries.map(([, value]) => value));
+    // A redirect can land on a site the domain rules refuse. The router said
+    // where it points without that page being read; the page is never fetched
+    // for metadata and the source leaves the citation list.
+    const kept: Array<[string, ResearchSourceEntry]> = [];
+    const publisherUrls: ResearchSourceEntry[] = [];
+    entries.forEach(([key, value], i) => {
+      const resolved = resolvedUrls[i] ?? value;
+      if (resolved.url !== value.url && !researchDomainAllowed(this.domainPolicy, resolved.url)) {
+        this.byUrl.delete(key);
+        return;
+      }
+      kept.push([key, value]);
+      publisherUrls.push(resolved);
+    });
     // A grounded entry's title is its publisher's domain, which the card shows
     // anyway; blanking it is what lets the page's own title, description and
     // date fill the three fields a searched source already has.
@@ -935,7 +949,7 @@ export class SourceAggregator {
       // headed by its publisher reads better than one headed by nothing.
       entry.title ? entry : { ...entry, title: publisherUrls[index]?.title ?? '' },
     );
-    entries.forEach(([key], i) => {
+    kept.forEach(([key], i) => {
       const value = enriched[i];
       if (value) this.byUrl.set(key, value);
     });
