@@ -7,8 +7,10 @@ export type ShortcutCategory = 'navigation' | 'conversation' | 'message' | 'ui' 
  * `app` bindings are matched on the window, `composer` bindings by the message
  * field's own key handler. An unmodified `app` binding never fires inside a text
  * field, so it can share a key with a `composer` binding without colliding.
+ * `code` bindings belong to the Code workspace, which matches them itself, so
+ * they are listed here but no window-level handler answers them.
  */
-export type ShortcutScope = 'app' | 'composer';
+export type ShortcutScope = 'app' | 'composer' | 'code';
 
 export interface ShortcutChord {
   key: string;
@@ -229,6 +231,15 @@ export const CHAT_SHORTCUTS: readonly ShortcutDefinition[] = [
     description: 'Toggle dictation',
     category: 'composer',
     scope: 'composer',
+  },
+  {
+    key: '`',
+    control: true,
+    id: 'code-terminal-toggle',
+    firesInEditable: true,
+    description: 'Show or hide the terminal',
+    category: 'ui',
+    scope: 'code',
   },
 ];
 

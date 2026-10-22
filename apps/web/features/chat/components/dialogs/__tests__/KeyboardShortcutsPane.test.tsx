@@ -178,6 +178,19 @@ describe('KeyboardShortcutsPane', () => {
     expect(screen.getByText('Copy last message')).toBeInTheDocument();
   });
 
+  it('finds the Code terminal toggle by its keys and keeps it out of the recorder', () => {
+    renderPane();
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search shortcuts' }), {
+      target: { value: 'ctrl+`' },
+    });
+    const code = screen.getByRole('region', { name: 'Code' });
+    expect(within(code).getByText('Show or hide the terminal')).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /^Change keys for Show or hide the terminal/ }),
+    ).toBeNull();
+    expect(screen.queryByRole('region', { name: 'App' })).not.toBeInTheDocument();
+  });
+
   it('says so when nothing matches and restores the list when the query is cleared', () => {
     renderPane();
     const search = screen.getByRole('searchbox', { name: 'Search shortcuts' });

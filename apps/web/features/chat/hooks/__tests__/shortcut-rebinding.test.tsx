@@ -96,10 +96,10 @@ describe('recorded shortcut keys', () => {
     ).toEqual({ ok: true });
   });
 
-  it('refuse Ctrl+`, which opens the terminal in Code', () => {
+  it('refuse Ctrl+`, which toggles the terminal in Code', () => {
     expect(
       checkShortcutBinding(copyDoc, { key: '`', ctrl: true, meta: true }, KEYBOARD_SHORTCUT_DOCS),
-    ).toEqual({ ok: false, reason: 'taken', by: 'Terminal in Code' });
+    ).toEqual({ ok: false, reason: 'taken', by: 'Show or hide the terminal' });
   });
 
   it('reserve nothing a default binding already uses', () => {

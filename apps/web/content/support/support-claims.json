@@ -5142,7 +5142,41 @@
       "doc": "keyboard-shortcuts",
       "section": "The list",
       "kind": "rows",
-      "rows": 20,
+      "rows": 13,
+      "implementation": [
+        "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts#KEYBOARD_SHORTCUT_DOCS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/support/__tests__/shortcut-article-drift.test.ts",
+          "name": "lists exactly the registered shortcuts with the same keys and descriptions"
+        }
+      ]
+    },
+    {
+      "id": "composer-shortcuts-table-matches-the-registry",
+      "doc": "keyboard-shortcuts",
+      "section": "In the message composer",
+      "kind": "rows",
+      "rows": 7,
+      "implementation": [
+        "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts#KEYBOARD_SHORTCUT_DOCS"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/support/__tests__/shortcut-article-drift.test.ts",
+          "name": "lists exactly the registered shortcuts with the same keys and descriptions"
+        }
+      ]
+    },
+    {
+      "id": "code-shortcuts-table-matches-the-registry",
+      "doc": "keyboard-shortcuts",
+      "section": "In a local Code session",
+      "kind": "rows",
+      "rows": 1,
       "implementation": [
         "apps/web/features/chat/hooks/use-keyboard-shortcuts.ts#KEYBOARD_SHORTCUT_DOCS"
       ],

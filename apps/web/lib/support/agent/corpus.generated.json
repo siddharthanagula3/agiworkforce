@@ -2,7 +2,7 @@
   "version": 1,
   "generatedBy": "scripts/build-support-corpus.mjs",
   "documentCount": 45,
-  "chunkCount": 252,
+  "chunkCount": 254,
   "documents": [
     {
       "id": "account-security",
@@ -92,7 +92,7 @@
           "ordinal": 8,
           "heading": "Active sessions",
           "headingPath": "Passkeys, two-factor and active sessions › Active sessions",
-          "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices** ends every session including this one, so you will\nneed to sign in again. It asks first and names that consequence.\n\nA session also ends on its own once it reaches its maximum age, counted from\nwhen you signed in rather than from your last request, so a session that is in\nconstant use still ends and asks you to sign in again. The maximum is 30 days.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
+          "text": "Settings, Account lists every signed-in session with its device, browser,\nlocation, when it was created and when it was last active, and marks the one\nyou are using. **Revoke** signs that device out immediately; it has to sign in\nagain to regain access. If the list is truncated it says how many of the total\nit is showing.\n\n**Log out of all devices**, in Settings, Security, ends every session including\nthis one, so you will need to sign in again. It asks first and names that consequence.\n\nA session also ends on its own once it reaches its maximum age, counted from\nwhen you signed in rather than from your last request, so a session that is in\nconstant use still ends and asks you to sign in again. The maximum is 30 days.\n\nSessions are reported by your account provider across devices. Revoke anything\nyou do not recognise."
         },
         {
           "id": "account-security#9",
@@ -238,7 +238,7 @@
         "save to project",
         "version conflict"
       ],
-      "updated": "2026-09-17",
+      "updated": "2026-10-22",
       "source": "content/support/artifacts.md",
       "chunks": [
         {
@@ -267,7 +267,7 @@
           "ordinal": 3,
           "heading": "Publishing",
           "headingPath": "Artifacts: documents and code AGI writes for you › Publishing",
-          "text": "Publishing an artifact gives it a link. The audience works like a shared\nconversation: anyone with the link, or your workspace only, and the panel\nconfirms which is in force. Changing it later asks first (\"Make this public\nagain?\", \"Limit this to your workspace?\").\n\nSettings holds a **Published artifacts** list with **Unpublish** on\neach one. Unpublishing stops the link working."
+          "text": "Publishing an artifact gives it a link. Under **Who can open this** you choose\none of three audiences, and the panel confirms which is in force.\n\n- **Anyone with the link** opens it without signing in.\n- **Everyone in this workspace** limits it to your workspace members, and the\n  choice appears only when you belong to a workspace.\n- **Only people you invite** limits it to the people you add by email, who sign\n  in to open it. The invite list sits under the link.\n\nSwitching audiences keeps the same link. Changing it later asks first (\"Make\nthis public again?\", \"Limit this to your workspace?\", \"Limit this to people you\ninvite?\") and says who loses access.\n\nSettings holds a **Published artifacts** list with **Unpublish** on\neach one. Unpublishing stops the link working."
         },
         {
           "id": "artifacts#4",
@@ -1408,9 +1408,11 @@
         "toggle sidebar",
         "escape",
         "regenerate shortcut",
-        "disable shortcut"
+        "disable shortcut",
+        "terminal shortcut",
+        "code shortcut"
       ],
-      "updated": "2026-10-15",
+      "updated": "2026-10-22",
       "source": "content/support/keyboard-shortcuts.md",
       "chunks": [
         {
@@ -1418,18 +1420,32 @@
           "ordinal": 0,
           "heading": "The list",
           "headingPath": "Keyboard shortcuts › The list",
-          "text": "On macOS use Cmd where this says Ctrl. The last five work in the message composer.\n\n| Shortcut         | What it does                                                           |\n| ---------------- | ---------------------------------------------------------------------- |\n| Shift+Ctrl+F     | Open search                                                            |\n| Ctrl+/           | Show keyboard shortcuts                                                |\n| Shift+Ctrl+O     | New conversation                                                       |\n| Ctrl+B           | Toggle sidebar                                                         |\n| Escape           | Focus message composer                                                 |\n| Shift+Ctrl+C     | Copy last message                                                      |\n| Shift+Ctrl+R     | Regenerate last message                                                |\n| Shift+Ctrl+A     | Toggle artifacts panel                                                 |\n| Enter            | Send message                                                           |\n| Shift+Enter      | New line                                                               |\n| Shift+Ctrl+Enter | While a reply runs, send this follow-up the other way (steer or queue) |\n| Escape           | Stop the response                                                      |\n| ↑                | Edit your last message (empty composer)                                |"
+          "text": "On macOS use Cmd where a table here says Ctrl, except in the Code table.\n\n| Shortcut             | What it does            |\n| -------------------- | ----------------------- |\n| Shift+Ctrl+F         | Open search             |\n| Ctrl+/               | Show keyboard shortcuts |\n| Shift+Ctrl+O         | New conversation        |\n| Ctrl+B               | Toggle sidebar          |\n| Escape               | Focus message composer  |\n| Shift+Ctrl+C         | Copy last message       |\n| Shift+Ctrl+R         | Regenerate last message |\n| Shift+Ctrl+A         | Toggle artifacts panel  |\n| Shift+Ctrl+K         | Select model            |\n| Shift+Ctrl+Y         | Toggle voice            |\n| Shift+Ctrl+H         | Set custom instructions |\n| Shift+Ctrl+X         | Copy last code block    |\n| Shift+Ctrl+Backspace | Delete chat             |"
         },
         {
           "id": "keyboard-shortcuts#1",
           "ordinal": 1,
+          "heading": "In the message composer",
+          "headingPath": "Keyboard shortcuts › In the message composer",
+          "text": "These work while you type a message.\n\n| Shortcut         | What it does                                                           |\n| ---------------- | ---------------------------------------------------------------------- |\n| Enter            | Send message                                                           |\n| Shift+Enter      | New line                                                               |\n| Shift+Ctrl+Enter | While a reply runs, send this follow-up the other way (steer or queue) |\n| Escape           | Stop the response                                                      |\n| ↑                | Edit your last message (empty composer)                                |\n| Shift+Ctrl+U     | Add photos & files                                                     |\n| Shift+Ctrl+S     | Toggle dictation                                                       |"
+        },
+        {
+          "id": "keyboard-shortcuts#2",
+          "ordinal": 2,
+          "heading": "In a local Code session",
+          "headingPath": "Keyboard shortcuts › In a local Code session",
+          "text": "This one works in a local AGI Code session and uses the Control key on a Mac too.\n\n| Shortcut | What it does              |\n| -------- | ------------------------- |\n| Ctrl+`   | Show or hide the terminal |"
+        },
+        {
+          "id": "keyboard-shortcuts#3",
+          "ordinal": 3,
           "heading": "Why new chat is Shift and not plain Ctrl+N",
           "headingPath": "Keyboard shortcuts › Why new chat is Shift and not plain Ctrl+N",
           "text": "Ctrl+N and Cmd+N are reserved by the browser for a new window, so the page never\nreceives the keypress and nothing can be bound to it. Shift with O is what the\nother assistants use for the same reason."
         },
         {
-          "id": "keyboard-shortcuts#2",
-          "ordinal": 2,
+          "id": "keyboard-shortcuts#4",
+          "ordinal": 4,
           "heading": "Turning one off",
           "headingPath": "Keyboard shortcuts › Turning one off",
           "text": "The shortcuts dialog, opened with Ctrl+/, has a switch per shortcut. A shortcut\nyou switch off stops firing, it does not merely look disabled, so a binding that\nclashes with something else in your setup can be released."

@@ -55,7 +55,7 @@ function matchesQuery(description: string, keys: readonly string[], query: strin
 }
 
 interface ShortcutGroup {
-  id: 'app' | 'composer';
+  id: 'app' | 'composer' | 'code';
   label: string;
   shortcuts: KeyboardShortcutDoc[];
 }
@@ -220,6 +220,7 @@ export function KeyboardShortcutsPane({
       label: 'Composer',
       shortcuts: matching.filter((doc) => doc.scope === 'composer'),
     },
+    { id: 'code', label: 'Code', shortcuts: matching.filter((doc) => doc.scope === 'code') },
   ].filter((group): group is ShortcutGroup => group.shortcuts.length > 0);
   const visibleHostShortcuts = hostShortcuts.filter((shortcut) =>
     matchesQuery(shortcut.description, [shortcut.chord], query),

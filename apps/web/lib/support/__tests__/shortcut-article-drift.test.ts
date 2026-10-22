@@ -22,8 +22,9 @@ function articleRows() {
         .split('|')
         .map((cell) => cell.trim()),
     )
-    .filter((cells) => cells.length === 2 && !/^-+$/.test(cells[0] ?? ''))
-    .slice(1);
+    .filter(
+      (cells) => cells.length === 2 && !/^-+$/.test(cells[0] ?? '') && cells[0] !== 'Shortcut',
+    );
 }
 
 function keySet(keys: string) {

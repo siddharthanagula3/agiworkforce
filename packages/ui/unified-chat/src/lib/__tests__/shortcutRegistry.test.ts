@@ -69,6 +69,13 @@ describe('CHAT_SHORTCUTS', () => {
     });
   });
 
+  it('lists the Code terminal toggle as Control+backtick on every platform', () => {
+    const terminal = CHAT_SHORTCUTS.find((shortcut) => shortcut.id === 'code-terminal-toggle')!;
+    expect(terminal.scope).toBe('code');
+    expect(formatShortcutKeys(terminal, true)).toEqual(['⌃', '`']);
+    expect(formatShortcutKeys(terminal, false)).toEqual(['Ctrl', '`']);
+  });
+
   it('gives every binding an id of its own', () => {
     const ids = CHAT_SHORTCUTS.map((shortcut) => shortcut.id);
     expect(new Set(ids).size).toBe(ids.length);
