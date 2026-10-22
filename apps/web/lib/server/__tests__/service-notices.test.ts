@@ -7,6 +7,7 @@ vi.mock('server-only', () => ({}));
 const mocks = vi.hoisted(() => ({
   getCachedHealthChecks: vi.fn(),
   resolveRedisOutagePolicy: vi.fn(),
+  getKeyValueStore: vi.fn(),
 }));
 
 vi.mock('@/lib/server/health-check', () => ({
@@ -15,12 +16,20 @@ vi.mock('@/lib/server/health-check', () => ({
   getCachedHealthChecks: mocks.getCachedHealthChecks,
   runHealthChecks: vi.fn(),
 }));
+vi.mock('@/lib/server/key-value', () => ({ getKeyValueStore: mocks.getKeyValueStore }));
+vi.mock('@/lib/logger', () => ({
+  logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
+}));
 vi.mock('@/lib/redis-outage-policy', async (importOriginal) => ({
   ...(await importOriginal<RedisOutagePolicyModule>()),
   resolveRedisOutagePolicy: mocks.resolveRedisOutagePolicy,
 }));
 
-import { readServiceNotices } from '../service-notices';
+import {
+  maintenanceUnderway,
+  readIncidentRecoveries,
+  readServiceNotices,
+} from '../service-notices';
 
 type RedisOutagePolicyModule = typeof import('@/lib/redis-outage-policy');
 
@@ -90,6 +99,28 @@ function health({
   };
 }
 
+interface StoredEntry {
+  value: unknown;
+  ttlSeconds: number | undefined;
+}
+
+function memoryStore() {
+  const entries = new Map<string, StoredEntry>();
+  return {
+    entries,
+    expire(key: string) {
+      entries.delete(key);
+    },
+    store: {
+      get: vi.fn(async (key: string) => entries.get(key)?.value ?? null),
+      set: vi.fn(async (key: string, value: unknown, options?: { ttlSeconds?: number }) => {
+        entries.set(key, { value, ttlSeconds: options?.ttlSeconds });
+        return true;
+      }),
+    },
+  };
+}
+
 function scopes(notices: Awaited<ReturnType<typeof readServiceNotices>>) {
   return notices.map(({ kind, scope, tone }) => ({ kind, scope, tone }));
 }
@@ -99,6 +130,7 @@ describe('readServiceNotices', () => {
     vi.clearAllMocks();
     delete process.env['AGI_MAINTENANCE_WINDOW'];
     mocks.resolveRedisOutagePolicy.mockReturnValue('fail-open');
+    mocks.getKeyValueStore.mockReturnValue(null);
   });
 
   it('keeps billing trouble and a missing shared store off every product page', async () => {
@@ -224,7 +256,7 @@ describe('readServiceNotices', () => {
     expect(scopes(notices)).toEqual([{ kind: 'maintenance', scope: 'product', tone: 'info' }]);
     expect(notices[0]?.href).toBe('/maintenance');
     expect(notices[0]?.message).toBe(
-      'Planned maintenance from Oct 2, 2026, 8:00 AM UTC to Oct 2, 2026, 9:00 AM UTC. Some features may not respond while it runs.',
+      'Planned maintenance from Oct 2, 2026, 8:00 AM UTC to Oct 2, 2026, 9:00 AM UTC. New chats will be paused while it runs, and open chats may be interrupted.',
     );
   });
 
@@ -235,6 +267,130 @@ describe('readServiceNotices', () => {
     const notices = await readServiceNotices(new Date('2026-10-02T08:30:00.000Z'));
 
     expect(scopes(notices)).toEqual([{ kind: 'maintenance', scope: 'product', tone: 'warning' }]);
-    expect(notices[0]?.message).toContain('until Oct 2, 2026, 9:00 AM UTC');
+    expect(notices[0]?.message).toBe(
+      'Planned maintenance is under way until Oct 2, 2026, 9:00 AM UTC. New chats are paused, and chats already open may be interrupted.',
+    );
+  });
+
+  it('reports maintenance as under way only between its start and its end', () => {
+    process.env['AGI_MAINTENANCE_WINDOW'] = '2026-10-02T08:00:00.000Z/2026-10-02T09:00:00.000Z';
+
+    expect(maintenanceUnderway(new Date('2026-10-02T07:59:59.999Z'))).toBeNull();
+    expect(maintenanceUnderway(new Date('2026-10-02T08:00:00.000Z'))).not.toBeNull();
+    expect(maintenanceUnderway(new Date('2026-10-02T08:59:59.999Z'))).not.toBeNull();
+    expect(maintenanceUnderway(new Date('2026-10-02T09:00:00.000Z'))).toBeNull();
+
+    delete process.env['AGI_MAINTENANCE_WINDOW'];
+    expect(maintenanceUnderway(new Date('2026-10-02T08:30:00.000Z'))).toBeNull();
+  });
+});
+
+describe('incident recovery', () => {
+  const failingAt = new Date('2026-10-02T06:00:00.000Z');
+  const laterAt = new Date('2026-10-02T06:10:00.000Z');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env['AGI_MAINTENANCE_WINDOW'];
+    mocks.resolveRedisOutagePolicy.mockReturnValue('fail-open');
+  });
+
+  it('says the service is restored but not fully recovered once a seen incident clears', async () => {
+    const memory = memoryStore();
+    mocks.getKeyValueStore.mockReturnValue(memory.store);
+    mocks.getCachedHealthChecks.mockResolvedValueOnce(health({ failing: ['database'] }));
+    mocks.getCachedHealthChecks.mockResolvedValueOnce(health());
+
+    const during = await readServiceNotices(failingAt);
+    const after = await readServiceNotices(laterAt);
+
+    expect(during.map(({ id }) => id)).toEqual(['incident:product']);
+    expect(after).toEqual([
+      {
+        id: 'restored:product',
+        kind: 'incident',
+        tone: 'warning',
+        scope: 'product',
+        message:
+          'AGI is working again after a problem. We are monitoring it and have not called it fully recovered yet.',
+        href: '/status',
+        linkLabel: 'Status',
+      },
+    ]);
+  });
+
+  it('keeps the restored notice for an hour after the last failing read, then says nothing', async () => {
+    const memory = memoryStore();
+    mocks.getKeyValueStore.mockReturnValue(memory.store);
+    mocks.getCachedHealthChecks.mockResolvedValueOnce(health({ failing: ['stripe'] }));
+
+    await readServiceNotices(failingAt);
+
+    const [key] = [...memory.entries.keys()];
+    expect(key).toBe('agi-service-notice:last-failing:billing');
+    expect(memory.entries.get(key!)?.ttlSeconds).toBe(3_600);
+
+    mocks.getCachedHealthChecks.mockResolvedValue(health());
+    expect(scopes(await readServiceNotices(laterAt))).toEqual([
+      { kind: 'incident', scope: 'billing', tone: 'warning' },
+    ]);
+    expect((await readServiceNotices(laterAt))[0]?.id).toBe('restored:billing');
+
+    memory.expire(key!);
+    expect(await readServiceNotices(laterAt)).toEqual([]);
+  });
+
+  it('shows the live incident, not a recovery, while the failure continues', async () => {
+    const memory = memoryStore();
+    mocks.getKeyValueStore.mockReturnValue(memory.store);
+    mocks.getCachedHealthChecks.mockResolvedValue(health({ failing: ['database'] }));
+
+    await readServiceNotices(failingAt);
+    const still = await readServiceNotices(laterAt);
+
+    expect(still.map(({ id }) => id)).toEqual(['incident:product']);
+    expect(memory.entries.get('agi-service-notice:last-failing:product')?.value).toEqual({
+      atMs: laterAt.getTime(),
+    });
+  });
+
+  it('claims no recovery when the health read does not answer', async () => {
+    const memory = memoryStore();
+    mocks.getKeyValueStore.mockReturnValue(memory.store);
+    memory.entries.set('agi-service-notice:last-failing:product', {
+      value: { atMs: failingAt.getTime() },
+      ttlSeconds: 3_600,
+    });
+    mocks.getCachedHealthChecks.mockRejectedValue(new Error('probe failed'));
+
+    expect(await readServiceNotices(laterAt)).toEqual([]);
+    expect(await readIncidentRecoveries(laterAt)).toEqual([]);
+  });
+
+  it('still raises the live incident when the recovery store cannot be written', async () => {
+    mocks.getKeyValueStore.mockReturnValue({
+      get: vi.fn(async () => {
+        throw new Error('store down');
+      }),
+      set: vi.fn(async () => {
+        throw new Error('store down');
+      }),
+    });
+    mocks.getCachedHealthChecks.mockResolvedValue(health({ failing: ['database'] }));
+
+    expect((await readServiceNotices(failingAt)).map(({ id }) => id)).toEqual(['incident:product']);
+  });
+
+  it('gives the status page the scope and the last time it was seen failing', async () => {
+    const memory = memoryStore();
+    mocks.getKeyValueStore.mockReturnValue(memory.store);
+    mocks.getCachedHealthChecks.mockResolvedValueOnce(health({ failing: ['identity'] }));
+    mocks.getCachedHealthChecks.mockResolvedValueOnce(health());
+
+    await readIncidentRecoveries(failingAt);
+
+    expect(await readIncidentRecoveries(laterAt)).toEqual([
+      { scope: 'product', lastFailingAt: failingAt },
+    ]);
   });
 });

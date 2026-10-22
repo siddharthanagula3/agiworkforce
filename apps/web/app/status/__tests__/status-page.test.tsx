@@ -2,10 +2,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 type ScanModule0 = typeof import('@/lib/server/health-check');
 type ScanModule1 = typeof import('@/lib/server/slo/attainment');
+type ScanModule2 = typeof import('@/lib/server/service-notices');
 
-const { healthChecks, sloAttainment } = vi.hoisted(() => ({
+const { healthChecks, sloAttainment, incidentRecoveries } = vi.hoisted(() => ({
   healthChecks: vi.fn(),
   sloAttainment: vi.fn(),
+  incidentRecoveries: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -16,6 +18,10 @@ vi.mock('@/lib/server/health-check', async (importOriginal) => ({
 vi.mock('@/lib/server/slo/attainment', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   getCachedSloAttainment: sloAttainment,
+}));
+vi.mock('@/lib/server/service-notices', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule2>()),
+  readIncidentRecoveries: incidentRecoveries,
 }));
 
 import StatusPage, { dynamic, metadata } from '../page';
@@ -130,6 +136,7 @@ beforeEach(() => {
   readSecondsAfterCheck(FRESH_READ_SECONDS);
   healthChecks.mockResolvedValue(passing());
   sloAttainment.mockResolvedValue([]);
+  incidentRecoveries.mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -505,6 +512,23 @@ describe('/status', () => {
       'href',
       MIRROR,
     );
+  });
+
+  it('says a recently cleared incident is restored and not yet fully recovered', async () => {
+    const lastFailingAt = new Date(CHECKED_AT_MS - 10 * 60 * MS_PER_SECOND);
+    incidentRecoveries.mockResolvedValue([{ scope: 'product', lastFailingAt }]);
+
+    await renderStatus();
+
+    expect(summary()).toHaveTextContent(
+      `Service restored after a problem last seen at ${lastFailingAt.toUTCString()}. We are monitoring it and have not called it fully recovered yet.`,
+    );
+  });
+
+  it('says nothing about recovery when no incident cleared recently', async () => {
+    await renderStatus();
+
+    expect(summary()).not.toHaveTextContent(/fully recovered/);
   });
 
   it('promises no written incident post, since the page renders none', async () => {

@@ -25,6 +25,7 @@ import { RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';
 import { statusMirrorUrl } from '@/lib/server/incident/out-of-band';
+import { readIncidentRecoveries, type IncidentRecovery } from '@/lib/server/service-notices';
 import {
   formatAge,
   STALE_AFTER_SECONDS,
@@ -70,6 +71,15 @@ const COMPONENT_LABEL: Record<'healthy' | 'unhealthy', string> = {
 };
 
 const HEALTH_READ_TIMEOUT_MS = 4_000;
+
+const RECOVERY_SUBJECT: Record<IncidentRecovery['scope'], string> = {
+  product: 'Service',
+  billing: 'Billing',
+};
+
+function recoveryLine({ scope, lastFailingAt }: IncidentRecovery): string {
+  return `${RECOVERY_SUBJECT[scope]} restored after a problem last seen at ${lastFailingAt.toUTCString()}. We are monitoring it and have not called it fully recovered yet.`;
+}
 
 const NO_SIGNAL: HealthSignal = { state: 'unknown', checkedAt: null, checks: null };
 
@@ -227,6 +237,7 @@ export default async function StatusPage() {
   const mirrorUrl = statusMirrorUrl();
   const health = await fetchHealth();
   const attainment = await fetchAttainment();
+  const recoveries = await readIncidentRecoveries();
   const view = viewSignal(health, Date.now(), COVERED);
 
   return (
@@ -257,6 +268,11 @@ export default async function StatusPage() {
                       {HEALTH_LABEL[view.reported]}.
                     </Prose>
                   ) : null}
+                  {recoveries.map((recovery) => (
+                    <Prose key={recovery.scope} tone="ink">
+                      {recoveryLine(recovery)}
+                    </Prose>
+                  ))}
                   <Prose tone="ink">{checkedLine(view)}</Prose>
                   <Prose>
                     {COVERED.length} hosted checks. {failingLine(view)}

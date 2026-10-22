@@ -12,3 +12,8 @@ export function parseMaintenanceWindow(raw: string | undefined): MaintenanceWind
   if (Number.isNaN(startsAt.getTime()) || Number.isNaN(endsAt.getTime())) return null;
   return endsAt.getTime() > startsAt.getTime() ? { startsAt, endsAt } : null;
 }
+
+export function isMaintenanceUnderway(window: MaintenanceWindow, now: Date): boolean {
+  const nowMs = now.getTime();
+  return nowMs >= window.startsAt.getTime() && nowMs < window.endsAt.getTime();
+}

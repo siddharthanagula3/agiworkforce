@@ -22,6 +22,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { isConfiguredManagedModelRoute } from '@/lib/server/model-catalogue';
 import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service';
 import { TEMPORARY_CHAT_PROJECT_REFUSAL } from '@/lib/temporary-chat-policy';
+import { formatMaintenanceEnd, maintenanceUnderway } from '@/lib/server/service-notices';
 
 const PAGE_SORT_COLUMN = 'page_sort_key';
 // Pinned-first then newest-first, as one fixed-width text key: lexicographic
@@ -190,6 +191,15 @@ async function handleCreateConversation(request: NextRequest) {
 
   const rateLimitResponse = await withRateLimit(request, 'chat-conversation');
   if (rateLimitResponse) return rateLimitResponse;
+
+  const maintenance = maintenanceUnderway();
+  if (maintenance) {
+    throw createError
+      .serviceUnavailable(
+        `New chats are paused for planned maintenance until ${formatMaintenanceEnd(maintenance)}. Try again after it ends.`,
+      )
+      .asUserSafe();
+  }
 
   let rawBody: unknown = {};
   try {
