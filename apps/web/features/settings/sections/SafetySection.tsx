@@ -7,8 +7,10 @@ import {
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { toUserMessage } from '@/lib/user-error-message';
+import { helpArticlePath } from '@/lib/support/help-paths';
 
 const NAMESPACE = 'safety';
+const SAFETY_HELP_ARTICLE = 'crisis-resources';
 
 interface SafetyPreferences {
   reduceSensitiveContent: boolean;
@@ -63,95 +65,74 @@ export function SafetySection() {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-6)' }}>
-      <div>
-        <h1
-          style={{
-            fontFamily: 'var(--sans)',
-            fontSize: 24,
-            fontWeight: 500,
-            color: 'var(--text-1)',
-            margin: '0 0 var(--space-1)',
-          }}
-        >
-          Safety
-        </h1>
-        <p style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
-          Choose additional safeguards for Managed Cloud prompts.
-        </p>
-        <p
-          role={error ? 'alert' : 'status'}
-          style={{
-            margin: 'var(--space-2) 0 0',
-            color: error ? 'var(--chat-accent-primary-text)' : 'var(--text-3)',
-            fontSize: 12,
-          }}
-        >
-          {loading
-            ? 'Loading account settings...'
-            : saving
-              ? 'Saving...'
-              : error
-                ? `Save failed: ${error}`
-                : 'Synced to your account'}
-        </p>
-      </div>
-
-      <section
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-4)' }}>
+      <h1
         style={{
-          border: '1px solid var(--settings-border)',
-          borderRadius: 'var(--radius-lg)',
-          background: 'var(--bg-elev)',
-          overflow: 'hidden',
+          fontFamily: 'var(--sans)',
+          fontSize: 24,
+          fontWeight: 500,
+          color: 'var(--text-1)',
+          margin: 0,
         }}
       >
-        <div
-          style={{
-            padding: 'var(--space-4) var(--space-5)',
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: 'var(--space-4)',
-          }}
-        >
-          <div style={{ minWidth: 0 }}>
-            <div style={{ color: 'var(--text-1)', fontSize: 14, fontWeight: 600 }}>
-              Reduce sensitive content
-            </div>
-            <p
-              style={{
-                maxWidth: 520,
-                margin: 'var(--space-1) 0 0',
-                color: 'var(--text-3)',
-                fontSize: 12,
-                lineHeight: 1.55,
-              }}
+        Safety
+      </h1>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'flex-start',
+          justifyContent: 'space-between',
+          gap: 'var(--space-4)',
+          padding: 'var(--space-4) 0',
+          borderBottom: '1px solid var(--settings-border)',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ color: 'var(--text-1)', fontSize: 14 }}>Reduce sensitive content</div>
+          <p
+            id="safety-reduce-sensitive-description"
+            style={{
+              maxWidth: 520,
+              margin: 'var(--space-1) 0 0',
+              color: 'var(--text-3)',
+              fontSize: 14,
+              lineHeight: 1.5,
+            }}
+          >
+            Refuse explicit or harmful how-to prompts before they reach a Managed Cloud model,
+            without monitoring your chats or alerting anyone.{' '}
+            <a
+              href={helpArticlePath(SAFETY_HELP_ARTICLE)}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ color: 'inherit', textDecoration: 'underline', textUnderlineOffset: 2 }}
             >
-              Block clearly explicit or harmful how-to prompts before they reach a Managed Cloud
-              model. Educational, medical, journalistic, and support-seeking discussion remains
-              available.
-            </p>
-          </div>
-          <Switch
-            checked={preferences.reduceSensitiveContent}
-            disabled={loading || saving}
-            onCheckedChange={handleChange}
-            aria-label="Reduce sensitive content"
-          />
+              Learn more
+            </a>
+          </p>
         </div>
-        <div
-          style={{
-            padding: 'var(--space-3) var(--space-5)',
-            borderTop: '1px solid var(--settings-border)',
-            color: 'var(--text-3)',
-            fontSize: 12,
-            lineHeight: 1.55,
-          }}
+        <Switch
+          checked={preferences.reduceSensitiveContent}
+          disabled={loading || saving}
+          onCheckedChange={handleChange}
+          aria-label="Reduce sensitive content"
+          aria-describedby="safety-reduce-sensitive-description"
+        />
+      </div>
+
+      {error ? (
+        <p
+          role="alert"
+          style={{ margin: 0, color: 'var(--settings-destructive-text)', fontSize: 14 }}
         >
-          This setting changes prompt admission. It does not monitor conversations, notify another
-          person, or replace emergency services.
-        </div>
-      </section>
+          {error}
+        </p>
+      ) : saving ? (
+        <p role="status" style={{ margin: 0, color: 'var(--text-3)', fontSize: 14 }}>
+          Saving…
+        </p>
+      ) : null}
     </div>
   );
 }

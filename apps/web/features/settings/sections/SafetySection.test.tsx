@@ -18,16 +18,19 @@ vi.mock('@agiworkforce/ui', () => ({
     disabled,
     onCheckedChange,
     'aria-label': ariaLabel,
+    'aria-describedby': ariaDescribedBy,
   }: {
     checked: boolean;
     disabled: boolean;
     onCheckedChange: (value: boolean) => void;
     'aria-label': string;
+    'aria-describedby'?: string;
   }) => (
     <button
       type="button"
       role="switch"
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
       aria-checked={checked}
       disabled={disabled}
       onClick={() => onCheckedChange(!checked)}
@@ -56,16 +59,46 @@ describe('Web Safety settings', () => {
         reduceSensitiveContent: true,
       }),
     );
-    expect(screen.getByText('Synced to your account')).toBeInTheDocument();
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+    expect(toggle).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('alert')).toBeNull();
   });
 
-  it('states the exact enforcement and non-monitoring boundary', async () => {
+  it('renders only the heading and the one setting once loaded', async () => {
     render(<SafetySection />);
 
-    expect(
-      screen.getByText(/Block clearly explicit or harmful how-to prompts before they reach/),
-    ).toBeInTheDocument();
-    expect(screen.getByText(/does not monitor conversations/)).toBeInTheDocument();
-    await screen.findByText('Synced to your account');
+    const toggle = await screen.findByRole('switch', { name: 'Reduce sensitive content' });
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+
+    expect(screen.getByRole('heading', { level: 1, name: 'Safety' })).toBeInTheDocument();
+    expect(screen.getAllByRole('switch')).toHaveLength(1);
+    expect(screen.queryByRole('status')).toBeNull();
+    expect(screen.queryByText('Synced to your account')).toBeNull();
+    expect(screen.queryByText(/prompt admission/)).toBeNull();
+  });
+
+  it('states the enforcement and non-monitoring boundary in one line with a Learn more link', async () => {
+    render(<SafetySection />);
+
+    const toggle = await screen.findByRole('switch', { name: 'Reduce sensitive content' });
+    expect(toggle).toHaveAccessibleDescription(
+      /Refuse explicit or harmful how-to prompts .* without monitoring your chats or alerting anyone\. Learn more/,
+    );
+    const link = screen.getByRole('link', { name: 'Learn more' });
+    expect(link).toHaveAttribute('href', '/help/crisis-resources');
+    expect(link).toHaveStyle({ textDecoration: 'underline' });
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+  });
+
+  it('shows the error and restores the switch when saving fails', async () => {
+    mocks.savePreferences.mockRejectedValue(new Error('Network unreachable'));
+    render(<SafetySection />);
+
+    const toggle = await screen.findByRole('switch', { name: 'Reduce sensitive content' });
+    await waitFor(() => expect(toggle).not.toBeDisabled());
+    fireEvent.click(toggle);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await waitFor(() => expect(toggle).toHaveAttribute('aria-checked', 'false'));
   });
 });

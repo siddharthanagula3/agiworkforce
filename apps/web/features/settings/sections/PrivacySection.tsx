@@ -170,7 +170,7 @@ function ExpandableSection({ title, children }: { title: string; children: React
         <div
           style={{
             padding: '0 var(--space-5) var(--space-4)',
-            fontSize: 13,
+            fontSize: 14,
             color: 'var(--text-3)',
             lineHeight: 1.6,
           }}
@@ -400,7 +400,7 @@ export function PrivacySection() {
         {loadingPreferences || savingPreferences || preferenceError || hasChanged ? (
           <SaveStatusLine
             failed={preferenceError !== null}
-            style={{ margin: 'var(--space-1) 0 0', fontSize: 12, color: 'var(--text-3)' }}
+            style={{ margin: 'var(--space-1) 0 0', fontSize: 14, color: 'var(--text-3)' }}
           >
             {loadingPreferences
               ? 'Loading account settings...'
@@ -444,7 +444,7 @@ export function PrivacySection() {
             target="_blank"
             rel="noopener noreferrer"
             style={{
-              fontSize: 13,
+              fontSize: 14,
               color: 'var(--text-2)',
               textDecoration: 'none',
               padding: 'var(--space-2) var(--space-4)',
@@ -556,7 +556,7 @@ export function PrivacySection() {
                   <span
                     style={{
                       marginLeft: 'var(--space-2)',
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: 700,
                       color: 'var(--text-3)',
                       textTransform: 'uppercase',
@@ -567,7 +567,7 @@ export function PrivacySection() {
                   </span>
                 ) : null}
               </span>
-              <span style={{ fontSize: 12, color: 'var(--text-3)', lineHeight: 1.5 }}>
+              <span style={{ fontSize: 14, color: 'var(--text-3)', lineHeight: 1.5 }}>
                 {spec.description}
               </span>
             </div>
@@ -607,14 +607,14 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Shared links
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Review and revoke links created from Web conversations.
             </div>
           </div>
           <SettingsSectionLink
             section="shared-links"
             style={{
-              fontSize: 13,
+              fontSize: 14,
               color: 'var(--text-2)',
               textDecoration: 'none',
               padding: 'var(--space-2) var(--space-4)',
@@ -640,14 +640,14 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Archived chats
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Restore archived chats or move them to Recently deleted.
             </div>
           </div>
           <SettingsSectionLink
             section="archived"
             style={{
-              fontSize: 13,
+              fontSize: 14,
               color: 'var(--text-2)',
               textDecoration: 'none',
               padding: 'var(--space-2) var(--space-4)',
@@ -673,14 +673,14 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Recently deleted
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Put back a chat you deleted in the last 30 days.
             </div>
           </div>
           <SettingsSectionLink
             section="deleted-chats"
             style={{
-              fontSize: 13,
+              fontSize: 14,
               color: 'var(--text-2)',
               textDecoration: 'none',
               padding: 'var(--space-2) var(--space-4)',
@@ -706,7 +706,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Archive all chats in this workspace
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Move every chat out of the sidebar. You can restore them later.
             </div>
           </div>
@@ -716,7 +716,7 @@ export function PrivacySection() {
             disabled={bulkAction !== null}
             style={{
               padding: 'var(--space-2) var(--space-4)',
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: 600,
               color: 'var(--text-1)',
               background: 'transparent',
@@ -743,7 +743,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Delete all chats in this workspace
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Remove every active and archived conversation in this workspace from history. Restore
               them from Recently deleted within 30 days.
             </div>
@@ -754,11 +754,11 @@ export function PrivacySection() {
             disabled={bulkAction !== null || streamingConversationIds.length > 0}
             style={{
               padding: 'var(--space-2) var(--space-4)',
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: 600,
-              color: 'var(--chat-accent-primary-text)',
+              color: 'var(--settings-destructive-text)',
               background: 'transparent',
-              border: '1px solid rgba(218,119,86,0.5)',
+              border: '1px solid var(--settings-destructive-text)',
               borderRadius: 'var(--radius-md)',
               cursor:
                 bulkAction !== null || streamingConversationIds.length > 0
@@ -777,7 +777,7 @@ export function PrivacySection() {
               padding: 'var(--space-3) var(--space-5)',
               borderBottom: '1px solid var(--settings-border)',
               color: conversationActionError ? 'var(--chat-accent-primary)' : 'var(--text-2)',
-              fontSize: 12,
+              fontSize: 14,
             }}
           >
             {conversationActionError ?? conversationActionNotice}
@@ -809,7 +809,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Start new chats as temporary
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               No message from a temporary conversation is written to your history, and it never
               shows up in search. The conversation and any attachment are removed after 30 days.
               Chats you start inside a project are always saved to it. You can still turn a single
@@ -843,7 +843,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Privacy requests
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Review your consent record, or ask us to access, correct, or erase your data.
             </div>
           </div>
@@ -851,7 +851,7 @@ export function PrivacySection() {
             href="/privacy/requests"
             style={{
               padding: 'var(--space-2) var(--space-4)',
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: 600,
               color: 'var(--text-1)',
               background: 'transparent',
@@ -888,7 +888,7 @@ export function PrivacySection() {
             <div style={{ fontSize: 14, fontWeight: 500, color: 'var(--text-1)' }}>
               Uploaded files
             </div>
-            <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+            <div style={{ fontSize: 14, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
               Files you uploaded and media generated for you. Review them, or delete individual
               items, in your Library.
             </div>
@@ -897,7 +897,7 @@ export function PrivacySection() {
             href="/chat/library"
             style={{
               padding: 'var(--space-2) var(--space-4)',
-              fontSize: 12,
+              fontSize: 14,
               fontWeight: 600,
               color: 'var(--text-1)',
               background: 'transparent',
@@ -921,7 +921,7 @@ export function PrivacySection() {
           style={{
             margin: 0,
             padding: 'var(--space-4) 0',
-            fontSize: 12,
+            fontSize: 14,
             color: 'var(--text-3)',
             lineHeight: 1.55,
           }}
@@ -944,7 +944,7 @@ export function PrivacySection() {
           <SettingsSectionLink
             section="memory"
             style={{
-              fontSize: 13,
+              fontSize: 14,
               color: 'var(--text-2)',
               textDecoration: 'none',
               padding: 'var(--space-2) var(--space-4)',
@@ -965,14 +965,14 @@ export function PrivacySection() {
         <p
           style={{
             margin: '0 0 var(--space-1)',
-            fontSize: 13,
+            fontSize: 14,
             fontWeight: 600,
             color: 'var(--chat-accent-primary-text)',
           }}
         >
           Danger zone
         </p>
-        <p style={{ margin: 0, fontSize: 12, lineHeight: 1.5, color: 'var(--text-3)' }}>
+        <p style={{ margin: 0, fontSize: 14, lineHeight: 1.5, color: 'var(--text-3)' }}>
           Permanently deleting your account, including all conversations and billing history, is
           handled from{' '}
           <SettingsSectionLink
