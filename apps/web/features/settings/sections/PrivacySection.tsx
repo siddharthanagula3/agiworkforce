@@ -351,7 +351,7 @@ export function PrivacySection() {
           });
     const confirmed = await confirmDestructive({
       title: 'Delete all chats in this workspace?',
-      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted for 30 days. Memories learned from these chats stay until you delete them in Settings > Memory.`,
+      description: `${scope}. You can restore them from Settings > Privacy > Recently deleted for 30 days. Memories learned from these chats stay until you delete them in Settings > Personalization.`,
       confirmText: 'Delete all chats',
       variant: 'destructive',
     });
