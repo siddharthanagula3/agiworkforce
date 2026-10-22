@@ -1,6 +1,6 @@
 'use client';
 
-import { CircleCheck, Lock, Plus, Settings as SettingsIcon } from 'lucide-react';
+import { CircleCheck, Download, Lock, Plus, Settings as SettingsIcon } from 'lucide-react';
 import { useState } from 'react';
 
 import { cn } from '../cn';
@@ -17,6 +17,9 @@ import {
   DIRECTORY_RETRY_LABEL,
   NEW_BADGE_LABEL,
   SETTINGS_LABEL,
+  formatInstallCount,
+  installCountLabel,
+  popularRankLabel,
 } from './constants';
 import { DirectoryBadge, DirectoryBadges, splitDirectoryBadges } from './DirectoryBadges';
 import {
@@ -30,18 +33,19 @@ import {
 import type { DirectoryEntry, DirectorySectionKey } from './types';
 
 const SKELETON_ROWS = 4;
+const QUICK_ADD_ICON_SIZE = 'size-8 shrink-0';
 const CONNECTED_GLYPH_SECTION: DirectorySectionKey = 'connectors';
 
 function entryMonogram(entry: DirectoryEntry): string {
   return entry.monogram ?? entry.name.slice(0, 1).toUpperCase();
 }
 
-function Monogram({ entry }: { entry: DirectoryEntry }) {
+function Monogram({ entry, iconSize }: { entry: DirectoryEntry; iconSize: string }) {
   return (
     <span
       aria-hidden
       className={cn(
-        ENTRY_ICON_SIZE,
+        iconSize,
         ENTRY_ICON_SHAPE,
         'inline-flex items-center justify-center text-sm font-semibold',
       )}
@@ -51,15 +55,16 @@ function Monogram({ entry }: { entry: DirectoryEntry }) {
   );
 }
 
-function EntryIcon({ entry }: { entry: DirectoryEntry }) {
+function EntryIcon({ entry, compact = false }: { entry: DirectoryEntry; compact?: boolean }) {
   const [iconFailed, setIconFailed] = useState(false);
+  const iconSize = compact ? QUICK_ADD_ICON_SIZE : ENTRY_ICON_SIZE;
   if (entry.slashName) return null;
   if (entry.brandId && (hasConnectorLogo(entry.brandId) || !entry.iconUrl)) {
     return (
       <ConnectorLogo
         connectorId={entry.brandId}
         fallbackText={entryMonogram(entry)}
-        size="lg"
+        size={compact ? 'sm' : 'lg'}
         className={ENTRY_ICON_SHAPE}
       />
     );
@@ -72,11 +77,21 @@ function EntryIcon({ entry }: { entry: DirectoryEntry }) {
         loading="lazy"
         decoding="async"
         onError={() => setIconFailed(true)}
-        className={cn(ENTRY_ICON_SIZE, ENTRY_ICON_SHAPE, 'object-contain p-1.5')}
+        className={cn(iconSize, ENTRY_ICON_SHAPE, 'object-contain p-1.5')}
       />
     );
   }
-  return <Monogram entry={entry} />;
+  return <Monogram entry={entry} iconSize={iconSize} />;
+}
+
+function InstallCount({ installs }: { installs: number }) {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1">
+      <Download aria-hidden className="size-3.5" />
+      <span aria-hidden>{formatInstallCount(installs)}</span>
+      <span className="sr-only">{installCountLabel(installs)}</span>
+    </span>
+  );
 }
 
 export function DirectoryCard({
@@ -111,7 +126,9 @@ export function DirectoryCard({
   const { glyphs, pills } = splitDirectoryBadges(entry.badges);
   const metaPills = pills.filter((badge) => badge !== COMMUNITY_BADGE);
   const community = pills.includes(COMMUNITY_BADGE);
-  const hasMeta = metaPills.length > 0 || publisher;
+  const installs = entry.installs !== undefined && entry.installs > 0 ? entry.installs : null;
+  const rankLabel = entry.popularRank !== undefined ? popularRankLabel(entry.popularRank) : null;
+  const hasMeta = metaPills.length > 0 || publisher || installs !== null;
 
   return (
     <div className={DIRECTORY_CARD} data-coming-soon={comingSoon || undefined}>
@@ -147,10 +164,16 @@ export function DirectoryCard({
             <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
               <DirectoryBadges badges={metaPills} />
               {publisher ? <span className="min-w-0 truncate">{publisher}</span> : null}
+              {publisher && installs !== null ? <span aria-hidden>{'\u2022'}</span> : null}
+              {installs !== null ? <InstallCount installs={installs} /> : null}
             </p>
           ) : null}
         </div>
-        {community ? <DirectoryBadge badge={COMMUNITY_BADGE} className="mt-1" /> : null}
+        {rankLabel ? (
+          <span className="mt-1 shrink-0 text-sm text-muted-foreground">{rankLabel}</span>
+        ) : community ? (
+          <DirectoryBadge badge={COMMUNITY_BADGE} className="mt-1" />
+        ) : null}
         {connectedGlyph ? (
           <CircleCheck
             role="img"
@@ -288,6 +311,56 @@ export function DirectoryGrid({
           onOpenSettings={onOpenSettings}
         />
       ))}
+    </div>
+  );
+}
+
+export function DirectoryQuickAddChip({
+  section,
+  entry,
+  onOpen,
+  onInstall,
+}: {
+  section: DirectorySectionKey;
+  entry: DirectoryEntry;
+  onOpen: (id: string) => void;
+  onInstall: (id: string) => void;
+}) {
+  const addLabel = entry.connectableMode
+    ? CONNECTOR_CARD_ACTION_LABELS[entry.connectableMode]
+    : CARD_INSTALL_LABELS[section];
+  return (
+    <div className="relative flex min-h-12 min-w-0 items-center gap-2.5 rounded-xl border border-border bg-background px-3 py-2 transition-colors motion-reduce:transition-none hover:bg-muted">
+      <EntryIcon entry={entry} compact />
+      <button
+        type="button"
+        onClick={() => onOpen(entry.id)}
+        className={cn(
+          'min-w-0 flex-1 truncate text-start text-sm font-medium text-foreground after:absolute after:inset-0 after:content-[""]',
+          DIRECTORY_FOCUS_RING,
+        )}
+      >
+        {entry.name}
+      </button>
+      <button
+        type="button"
+        onClick={() => onInstall(entry.id)}
+        disabled={entry.mutating}
+        aria-label={`${addLabel} ${entry.name}`}
+        title={addLabel}
+        className={cn(
+          'relative z-[var(--z-control)]',
+          DIRECTORY_ICON_BUTTON,
+          DIRECTORY_ADD_BUTTON,
+          DIRECTORY_FOCUS_RING,
+        )}
+      >
+        {entry.mutating ? (
+          <Spinner size="sm" aria-label={addLabel} />
+        ) : (
+          <Plus aria-hidden className="size-4" />
+        )}
+      </button>
     </div>
   );
 }

@@ -67,6 +67,11 @@ export const ManagedSkillSummarySchema = z
     requiredTools: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
     requiredConnectors: z.array(z.string().trim().min(1).max(200)).max(20).optional(),
     origin: ManagedSkillOriginSchema.optional().catch(undefined),
+    /**
+     * Accounts that installed this skill, measured from install records.
+     * Absent when none did, so a consumer never renders a zero or a guess.
+     */
+    installs: z.number().int().positive().optional().catch(undefined),
   })
   .superRefine((skill, context) => {
     if (skill.downloadable && (skill.source !== 'bundled' || skill.lifecycle !== 'included')) {

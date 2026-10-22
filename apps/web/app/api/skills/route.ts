@@ -39,6 +39,7 @@ import {
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
 import { resolveInstalledManagedSkills } from '@/lib/services/skill-install-service';
+import { readSkillInstallTotals } from '@/features/skills/server/skill-install-totals';
 import {
   createUserSkill,
   listUserSkills,
@@ -159,6 +160,10 @@ async function handleListSkills(request: NextRequest) {
   const directorySkills = pluginsAllowed ? await listInstalledDirectorySkills(db, userId) : [];
   const listed = dedupeByFirstClaimedName([...skills, ...directorySkills]);
   const originOf = await loadSkillOrigins(db, userId, listed);
+  const installTotals = await readSkillInstallTotals(
+    db,
+    listed.map((s) => s.name),
+  );
   let body;
   try {
     body = ManagedSkillsResponseSchema.parse({
@@ -170,6 +175,7 @@ async function handleListSkills(request: NextRequest) {
           source: s.source,
           lifecycle: s.frontmatter['draft'] === true ? 'draft' : 'included',
           downloadable: s.source === 'bundled' && s.frontmatter['draft'] !== true,
+          ...(installTotals.has(s.name) ? { installs: installTotals.get(s.name) } : {}),
           // Straight from the bundle's frontmatter. Omitted when the skill has
           // none, so the column can say "unknown" instead of showing a version
           // this route made up.

@@ -34,6 +34,27 @@ export const DIRECTORY_POPULAR_HEADINGS: Record<DirectorySectionKey, string> = {
   plugins: 'Popular plugins',
 };
 
+export const DIRECTORY_QUICK_ADD_HEADING = 'Popular';
+export const DIRECTORY_QUICK_ADD_LIMIT = 3;
+export const POPULAR_RANK_TOP_LABEL = 'Most popular';
+
+export function popularRankLabel(rank: number): string {
+  return rank === 1 ? POPULAR_RANK_TOP_LABEL : `#${rank} popular`;
+}
+
+const INSTALL_COUNT_FORMAT = new Intl.NumberFormat(undefined, {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+export function formatInstallCount(installs: number): string {
+  return INSTALL_COUNT_FORMAT.format(installs);
+}
+
+export function installCountLabel(installs: number): string {
+  return `${installs.toLocaleString()} ${installs === 1 ? 'install' : 'installs'}`;
+}
+
 export const DIRECTORY_SEARCH_PLACEHOLDERS: Record<DirectorySectionKey, string> = {
   skills: 'Search skills',
   connectors: 'Search connectors',

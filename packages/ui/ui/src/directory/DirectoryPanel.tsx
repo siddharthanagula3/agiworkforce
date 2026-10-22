@@ -21,6 +21,8 @@ import {
   DIRECTORY_CUSTOM_HEADING,
   DIRECTORY_INSTALLED_HEADINGS,
   DIRECTORY_POPULAR_HEADINGS,
+  DIRECTORY_QUICK_ADD_HEADING,
+  DIRECTORY_QUICK_ADD_LIMIT,
   DIRECTORY_LOADING_LABEL,
   DIRECTORY_LOADING_MORE_LABEL,
   DIRECTORY_PUBLISHER_FILTER_ID,
@@ -74,11 +76,11 @@ import {
   UPLOAD_SKILL_LABEL,
 } from './constants';
 import { DirectoryBackLink } from './DirectoryDetailHeader';
-import { DirectoryGrid } from './DirectoryGrid';
+import { DirectoryGrid, DirectoryQuickAddChip } from './DirectoryGrid';
 import { DirectoryManageView } from './DirectoryManageView';
 import { DIRECTORY_CREATE_BUTTON, DIRECTORY_FOCUS_RING } from './styles';
 import { DirectoryToolbar } from './DirectoryToolbar';
-import { selectDirectoryEntries, toggleFilterValue } from './filtering';
+import { countActiveFilters, selectDirectoryEntries, toggleFilterValue } from './filtering';
 import { PluginDetailView } from './PluginDetailView';
 import { SkillDetailView } from './SkillDetailView';
 import type {
@@ -100,7 +102,8 @@ const NO_FILTERS: DirectoryFilterSelection = {};
 const EMPTY_ENTRIES: readonly DirectoryEntry[] = [];
 const EMPTY_GROUPS: readonly DirectoryGroup[] = [];
 const EMPTY_TOGGLES: Readonly<Record<string, boolean>> = {};
-const DEFAULT_SORT_OPTIONS: readonly DirectorySortKey[] = ['name'];
+const DEFAULT_SORT: DirectorySortKey = 'name';
+const DEFAULT_SORT_OPTIONS: readonly DirectorySortKey[] = [DEFAULT_SORT];
 const LOAD_MORE_ROOT_MARGIN = '240px';
 
 export interface DirectoryPanelProps {
@@ -140,6 +143,7 @@ function DirectorySectionPanel({
   const [sourceId, setSourceId] = useState<string | null>(null);
   const [selection, setSelection] = useState<DirectoryFilterSelection>(NO_FILTERS);
   const previousSectionRef = useRef(section);
+  const [sortChoice, setSortChoice] = useState<DirectorySortKey | null>(null);
 
   /**
    * One panel instance serves every section, so a filter chosen in one section
@@ -153,8 +157,13 @@ function DirectorySectionPanel({
     previousSectionRef.current = section;
     setSelection(NO_FILTERS);
     setSourceId(null);
+    setSortChoice(null);
   }, [section]);
-  const [sort, setSort] = useState<DirectorySortKey>(data.sortOptions?.[0] ?? 'name');
+  const sortOptions = data.sortOptions ?? DEFAULT_SORT_OPTIONS;
+  const sort =
+    sortChoice !== null && sortOptions.includes(sortChoice)
+      ? sortChoice
+      : (sortOptions[0] ?? DEFAULT_SORT);
   const [toggleOverrides, setToggleOverrides] = useState<Readonly<Record<string, boolean>>>({});
   const deepLinkedEntryId =
     adapter.openEntry?.section === section ? adapter.openEntry.entryId : null;
@@ -165,6 +174,7 @@ function DirectorySectionPanel({
   const [detailError, setDetailError] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
   const lockNoticeId = useId();
+  const quickAddHeadingId = useId();
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -308,6 +318,23 @@ function DirectorySectionPanel({
   const catalog = useMemo(() => owned.filter((entry) => entry.installed !== true), [owned]);
   const popular = useMemo(() => catalog.filter((entry) => entry.popular === true), [catalog]);
   const rest = useMemo(() => catalog.filter((entry) => entry.popular !== true), [catalog]);
+  const unfiltered =
+    query.trim() === '' && sourceId === null && countActiveFilters(selection) === 0;
+  const quickAdd = useMemo(
+    () =>
+      unfiltered
+        ? catalog
+            .filter(
+              (entry) =>
+                entry.popularRank !== undefined &&
+                entry.installable !== false &&
+                entry.connectableMode !== 'coming-soon',
+            )
+            .sort((left, right) => (left.popularRank ?? 0) - (right.popularRank ?? 0))
+            .slice(0, DIRECTORY_QUICK_ADD_LIMIT)
+        : EMPTY_ENTRIES,
+    [catalog, unfiltered],
+  );
 
   const guardedRef = useRef<(id: string, work: GuardedWork) => Promise<void>>(async () => {});
   const runGuarded = useCallback(
@@ -385,6 +412,8 @@ function DirectorySectionPanel({
       ? { onOpenSettings: (id: string) => void adapter.openSettings?.(section, id) }
       : {}),
   };
+
+  const quickAddInstall = gridActions.onInstall;
 
   function renderActionError() {
     return (
@@ -821,9 +850,9 @@ function DirectorySectionPanel({
             )
           }
           onClearFilters={() => setSelection({})}
-          sortOptions={data.sortOptions ?? DEFAULT_SORT_OPTIONS}
+          sortOptions={sortOptions}
           sort={sort}
-          onSortChange={setSort}
+          onSortChange={setSortChoice}
           onAddMarketplace={showAddMarketplace ? () => setMarketplaceOpen(true) : undefined}
           countLabel={data.countLabel}
           toggles={data.toggles}
@@ -854,6 +883,28 @@ function DirectorySectionPanel({
         {renderActionError()}
 
         <div className="flex flex-col gap-5" aria-busy={remote && data.loading === true}>
+          {quickAdd.length > 0 && quickAddInstall ? (
+            <section aria-labelledby={quickAddHeadingId} className="flex flex-col gap-2">
+              <h3
+                id={quickAddHeadingId}
+                className="text-sm font-semibold uppercase tracking-wide text-muted-foreground"
+              >
+                {DIRECTORY_QUICK_ADD_HEADING}
+              </h3>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                {quickAdd.map((entry) => (
+                  <DirectoryQuickAddChip
+                    key={entry.id}
+                    section={section}
+                    entry={entry}
+                    onOpen={gridActions.onOpen}
+                    onInstall={quickAddInstall}
+                  />
+                ))}
+              </div>
+            </section>
+          ) : null}
+
           {custom.length > 0 ? (
             <section className="flex flex-col gap-2">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">

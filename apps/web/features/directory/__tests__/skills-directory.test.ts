@@ -306,3 +306,17 @@ describe('fetchSkillDetail', () => {
     );
   });
 });
+
+describe('measured skill installs', () => {
+  it('carries a measured install count onto the entry and leaves it off otherwise', () => {
+    expect(toSkillEntry(skill({ installs: 129_812 }), new Set()).installs).toBe(129_812);
+    expect(toSkillEntry(skill(), new Set()).installs).toBeUndefined();
+  });
+
+  it('offers Most popular only when at least one skill has a measured count', () => {
+    expect(toSkillSection([skill()], new Set()).sortOptions).toEqual(['name']);
+    expect(
+      toSkillSection([skill(), skill({ name: 'pdf', installs: 4 })], new Set()).sortOptions,
+    ).toEqual(['popular', 'name']);
+  });
+});

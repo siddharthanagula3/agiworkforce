@@ -12,6 +12,7 @@ const {
   mockAuthoringEnabled,
   mockInvalidateCache,
   mockUserScopedDb,
+  mockInstallTotals,
 } = vi.hoisted(() => ({
   mockAuthUser: vi.fn(),
   mockRateLimit: vi.fn(),
@@ -22,6 +23,7 @@ const {
   mockAuthoringEnabled: vi.fn(),
   mockInvalidateCache: vi.fn(),
   mockUserScopedDb: vi.fn(),
+  mockInstallTotals: vi.fn(),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
@@ -64,6 +66,9 @@ vi.mock('@/lib/services/user-skill-authoring', () => ({
   requireUserSkillAuthoring: vi.fn(),
   USER_SKILL_AUTHORING_ENV_VAR: 'AGI_USER_SKILL_AUTHORING',
 }));
+vi.mock('@/features/skills/server/skill-install-totals', () => ({
+  readSkillInstallTotals: mockInstallTotals,
+}));
 vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
   findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
@@ -104,6 +109,18 @@ describe('GET /api/skills catalog parameter', () => {
     mockAuthoringEnabled.mockReturnValue(false);
     mockDirectory.mockResolvedValue([INSTALLED, REMOVED]);
     mockResolveInstalled.mockResolvedValue([INSTALLED]);
+    mockInstallTotals.mockResolvedValue(new Map());
+  });
+
+  it('reports a measured install total only for skills that have one', async () => {
+    mockInstallTotals.mockResolvedValueOnce(new Map([['code-review', 1_834]]));
+    const response = await GET(get('http://localhost:3000/api/skills?catalog=all'));
+    const body = (await response.json()) as { skills: { name: string; installs?: number }[] };
+    expect(mockInstallTotals).toHaveBeenCalledWith({}, ['code-review', 'data-analysis']);
+    expect(body.skills.map((entry) => [entry.name, entry.installs])).toEqual([
+      ['code-review', 1_834],
+      ['data-analysis', undefined],
+    ]);
   });
 
   it('hides a skill the account uninstalled by default, for the composer', async () => {

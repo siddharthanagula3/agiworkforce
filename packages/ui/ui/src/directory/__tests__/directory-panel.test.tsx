@@ -128,6 +128,48 @@ function renderPanel(
   return adapter;
 }
 
+describe('DirectoryPanel popular quick-add row', () => {
+  const ranked = {
+    installable: true,
+    entries: [
+      { id: 'canva', name: 'Canva', description: 'Design', popularRank: 4 },
+      { id: 'slack', name: 'Slack', description: 'Chat', popularRank: 3 },
+      { id: 'drive', name: 'Drive', description: 'Files', popularRank: 1 },
+      { id: 'gmail', name: 'Gmail', description: 'Mail', popularRank: 2, installed: true },
+      { id: 'figma', name: 'Figma', description: 'Design', popularRank: 5 },
+      { id: 'notion', name: 'Notion', description: 'Notes' },
+    ],
+    sortOptions: ['popular', 'name'] as const,
+  };
+
+  it('lists the three most connected entries not yet added, each with a working add control', () => {
+    const install = vi.fn();
+    renderPanel('connectors', {
+      connectors: { ...ranked, sortOptions: [...ranked.sortOptions] },
+      install,
+    });
+    const row = screen.getByRole('region', { name: 'Popular' });
+    const names = within(row)
+      .getAllByRole('button')
+      .filter((button) => !button.getAttribute('aria-label'))
+      .map((button) => button.textContent);
+    expect(names).toEqual(['Drive', 'Slack', 'Canva']);
+    fireEvent.click(within(row).getByRole('button', { name: 'Add Slack' }));
+    expect(install).toHaveBeenCalledWith('connectors', 'slack');
+  });
+
+  it('hides the row while searching and when nothing is ranked', () => {
+    renderPanel('connectors', { connectors: { ...ranked, sortOptions: [...ranked.sortOptions] } });
+    fireEvent.change(screen.getByPlaceholderText('Search connectors'), {
+      target: { value: 'sla' },
+    });
+    expect(screen.queryByRole('region', { name: 'Popular' })).toBeNull();
+    cleanup();
+    renderPanel('connectors');
+    expect(screen.queryByRole('region', { name: 'Popular' })).toBeNull();
+  });
+});
+
 describe('DirectoryPanel layout', () => {
   it('renders the panel title, search and filters in one view', () => {
     renderPanel();

@@ -1,5 +1,7 @@
 import {
   CONNECTOR_DIRECTORY_PATH,
+  CONNECTOR_DIRECTORY_POPULARITY_PATH,
+  ConnectorDirectoryPopularityResponseSchema,
   MANAGED_CLOUD_CONNECTORS_PATH,
   connectorDirectoryEntryPath,
   connectorDirectoryIconPath,
@@ -525,6 +527,44 @@ export interface ConnectorSectionInput {
   stats?: ConnectorDirectoryStats;
   featuredLimit?: number;
   connectionState?: ConnectorConnectionState;
+  popularity?: readonly string[];
+}
+
+export function withPopularRanks(
+  entries: readonly DirectoryEntry[],
+  popularity: readonly string[],
+): DirectoryEntry[] {
+  if (popularity.length === 0) return [...entries];
+  const rankOf = new Map(popularity.map((id, index) => [id, index + 1]));
+  return entries.map((entry) => {
+    const popularRank = rankOf.get(entry.id);
+    return popularRank === undefined ? entry : { ...entry, popularRank };
+  });
+}
+
+function sortByPopularRank(entries: readonly DirectoryEntry[]): DirectoryEntry[] {
+  return entries
+    .map((entry, index) => ({ entry, index }))
+    .sort((left, right) => {
+      const leftRank = left.entry.popularRank;
+      const rightRank = right.entry.popularRank;
+      if (leftRank !== undefined && rightRank !== undefined) return leftRank - rightRank;
+      if (leftRank !== undefined) return -1;
+      if (rightRank !== undefined) return 1;
+      return left.index - right.index;
+    })
+    .map(({ entry }) => entry);
+}
+
+export async function fetchConnectorPopularity(): Promise<string[]> {
+  try {
+    const response = await fetch(CONNECTOR_DIRECTORY_POPULARITY_PATH);
+    if (!response.ok) return [];
+    const parsed = ConnectorDirectoryPopularityResponseSchema.safeParse(await response.json());
+    return parsed.success ? parsed.data.ranked : [];
+  } catch {
+    return [];
+  }
 }
 
 export function toConnectorSection({
@@ -539,6 +579,7 @@ export function toConnectorSection({
   stats,
   featuredLimit,
   connectionState = CONNECTOR_STATE_ALL,
+  popularity = [],
 }: ConnectorSectionInput): DirectorySection {
   const tabHeading = request.badge ? CONNECTOR_TAB_HEADINGS[request.badge] : undefined;
   const allTab = tabHeading === undefined;
@@ -563,7 +604,8 @@ export function toConnectorSection({
     ...categories,
     ...curated.map((connector) => curatedDirectoryCategory(connector)),
   ]);
-  const loaded = [...curatedEntries, ...registryEntries];
+  const ranked = withPopularRanks([...curatedEntries, ...registryEntries], popularity);
+  const loaded = request.sort === DIRECTORY_SORT_POPULAR ? sortByPopularRank(ranked) : ranked;
   /*
    * The directory request has no connected facet, so this is decided here.
    * Connected is the whole connected set the adapter pins onto the first page,

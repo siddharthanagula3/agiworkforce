@@ -12,6 +12,7 @@ import type {
   DirectoryPluginConnectorSetting,
   DirectorySection,
   DirectorySkillDetail,
+  DirectorySortKey,
   DirectorySourceChip,
 } from '@agiworkforce/ui';
 
@@ -69,6 +70,9 @@ export function skillAuthor(source: string): string {
   if (source === MANAGED_LOCAL_SOURCE) return SKILL_PUBLISHER_MANAGED;
   return SKILL_AUTHOR_AGI;
 }
+
+const SKILL_SORT_OPTIONS: readonly DirectorySortKey[] = ['name'];
+const SKILL_SORT_OPTIONS_MEASURED: readonly DirectorySortKey[] = ['popular', 'name'];
 
 const ENTRY_FILE = 'SKILL.md';
 const LICENSE_PREFIX = 'license';
@@ -147,6 +151,7 @@ export function toSkillEntry(
     publisher: skillPublisherFor(skill),
     description: skill.description,
     sourceId: skillSourceId(skill.source),
+    ...(skill.installs ? { installs: skill.installs } : {}),
     installed: isInstalled,
     ...(draft ? { installable: false, statusLabel: SKILL_LIFECYCLE_DRAFT_LABEL } : {}),
     ...(skill.editable ? { editable: true } : {}),
@@ -240,12 +245,13 @@ export function toSkillSection(
   installed: ReadonlySet<string>,
 ): DirectorySection {
   const entries = skills.map((skill) => toSkillEntry(skill, installed));
+  const measured = entries.some((entry) => (entry.installs ?? 0) > 0);
   return {
     entries,
     installable: true,
     sources: skillSources(),
     filterGroups: skillFilterGroups(skills, entries),
-    sortOptions: ['name'],
+    sortOptions: measured ? SKILL_SORT_OPTIONS_MEASURED : SKILL_SORT_OPTIONS,
   };
 }
 

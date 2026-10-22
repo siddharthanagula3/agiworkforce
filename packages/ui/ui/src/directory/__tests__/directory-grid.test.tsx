@@ -435,4 +435,38 @@ describe('DirectoryGrid card type and badge placement', () => {
     const addControl = screen.getByRole('button', { name: 'Add Aha!' });
     expect(chip.nextElementSibling).toBe(addControl);
   });
+
+  it('shows a measured install count in the meta line with a compact number', () => {
+    renderGrid({ entries: [{ ...skill, installs: 1_834_120 }] });
+    expect(screen.getByText('1.8M')).toBeTruthy();
+    expect(screen.getByText('1,834,120 installs')).toBeTruthy();
+  });
+
+  it('shows no count when nothing was measured', () => {
+    renderGrid({ entries: [{ ...skill, installs: 0 }] });
+    expect(screen.queryByText(/installs?$/)).toBeNull();
+    expect(screen.queryByText('0')).toBeNull();
+  });
+
+  it('shows the popularity rank in place of the community pill', () => {
+    render(
+      <DirectoryGrid
+        section="connectors"
+        entries={[
+          {
+            id: 'drive',
+            name: 'Drive',
+            description: 'Files',
+            badges: ['community'],
+            popularRank: 1,
+          },
+          { id: 'mail', name: 'Mail', description: 'Mail', popularRank: 2 },
+        ]}
+        onOpen={vi.fn()}
+      />,
+    );
+    expect(screen.getByText('Most popular')).toBeTruthy();
+    expect(screen.getByText('#2 popular')).toBeTruthy();
+    expect(screen.queryByText('Community')).toBeNull();
+  });
 });

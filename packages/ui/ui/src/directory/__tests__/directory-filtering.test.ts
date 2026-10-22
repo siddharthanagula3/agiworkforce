@@ -100,6 +100,23 @@ describe('sortDirectoryEntries', () => {
     ]);
   });
 
+  it('ranks measured installs first, then measured rank, then the popular flag', () => {
+    const measured = [
+      entry({ id: 'flagged', name: 'Flagged', popular: true }),
+      entry({ id: 'ranked', name: 'Ranked', popularRank: 2 }),
+      entry({ id: 'few', name: 'Few', installs: 3 }),
+      entry({ id: 'many', name: 'Many', installs: 40 }),
+      entry({ id: 'top', name: 'Top', popularRank: 1 }),
+    ];
+    expect(sortDirectoryEntries(measured, 'popular').map((item) => item.id)).toEqual([
+      'many',
+      'few',
+      'top',
+      'ranked',
+      'flagged',
+    ]);
+  });
+
   it('puts popular entries first and the rest by name', () => {
     expect(sortDirectoryEntries(entries, 'popular').map((item) => item.id)).toEqual([
       'beta',

@@ -71,6 +71,10 @@ export interface DirectoryEntry {
   isNew?: boolean;
   installed?: boolean;
   popular?: boolean;
+  /** Measured installs; set only when at least one account installed it. */
+  installs?: number;
+  /** Measured popularity position, 1 for the most connected. */
+  popularRank?: number;
   sourceId?: string;
   groupId?: string;
   updatedAt?: string;

@@ -131,6 +131,42 @@ function stubDirectory(pages: Record<string, ReturnType<typeof page>>, connected
 }
 
 describe('useDirectoryAdapter connectors paging', () => {
+  it('ranks connectors by the measured popularity it reads once', async () => {
+    const calls: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn((input: string) => {
+        calls.push(input);
+        if (input === '/api/connectors/directory/popularity') {
+          return Promise.resolve({ ok: true, json: () => Promise.resolve({ ranked: ['b'] }) });
+        }
+        if (input.startsWith('/api/connectors/directory?')) {
+          return Promise.resolve(page([record('a'), record('b')], 2, null));
+        }
+        return Promise.resolve(connectedResponse([]));
+      }),
+    );
+    const { result } = renderHook(() => useDirectoryAdapter());
+    await act(async () => {
+      await result.current.queryEntries?.('connectors', DEFAULT_DIRECTORY_QUERY);
+    });
+    await waitFor(() =>
+      expect(
+        result.current.connectors?.entries.map((entry) => [entry.id, entry.popularRank]),
+      ).toEqual([
+        ['b', 1],
+        ['a', undefined],
+      ]),
+    );
+    await act(async () => {
+      await result.current.queryEntries?.('connectors', {
+        ...DEFAULT_DIRECTORY_QUERY,
+        search: 'x',
+      });
+    });
+    expect(calls.filter((call) => call === '/api/connectors/directory/popularity')).toHaveLength(1);
+  });
+
   it('fetches the first page for a query and appends the next page on load more', async () => {
     const calls = stubDirectory(
       {
@@ -244,7 +280,7 @@ describe('useDirectoryAdapter connectors paging', () => {
         result.current.queryEntries?.('connectors', DEFAULT_DIRECTORY_QUERY),
       ]);
     });
-    expect(calls.filter((call) => call.startsWith('/api/connectors/directory'))).toHaveLength(1);
+    expect(calls.filter((call) => call.startsWith('/api/connectors/directory?'))).toHaveLength(1);
     await waitFor(() => expect(result.current.connectors?.entries).toHaveLength(1));
   });
 

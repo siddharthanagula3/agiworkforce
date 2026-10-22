@@ -725,6 +725,7 @@ export function toPluginEntry(
     description: entry.description,
     monogram: monogramOf(entry.name),
     ...(badges.length > 0 ? { badges } : {}),
+    ...(entry.installs !== null && entry.installs > 0 ? { installs: entry.installs } : {}),
     sourceId: entry.sourceFacet,
     groupId: entry.sourceFacet,
     installed,

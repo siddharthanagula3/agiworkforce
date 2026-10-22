@@ -271,6 +271,18 @@ describe('toPluginRequest and pluginDirectoryHref', () => {
 });
 
 describe('toPluginEntry', () => {
+  it('carries the catalogue install count only when one is recorded', () => {
+    expect(
+      toPluginEntry(directoryEntry({ installs: 1_800_000 }), EMPTY_INSTALL_STATE).installs,
+    ).toBe(1_800_000);
+    expect(
+      toPluginEntry(directoryEntry({ installs: null }), EMPTY_INSTALL_STATE).installs,
+    ).toBeUndefined();
+    expect(
+      toPluginEntry(directoryEntry({ installs: 0 }), EMPTY_INSTALL_STATE).installs,
+    ).toBeUndefined();
+  });
+
   it('carries the publisher, the verified glyph and the works-with facet', () => {
     const entry = toPluginEntry(directoryEntry(), EMPTY_INSTALL_STATE);
     expect(entry).toMatchObject({

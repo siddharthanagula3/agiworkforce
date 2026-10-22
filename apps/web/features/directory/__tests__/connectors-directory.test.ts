@@ -16,6 +16,7 @@ import {
   fetchConnectedConnectorIds,
   fetchConnectedConnectors,
   fetchConnectorDirectoryPage,
+  fetchConnectorPopularity,
   fetchConnectorRecord,
   initialConnectorSection,
   matchesCuratedConnector,
@@ -1013,5 +1014,49 @@ describe('the github connection path', () => {
 
   it('leaves every other connector to the generic label', () => {
     expect(toConnectorDetail(record(), new Set()).connectLabel).toBeUndefined();
+  });
+});
+
+describe('measured connector popularity', () => {
+  it('ranks entries by the measured order and leads the popular sort with them', () => {
+    const built = section(
+      [record({ id: 'canva', name: 'Canva' }), record({ id: 'customerscore' })],
+      new Set(),
+      [curated(), curated({ id: 'google-drive', name: 'Google Drive' })],
+      { popularity: ['google-drive', 'gmail', 'canva'] },
+    );
+    expect(built.entries.map((entry) => [entry.id, entry.popularRank])).toEqual([
+      ['google-drive', 1],
+      ['gmail', 2],
+      ['canva', 3],
+      ['customerscore', undefined],
+    ]);
+  });
+
+  it('keeps the existing order when sorting by name or when nothing is measured', () => {
+    const records = [record({ id: 'canva', name: 'Canva' }), record({ id: 'customerscore' })];
+    const byName = section(records, new Set(), [], {
+      popularity: ['customerscore'],
+      request: request({ sort: 'name' }),
+    });
+    expect(byName.entries.map((entry) => entry.id)).toEqual(['canva', 'customerscore']);
+    expect(byName.entries[1]?.popularRank).toBe(1);
+    const unmeasured = section(records, new Set());
+    expect(unmeasured.entries.every((entry) => entry.popularRank === undefined)).toBe(true);
+  });
+
+  it('reads the ranking and treats a failed or malformed response as no ranking', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ ranked: ['gmail'] }) }),
+    );
+    await expect(fetchConnectorPopularity()).resolves.toEqual(['gmail']);
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: false, status: 503 }));
+    await expect(fetchConnectorPopularity()).resolves.toEqual([]);
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({ ok: true, json: () => Promise.resolve({ ranked: 'x' }) }),
+    );
+    await expect(fetchConnectorPopularity()).resolves.toEqual([]);
   });
 });

@@ -3,6 +3,8 @@ import { z } from 'zod';
 export const CONNECTOR_DIRECTORY_PATH = '/api/connectors/directory';
 export const CONNECTOR_DIRECTORY_ICON_PATH = '/api/connectors/directory/icon';
 export const CONNECTOR_DIRECTORY_ICON_ID_PARAM = 'id';
+export const CONNECTOR_DIRECTORY_POPULARITY_PATH = '/api/connectors/directory/popularity';
+export const CONNECTOR_DIRECTORY_POPULARITY_LIMIT = 10;
 
 export function connectorDirectoryEntryPath(id: string): string {
   const segments = id.split('/').map((segment) => encodeURIComponent(segment));
@@ -162,6 +164,13 @@ export const ConnectorDirectoryListResponseSchema = z.object({
   stats: ConnectorDirectoryStatsSchema,
 });
 export type ConnectorDirectoryListResponse = z.infer<typeof ConnectorDirectoryListResponseSchema>;
+
+export const ConnectorDirectoryPopularityResponseSchema = z.object({
+  ranked: z.array(z.string().min(1)).max(CONNECTOR_DIRECTORY_POPULARITY_LIMIT),
+});
+export type ConnectorDirectoryPopularityResponse = z.infer<
+  typeof ConnectorDirectoryPopularityResponseSchema
+>;
 
 export const ConnectorDirectoryEntryResponseSchema = z.object({
   entry: ConnectorDirectoryEntrySchema,

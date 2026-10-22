@@ -148,6 +148,7 @@ import {
   connectorDirectoryIndexing,
   connectorReauthorizationErrors,
   fetchConnectedConnectors,
+  fetchConnectorPopularity,
   connectorConnectionState,
   connectorsRequiredByPlugins,
   fetchConnectedRecordsMissingFrom,
@@ -415,6 +416,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
   const connectorRegistryNotice = useRef<string | null>(null);
   const connectorSetup = useRef<Readonly<Record<string, ConnectorSetupRequirement>>>({});
   const connectorPending = useRef<ReadonlySet<string>>(new Set());
+  const connectorPopularity = useRef<readonly string[] | null>(null);
   const connectorsQueried = useRef(false);
   const [credentialFormId, setCredentialFormId] = useState<string | null>(null);
   const [openEntry, setOpenEntry] = useState<DirectoryOpenEntry | null>(null);
@@ -517,6 +519,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
         nextCursor: page.nextCursor,
         categories: page.categories,
         featuredLimit: page.firstPageCount,
+        popularity: connectorPopularity.current ?? [],
         ...(page.stats ? { stats: page.stats } : {}),
       });
       const errors = {
@@ -567,9 +570,10 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
       setConnectors((prev) => ({ ...prev, loading: true, error: null }));
       try {
         const request = toDirectoryRequest(query);
-        const [page, connected] = await Promise.all([
+        const [page, connected, popularity] = await Promise.all([
           fetchConnectorDirectoryPage(request).catch(() => null),
           fetchConnectedConnectors(),
+          connectorPopularity.current ?? fetchConnectorPopularity(),
         ]);
         if (seq !== connectorRequestSeq.current) return;
         const pinned =
@@ -584,6 +588,7 @@ export function useDirectoryAdapter(options: DirectoryAdapterOptions = {}): Dire
             : [];
         if (seq !== connectorRequestSeq.current) return;
         const records = page ? [...pinned, ...page.entries] : [];
+        connectorPopularity.current = popularity.length > 0 ? popularity : null;
         serverConnectedIds.current = connected.ids;
         connectorSetup.current = connected.setup;
         connectorPending.current = connected.pending;

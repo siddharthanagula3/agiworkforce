@@ -42,7 +42,18 @@ function compareByUpdated(a: DirectoryEntry, b: DirectoryEntry): number {
   return right - left;
 }
 
+function compareByRank(a: DirectoryEntry, b: DirectoryEntry): number {
+  if (a.popularRank === b.popularRank) return 0;
+  if (a.popularRank === undefined) return 1;
+  if (b.popularRank === undefined) return -1;
+  return a.popularRank - b.popularRank;
+}
+
 function compareByPopularity(a: DirectoryEntry, b: DirectoryEntry): number {
+  const byInstalls = (b.installs ?? 0) - (a.installs ?? 0);
+  if (byInstalls !== 0) return byInstalls;
+  const byRank = compareByRank(a, b);
+  if (byRank !== 0) return byRank;
   if (a.popular === b.popular) return compareByName(a, b);
   return a.popular ? -1 : 1;
 }
