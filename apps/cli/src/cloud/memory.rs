@@ -1,9 +1,10 @@
 //! Account memory: the same `/api/memory/sync` records the web settings memory
 //! panel and mobile read and write.
 //!
-//! The local `memories/raw_memories.md` file stays exactly where it is. In
-//! Managed mode it becomes the cache of what the account holds; in Local mode
-//! it is the whole store.
+//! This device caches what the account holds in `cloud/memory.json`, and only
+//! a Managed session's prompt carries it. Memory merged from this device's own
+//! sessions is separate: one file per trust boundary under `memories/` (see
+//! `memory_pipeline`), each read only by sessions allowed to receive it.
 
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;

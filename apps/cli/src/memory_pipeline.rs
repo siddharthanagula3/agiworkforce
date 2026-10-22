@@ -5,12 +5,13 @@
 //!   learnings, and save them to `~/.agiworkforce/memories/session_summaries/{session_id}.md`.
 //!
 //! Phase 2, Consolidation (on startup, max once per hour):
-//!   Read all session summaries, merge/deduplicate them by origin, and prune
-//!   summaries older than 30 days. Summaries from Local sessions (and any
+//!   Read all session summaries, merge/deduplicate them per trust boundary, and
+//!   prune summaries older than 30 days. Summaries from Local sessions (and any
 //!   without an origin label) merge on the device into
-//!   `~/.agiworkforce/memories/raw_memories.md`; summaries from BYOK and Managed
-//!   sessions merge into `~/.agiworkforce/memories/cloud_memories.md`. Only a
-//!   Local session's prompt carries the first.
+//!   `~/.agiworkforce/memories/raw_memories.md`, BYOK summaries into
+//!   `byok_memories.md` and Managed summaries into `managed_memories.md`. A BYOK
+//!   or Managed session's prompt carries only its own boundary's file; a Local
+//!   session's carries all three.
 //!
 //! All operations are best-effort: errors are logged to stderr and never
 //! block the main agent loop.
@@ -24,15 +25,24 @@ use crate::agent::PrivacyMode;
 use crate::config::CliConfig;
 use crate::models::{self, ContentBlock, Message, MessageContent, Provider};
 
-/// Merged memory from Local sessions, and from files written before summaries
-/// carried an origin.
-const LOCAL_MEMORY_FILE: &str = "raw_memories.md";
-/// Merged memory from BYOK and Managed sessions.
-const CLOUD_MEMORY_FILE: &str = "cloud_memories.md";
+const BOUNDARIES: [PrivacyMode; 3] = [PrivacyMode::Local, PrivacyMode::Byok, PrivacyMode::Managed];
 
-/// Wraps Local-origin memory inside a Local session's prompt. A session whose
-/// system prompt carries it must not send that prompt off the device.
-pub(crate) const LOCAL_ORIGIN_MEMORY_TAG: &str = "local_origin_memory";
+/// The merged memory file for one trust boundary. The Local file keeps its
+/// historical name, so memory written before summaries carried an origin
+/// counts as Local.
+fn boundary_memory_file(boundary: PrivacyMode) -> &'static str {
+    match boundary {
+        PrivacyMode::Local => "raw_memories.md",
+        PrivacyMode::Byok => "byok_memories.md",
+        PrivacyMode::Managed => "managed_memories.md",
+    }
+}
+
+/// The tag that wraps one boundary's memory inside a prompt. A session must
+/// not send a prompt carrying another boundary's tag.
+pub(crate) fn origin_memory_tag(boundary: PrivacyMode) -> String {
+    format!("{}_origin_memory", boundary.label())
+}
 
 /// Maximum number of message characters to include in the extraction prompt.
 const MAX_MESSAGE_CHARS: usize = 20_000; // ~5000 tokens at 4 chars/token
@@ -128,9 +138,11 @@ fn cap_consolidated_facts(consolidated: &str, max_facts: usize) -> String {
 }
 
 pub fn stored_fact_count(home: &Path) -> usize {
-    [LOCAL_MEMORY_FILE, CLOUD_MEMORY_FILE]
+    BOUNDARIES
         .into_iter()
-        .filter_map(|file| fs::read_to_string(memory_file(home, file)).ok())
+        .filter_map(|boundary| {
+            fs::read_to_string(memory_file(home, boundary_memory_file(boundary))).ok()
+        })
         .map(|content| {
             content
                 .lines()
@@ -167,24 +179,37 @@ fn summary_origin(content: &str) -> PrivacyMode {
 }
 
 #[derive(Default)]
+struct BoundarySummaries {
+    text: String,
+    count: u32,
+}
+
+#[derive(Default)]
 struct SummariesByOrigin {
-    local: String,
-    local_count: u32,
-    off_device: String,
-    off_device_count: u32,
+    local: BoundarySummaries,
+    byok: BoundarySummaries,
+    managed: BoundarySummaries,
 }
 
 impl SummariesByOrigin {
+    fn of(&self, boundary: PrivacyMode) -> &BoundarySummaries {
+        match boundary {
+            PrivacyMode::Local => &self.local,
+            PrivacyMode::Byok => &self.byok,
+            PrivacyMode::Managed => &self.managed,
+        }
+    }
+
     fn push(&mut self, origin: PrivacyMode, body: &str) {
-        let (text, count) = if origin == PrivacyMode::Local {
-            (&mut self.local, &mut self.local_count)
-        } else {
-            (&mut self.off_device, &mut self.off_device_count)
+        let summaries = match origin {
+            PrivacyMode::Local => &mut self.local,
+            PrivacyMode::Byok => &mut self.byok,
+            PrivacyMode::Managed => &mut self.managed,
         };
-        text.push_str("---\n");
-        text.push_str(body.trim());
-        text.push_str("\n\n");
-        *count += 1;
+        summaries.text.push_str("---\n");
+        summaries.text.push_str(body.trim());
+        summaries.text.push_str("\n\n");
+        summaries.count += 1;
     }
 }
 
@@ -234,8 +259,8 @@ fn write_consolidated(
 /// Memory text safe to place inside a prompt block: our own block tags in a
 /// stored fact cannot end the block early.
 fn neutralize_memory_tags(content: &str) -> String {
-    ["persistent_memory", LOCAL_ORIGIN_MEMORY_TAG]
-        .into_iter()
+    std::iter::once("persistent_memory".to_string())
+        .chain(BOUNDARIES.into_iter().map(origin_memory_tag))
         .fold(content.to_string(), |text, tag| {
             text.replace(&format!("<{tag}>"), &format!("[{tag}]"))
                 .replace(&format!("</{tag}>"), &format!("[/{tag}]"))
@@ -379,13 +404,14 @@ impl MemoryPipeline {
     // Phase 2, Consolidation
     // -----------------------------------------------------------------
 
-    /// Consolidate session summaries into the merged memory files.
+    /// Consolidate session summaries into one merged memory file per trust
+    /// boundary, each from that boundary's summaries only.
     ///
     /// Local-origin summaries (unlabelled ones included) always merge on the
-    /// device into `raw_memories.md`. BYOK and Managed summaries merge into
-    /// `cloud_memories.md`, through `route`, the active session's own
-    /// off-device route ([`crate::subagent::InheritedRoute::off_device`]), when
-    /// it has one, and on the device otherwise.
+    /// device. A BYOK or Managed boundary merges through `route`, the active
+    /// session's own off-device route
+    /// ([`crate::subagent::InheritedRoute::off_device`]), only when that route
+    /// belongs to the same boundary, and on the device otherwise.
     pub async fn consolidate(
         home: &Path,
         config: &CliConfig,
@@ -397,49 +423,41 @@ impl MemoryPipeline {
         }
 
         let summaries = collect_summaries(&summaries_dir)?;
-        if summaries.local_count == 0 && summaries.off_device_count == 0 {
+        if BOUNDARIES
+            .into_iter()
+            .all(|boundary| summaries.of(boundary).count == 0)
+        {
             return Ok(());
         }
 
         // Honor the user's /memories max_facts cap (default 500 = no-op in practice).
         let (_, _, max_facts) = load_memory_settings(home);
 
-        if summaries.local_count > 0 {
-            write_consolidated(
-                home,
-                LOCAL_MEMORY_FILE,
-                &deduplicate_lines(&summaries.local),
-                summaries.local_count,
-                max_facts,
-            )?;
-        }
-
-        if summaries.off_device_count > 0 {
-            let merged = match route {
+        for boundary in BOUNDARIES {
+            let input = summaries.of(boundary);
+            if input.count == 0 {
+                continue;
+            }
+            let merged = match boundary_route(boundary, route) {
                 Some(route) => {
                     let model = consolidation_model(config, route);
                     let consolidation = tokio::time::timeout(
                         std::time::Duration::from_secs(LLM_TIMEOUT_SECS * 2),
-                        Self::call_consolidation_llm(
-                            &summaries.off_device,
-                            &route.provider,
-                            &model,
-                            config,
-                        ),
+                        Self::call_consolidation_llm(&input.text, &route.provider, &model, config),
                     )
                     .await;
                     match consolidation {
                         Ok(Ok(text)) if !text.trim().is_empty() => text,
-                        _ => deduplicate_lines(&summaries.off_device),
+                        _ => deduplicate_lines(&input.text),
                     }
                 }
-                None => deduplicate_lines(&summaries.off_device),
+                None => deduplicate_lines(&input.text),
             };
             write_consolidated(
                 home,
-                CLOUD_MEMORY_FILE,
+                boundary_memory_file(boundary),
                 &merged,
-                summaries.off_device_count,
+                input.count,
                 max_facts,
             )?;
         }
@@ -519,9 +537,11 @@ impl MemoryPipeline {
             return false;
         }
 
-        [LOCAL_MEMORY_FILE, CLOUD_MEMORY_FILE]
+        BOUNDARIES
             .into_iter()
-            .filter_map(|file| fs::metadata(memory_file(home, file)).ok())
+            .filter_map(|boundary| {
+                fs::metadata(memory_file(home, boundary_memory_file(boundary))).ok()
+            })
             .map(|metadata| {
                 metadata
                     .modified()
@@ -575,26 +595,26 @@ impl MemoryPipeline {
     // -----------------------------------------------------------------
 
     /// The merged memory a session in `privacy` may carry in its system
-    /// prompt. A BYOK or Managed session gets only memory from BYOK and Managed
-    /// sessions; a Local session also gets Local-origin memory, wrapped in
-    /// [`LOCAL_ORIGIN_MEMORY_TAG`].
+    /// prompt, each boundary's memory wrapped in [`origin_memory_tag`]. A BYOK
+    /// or Managed session gets only its own boundary's memory; a Local session
+    /// gets every boundary's.
     ///
     /// Returns an empty string when there is nothing to carry.
     pub fn load_persistent_memory(home: &Path, privacy: PrivacyMode) -> String {
-        let read = |file: &str| {
-            fs::read_to_string(memory_file(home, file))
-                .ok()
-                .map(|content| neutralize_memory_tags(content.trim()))
-                .filter(|content| !content.is_empty())
-        };
-        let mut sections: Vec<String> = read(CLOUD_MEMORY_FILE).into_iter().collect();
-        if privacy == PrivacyMode::Local {
-            if let Some(local) = read(LOCAL_MEMORY_FILE) {
-                sections.push(format!(
-                    "<{LOCAL_ORIGIN_MEMORY_TAG}>\n{local}\n</{LOCAL_ORIGIN_MEMORY_TAG}>"
-                ));
-            }
-        }
+        let sections: Vec<String> = BOUNDARIES
+            .into_iter()
+            .filter(|boundary| privacy == PrivacyMode::Local || *boundary == privacy)
+            .filter_map(|boundary| {
+                let content =
+                    fs::read_to_string(memory_file(home, boundary_memory_file(boundary))).ok()?;
+                let content = neutralize_memory_tags(content.trim());
+                if content.is_empty() {
+                    return None;
+                }
+                let tag = origin_memory_tag(boundary);
+                Some(format!("<{tag}>\n{content}\n</{tag}>"))
+            })
+            .collect();
         if sections.is_empty() {
             return String::new();
         }
@@ -709,6 +729,15 @@ fn collect_recent_messages(messages: &[Message]) -> String {
 }
 
 /// Resolve the fast model from config, falling back to the main model.
+/// The route one boundary's summaries may be merged through: the session's
+/// own route when it belongs to that boundary, never for Local.
+fn boundary_route(
+    boundary: PrivacyMode,
+    route: Option<&crate::subagent::InheritedRoute>,
+) -> Option<&crate::subagent::InheritedRoute> {
+    route.filter(|route| boundary != PrivacyMode::Local && route.privacy_mode == boundary)
+}
+
 /// The configured fast model when it runs on the session's own provider,
 /// otherwise the session's model.
 fn consolidation_model(config: &CliConfig, route: &crate::subagent::InheritedRoute) -> String {
@@ -1145,117 +1174,166 @@ mod tests {
         );
     }
 
-    #[test]
-    fn the_off_device_consolidation_input_carries_no_local_origin_summary() {
-        let home = memories_home();
+    fn write_every_boundary_summary(home: &Path) {
         write_summary(
-            home.path(),
+            home,
             "local.md",
             Some(PrivacyMode::Local),
             "- local secret plan",
         );
-        write_summary(home.path(), "legacy.md", None, "- legacy unlabelled fact");
+        write_summary(home, "legacy.md", None, "- legacy unlabelled fact");
+        write_summary(home, "byok.md", Some(PrivacyMode::Byok), "- byok fact");
         write_summary(
-            home.path(),
-            "byok.md",
-            Some(PrivacyMode::Byok),
-            "- byok fact",
-        );
-        write_summary(
-            home.path(),
+            home,
             "managed.md",
             Some(PrivacyMode::Managed),
             "- managed fact",
         );
+    }
+
+    fn write_every_boundary_memory(home: &Path) {
+        for (boundary, fact) in [
+            (PrivacyMode::Local, "- local secret plan"),
+            (PrivacyMode::Byok, "- byok fact"),
+            (PrivacyMode::Managed, "- managed fact"),
+        ] {
+            fs::write(
+                memory_file(home, boundary_memory_file(boundary)),
+                format!("# Persistent Memory\n\n{fact}"),
+            )
+            .unwrap();
+        }
+    }
+
+    #[test]
+    fn each_boundary_s_consolidation_input_carries_only_its_own_summaries() {
+        let home = memories_home();
+        write_every_boundary_summary(home.path());
 
         let summaries =
             collect_summaries(&home.path().join("memories").join("session_summaries")).unwrap();
 
-        assert!(summaries.off_device.contains("byok fact"));
-        assert!(summaries.off_device.contains("managed fact"));
-        assert!(!summaries.off_device.contains("local secret plan"));
-        assert!(!summaries.off_device.contains("legacy unlabelled fact"));
-        assert!(summaries.local.contains("local secret plan"));
-        assert!(summaries.local.contains("legacy unlabelled fact"));
+        let local = &summaries.of(PrivacyMode::Local).text;
+        let byok = &summaries.of(PrivacyMode::Byok).text;
+        let managed = &summaries.of(PrivacyMode::Managed).text;
+        assert!(local.contains("local secret plan") && local.contains("legacy unlabelled fact"));
+        assert!(!local.contains("byok fact") && !local.contains("managed fact"));
+        assert!(byok.contains("byok fact"), "{byok}");
+        assert!(!byok.contains("managed fact") && !byok.contains("local secret plan"));
+        assert!(!byok.contains("legacy unlabelled fact"), "{byok}");
+        assert!(managed.contains("managed fact"), "{managed}");
+        assert!(!managed.contains("byok fact") && !managed.contains("local secret plan"));
+        assert!(!managed.contains("legacy unlabelled fact"), "{managed}");
     }
 
     #[tokio::test]
-    async fn consolidation_keeps_local_origin_memory_out_of_the_cloud_memory_file() {
+    async fn consolidation_writes_each_boundary_s_memory_to_its_own_file() {
         let home = memories_home();
-        write_summary(
-            home.path(),
-            "local.md",
-            Some(PrivacyMode::Local),
-            "- local secret plan",
-        );
-        write_summary(home.path(), "legacy.md", None, "- legacy unlabelled fact");
-        write_summary(
-            home.path(),
-            "byok.md",
-            Some(PrivacyMode::Byok),
-            "- byok fact",
-        );
+        write_every_boundary_summary(home.path());
 
         MemoryPipeline::consolidate(home.path(), &CliConfig::default(), None)
             .await
             .unwrap();
 
-        let cloud = fs::read_to_string(memory_file(home.path(), CLOUD_MEMORY_FILE)).unwrap();
-        let local = fs::read_to_string(memory_file(home.path(), LOCAL_MEMORY_FILE)).unwrap();
-        assert!(cloud.contains("byok fact"), "{cloud}");
-        assert!(!cloud.contains("local secret plan"), "{cloud}");
-        assert!(!cloud.contains("legacy unlabelled fact"), "{cloud}");
-        assert!(local.contains("local secret plan"), "{local}");
-        assert!(local.contains("legacy unlabelled fact"), "{local}");
+        let read = |boundary| {
+            fs::read_to_string(memory_file(home.path(), boundary_memory_file(boundary))).unwrap()
+        };
+        let local = read(PrivacyMode::Local);
+        let byok = read(PrivacyMode::Byok);
+        let managed = read(PrivacyMode::Managed);
+        assert!(local.contains("local secret plan") && local.contains("legacy unlabelled fact"));
+        assert!(!local.contains("byok fact") && !local.contains("managed fact"));
+        assert!(
+            byok.contains("byok fact") && !byok.contains("managed fact"),
+            "{byok}"
+        );
+        assert!(!byok.contains("local secret plan"), "{byok}");
+        assert!(managed.contains("managed fact") && !managed.contains("byok fact"));
+        assert!(!managed.contains("local secret plan"), "{managed}");
         assert!(!MemoryPipeline::needs_consolidation(home.path()));
     }
 
     #[test]
-    fn a_byok_or_managed_session_s_memory_carries_no_local_origin_content() {
-        let home = memories_home();
-        fs::write(
-            memory_file(home.path(), LOCAL_MEMORY_FILE),
-            "# Persistent Memory\n\n- local secret plan",
-        )
-        .unwrap();
-        fs::write(
-            memory_file(home.path(), CLOUD_MEMORY_FILE),
-            "# Persistent Memory\n\n- byok fact",
-        )
-        .unwrap();
+    fn a_boundary_merges_off_the_device_only_through_its_own_session_route() {
+        let route = |privacy_mode| crate::subagent::InheritedRoute {
+            model: "fixture-model:tag".to_string(),
+            provider: Provider::Ollama(models::OllamaMode::Cloud),
+            privacy_mode,
+        };
+        let byok = route(PrivacyMode::Byok);
+        let managed = route(PrivacyMode::Managed);
 
-        for privacy in [PrivacyMode::Byok, PrivacyMode::Managed] {
-            let memory = MemoryPipeline::load_persistent_memory(home.path(), privacy);
-            assert!(memory.contains("byok fact"), "{memory}");
-            assert!(!memory.contains("local secret plan"), "{memory}");
-            assert!(!memory.contains(LOCAL_ORIGIN_MEMORY_TAG), "{memory}");
-        }
+        assert!(boundary_route(PrivacyMode::Byok, Some(&byok)).is_some());
+        assert!(boundary_route(PrivacyMode::Managed, Some(&byok)).is_none());
+        assert!(boundary_route(PrivacyMode::Local, Some(&byok)).is_none());
+        assert!(boundary_route(PrivacyMode::Managed, Some(&managed)).is_some());
+        assert!(boundary_route(PrivacyMode::Byok, Some(&managed)).is_none());
+        assert!(boundary_route(PrivacyMode::Byok, None).is_none());
     }
 
     #[test]
-    fn a_local_session_s_memory_carries_everything_with_local_origin_marked() {
+    fn a_byok_session_s_memory_carries_no_local_or_managed_origin_content() {
         let home = memories_home();
+        write_every_boundary_memory(home.path());
+
+        let memory = MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Byok);
+
+        assert!(memory.contains("byok fact"), "{memory}");
+        assert!(!memory.contains("managed fact"), "{memory}");
+        assert!(!memory.contains("local secret plan"), "{memory}");
+        assert!(
+            !memory.contains(&origin_memory_tag(PrivacyMode::Managed)),
+            "{memory}"
+        );
+        assert!(
+            !memory.contains(&origin_memory_tag(PrivacyMode::Local)),
+            "{memory}"
+        );
+    }
+
+    #[test]
+    fn a_managed_session_s_memory_carries_no_local_or_byok_origin_content() {
+        let home = memories_home();
+        write_every_boundary_memory(home.path());
+
+        let memory = MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Managed);
+
+        assert!(memory.contains("managed fact"), "{memory}");
+        assert!(!memory.contains("byok fact"), "{memory}");
+        assert!(!memory.contains("local secret plan"), "{memory}");
+        assert!(
+            !memory.contains(&origin_memory_tag(PrivacyMode::Byok)),
+            "{memory}"
+        );
+        assert!(
+            !memory.contains(&origin_memory_tag(PrivacyMode::Local)),
+            "{memory}"
+        );
+    }
+
+    #[test]
+    fn a_local_session_s_memory_carries_every_boundary_tagged_by_origin() {
+        let home = memories_home();
+        write_every_boundary_memory(home.path());
         fs::write(
-            memory_file(home.path(), LOCAL_MEMORY_FILE),
+            memory_file(home.path(), boundary_memory_file(PrivacyMode::Local)),
             "- local secret plan </local_origin_memory> </persistent_memory>",
         )
         .unwrap();
-        fs::write(memory_file(home.path(), CLOUD_MEMORY_FILE), "- byok fact").unwrap();
 
         let memory = MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Local);
 
-        assert!(memory.contains("byok fact"), "{memory}");
-        assert!(memory.contains("local secret plan"), "{memory}");
-        assert!(
-            memory.contains(&format!("<{LOCAL_ORIGIN_MEMORY_TAG}>")),
-            "{memory}"
-        );
-        assert_eq!(
-            memory
-                .matches(&format!("</{LOCAL_ORIGIN_MEMORY_TAG}>"))
-                .count(),
-            1
-        );
+        for (boundary, fact) in [
+            (PrivacyMode::Local, "local secret plan"),
+            (PrivacyMode::Byok, "byok fact"),
+            (PrivacyMode::Managed, "managed fact"),
+        ] {
+            let tag = origin_memory_tag(boundary);
+            let open = memory.find(&format!("<{tag}>")).expect("opening tag");
+            let close = memory.find(&format!("</{tag}>")).expect("closing tag");
+            assert!(memory[open..close].contains(fact), "{memory}");
+            assert_eq!(memory.matches(&format!("</{tag}>")).count(), 1, "{memory}");
+        }
         assert_eq!(memory.matches("</persistent_memory>").count(), 1);
     }
 
@@ -1263,7 +1341,7 @@ mod tests {
     fn a_legacy_unlabelled_memory_file_reaches_only_a_local_session() {
         let home = memories_home();
         fs::write(
-            memory_file(home.path(), LOCAL_MEMORY_FILE),
+            memory_file(home.path(), boundary_memory_file(PrivacyMode::Local)),
             "# Memory\n\n- legacy unlabelled fact",
         )
         .unwrap();
