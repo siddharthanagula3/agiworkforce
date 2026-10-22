@@ -1,10 +1,14 @@
 # Arrangements: what each one costs and how to run it
 
-Facts about Claude Code features here were read from the official documentation on 2026-10-08 (pages listed at the end). Re-check them when a feature behaves differently from this file.
+Facts about Claude Code features here were read from the official documentation on 2026-10-08 and rechecked on 2026-10-21 (pages listed at the end). Re-check them when a feature behaves differently from this file.
 
 ## Direct execution
 
 No extra agents. Best for small tasks and for work whose parts depend on each other so tightly that a worker would need your whole context. The cost is your own context window: if the task needs a lot of reading that you will not need afterwards, that reading is what to delegate.
+
+## Forks
+
+A fork is a sub-agent that inherits the whole conversation so far, with the same system prompt, tools and model. Its first request reuses your prompt cache, so "a fork costs less than a fresh subagent for tasks that need the same context". Start one with `/subtask <task>`, or Claude forks on its own (on by default). A fork cannot start another fork and cannot change model, so use it for parallel work that needs your context on your model, and a fresh sub-agent when a cheaper model or a clean context is the point.
 
 ## Sub-agents
 
@@ -14,13 +18,22 @@ A sub-agent starts fresh with only your brief, works on its own, and returns one
 - A sub-agent can be continued with SendMessage; that keeps what it learned. Starting a new one discards it.
 - The model is taken, in order, from: the `model` you pass on the call, the profile's frontmatter, the `CLAUDE_CODE_SUBAGENT_MODEL` environment variable, then your own model. Pass `model` whenever the route matters.
 - Sub-agents can start their own sub-agents by default (up to three layers). The `orch-*` profiles cannot, because recursive delegation hides cost and duplicates work. If you use another agent type, tell it in the brief not to delegate.
-- One writer per file. Two sub-agents editing the same file will overwrite each other; sequence them, or give each its own files, or use a separate worktree per worker for larger parallel changes.
+- One writer per file. Two sub-agents editing the same file will overwrite each other; sequence them, or give each its own files, or use a separate worktree per worker for larger parallel changes (`isolation: worktree` in the agent file).
+- Up to 20 run at once by default. Their cache lasts 5 minutes unless the agent file sets `experimental.cacheTtl: 1h`. There is no per-agent thinking setting; `effort` is the control.
+- The built-in Explore and Plan are one-shot (no agent ID, cannot be continued) and run on your model unless the project defines its own `Explore`. Use a custom or `general-purpose` agent when you will want to continue the work.
+
+## Background sessions and batch changes
+
+- A background session (`claude --bg`, agent view) is a full separate session in its own worktree, which you hand work to and check later. It suits independent tasks you will review, not tasks you will steer; "running ten agents in parallel uses quota roughly ten times as fast as running one."
+- `/batch` splits one large mechanical change into 5 to 30 worktree-isolated sub-agents.
+- Scheduled cloud routines and `/loop` resend context on every firing; use them for recurring checks, and keep each run's prompt short.
 
 ## Agent teams
 
 A lead plus teammates with a shared task list and messaging between them.
 
-- Experimental and off by default. Enabled with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in the shell or in the `env` block of a settings file. Interactive sessions only.
+- Experimental and off by default. Enabled with `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in the shell or in the `env` block of a settings file. Interactive sessions only. While it is on, any sub-agent given a name launches as a teammate, so teams can form without being asked for; leaving it off by default and turning it on per session avoids that.
+- The documented cost figure is "approximately 7x more tokens than standard sessions when teammates run in plan mode". Teammates are not isolated in worktrees, so partition the files.
 - One team per session; teammates cannot start teams of their own; in-process teammates are not restored when a session is resumed.
 - A team uses significantly more tokens than one session or the same number of sub-agents, because every teammate carries its own context and the messages between them. The documentation suggests starting with three to five teammates.
 - Use it when workers need each other's intermediate results: agreeing an interface between two sides of a change, arguing competing explanations of a bug, reviewing each other's work as it lands.

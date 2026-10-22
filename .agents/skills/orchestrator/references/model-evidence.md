@@ -2,13 +2,14 @@
 
 The figures behind the routing defaults. Everything here changes: prices, benchmark scores and model generations. Check the date on a table before leaning on it, and refresh this file rather than editing numbers into `SKILL.md` or `routing.md`.
 
-**Read on 2026-10-08.** The pages were fetched through a summarising tool, so individual numbers may be off; spot-check a figure against its page before a decision rests on it. The source's own model labels are kept in the tables so each row can be traced; the rest of the skill uses family names only.
+**Read on 2026-10-08, refreshed 2026-10-21.** The 2026-10-21 refresh read the leaderboard and the Anthropic pricing, caching, effort and model pages first-hand: every index score and cost per task was unchanged, speed and latency moved slightly. Spot-check a figure against its page before a decision rests on it. The source's own model labels are kept in the tables so each row can be traced; the rest of the skill uses family names only.
 
 ## Contents
 
 - What the evidence changed in the defaults
 - Artificial Analysis: intelligence, cost per task and speed by effort
 - Anthropic: list prices and stated purpose
+- Billing modifiers and cache rules
 - Anthropic: effort guidance
 - Coding and agent benchmarks
 - What is not established
@@ -27,30 +28,30 @@ The figures behind the routing defaults. Everything here changes: prices, benchm
 
 ## Artificial Analysis: intelligence, cost per task and speed by effort
 
-Source: artificialanalysis.ai/leaderboards/models, read 2026-10-08. Columns: Intelligence Index; cost per task in USD; median output tokens per second; seconds to first output chunk. All rows are reasoning (effort) variants; context is listed as 1M tokens for all. Opus, Sonnet and Fable rows were labelled "with fallback".
+Source: artificialanalysis.ai/leaderboards/models, read 2026-10-21. Columns: Intelligence Index; cost per task in USD; median output tokens per second; seconds to first output chunk. All rows are reasoning (effort) variants; context is listed as 1M tokens for all. Opus, Sonnet and Fable rows are labelled "with fallback". The best non-Claude row scored 56.
 
 | Source label      | Index | $ per task | tok/s | First chunk (s) |
 | ----------------- | ----- | ---------- | ----- | --------------- |
-| Opus 5.5 max      | 58    | 5.98       | 95    | 731.5           |
-| Opus 5.5 xhigh    | 56    | 3.46       | 80    | 132.0           |
-| Opus 5.5 high     | 54    | 1.82       | 76    | 37.6            |
-| Opus 5.5 medium   | 51    | 1.34       | 76    | 22.5            |
-| Opus 5.5 low      | 42    | 0.55       | 79    | 8.7             |
-| Sonnet 5.5 max    | 56    | 5.46       | 129   | 460.7           |
-| Sonnet 5.5 xhigh  | 52    | 2.01       | 107   | 35.9            |
-| Sonnet 5.5 high   | 47    | 0.88       | 104   | 13.0            |
-| Sonnet 5.5 medium | 41    | 0.48       | 102   | 2.05            |
-| Sonnet 5.5 low    | 36    | 0.35       | 101   | 1.05            |
-| Fable 5.1 max     | 53    | 7.63       | 66    | 293.7           |
-| Fable 5.1 xhigh   | 53    | 5.98       | 58    | 80.6            |
-| Fable 5.1 high    | 51    | 3.91       | 58    | 22.7            |
-| Fable 5.1 medium  | 49    | 2.98       | 54    | 7.6             |
-| Fable 5.1 low     | 47    | 2.37       | 54    | 3.9             |
-| Haiku 5.5 max     | 43    | 0.21       | 242   | 432.2           |
-| Haiku 5.5 xhigh   | 41    | 0.12       | 187   | 87.0            |
-| Haiku 5.5 high    | 38    | 0.08       | 160   | 28.0            |
-| Haiku 5.5 medium  | 34    | 0.05       | 137   | 13.4            |
-| Haiku 5.5 low     | 29    | 0.02       | 178   | 9.9             |
+| Opus 5.5 max      | 58    | 5.98       | 95    | 647.8           |
+| Opus 5.5 xhigh    | 56    | 3.46       | 83    | 123.7           |
+| Opus 5.5 high     | 54    | 1.82       | 77    | 35.4            |
+| Opus 5.5 medium   | 51    | 1.34       | 78    | 22.5            |
+| Opus 5.5 low      | 42    | 0.55       | 79    | 5.5             |
+| Sonnet 5.5 max    | 56    | 5.46       | 136   | 395.0           |
+| Sonnet 5.5 xhigh  | 52    | 2.01       | 106   | 30.9            |
+| Sonnet 5.5 high   | 47    | 0.88       | 102   | 11.7            |
+| Sonnet 5.5 medium | 41    | 0.48       | 101   | 1.4             |
+| Sonnet 5.5 low    | 36    | 0.35       | 101   | 1.3             |
+| Fable 5.1 max     | 53    | 7.63       | 69    | 257.0           |
+| Fable 5.1 xhigh   | 53    | 5.98       | 64    | 66.4            |
+| Fable 5.1 high    | 51    | 3.91       | 55    | 20.0            |
+| Fable 5.1 medium  | 49    | 2.98       | 55    | 3.2             |
+| Fable 5.1 low     | 47    | 2.37       | 55    | 2.5             |
+| Haiku 5.5 max     | 43    | 0.21       | 235   | 310.4           |
+| Haiku 5.5 xhigh   | 41    | 0.12       | 193   | 64.5            |
+| Haiku 5.5 high    | 38    | 0.08       | 179   | 23.2            |
+| Haiku 5.5 medium  | 34    | 0.05       | 172   | 11.5            |
+| Haiku 5.5 low     | 29    | 0.02       | 166   | 9.0             |
 
 Not on that page when read: a coding index, an agentic index, per-token prices, and the cost to run the whole index. The per-model pages were not opened.
 
@@ -77,6 +78,18 @@ Worked comparison from the table above (list prices, 1-hour cache, rounded; Clau
 - Start a fresh Haiku batch from a 20K summary instead of the material: about $0.01 to $0.02, if the summary is enough.
 
 The 5x tier mostly matters when a Haiku worker is planned too large; once it holds the material, a family switch costs more than the tier.
+
+## Billing modifiers and cache rules
+
+Source: platform.claude.com/docs/en/about-claude/pricing, build-with-claude/prompt-caching, thinking, effort, fast-mode and token-counting, read 2026-10-21.
+
+- Thinking tokens bill as output, including thinking that is not shown ("reduces latency, not cost"); thinking cannot be turned off on the current four families. Effort changes the number of tokens, not the price per token.
+- The current models use a newer tokenizer that counts about 30 percent more tokens for the same text than the previous generation.
+- Fast mode (current Opus only): $8 / $40, "up to 2.5x" faster output, no batch, and fast and standard requests do not share a cache. US-only inference is 1.1 times every rate.
+- Cache reads cost 0.05 times input on Opus and Sonnet, 0.1 times on Haiku and 0.025 times on Fable. A 5-minute write is 1.25 times input and pays back after one read; a 1-hour write is 2 times and pays back after two. Every read refreshes the timer at no cost. Minimum cacheable prompt is 512 tokens; up to 4 breakpoints; caches are isolated per workspace and need a byte-identical prefix.
+- Rebuilds: changing tool definitions invalidates everything after them; web search, citations or speed toggles invalidate system and messages; images and `tool_choice` invalidate messages. The API page says thinking and effort changes invalidate messages; Claude Code's page says effort changes keep the cache on the current models. Sharing across models is not documented.
+- Claude Code's cache lifetimes: the main conversation gets 1 hour on a subscription within plan usage, otherwise 5 minutes; sub-agents, workflow agents and compaction get 5 minutes. Settings: `promptCacheTtl`, `subagentPromptCacheTtl`, the `CLAUDE_CODE_*PROMPT_CACHE_TTL` variables, and `experimental.cacheTtl` in an agent file.
+- Subscription limits: five-hour and weekly limits are shared across Claude and Claude Code and every model; Max adds a separate weekly limit for Fable ("up to 50% of your weekly usage limits"). No per-model weights are published. Over the limit, usage credits bill at API rates and the main cache drops to 5 minutes. Anthropic's average: about $13 per developer per active day.
 
 Other statements from the same pages: batch processing is half price; "Most workloads start with" Opus; move to Fable if "evals at xhigh or max effort still fall short"; Haiku is listed for "sub-agent tasks".
 
@@ -113,13 +126,12 @@ Third-party trackers reported effort-by-effort Terminal-Bench figures for Sonnet
 
 ## This installation
 
-Checked on 2026-10-08.
+Checked on 2026-10-21.
 
-- Claude Code 2.1.293. `claude --model` accepts the family aliases `haiku`, `sonnet`, `opus`, `fable`; `claude --effort` accepts `low`, `medium`, `high`, `xhigh`, `max`. The `effortLevel` setting does not accept `max`.
-- Agent definition files accept `model` (an alias, `inherit`, or a full id) and `effort` (the five levels). A `model` passed on the Agent call wins over the file.
-- User settings: main model `opus`, effort `high`; the `haiku` alias is pinned through `ANTHROPIC_DEFAULT_HAIKU_MODEL`; per-model effort overrides exist under `modelSettings`.
-- Agent teams are enabled in one project's settings (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1`), not for the user account. Workflows are not disabled.
-- The older user skill `intelligent-model-orchestration` (Opus and Sonnet only) was deleted on 2026-10-08 at the user's request, so this skill is the only router.
+- Claude Code 2.1.307. Model aliases `haiku`, `sonnet`, `opus`, `fable`, plus `best` (Fable where available, else Opus) and `opusplan` (Opus in plan mode, Sonnet to execute; each switch rebuilds the cache). Effort levels `low` to `max`; a top-level `effortLevel` in user settings is ignored for the current Opus, so per-model `modelSettings` entries apply.
+- Agent files accept `model`, `effort`, `tools`, `maxTurns`, `autoCompactWindow`, `isolation`, `background`, `omitClaudeMd`, `memory` and `experimental.cacheTtl`. A `model` or `effort` passed on the Agent call wins over the file.
+- Project settings: `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`, so unconfigured sub-agents run on Sonnet; agent teams off by default; a project `Explore` agent runs searches on Haiku at medium. `orch-builder` and `orch-principal` keep a 1-hour cache because their tool calls often run longer than 5 minutes; scouts stay on 5 minutes.
+- User settings: main model `opus`, Opus effort `high`; the `haiku` alias is pinned through `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
 
 ## How to refresh
 
