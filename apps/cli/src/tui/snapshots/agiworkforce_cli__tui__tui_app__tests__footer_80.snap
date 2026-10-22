@@ -2,4 +2,4 @@
 source: apps/cli/src/tui/tui_app.rs
 expression: "draw_footer(80, \"High\", None)"
 ---
- Default  ◉ Your key  ctx [███░░░░░]  42%  effort:High  T3 ↑1234 ↓567
+ Default  ◉ Your key  ctx [███░░░░░]  42%  effort:High  in 1.2K · out 567 · T3

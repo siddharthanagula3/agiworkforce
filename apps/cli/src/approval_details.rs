@@ -1,5 +1,7 @@
 use serde_json::Value;
 
+use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
+
 const MAX_ARGUMENT_PREVIEW_CHARS: usize = 4_000;
 const MAX_DETAIL_VALUE_CHARS: usize = 240;
 const MAX_DEPTH: usize = 4;
@@ -49,6 +51,28 @@ pub(crate) fn approval_detail(args: &Value) -> Vec<String> {
     }
     detail.push(argument_preview(args));
     detail
+}
+
+const GIT_COMMIT_TOOL: &str = "git_commit";
+const GIT_COMMIT_TARGET_PREFIX: &str = "git commit --message=";
+
+/// The commit subject in words for a commit approval, whichever gate raised it.
+pub(crate) fn commit_line(request: &ApprovalRequest) -> Option<String> {
+    let message = match (&request.kind, &request.tool_subject) {
+        (_, Some((name, args))) if name == GIT_COMMIT_TOOL => args.get("message")?.as_str()?,
+        (ApprovalRequestKind::Git { tool_name, target }, _) if tool_name == GIT_COMMIT_TOOL => {
+            target.strip_prefix(GIT_COMMIT_TARGET_PREFIX)?
+        }
+        _ => return None,
+    };
+    let subject = message
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())?;
+    Some(format!(
+        "Commit: {}",
+        clip(&crate::terminal_text::sanitize_terminal_text(subject))
+    ))
 }
 
 pub(crate) fn argument_preview(args: &Value) -> String {
@@ -192,4 +216,65 @@ fn clip(text: &str) -> String {
     let mut clipped: String = text.chars().take(MAX_DETAIL_VALUE_CHARS).collect();
     clipped.push('…');
     clipped
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn request(kind: ApprovalRequestKind) -> ApprovalRequest {
+        ApprovalRequest::new(kind, "Allow this?", Vec::new())
+    }
+
+    #[test]
+    fn a_commit_subject_comes_from_the_tool_arguments() {
+        let request = request(ApprovalRequestKind::WorkspacePolicy {
+            tool_name: "git_commit".to_string(),
+            primary_argument: String::new(),
+        })
+        .with_tool_subject(
+            "git_commit",
+            json!({"message": "\n  fix(routing): read the live snapshot  \n\nbody"}),
+        );
+        assert_eq!(
+            commit_line(&request).as_deref(),
+            Some("Commit: fix(routing): read the live snapshot")
+        );
+    }
+
+    #[test]
+    fn a_commit_subject_comes_from_the_git_target() {
+        let request = request(ApprovalRequestKind::Git {
+            tool_name: "git_commit".to_string(),
+            target: "git commit --message=add a test\n\nlong body".to_string(),
+        });
+        assert_eq!(commit_line(&request).as_deref(), Some("Commit: add a test"));
+    }
+
+    #[test]
+    fn a_commit_subject_is_sanitized_and_clipped() {
+        let long = "x".repeat(MAX_DETAIL_VALUE_CHARS + 50);
+        let request = request(ApprovalRequestKind::Git {
+            tool_name: "git_commit".to_string(),
+            target: format!("git commit --message=\u{1b}[2Jhidden {long}"),
+        });
+        let line = commit_line(&request).expect("line");
+        assert!(!line.contains('\u{1b}'), "{line:?}");
+        assert!(line.ends_with('…'), "{line:?}");
+    }
+
+    #[test]
+    fn other_tools_get_no_commit_line() {
+        let merge = request(ApprovalRequestKind::Git {
+            tool_name: "git_merge".to_string(),
+            target: "git merge --message=nope".to_string(),
+        });
+        assert_eq!(commit_line(&merge), None);
+        let empty = request(ApprovalRequestKind::Git {
+            tool_name: "git_commit".to_string(),
+            target: "git commit --message=".to_string(),
+        });
+        assert_eq!(commit_line(&empty), None);
+    }
 }

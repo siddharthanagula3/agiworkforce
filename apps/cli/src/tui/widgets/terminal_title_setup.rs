@@ -2,7 +2,8 @@
 
 use super::interactive::{InteractiveView, KeyAction, SelectionState, ViewAction};
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(default)]
 pub struct TerminalTitleConfig {
     pub show_session_id: bool,
     pub show_model: bool,

@@ -395,7 +395,7 @@ struct TuiApp {
     // edits a copy and commits it here on save (the generic overlay path dropped it).
     statusline_config: super::widgets::statusline_setup::StatusLineConfig,
     // Terminal-title field config: which of session-id/model/cwd/branch appear in
-    // the OS window title. Applied (emitted via SetTitle) when /title saves.
+    // the OS window title. Read from `[ui]` at startup and saved by /title.
     terminal_title_config: super::widgets::terminal_title_setup::TerminalTitleConfig,
     // Currently active effort level (persisted across model switches)
     effort: crate::design_system::Effort,
@@ -486,6 +486,7 @@ impl TuiApp {
             .and_then(super::widgets::theme_picker::ThemeChoice::from_arg)
             .unwrap_or(super::widgets::theme_picker::ThemeChoice::Dark);
         crate::tui::terminal_palette::set_active_theme(theme_choice.applied() as u8);
+        let terminal_title_config = config.ui.terminal_title.clone().unwrap_or_default();
 
         let model_name = session.model.clone();
         let provider_name = crate::design_system::provider_label(&session.provider);
@@ -609,8 +610,7 @@ impl TuiApp {
                 show_branch: false,
                 show_mode: true,
             },
-            terminal_title_config:
-                super::widgets::terminal_title_setup::TerminalTitleConfig::default(),
+            terminal_title_config,
             effort,
             theme_picker: super::widgets::theme_picker::ThemePickerState::default(),
             theme_choice,
@@ -866,7 +866,11 @@ impl TuiApp {
     }
 
     fn sync_stats(&mut self) {
+        let model_changed = self.model_name != self.session.model;
         self.model_name = self.session.model.clone();
+        if model_changed && self.terminal_title_config.show_model {
+            self.emit_terminal_title();
+        }
         self.provider_name = crate::design_system::provider_label(&self.session.provider);
     }
 
@@ -1019,6 +1023,15 @@ impl TuiApp {
             OverlayResult::TerminalTitle(config) => {
                 self.terminal_title_config = config;
                 self.emit_terminal_title();
+                if let Err(error) = self
+                    .config
+                    .persist_terminal_title_project(&self.terminal_title_config)
+                {
+                    self.chat_messages.push(ChatMessage {
+                        role: ChatRole::Error,
+                        text: format!("The terminal title choice was not saved: {error}"),
+                    });
+                }
             }
             OverlayResult::SkillsDisabled(names) => {
                 // Persist the disabled set; discover_skills() then skips them for
@@ -1181,23 +1194,51 @@ impl TuiApp {
         }
     }
 
-    /// Emit the OS window title from the current config + live session data. Called
-    /// on /title save (best-effort, a title-set escape never affects the screen).
-    fn emit_terminal_title(&self) {
+    fn terminal_title(&self) -> Option<String> {
         let cwd = std::env::current_dir()
             .ok()
             .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
             .unwrap_or_default();
         let session_id: String = self.session.runtime_session_id.chars().take(8).collect();
-        if let Some(title) = build_terminal_title(
+        build_terminal_title(
             &self.terminal_title_config,
             &session_id,
             &self.model_name,
             &cwd,
             self.git_branch.as_deref(),
-        ) {
-            let _ = std::io::stdout().execute(crossterm::terminal::SetTitle(title));
+        )
+    }
+
+    /// Best-effort: a title-set escape never affects the screen.
+    fn emit_terminal_title(&self) {
+        if !super::tui_active() {
+            return;
         }
+        if let Some(title) = self.terminal_title() {
+            set_terminal_title(title);
+        }
+    }
+}
+
+static TERMINAL_TITLE_STACKED: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+fn set_terminal_title(title: String) {
+    let mut stdout = io::stdout();
+    #[cfg(unix)]
+    if !TERMINAL_TITLE_STACKED.swap(true, std::sync::atomic::Ordering::Relaxed) {
+        use std::io::Write;
+        let _ = stdout.write_all(b"\x1b[22;0t");
+    }
+    let _ = stdout.execute(crossterm::terminal::SetTitle(title));
+}
+
+fn release_terminal_title() {
+    if TERMINAL_TITLE_STACKED.swap(false, std::sync::atomic::Ordering::Relaxed) {
+        use std::io::Write;
+        let mut stdout = io::stdout();
+        let _ = stdout.write_all(b"\x1b[23;0t");
+        let _ = stdout.flush();
     }
 }
 
@@ -1210,25 +1251,31 @@ fn build_terminal_title(
     cwd: &str,
     branch: Option<&str>,
 ) -> Option<String> {
+    let plain = |text: &str| -> String {
+        sanitize_terminal_text(text)
+            .chars()
+            .map(|c| if c.is_whitespace() { ' ' } else { c })
+            .collect()
+    };
     let mut parts: Vec<String> = Vec::new();
     if cfg.show_session_id && !session_id.is_empty() {
-        parts.push(format!("#{session_id}"));
+        parts.push(format!("#{}", plain(session_id)));
     }
     if cfg.show_model && !model.is_empty() {
-        parts.push(model.to_string());
+        parts.push(plain(model));
     }
     if cfg.show_cwd && !cwd.is_empty() {
-        parts.push(cwd.to_string());
+        parts.push(plain(cwd));
     }
     if cfg.show_branch {
         if let Some(b) = branch {
-            parts.push(format!("⎇ {b}"));
+            parts.push(format!("⎇ {}", plain(b)));
         }
     }
     if parts.is_empty() {
         None
     } else {
-        Some(format!("agi, {}", parts.join(" · ")))
+        Some(format!("agi · {}", parts.join(" · ")))
     }
 }
 
@@ -1291,10 +1338,14 @@ fn approval_overlay_for(
     let mut overlay = crate::tui::widgets::approval_overlay::ApprovalOverlayState::default();
     overlay.open(
         sanitize_terminal_text(&request.summary).into_owned(),
-        request
-            .detail
-            .iter()
-            .map(|line| sanitize_terminal_text(line).into_owned())
+        crate::approval_details::commit_line(request)
+            .into_iter()
+            .chain(
+                request
+                    .detail
+                    .iter()
+                    .map(|line| sanitize_terminal_text(line).into_owned()),
+            )
             .collect(),
     );
     overlay.always_allow_unavailable = !request.saves_always_allow;
@@ -1526,6 +1577,7 @@ fn restore_terminal_state() {
     let _ = stdout.execute(DisableBracketedPaste);
     let _ = stdout.execute(LeaveAlternateScreen);
     let _ = stdout.execute(crossterm::cursor::Show);
+    release_terminal_title();
     super::set_tui_active(false);
 }
 
@@ -2119,26 +2171,16 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         )));
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Type a message and press Enter to send, for example:",
+            "  Type a message and press Enter to send.",
             Style::default().fg(ui_muted()),
         )));
-        for example in [
-            "explain how this project is organised",
-            "find the failing test and fix it",
-            "/search what changed in the latest release of a library you use",
-        ] {
-            lines.push(Line::from(Span::styled(
-                format!("    {example}"),
-                Style::default().fg(ui_accent()),
-            )));
-        }
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Type / for commands. Shift+Tab cycles how much AGI may do on its own: ask before each action, plan only (reads, no edits), or accept edits.",
+            "  Type / for commands · Shift+Tab to change how much AGI does alone.",
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(Span::styled(
-            "  Esc closes a panel or clears the composer; twice on an empty composer, it rewinds. Ctrl+D twice quits.",
+            "  Esc clears · Ctrl+D twice to quit · /keys for all keys.",
             Style::default().fg(ui_muted()),
         )));
     } else {
@@ -2415,7 +2457,7 @@ fn render_input(frame: &mut ratatui::Frame, area: Rect, app: &TuiApp) {
                 if exit_armed {
                     "Press the same key again to exit"
                 } else {
-                    "Message AGI...  Enter sends · Ctrl-J newline · / commands · @ files"
+                    "Message AGI...  / for commands"
                 },
                 Style::default().fg(ui_muted()),
             ),
@@ -2657,6 +2699,22 @@ fn row_width(spans: &[Span]) -> usize {
     spans.iter().map(|s| display_width(&s.content)).sum()
 }
 
+fn token_counts_label(input: u32, output: u32) -> String {
+    format!(
+        "in {} · out {}",
+        crate::output::format_tokens(input),
+        crate::output::format_tokens(output)
+    )
+}
+
+fn compact_token_counts_label(turns: u32, input: u32, output: u32) -> String {
+    format!(
+        "T{turns}↑{}↓{}",
+        crate::output::format_tokens(input),
+        crate::output::format_tokens(output)
+    )
+}
+
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     use crate::tui::terminal_palette::{
         ui_accent, ui_cloud, ui_danger, ui_muted, ui_on_dark, ui_on_light, ui_status_bar_bg,
@@ -2775,17 +2833,13 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         if !sl.show_cost {
             return Vec::new();
         }
-        let full = format!(
-            "T{} ↑{} ↓{} {cost_str}",
-            ctx.turn_count, ctx.total_input_tokens, ctx.total_output_tokens
-        );
-        let short = format!(
-            "T{} ↑{} ↓{}",
-            ctx.turn_count, ctx.total_input_tokens, ctx.total_output_tokens
-        );
-        let shortest = format!(
-            "T{}↑{}↓{}",
-            ctx.turn_count, ctx.total_input_tokens, ctx.total_output_tokens
+        let counts = token_counts_label(ctx.total_input_tokens, ctx.total_output_tokens);
+        let full = format!("{counts} · {cost_str} · T{}", ctx.turn_count);
+        let short = format!("{counts} · T{}", ctx.turn_count);
+        let shortest = compact_token_counts_label(
+            ctx.turn_count,
+            ctx.total_input_tokens,
+            ctx.total_output_tokens,
         );
         match tier {
             0 => vec![full, short, shortest],
@@ -2873,8 +2927,9 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     if sl.show_tokens {
         optional.push(Span::styled(
             format!(
-                "T{} ↑{} ↓{}",
-                ctx.turn_count, ctx.total_input_tokens, ctx.total_output_tokens
+                "{} · T{}",
+                token_counts_label(ctx.total_input_tokens, ctx.total_output_tokens),
+                ctx.turn_count
             ),
             Style::default().fg(ui_muted()),
         ));
@@ -5978,6 +6033,7 @@ pub async fn run(
     );
     let mut terminal = setup_terminal()?;
     crate::tui::terminal_palette::set_active_theme(app.theme_choice.applied() as u8);
+    app.emit_terminal_title();
 
     let result = run_event_loop(&mut terminal, &mut app, &mut mcp_attach_join).await;
 
@@ -5999,6 +6055,7 @@ pub async fn run(
         tracing::warn!("failed to persist the session on exit: {error:#}");
     }
 
+    release_terminal_title();
     restore_terminal(&mut terminal)?;
 
     if let Err(error) = app.session.finalize_memory(&app.config).await {
@@ -8122,6 +8179,10 @@ mod tests {
     // Build the thinnest possible TuiApp without touching the filesystem or
     // spawning terminals, we only test the overlay slot, not the TUI render.
     fn minimal_app() -> TuiApp {
+        minimal_app_with(crate::config::CliConfig::default())
+    }
+
+    fn minimal_app_with(config: crate::config::CliConfig) -> TuiApp {
         let sys_ctx = crate::context::SystemContext {
             cwd: "/tmp".into(),
             git_branch: None,
@@ -8141,7 +8202,6 @@ mod tests {
         // a model here, and a literal goes stale the next time one is retired.
         let model = crate::model_catalog::fast_completion_model("anthropic");
         let session = crate::agent::AgentSession::new(&model, &sys_ctx, None);
-        let config = crate::config::CliConfig::default();
         TuiApp::new(session, config)
     }
 
@@ -8442,7 +8502,7 @@ mod tests {
         };
         assert_eq!(
             build_terminal_title(&all, "abcdef", "some-model", "myrepo", Some("main")),
-            Some("agi, some-model · myrepo · ⎇ main".to_string())
+            Some("agi · some-model · myrepo · ⎇ main".to_string())
         );
         let only_id = TerminalTitleConfig {
             show_session_id: true,
@@ -8452,7 +8512,7 @@ mod tests {
         };
         assert_eq!(
             build_terminal_title(&only_id, "abcdef12", "m", "c", Some("b")),
-            Some("agi, #abcdef12".to_string())
+            Some("agi · #abcdef12".to_string())
         );
         let none = TerminalTitleConfig {
             show_session_id: false,
@@ -8461,6 +8521,93 @@ mod tests {
             show_branch: false,
         };
         assert_eq!(build_terminal_title(&none, "x", "m", "c", Some("b")), None);
+    }
+
+    #[test]
+    fn the_terminal_title_strips_escapes_from_every_field() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleConfig;
+        let all = TerminalTitleConfig {
+            show_session_id: true,
+            show_model: true,
+            show_cwd: true,
+            show_branch: true,
+        };
+        let title = build_terminal_title(
+            &all,
+            "abc",
+            "model",
+            &format!("repo{ESCAPE_PAYLOAD}dir\nname"),
+            Some("main"),
+        )
+        .expect("title");
+        assert_no_terminal_escapes(&title, "terminal title");
+        assert!(!title.contains('\n'), "{title:?}");
+    }
+
+    #[test]
+    fn the_title_is_built_at_startup_from_the_saved_config() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleConfig;
+        let mut app = minimal_app();
+        app.model_name = "fixture-model".to_string();
+        app.git_branch = Some("main".to_string());
+        app.terminal_title_config = TerminalTitleConfig {
+            show_session_id: false,
+            show_model: true,
+            show_cwd: false,
+            show_branch: true,
+        };
+        assert_eq!(
+            app.terminal_title().as_deref(),
+            Some("agi · fixture-model · ⎇ main")
+        );
+        app.terminal_title_config = TerminalTitleConfig {
+            show_session_id: false,
+            show_model: false,
+            show_cwd: false,
+            show_branch: false,
+        };
+        assert_eq!(
+            app.terminal_title(),
+            None,
+            "an all-off config sets no title"
+        );
+    }
+
+    #[test]
+    fn a_saved_title_config_is_what_the_app_starts_with() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleConfig;
+        let mut config = crate::config::CliConfig::default();
+        config.ui.terminal_title = Some(TerminalTitleConfig {
+            show_session_id: true,
+            show_model: false,
+            show_cwd: false,
+            show_branch: false,
+        });
+        let app = minimal_app_with(config);
+        assert!(app.terminal_title_config.show_session_id);
+        assert!(!app.terminal_title_config.show_model);
+        assert_eq!(
+            minimal_app().terminal_title_config,
+            TerminalTitleConfig::default()
+        );
+    }
+
+    #[test]
+    fn saving_the_title_overlay_persists_it_to_the_project_config() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleSetupView;
+        let tmp = tempfile::tempdir().unwrap();
+        let config_file = tmp.path().join(".agiworkforce").join("config.toml");
+        let mut app = minimal_app();
+        app.config.source.project_path = Some(config_file.clone());
+        app.open_overlay(Box::new(TerminalTitleSetupView::new(
+            app.terminal_title_config.clone(),
+        )));
+        app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Char(' ')));
+        app.dispatch_key_to_overlay(make_key(crossterm::event::KeyCode::Enter));
+
+        let saved = std::fs::read_to_string(&config_file).expect("config written");
+        assert!(saved.contains("[ui.terminal_title]"), "{saved}");
+        assert!(saved.contains("show_session_id = true"), "{saved}");
     }
 
     #[test]
@@ -9773,11 +9920,11 @@ mod tests {
         for width in [120u16, 80, 40] {
             let rendered = draw_footer(width, "High", None);
             assert!(
-                rendered.contains("1234") && rendered.contains("567"),
+                rendered.contains("1.2K") && rendered.contains("567"),
                 "token counts dropped at {width}: {rendered}"
             );
             assert!(
-                rendered.contains('3'),
+                rendered.contains("T3"),
                 "turn count dropped at {width}: {rendered}"
             );
             assert!(
@@ -9799,7 +9946,7 @@ mod tests {
         for width in [180u16, 120, 100, 60] {
             let rendered = draw_footer(width, "High", None);
             assert!(
-                rendered.contains("1234") && rendered.contains("567"),
+                rendered.contains("1.2K") && rendered.contains("567"),
                 "cost readout dropped at {width}: {rendered}"
             );
             assert!(
@@ -9816,6 +9963,31 @@ mod tests {
         // quit hint as well.
         let narrow = draw_footer(60, "High", None);
         assert!(narrow.contains("ctrl+d quit"), "{narrow}");
+    }
+
+    #[test]
+    fn a_wide_footer_reads_in_out_cost_and_turns_with_middle_dots() {
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.cost_str = "0 credits".to_string();
+        let mut terminal =
+            Terminal::new(ratatui::backend::TestBackend::new(160, 1)).expect("terminal");
+        terminal
+            .draw(|frame| render_status_bar(frame, Rect::new(0, 0, 160, 1), &ctx))
+            .expect("draw");
+        let rendered = buffer_rows(&terminal, 160);
+
+        assert!(
+            rendered.contains("in 1.2K · out 567 · 0 credits · T3"),
+            "{rendered}"
+        );
+        assert!(
+            !rendered.contains('↑') && !rendered.contains('↓'),
+            "{rendered}"
+        );
+        assert!(rendered.contains("Your key  ctx ["), "{rendered}");
     }
 
     /// The footer reports the session's own effort, not a hardcoded default.
@@ -10120,6 +10292,79 @@ mod tests {
         assert!(offers(ApprovalRequestKind::FileWrite {
             path: std::path::PathBuf::from("src/main.rs"),
         }));
+    }
+
+    #[test]
+    fn the_start_view_hints_are_one_sentence_each_and_never_say_esc_quits() {
+        let app = minimal_app();
+        let rendered = draw_app(&app, 120, 40);
+        for hint in [
+            "Choose Local, Your key, or Managed with /model.",
+            "Type a message and press Enter to send.",
+            "Type / for commands · Shift+Tab to change how much AGI does alone.",
+            "Esc clears · Ctrl+D twice to quit · /keys for all keys.",
+        ] {
+            assert!(rendered.contains(hint), "missing {hint:?}:\n{rendered}");
+        }
+        assert!(!rendered.contains("Esc to quit"), "{rendered}");
+        assert!(!rendered.contains("for example"), "{rendered}");
+    }
+
+    #[test]
+    fn the_empty_composer_placeholder_is_one_short_hint() {
+        let app = minimal_app();
+        let rendered = draw_app(&app, 120, 40);
+        assert!(
+            rendered.contains("Message AGI...  / for commands"),
+            "{rendered}"
+        );
+        assert!(!rendered.contains("Ctrl-J newline"), "{rendered}");
+    }
+
+    #[test]
+    fn a_commit_approval_names_the_subject_and_declining_it_denies() {
+        use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
+        use crate::tui::widgets::approval_overlay::ApprovalChoice;
+        use crate::tui::widgets::interactive::{InteractiveView, KeyAction};
+
+        let message = "fix(routing): read the live snapshot\n\nThe router cached a stale one.";
+        let argv = crate::platform::runtime::git::GitOperation::Commit {
+            message: message.to_string(),
+        }
+        .argv()
+        .expect("argv");
+        let request = ApprovalRequest::new(
+            ApprovalRequestKind::Git {
+                tool_name: "git_commit".to_string(),
+                target: format!("git {}", argv.join(" ")),
+            },
+            "Run git_commit in /repo?",
+            vec![format!("git {}", argv.join(" "))],
+        );
+
+        let mut overlay = approval_overlay_for(&request);
+        assert_eq!(
+            overlay.detail.first().map(String::as_str),
+            Some("Commit: fix(routing): read the live snapshot")
+        );
+
+        let mut terminal =
+            Terminal::new(ratatui::backend::TestBackend::new(120, 30)).expect("terminal");
+        terminal
+            .draw(|frame| overlay.render_into(frame, frame.area()))
+            .expect("draw");
+        assert!(
+            rendered_symbols(&terminal).contains("Commit: fix(routing): read the live snapshot")
+        );
+
+        overlay.handle_key(KeyAction::Char('n'));
+        let choice = overlay.result.expect("n answers the prompt");
+        assert_eq!(choice, ApprovalChoice::No);
+        let decision = approval_choice_to_decision(choice);
+        assert!(
+            !crate::tools::approval_allows(decision),
+            "declining must not let the commit run"
+        );
     }
 
     /// A tool-approval request carries the model's own command line and diff

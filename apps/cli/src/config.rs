@@ -103,6 +103,11 @@ pub struct UiConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub theme: Option<String>,
 
+    /// Which fields the full-screen TUI puts in the terminal window title. Saved by `/title`
+    /// and applied at startup.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal_title: Option<crate::tui::widgets::terminal_title_setup::TerminalTitleConfig>,
+
     /// Hold the full-screen TUI's spinner and shimmer still.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reduced_motion: Option<bool>,
@@ -771,6 +776,9 @@ impl CliConfig {
         if other.ui.theme.is_some() {
             self.ui.theme = other.ui.theme.clone();
         }
+        if other.ui.terminal_title.is_some() {
+            self.ui.terminal_title = other.ui.terminal_title.clone();
+        }
         if other.ui.reduced_motion.is_some() {
             self.ui.reduced_motion = other.ui.reduced_motion;
         }
@@ -833,6 +841,7 @@ impl CliConfig {
         let output_style = self.ui.output_style.clone();
         let privacy_mode = self.ui.privacy_mode.clone();
         let theme = self.ui.theme.clone();
+        let terminal_title = self.ui.terminal_title.clone();
         self.update_project_config(|root| {
             let ui_value = root
                 .entry("ui".to_string())
@@ -851,6 +860,12 @@ impl CliConfig {
             }
             if let Some(theme) = theme {
                 ui.insert("theme".to_string(), toml::Value::String(theme));
+            }
+            if let Some(title) = terminal_title {
+                ui.insert(
+                    "terminal_title".to_string(),
+                    toml::Value::try_from(title).context("Failed to encode the terminal title")?,
+                );
             }
             Ok(())
         })
@@ -927,6 +942,14 @@ impl CliConfig {
     /// the picker recolours the running TUI and the choice dies with the process.
     pub fn persist_theme_project(&mut self, slug: &str) -> Result<PathBuf> {
         self.ui.theme = Some(slug.to_ascii_lowercase());
+        self.save_project_ui_settings()
+    }
+
+    pub fn persist_terminal_title_project(
+        &mut self,
+        title: &crate::tui::widgets::terminal_title_setup::TerminalTitleConfig,
+    ) -> Result<PathBuf> {
+        self.ui.terminal_title = Some(title.clone());
         self.save_project_ui_settings()
     }
 
@@ -2414,6 +2437,36 @@ model = "fixture-config-model"
         assert!(contents.contains("[ui]"));
         assert!(contents.contains("output_style = \"explanatory\""));
         assert!(contents.contains("privacy_mode = \"byok\""));
+    }
+
+    #[test]
+    fn the_terminal_title_choice_survives_a_save_and_a_reload() {
+        use crate::tui::widgets::terminal_title_setup::TerminalTitleConfig;
+        let tmp = tempfile::tempdir().unwrap();
+        let config_file = tmp.path().join(".agiworkforce").join("config.toml");
+        let mut config = CliConfig::default();
+        config.source.project_path = Some(config_file.clone());
+        let chosen = TerminalTitleConfig {
+            show_session_id: true,
+            show_model: false,
+            show_cwd: true,
+            show_branch: false,
+        };
+
+        config.persist_terminal_title_project(&chosen).unwrap();
+
+        let reloaded: CliConfig =
+            toml::from_str(&std::fs::read_to_string(&config_file).unwrap()).unwrap();
+        assert_eq!(reloaded.ui.terminal_title, Some(chosen));
+    }
+
+    #[test]
+    fn a_partial_terminal_title_table_keeps_the_other_defaults() {
+        let reloaded: CliConfig =
+            toml::from_str("[ui.terminal_title]\nshow_cwd = false\n").unwrap();
+        let title = reloaded.ui.terminal_title.unwrap();
+        assert!(!title.show_cwd);
+        assert!(title.show_model && title.show_branch && !title.show_session_id);
     }
 
     #[test]
