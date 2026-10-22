@@ -2308,8 +2308,8 @@ export function getWebviewContent(
       display: none;
       flex-direction: column;
       width: min(320px, 100%);
-      max-height: 240px;
-      overflow-y: auto;
+      max-height: min(360px, calc(100vh - 140px));
+      overflow: hidden;
       padding: 4px;
       background: var(--bg-popover);
       border: 1px solid var(--border);
@@ -2317,8 +2317,40 @@ export function getWebviewContent(
       box-shadow: var(--elevation-2);
     }
     .slash-menu.open { display: flex; }
+    .slash-menu-list {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow-y: auto;
+    }
+    .slash-menu-filter {
+      flex: none;
+      margin: 2px 2px 6px;
+      padding: 5px 8px;
+      background: var(--vscode-input-background, var(--bg-elevated));
+      border: 1px solid var(--vscode-input-border, var(--border));
+      border-radius: var(--corner-field);
+      color: var(--vscode-input-foreground, var(--text-primary));
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+    }
+    .slash-menu-filter[hidden] { display: none; }
+    .slash-menu-section + .slash-menu-section {
+      margin-top: 4px;
+      padding-top: 4px;
+      border-top: 1px solid var(--border);
+    }
+    .slash-menu-heading {
+      padding: 4px 8px;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      font-weight: 600;
+      line-height: var(--type-caption-height);
+    }
 
-    .slash-menu-item {
+    .slash-menu-item,
+    .slash-menu-action {
       display: flex;
       align-items: baseline;
       gap: 8px;
@@ -2337,8 +2369,20 @@ export function getWebviewContent(
     }
     .slash-menu-item:hover,
     .slash-menu-item.highlighted,
-    .slash-menu-item:focus-visible { background: var(--hover); outline: none; }
+    .slash-menu-item:focus-visible,
+    .slash-menu-action:hover,
+    .slash-menu-action:focus-visible { background: var(--hover); outline: none; }
     .slash-menu-item-name { font-weight: 600; }
+    .slash-menu-action { align-items: center; }
+    .slash-menu-action-value {
+      margin-left: auto;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .slash-menu-item-description {
       color: var(--text-secondary);
       flex: 1;
@@ -2978,7 +3022,10 @@ export function getWebviewContent(
         <button id="stopBtn" title="Stop response" aria-label="Stop response"></button>
         <button id="sendBtn" title="Send (Enter)" aria-label="Send"><span class="send-action-label" id="sendActionLabel"></span></button>
       </div>
-      <div class="slash-menu" id="slashMenu" role="menu" aria-label="Commands"></div>
+      <div class="slash-menu" id="slashMenu" role="menu" aria-label="Commands">
+        <input class="slash-menu-filter" id="slashFilter" type="search" placeholder="Filter actions…" aria-label="Filter actions" autocomplete="off" hidden />
+        <div class="slash-menu-list" id="slashList"></div>
+      </div>
     </div>
     <div class="composer-status">
       <span class="composer-status-route" id="composerStatus" role="status" aria-live="polite">
@@ -3100,6 +3147,8 @@ export function getWebviewContent(
     const sessionsArchived = document.getElementById('sessionsArchived');
     const slashBtn = document.getElementById('slashBtn');
     const slashMenu = document.getElementById('slashMenu');
+    const slashFilter = document.getElementById('slashFilter');
+    const slashList = document.getElementById('slashList');
     const composerStatusBoundary = document.getElementById('composerStatusBoundary');
     const composerStatusSeparator = document.getElementById('composerStatusSeparator');
     const composerStatusSignIn = document.getElementById('composerStatusSignIn');
@@ -5194,12 +5243,7 @@ export function getWebviewContent(
       }
     }
 
-    if (newChatBtn) {
-      newChatBtn.addEventListener('click', () => {
-        invalidateAttachmentBatches();
-        vscode.postMessage({ type: 'newChat' });
-      });
-    }
+    if (newChatBtn) newChatBtn.addEventListener('click', startNewChat);
 
     // ── Popover keyboard support (VSCX-14) ────────────────────────────────────
     // These containers claim role="menu", which tells a screen-reader user that
@@ -5476,6 +5520,7 @@ export function getWebviewContent(
     var slashCommands = [];
     var slashRequested = false;
     var slashHighlight = -1;
+    var slashMode = 'typed';
 
     function closeSlashMenu() {
       if (!slashMenu) return;
@@ -5495,7 +5540,7 @@ export function getWebviewContent(
 
     function highlightSlashItem(index) {
       var items = slashMenuItems();
-      if (items.length === 0) {
+      if (items.length === 0 || slashMode !== 'typed') {
         slashHighlight = -1;
         userInput.removeAttribute('aria-activedescendant');
         return;
@@ -5517,49 +5562,137 @@ export function getWebviewContent(
       return true;
     }
 
-    function renderSlashMenu(filter) {
-      if (!slashMenu) return;
-      slashMenu.replaceChildren();
+    function startNewChat() {
+      invalidateAttachmentBatches();
+      vscode.postMessage({ type: 'newChat' });
+    }
+
+    function mentionFileInComposer() {
+      var value = userInput.value;
+      var start = userInput.selectionStart === null ? value.length : userInput.selectionStart;
+      var end = userInput.selectionEnd === null ? start : userInput.selectionEnd;
+      var before = value.slice(0, start);
+      var lead = before === '' || /\\s$/.test(before) ? '' : ' ';
+      userInput.value = before + lead + '@' + value.slice(end);
+      var caret = before.length + lead.length + 1;
+      userInput.focus();
+      userInput.setSelectionRange(caret, caret);
+      userInput.dispatchEvent(new Event('input'));
+    }
+
+    function slashActionSections() {
+      var model = [{ label: 'Switch model…', value: currentModelLabel, run: beginModelPicker }];
+      if (activeSupportsEffort) {
+        model.push({ label: 'Effort', value: effortLabel(activeEffort), run: openControlsPopover });
+      }
+      model.push({ label: 'Mode', value: modeLabel(activeMode), run: openControlsPopover });
+      model.push({
+        label: 'Account & usage…',
+        run: function () { vscode.postMessage({ type: 'openAccount' }); },
+      });
+      return [
+        {
+          title: 'Context',
+          items: [
+            { label: 'Attach file…', run: function () { vscode.postMessage({ type: 'openFilePicker' }); } },
+            { label: 'Mention file from this project…', run: mentionFileInComposer },
+            { label: 'Clear conversation', run: startNewChat },
+            {
+              label: 'Rewind',
+              run: function () {
+                vscode.postMessage({ type: 'runSlashCommand', payload: { name: '/rewind' } });
+              },
+            },
+            { label: 'Developer session history', run: openSessionsSheet },
+          ],
+        },
+        { title: 'Model', items: model },
+      ];
+    }
+
+    function appendSlashEmpty(parent, text) {
+      var empty = document.createElement('div');
+      empty.className = 'slash-menu-empty';
+      empty.textContent = text;
+      parent.appendChild(empty);
+    }
+
+    function appendSlashSection(title) {
+      var section = document.createElement('div');
+      section.className = 'slash-menu-section';
+      section.setAttribute('role', 'group');
+      var heading = document.createElement('div');
+      heading.className = 'slash-menu-heading';
+      heading.id = 'slashHeading' + title;
+      heading.textContent = title;
+      section.setAttribute('aria-labelledby', heading.id);
+      section.appendChild(heading);
+      slashList.appendChild(section);
+      return section;
+    }
+
+    function appendSlashAction(section, action) {
+      var row = document.createElement('button');
+      row.type = 'button';
+      row.className = 'slash-menu-action';
+      row.setAttribute('role', 'menuitem');
+      var label = document.createElement('span');
+      label.className = 'slash-menu-action-label';
+      label.textContent = action.label;
+      row.appendChild(label);
+      if (action.value) {
+        var value = document.createElement('span');
+        value.className = 'slash-menu-action-value';
+        value.textContent = action.value;
+        row.appendChild(value);
+      }
+      row.addEventListener('click', function () {
+        closeSlashMenu();
+        action.run();
+      });
+      section.appendChild(row);
+    }
+
+    function appendSlashCommand(parent, entry) {
+      var item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'slash-menu-item';
+      item.setAttribute('role', 'menuitem');
+      var name = document.createElement('span');
+      name.className = 'slash-menu-item-name';
+      name.textContent = entry.name;
+      item.appendChild(name);
+      if (entry.description) {
+        var description = document.createElement('span');
+        description.className = 'slash-menu-item-description';
+        description.textContent = entry.description;
+        item.appendChild(description);
+      }
+      item.addEventListener('click', function () {
+        closeSlashMenu();
+        if (slashMode === 'typed' && userInput.value.trim().indexOf('/') === 0) {
+          userInput.value = '';
+          autoResize();
+          saveComposerDraft();
+          syncSendState();
+        }
+        vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
+      });
+      parent.appendChild(item);
+    }
+
+    function renderTypedSlashMenu(filter) {
       var needle = (filter || '').toLowerCase();
       var visible = slashCommands.filter(function (entry) {
         return needle === '' || entry.name.toLowerCase().indexOf(needle) === 0;
       });
       if (visible.length === 0) {
-        var empty = document.createElement('div');
-        empty.className = 'slash-menu-empty';
-        empty.textContent = slashCommands.length === 0 ? 'Loading commands…' : 'No matching command';
-        slashMenu.appendChild(empty);
+        appendSlashEmpty(slashList, slashCommands.length === 0 ? 'Loading commands…' : 'No matching command');
         highlightSlashItem(0);
         return;
       }
       for (var i = 0; i < visible.length; i++) {
-        (function (entry) {
-          var item = document.createElement('button');
-          item.type = 'button';
-          item.className = 'slash-menu-item';
-          item.setAttribute('role', 'menuitem');
-          var name = document.createElement('span');
-          name.className = 'slash-menu-item-name';
-          name.textContent = entry.name;
-          item.appendChild(name);
-          if (entry.description) {
-            var description = document.createElement('span');
-            description.className = 'slash-menu-item-description';
-            description.textContent = entry.description;
-            item.appendChild(description);
-          }
-          item.addEventListener('click', function () {
-            closeSlashMenu();
-            if (userInput.value.trim().indexOf('/') === 0) {
-              userInput.value = '';
-              autoResize();
-              saveComposerDraft();
-              syncSendState();
-            }
-            vscode.postMessage({ type: 'runSlashCommand', payload: { name: entry.name } });
-          });
-          slashMenu.appendChild(item);
-        })(visible[i]);
+        appendSlashCommand(slashList, visible[i]);
       }
       var rendered = slashMenuItems();
       for (var idIndex = 0; idIndex < rendered.length; idIndex++) {
@@ -5568,8 +5701,50 @@ export function getWebviewContent(
       highlightSlashItem(0);
     }
 
-    function openSlashMenu(filter) {
+    function renderPanelSlashMenu(filter) {
+      var needle = (filter || '').trim().toLowerCase();
+      var matches = function (text) {
+        return needle === '' || text.toLowerCase().indexOf(needle) !== -1;
+      };
+      var sections = 0;
+      slashActionSections().forEach(function (group) {
+        var actions = group.items.filter(function (action) { return matches(action.label); });
+        if (actions.length === 0) return;
+        var section = appendSlashSection(group.title);
+        actions.forEach(function (action) { appendSlashAction(section, action); });
+        sections++;
+      });
+      if (slashCommands.length === 0) {
+        appendSlashEmpty(appendSlashSection('Commands'), 'Loading commands…');
+        sections++;
+      } else {
+        var commands = slashCommands.filter(function (entry) {
+          return matches(entry.name) || matches(entry.description || '');
+        });
+        if (commands.length > 0) {
+          var commandSection = appendSlashSection('Commands');
+          commands.forEach(function (entry) { appendSlashCommand(commandSection, entry); });
+          sections++;
+        }
+      }
+      if (sections === 0) appendSlashEmpty(slashList, 'No matching action');
+      highlightSlashItem(0);
+    }
+
+    function renderSlashMenu(filter) {
+      if (!slashMenu || !slashList) return;
+      slashList.replaceChildren();
+      if (slashMode === 'panel') renderPanelSlashMenu(filter);
+      else renderTypedSlashMenu(filter);
+    }
+
+    function openSlashMenu(filter, mode) {
       if (!slashMenu) return;
+      slashMode = mode || 'typed';
+      if (slashFilter) {
+        slashFilter.hidden = slashMode !== 'panel';
+        if (slashMode === 'panel') slashFilter.value = filter || '';
+      }
       slashMenu.classList.add('open');
       if (slashBtn) slashBtn.setAttribute('aria-expanded', 'true');
       renderSlashMenu(filter);
@@ -5579,6 +5754,11 @@ export function getWebviewContent(
       }
     }
 
+    function slashRenderFilter() {
+      if (slashMode === 'panel') return slashFilter ? slashFilter.value : '';
+      return userInput.value.indexOf('/') === 0 ? userInput.value : '';
+    }
+
     if (slashBtn && slashMenu) {
       slashBtn.addEventListener('click', function (event) {
         event.stopPropagation();
@@ -5586,16 +5766,36 @@ export function getWebviewContent(
           closeSlashMenu();
           return;
         }
-        openSlashMenu('');
-        focusMenuItem(slashMenu, 0);
+        closeModelPopover();
+        closeControlsPopover();
+        if (plusMenu) {
+          plusMenu.classList.remove('open');
+          if (plusBtn) plusBtn.setAttribute('aria-expanded', 'false');
+        }
+        openSlashMenu('', 'panel');
+        if (slashFilter) slashFilter.focus();
       });
       wireMenuKeyboard(slashMenu, slashBtn, closeSlashMenu);
       slashMenu.addEventListener('click', function (event) { event.stopPropagation(); });
+      if (slashFilter) {
+        slashFilter.addEventListener('input', function () { renderSlashMenu(slashFilter.value); });
+        slashFilter.addEventListener('keydown', function (event) {
+          if (event.key === 'Home' || event.key === 'End') {
+            event.stopPropagation();
+            return;
+          }
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            var first = menuItemsOf(slashMenu)[0];
+            if (first) first.click();
+          }
+        });
+      }
       document.addEventListener('click', closeSlashMenu);
       userInput.addEventListener('input', function () {
         var value = userInput.value;
         if (value.indexOf('/') === 0 && value.indexOf(' ') === -1) {
-          openSlashMenu(value);
+          openSlashMenu(value, 'typed');
           return;
         }
         closeSlashMenu();
@@ -5659,6 +5859,7 @@ export function getWebviewContent(
         e.stopPropagation();
         closeModelPopover();
         closeControlsPopover();
+        closeSlashMenu();
         var isOpen = plusMenu.classList.contains('open');
         plusMenu.classList.toggle('open', !isOpen);
         plusBtn.setAttribute('aria-expanded', String(!isOpen));
@@ -5743,6 +5944,16 @@ export function getWebviewContent(
       });
     }
 
+    function beginModelPicker() {
+      closeControlsPopover();
+      if (plusMenu) {
+        plusMenu.classList.remove('open');
+        if (plusBtn) plusBtn.setAttribute('aria-expanded', 'false');
+      }
+      openModelLoading();
+      vscode.postMessage({ type: 'openModelPopover' });
+    }
+
     // Model pill opens inline model popover (v3)
     if (modelPill) {
       modelPill.addEventListener('click', (e) => {
@@ -5750,13 +5961,8 @@ export function getWebviewContent(
         if (modelPopoverEl && modelPopoverEl.classList.contains('open')) {
           closeModelPopover();
         } else {
-          closeControlsPopover();
-          if (plusMenu) {
-            plusMenu.classList.remove('open');
-            if (plusBtn) plusBtn.setAttribute('aria-expanded', 'false');
-          }
-          openModelLoading();
-          vscode.postMessage({ type: 'openModelPopover' });
+          closeSlashMenu();
+          beginModelPicker();
         }
       });
       modelPill.addEventListener('keydown', function(e) {
@@ -5795,6 +6001,7 @@ export function getWebviewContent(
           return;
         }
         closeModelPopover();
+        closeSlashMenu();
         if (plusMenu) {
           plusMenu.classList.remove('open');
           if (plusBtn) plusBtn.setAttribute('aria-expanded', 'false');
@@ -6788,7 +6995,7 @@ export function getWebviewContent(
       else if (msg.type === 'slashCommands') {
         slashCommands = msg.payload.items || [];
         if (slashMenu && slashMenu.classList.contains('open')) {
-          renderSlashMenu(userInput.value.indexOf('/') === 0 ? userInput.value : '');
+          renderSlashMenu(slashRenderFilter());
         }
       }
 
