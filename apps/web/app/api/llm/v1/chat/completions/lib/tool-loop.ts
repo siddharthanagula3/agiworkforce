@@ -300,6 +300,7 @@ import {
   WEB_SEARCH_MAX_RESULTS,
   WEB_SEARCH_TOOL,
   webSearchResultsToFetchedSources,
+  isRoutingRedirectUrl,
   resolveRoutingRedirectUrls,
   isBareDomainTitle,
   type WebSearchSpend,
@@ -1666,6 +1667,7 @@ export function serverToolResultSources(content: unknown[]): FetchedSource[] {
 export interface ServerSearchResultsEnrichment {
   resolveRedirects?: typeof resolveRoutingRedirectUrls;
   enrichTitles?: typeof enrichWebSearchResultTitles;
+  domainPolicy?: ResearchDomainPolicy | null;
 }
 
 export async function enrichServerSearchResultsLine(
@@ -1686,8 +1688,18 @@ export async function enrichServerSearchResultsLine(
   const delta = (choices[0] as Record<string, unknown> | undefined)?.['delta'] as
     Record<string, unknown> | undefined;
   const block = delta?.['x_search_results'] as Record<string, unknown> | undefined;
-  const content = block?.['content'];
-  if (!Array.isArray(content)) return line;
+  if (!Array.isArray(block?.['content'])) return line;
+  const domainPolicy = overrides.domainPolicy ?? null;
+  const outsidePolicy = (entry: unknown): boolean =>
+    domainPolicy !== null &&
+    typeof entry === 'object' &&
+    entry !== null &&
+    (entry as Record<string, unknown>)['type'] === 'web_search_result' &&
+    !researchDomainAllowed(domainPolicy, String((entry as Record<string, unknown>)['url'] ?? ''));
+  const arrived = block['content'] as unknown[];
+  const content = arrived.filter((entry) => !outsidePolicy(entry));
+  block['content'] = content;
+  const sourcesWithheld = content.length !== arrived.length;
 
   let opaqueSnippetWithheld = false;
   const rows = content.flatMap((entry, index) => {
@@ -1717,12 +1729,21 @@ export async function enrichServerSearchResultsLine(
     ];
   });
   const projectedLine = (): SseLine =>
-    opaqueSnippetWithheld ? `data: ${JSON.stringify(event)}\n\n` : line;
+    opaqueSnippetWithheld || sourcesWithheld ? `data: ${JSON.stringify(event)}\n\n` : line;
   if (rows.length === 0) return projectedLine();
-  if (rows.every((row) => row.title && row.reportedSnippet && row.date)) return projectedLine();
+  const redirectsNeedChecking =
+    domainPolicy !== null && rows.some((row) => isRoutingRedirectUrl(row.url));
+  if (!redirectsNeedChecking && rows.every((row) => row.title && row.reportedSnippet && row.date)) {
+    return projectedLine();
+  }
 
   const resolved = await (overrides.resolveRedirects ?? resolveRoutingRedirectUrls)(rows);
-  const enriched = await (overrides.enrichTitles ?? enrichWebSearchResultTitles)(resolved);
+  const unreadable = new Set(
+    resolved.filter((row) => !researchDomainAllowed(domainPolicy, row.url)).map((row) => row.index),
+  );
+  const enriched = await (overrides.enrichTitles ?? enrichWebSearchResultTitles)(
+    resolved.filter((row) => !unreadable.has(row.index)),
+  );
   for (const row of enriched) {
     const target = content[row.index] as Record<string, unknown>;
     target['url'] = row.url;
@@ -1732,6 +1753,7 @@ export async function enrichServerSearchResultsLine(
     if (row.snippet) target['encrypted_content'] = row.snippet;
     if (row.date) target['page_age'] = row.date;
   }
+  if (unreadable.size > 0) block['content'] = content.filter((_, index) => !unreadable.has(index));
   return `data: ${JSON.stringify(event)}\n\n`;
 }
 
@@ -4159,7 +4181,11 @@ export async function* runToolLoop(
     }
     const providerLine =
       callerOwnedTools.size > 0 ? providerLineWithoutCallerToolCalls(entry.line) : entry.line;
-    yield encoder.encode(await enrichServerSearchResultsLine(providerLine));
+    yield encoder.encode(
+      await enrichServerSearchResultsLine(providerLine, {
+        domainPolicy: processed.webSearchDomainPolicy ?? null,
+      }),
+    );
     if (entry.publicTextDelta) publicTextEmitted = true;
     if (entry.reasoningDelta) {
       yield encoder.encode(
@@ -4183,8 +4209,11 @@ export async function* runToolLoop(
       );
     }
     for (const result of entry.serverToolResults ?? []) {
-      for (const source of result.sources) nativeSourceKeys.add(normalizeSourceUrlKey(source.url));
-      const enrichedTitleSources = await enrichWebSearchResultTitles(result.sources);
+      const readableSources = result.sources.filter((source) =>
+        researchDomainAllowed(processed.webSearchDomainPolicy ?? null, source.url),
+      );
+      for (const source of readableSources) nativeSourceKeys.add(normalizeSourceUrlKey(source.url));
+      const enrichedTitleSources = await enrichWebSearchResultTitles(readableSources);
       yield encoder.encode(
         eventStream.emit({
           type: 'source-list',

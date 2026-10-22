@@ -173,3 +173,66 @@ describe('enrichServerSearchResultsLine', () => {
     expect(await enrichServerSearchResultsLine(line)).toBe(line);
   });
 });
+
+describe('enrichServerSearchResultsLine under website rules', () => {
+  const rules = { allow: [], deny: ['blocked.example'] };
+
+  it('drops a blocked result before anything is fetched for it', async () => {
+    const resolveRedirects = vi.fn(async (rows: unknown[]) => rows);
+    const enrichTitles = vi.fn(async (rows: unknown[]) => rows);
+    const out = await enrichServerSearchResultsLine(
+      frame([
+        { type: 'web_search_result', url: 'https://news.blocked.example/a', title: '' },
+        { type: 'web_search_result', url: 'https://open.example/b', title: '' },
+      ]),
+      {
+        domainPolicy: rules,
+        resolveRedirects: resolveRedirects as never,
+        enrichTitles: enrichTitles as never,
+      },
+    );
+
+    expect(parseFrame(out).map((entry) => entry['url'])).toEqual(['https://open.example/b']);
+    const enrichedUrls = (enrichTitles.mock.calls[0]?.[0] as Array<{ url: string }>).map(
+      (row) => row.url,
+    );
+    expect(enrichedUrls).toEqual(['https://open.example/b']);
+  });
+
+  it('drops a redirect that resolves to a blocked site and never reads that page', async () => {
+    const enrichTitles = vi.fn(async (rows: unknown[]) => rows);
+    const out = await enrichServerSearchResultsLine(
+      frame([
+        {
+          type: 'web_search_result',
+          url: REDIRECT,
+          title: 'Complete',
+          encrypted_content: 'already has a snippet',
+          page_age: '2026-03-12',
+        },
+      ]),
+      {
+        domainPolicy: rules,
+        resolveRedirects: (async (rows: Array<{ url: string }>) =>
+          rows.map((row) => ({ ...row, url: 'https://blocked.example/story' }))) as never,
+        enrichTitles: enrichTitles as never,
+      },
+    );
+
+    expect(parseFrame(out)).toEqual([]);
+    expect(enrichTitles.mock.calls[0]?.[0]).toEqual([]);
+  });
+
+  it('keeps every result when no rules are set', async () => {
+    const line = frame([
+      {
+        type: 'web_search_result',
+        url: 'https://blocked.example/a',
+        title: 'T',
+        encrypted_content: 'a snippet',
+        page_age: '2026-01-01',
+      },
+    ]);
+    expect(await enrichServerSearchResultsLine(line)).toBe(line);
+  });
+});

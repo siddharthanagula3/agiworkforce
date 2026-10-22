@@ -800,6 +800,50 @@ export type ImplicitManagedToolIntentContext = {
   planTier: string | null | undefined;
 };
 
+export type TurnWebDomainPolicy =
+  | { ok: true; policy: ResearchDomainPolicy | null }
+  | {
+      ok: false;
+      code: 'sites_outside_workspace_policy' | 'sites_outside_agent_policy';
+      message: string;
+    };
+
+export function resolveTurnWebDomainPolicy(input: {
+  workspace: ResearchDomainPolicy | null;
+  agent: { name: string; allow: readonly string[]; deny: readonly string[] } | null;
+  request: { allow?: readonly string[]; deny?: readonly string[] } | undefined;
+}): TurnWebDomainPolicy {
+  const agentPolicy = input.agent
+    ? createResearchDomainPolicy({ allow: input.agent.allow, deny: input.agent.deny })
+    : null;
+  const withAgent = narrowResearchDomainPolicy(input.workspace, agentPolicy);
+  if (!withAgent.ok) {
+    return {
+      ok: false,
+      code: 'sites_outside_workspace_policy',
+      message: `Your workspace only allows reading ${withAgent.allowed.join(', ')}, and none of the sites ${input.agent?.name ?? 'this agent'} may read are among them.`,
+    };
+  }
+  const withRequest = narrowResearchDomainPolicy(
+    withAgent.policy,
+    createResearchDomainPolicy({ allow: input.request?.allow, deny: input.request?.deny }),
+  );
+  if (!withRequest.ok) {
+    return input.agent && agentPolicy && agentPolicy.allow.length > 0
+      ? {
+          ok: false,
+          code: 'sites_outside_agent_policy',
+          message: `${input.agent.name} only reads ${withRequest.allowed.join(', ')}, and none of the sites chosen for this chat are among them.`,
+        }
+      : {
+          ok: false,
+          code: 'sites_outside_workspace_policy',
+          message: `Your workspace only allows reading ${withRequest.allowed.join(', ')}, and none of the sites chosen for this chat are among them.`,
+        };
+  }
+  return { ok: true, policy: withRequest.policy };
+}
+
 export function applyImplicitManagedToolIntent(
   request: ChatCompletionRequest,
   context: ImplicitManagedToolIntentContext,
@@ -4916,22 +4960,29 @@ async function processAdmittedRequest(
           readWorkspaceWebDomainPolicy(scoped.db, scoped.organizationId),
         )
       : null;
-  const narrowedDomainPolicy = narrowResearchDomainPolicy(
-    workspaceWebDomainPolicy,
-    createResearchDomainPolicy({
+  const narrowedDomainPolicy = resolveTurnWebDomainPolicy({
+    workspace: workspaceWebDomainPolicy,
+    agent: ownership.agentTurn
+      ? {
+          name: ownership.agentTurn.config.name,
+          allow: ownership.agentTurn.config.allowedWebDomains,
+          deny: ownership.agentTurn.config.blockedWebDomains,
+        }
+      : null,
+    request: {
       allow: chatRequest.research_sources?.allow_domains,
       deny: chatRequest.research_sources?.deny_domains,
-    }),
-  );
+    },
+  });
   if (!narrowedDomainPolicy.ok) {
     return {
       ok: false,
       response: NextResponse.json(
         {
           error: {
-            message: `Your workspace only allows reading ${narrowedDomainPolicy.allowed.join(', ')}, and none of the sites chosen for this chat are among them.`,
+            message: narrowedDomainPolicy.message,
             type: 'invalid_request_error',
-            code: 'sites_outside_workspace_policy',
+            code: narrowedDomainPolicy.code,
           },
         },
         { status: 403 },
@@ -5918,7 +5969,7 @@ async function processAdmittedRequest(
     ) {
       resolvedTools = [...(resolvedTools ?? []), webSearchToolDef()];
     }
-    if (workspaceWebDomainPolicy) {
+    if (webSearchDomainPolicy) {
       resolvedTools = replaceNativeWebSearchTool(
         resolvedTools,
         chatRequest.stream === true && webSearchBackendConfigured(),
@@ -6007,7 +6058,7 @@ async function processAdmittedRequest(
       tools: resolvedTools,
       toolsCapable: resolvedModelCaps?.tools ?? true,
       stream: chatRequest.stream,
-      nativeFetchPermitted: nativeToolPermitted(URL_FETCH_TOOL) && !workspaceWebDomainPolicy,
+      nativeFetchPermitted: nativeToolPermitted(URL_FETCH_TOOL) && !webSearchDomainPolicy,
     });
   }
 
@@ -6427,8 +6478,8 @@ async function processAdmittedRequest(
     requestId,
     chatSurface,
     ...(deviceHost ? { deviceHost } : {}),
-    ...(deviceHost && workspaceWebDomainPolicy
-      ? { deviceWebDomainPolicy: workspaceWebDomainPolicy }
+    ...(deviceHost && webSearchDomainPolicy
+      ? { deviceWebDomainPolicy: webSearchDomainPolicy }
       : {}),
     organizationId,
     zeroDataRetentionOnly,
