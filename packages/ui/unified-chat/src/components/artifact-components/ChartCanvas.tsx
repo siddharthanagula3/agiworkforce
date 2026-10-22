@@ -12,13 +12,16 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  type PieLabelRenderProps,
 } from 'recharts';
-import type { ChartChrome, ChartSpec } from './chart-spec';
+import { formatChartShare, type ChartChrome, type ChartSpec } from './chart-spec';
 
 const AXIS_FONT_SIZE_PX = 11;
 const GRID_DASH = '3 3';
 const LINE_STROKE_WIDTH = 2;
 const PIE_OUTER_RADIUS = '75%';
+const DONUT_INNER_RADIUS = '50%';
+const DONUT_LABEL_FONT_SIZE_PX = 14;
 const PIE_CENTER = '50%';
 const BAR_RADIUS: [number, number, number, number] = [3, 3, 0, 0];
 const TOOLTIP_RADIUS_PX = 8;
@@ -49,6 +52,19 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
     itemStyle: { color: chrome.text },
   };
   const legendStyle = { color: chrome.label, fontSize: AXIS_FONT_SIZE_PX };
+  const shareLabel = ({ x, y, textAnchor, percent }: PieLabelRenderProps) => (
+    <text
+      data-chart-share=""
+      x={x}
+      y={y}
+      textAnchor={textAnchor}
+      dominantBaseline="central"
+      fill={chrome.label}
+      fontSize={DONUT_LABEL_FONT_SIZE_PX}
+    >
+      {formatChartShare(percent ?? 0)}
+    </text>
+  );
 
   const chart =
     kind === 'bar' ? (
@@ -98,6 +114,7 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
           cx={PIE_CENTER}
           cy={PIE_CENTER}
           outerRadius={PIE_OUTER_RADIUS}
+          {...(spec.donut ? { innerRadius: DONUT_INNER_RADIUS, label: shareLabel } : {})}
           isAnimationActive={animate}
         >
           {rows.map((row, index) => (
@@ -105,7 +122,7 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
           ))}
         </Pie>
         <Tooltip {...tooltipStyles} />
-        {showLegend && <Legend wrapperStyle={legendStyle} />}
+        {showLegend && <Legend wrapperStyle={legendStyle} itemSorter={null} />}
       </PieChart>
     );
 

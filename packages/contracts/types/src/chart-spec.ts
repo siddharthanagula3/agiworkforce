@@ -1,5 +1,6 @@
 export const CHART_KINDS = ['bar', 'line', 'pie'] as const;
 export type ChartKind = (typeof CHART_KINDS)[number];
+export const CHART_DONUT_TYPES = ['donut', 'doughnut'] as const;
 
 export const CHART_ROW_CAP = 500;
 export const CHART_SERIES_CAP = 12;
@@ -35,6 +36,7 @@ export interface ChartSpec {
   series: ChartSeriesSpec[];
   showLegend: boolean;
   totalRows: number;
+  donut?: true;
   title?: string;
   xLabel?: string;
   yLabel?: string;
@@ -191,11 +193,15 @@ export function parseChartArtifact(content: string): ChartParseResult {
   }
   const spec: Record<string, unknown> = Array.isArray(parsed) ? { data: parsed } : parsed;
 
-  const requestedKind = readString(spec, KIND_KEYS)?.toLowerCase();
+  const requestedType = readString(spec, KIND_KEYS)?.toLowerCase();
+  const donut = Boolean(
+    requestedType && (CHART_DONUT_TYPES as readonly string[]).includes(requestedType),
+  );
+  const requestedKind = donut ? 'pie' : requestedType;
   if (requestedKind && !(CHART_KINDS as readonly string[]).includes(requestedKind)) {
     return {
       ok: false,
-      reason: `Unsupported chart type "${requestedKind}". Supported types: ${CHART_KINDS.join(', ')}.`,
+      reason: `Unsupported chart type "${requestedKind}". Supported types: ${[...CHART_KINDS, CHART_DONUT_TYPES[0]].join(', ')}.`,
     };
   }
   const kind = (requestedKind ?? CHART_KINDS[0]) as ChartKind;
@@ -234,6 +240,7 @@ export function parseChartArtifact(content: string): ChartParseResult {
       title: readString(spec, TITLE_KEYS),
       xLabel: readAxisLabel(spec, AXIS_CONTAINER_KEYS.x),
       yLabel: readAxisLabel(spec, AXIS_CONTAINER_KEYS.y),
+      ...(donut ? { donut: true as const } : {}),
     },
   };
 }

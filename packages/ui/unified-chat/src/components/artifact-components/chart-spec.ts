@@ -3,6 +3,7 @@ import { translateUiPlural } from '@agiworkforce/ui';
 import type { ChartCellValue, ChartSeriesSpec, ChartSpec } from '@agiworkforce/types';
 
 export {
+  CHART_DONUT_TYPES,
   CHART_KINDS,
   CHART_ROW_CAP,
   CHART_SERIES_CAP,
@@ -26,6 +27,7 @@ const CHANNEL_MAX = 255;
 const SERIES_SHADE_RATIO = 0.45;
 
 const HEX_RE = /^[0-9a-f]{6}$/i;
+const PERCENT = 100;
 
 export interface ChartChrome {
   grid: string;
@@ -105,6 +107,12 @@ function formatChartValue(value: ChartCellValue | undefined): string {
   return value ?? '';
 }
 
+export function formatChartShare(share: number): string {
+  const percent = share * PERCENT;
+  if (percent > 0 && percent < 1) return '<1%';
+  return `${Math.round(percent)}%`;
+}
+
 function describeSeries(spec: ChartSpec, entry: ChartSeriesSpec): string | null {
   const points = spec.rows
     .map((row) => ({ category: row[spec.xKey], value: row[entry.dataKey] }))
@@ -122,6 +130,14 @@ function describeSeries(spec: ChartSpec, entry: ChartSeriesSpec): string | null 
   const highest = points.reduce((high, point) => (point.value > high.value ? point : high));
   if (spec.kind === 'pie') {
     const total = points.reduce((sum, point) => sum + point.value, 0);
+    if (spec.donut && total > 0) {
+      const shares = points
+        .map(
+          (point) => `${formatChartValue(point.category)} ${formatChartShare(point.value / total)}`,
+        )
+        .join(', ');
+      return `${label}: total ${formatChartValue(total)}, ${shares}.`;
+    }
     return `${label}: total ${formatChartValue(total)}, largest ${at(highest)}, smallest ${at(lowest)}.`;
   }
   return `${label}: starts at ${at(first)}, ends at ${at(last)}, lowest ${at(lowest)}, highest ${at(highest)}.`;
@@ -139,7 +155,7 @@ export function summarizeChart(spec: ChartSpec, fallbackTitle?: string): string 
   });
   const plotted =
     spec.kind === 'pie'
-      ? `Pie chart of ${pointCount}, one slice per ${xAxis}.`
+      ? `${spec.donut ? 'Donut' : 'Pie'} chart of ${pointCount}, one slice per ${xAxis}.`
       : `${spec.kind === 'bar' ? 'Bar' : 'Line'} chart of ${pointCount}, ${xAxis} on the horizontal axis${spec.yLabel ? ` and ${spec.yLabel} on the vertical axis` : ''}.`;
   const truncated =
     spec.totalRows > spec.rows.length
