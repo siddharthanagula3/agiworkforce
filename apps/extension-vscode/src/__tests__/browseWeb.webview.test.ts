@@ -64,6 +64,7 @@ describe('VS Code Browse the web context', () => {
 
     const input = document.getElementById('userInput') as HTMLTextAreaElement;
     input.value = 'What changed in the latest Rust release?';
+    input.dispatchEvent(new Event('input'));
     (document.getElementById('sendBtn') as HTMLButtonElement).click();
 
     expect(postMessage).toHaveBeenCalledWith({

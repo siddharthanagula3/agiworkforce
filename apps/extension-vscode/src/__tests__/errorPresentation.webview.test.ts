@@ -454,6 +454,7 @@ function deliver(data: unknown): void {
 function sendTurn(text: string): void {
   const input = document.getElementById('userInput') as HTMLTextAreaElement;
   input.value = text;
+  input.dispatchEvent(new Event('input'));
   (document.getElementById('sendBtn') as HTMLButtonElement).click();
 }
 
