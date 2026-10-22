@@ -27,6 +27,7 @@ import {
   LifeBuoy,
   Gift,
   MessagesSquare,
+  MousePointerClick,
 } from 'lucide-react';
 
 export type SettingsNavKey =
@@ -54,6 +55,7 @@ export type SettingsNavKey =
   // browser has no shell to configure, and the modal appends the group only
   // when it is running inside one.
   | 'desktop'
+  | 'computer-use'
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer, see apps/desktop settings-ia contract test).
   | 'personalization'
@@ -288,7 +290,13 @@ export const SETTINGS_NAV_GROUP_DESKTOP_APP: SettingsNavGroupResolved = {
       key: 'desktop',
       label: 'General',
       icon: Laptop,
-      keywords: ['desktop', 'shortcut', 'startup', 'menu bar', 'update'],
+      keywords: ['desktop', 'shortcut', 'startup', 'menu bar', 'update', 'keep awake', 'sleep'],
+    },
+    {
+      key: 'computer-use',
+      label: 'Computer use',
+      icon: MousePointerClick,
+      keywords: ['computer use', 'control', 'apps', 'mouse', 'keyboard', 'screen', 'chrome'],
     },
   ],
 };

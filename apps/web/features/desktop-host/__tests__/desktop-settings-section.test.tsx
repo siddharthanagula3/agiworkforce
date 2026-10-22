@@ -194,6 +194,63 @@ describe('the desktop settings section', () => {
     expect(screen.queryByLabelText('Dictate into the app you are using')).not.toBeInTheDocument();
   });
 
+  it('offers keep computer awake where the shell reports it, on by default, and writes it', async () => {
+    const { writePreferences } = installHost({
+      preferences: { ...DEFAULT_STATE.preferences, preventSleepWhileRunning: true },
+    });
+    render(<DesktopSettingsSection />);
+
+    const toggle = await screen.findByRole('switch', { name: 'Keep computer awake' });
+    expect(toggle).toBeChecked();
+    await userEvent.click(toggle);
+    expect(writePreferences).toHaveBeenCalledWith({ preventSleepWhileRunning: false });
+    await waitFor(() => expect(toggle).not.toBeChecked());
+  });
+
+  it('shows no keep-awake switch to a shell that does not report it', async () => {
+    installHost();
+    render(<DesktopSettingsSection />);
+
+    await screen.findByLabelText('Menu bar');
+    expect(screen.queryByLabelText('Keep computer awake')).not.toBeInTheDocument();
+  });
+
+  it('offers draw attention, off by default, only where the shell reports it', async () => {
+    const { writePreferences } = installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true, drawAttention: false },
+      },
+    });
+    render(<DesktopSettingsSection />);
+
+    const toggle = await screen.findByRole('switch', { name: 'Draw attention' });
+    expect(toggle).not.toBeChecked();
+    expect(screen.getByText(/Bounce the Dock icon/u)).toBeInTheDocument();
+    await userEvent.click(toggle);
+    expect(writePreferences).toHaveBeenLastCalledWith({
+      agentNotifications: { when: 'unfocused', muted: [], sound: true, drawAttention: true },
+      sessionCompletionAlerts: 'background',
+      sessionApprovalAlerts: true,
+    });
+
+    await userEvent.selectOptions(screen.getByLabelText('Agent notifications'), 'never');
+    await waitFor(() => expect(screen.getByLabelText('Draw attention')).toBeDisabled());
+  });
+
+  it('shows no draw attention switch to a shell whose notifications lack it', async () => {
+    installHost({
+      preferences: {
+        ...DEFAULT_STATE.preferences,
+        agentNotifications: { when: 'unfocused', muted: [], sound: true },
+      },
+    });
+    render(<DesktopSettingsSection />);
+
+    await screen.findByLabelText('Agent notifications');
+    expect(screen.queryByLabelText('Draw attention')).not.toBeInTheDocument();
+  });
+
   it('offers no shortcut beside the presets, and no literal of its own', async () => {
     installHost();
     render(<DesktopSettingsSection />);

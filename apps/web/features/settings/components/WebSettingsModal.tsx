@@ -28,6 +28,7 @@ import {
   type WebSettingsPane,
 } from '../lib/web-settings-sections';
 import { DesktopSettingsSection, useDesktopHost } from '@/features/desktop-host';
+import { ComputerUseSettings } from '@/features/desktop-host/components/ComputerUseSettings';
 
 import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
@@ -87,6 +88,21 @@ const NAV_GROUP_LABEL_KEYS: Record<string, string> = {
   [SETTINGS_NAV_GROUP_DESKTOP]: 'nav.groupDesktop',
 };
 
+const ELECTRON_ONLY_SECTIONS: ReadonlySet<string> = new Set<WebSettingsHostedSection>([
+  'computer-use',
+]);
+
+function hostedNavGroups(
+  groups: SettingsNavGroupResolved[],
+  electronHost: boolean,
+): SettingsNavGroupResolved[] {
+  if (electronHost) return groups;
+  return groups.map((group) => ({
+    ...group,
+    items: group.items.filter((item) => !ELECTRON_ONLY_SECTIONS.has(item.key)),
+  }));
+}
+
 function translateNavGroups(
   groups: SettingsNavGroupResolved[],
   t: (key: string, options: { defaultValue: string }) => string,
@@ -127,9 +143,14 @@ export function WebSettingsModal({
   const pathname = usePathname();
   const host = useDesktopHost();
   const { t } = useTranslation('settings');
+  const electronHost = host?.shell === 'electron';
   const navGroups = useMemo(
-    () => translateNavGroups(host ? HOSTED_SETTINGS_NAV_GROUPS : WEB_SETTINGS_NAV_GROUPS, t),
-    [host, t],
+    () =>
+      translateNavGroups(
+        host ? hostedNavGroups(HOSTED_SETTINGS_NAV_GROUPS, electronHost) : WEB_SETTINGS_NAV_GROUPS,
+        t,
+      ),
+    [host, electronHost, t],
   );
 
   const sectionFromPath = settingsSectionFromPath(pathname);
@@ -218,6 +239,7 @@ export function WebSettingsModal({
   const sectionContent: Record<WebSettingsPane, React.ReactNode> &
     Partial<Record<WebSettingsHostedSection | 'skills' | 'plugins', React.ReactNode>> = {
     ...(host ? { desktop: <DesktopSettingsSection /> } : {}),
+    ...(electronHost ? { 'computer-use': <ComputerUseSettings /> } : {}),
     ...(skillsDecision?.allowed === false && skillsDecision.reason
       ? { skills: <CapabilityDeniedNotice reason={skillsDecision.reason} /> }
       : {}),

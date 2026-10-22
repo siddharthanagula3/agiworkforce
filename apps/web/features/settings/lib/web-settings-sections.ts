@@ -74,6 +74,7 @@ export const WEB_SETTINGS_BUILT_IN_SECTIONS = [
  */
 export const WEB_SETTINGS_HOSTED_SECTIONS = [
   'desktop',
+  'computer-use',
 ] as const satisfies readonly SettingsNavKey[];
 
 export type WebSettingsHostedSection = (typeof WEB_SETTINGS_HOSTED_SECTIONS)[number];

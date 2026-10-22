@@ -32,7 +32,6 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
 import { readDeveloperRuntimeStatus } from '../lib/runtime-client';
 import { BackgroundActivitySection } from './BackgroundActivitySection';
-import { ComputerUseSettings } from './ComputerUseSettings';
 import { DesktopPermissionsSection } from './DesktopPermissionsSection';
 import { DesktopSettingsHeading, DesktopSettingsRow as Row } from './DesktopSettingsRow';
 import { DesktopUpdateRow } from './DesktopUpdateRow';
@@ -50,6 +49,9 @@ const MENU_BAR_HINT = 'Show AGI Desktop in the menu bar.';
 const DICTATE_ELSEWHERE_LABEL = 'Dictate into the app you are using';
 const DICTATE_ELSEWHERE_HINT =
   'With another app in front, the dictation shortcut opens a small bar there and types what you said into that app when you press it again.';
+const KEEP_AWAKE_LABEL = 'Keep computer awake';
+const KEEP_AWAKE_HINT =
+  'Stops idle sleep while an agent runs; the display can still turn off and closing the lid still sleeps.';
 const COMPLETION_ALERTS_LABEL = 'Task finished alerts';
 const COMPLETION_ALERTS_HINT =
   'Show a notification when a coding session on this computer finishes or stops.';
@@ -133,6 +135,13 @@ const NOTIFY_KIND_ROWS: Record<HostAgentNotificationKind, { label: string; hint:
 };
 const NOTIFY_SOUND_LABEL = 'Notification sound';
 const NOTIFY_SOUND_HINT = 'Play the system sound with agent notifications.';
+const DRAW_ATTENTION_LABEL = 'Draw attention';
+
+function drawAttentionHint(platform: string): string {
+  return platform.includes('darwin')
+    ? 'Bounce the Dock icon when an agent notifies you while AGI Desktop is in the background.'
+    : 'Flash the taskbar button when an agent notifies you while AGI Desktop is in the background.';
+}
 
 /**
  * What the shell reports back about a chord it could not claim. `registered`
@@ -318,6 +327,16 @@ export function DesktopSettingsSection() {
             </Row>
           )}
 
+          {preferences?.preventSleepWhileRunning !== undefined && (
+            <Row label={KEEP_AWAKE_LABEL} hint={KEEP_AWAKE_HINT}>
+              <Switch
+                checked={preferences.preventSleepWhileRunning}
+                onCheckedChange={(checked) => write({ preventSleepWhileRunning: checked })}
+                aria-label={KEEP_AWAKE_LABEL}
+              />
+            </Row>
+          )}
+
           {preferences?.agentNotifications === undefined ? (
             <>
               <Row label={COMPLETION_ALERTS_LABEL} hint={COMPLETION_ALERTS_HINT}>
@@ -352,6 +371,8 @@ export function DesktopSettingsSection() {
           ) : (
             <AgentNotificationRows
               value={effectiveAgentNotifications(preferences)}
+              offersDrawAttention={preferences.agentNotifications.drawAttention !== undefined}
+              platform={host.platform}
               onChange={(next) => write(agentNotificationsWrite(next))}
             />
           )}
@@ -360,11 +381,10 @@ export function DesktopSettingsSection() {
         </div>
 
         {platformName !== null && (
-          <p className="text-xs text-[var(--text-3)]">AGI Desktop on {platformName}</p>
+          <p className="text-sm text-[var(--text-3)]">AGI Desktop on {platformName}</p>
         )}
       </section>
 
-      <ComputerUseSettings />
       <BackgroundActivitySection />
       <DesktopPermissionsSection />
     </div>
@@ -373,9 +393,13 @@ export function DesktopSettingsSection() {
 
 function AgentNotificationRows({
   value,
+  offersDrawAttention,
+  platform,
   onChange,
 }: {
   value: HostAgentNotificationPreferences;
+  offersDrawAttention: boolean;
+  platform: string;
   onChange: (next: HostAgentNotificationPreferences) => void;
 }) {
   const off = value.when === 'never';
@@ -422,6 +446,16 @@ function AgentNotificationRows({
           aria-label={NOTIFY_SOUND_LABEL}
         />
       </Row>
+      {offersDrawAttention && (
+        <Row label={DRAW_ATTENTION_LABEL} hint={drawAttentionHint(platform)}>
+          <Switch
+            checked={!off && value.drawAttention === true}
+            disabled={off}
+            onCheckedChange={(drawAttention) => onChange({ ...value, drawAttention })}
+            aria-label={DRAW_ATTENTION_LABEL}
+          />
+        </Row>
+      )}
     </>
   );
 }

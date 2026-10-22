@@ -3,38 +3,91 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   SYSTEM_PERMISSION_KINDS,
+  SYSTEM_PERMISSION_LABELS,
+  SYSTEM_PERMISSION_PURPOSES,
   describeHostPlatform,
   permissionKey,
   type DesktopPermissionsReview,
   type ReviewedPermission,
+  type SystemPermissionKind,
+  type SystemPermissionStatus,
 } from '@agiworkforce/local-runtime-contract';
 import { Spinner } from '@agiworkforce/ui';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useElectronHost } from '../lib/host';
-import { readDesktopPermissions, revokeDesktopPermission } from '../lib/runtime-client';
-import { SystemPermissionRow } from './ComputerUseSettings';
+import {
+  openSystemPermissionSettings,
+  readDesktopPermissions,
+  revokeDesktopPermission,
+} from '../lib/runtime-client';
 import {
   DESKTOP_SETTINGS_BUTTON_CLASS,
+  DesktopSettingsEmpty,
+  DesktopSettingsGroup,
   DesktopSettingsHeading,
   DesktopSettingsRow,
 } from './DesktopSettingsRow';
 
 const HEADING = 'Permissions';
-const HEADING_HINT =
-  'What you have allowed or refused on this computer. Remove an answer and AGI Desktop asks again the next time it needs that permission.';
+const HEADING_HINT = 'Remove an answer and AGI Desktop asks again the next time it needs it.';
 const ANSWERS_HEADING = 'Your answers';
-const NO_ANSWERS =
-  'No saved answers yet. AGI Desktop asks the first time it needs each permission.';
+const NO_ANSWERS = 'None yet. AGI Desktop asks the first time it needs each permission.';
+const SYSTEM_HINT = 'Computer use, screenshots and dictation need these.';
+const REFRESH_LABEL = 'Refresh';
+const OPEN_SETTINGS_LABEL = 'Open System Settings';
 const LOAD_FAILED = 'Permissions could not be read from the app.';
 const REMOVE_FAILED = 'That answer was not removed.';
-const SUB_HEADING_CLASS = 'text-xs font-medium uppercase tracking-wider text-[var(--text-3)]';
 
-function answerLabel(decision: ReviewedPermission): string {
+export const SYSTEM_PERMISSION_STATUS_TEXT: Readonly<Record<SystemPermissionStatus, string>> = {
+  granted: 'Allowed',
+  denied: 'Not allowed',
+  'not-determined': 'Not asked yet',
+  restricted: 'Blocked by your organization',
+  'not-required': 'Not needed on this computer',
+};
+
+export function systemPermissionNeedsAction(status: SystemPermissionStatus): boolean {
+  return status === 'denied' || status === 'not-determined';
+}
+
+export function isApplicationAnswer(decision: ReviewedPermission): boolean {
+  return decision.capability === 'application.control' && decision.scope.kind === 'application';
+}
+
+export function SystemPermissionRow({
+  kind,
+  status,
+}: {
+  kind: SystemPermissionKind;
+  status: SystemPermissionStatus;
+}) {
+  return (
+    <DesktopSettingsRow
+      label={SYSTEM_PERMISSION_LABELS[kind]}
+      hint={SYSTEM_PERMISSION_PURPOSES[kind]}
+      note={SYSTEM_PERMISSION_STATUS_TEXT[status]}
+      noteIsFailure={status === 'denied' || status === 'restricted'}
+    >
+      {systemPermissionNeedsAction(status) ? (
+        <button
+          type="button"
+          className={DESKTOP_SETTINGS_BUTTON_CLASS}
+          aria-label={`${OPEN_SETTINGS_LABEL} for ${SYSTEM_PERMISSION_LABELS[kind]}`}
+          onClick={() => void openSystemPermissionSettings(kind)}
+        >
+          {OPEN_SETTINGS_LABEL}
+        </button>
+      ) : null}
+    </DesktopSettingsRow>
+  );
+}
+
+export function answerLabel(decision: ReviewedPermission): string {
   const text = decision.description;
   return `${text.charAt(0).toUpperCase()}${text.slice(1)}`;
 }
 
-function answerHint(decision: ReviewedPermission): string {
+export function answerHint(decision: ReviewedPermission): string {
   if (decision.state === 'denied') {
     return decision.duration === 'always' ? 'Always refused' : 'Refused until you quit the app';
   }
@@ -48,7 +101,15 @@ function systemHeading(platform: string): string {
   return name ? `${name} privacy settings` : 'System privacy settings';
 }
 
-export function DesktopPermissionsSection() {
+export interface DesktopPermissions {
+  review: DesktopPermissionsReview | null;
+  error: string | null;
+  removing: string | null;
+  refresh: () => void;
+  remove: (decision: ReviewedPermission) => void;
+}
+
+export function useDesktopPermissions(): DesktopPermissions {
   const host = useElectronHost();
   const [review, setReview] = useState<DesktopPermissionsReview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -76,7 +137,7 @@ export function DesktopPermissionsSection() {
     };
   }, [host, refresh]);
 
-  const onRemove = useCallback((decision: ReviewedPermission) => {
+  const remove = useCallback((decision: ReviewedPermission) => {
     const key = permissionKey(decision.capability, decision.scope);
     setRemoving(key);
     revokeDesktopPermission(decision)
@@ -88,7 +149,43 @@ export function DesktopPermissionsSection() {
       .finally(() => setRemoving(null));
   }, []);
 
+  return { review, error, removing, refresh, remove };
+}
+
+export function PermissionAnswerRow({
+  decision,
+  label = answerLabel(decision),
+  disabled,
+  onRemove,
+}: {
+  decision: ReviewedPermission;
+  label?: string;
+  disabled: boolean;
+  onRemove: (decision: ReviewedPermission) => void;
+}) {
+  const action = decision.state === 'denied' ? 'Ask again' : 'Remove';
+  return (
+    <DesktopSettingsRow label={label} hint={answerHint(decision)}>
+      <button
+        type="button"
+        className={DESKTOP_SETTINGS_BUTTON_CLASS}
+        disabled={disabled}
+        aria-label={`${action}: ${label}`}
+        onClick={() => onRemove(decision)}
+      >
+        {action}
+      </button>
+    </DesktopSettingsRow>
+  );
+}
+
+export function DesktopPermissionsSection() {
+  const host = useElectronHost();
+  const { review, error, removing, refresh, remove } = useDesktopPermissions();
+
   if (!host) return null;
+
+  const answers = review?.decisions.filter((decision) => !isApplicationAnswer(decision)) ?? [];
 
   return (
     <section className="flex flex-col gap-4" aria-label={HEADING}>
@@ -106,37 +203,34 @@ export function DesktopPermissionsSection() {
         ) : null
       ) : (
         <>
-          <div className="flex flex-col">
-            <h3 className={SUB_HEADING_CLASS}>{ANSWERS_HEADING}</h3>
-            {review.decisions.length === 0 ? (
-              <p className="py-[14px] text-xs text-[var(--text-3)]">{NO_ANSWERS}</p>
+          <DesktopSettingsGroup title={ANSWERS_HEADING}>
+            {answers.length === 0 ? (
+              <DesktopSettingsEmpty>{NO_ANSWERS}</DesktopSettingsEmpty>
             ) : (
-              review.decisions.map((decision) => {
-                const key = permissionKey(decision.capability, decision.scope);
-                const label = answerLabel(decision);
-                return (
-                  <DesktopSettingsRow key={key} label={label} hint={answerHint(decision)}>
-                    <button
-                      type="button"
-                      className={DESKTOP_SETTINGS_BUTTON_CLASS}
-                      disabled={removing !== null}
-                      aria-label={`${decision.state === 'denied' ? 'Ask again' : 'Remove'}: ${label}`}
-                      onClick={() => onRemove(decision)}
-                    >
-                      {decision.state === 'denied' ? 'Ask again' : 'Remove'}
-                    </button>
-                  </DesktopSettingsRow>
-                );
-              })
+              answers.map((decision) => (
+                <PermissionAnswerRow
+                  key={permissionKey(decision.capability, decision.scope)}
+                  decision={decision}
+                  disabled={removing !== null}
+                  onRemove={remove}
+                />
+              ))
             )}
-          </div>
+          </DesktopSettingsGroup>
 
-          <div className="flex flex-col">
-            <h3 className={SUB_HEADING_CLASS}>{systemHeading(host.platform)}</h3>
+          <DesktopSettingsGroup
+            title={systemHeading(host.platform)}
+            hint={SYSTEM_HINT}
+            action={
+              <button type="button" className={DESKTOP_SETTINGS_BUTTON_CLASS} onClick={refresh}>
+                {REFRESH_LABEL}
+              </button>
+            }
+          >
             {SYSTEM_PERMISSION_KINDS.map((kind) => (
               <SystemPermissionRow key={kind} kind={kind} status={review.system[kind]} />
             ))}
-          </div>
+          </DesktopSettingsGroup>
         </>
       )}
     </section>

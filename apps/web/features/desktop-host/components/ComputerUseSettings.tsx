@@ -1,29 +1,50 @@
 'use client';
 
+import { useCallback, useEffect, useState } from 'react';
 import {
   COMPUTER_USE_STOP_SHORTCUT,
-  SYSTEM_PERMISSION_LABELS,
-  SYSTEM_PERMISSION_PURPOSES,
   describeAccelerator,
+  permissionKey,
+  type BrowserPairingState,
   type ComputerUseStatus,
-  type SystemPermissionKind,
-  type SystemPermissionStatus,
+  type ReviewedPermission,
 } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Switch } from '@agiworkforce/ui';
+import { SettingsSectionLink } from '@/features/settings/components/SettingsSectionLink';
 import { useComputerUse } from '../hooks/use-computer-use';
 import { useElectronHost } from '../lib/host';
-import { openSystemPermissionSettings } from '../lib/runtime-client';
+import { readBrowserPairing } from '../lib/runtime-client';
+import {
+  PermissionAnswerRow,
+  SystemPermissionRow,
+  isApplicationAnswer,
+  useDesktopPermissions,
+} from './DesktopPermissionsSection';
 import {
   DESKTOP_SETTINGS_BUTTON_CLASS,
+  DesktopSettingsEmpty,
+  DesktopSettingsGroup,
   DesktopSettingsHeading,
   DesktopSettingsRow,
 } from './DesktopSettingsRow';
 
 const HEADING = 'Computer use';
-const HEADING_HINT =
-  'Let AGI see your screen and use the mouse and keyboard on this computer when you ask it to. It asks before it controls each app, and your answers are listed under Permissions.';
-const TOGGLE_LABEL = 'Computer use';
-const OPEN_SETTINGS_LABEL = 'Open System Settings';
+const HEADING_HINT = 'Let AGI see your screen and use the mouse and keyboard in apps you allow.';
+const CONTROL_HEADING = 'Control';
+const ANY_APP_LABEL = 'Any app';
+const CHROME_LABEL = 'Chrome';
+const CHROME_HINT = `Lets AGI act in Chrome through the ${PRODUCT_NAMES.extension}.`;
+const CHROME_CHECKING = 'Checking the browser connection…';
+const CHROME_CONNECTED = 'Connected';
+const CHROME_PAIRED_AWAY = 'Paired, but Chrome is not connected right now';
+const CHROME_NOT_PAIRED = `${PRODUCT_NAMES.extension} not paired`;
+const CHROME_UNREACHABLE = 'Chrome cannot reach this app';
+const CHROME_LOAD_FAILED = 'The browser connection could not be read.';
+const MANAGE_LABEL = 'Manage';
+const ALLOWED_APPS_HEADING = 'Allowed apps';
+const REFUSED_APPS_HEADING = 'Refused apps';
+const NO_APPS = 'None yet';
 const STOP_LABEL = 'Stop';
 const TAKE_OVER_LABEL = 'Take over';
 const HAND_BACK_LABEL = 'Hand back';
@@ -32,49 +53,9 @@ const REFUSED_HINT =
   'You refused computer use when AGI asked. It stays off until you quit the app or ask again.';
 const ASK_AGAIN_LABEL = 'Ask again';
 
-export const SYSTEM_PERMISSION_STATUS_TEXT: Readonly<Record<SystemPermissionStatus, string>> = {
-  granted: 'Allowed',
-  denied: 'Not allowed',
-  'not-determined': 'Not asked yet',
-  restricted: 'Blocked by your organization',
-  'not-required': 'Not needed on this computer',
-};
-
-export function systemPermissionNeedsAction(status: SystemPermissionStatus): boolean {
-  return status === 'denied' || status === 'not-determined';
-}
-
 function toggleHint(stopKey: string): string {
   const stopping = stopKey ? `${stopKey} stops it at any time` : 'Stop ends it at any time';
-  return `Off until you turn it on. AGI asks before its first step each session, and ${stopping}.`;
-}
-
-export function SystemPermissionRow({
-  kind,
-  status,
-}: {
-  kind: SystemPermissionKind;
-  status: SystemPermissionStatus;
-}) {
-  return (
-    <DesktopSettingsRow
-      label={SYSTEM_PERMISSION_LABELS[kind]}
-      hint={SYSTEM_PERMISSION_PURPOSES[kind]}
-      note={SYSTEM_PERMISSION_STATUS_TEXT[status]}
-      noteIsFailure={status === 'denied' || status === 'restricted'}
-    >
-      {systemPermissionNeedsAction(status) ? (
-        <button
-          type="button"
-          className={DESKTOP_SETTINGS_BUTTON_CLASS}
-          aria-label={`${OPEN_SETTINGS_LABEL} for ${SYSTEM_PERMISSION_LABELS[kind]}`}
-          onClick={() => void openSystemPermissionSettings(kind)}
-        >
-          {OPEN_SETTINGS_LABEL}
-        </button>
-      ) : null}
-    </DesktopSettingsRow>
-  );
+  return `AGI asks before it controls each app, and ${stopping}.`;
 }
 
 function phaseCopy(status: ComputerUseStatus): { label: string; hint: string } | null {
@@ -96,9 +77,75 @@ function phaseCopy(status: ComputerUseStatus): { label: string; hint: string } |
   return null;
 }
 
+type ChromeReading = { state: BrowserPairingState } | { failed: true } | null;
+
+function chromeNote(reading: ChromeReading): { text: string; failure: boolean } {
+  if (reading === null) return { text: CHROME_CHECKING, failure: false };
+  if ('failed' in reading) return { text: CHROME_LOAD_FAILED, failure: true };
+  const { state } = reading;
+  if (!state.bridgeListening || !state.hostInstalled) {
+    return { text: CHROME_UNREACHABLE, failure: true };
+  }
+  if (state.connected) return { text: CHROME_CONNECTED, failure: false };
+  if (state.paired) return { text: CHROME_PAIRED_AWAY, failure: false };
+  return { text: CHROME_NOT_PAIRED, failure: false };
+}
+
+function useChromeReading(enabled: boolean): ChromeReading {
+  const host = useElectronHost();
+  const [reading, setReading] = useState<ChromeReading>(null);
+
+  const refresh = useCallback(() => {
+    readBrowserPairing()
+      .then((state) => setReading({ state }))
+      .catch(() => setReading({ failed: true }));
+  }, []);
+
+  useEffect(() => {
+    if (!host || !enabled) return undefined;
+    refresh();
+    return host.onRuntimeEvent((event) => {
+      if (event.kind === 'browser-pairing-changed') setReading({ state: event.state });
+    });
+  }, [host, enabled, refresh]);
+
+  return reading;
+}
+
+function AppAnswers({
+  title,
+  answers,
+  disabled,
+  onRemove,
+}: {
+  title: string;
+  answers: ReviewedPermission[];
+  disabled: boolean;
+  onRemove: (decision: ReviewedPermission) => void;
+}) {
+  return (
+    <DesktopSettingsGroup title={title}>
+      {answers.length === 0 ? (
+        <DesktopSettingsEmpty>{NO_APPS}</DesktopSettingsEmpty>
+      ) : (
+        answers.map((decision) => (
+          <PermissionAnswerRow
+            key={permissionKey(decision.capability, decision.scope)}
+            decision={decision}
+            disabled={disabled}
+            onRemove={onRemove}
+          />
+        ))
+      )}
+    </DesktopSettingsGroup>
+  );
+}
+
 export function ComputerUseSettings() {
   const host = useElectronHost();
   const { status, error, busy, setEnabled, stop, takeOver, handBack, askAgain } = useComputerUse();
+  const permissions = useDesktopPermissions();
+  const chrome = useChromeReading(host !== null);
 
   if (!host) return null;
 
@@ -107,20 +154,23 @@ export function ComputerUseSettings() {
     status?.stopShortcut ?? COMPUTER_USE_STOP_SHORTCUT,
     host.platform,
   );
+  const chromeStatus = chromeNote(chrome);
+  const appAnswers = permissions.review?.decisions.filter(isApplicationAnswer) ?? [];
+  const failures = [error, permissions.error].filter((message) => message !== null);
 
   return (
-    <section className="flex flex-col gap-4" aria-label={HEADING}>
+    <section className="flex flex-col gap-6" aria-label={HEADING}>
       <DesktopSettingsHeading title={HEADING} hint={HEADING_HINT} />
 
-      {error !== null && (
-        <p className="text-sm text-[var(--settings-destructive-text)]" role="alert">
-          {error}
+      {failures.map((message) => (
+        <p key={message} className="text-sm text-[var(--settings-destructive-text)]" role="alert">
+          {message}
         </p>
-      )}
+      ))}
 
-      <div className="flex flex-col">
+      <DesktopSettingsGroup title={CONTROL_HEADING}>
         <DesktopSettingsRow
-          label={TOGGLE_LABEL}
+          label={ANY_APP_LABEL}
           hint={toggleHint(stopKey)}
           {...(status && !status.available && status.unavailableReason
             ? { note: status.unavailableReason }
@@ -130,8 +180,22 @@ export function ComputerUseSettings() {
             checked={status?.enabled ?? false}
             disabled={!status || busy}
             onCheckedChange={setEnabled}
-            aria-label={TOGGLE_LABEL}
+            aria-label={ANY_APP_LABEL}
           />
+        </DesktopSettingsRow>
+
+        <DesktopSettingsRow
+          label={CHROME_LABEL}
+          hint={CHROME_HINT}
+          note={chromeStatus.text}
+          noteIsFailure={chromeStatus.failure}
+        >
+          <SettingsSectionLink
+            section="capabilities"
+            className={`${DESKTOP_SETTINGS_BUTTON_CLASS} inline-flex items-center`}
+          >
+            {MANAGE_LABEL}
+          </SettingsSectionLink>
         </DesktopSettingsRow>
 
         {status?.enabled && status.grant === 'denied' ? (
@@ -187,7 +251,24 @@ export function ComputerUseSettings() {
             </span>
           </DesktopSettingsRow>
         ) : null}
-      </div>
+      </DesktopSettingsGroup>
+
+      {permissions.review !== null && (
+        <>
+          <AppAnswers
+            title={ALLOWED_APPS_HEADING}
+            answers={appAnswers.filter((decision) => decision.state === 'granted')}
+            disabled={permissions.removing !== null}
+            onRemove={permissions.remove}
+          />
+          <AppAnswers
+            title={REFUSED_APPS_HEADING}
+            answers={appAnswers.filter((decision) => decision.state === 'denied')}
+            disabled={permissions.removing !== null}
+            onRemove={permissions.remove}
+          />
+        </>
+      )}
     </section>
   );
 }
