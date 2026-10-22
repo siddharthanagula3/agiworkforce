@@ -1,14 +1,19 @@
 import * as vscode from 'vscode';
 import { MODEL_LOCKED_HINT, getModelPickerOptionsForTier } from '../model-picker/modelConstants';
 import {
-  AGENT_MODE_LABEL,
-  EFFORT_LABEL,
+  EFFORT_DESCRIPTION,
   REMOTE_CODE_LIMITS,
   TOOL_APPROVAL_ACTION_LABELS,
-  type AgentMode,
-  type Effort,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
+import {
+  DEVELOPER_AGENT_MODES,
+  DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_REASONING_EFFORTS,
+  DEVELOPER_REASONING_EFFORT_LABELS,
+  type DeveloperAgentMode,
+  type DeveloperReasoningEffort,
+} from '@agiworkforce/local-runtime-contract';
 import {
   agiCornerCssVars,
   agiMotionCssVars,
@@ -37,6 +42,32 @@ export function getNonce(): string {
   return randomBytes(24).toString('base64url');
 }
 
+function serializeForInlineScript(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</gu, '\\u003c')
+    .replace(/\u2028/gu, '\\u2028')
+    .replace(/\u2029/gu, '\\u2029');
+}
+
+const DEVELOPER_MODE_DESCRIPTIONS: Record<DeveloperAgentMode, string> = {
+  plan: 'Generate a plan; no edits until approved',
+  ask: 'Confirm every edit before it runs',
+  auto: 'Safe reads run automatically; writes and commands require approval',
+  bypass: 'Skip all approval prompts (dangerous)',
+};
+
+const DEVELOPER_MODE_OPTIONS = DEVELOPER_AGENT_MODES.map((mode) => ({
+  value: mode,
+  label: DEVELOPER_AGENT_MODE_LABELS[mode],
+  description: DEVELOPER_MODE_DESCRIPTIONS[mode],
+}));
+
+const DEVELOPER_EFFORT_OPTIONS = DEVELOPER_REASONING_EFFORTS.map((effort) => ({
+  value: effort,
+  label: DEVELOPER_REASONING_EFFORT_LABELS[effort],
+  description: EFFORT_DESCRIPTION[effort],
+}));
+
 const CODICON_DIR = ['out', 'codicons'] as const;
 const RENDER_SCRIPT_DIR = ['out', 'webview'] as const;
 
@@ -64,8 +95,8 @@ export function getWebviewContent(
   webview: vscode.Webview,
   extensionUri: vscode.Uri,
   nonce: string,
-  initialMode: AgentMode,
-  initialEffort: Effort,
+  initialMode: DeveloperAgentMode,
+  initialEffort: DeveloperReasoningEffort,
   supportsEffort: boolean,
   meterCollapsed: boolean,
   tier?: string,
@@ -88,8 +119,8 @@ export function getWebviewContent(
       return `<option value="${option.id}" data-display-label="${displayLabel}">${displayLabel}</option>`;
     })
     .join('');
-  const modeLabel = escapeHtml(AGENT_MODE_LABEL[initialMode]);
-  const effortLabel = escapeHtml(EFFORT_LABEL[initialEffort]);
+  const modeLabel = escapeHtml(DEVELOPER_AGENT_MODE_LABELS[initialMode]);
+  const effortLabel = escapeHtml(DEVELOPER_REASONING_EFFORT_LABELS[initialEffort]);
   const followUpBehaviorLiteral = initialFollowUpBehavior === 'steer' ? 'steer' : 'queue';
 
   const codiconCssUri = webview.asWebviewUri(
@@ -3712,15 +3743,19 @@ export function getWebviewContent(
     }
 
     // ── Helpers ───────────────────────────────────────────────────────────────
-    function capitalizeControl(value) {
-      return value ? value.charAt(0).toUpperCase() + value.slice(1) : '';
+    var MODE_LABELS = ${serializeForInlineScript(DEVELOPER_AGENT_MODE_LABELS)};
+    var EFFORT_LABELS = ${serializeForInlineScript(DEVELOPER_REASONING_EFFORT_LABELS)};
+    function modeLabel(value) {
+      return Object.prototype.hasOwnProperty.call(MODE_LABELS, value) ? MODE_LABELS[value] : '';
+    }
+    function effortLabel(value) {
+      return Object.prototype.hasOwnProperty.call(EFFORT_LABELS, value) ? EFFORT_LABELS[value] : '';
     }
 
     var currentModelLabel = 'Auto';
     function renderModelPill() {
       if (!modelPill) return;
-      var effort = capitalizeControl(activeEffort);
-      var effortShort = effort === 'Medium' ? 'Med' : effort;
+      var effortShort = effortLabel(activeEffort);
       var nameEl = document.createElement('span');
       nameEl.className = 'model-pill-name';
       nameEl.textContent = currentModelLabel;
@@ -3738,8 +3773,8 @@ export function getWebviewContent(
 
     function renderControlsSummary() {
       if (!controlsSummary) return;
-      var mode = capitalizeControl(activeMode);
-      var effort = capitalizeControl(activeEffort);
+      var mode = modeLabel(activeMode);
+      var effort = effortLabel(activeEffort);
       controlsSummary.textContent = mode;
       renderModelPill();
       var fullLabel = 'Controls: ' + mode + ' mode' +
@@ -4368,19 +4403,9 @@ export function getWebviewContent(
       userInput.style.height = Math.min(userInput.scrollHeight, 140) + 'px';
     }
 
-    var MODE_OPTIONS = [
-      { value: 'ask', label: 'Ask before edits', description: 'Confirm every edit before it runs' },
-      { value: 'auto', label: 'Auto safe operations', description: 'Safe reads run automatically; writes and commands require approval' },
-      { value: 'plan', label: 'Plan mode', description: 'Generate a plan; no edits until approved' },
-      { value: 'bypass', label: 'Bypass permissions', description: 'Skip all approval prompts (dangerous)' }
-    ];
+    var MODE_OPTIONS = ${serializeForInlineScript(DEVELOPER_MODE_OPTIONS)};
     var activeEffortLevels = null;
-    var EFFORT_OPTIONS = [
-      { value: 'low', label: 'Low', description: 'Minimal reasoning, fastest, lowest cost' },
-      { value: 'medium', label: 'Medium', description: 'Balanced reasoning, default' },
-      { value: 'high', label: 'High', description: 'Extended reasoning, slower, higher quality' },
-      { value: 'max', label: 'Max', description: 'Maximum reasoning budget' }
-    ];
+    var EFFORT_OPTIONS = ${serializeForInlineScript(DEVELOPER_EFFORT_OPTIONS)};
 
     function closeControlsPopover() {
       if (!controlsPopoverEl) return;
@@ -5509,7 +5534,7 @@ export function getWebviewContent(
       if (composerStatusSeparator && composerStatusBoundary) {
         composerStatusSeparator.hidden = composerStatusBoundary.textContent === '';
       }
-      if (composerStatusMode) composerStatusMode.textContent = capitalizeControl(activeMode);
+      if (composerStatusMode) composerStatusMode.textContent = modeLabel(activeMode);
     }
 
     if (composerStatusSignIn) {

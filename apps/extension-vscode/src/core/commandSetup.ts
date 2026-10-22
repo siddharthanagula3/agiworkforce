@@ -120,9 +120,16 @@ import {
 } from '../integrations/developerSessionHandoff';
 import {
   DEVELOPER_SESSION_PROTOCOL_VERSION,
+  EFFORT_DESCRIPTION,
   PRODUCT_BRAND,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
+import {
+  DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_REASONING_EFFORTS,
+  DEVELOPER_REASONING_EFFORT_LABELS,
+  type DeveloperReasoningEffort,
+} from '@agiworkforce/local-runtime-contract';
 import {
   CliCapabilityAdapter,
   openArtifactsSurface,
@@ -1590,10 +1597,6 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       const currentMode = Config.agentMode();
       const currentEffort = Config.agentEffort();
 
-      function cap(s: string): string {
-        return s.charAt(0).toUpperCase() + s.slice(1);
-      }
-
       type ActionSheetAction =
         | 'attach-file'
         | 'mention-file-project'
@@ -1643,12 +1646,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           action: 'switch-model',
         },
         {
-          label: `$(brain) Effort: ${cap(currentEffort)}`,
-          description: 'Set reasoning effort (Low / Medium / High / Max)',
+          label: `$(brain) Effort: ${DEVELOPER_REASONING_EFFORT_LABELS[currentEffort]}`,
+          description: `Set reasoning effort (${DEVELOPER_REASONING_EFFORTS.map(
+            (effort) => DEVELOPER_REASONING_EFFORT_LABELS[effort],
+          ).join(' / ')})`,
           action: 'effort',
         },
         {
-          label: `$(robot) Mode: ${cap(currentMode)}`,
+          label: `$(robot) Mode: ${DEVELOPER_AGENT_MODE_LABELS[currentMode]}`,
           description: 'Set agent operating mode',
           action: 'mode',
         },
@@ -1717,13 +1722,10 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.setAgentMode', async () => {
       const currentMode = Config.agentMode();
-      function capMode(s: string): string {
-        return s.charAt(0).toUpperCase() + s.slice(1);
-      }
       type ModeItem = vscode.QuickPickItem & { mode: 'ask' | 'auto' | 'plan' | 'bypass' };
       const modeItems: ModeItem[] = [
         {
-          label: '$(comment-discussion) Ask before edits',
+          label: `$(comment-discussion) ${DEVELOPER_AGENT_MODE_LABELS.ask}`,
           description: 'AGI will ask for approval before making each edit',
           detail:
             'Example: “add a test for parseDate” shows each edit and command for you to approve.',
@@ -1731,7 +1733,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           picked: currentMode === 'ask',
         },
         {
-          label: '$(symbol-misc) Auto safe operations',
+          label: `$(symbol-misc) ${DEVELOPER_AGENT_MODE_LABELS.auto}`,
           description: 'Safe reads run automatically; writes and commands require approval',
           detail:
             'Example: reading files and searching run on their own; npm install still asks first.',
@@ -1739,7 +1741,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           picked: currentMode === 'auto',
         },
         {
-          label: '$(checklist) Plan mode',
+          label: `$(checklist) ${DEVELOPER_AGENT_MODE_LABELS.plan}`,
           description: 'AGI will explore the code and present a plan before editing',
           detail:
             'Example: “move to the new API” returns a step-by-step plan and edits nothing until you approve it.',
@@ -1747,7 +1749,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
           picked: currentMode === 'plan',
         },
         {
-          label: '$(warning) Bypass permissions',
+          label: `$(warning) ${DEVELOPER_AGENT_MODE_LABELS.bypass}`,
           description:
             'AGI will not ask for approval before running potentially dangerous commands',
           detail:
@@ -1758,14 +1760,14 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       ];
       const modePick = await vscode.window.showQuickPick(modeItems, {
         title: `${PRODUCT_NAMES.code}, Modes`,
-        placeHolder: `Current: ${capMode(currentMode)} · choose the authority for future actions`,
+        placeHolder: `Current: ${DEVELOPER_AGENT_MODE_LABELS[currentMode]} · choose the authority for future actions`,
         matchOnDescription: true,
       });
       if (modePick !== undefined) {
         const selectedMode = modePick.mode;
         if (await setAgentModeWithConsent(context, selectedMode)) {
           vscode.window.showInformationMessage(
-            `${PRODUCT_NAMES.code} agent mode set to: ${capMode(selectedMode)}`,
+            `${PRODUCT_NAMES.code} agent mode set to: ${DEVELOPER_AGENT_MODE_LABELS[selectedMode]}`,
           );
         }
       }
@@ -1773,45 +1775,23 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
     register('agi-workforce.setAgentEffort', async () => {
       const currentEffort = Config.agentEffort();
-      function capEffort(s: string): string {
-        return s.charAt(0).toUpperCase() + s.slice(1);
-      }
-      const effortItems: vscode.QuickPickItem[] = [
-        {
-          label: '$(circle-outline) Low',
-          description: 'Minimal reasoning, fastest, lowest cost',
-          detail: 'low',
-          picked: currentEffort === 'low',
-        },
-        {
-          label: '$(circle-filled) Medium',
-          description: 'Balanced reasoning, default',
-          detail: 'medium',
-          picked: currentEffort === 'medium',
-        },
-        {
-          label: '$(pulse) High',
-          description: 'Extended reasoning, slower, higher quality',
-          detail: 'high',
-          picked: currentEffort === 'high',
-        },
-        {
-          label: '$(sparkle) Max',
-          description: 'Maximum reasoning budget',
-          detail: 'max',
-          picked: currentEffort === 'max',
-        },
-      ];
+      type EffortItem = vscode.QuickPickItem & { effort: DeveloperReasoningEffort };
+      const effortItems: EffortItem[] = DEVELOPER_REASONING_EFFORTS.map((effort) => ({
+        label: DEVELOPER_REASONING_EFFORT_LABELS[effort],
+        description: EFFORT_DESCRIPTION[effort],
+        effort,
+        picked: currentEffort === effort,
+      }));
       const effortPick = await vscode.window.showQuickPick(effortItems, {
         title: `${PRODUCT_NAMES.code}, Effort`,
-        placeHolder: `Current: ${capEffort(currentEffort)}`,
+        placeHolder: `Current: ${DEVELOPER_REASONING_EFFORT_LABELS[currentEffort]}`,
         matchOnDescription: true,
       });
-      if (effortPick?.detail !== undefined) {
-        const selectedEffort = effortPick.detail as 'low' | 'medium' | 'high' | 'max';
+      if (effortPick !== undefined) {
+        const selectedEffort = effortPick.effort;
         if (await setAgentEffortWithConsent(context, selectedEffort)) {
           vscode.window.showInformationMessage(
-            `${PRODUCT_NAMES.code} effort set to: ${capEffort(selectedEffort)}`,
+            `${PRODUCT_NAMES.code} effort set to: ${DEVELOPER_REASONING_EFFORT_LABELS[selectedEffort]}`,
           );
         }
       }

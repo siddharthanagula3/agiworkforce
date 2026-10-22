@@ -6,6 +6,12 @@ import { getSettingsWebviewContent } from '../features/settings/settingsWebviewC
 import { SETTINGS_SECTIONS, type SettingsPanelState } from '../features/settings/settingsProtocol';
 import { SETTINGS_PANEL_SETTING_KEYS } from '../platform/config';
 import { vscodeApiStub } from './vscodeApiStub';
+import {
+  DEVELOPER_AGENT_MODES,
+  DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_REASONING_EFFORTS,
+  DEVELOPER_REASONING_EFFORT_LABELS,
+} from '@agiworkforce/local-runtime-contract';
 
 const initialState: SettingsPanelState = {
   values: {
@@ -131,15 +137,15 @@ describe('settings webview', () => {
     ).toEqual([
       {
         label: 'Workspace',
-        sections: ['general', 'configuration', 'personalization'],
+        sections: ['general', 'configuration', 'personalization', 'usage'],
       },
       {
         label: 'Integrations',
-        sections: ['mcp', 'plugins', 'hooks'],
+        sections: ['mcp', 'hooks', 'plugins'],
       },
       {
         label: 'Account',
-        sections: ['usage', 'account'],
+        sections: ['account'],
       },
     ]);
     expect(
@@ -151,10 +157,10 @@ describe('settings webview', () => {
       'Session',
       'Runtime',
       'Instructions & editor',
-      'MCP servers',
-      'Plugins',
-      'Hooks',
       'Usage & billing',
+      'MCP servers',
+      'Hooks',
+      'Plugins',
       'Cloud account',
     ]);
     expect([...new Set(renderedSettings)].sort()).toEqual([...SETTINGS_PANEL_SETTING_KEYS].sort());
@@ -171,6 +177,25 @@ describe('settings webview', () => {
     expect(developerDiagnostics?.textContent).toContain('Resolved entitlement');
     expect(doc.querySelectorAll('[id]').length).toBe(
       new Set(Array.from(doc.querySelectorAll('[id]')).map((element) => element.id)).size,
+    );
+  });
+
+  it('offers the mode and effort levels every developer surface names, in their order', () => {
+    const doc = parse();
+    const options = (id: string) =>
+      Array.from(doc.querySelectorAll<HTMLOptionElement>(`#${id} option`)).map((option) => [
+        option.value,
+        option.textContent,
+      ]);
+
+    expect(options('setting-agent-mode')).toEqual(
+      DEVELOPER_AGENT_MODES.map((mode) => [mode, DEVELOPER_AGENT_MODE_LABELS[mode]]),
+    );
+    expect(options('setting-agent-effort')).toEqual(
+      DEVELOPER_REASONING_EFFORTS.map((effort) => [
+        effort,
+        DEVELOPER_REASONING_EFFORT_LABELS[effort],
+      ]),
     );
   });
 

@@ -3,6 +3,12 @@ import {
   getSurfaceCapabilityAvailability,
   type DiscoverableSurfaceCapability,
 } from '@agiworkforce/types';
+import {
+  DEVELOPER_AGENT_MODES,
+  DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_REASONING_EFFORTS,
+  DEVELOPER_REASONING_EFFORT_LABELS,
+} from '@agiworkforce/local-runtime-contract';
 import { agiCornerCssVars, agiMotionCssVars, cssVarsToString } from '@agiworkforce/design-tokens';
 import type { SettingsPanelState, SettingsSection } from './settingsProtocol';
 
@@ -21,6 +27,21 @@ function escapeHtml(value: string): string {
     .replace(/"/gu, '&quot;')
     .replace(/'/gu, '&#39;');
 }
+
+function selectOptions<Value extends string>(
+  values: readonly Value[],
+  labels: Readonly<Record<Value, string>>,
+): string {
+  return values
+    .map((value) => `<option value="${value}">${escapeHtml(labels[value])}</option>`)
+    .join('\n                ');
+}
+
+const AGENT_MODE_OPTIONS_HTML = selectOptions(DEVELOPER_AGENT_MODES, DEVELOPER_AGENT_MODE_LABELS);
+const REASONING_EFFORT_OPTIONS_HTML = selectOptions(
+  DEVELOPER_REASONING_EFFORTS,
+  DEVELOPER_REASONING_EFFORT_LABELS,
+);
 
 const VSCODE_DISCOVERABLE_CAPABILITIES: readonly DiscoverableSurfaceCapability[] = [
   'managed-plugins',
@@ -1115,16 +1136,16 @@ export function getSettingsWebviewContent(
             <button class="nav-button" type="button" data-section="general">Session</button>
             <button class="nav-button" type="button" data-section="configuration">Runtime</button>
             <button class="nav-button" type="button" data-section="personalization">Instructions &amp; editor</button>
+            <button class="nav-button" type="button" data-section="usage">Usage &amp; billing</button>
           </div>
           <div class="nav-group" role="group" aria-labelledby="nav-integrations-label">
             <span class="nav-group-label" id="nav-integrations-label">Integrations</span>
             <button class="nav-button" type="button" data-section="mcp">MCP servers</button>
-            <button class="nav-button" type="button" data-section="plugins">Plugins</button>
             <button class="nav-button" type="button" data-section="hooks">Hooks</button>
+            <button class="nav-button" type="button" data-section="plugins">Plugins</button>
           </div>
           <div class="nav-group" role="group" aria-labelledby="nav-account-label">
             <span class="nav-group-label" id="nav-account-label">Account</span>
-            <button class="nav-button" type="button" data-section="usage">Usage &amp; billing</button>
             <button class="nav-button" type="button" data-section="account">Cloud account</button>
           </div>
         </nav>
@@ -1211,7 +1232,7 @@ export function getSettingsWebviewContent(
                   Controls when the agent asks before editing files or running commands.
                 </span>
                 <span class="setting-description danger">
-                  Bypass Permissions requires a separate risk confirmation before it can activate.
+                  ${escapeHtml(DEVELOPER_AGENT_MODE_LABELS.bypass)} requires a separate risk confirmation before it can activate.
                 </span>
               </div>
               <select
@@ -1220,10 +1241,7 @@ export function getSettingsWebviewContent(
                 data-setting="agent.mode"
                 data-kind="string"
               >
-                <option value="ask">Ask before edits and commands</option>
-                <option value="auto">Auto, safe reads, approve writes</option>
-                <option value="plan">Plan before changes</option>
-                <option value="bypass">Bypass Permissions</option>
+                ${AGENT_MODE_OPTIONS_HTML}
               </select>
             </div>
             <div class="setting-row">
@@ -1239,10 +1257,7 @@ export function getSettingsWebviewContent(
                 data-setting="agent.effort"
                 data-kind="string"
               >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-                <option value="max">Max</option>
+                ${REASONING_EFFORT_OPTIONS_HTML}
               </select>
             </div>
             <div class="setting-row">

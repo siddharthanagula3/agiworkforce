@@ -1,4 +1,5 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { DEVELOPER_AGENT_MODE_LABELS } from '@agiworkforce/local-runtime-contract';
 import * as vscode from 'vscode';
 import type {
   HookListResponse,
@@ -802,14 +803,11 @@ export interface SessionPermissions {
   setDisallowedTools(tools: readonly string[]): void;
 }
 
-const MODE_SUMMARIES: Record<ExtensionAgentMode, { label: string; detail: string }> = {
-  ask: { label: 'Ask before edits', detail: 'Every edit and command asks you first' },
-  auto: {
-    label: 'Auto safe operations',
-    detail: 'Reads run on their own; writes and commands ask you first',
-  },
-  plan: { label: 'Plan mode', detail: 'Reads only; nothing changes until you approve the plan' },
-  bypass: { label: 'Bypass permissions', detail: 'Nothing asks first, including commands' },
+const MODE_DETAILS: Record<ExtensionAgentMode, string> = {
+  ask: 'Every edit and command asks you first',
+  auto: 'Reads run on their own; writes and commands ask you first',
+  plan: 'Reads only; nothing changes until you approve the plan',
+  bypass: 'Nothing asks first, including commands',
 };
 
 const SESSION_TOOLS: readonly { label: string; detail: string; specs: readonly string[] }[] = [
@@ -948,14 +946,14 @@ async function loadPermissionsView(
     offersTrust ? adapter.call<TrustedFolderList>('trustedFolders') : Promise.resolve(undefined),
   ]);
   if (rules.status !== 'ok') return rules;
-  const mode = MODE_SUMMARIES[session.mode()];
+  const currentMode = session.mode();
   const disabled = disabledToolLabels(session.disallowedTools());
   const items: ManagedItem[] = [
     { label: 'This session', kind: vscode.QuickPickItemKind.Separator },
     {
-      label: `$(shield) ${mode.label}`,
+      label: `$(shield) ${DEVELOPER_AGENT_MODE_LABELS[currentMode]}`,
       description: 'Mode',
-      detail: mode.detail,
+      detail: MODE_DETAILS[currentMode],
       followUp: {
         run: async () => {
           await vscode.commands.executeCommand('agi-workforce.setAgentMode');

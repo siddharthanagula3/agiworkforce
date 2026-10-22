@@ -7,6 +7,10 @@
  */
 
 import { getBillingPlanPricing, isBillingPlanTier } from '@agiworkforce/types';
+import {
+  DEVELOPER_REASONING_EFFORTS,
+  type DeveloperReasoningEffort,
+} from '@agiworkforce/local-runtime-contract';
 import * as vscode from 'vscode';
 import {
   enforceAgentModeConsent,
@@ -15,7 +19,7 @@ import {
   type ExtensionAgentMode,
 } from '../features/permissions/agentModeConsent';
 
-export type ExtensionAgentEffort = 'low' | 'medium' | 'high' | 'max';
+export type ExtensionAgentEffort = DeveloperReasoningEffort;
 export type ComposerFollowUpBehavior = 'queue' | 'steer';
 export type ComposerEnterBehavior = 'enter' | 'modifierIfMultiline' | 'modifier';
 const COMPOSER_ENTER_BEHAVIORS: readonly ComposerEnterBehavior[] = [
@@ -140,8 +144,7 @@ export const Config = {
   },
   agentEffort(): ExtensionAgentEffort {
     const raw = get<string>('agent.effort', DEFAULTS.agentEffort);
-    if (raw === 'low' || raw === 'medium' || raw === 'high' || raw === 'max') return raw;
-    return 'medium';
+    return DEVELOPER_REASONING_EFFORTS.find((effort) => effort === raw) ?? 'medium';
   },
   planModeActive(): boolean {
     return Config.agentMode() === 'plan' || Config.agentPlanMode();

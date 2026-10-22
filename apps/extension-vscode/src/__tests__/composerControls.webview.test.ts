@@ -7,6 +7,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { getWebviewContent } from '../features/sidebar-webview/webviewContent';
 import { vscodeApiStub } from './vscodeApiStub';
+import {
+  DEVELOPER_AGENT_MODES,
+  DEVELOPER_AGENT_MODE_LABELS,
+  DEVELOPER_REASONING_EFFORTS,
+  DEVELOPER_REASONING_EFFORT_LABELS,
+} from '@agiworkforce/local-runtime-contract';
 
 function makeWebview() {
   return {
@@ -78,7 +84,7 @@ describe('compact composer controls', () => {
 
     const controls = document.getElementById('controlsSummary');
     expect(controls?.textContent).toBe('Auto');
-    expect(document.getElementById('modelPill')?.textContent).toBe('Auto · Med');
+    expect(document.getElementById('modelPill')?.textContent).toBe('Auto · Medium');
     expect(controls?.getAttribute('aria-label')).toBe('Controls: Auto mode, Medium effort');
     expect(document.getElementById('plusMenuActions')).toBeNull();
 
@@ -115,7 +121,7 @@ describe('compact composer controls', () => {
     const checked = Array.from(popover?.querySelectorAll('[aria-checked="true"]') ?? []).map(
       (node) => node.querySelector('.model-popover__label')?.textContent,
     );
-    expect(checked).toEqual(['Auto safe operations', 'Medium']);
+    expect(checked).toEqual(['Auto', 'Medium']);
   });
 
   it('asks the host to change mode and effort rather than setting them itself', () => {
@@ -125,7 +131,8 @@ describe('compact composer controls', () => {
 
     const plan = Array.from(
       document.querySelectorAll('#controlsPopover .model-popover__option'),
-    ).find((node) => node.textContent?.startsWith('Plan mode')) as HTMLElement | undefined;
+    ).find((node) => node.querySelector('.model-popover__label')?.textContent === 'Plan') as
+      HTMLElement | undefined;
     plan?.click();
 
     expect(postMessage).toHaveBeenLastCalledWith({
@@ -151,8 +158,41 @@ describe('compact composer controls', () => {
     const checked = Array.from(
       document.querySelectorAll('#controlsPopover [aria-checked="true"] .model-popover__label'),
     ).map((node) => node.textContent);
-    expect(checked).toContain('Auto safe operations');
+    expect(checked).toContain('Auto');
     expect(checked).not.toContain('Bypass permissions');
+  });
+
+  it('names modes and effort levels with the labels every developer surface shares', () => {
+    bootWebview();
+    document.getElementById('controlsSummary')?.click();
+    const labels = (key: string) =>
+      Array.from(
+        document.querySelectorAll(
+          `#controlsPopover [data-control-key="${key}"] .model-popover__label`,
+        ),
+      ).map((node) => node.textContent);
+
+    expect(labels('mode')).toEqual(
+      DEVELOPER_AGENT_MODES.map((mode) => DEVELOPER_AGENT_MODE_LABELS[mode]),
+    );
+    expect(labels('effort')).toEqual(
+      DEVELOPER_REASONING_EFFORTS.map((effort) => DEVELOPER_REASONING_EFFORT_LABELS[effort]),
+    );
+  });
+
+  it('offers only the levels the selected model takes', () => {
+    bootWebview();
+    postHostMessage('effortChanged', {
+      effort: 'high',
+      supportsEffort: true,
+      efforts: ['medium', 'high'],
+    });
+    document.getElementById('controlsSummary')?.click();
+
+    const offered = Array.from(
+      document.querySelectorAll<HTMLElement>('#controlsPopover [data-control-key="effort"]'),
+    ).map((node) => node.dataset.controlValue);
+    expect(offered).toEqual(['medium', 'high']);
   });
 
   it('offers no effort levels for a model that takes none', () => {
