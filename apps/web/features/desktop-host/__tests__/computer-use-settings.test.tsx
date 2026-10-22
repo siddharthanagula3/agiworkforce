@@ -5,8 +5,10 @@ import type {
   BrowserPairingState,
   ComputerUseStatus,
   DesktopPermissionsReview,
+  RefusableApplication,
   ReviewedPermission,
 } from '@agiworkforce/local-runtime-contract';
+import { HOSTED_SETTINGS_NAV_FIELDS } from '@/features/settings/components/web-settings-navigation';
 import { ComputerUseSettings } from '../components/ComputerUseSettings';
 import { DesktopPermissionsSection } from '../components/DesktopPermissionsSection';
 
@@ -68,10 +70,17 @@ function review(decisions: ReviewedPermission[]): DesktopPermissionsReview {
   };
 }
 
+const INSTALLED: RefusableApplication[] = [
+  { name: 'Mail', bundleId: 'com.apple.mail' },
+  { name: 'Notes', bundleId: 'com.apple.Notes' },
+  { name: 'Terminal', bundleId: 'com.apple.Terminal' },
+];
+
 function installHost({
   status = STATUS,
   pairing = PAIRING as BrowserPairingState | null,
   decisions = [] as ReviewedPermission[],
+  installed = INSTALLED as RefusableApplication[] | null,
 } = {}) {
   let current = review(decisions);
   const invokeRuntime = vi.fn(async (command: string, args?: Record<string, unknown>) => {
@@ -87,6 +96,29 @@ function installHost({
       case 'permission_revoke': {
         const scope = args?.['scope'] as { target?: string };
         current = review(current.decisions.filter((d) => d.scope.target !== scope.target));
+        return { ok: true, value: current };
+      }
+      case 'permission_application_list':
+        return installed
+          ? { ok: true, value: installed }
+          : {
+              ok: false,
+              error: { code: 'io-error', message: 'Installed apps could not be read.' },
+            };
+      case 'permission_deny': {
+        const scope = args?.['scope'] as { kind: 'application'; target: string };
+        const app = INSTALLED.find((entry) => entry.bundleId === scope.target);
+        current = review([
+          {
+            capability: 'application.control',
+            scope,
+            state: 'denied',
+            duration: 'always',
+            decidedAtMs: 9,
+            description: `control ${app?.name ?? scope.target}`,
+          },
+          ...current.decisions.filter((d) => d.scope.target !== scope.target),
+        ]);
         return { ok: true, value: current };
       }
       default:
@@ -157,7 +189,9 @@ describe('the computer use page', () => {
     const allowed = await screen.findByRole('region', { name: 'Allowed apps' });
     const refused = screen.getByRole('region', { name: 'Refused apps' });
     expect(within(allowed).getByText('None yet')).toBeInTheDocument();
-    expect(within(refused).getByText('None yet')).toBeInTheDocument();
+    expect(
+      within(refused).getByText('None yet. AGI does not control an app you add here.'),
+    ).toBeInTheDocument();
     expect(screen.queryByText('Read files in /Users/me/code')).not.toBeInTheDocument();
   });
 
@@ -182,6 +216,88 @@ describe('the computer use page', () => {
   });
 });
 
+describe('refusing an app from the page', () => {
+  it('links the any-app switch to the computer use help article', async () => {
+    installHost();
+    render(<ComputerUseSettings />);
+
+    const link = await screen.findByRole('link', { name: 'Learn more about computer use' });
+    expect(link).toHaveAttribute('href', '/help/computer-use');
+    expect(link).toHaveTextContent('Learn more');
+  });
+
+  it('offers installed apps not yet refused, filters by name, and refuses the one picked', async () => {
+    const { invokeRuntime } = installHost({ decisions: [MAIL_REFUSED, SAFARI_ALLOWED] });
+    render(<ComputerUseSettings />);
+
+    const refused = await screen.findByRole('region', { name: 'Refused apps' });
+    await userEvent.click(within(refused).getByRole('button', { name: 'Add app' }));
+
+    const list = await screen.findByRole('listbox', { name: 'Installed apps' });
+    expect(within(list).queryByRole('option', { name: 'Mail' })).not.toBeInTheDocument();
+    expect(within(list).getByRole('option', { name: 'Notes' })).toBeInTheDocument();
+
+    await userEvent.type(screen.getByRole('combobox', { name: 'Search apps' }), 'term');
+    expect(screen.queryByRole('option', { name: 'Notes' })).not.toBeInTheDocument();
+    await userEvent.click(screen.getByRole('option', { name: 'Terminal' }));
+
+    expect(invokeRuntime).toHaveBeenCalledWith('permission_deny', {
+      capability: 'application.control',
+      scope: { kind: 'application', target: 'com.apple.Terminal' },
+    });
+    expect(await within(refused).findByText('Control Terminal')).toBeInTheDocument();
+    expect(within(refused).getByText('Control Mail')).toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
+  it('picks the highlighted app with the keyboard', async () => {
+    const { invokeRuntime } = installHost();
+    render(<ComputerUseSettings />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Add app' }));
+    await screen.findByRole('listbox', { name: 'Installed apps' });
+    await userEvent.type(
+      screen.getByRole('combobox', { name: 'Search apps' }),
+      '{ArrowDown}{Enter}',
+    );
+
+    expect(invokeRuntime).toHaveBeenCalledWith('permission_deny', {
+      capability: 'application.control',
+      scope: { kind: 'application', target: 'com.apple.Notes' },
+    });
+  });
+
+  it('says what adding does while nothing is refused', async () => {
+    installHost();
+    render(<ComputerUseSettings />);
+
+    const refused = await screen.findByRole('region', { name: 'Refused apps' });
+    expect(
+      within(refused).getByText('None yet. AGI does not control an app you add here.'),
+    ).toBeInTheDocument();
+  });
+
+  it('says so when the installed apps cannot be read', async () => {
+    installHost({ installed: null });
+    render(<ComputerUseSettings />);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Add app' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Installed apps could not be read.');
+  });
+
+  it('offers no Add app where computer use cannot run', async () => {
+    installHost({
+      status: { ...STATUS, available: false, unavailableReason: 'macOS only' },
+    });
+    render(<ComputerUseSettings />);
+
+    const refused = await screen.findByRole('region', { name: 'Refused apps' });
+    expect(within(refused).getByText('None yet')).toBeInTheDocument();
+    expect(within(refused).queryByRole('button', { name: 'Add app' })).not.toBeInTheDocument();
+  });
+});
+
 describe('the permissions section', () => {
   it('keeps app answers on the computer use page and re-reads system settings on Refresh', async () => {
     const { invokeRuntime } = installHost({ decisions: [SAFARI_ALLOWED, FOLDER_READ] });
@@ -195,5 +311,23 @@ describe('the permissions section', () => {
     const before = reads();
     await userEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(reads()).toBe(before + 1));
+  });
+});
+
+describe('the computer use page search index', () => {
+  it('renders every control the settings search lists under computer use', async () => {
+    installHost();
+    render(<ComputerUseSettings />);
+
+    const fields = HOSTED_SETTINGS_NAV_FIELDS['computer-use'] ?? [];
+    expect(fields.length).toBeGreaterThan(0);
+    await screen.findByRole('region', { name: 'Refused apps' });
+    for (const field of fields) {
+      expect(
+        screen.queryByRole('switch', { name: field.label }) ??
+          screen.queryByRole('region', { name: field.label }),
+        field.label,
+      ).toBeInTheDocument();
+    }
   });
 });

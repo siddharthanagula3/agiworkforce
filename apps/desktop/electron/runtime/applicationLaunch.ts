@@ -3,12 +3,15 @@ import { readdir } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
-import { ComputerUseRefused, requireAvailable } from './computerUseService';
+import { ComputerUseRefused, computerUseSupport, requireAvailable } from './computerUseService';
 
 const LOOKUP_TIMEOUT_MS = 5_000;
 const BUNDLE_ID_PATTERN = /^[A-Za-z0-9-]+(\.[A-Za-z0-9-]+)+$/;
 const BUNDLE_ID_CHARACTERS = /^[A-Za-z0-9.-]+$/;
 const APP_SUFFIX = '.app';
+const CORE_SERVICES = '/System/Library/CoreServices';
+const FINDER_PATH = path.join(CORE_SERVICES, 'Finder.app');
+const LISTING_CONCURRENCY = 8;
 
 export interface InstalledApplication {
   name: string;
@@ -31,7 +34,7 @@ function applicationFolders(): string[] {
     '/Applications/Utilities',
     '/System/Applications',
     '/System/Applications/Utilities',
-    '/System/Library/CoreServices',
+    CORE_SERVICES,
     path.join(os.homedir(), 'Applications'),
   ];
 }
@@ -121,4 +124,54 @@ export async function launchApplication(target: InstalledApplication): Promise<t
     throw new ComputerUseRefused('failed', `${target.name} did not open.`);
   }
   return true;
+}
+
+async function bundlesIn(folder: string): Promise<string[]> {
+  try {
+    return (await readdir(folder))
+      .filter((entry) => entry.endsWith(APP_SUFFIX))
+      .map((entry) => path.join(folder, entry));
+  } catch {
+    return [];
+  }
+}
+
+async function inBatches<T, R>(
+  items: readonly T[],
+  size: number,
+  work: (item: T) => Promise<R>,
+): Promise<R[]> {
+  const results: R[] = [];
+  for (let start = 0; start < items.length; start += size) {
+    results.push(...(await Promise.all(items.slice(start, start + size).map(work))));
+  }
+  return results;
+}
+
+/**
+ * CoreServices holds system helpers nobody picks by name, so only Finder is
+ * read from it.
+ */
+export async function listInstalledApplications(): Promise<InstalledApplication[]> {
+  const support = computerUseSupport();
+  if (!support.supported) throw new ComputerUseRefused('unsupported', support.reason);
+  const folders = applicationFolders().filter((folder) => folder !== CORE_SERVICES);
+  const paths = [...(await Promise.all(folders.map(bundlesIn))).flat(), FINDER_PATH];
+  const ownPath = ownBundlePath();
+  const ownBundleId = await bundleIdAt(ownPath);
+  const found = await inBatches(paths, LISTING_CONCURRENCY, async (appPath) => {
+    if (appPath === ownPath) return null;
+    const bundleId = await bundleIdAt(appPath);
+    if (!bundleId || bundleId === ownBundleId) return null;
+    return { name: path.basename(appPath, APP_SUFFIX), bundleId, path: appPath };
+  });
+  const byBundleId = new Map<string, InstalledApplication>();
+  for (const application of found) {
+    if (application && !byBundleId.has(application.bundleId)) {
+      byBundleId.set(application.bundleId, application);
+    }
+  }
+  return [...byBundleId.values()].sort((a, b) =>
+    a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+  );
 }

@@ -27,6 +27,7 @@ import {
   type DispatchTaskReport,
   type PermissionDecision,
   type PermissionScope,
+  type RefusableApplication,
   type SystemPermissionKind,
   type RemoteControlStartRequest,
   type RemoteControlState,
@@ -402,6 +403,17 @@ export function revokeDesktopPermission(
   return invoke<DesktopPermissionsReview>('permission_revoke', {
     capability: decision.capability,
     scope: decision.scope,
+  });
+}
+
+export function readRefusableApplications(): Promise<RefusableApplication[]> {
+  return invoke<RefusableApplication[]>('permission_application_list');
+}
+
+export function refuseDesktopApplication(bundleId: string): Promise<DesktopPermissionsReview> {
+  return invoke<DesktopPermissionsReview>('permission_deny', {
+    capability: 'application.control',
+    scope: { kind: 'application', target: bundleId },
   });
 }
 

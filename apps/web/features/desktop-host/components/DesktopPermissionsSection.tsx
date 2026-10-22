@@ -18,6 +18,7 @@ import { useElectronHost } from '../lib/host';
 import {
   openSystemPermissionSettings,
   readDesktopPermissions,
+  refuseDesktopApplication,
   revokeDesktopPermission,
 } from '../lib/runtime-client';
 import {
@@ -37,6 +38,7 @@ const REFRESH_LABEL = 'Refresh';
 const OPEN_SETTINGS_LABEL = 'Open System Settings';
 const LOAD_FAILED = 'Permissions could not be read from the app.';
 const REMOVE_FAILED = 'That answer was not removed.';
+const REFUSE_FAILED = 'That app was not added to Refused apps.';
 
 export const SYSTEM_PERMISSION_STATUS_TEXT: Readonly<Record<SystemPermissionStatus, string>> = {
   granted: 'Allowed',
@@ -105,8 +107,10 @@ export interface DesktopPermissions {
   review: DesktopPermissionsReview | null;
   error: string | null;
   removing: string | null;
+  refusing: boolean;
   refresh: () => void;
   remove: (decision: ReviewedPermission) => void;
+  refuse: (bundleId: string) => void;
 }
 
 export function useDesktopPermissions(): DesktopPermissions {
@@ -114,6 +118,7 @@ export function useDesktopPermissions(): DesktopPermissions {
   const [review, setReview] = useState<DesktopPermissionsReview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [removing, setRemoving] = useState<string | null>(null);
+  const [refusing, setRefusing] = useState(false);
 
   const refresh = useCallback(() => {
     readDesktopPermissions()
@@ -149,7 +154,18 @@ export function useDesktopPermissions(): DesktopPermissions {
       .finally(() => setRemoving(null));
   }, []);
 
-  return { review, error, removing, refresh, remove };
+  const refuse = useCallback((bundleId: string) => {
+    setRefusing(true);
+    refuseDesktopApplication(bundleId)
+      .then((next) => {
+        setReview(next);
+        setError(null);
+      })
+      .catch((cause: unknown) => setError(toUserMessage(cause, REFUSE_FAILED)))
+      .finally(() => setRefusing(false));
+  }, []);
+
+  return { review, error, removing, refusing, refresh, remove, refuse };
 }
 
 export function PermissionAnswerRow({

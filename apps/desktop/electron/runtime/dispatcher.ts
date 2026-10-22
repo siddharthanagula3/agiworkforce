@@ -55,6 +55,7 @@ import {
   type DeveloperSessionList,
   type DeveloperThreadRevertRequest,
   type PermissionScope,
+  type RefusableApplication,
   type ShellPolicy,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
@@ -95,7 +96,11 @@ import {
   type BrowserCommandPlan,
 } from '../browser/commandGate';
 import { gateApplication } from './applicationControl';
-import { findInstalledApplication, launchApplication } from './applicationLaunch';
+import {
+  findInstalledApplication,
+  launchApplication,
+  listInstalledApplications,
+} from './applicationLaunch';
 import { openInEditor, openWithDefaultApplication, revealInFileManager } from './appsService';
 import { openLocalPreview } from '../previewWindow';
 import { WORKSPACE_PICKER_COPY, grantPickedRoot } from './workspacePicker';
@@ -272,6 +277,7 @@ import {
   getPermissionState,
   permissionRevision,
   listPermissions,
+  recordDecision,
   requestPermission,
   reviewPermissions,
   revokePermission,
@@ -1065,6 +1071,40 @@ async function revokeGrant(
   if (capability === 'host.remote') stopRemoteControl();
   revokePermission(capability, scope);
   emitRuntimeEvent(window, { kind: 'permission-changed', capability, scope });
+  return reviewPermissions();
+}
+
+async function refusableApplications(): Promise<RefusableApplication[]> {
+  return (await listInstalledApplications()).map(({ name, bundleId }) => ({ name, bundleId }));
+}
+
+/**
+ * Records a standing refusal for one installed app. A refusal only narrows
+ * what a run may touch, so the page may ask for it without a prompt in main;
+ * the app's name comes from the shell's own listing, never from the page.
+ */
+async function refuseApplication(
+  window: BrowserWindow | null,
+  args: Args,
+): Promise<DesktopPermissionsReview> {
+  const scope = args['scope'];
+  if (args['capability'] !== 'application.control') {
+    throw new InvalidArguments('"capability" must be application.control.');
+  }
+  if (!isPermissionScope(scope) || scope.kind !== 'application') {
+    throw new InvalidArguments('"scope" must name an application.');
+  }
+  const target = (await refusableApplications()).find((app) => app.bundleId === scope.target);
+  if (!target) throw new InvalidArguments('That app is not installed on this computer.');
+  const appScope: PermissionScope = { kind: 'application', target: target.bundleId };
+  // Cleared and refused in one turn, so no step can find the app allowed in between.
+  revokePermission('application.control', appScope);
+  recordDecision('application.control', appScope, 'denied', 'always', target.name);
+  emitRuntimeEvent(window, {
+    kind: 'permission-changed',
+    capability: 'application.control',
+    scope: appScope,
+  });
   return reviewPermissions();
 }
 
@@ -1891,6 +1931,10 @@ async function execute(
       return reviewPermissions();
     case 'permission_revoke':
       return revokeGrant(window, args);
+    case 'permission_deny':
+      return refuseApplication(window, args);
+    case 'permission_application_list':
+      return refusableApplications();
     case 'workspace_reveal': {
       const failure = await shell.openPath(resolveRoot(args).path);
       if (failure !== '') throw new InvalidArguments(failure);
@@ -2593,6 +2637,8 @@ const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   'developer_user_input_answer',
   'device_host_declaration',
   DEVICE_REGISTRY_PROFILE_COMMAND,
+  'permission_application_list',
+  'permission_deny',
   'permission_review',
   'permission_revoke',
   'remote_control_state',

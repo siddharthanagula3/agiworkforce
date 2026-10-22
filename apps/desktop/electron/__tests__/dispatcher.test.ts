@@ -50,6 +50,7 @@ const getPermissionState = vi.fn<() => PermissionState>();
 const requestPermission = vi.fn<() => Promise<PermissionState>>();
 const consumeSingleUse = vi.fn();
 const revokePermission = vi.fn();
+const recordDecision = vi.fn();
 const listPermissions = vi.fn<() => PermissionDecision[]>(() => []);
 const revokeRoot = vi.fn();
 const stopDeveloperRuntime = vi.fn();
@@ -92,7 +93,7 @@ vi.mock('../runtime/permissionManager', () => ({
   describePermissionDecision: vi.fn(),
   getPermissionState,
   listPermissions,
-  recordDecision: vi.fn(),
+  recordDecision,
   requestPermission,
   consumeSingleUse,
   reviewPermissions,
@@ -219,7 +220,13 @@ const NOTES = {
 };
 const findInstalledApplication = vi.fn(async () => NOTES);
 const launchApplication = vi.fn(async () => true as const);
-vi.mock('../runtime/applicationLaunch', () => ({ findInstalledApplication, launchApplication }));
+const MAIL = { name: 'Mail', bundleId: 'com.apple.mail', path: '/System/Applications/Mail.app' };
+const listInstalledApplications = vi.fn(async () => [MAIL, NOTES]);
+vi.mock('../runtime/applicationLaunch', () => ({
+  findInstalledApplication,
+  launchApplication,
+  listInstalledApplications,
+}));
 const openLocalPreview = vi.fn(async (url: string) => ({ url }));
 vi.mock('../previewWindow', () => ({ openLocalPreview }));
 vi.mock('../runtime/appsService', () => ({
@@ -1477,6 +1484,66 @@ describe('recorded permissions', () => {
       );
     }
     expect(revokePermission).not.toHaveBeenCalled();
+  });
+
+  describe('refusing an app from Settings', () => {
+    const mail: PermissionScope = { kind: 'application', target: 'com.apple.mail' };
+
+    it('lists installed apps by name and bundle id only', async () => {
+      expect(await dispatch(window, 'permission_application_list', {})).toEqual({
+        ok: true,
+        value: [
+          { name: 'Mail', bundleId: 'com.apple.mail' },
+          { name: 'Notes', bundleId: 'com.apple.Notes' },
+        ],
+      });
+      expect(requestPermission).not.toHaveBeenCalled();
+    });
+
+    it('replaces whatever was decided with a standing refusal named by the shell, and tells the page', async () => {
+      const response = await dispatch(window, 'permission_deny', {
+        capability: 'application.control',
+        scope: mail,
+      });
+
+      expect(response).toEqual({ ok: true, value: REVIEW });
+      expect(revokePermission).toHaveBeenCalledWith('application.control', mail);
+      expect(recordDecision).toHaveBeenCalledWith(
+        'application.control',
+        mail,
+        'denied',
+        'always',
+        'Mail',
+      );
+      expect(revokePermission.mock.invocationCallOrder[0]).toBeLessThan(
+        recordDecision.mock.invocationCallOrder[0] ?? 0,
+      );
+      expect(send).toHaveBeenCalledWith(DESKTOP_RUNTIME_EVENT_CHANNEL, {
+        kind: 'permission-changed',
+        capability: 'application.control',
+        scope: mail,
+      });
+      expect(showMessageBox).not.toHaveBeenCalled();
+      expect(requestPermission).not.toHaveBeenCalled();
+    });
+
+    it('refuses anything but an installed app, and records nothing', async () => {
+      for (const args of [
+        { capability: 'computer.use', scope: { kind: 'global' } },
+        { capability: 'shell.execute', scope: folder },
+        { capability: 'application.control', scope: folder },
+        { capability: 'application.control', scope: { kind: 'application' } },
+        { capability: 'application.control', scope: { kind: 'application', target: 'x.y.z' } },
+        { scope: mail },
+      ]) {
+        expect(await dispatch(window, 'permission_deny', args), JSON.stringify(args)).toMatchObject(
+          { ok: false, error: { code: 'invalid-arguments' } },
+        );
+      }
+      expect(revokePermission).not.toHaveBeenCalled();
+      expect(recordDecision).not.toHaveBeenCalled();
+      expect(send).not.toHaveBeenCalled();
+    });
   });
 
   it('stops every runtime of a folder, its worktrees included, when the folder is withdrawn', async () => {

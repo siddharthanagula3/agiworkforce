@@ -29,6 +29,7 @@ export type {
   PermissionScopeKind,
   PermissionState,
   PermissionCommand,
+  RefusableApplication,
 } from './capabilities';
 
 export {

@@ -75,9 +75,20 @@ export function isHighRiskCapability(capability: DesktopCapability): boolean {
   return HIGH_RISK_CAPABILITIES.includes(capability);
 }
 
-export const PERMISSION_COMMANDS = ['permission_review', 'permission_revoke'] as const;
+export const PERMISSION_COMMANDS = [
+  'permission_review',
+  'permission_revoke',
+  'permission_deny',
+  'permission_application_list',
+] as const;
 
 export type PermissionCommand = (typeof PERMISSION_COMMANDS)[number];
+
+/** An installed app the user can refuse from Settings, named as the shell found it. */
+export interface RefusableApplication {
+  name: string;
+  bundleId: string;
+}
 
 const PERMISSION_SCOPE_KINDS: readonly PermissionScopeKind[] = [
   'workspace',

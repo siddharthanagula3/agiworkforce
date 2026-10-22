@@ -55,7 +55,7 @@ export function DesktopSettingsRow({
   children,
 }: {
   label: string;
-  hint: string;
+  hint: ReactNode;
   note?: string;
   noteIsFailure?: boolean;
   children?: ReactNode;

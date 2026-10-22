@@ -39,6 +39,9 @@ vi.mock('node:fs/promises', async (importOriginal) => {
 });
 
 const requireAvailable = vi.fn();
+const computerUseSupport = vi.fn<() => { supported: true } | { supported: false; reason: string }>(
+  () => ({ supported: true }),
+);
 vi.mock('../runtime/computerUseService', () => ({
   ComputerUseRefused: class extends Error {
     readonly reason: string;
@@ -47,10 +50,11 @@ vi.mock('../runtime/computerUseService', () => ({
       this.reason = reason;
     }
   },
+  computerUseSupport,
   requireAvailable,
 }));
 
-const { findInstalledApplication, launchApplication } =
+const { findInstalledApplication, launchApplication, listInstalledApplications } =
   await import('../runtime/applicationLaunch');
 
 const OWN_BUNDLE = '/Applications/AGI Desktop.app';
@@ -67,6 +71,8 @@ beforeEach(() => {
   calls.length = 0;
   folders.clear();
   requireAvailable.mockReset();
+  readdir.mockClear();
+  computerUseSupport.mockReturnValue({ supported: true });
   Object.defineProperty(process, 'execPath', {
     configurable: true,
     value: `${OWN_BUNDLE}/Contents/MacOS/AGI Desktop`,
@@ -145,5 +151,47 @@ describe('opening the app that was asked about', () => {
     await expect(
       launchApplication({ name: 'Notes', bundleId: 'com.apple.Notes', path: '/gone/Notes.app' }),
     ).rejects.toMatchObject({ reason: 'failed', message: 'Notes did not open.' });
+  });
+});
+
+describe('listing the apps a person can refuse', () => {
+  it('lists installed apps once each by name, Finder included and AGI Desktop left out', async () => {
+    folders.set('/System/Library/CoreServices', ['Finder.app', 'Dock.app']);
+    folders.set('/Applications/Utilities', ['notes.txt', 'Notes.app']);
+    plist('/System/Library/CoreServices/Finder.app', 'com.apple.finder');
+    plist('/System/Library/CoreServices/Dock.app', 'com.apple.dock');
+    plist('/Applications/Utilities/Notes.app', 'com.apple.Notes');
+
+    expect(await listInstalledApplications()).toEqual([
+      {
+        name: 'Finder',
+        bundleId: 'com.apple.finder',
+        path: '/System/Library/CoreServices/Finder.app',
+      },
+      { name: 'Notes', bundleId: 'com.apple.Notes', path: '/Applications/Utilities/Notes.app' },
+      {
+        name: 'Visual Studio Code',
+        bundleId: 'com.microsoft.VSCode',
+        path: '/Applications/Visual Studio Code.app',
+      },
+    ]);
+    expect(readdir).not.toHaveBeenCalledWith('/System/Library/CoreServices');
+  });
+
+  it('leaves out a bundle whose id cannot be read', async () => {
+    folders.set('/Applications', ['Broken.app']);
+
+    expect((await listInstalledApplications()).map((app) => app.name)).toEqual(['Notes']);
+  });
+
+  it('reads nothing on a computer where computer use cannot run', async () => {
+    computerUseSupport.mockReturnValue({ supported: false, reason: 'macOS only' });
+
+    await expect(listInstalledApplications()).rejects.toMatchObject({
+      reason: 'unsupported',
+      message: 'macOS only',
+    });
+    expect(calls).toEqual([]);
+    expect(readdir).not.toHaveBeenCalled();
   });
 });

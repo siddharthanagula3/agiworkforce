@@ -100,6 +100,12 @@ export const HOSTED_SETTINGS_NAV_FIELDS: Partial<Record<SettingsNavKey, Settings
   desktop: [
     { label: 'Run on startup', keywords: ['launch at login', 'open at login'] },
     { label: 'Menu bar', keywords: ['tray'] },
+    { label: 'Keep computer awake', keywords: ['prevent sleep', 'sleep', 'caffeinate'] },
+  ],
+  'computer-use': [
+    { label: 'Any app', keywords: ['control apps', 'mouse', 'keyboard'] },
+    { label: 'Allowed apps', keywords: ['app permissions'] },
+    { label: 'Refused apps', keywords: ['denied apps', 'block app', 'add app'] },
   ],
 };
 

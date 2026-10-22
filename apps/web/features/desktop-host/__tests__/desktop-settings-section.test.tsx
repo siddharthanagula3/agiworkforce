@@ -464,7 +464,9 @@ describe('the desktop settings section', () => {
 
 describe('the desktop settings section search index', () => {
   it('renders every control the settings search lists under the desktop app', async () => {
-    installHost();
+    installHost({
+      preferences: { ...DEFAULT_STATE.preferences, preventSleepWhileRunning: true },
+    });
 
     render(<DesktopSettingsSection />);
 

@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   COMPUTER_USE_STOP_SHORTCUT,
   describeAccelerator,
@@ -12,6 +12,7 @@ import {
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Switch } from '@agiworkforce/ui';
 import { SettingsSectionLink } from '@/features/settings/components/SettingsSectionLink';
+import { helpArticlePath } from '@/lib/support/help-paths';
 import { useComputerUse } from '../hooks/use-computer-use';
 import { useElectronHost } from '../lib/host';
 import { readBrowserPairing } from '../lib/runtime-client';
@@ -28,6 +29,7 @@ import {
   DesktopSettingsHeading,
   DesktopSettingsRow,
 } from './DesktopSettingsRow';
+import { RefuseAppPicker } from './RefuseAppPicker';
 
 const HEADING = 'Computer use';
 const HEADING_HINT = 'Let AGI see your screen and use the mouse and keyboard in apps you allow.';
@@ -45,6 +47,10 @@ const MANAGE_LABEL = 'Manage';
 const ALLOWED_APPS_HEADING = 'Allowed apps';
 const REFUSED_APPS_HEADING = 'Refused apps';
 const NO_APPS = 'None yet';
+const NO_REFUSED_APPS = 'None yet. AGI does not control an app you add here.';
+const HELP_DOC_ID = 'computer-use';
+const LEARN_MORE_LABEL = 'Learn more';
+const LEARN_MORE_ARIA = 'Learn more about computer use';
 const STOP_LABEL = 'Stop';
 const TAKE_OVER_LABEL = 'Take over';
 const HAND_BACK_LABEL = 'Hand back';
@@ -112,21 +118,39 @@ function useChromeReading(enabled: boolean): ChromeReading {
   return reading;
 }
 
+function LearnMoreLink() {
+  return (
+    <a
+      href={helpArticlePath(HELP_DOC_ID)}
+      target="_blank"
+      rel="noopener noreferrer"
+      aria-label={LEARN_MORE_ARIA}
+      className="text-[var(--text-1)] underline underline-offset-2"
+    >
+      {LEARN_MORE_LABEL}
+    </a>
+  );
+}
+
 function AppAnswers({
   title,
   answers,
   disabled,
+  empty = NO_APPS,
+  action,
   onRemove,
 }: {
   title: string;
   answers: ReviewedPermission[];
   disabled: boolean;
+  empty?: string;
+  action?: ReactNode;
   onRemove: (decision: ReviewedPermission) => void;
 }) {
   return (
-    <DesktopSettingsGroup title={title}>
+    <DesktopSettingsGroup title={title} {...(action === undefined ? {} : { action })}>
       {answers.length === 0 ? (
-        <DesktopSettingsEmpty>{NO_APPS}</DesktopSettingsEmpty>
+        <DesktopSettingsEmpty>{empty}</DesktopSettingsEmpty>
       ) : (
         answers.map((decision) => (
           <PermissionAnswerRow
@@ -146,6 +170,15 @@ export function ComputerUseSettings() {
   const { status, error, busy, setEnabled, stop, takeOver, handBack, askAgain } = useComputerUse();
   const permissions = useDesktopPermissions();
   const chrome = useChromeReading(host !== null);
+  const refusedTargets = useMemo(
+    () =>
+      new Set(
+        (permissions.review?.decisions ?? [])
+          .filter((decision) => isApplicationAnswer(decision) && decision.state === 'denied')
+          .flatMap((decision) => (decision.scope.target ? [decision.scope.target] : [])),
+      ),
+    [permissions.review],
+  );
 
   if (!host) return null;
 
@@ -156,6 +189,8 @@ export function ComputerUseSettings() {
   );
   const chromeStatus = chromeNote(chrome);
   const appAnswers = permissions.review?.decisions.filter(isApplicationAnswer) ?? [];
+  const refusedAnswers = appAnswers.filter((decision) => decision.state === 'denied');
+  const canRefuse = status?.available === true;
   const failures = [error, permissions.error].filter((message) => message !== null);
 
   return (
@@ -171,7 +206,11 @@ export function ComputerUseSettings() {
       <DesktopSettingsGroup title={CONTROL_HEADING}>
         <DesktopSettingsRow
           label={ANY_APP_LABEL}
-          hint={toggleHint(stopKey)}
+          hint={
+            <>
+              {toggleHint(stopKey)} <LearnMoreLink />
+            </>
+          }
           {...(status && !status.available && status.unavailableReason
             ? { note: status.unavailableReason }
             : {})}
@@ -263,8 +302,20 @@ export function ComputerUseSettings() {
           />
           <AppAnswers
             title={REFUSED_APPS_HEADING}
-            answers={appAnswers.filter((decision) => decision.state === 'denied')}
+            answers={refusedAnswers}
             disabled={permissions.removing !== null}
+            {...(canRefuse
+              ? {
+                  empty: NO_REFUSED_APPS,
+                  action: (
+                    <RefuseAppPicker
+                      refused={refusedTargets}
+                      disabled={permissions.refusing}
+                      onPick={(app) => permissions.refuse(app.bundleId)}
+                    />
+                  ),
+                }
+              : {})}
             onRemove={permissions.remove}
           />
         </>
