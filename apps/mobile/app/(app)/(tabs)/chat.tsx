@@ -98,6 +98,7 @@ import { useAuthStore } from '@/src/features/auth/store';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { freeImageOfferFor } from '@/src/features/chat/actions/freeImageOffer';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
+import { ComposerApprovalModeControl } from '@/src/features/chat/components/ComposerApprovalModeControl';
 import { WorkModeSourceNotice } from '@/src/features/chat/components/WorkModeSourceNotice';
 import { pickableDocumentMimeTypes } from '@/services/docParser';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
@@ -997,6 +998,7 @@ export default function ChatTabScreen() {
             Trigger lives in the "+" sheet; this renders the picker modal only. */}
         <ProjectSelectorBar openSignal={projectPickerOpenSignal} />
 
+        {workMode === 'agiwork' && !voiceInlineVisible ? <ComposerApprovalModeControl /> : null}
         {voiceInlineVisible ? null : (
           <ChatInput
             onSend={handleComposerSend}

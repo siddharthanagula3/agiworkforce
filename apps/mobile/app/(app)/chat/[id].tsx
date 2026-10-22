@@ -36,6 +36,7 @@ import { resolveOnAcceptedSend } from '@/src/features/chat/utils/sendDispatch';
 import { confirmShareConversation } from '@/src/features/shared-links/shareConversation';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { WorkModeSwitch } from '@/src/features/chat/components/WorkModeSwitch';
+import { ComposerApprovalModeControl } from '@/src/features/chat/components/ComposerApprovalModeControl';
 import {
   EMPTY_VARIANT_INFO,
   resolveLeafForSibling,
@@ -241,6 +242,7 @@ export default function ChatScreen() {
   const isLoadingMessages = useChatStore((s) => s.isLoadingMessages);
   const conversations = useChatStore((s) => s.conversations);
   const loadMessages = useChatStore((s) => s.loadMessages);
+  const workMode = useChatStore((s) => s.workMode);
   const sendMessage = useChatStore((s) => s.sendMessage);
   const stopStreaming = useChatStore((s) => s.stopStreaming);
   const setCurrentConversationId = useChatStore((s) => s.setCurrentConversationId);
@@ -2012,6 +2014,12 @@ export default function ChatScreen() {
             promises ("the only thing that changes is the composer"). */}
         {conversationExecutionMode === 'cloud' && !voiceInlineVisible && !liveVoiceVisible ? (
           <WorkModeSwitch />
+        ) : null}
+        {conversationExecutionMode === 'cloud' &&
+        workMode === 'agiwork' &&
+        !voiceInlineVisible &&
+        !liveVoiceVisible ? (
+          <ComposerApprovalModeControl />
         ) : null}
         {voiceInlineVisible || liveVoiceVisible ? null : (
           <Composer
