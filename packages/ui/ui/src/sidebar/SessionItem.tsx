@@ -173,6 +173,13 @@ function SessionItemBase({
       >
         {rowLabel}
       </span>
+      {session.unread && (
+        <span
+          data-testid={`session-unread-${session.id}`}
+          className="pointer-events-none absolute end-3 top-1/2 h-1.5 w-1.5 shrink-0 -translate-y-1/2 rounded-full bg-[var(--chat-info)] transition-opacity group-focus-within:opacity-0 group-hover:opacity-0 [@media(hover:none)]:static [@media(hover:none)]:translate-y-0 [@media(hover:none)]:opacity-100"
+          aria-hidden="true"
+        />
+      )}
     </div>
   );
 

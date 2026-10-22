@@ -127,6 +127,21 @@ describe('a Recents row says what has been done to the conversation', () => {
     expect(itemLabels(openRowMenu())).toContain('Mark as unread');
   });
 
+  it('marks an unread row with a trailing dot that gives way to the row actions', () => {
+    const { unmount } = renderRow({ unread: true });
+    const dot = screen.getByTestId('session-unread-s1');
+    expect(dot.getAttribute('aria-hidden')).toBe('true');
+    expect(dot.className).toContain('bg-[var(--chat-info)]');
+    expect(dot.className).toContain('end-3');
+    expect(dot.className).toContain('group-hover:opacity-0');
+    expect(dot.className).toContain('group-focus-within:opacity-0');
+    expect(rowLink().getAttribute('aria-label')).toBe('Quarterly revenue model, Unread');
+    unmount();
+
+    renderRow();
+    expect(screen.queryByTestId('session-unread-s1')).toBeNull();
+  });
+
   it('says a turn is still running in words, not only with a moving dot', () => {
     renderRow({ runState: 'running' });
     const marker = screen.getByTestId('session-running-s1');
