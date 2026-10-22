@@ -53,11 +53,17 @@ export interface WorkloadSessionUsage {
   credits: number;
 }
 
+export interface OrganizationMemberActivity {
+  active: number;
+  seatsInUse: number | null;
+}
+
 export interface OrganizationUsage {
   organizationId: string;
   from: string;
   to: string;
   totals: UsageTotals;
+  members: OrganizationMemberActivity;
   byMember: UsageBreakdownRow[];
   byModel: UsageBreakdownRow[];
   byProvider: UsageBreakdownRow[];
@@ -67,6 +73,19 @@ export interface OrganizationUsage {
   codeSessions: WorkloadSessionUsage;
   daily: UsageDayRow[];
   freshness: UsageFreshness;
+}
+
+interface TotalsRow extends AggregateRow {
+  active_members: string | number | null;
+  seats_in_use: string | number | null;
+}
+
+function toMemberActivity(row: TotalsRow | undefined): OrganizationMemberActivity {
+  return {
+    active: num(row?.active_members),
+    seatsInUse:
+      row?.seats_in_use === null || row?.seats_in_use === undefined ? null : num(row.seats_in_use),
+  };
 }
 
 interface WorkloadRow extends AggregateRow {
@@ -172,12 +191,14 @@ export async function readOrganizationUsage(
     dailyRows,
     freshnessRows,
   ] = await Promise.all([
-    db.query<AggregateRow>(
+    db.query<TotalsRow>(
       `select null as key,
               count(*)::int as requests,
               sum(${TOKENS})::bigint as input_tokens,
               sum(${OUT_TOKENS})::bigint as output_tokens,
-              ${COST_MICROUSD} as cost_microusd
+              ${COST_MICROUSD} as cost_microusd,
+              count(distinct user_id)::int as active_members,
+              (select o.seats_consumed from public.organizations o where o.id = $1) as seats_in_use
          from public.managed_usage_requests
         where organization_id = $1
           and ${SETTLED}
@@ -220,6 +241,7 @@ export async function readOrganizationUsage(
     from,
     to,
     totals: toTotals(totalsRows[0]),
+    members: toMemberActivity(totalsRows[0]),
     byMember,
     byModel,
     byProvider,

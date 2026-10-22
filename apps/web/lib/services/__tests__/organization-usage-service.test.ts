@@ -122,6 +122,21 @@ describe('readOrganizationUsage', () => {
       credits: 0,
     });
     expect(usage.byMember).toEqual([]);
+    expect(usage.members).toEqual({ active: 0, seatsInUse: null });
+  });
+
+  it('counts distinct settled members and reads seats in use for the same workspace', async () => {
+    const h = harness({ totals: [agg({ active_members: '3', seats_in_use: 7 })] });
+    const usage = await readOrganizationUsage(h.db, ORG, window);
+
+    expect(usage.members).toEqual({ active: 3, seatsInUse: 7 });
+    const totalsSql = String(
+      h.query.mock.calls.find(([sql]) => /active_members/.test(String(sql)))?.[0],
+    );
+    expect(totalsSql).toContain('count(distinct user_id)::int as active_members');
+    expect(totalsSql).toContain(
+      '(select o.seats_consumed from public.organizations o where o.id = $1) as seats_in_use',
+    );
   });
 
   it('labels a null grouping key rather than dropping the row', async () => {

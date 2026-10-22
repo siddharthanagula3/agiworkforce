@@ -15,6 +15,7 @@ function usage(unsettledRequests: number) {
     from: '2026-09-01T00:00:00.000Z',
     to: '2026-09-19T10:00:00.000Z',
     totals: { requests: 0, credits: 0, inputTokens: 0, outputTokens: 0 },
+    members: { active: 0, seatsInUse: 4 as number | null },
     byMember: [],
     byModel: [],
     byProvider: [],
@@ -95,6 +96,14 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     ]);
     expect(rows[0]).toHaveTextContent('2,000 credits');
     expect(rows[1]).toHaveTextContent('500 credits');
+    expect(within(byMember).getByRole('columnheader', { name: 'Rank' })).toBeInTheDocument();
+    expect(within(rows[0]!).getAllByRole('cell')[0]).toHaveTextContent(/^1$/);
+    expect(within(rows[1]!).getAllByRole('cell')[0]).toHaveTextContent(/^2$/);
+    expect(
+      within(screen.getByRole('region', { name: 'By model' })).queryByRole('columnheader', {
+        name: 'Rank',
+      }),
+    ).toBeNull();
     expect(screen.getByText('2,500 credits')).toBeInTheDocument();
     expect(container).not.toHaveTextContent('$');
   });
@@ -114,6 +123,50 @@ describe('WorkspaceUsageAnalytics settlement visibility', () => {
     expect(screen.getByRole('link', { name: 'Export daily CSV' })).toHaveAttribute(
       'href',
       '/api/settings/organization/usage-analytics/export?from=2026-09-01T00%3A00%3A00.000Z&to=2026-09-19T10%3A00%3A00.000Z&dimension=daily',
+    );
+  });
+
+  it('shows active members against seats in use and the average credits per active member', () => {
+    mocks.query.mockReturnValue({
+      data: {
+        currentUserRole: 'owner',
+        usage: {
+          ...usage(0),
+          totals: { requests: 9, credits: 2_500, inputTokens: 900, outputTokens: 300 },
+          members: { active: 2, seatsInUse: 5 },
+        },
+      },
+      isPending: false,
+      isError: false,
+    });
+    render(<WorkspaceUsageAnalytics />);
+
+    const totals = screen.getByRole('region', { name: 'Managed cloud usage' });
+    expect(within(totals).getByText('Active members').parentElement).toHaveTextContent(
+      'Active members2 / 5Out of seats in use',
+    );
+    expect(within(totals).getByText('Avg credits / active member').parentElement).toHaveTextContent(
+      '1,250 credits',
+    );
+  });
+
+  it('shows only the active count when seats are not readable, and no average without activity', () => {
+    mocks.query.mockReturnValue({
+      data: {
+        currentUserRole: 'owner',
+        usage: { ...usage(0), members: { active: 0, seatsInUse: null } },
+      },
+      isPending: false,
+      isError: false,
+    });
+    render(<WorkspaceUsageAnalytics />);
+
+    const totals = screen.getByRole('region', { name: 'Managed cloud usage' });
+    expect(within(totals).getByText('Active members').parentElement).toHaveTextContent(
+      /^Active members0$/,
+    );
+    expect(within(totals).getByText('Avg credits / active member').parentElement).toHaveTextContent(
+      /^Avg credits \/ active memberNone$/,
     );
   });
 });

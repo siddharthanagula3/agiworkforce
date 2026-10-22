@@ -84,16 +84,22 @@ function Sparkline({ days }: { days: UsageDayRow[] }) {
   );
 }
 
+function activeMembersValue(active: number, seatsInUse: number | null): string {
+  return seatsInUse === null ? compact(active) : `${compact(active)} / ${compact(seatsInUse)}`;
+}
+
 function BreakdownTable({
   title,
   caption,
   rows,
   labelFor,
+  ranked = false,
 }: {
   title: string;
   caption: string;
   rows: UsageBreakdownRow[];
   labelFor?: (key: string) => string;
+  ranked?: boolean;
 }) {
   const headingId = `${title.toLowerCase().replace(/\s+/g, '-')}-heading`;
 
@@ -117,6 +123,7 @@ function BreakdownTable({
           <table className="w-full text-start text-xs" style={{ borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ color: 'var(--text-3)' }}>
+                {ranked ? <th className="w-12 px-5 py-2 font-medium">Rank</th> : null}
                 <th className="px-5 py-2 font-medium">Name</th>
                 <th className="px-5 py-2 text-end font-medium">Turns</th>
                 <th className="px-5 py-2 text-end font-medium">Tokens in</th>
@@ -125,8 +132,13 @@ function BreakdownTable({
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
+              {rows.map((row, index) => (
                 <tr key={row.key} style={{ borderTop: '1px solid var(--settings-border)' }}>
+                  {ranked ? (
+                    <td className="px-5 py-2.5 tabular-nums" style={{ color: 'var(--text-3)' }}>
+                      {index + 1}
+                    </td>
+                  ) : null}
                   <td
                     className="max-w-[16rem] truncate px-5 py-2.5"
                     style={{ color: 'var(--text-1)' }}
@@ -218,6 +230,9 @@ export function WorkspaceUsageAnalytics() {
 
   const { usage } = data;
   const empty = usage.totals.requests === 0;
+  const activeMembers = usage.members.active;
+  const creditsPerActiveMember =
+    activeMembers > 0 ? formatCredits(usage.totals.credits / activeMembers) : 'None';
 
   return (
     <div className="flex flex-col gap-6">
@@ -261,10 +276,16 @@ export function WorkspaceUsageAnalytics() {
           </p>
         </div>
         <div
-          className="grid grid-cols-2 divide-x md:grid-cols-4"
+          className="grid grid-cols-2 divide-x md:grid-cols-3"
           style={{ borderColor: 'var(--settings-border)' }}
         >
           <Stat label="Credits used" value={formatCredits(usage.totals.credits)} />
+          <Stat
+            label="Active members"
+            value={activeMembersValue(activeMembers, usage.members.seatsInUse)}
+            {...(usage.members.seatsInUse === null ? {} : { note: 'Out of seats in use' })}
+          />
+          <Stat label="Avg credits / active member" value={creditsPerActiveMember} />
           <Stat label="Turns" value={compact(usage.totals.requests)} />
           <Stat label="Tokens in" value={compact(usage.totals.inputTokens)} />
           <Stat label="Tokens out" value={compact(usage.totals.outputTokens)} />
@@ -310,8 +331,9 @@ export function WorkspaceUsageAnalytics() {
         <>
           <BreakdownTable
             title="By member"
-            caption="Who is using credits. Volume and credits only, this surface never carries what anyone asked the model."
+            caption="Who is using credits, most first. Volume and credits only, this surface never carries what anyone asked the model."
             rows={usage.byMember}
+            ranked
           />
           <BreakdownTable
             title="By product area"
