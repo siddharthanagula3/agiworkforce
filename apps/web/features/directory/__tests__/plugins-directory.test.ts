@@ -334,6 +334,7 @@ describe('toPluginDetail', () => {
             skills: ['frontend-design'],
             skillPaths: [],
             commands: 2,
+            commandPaths: ['commands/income-statement.md', 'plugin/commands/close/accruals.md'],
             agents: ['reviewer'],
             hooks: true,
             mcpServers: [{ name: 'github', transport: 'http' }],
@@ -350,7 +351,9 @@ describe('toPluginDetail', () => {
       components: {
         skills: ['frontend-design'],
         commands: 2,
+        commandNames: ['income-statement', 'close:accruals'],
         agents: 1,
+        agentNames: ['reviewer'],
         hooks: true,
         mcpServers: [{ name: 'github', transport: 'http' }],
         lspServers: ['tsserver'],

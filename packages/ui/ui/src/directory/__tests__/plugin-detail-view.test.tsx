@@ -396,3 +396,77 @@ describe('the Connectors section on a plugin page', () => {
     expect(screen.getByTestId('plugin-unreviewed-note')).toBeTruthy();
   });
 });
+
+describe('the Commands, Skills and Agents tabs', () => {
+  const named = {
+    skills: ['frontend-design', 'design-review'],
+    commands: 2,
+    commandNames: ['income-statement', 'close:accruals'],
+    agents: 1,
+    agentNames: ['reviewer'],
+    hooks: false,
+    mcpServers: [],
+    lspServers: [],
+  };
+
+  function tabNames() {
+    return screen.getAllByRole('tab').map((tab) => tab.textContent);
+  }
+
+  it('orders the tabs Commands, Skills, Agents and opens Commands with a card per command', () => {
+    renderDetail({ components: named });
+    expect(tabNames()).toEqual(['Commands', 'Skills', 'Agents']);
+    expect(screen.getByRole('tab', { name: 'Commands' }).getAttribute('data-state')).toBe('active');
+    const cards = screen.getByTestId('plugin-commands').querySelectorAll('li');
+    expect([...cards].map((card) => card.textContent)).toEqual([
+      '/income-statement',
+      '/close:accruals',
+    ]);
+  });
+
+  it('lists skills and agents by name under their own tabs', () => {
+    renderDetail({ components: named });
+    selectTab('Skills');
+    expect(screen.getByText('frontend-design')).toBeTruthy();
+    expect(screen.getByText('design-review')).toBeTruthy();
+    selectTab('Agents');
+    expect(screen.getByText('reviewer')).toBeTruthy();
+    expect(screen.getByText('Agents run in the agi CLI, not in chat.')).toBeTruthy();
+  });
+
+  it('drops the counts the tabs already list from the Includes summary', () => {
+    renderDetail({ components: { ...named, hooks: true } });
+    expect(screen.getByRole('heading', { name: 'Includes' })).toBeTruthy();
+    expect(screen.getAllByText('Commands')).toHaveLength(1);
+    expect(screen.getAllByText('Agents')).toHaveLength(1);
+  });
+
+  it('titles a command card with the description the installed plugin loaded', () => {
+    renderDetail(
+      { installed: true, components: named },
+      {
+        settings: {
+          pluginId: 'frontend-design',
+          skills: [
+            { name: 'income-statement', enabled: true, description: 'Build an income statement.' },
+            { name: 'frontend-design', enabled: true },
+          ],
+          connectors: [],
+          loading: false,
+          saving: false,
+          error: null,
+        },
+      },
+    );
+    expect(tabNames()).toEqual(['Commands', 'Skills', 'Agents', 'Connectors']);
+    const first = screen.getByTestId('plugin-commands').querySelector('li');
+    expect(first?.textContent).toBe('Build an income statement./income-statement');
+    selectTab('Skills');
+    expect(screen.getByRole('switch', { name: 'Use frontend-design' })).toBeTruthy();
+  });
+
+  it('shows no tab set when the plugin names no commands or agents and is not installed', () => {
+    renderDetail();
+    expect(screen.queryByRole('tablist')).toBeNull();
+  });
+});

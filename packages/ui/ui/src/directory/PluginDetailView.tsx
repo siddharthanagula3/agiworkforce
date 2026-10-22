@@ -146,18 +146,24 @@ function MonoList({ values }: { values: readonly string[] }) {
   );
 }
 
+interface ListedInTabs {
+  skills: boolean;
+  commands: boolean;
+  agents: boolean;
+}
+
 function componentRows(
   components: DirectoryPluginComponents,
-  skillsListedElsewhere: boolean,
+  listed: ListedInTabs,
 ): { label: string; body: ReactNode }[] {
   const rows: { label: string; body: ReactNode }[] = [];
-  if (components.skills.length > 0 && !skillsListedElsewhere) {
+  if (components.skills.length > 0 && !listed.skills) {
     rows.push({ label: PLUGIN_SKILLS_LABEL, body: <MonoList values={components.skills} /> });
   }
-  if (components.commands > 0) {
+  if (components.commands > 0 && !listed.commands) {
     rows.push({ label: PLUGIN_COMMANDS_LABEL, body: String(components.commands) });
   }
-  if (components.agents > 0) {
+  if (components.agents > 0 && !listed.agents) {
     rows.push({
       label: PLUGIN_AGENTS_LABEL,
       body: (
@@ -192,12 +198,12 @@ function componentRows(
 
 function ComponentsSummary({
   components,
-  skillsListedElsewhere,
+  listed,
 }: {
   components: DirectoryPluginComponents;
-  skillsListedElsewhere: boolean;
+  listed: ListedInTabs;
 }) {
-  const rows = componentRows(components, skillsListedElsewhere);
+  const rows = componentRows(components, listed);
   if (rows.length === 0) return null;
   return (
     <section className="flex flex-col gap-3">
@@ -459,8 +465,60 @@ function EnabledRow({
   );
 }
 
+const TAB_COMMANDS = 'commands';
 const TAB_SKILLS = 'skills';
+const TAB_AGENTS = 'agents';
 const TAB_CONNECTORS = 'connectors';
+
+const CARD_GRID_CLASS = 'grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3';
+const CARD_CLASS =
+  'flex min-w-0 flex-col gap-1 rounded-lg border border-border bg-card px-3 py-2.5';
+
+function CommandCards({
+  names,
+  descriptions,
+}: {
+  names: readonly string[];
+  descriptions: ReadonlyMap<string, string>;
+}) {
+  return (
+    <ul className={CARD_GRID_CLASS} data-testid="plugin-commands">
+      {names.map((name) => {
+        const description = descriptions.get(name);
+        return (
+          <li key={name} className={CARD_CLASS}>
+            {description ? (
+              <span className="line-clamp-2 text-sm text-foreground">{description}</span>
+            ) : null}
+            <span
+              className={cn(
+                'truncate font-mono text-sm',
+                description ? 'text-muted-foreground' : 'text-foreground',
+              )}
+              title={`${PLUGIN_SKILL_SLASH_PREFIX}${name}`}
+            >
+              {`${PLUGIN_SKILL_SLASH_PREFIX}${name}`}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+function NameCards({ names }: { names: readonly string[] }) {
+  return (
+    <ul className={CARD_GRID_CLASS}>
+      {names.map((name) => (
+        <li key={name} className={CARD_CLASS}>
+          <span className="truncate font-mono text-sm text-foreground" title={name}>
+            {name}
+          </span>
+        </li>
+      ))}
+    </ul>
+  );
+}
 
 function SkillRows({
   settings,
@@ -594,29 +652,33 @@ function PluginConnectorList({
   );
 }
 
-function ContentsTabs({
-  settings,
-  connectors,
-  connectorsLocked,
-  connectorsNote,
-  onSetSkillEnabled,
-  onOpenConnector,
-}: {
-  settings: DirectoryPluginSettings;
+interface ContentsTab {
+  value: string;
+  label: string;
+  filled: boolean;
+  body: ReactNode;
+}
+
+interface ContentsTabsProps {
+  components?: DirectoryPluginComponents;
+  settings?: DirectoryPluginSettings;
   connectors: readonly DirectoryPluginConnectorSetting[];
   connectorsLocked?: DirectoryLockNotice;
   connectorsNote?: string;
   onSetSkillEnabled?: (skill: string, enabled: boolean) => Promise<void> | void;
   onOpenConnector?: (connectorId: string) => void;
-}) {
-  if (settings.loading) {
+}
+
+function ContentsTabs(props: ContentsTabsProps) {
+  const { settings } = props;
+  if (settings?.loading) {
     return (
       <div className="flex items-center justify-center py-6">
         <Spinner size="sm" aria-label={PLUGIN_SETTINGS_LOADING_LABEL} />
       </div>
     );
   }
-  if (settings.error) {
+  if (settings?.error) {
     return (
       <p
         role="alert"
@@ -626,27 +688,104 @@ function ContentsTabs({
       </p>
     );
   }
-  if (settings.skills.length === 0 && connectors.length === 0) return null;
+  const tabs = contentsTabs(props);
+  const initial = tabs.find((tab) => tab.filled) ?? tabs[0];
+  if (!initial) return null;
   return (
-    <Tabs defaultValue={settings.skills.length > 0 ? TAB_SKILLS : TAB_CONNECTORS}>
+    <Tabs defaultValue={initial.value}>
       <TabsList aria-label={PLUGIN_TABS_LABEL}>
-        <TabsTrigger value={TAB_SKILLS}>{PLUGIN_SKILLS_TAB_LABEL}</TabsTrigger>
-        <TabsTrigger value={TAB_CONNECTORS}>{PLUGIN_CONNECTORS_TAB_LABEL}</TabsTrigger>
+        {tabs.map((tab) => (
+          <TabsTrigger key={tab.value} value={tab.value}>
+            {tab.label}
+          </TabsTrigger>
+        ))}
       </TabsList>
-      <TabsContent value={TAB_SKILLS} className="flex flex-col gap-3">
-        <p className="text-xs text-muted-foreground">{PLUGIN_SKILLS_TAB_COPY}</p>
-        <SkillRows settings={settings} onSetSkillEnabled={onSetSkillEnabled} />
-      </TabsContent>
-      <TabsContent value={TAB_CONNECTORS}>
+      {tabs.map((tab) => (
+        <TabsContent key={tab.value} value={tab.value} className="flex flex-col gap-3">
+          {tab.body}
+        </TabsContent>
+      ))}
+    </Tabs>
+  );
+}
+
+function contentsTabs({
+  components,
+  settings,
+  connectors,
+  connectorsLocked,
+  connectorsNote,
+  onSetSkillEnabled,
+  onOpenConnector,
+}: ContentsTabsProps): ContentsTab[] {
+  const commandNames = components?.commandNames ?? EMPTY_VALUES;
+  const agentNames = components?.agentNames ?? EMPTY_VALUES;
+  const settingsTabs =
+    settings !== undefined && (settings.skills.length > 0 || connectors.length > 0);
+  if (!settingsTabs && commandNames.length === 0 && agentNames.length === 0) return [];
+  const tabs: ContentsTab[] = [];
+  if (commandNames.length > 0) {
+    const descriptions = new Map(
+      (settings?.skills ?? [])
+        .filter((skill) => skill.description)
+        .map((skill) => [skill.name, skill.description ?? '']),
+    );
+    tabs.push({
+      value: TAB_COMMANDS,
+      label: PLUGIN_COMMANDS_LABEL,
+      filled: true,
+      body: <CommandCards names={commandNames} descriptions={descriptions} />,
+    });
+  }
+  if (settingsTabs && settings) {
+    tabs.push({
+      value: TAB_SKILLS,
+      label: PLUGIN_SKILLS_TAB_LABEL,
+      filled: settings.skills.length > 0,
+      body: (
+        <>
+          <p className="text-xs text-muted-foreground">{PLUGIN_SKILLS_TAB_COPY}</p>
+          <SkillRows settings={settings} onSetSkillEnabled={onSetSkillEnabled} />
+        </>
+      ),
+    });
+  } else if (components && components.skills.length > 0) {
+    tabs.push({
+      value: TAB_SKILLS,
+      label: PLUGIN_SKILLS_TAB_LABEL,
+      filled: true,
+      body: <NameCards names={components.skills} />,
+    });
+  }
+  if (agentNames.length > 0) {
+    tabs.push({
+      value: TAB_AGENTS,
+      label: PLUGIN_AGENTS_LABEL,
+      filled: true,
+      body: (
+        <>
+          <p className="text-sm text-muted-foreground">{PLUGIN_AGENTS_NOTE}</p>
+          <NameCards names={agentNames} />
+        </>
+      ),
+    });
+  }
+  if (settingsTabs) {
+    tabs.push({
+      value: TAB_CONNECTORS,
+      label: PLUGIN_CONNECTORS_TAB_LABEL,
+      filled: connectors.length > 0,
+      body: (
         <PluginConnectorList
           connectors={connectors}
           locked={connectorsLocked}
           note={connectorsNote}
           onOpenConnector={onOpenConnector}
         />
-      </TabsContent>
-    </Tabs>
-  );
+      ),
+    });
+  }
+  return tabs;
 }
 
 export function PluginDetailView({
@@ -716,7 +855,15 @@ export function PluginDetailView({
   );
   const showCli = !installed && !installable;
   const updated = formatUpdatedAt(detail.updatedAt);
-  const showsTabs = installed && settings !== undefined;
+  const showsSettings = installed && settings !== undefined;
+  const tabSettings = showsSettings ? settings : undefined;
+  const commandsNamed = (detail.components?.commandNames?.length ?? 0) > 0;
+  const agentsNamed = (detail.components?.agentNames?.length ?? 0) > 0;
+  const listedInTabs: ListedInTabs = {
+    skills: showsSettings || commandsNamed || agentsNamed,
+    commands: commandsNamed,
+    agents: agentsNamed,
+  };
   const connectors = detail.connectors ?? settings?.connectors ?? EMPTY_CONNECTORS;
   const versionControl =
     installed && detail.versions !== undefined && onChangeVersion !== undefined
@@ -876,22 +1023,22 @@ export function PluginDetailView({
         />
       ) : null}
 
-      {showsTabs ? (
-        <ContentsTabs
-          settings={settings}
-          connectors={connectors}
-          connectorsLocked={detail.connectorsLocked}
-          connectorsNote={detail.connectorsNote}
-          onSetSkillEnabled={locked ? undefined : onSetSkillEnabled}
-          onOpenConnector={onOpenConnector}
-        />
-      ) : null}
-
       <p className="whitespace-pre-line text-sm leading-relaxed text-foreground">
         {detail.description}
       </p>
 
-      {!showsTabs && (connectors.length > 0 || detail.connectorsLocked || detail.connectorsNote) ? (
+      <ContentsTabs
+        components={detail.components}
+        settings={tabSettings}
+        connectors={connectors}
+        connectorsLocked={detail.connectorsLocked}
+        connectorsNote={detail.connectorsNote}
+        onSetSkillEnabled={locked ? undefined : onSetSkillEnabled}
+        onOpenConnector={onOpenConnector}
+      />
+
+      {!showsSettings &&
+      (connectors.length > 0 || detail.connectorsLocked || detail.connectorsNote) ? (
         <section className="flex flex-col gap-3">
           <h4 className={DETAIL_HEADING}>{PLUGIN_CONNECTORS_HEADING}</h4>
           <PluginConnectorList
@@ -904,7 +1051,7 @@ export function PluginDetailView({
       ) : null}
 
       {detail.components ? (
-        <ComponentsSummary components={detail.components} skillsListedElsewhere={showsTabs} />
+        <ComponentsSummary components={detail.components} listed={listedInTabs} />
       ) : null}
 
       {versionControl ? (

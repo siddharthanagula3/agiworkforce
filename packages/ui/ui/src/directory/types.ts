@@ -231,7 +231,9 @@ export interface DirectoryPluginMcpServer {
 export interface DirectoryPluginComponents {
   skills: readonly string[];
   commands: number;
+  commandNames?: readonly string[];
   agents: number;
+  agentNames?: readonly string[];
   hooks: boolean;
   mcpServers: readonly DirectoryPluginMcpServer[];
   lspServers: readonly string[];

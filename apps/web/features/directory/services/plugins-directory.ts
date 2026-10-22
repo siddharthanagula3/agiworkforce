@@ -62,6 +62,7 @@ import type {
   PluginWorksWith,
 } from '@/features/plugins/server/directory/types';
 import type { PluginUpdateOffer } from '@/lib/services/plugin-lifecycle';
+import { commandNameFromPath } from '@/features/plugins/command-name';
 import {
   PLUGIN_TARGET_BUILTIN,
   PLUGIN_TARGET_COMMUNITY,
@@ -925,12 +926,18 @@ function worksWithLabels(values: readonly string[]): string[] {
   );
 }
 
+function commandNames(paths: readonly string[] | undefined): string[] {
+  return (paths ?? []).flatMap((path) => commandNameFromPath(path) ?? []);
+}
+
 function toComponents(entry: PluginDirectoryEntry): DirectoryPluginComponents {
   const components = entry.runtime.components;
   return {
     skills: components.skills,
     commands: components.commands,
+    commandNames: commandNames(components.commandPaths),
     agents: components.agents.length,
+    agentNames: components.agents,
     hooks: components.hooks,
     mcpServers: components.mcpServers.map((server) => ({
       name: server.name,
