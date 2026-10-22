@@ -20,7 +20,11 @@ jest.mock('../../remote-code/service', () => ({
 }));
 
 import * as mockService from '../../remote-code/service';
-import { ingestRemoteCodeControl, useRemoteCodeStore } from '../../remote-code/store';
+import {
+  ingestRemoteCodeControl,
+  useRemoteCodePreferences,
+  useRemoteCodeStore,
+} from '../../remote-code/store';
 import { CodeSessionView } from '../CodeSessionView';
 
 const SENT_AT = '2026-09-17T12:00:00.000Z';
@@ -53,6 +57,7 @@ function openSession(overrides: Record<string, unknown> = {}) {
 beforeEach(() => {
   jest.clearAllMocks();
   useRemoteCodeStore.getState().reset();
+  useRemoteCodePreferences.setState({ followUpBehavior: 'queue' });
 });
 
 describe('CodeSessionView', () => {
@@ -157,6 +162,36 @@ describe('CodeSessionView', () => {
       ),
     );
   });
+
+  it.each([
+    ['queue', false],
+    ['steer', true],
+  ] as const)(
+    'starts the composer from the stored %s follow-up behaviour',
+    async (behavior, interrupt) => {
+      useRemoteCodePreferences.setState({ followUpBehavior: behavior });
+      render(<CodeSessionView rootId="root-1" threadId="thread-1" />);
+      openSession();
+
+      expect(
+        screen.getByLabelText('Stop the current turn before sending guidance').props.value,
+      ).toBe(interrupt);
+      fireEvent.changeText(
+        await screen.findByLabelText('Guidance for this session'),
+        'use the retry helper',
+      );
+      fireEvent.press(screen.getByLabelText('Send guidance'));
+
+      await waitFor(() =>
+        expect(mockService.steerCodeSession).toHaveBeenCalledWith(
+          'root-1',
+          'thread-1',
+          'use the retry helper',
+          interrupt,
+        ),
+      );
+    },
+  );
 
   it('shows generated files, diffs and test results from the host', async () => {
     render(<CodeSessionView rootId="root-1" threadId="thread-1" />);

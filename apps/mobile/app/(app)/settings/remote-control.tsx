@@ -1,7 +1,8 @@
 import { useCallback } from 'react';
 import { Alert, View } from 'react-native';
+import { PressableBox } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
-import { Laptop, MonitorSmartphone, QrCode, RotateCcw, Unlink } from 'lucide-react-native';
+import { Check, Laptop, MonitorSmartphone, QrCode, RotateCcw, Unlink } from 'lucide-react-native';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
@@ -10,6 +11,60 @@ import { SettingsGroup, SettingsRow, SettingsScreenShell } from '@/src/features/
 import { offlineStatusLine } from '@/src/features/companion/components/StatusBanners';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
 import { manualReconnect } from '@/services/companion';
+import {
+  REMOTE_FOLLOW_UP_BEHAVIORS,
+  useRemoteCodePreferences,
+  type RemoteFollowUpBehavior,
+} from '@/src/features/companion/remote-code/store';
+
+const FOLLOW_UP_OPTIONS: Record<RemoteFollowUpBehavior, { label: string; description: string }> = {
+  queue: { label: 'Queue', description: 'Send after the current turn finishes.' },
+  steer: { label: 'Steer', description: 'Stop the current turn and send now.' },
+};
+
+function FollowUpBehaviorPicker() {
+  const colors = useThemeColors();
+  const value = useRemoteCodePreferences((s) => s.followUpBehavior);
+  const setValue = useRemoteCodePreferences((s) => s.setFollowUpBehavior);
+  return (
+    <View accessibilityRole="radiogroup" accessibilityLabel="Follow-up behavior">
+      {REMOTE_FOLLOW_UP_BEHAVIORS.map((behavior, index) => {
+        const option = FOLLOW_UP_OPTIONS[behavior];
+        const selected = value === behavior;
+        return (
+          <PressableBox
+            key={behavior}
+            onPress={() => setValue(behavior)}
+            accessibilityRole="radio"
+            accessibilityState={{ checked: selected }}
+            accessibilityLabel={`${option.label}. ${option.description}`}
+            style={{
+              minHeight: 60,
+              paddingHorizontal: 14,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 12,
+              borderBottomWidth: index === REMOTE_FOLLOW_UP_BEHAVIORS.length - 1 ? 0 : 1,
+              borderBottomColor: colors.border,
+            }}
+          >
+            <View style={{ flex: 1 }}>
+              <Text
+                style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+              >
+                {option.label}
+              </Text>
+              <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote, marginTop: 2 }}>
+                {option.description}
+              </Text>
+            </View>
+            {selected ? <Check size={18} color={colors.textPrimary} /> : null}
+          </PressableBox>
+        );
+      })}
+    </View>
+  );
+}
 
 type Tone = 'success' | 'warning' | 'error' | 'muted';
 
@@ -158,6 +213,10 @@ export default function RemoteControlSettingsScreen() {
             isLast
           />
         ) : null}
+      </SettingsGroup>
+      <SectionHeader>Follow-up behavior</SectionHeader>
+      <SettingsGroup>
+        <FollowUpBehaviorPicker />
       </SettingsGroup>
     </SettingsScreenShell>
   );

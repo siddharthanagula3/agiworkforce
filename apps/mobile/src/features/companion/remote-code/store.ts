@@ -1,4 +1,6 @@
 import { create } from 'zustand';
+import { createJSONStorage, persist } from 'zustand/middleware';
+import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import {
   REMOTE_CODE_LIMITS,
   parseRemoteCodeEvent,
@@ -100,6 +102,40 @@ export const useRemoteCodeStore = create<RemoteCodeState>((set) => ({
       starts: {},
     }),
 }));
+
+export const REMOTE_FOLLOW_UP_BEHAVIORS = ['queue', 'steer'] as const;
+
+export type RemoteFollowUpBehavior = (typeof REMOTE_FOLLOW_UP_BEHAVIORS)[number];
+
+interface RemoteCodePreferences {
+  followUpBehavior: RemoteFollowUpBehavior;
+  setFollowUpBehavior: (behavior: RemoteFollowUpBehavior) => void;
+}
+
+function isFollowUpBehavior(value: unknown): value is RemoteFollowUpBehavior {
+  return REMOTE_FOLLOW_UP_BEHAVIORS.some((behavior) => behavior === value);
+}
+
+export const useRemoteCodePreferences = create<RemoteCodePreferences>()(
+  persist(
+    (set) => ({
+      followUpBehavior: 'queue',
+      setFollowUpBehavior: (followUpBehavior) => set({ followUpBehavior }),
+    }),
+    {
+      name: 'remote-code-preferences',
+      storage: createJSONStorage(() => mmkvStorage),
+      skipHydration: true,
+      partialize: (state) => ({ followUpBehavior: state.followUpBehavior }),
+      merge: (persisted, current) => {
+        const stored = (persisted as { followUpBehavior?: unknown } | undefined)?.followUpBehavior;
+        return isFollowUpBehavior(stored) ? { ...current, followUpBehavior: stored } : current;
+      },
+    },
+  ),
+);
+
+rehydrateWhenMmkvReady(useRemoteCodePreferences, 'remote-code-preferences');
 
 export function beginCodeSessionStart(requestId: string, rootId: string): void {
   useRemoteCodeStore.setState((state) => ({

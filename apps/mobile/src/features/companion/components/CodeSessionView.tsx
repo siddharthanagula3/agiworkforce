@@ -34,7 +34,11 @@ import {
   requestCodeTranscript,
   steerCodeSession,
 } from '../remote-code/service';
-import { remoteCodeThreadKey, useRemoteCodeStore } from '../remote-code/store';
+import {
+  remoteCodeThreadKey,
+  useRemoteCodePreferences,
+  useRemoteCodeStore,
+} from '../remote-code/store';
 import { codeSessionStatusColor, codeSessionStatusLabel } from './CodeSessionsCard';
 
 interface CodeSessionViewProps {
@@ -151,7 +155,8 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
     (state) => state.threads[remoteCodeThreadKey(rootId, threadId)] ?? null,
   );
   const [guidance, setGuidance] = useState('');
-  const [interruptFirst, setInterruptFirst] = useState(false);
+  const steerByDefault = useRemoteCodePreferences((state) => state.followUpBehavior === 'steer');
+  const [interruptFirst, setInterruptFirst] = useState(steerByDefault);
   const [sendError, setSendError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
 
@@ -197,7 +202,7 @@ export function CodeSessionView({ rootId, threadId, focusApprovalId }: CodeSessi
     const sent = await steerCodeSession(rootId, threadId, trimmed, running && interruptFirst);
     if (sent) {
       setGuidance('');
-      setInterruptFirst(false);
+      setInterruptFirst(steerByDefault);
     } else {
       setSendError('Guidance was not sent. Check the Desktop connection and try again.');
     }

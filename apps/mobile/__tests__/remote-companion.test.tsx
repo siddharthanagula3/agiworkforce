@@ -84,7 +84,10 @@ import { manualReconnect } from '@/services/companion';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useConnectionStore } from '@/stores/connectionStore';
-import { useRemoteCodeStore } from '@/src/features/companion/remote-code/store';
+import {
+  useRemoteCodePreferences,
+  useRemoteCodeStore,
+} from '@/src/features/companion/remote-code/store';
 import { OfflineDesktopView } from '@/src/features/companion/components/ConnectionStateViews';
 import { offlineStatusLine } from '@/src/features/companion/components/StatusBanners';
 import { PairingStatus } from '@/src/features/companion/components/PairingStatus';
@@ -132,6 +135,7 @@ beforeEach(() => {
     lastHeartbeatAt: null,
   });
   useRemoteCodeStore.getState().reset();
+  useRemoteCodePreferences.setState({ followUpBehavior: 'queue' });
 });
 
 describe('offline desktop view', () => {
@@ -296,6 +300,21 @@ describe('remote control settings page', () => {
     expect(queryByLabelText('Disconnect')).toBeNull();
     fireEvent.press(getByLabelText('Pair a computer'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/companion');
+  });
+});
+
+describe('follow-up behavior picker', () => {
+  it('defaults to Queue and stores Steer when chosen', () => {
+    const { getByLabelText } = render(<RemoteControlSettingsScreen />);
+    const queue = getByLabelText('Queue. Send after the current turn finishes.');
+    const steer = getByLabelText('Steer. Stop the current turn and send now.');
+    expect(queue.props.accessibilityState).toMatchObject({ checked: true });
+    expect(steer.props.accessibilityState).toMatchObject({ checked: false });
+    fireEvent.press(steer);
+    expect(useRemoteCodePreferences.getState().followUpBehavior).toBe('steer');
+    expect(
+      getByLabelText('Steer. Stop the current turn and send now.').props.accessibilityState,
+    ).toMatchObject({ checked: true });
   });
 });
 
