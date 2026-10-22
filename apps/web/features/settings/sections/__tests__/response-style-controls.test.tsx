@@ -89,6 +89,7 @@ vi.mock('@/features/chat/components/dialogs/KeyboardShortcutsDialog', () => ({
 
 vi.mock('../MemorySection', () => ({ MemorySection: () => null }));
 
+import { RESPONSE_STYLE_PREFERENCE_DEFAULTS, responseStyleLines } from '@agiworkforce/types';
 import { PersonalizationSection } from '../PersonalizationSection';
 
 beforeEach(() => {
@@ -145,6 +146,29 @@ describe('response style controls on web', () => {
     await waitFor(async () => expect(await screen.findByLabelText('Emoji')).toHaveValue('less'));
     expect(await screen.findByLabelText('Response style')).toHaveValue('formal');
   });
+
+  it.each([
+    [30, 'less'],
+    [31, 'default'],
+    [69, 'default'],
+    [70, 'more'],
+  ])(
+    'shows a stored score of %i as %s, the level the prompt builder acts on',
+    async (score, level) => {
+      mocks.fetchPreferences.mockImplementation(async (ns: string) =>
+        ns === 'personalization' ? { warmth: score } : {},
+      );
+
+      render(<PersonalizationSection />);
+
+      await waitFor(async () => expect(await screen.findByLabelText('Warmth')).toHaveValue(level));
+      const lines = responseStyleLines({
+        ...RESPONSE_STYLE_PREFERENCE_DEFAULTS,
+        traits: { warmth: score },
+      });
+      expect(lines.length > 0).toBe(level !== 'default');
+    },
+  );
 
   it('describes the level to assistive technology in words, not just by position', async () => {
     mocks.fetchPreferences.mockImplementation(async (ns: string) =>

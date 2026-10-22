@@ -25,20 +25,17 @@ jest.mock('react-native-safe-area-context', () => ({
   },
 }));
 
-jest.mock('@react-native-community/slider', () => {
-  const { View } = require('react-native');
-  return {
-    __esModule: true,
-    default: (props: { value?: number; testID?: string }) => (
-      <View testID={props.testID ?? 'slider'} accessibilityValue={{ now: props.value }} />
-    ),
-  };
-});
-
 jest.mock('lucide-react-native', () => {
   const { Text } = require('react-native');
   const icon = () => <Text>icon</Text>;
-  return { ArrowLeft: icon, Check: icon, Sun: icon, Moon: icon, Monitor: icon };
+  return {
+    ArrowLeft: icon,
+    Check: icon,
+    ChevronsUpDown: icon,
+    Sun: icon,
+    Moon: icon,
+    Monitor: icon,
+  };
 });
 
 jest.mock('../lib/mmkv', () => ({
@@ -123,29 +120,52 @@ describe('Personalization page', () => {
     expect(getByText('Custom Instructions')).toBeTruthy();
   });
 
-  it('renders 4 slider labels', () => {
-    const { getByText } = render(<PersonalizationScreen />);
+  it('shows the four characteristics as Less, Default or More levels from the stored scores', () => {
+    useLocalSettingsStore.setState({
+      personalization: {
+        ...defaultPersonalization,
+        warmth: 20,
+        enthusiasm: 63,
+        headersLists: 80,
+        emoji: 30,
+      },
+    });
+    const { getByLabelText, queryByText } = render(<PersonalizationScreen />);
 
-    expect(getByText('Warmth')).toBeTruthy();
-    expect(getByText('Enthusiasm')).toBeTruthy();
-    expect(getByText('Headers and lists')).toBeTruthy();
-    expect(getByText('Emoji')).toBeTruthy();
+    expect(getByLabelText('Warmth: Less')).toBeTruthy();
+    expect(getByLabelText('Enthusiasm: Default')).toBeTruthy();
+    expect(getByLabelText('Headers and lists: More')).toBeTruthy();
+    expect(getByLabelText('Emoji: Less')).toBeTruthy();
+    expect(queryByText('Cold')).toBeNull();
   });
 
-  it('renders slider range labels', () => {
-    const { getByText } = render(<PersonalizationScreen />);
+  it('picks a level from the sheet and saves its score', () => {
+    const { getByLabelText, queryByLabelText } = render(<PersonalizationScreen />);
 
-    expect(getByText('Cold')).toBeTruthy();
-    expect(getByText('Warm')).toBeTruthy();
+    expect(getByLabelText('Save personalization settings')).toBeDisabled();
+    fireEvent.press(getByLabelText('Warmth: Default'));
+    expect(getByLabelText('Warmth Default')).toBeSelected();
+    fireEvent.press(getByLabelText('Warmth More'));
 
-    expect(getByText('Neutral')).toBeTruthy();
-    expect(getByText('Enthusiastic')).toBeTruthy();
+    expect(queryByLabelText('Warmth More')).toBeNull();
+    expect(getByLabelText('Warmth: More')).toBeTruthy();
+    fireEvent.press(getByLabelText('Save personalization settings'));
+    expect(useLocalSettingsStore.getState().personalization.warmth).toBe(80);
+  });
 
-    expect(getByText('Prose')).toBeTruthy();
-    expect(getByText('Structured')).toBeTruthy();
+  it('replaces an in-between stored score only for the trait whose level is picked', () => {
+    useLocalSettingsStore.setState({
+      personalization: { ...defaultPersonalization, emoji: 63 },
+    });
+    const { getByLabelText } = render(<PersonalizationScreen />);
 
-    expect(getByText('None')).toBeTruthy();
-    expect(getByText('Frequent')).toBeTruthy();
+    fireEvent.press(getByLabelText('Emoji: Default'));
+    fireEvent.press(getByLabelText('Emoji Less'));
+    fireEvent.press(getByLabelText('Save personalization settings'));
+
+    const saved = useLocalSettingsStore.getState().personalization;
+    expect(saved.emoji).toBe(20);
+    expect(saved.warmth).toBe(50);
   });
 
   it('pre-fills text inputs from settingsStore', () => {

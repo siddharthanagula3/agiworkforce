@@ -98,6 +98,34 @@ const TRAIT_GUIDANCE: Readonly<Record<string, TraitCopy>> = {
 
 export const RESPONSE_STYLE_TRAIT_KEYS = Object.keys(TRAIT_GUIDANCE);
 
+export const RESPONSE_STYLE_TRAITS = [
+  { key: 'warmth', label: 'Warmth' },
+  { key: 'enthusiasm', label: 'Enthusiasm' },
+  { key: 'headersLists', label: 'Headers and lists' },
+  { key: 'emoji', label: 'Emoji' },
+] as const;
+export type ResponseStyleTraitKey = (typeof RESPONSE_STYLE_TRAITS)[number]['key'];
+
+export const RESPONSE_STYLE_TRAIT_NEUTRAL = 50;
+
+export const RESPONSE_STYLE_TRAIT_LEVELS = [
+  { value: 'less', label: 'Less', score: 20 },
+  { value: 'default', label: 'Default', score: RESPONSE_STYLE_TRAIT_NEUTRAL },
+  { value: 'more', label: 'More', score: 80 },
+] as const;
+export type ResponseStyleTraitLevel = (typeof RESPONSE_STYLE_TRAIT_LEVELS)[number]['value'];
+
+export function responseStyleTraitLevel(score: number): ResponseStyleTraitLevel {
+  if (score <= RESPONSE_STYLE_TRAIT_NEUTRAL - TRAIT_BAND) return 'less';
+  if (score >= RESPONSE_STYLE_TRAIT_NEUTRAL + TRAIT_BAND) return 'more';
+  return 'default';
+}
+
+export function responseStyleTraitScore(level: ResponseStyleTraitLevel): number {
+  const match = RESPONSE_STYLE_TRAIT_LEVELS.find((entry) => entry.value === level);
+  return match ? match.score : RESPONSE_STYLE_TRAIT_NEUTRAL;
+}
+
 function pick<T extends string>(value: unknown, allowed: readonly T[], fallback: T): T {
   return typeof value === 'string' && (allowed as readonly string[]).includes(value)
     ? (value as T)
@@ -176,8 +204,9 @@ export function responseStyleLines(preference: ResponseStylePreference): string[
   for (const [key, copy] of Object.entries(TRAIT_GUIDANCE)) {
     const value = preference.traits[key];
     if (value === undefined) continue;
-    if (value <= 50 - TRAIT_BAND) lines.push(copy.low);
-    else if (value >= 50 + TRAIT_BAND) lines.push(copy.high);
+    const level = responseStyleTraitLevel(value);
+    if (level === 'less') lines.push(copy.low);
+    else if (level === 'more') lines.push(copy.high);
   }
 
   return lines;

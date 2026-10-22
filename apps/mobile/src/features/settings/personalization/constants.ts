@@ -30,17 +30,3 @@ export const PERSONALIZATION_TECHNICAL_LEVELS: ReadonlyArray<{
   { value: 'intermediate', label: 'Intermediate' },
   { value: 'expert', label: 'Expert' },
 ];
-
-export interface StyleSliderConfig {
-  key: 'warmth' | 'enthusiasm' | 'headersLists' | 'emoji';
-  label: string;
-  leftLabel: string;
-  rightLabel: string;
-}
-
-export const PERSONALIZATION_SLIDERS: StyleSliderConfig[] = [
-  { key: 'warmth', label: 'Warmth', leftLabel: 'Cold', rightLabel: 'Warm' },
-  { key: 'enthusiasm', label: 'Enthusiasm', leftLabel: 'Neutral', rightLabel: 'Enthusiastic' },
-  { key: 'headersLists', label: 'Headers and lists', leftLabel: 'Prose', rightLabel: 'Structured' },
-  { key: 'emoji', label: 'Emoji', leftLabel: 'None', rightLabel: 'Frequent' },
-];

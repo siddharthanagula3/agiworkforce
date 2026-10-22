@@ -3,6 +3,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Switch } from '@agiworkforce/ui';
+import {
+  RESPONSE_STYLE_TRAITS,
+  RESPONSE_STYLE_TRAIT_LEVELS,
+  responseStyleTraitLevel,
+  responseStyleTraitScore,
+  type ResponseStyleTraitLevel,
+} from '@agiworkforce/types';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
 import { SELECTABLE_LANGUAGES } from '@/app/i18n/index';
@@ -71,30 +78,6 @@ const MAX_PREFERRED_NAME_CHARS = 60;
 // help text that conversations are unaffected, and someone reading the
 // interface in one language often writes in another.
 const RESPONSE_LANGUAGE_AUTO = 'auto';
-
-// The four traits mobile ships, on the same 0-100 scale with 50 neutral. The
-// server only acts on a value 20 or more away from neutral, so the three
-// levels below sit safely past that threshold in either direction.
-const STYLE_TRAITS = [
-  { key: 'warmth', label: 'Warmth' },
-  { key: 'enthusiasm', label: 'Enthusiasm' },
-  { key: 'headersLists', label: 'Headers and lists' },
-  { key: 'emoji', label: 'Emoji' },
-] as const;
-
-const TRAIT_LEVELS = [
-  { value: 'less', label: 'Less', score: 20 },
-  { value: 'default', label: 'Default', score: 50 },
-  { value: 'more', label: 'More', score: 80 },
-] as const;
-
-type TraitLevel = (typeof TRAIT_LEVELS)[number]['value'];
-
-function traitLevelFor(value: number): TraitLevel {
-  if (value <= 30) return 'less';
-  if (value >= 70) return 'more';
-  return 'default';
-}
 
 interface ResponsePreferences {
   style: ResponseStyle;
@@ -471,18 +454,19 @@ export function PersonalizationSection() {
             Adjust these on top of your response style.
           </p>
         </div>
-        {STYLE_TRAITS.map((trait) => (
+        {RESPONSE_STYLE_TRAITS.map((trait) => (
           <SelectRow
             key={trait.key}
             id={`personalization-trait-${trait.key}`}
             label={trait.label}
-            value={traitLevelFor(responses[trait.key])}
-            options={TRAIT_LEVELS}
+            value={responseStyleTraitLevel(responses[trait.key])}
+            options={RESPONSE_STYLE_TRAIT_LEVELS}
             disabled={disabled}
-            onChange={(value) => {
-              const level = TRAIT_LEVELS.find((entry) => entry.value === value);
-              if (level) updateResponses({ [trait.key]: level.score });
-            }}
+            onChange={(value) =>
+              updateResponses({
+                [trait.key]: responseStyleTraitScore(value as ResponseStyleTraitLevel),
+              })
+            }
           />
         ))}
         <button

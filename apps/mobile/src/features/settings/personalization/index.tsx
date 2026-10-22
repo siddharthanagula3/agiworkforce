@@ -1,26 +1,37 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { View, ScrollView, TextInput, Platform, Alert } from 'react-native';
+import { View, ScrollView, TextInput, Alert, Modal } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
-import Slider from '@react-native-community/slider';
-import { Check } from 'lucide-react-native';
+import { Check, ChevronsUpDown } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Card } from '@/components/ui/card';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import type { PreferredLength, TechnicalLevel } from '@agiworkforce/types';
-import { PRODUCT_BRAND, RESPONSE_LANGUAGE_AUTO } from '@agiworkforce/types';
+import type {
+  PreferredLength,
+  ResponseStyleTraitKey,
+  ResponseStyleTraitLevel,
+  TechnicalLevel,
+} from '@agiworkforce/types';
+import {
+  PRODUCT_BRAND,
+  RESPONSE_LANGUAGE_AUTO,
+  RESPONSE_STYLE_TRAITS,
+  RESPONSE_STYLE_TRAIT_LEVELS,
+  RESPONSE_STYLE_TRAIT_NEUTRAL,
+  responseStyleTraitLevel,
+  responseStyleTraitScore,
+} from '@agiworkforce/types';
 import { SELECTABLE_LANGUAGES } from '@agiworkforce/i18n';
 import { useThemeColors } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import {
   PERSONALIZATION_LENGTHS,
-  PERSONALIZATION_SLIDERS as SLIDERS,
   PERSONALIZATION_STYLES,
   PERSONALIZATION_TECHNICAL_LEVELS,
-  type StyleSliderConfig as SliderConfig,
 } from './constants';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
@@ -150,44 +161,119 @@ function LabeledInput({
   );
 }
 
-function StyleSlider({
-  config,
-  value,
-  onValueChange,
+function levelLabel(level: ResponseStyleTraitLevel): string {
+  return RESPONSE_STYLE_TRAIT_LEVELS.find((entry) => entry.value === level)?.label ?? level;
+}
+
+function TraitRow({
+  label,
+  level,
+  onPress,
+  isFirst,
 }: {
-  config: SliderConfig;
-  value: number;
-  onValueChange: (v: number) => void;
+  label: string;
+  level: ResponseStyleTraitLevel;
+  onPress: () => void;
+  isFirst: boolean;
+}) {
+  const c = useThemeColors();
+  const valueLabel = levelLabel(level);
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={`${label}: ${valueLabel}`}
+      accessibilityHint="Opens the level picker"
+      style={({ pressed }) => ({
+        minHeight: 52,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+        borderTopWidth: isFirst ? 0 : 1,
+        borderTopColor: c.border,
+        backgroundColor: pressed ? c.surfaceHover : c.transparent,
+      })}
+    >
+      <Text style={{ flex: 1, color: c.textPrimary, fontSize: typeScale.body }}>{label}</Text>
+      <Text style={{ color: c.textMuted, fontSize: typeScale.body }}>{valueLabel}</Text>
+      <ChevronsUpDown size={16} color={c.textMuted} />
+    </Pressable>
+  );
+}
+
+function TraitLevelSheet({
+  trait,
+  level,
+  onSelect,
+  onClose,
+}: {
+  trait: { key: ResponseStyleTraitKey; label: string } | null;
+  level: ResponseStyleTraitLevel;
+  onSelect: (level: ResponseStyleTraitLevel) => void;
+  onClose: () => void;
 }) {
   const c = useThemeColors();
   return (
-    <View className="gap-1">
-      <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
-        {config.label}
-      </Text>
-      <Slider
-        minimumValue={0}
-        maximumValue={100}
-        step={1}
-        value={value}
-        onValueChange={onValueChange}
-        minimumTrackTintColor={c.teal}
-        maximumTrackTintColor={c.charcoal700}
-        thumbTintColor={Platform.OS === 'ios' ? c.white : c.teal}
-        style={{ height: 36 }}
-      />
-      <View className="flex-row justify-between px-0.5">
-        <Text className="text-sm" style={{ color: c.textMuted }}>
-          {config.leftLabel}
-        </Text>
-        <Text className="text-sm" style={{ color: c.textMuted }}>
-          Default
-        </Text>
-        <Text className="text-sm" style={{ color: c.textMuted }}>
-          {config.rightLabel}
-        </Text>
-      </View>
-    </View>
+    <Modal visible={trait !== null} transparent animationType="fade" onRequestClose={onClose}>
+      <Pressable
+        accessible={false}
+        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: c.scrim }}
+        onPress={onClose}
+      >
+        <Pressable accessible={false} onPress={(event) => event.stopPropagation()}>
+          <View
+            accessibilityViewIsModal
+            style={{
+              backgroundColor: c.surfaceOverlay,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              paddingTop: 16,
+              paddingBottom: 24,
+            }}
+          >
+            <Text
+              accessibilityRole="header"
+              style={{
+                color: c.textPrimary,
+                fontSize: typeScale.callout,
+                fontWeight: '700',
+                paddingHorizontal: 18,
+                paddingBottom: 12,
+              }}
+            >
+              {trait?.label ?? ''}
+            </Text>
+            {RESPONSE_STYLE_TRAIT_LEVELS.map((option, index) => {
+              const selected = option.value === level;
+              return (
+                <Pressable
+                  key={option.value}
+                  onPress={() => onSelect(option.value)}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  accessibilityLabel={`${trait?.label ?? ''} ${option.label}`}
+                  style={({ pressed }) => ({
+                    minHeight: 52,
+                    paddingHorizontal: 18,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 12,
+                    borderTopWidth: index === 0 ? 0 : 1,
+                    borderTopColor: c.border,
+                    backgroundColor: pressed ? c.surfaceHover : c.transparent,
+                  })}
+                >
+                  <Text style={{ flex: 1, color: c.textPrimary, fontSize: typeScale.body }}>
+                    {option.label}
+                  </Text>
+                  {selected ? <Check size={17} color={c.teal} /> : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        </Pressable>
+      </Pressable>
+    </Modal>
   );
 }
 
@@ -257,14 +343,16 @@ export default function PersonalizationScreen() {
     setEmoji(personalization.emoji);
   }, [clerkUserId, isCloud, personalization]);
 
-  const sliderValues: Record<SliderConfig['key'], number> = {
+  const [openTrait, setOpenTrait] = useState<ResponseStyleTraitKey | null>(null);
+
+  const traitScores: Record<ResponseStyleTraitKey, number> = {
     warmth,
     enthusiasm,
     headersLists,
     emoji,
   };
 
-  const sliderSetters: Record<SliderConfig['key'], (v: number) => void> = {
+  const traitSetters: Record<ResponseStyleTraitKey, (v: number) => void> = {
     warmth: (value) => {
       draftDirtyRef.current = true;
       setWarmth(value);
@@ -333,10 +421,10 @@ export default function PersonalizationScreen() {
     setPreferredLength('default');
     setTechnicalLevel('unspecified');
     setResponseLanguage(RESPONSE_LANGUAGE_AUTO);
-    setWarmth(50);
-    setEnthusiasm(50);
-    setHeadersLists(50);
-    setEmoji(50);
+    setWarmth(RESPONSE_STYLE_TRAIT_NEUTRAL);
+    setEnthusiasm(RESPONSE_STYLE_TRAIT_NEUTRAL);
+    setHeadersLists(RESPONSE_STYLE_TRAIT_NEUTRAL);
+    setEmoji(RESPONSE_STYLE_TRAIT_NEUTRAL);
   }, []);
 
   const handleBack = useCallback(() => {
@@ -552,13 +640,14 @@ export default function PersonalizationScreen() {
           >
             Response Style
           </Text>
-          <Card className="gap-5">
-            {SLIDERS.map((slider) => (
-              <StyleSlider
-                key={slider.key}
-                config={slider}
-                value={sliderValues[slider.key]}
-                onValueChange={sliderSetters[slider.key]}
+          <Card style={{ paddingVertical: 0 }}>
+            {RESPONSE_STYLE_TRAITS.map((trait, index) => (
+              <TraitRow
+                key={trait.key}
+                label={trait.label}
+                level={responseStyleTraitLevel(traitScores[trait.key])}
+                onPress={() => setOpenTrait(trait.key)}
+                isFirst={index === 0}
               />
             ))}
           </Card>
@@ -570,7 +659,7 @@ export default function PersonalizationScreen() {
           style={{ borderWidth: 1, borderColor: c.border }}
           accessibilityRole="button"
           accessibilityLabel="Reset response style"
-          accessibilityHint="Puts style, length, level, language and the style dials back to their defaults. Save to keep it."
+          accessibilityHint="Puts style, length, level, language and the Less, Default or More levels back to their defaults. Save to keep it."
         >
           <Text className="text-sm font-medium" style={{ color: c.textPrimary }}>
             Reset response style
@@ -590,6 +679,15 @@ export default function PersonalizationScreen() {
           </Text>
         </View>
       </ScrollView>
+      <TraitLevelSheet
+        trait={RESPONSE_STYLE_TRAITS.find((trait) => trait.key === openTrait) ?? null}
+        level={openTrait ? responseStyleTraitLevel(traitScores[openTrait]) : 'default'}
+        onSelect={(level) => {
+          if (openTrait) traitSetters[openTrait](responseStyleTraitScore(level));
+          setOpenTrait(null);
+        }}
+        onClose={() => setOpenTrait(null)}
+      />
     </SafeAreaView>
   );
 }
