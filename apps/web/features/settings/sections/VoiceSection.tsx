@@ -1,19 +1,16 @@
 'use client';
 
-/**
- * Voice settings section.
- *
- * Web has exactly one working voice surface: composer dictation
- * (push-to-talk speech-to-text, not a live voice conversation). Managed
- * voice personas, live-call models and BYOK do not run here, so this page
- * shows only the two controls that do something: a Dictation toggle and
- * the language dictation transcribes into.
- */
-
+import { useState } from 'react';
 import { Switch } from '@agiworkforce/ui';
 import { defaultLanguage as DEFAULT_LANGUAGE_CODE, SUPPORTED_LANGUAGES } from '@/app/i18n/index';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { useVoiceInputStore } from '@features/chat/stores/voice-input-store';
+import { useVoiceSessionStore } from '@features/chat/stores/voice-session-store';
+import { LIVE_VOICES } from '@features/chat/lib/live-voices';
+import {
+  VoiceCarousel,
+  VoiceLanguagePicker,
+} from '@features/chat/components/Voice/VoiceSettingsModal';
 import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 
 export function VoiceSection() {
@@ -21,6 +18,11 @@ export function VoiceSection() {
   const setDictationEnabled = useSettingsStore((state) => state.setDictationEnabled);
   const dictationLanguage = useVoiceInputStore((state) => state.language);
   const setDictationLanguage = useVoiceInputStore((state) => state.setLanguage);
+  const voice = useVoiceSessionStore((state) => state.voice);
+  const setVoice = useVoiceSessionStore((state) => state.setVoice);
+  const voiceLanguage = useVoiceSessionStore((state) => state.language);
+  const setVoiceLanguage = useVoiceSessionStore((state) => state.setLanguage);
+  const [languageOpen, setLanguageOpen] = useState(false);
   const dictationLanguageCode = dictationLanguage.split('-')[0]?.toLowerCase() ?? '';
   const selectedLanguageCode = SUPPORTED_LANGUAGES.some(
     (lang) => lang.code === dictationLanguageCode,
@@ -43,11 +45,30 @@ export function VoiceSection() {
           Voice
         </h1>
         <p style={{ fontSize: 14, color: 'var(--text-3)', margin: 0 }}>
-          Dictate into the composer with the microphone button.
+          Choose your voice and dictate with the microphone button.
         </p>
         <div style={{ marginTop: 'var(--space-2)' }}>
           <HelpArticleLink docId="voice" label="How voice works" />
         </div>
+      </div>
+
+      <div
+        data-testid="voice-picker"
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 'var(--space-3)',
+          padding: 'var(--space-4) 0',
+          borderBottom: '1px solid var(--settings-border)',
+        }}
+      >
+        <VoiceCarousel voices={LIVE_VOICES} voiceUri={voice} onVoiceChange={setVoice} />
+        <VoiceLanguagePicker
+          language={voiceLanguage}
+          open={languageOpen}
+          onOpenChange={setLanguageOpen}
+          onLanguageChange={setVoiceLanguage}
+        />
       </div>
 
       <div>
@@ -84,7 +105,7 @@ export function VoiceSection() {
             padding: 'var(--space-4) 0',
           }}
         >
-          <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Language</div>
+          <div style={{ fontSize: 14, color: 'var(--text-1)' }}>Dictation language</div>
           <select
             value={selectedLanguageCode}
             disabled={!dictationEnabled}

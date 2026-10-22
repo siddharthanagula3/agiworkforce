@@ -49,7 +49,7 @@ const LABEL = {
   noVoices: 'This browser offers no speech voices.',
 } as const;
 
-const VOICE_CAROUSEL_DOTS_MAX = 12;
+const VOICE_CAROUSEL_DOTS_MAX = 16;
 
 const REASONING_OPTIONS: readonly PickerOption[] = [
   { id: LIVE_VOICE_REASONING.instant, label: 'Instant', hint: 'Answers right away' },
@@ -77,7 +77,7 @@ const ITEM_CLASS =
   'flex w-full items-center gap-2 rounded-lg px-3 py-2 text-start text-sm text-[var(--chat-text-primary)] transition-colors hover:bg-[var(--chat-surface-hover)] focus:bg-[var(--chat-surface-hover)] focus:outline-none';
 
 const ROUND_CONTROL_CLASS =
-  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] disabled:cursor-not-allowed disabled:opacity-40';
+  'flex h-9 w-9 shrink-0 items-center justify-center rounded-full text-[var(--chat-text-secondary)] transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-40';
 
 interface PickerOption {
   id: string;
@@ -172,6 +172,125 @@ export interface VoicePickerOption {
   lang: string;
 }
 
+const DOT_CLASS =
+  'h-3 w-3 rounded-full p-0 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--chat-surface-elevated)]';
+
+export interface VoiceCarouselProps {
+  voices: readonly VoicePickerOption[];
+  voiceUri: string | null;
+  onVoiceChange: (uri: string) => void;
+}
+
+export function VoiceCarousel({ voices, voiceUri, onVoiceChange }: VoiceCarouselProps) {
+  const voiceIndex = Math.max(
+    voices.findIndex((voice) => voice.voiceURI === voiceUri),
+    0,
+  );
+  const activeVoice = voices[voiceIndex];
+
+  const stepVoice = useCallback(
+    (delta: number) => {
+      if (voices.length === 0) return;
+      const next = (voiceIndex + delta + voices.length) % voices.length;
+      const target = voices[next];
+      if (target) onVoiceChange(target.voiceURI);
+    },
+    [voiceIndex, voices, onVoiceChange],
+  );
+
+  return (
+    <>
+      <div className="flex items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => stepVoice(-1)}
+          disabled={voices.length === 0}
+          aria-label={LABEL.previous}
+          className={ROUND_CONTROL_CLASS}
+        >
+          <ChevronLeft className="h-4 w-4" aria-hidden="true" />
+        </button>
+        <div className="min-w-0 flex-1 text-center" data-testid="voice-carousel">
+          <p className="truncate text-sm font-semibold text-[var(--chat-text-primary)]">
+            {activeVoice?.name ?? LABEL.noVoices}
+          </p>
+          {activeVoice && (
+            <p className="truncate text-xs text-[var(--chat-text-muted)]">{activeVoice.lang}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => stepVoice(1)}
+          disabled={voices.length === 0}
+          aria-label={LABEL.next}
+          className={ROUND_CONTROL_CLASS}
+        >
+          <ChevronRight className="h-4 w-4" aria-hidden="true" />
+        </button>
+      </div>
+
+      {activeVoice ? (
+        <VoiceSampleButton voiceUri={activeVoice.voiceURI} voiceName={activeVoice.name} />
+      ) : null}
+
+      {voices.length > 1 && voices.length <= VOICE_CAROUSEL_DOTS_MAX && (
+        <div className="flex justify-center gap-1.5" data-testid="voice-carousel-dots">
+          {voices.map((voice, index) => (
+            <button
+              key={voice.voiceURI}
+              type="button"
+              onClick={() => onVoiceChange(voice.voiceURI)}
+              aria-label={voice.name}
+              aria-current={index === voiceIndex ? 'true' : undefined}
+              className={cn(
+                DOT_CLASS,
+                index === voiceIndex
+                  ? 'bg-[var(--chat-text-primary)]'
+                  : 'bg-[var(--chat-border-strong)]',
+              )}
+            />
+          ))}
+        </div>
+      )}
+    </>
+  );
+}
+
+export interface VoiceLanguagePickerProps {
+  language: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onLanguageChange: (language: string) => void;
+}
+
+export function VoiceLanguagePicker({
+  language,
+  open,
+  onOpenChange,
+  onLanguageChange,
+}: VoiceLanguagePickerProps) {
+  const options = useMemo<PickerOption[]>(
+    () => [
+      { id: VOICE_LANGUAGE_AUTO, label: LABEL.autoDetect },
+      ...SUPPORTED_LANGUAGES.map((entry) => ({ id: entry.code, label: entry.name })),
+    ],
+    [],
+  );
+
+  return (
+    <Picker
+      id="language"
+      label={LABEL.language}
+      icon={Globe}
+      options={options}
+      selectedId={language}
+      open={open}
+      onOpenChange={onOpenChange}
+      onSelect={onLanguageChange}
+    />
+  );
+}
+
 export interface VoiceSettingsModalProps {
   open: boolean;
   reducedMotion: boolean;
@@ -216,30 +335,6 @@ export function VoiceSettingsModal({
     [],
   );
 
-  const languageOptions = useMemo<PickerOption[]>(
-    () => [
-      { id: VOICE_LANGUAGE_AUTO, label: LABEL.autoDetect },
-      ...SUPPORTED_LANGUAGES.map((entry) => ({ id: entry.code, label: entry.name })),
-    ],
-    [],
-  );
-
-  const voiceIndex = Math.max(
-    voices.findIndex((voice) => voice.voiceURI === voiceUri),
-    0,
-  );
-  const activeVoice = voices[voiceIndex];
-
-  const stepVoice = useCallback(
-    (delta: number) => {
-      if (voices.length === 0) return;
-      const next = (voiceIndex + delta + voices.length) % voices.length;
-      const target = voices[next];
-      if (target) onVoiceChange(target.voiceURI);
-    },
-    [voiceIndex, voices, onVoiceChange],
-  );
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -262,54 +357,7 @@ export function VoiceSettingsModal({
           />
         </div>
 
-        <div className="flex items-center justify-between gap-2">
-          <button
-            type="button"
-            onClick={() => stepVoice(-1)}
-            disabled={voices.length === 0}
-            aria-label={LABEL.previous}
-            className={ROUND_CONTROL_CLASS}
-          >
-            <ChevronLeft className="h-4 w-4" aria-hidden="true" />
-          </button>
-          <div className="min-w-0 flex-1 text-center" data-testid="voice-carousel">
-            <p className="truncate text-sm font-semibold text-[var(--chat-text-primary)]">
-              {activeVoice?.name ?? LABEL.noVoices}
-            </p>
-            {activeVoice && (
-              <p className="truncate text-xs text-[var(--chat-text-muted)]">{activeVoice.lang}</p>
-            )}
-          </div>
-          <button
-            type="button"
-            onClick={() => stepVoice(1)}
-            disabled={voices.length === 0}
-            aria-label={LABEL.next}
-            className={ROUND_CONTROL_CLASS}
-          >
-            <ChevronRight className="h-4 w-4" aria-hidden="true" />
-          </button>
-        </div>
-
-        {activeVoice ? (
-          <VoiceSampleButton voiceUri={activeVoice.voiceURI} voiceName={activeVoice.name} />
-        ) : null}
-
-        {voices.length > 1 && voices.length <= VOICE_CAROUSEL_DOTS_MAX && (
-          <div className="flex justify-center gap-1.5" aria-hidden="true">
-            {voices.map((voice, index) => (
-              <span
-                key={voice.voiceURI}
-                className={cn(
-                  'h-1.5 w-1.5 rounded-full',
-                  index === voiceIndex
-                    ? 'bg-[var(--chat-text-primary)]'
-                    : 'bg-[var(--chat-border-strong)]',
-                )}
-              />
-            ))}
-          </div>
-        )}
+        <VoiceCarousel voices={voices} voiceUri={voiceUri} onVoiceChange={onVoiceChange} />
 
         <div className="flex flex-col gap-3">
           <Picker
@@ -332,15 +380,11 @@ export function VoiceSettingsModal({
             onOpenChange={(next) => setOpenPicker(next ? LABEL.reasoning : null)}
             onSelect={(id) => setReasoning(id as LiveVoiceReasoning)}
           />
-          <Picker
-            id="language"
-            label={LABEL.language}
-            icon={Globe}
-            options={languageOptions}
-            selectedId={language}
+          <VoiceLanguagePicker
+            language={language}
             open={openPicker === LABEL.language}
             onOpenChange={(next) => setOpenPicker(next ? LABEL.language : null)}
-            onSelect={onLanguageChange}
+            onLanguageChange={onLanguageChange}
           />
           <Picker
             id="pace"
