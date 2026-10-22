@@ -3,6 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { HostBridge, HostNavigationState } from '@agiworkforce/local-runtime-contract';
 import { DesktopTitleStrip } from '../components/DesktopTitleStrip';
 
+type UiModule = typeof import('@agiworkforce/ui');
+
 const push = vi.fn();
 
 vi.mock('next/navigation', () => ({
@@ -10,7 +12,7 @@ vi.mock('next/navigation', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<UiModule>()),
   confirmNavigation: (proceed: () => void) => proceed(),
 }));
 

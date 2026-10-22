@@ -8,27 +8,29 @@ import { getHelpArticle } from '@/lib/support/help-articles';
 const DELIMITER_ROW = /^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)+\|?\s*$/m;
 
 describe('help article body', () => {
-  it('renders the keyboard shortcuts list as one accessible table', () => {
+  it('renders each keyboard shortcuts table with accessible headers', () => {
     const article = getHelpArticle('keyboard-shortcuts');
     expect(article).not.toBeNull();
     const { container } = render(<DocsArticleBody sections={article?.sections ?? []} />);
 
-    expect(container.querySelectorAll('table')).toHaveLength(1);
-    const headers = Array.from(container.querySelectorAll('th')).map((th) => ({
-      text: th.textContent,
-      scope: th.getAttribute('scope'),
-    }));
-    expect(headers).toEqual([
-      { text: 'Shortcut', scope: 'col' },
-      { text: 'What it does', scope: 'col' },
-    ]);
-    expect(container.querySelectorAll('tbody tr')).toHaveLength(13);
+    const tables = Array.from(container.querySelectorAll('table'));
+    expect(tables).toHaveLength(3);
+    expect(tables.map((table) => table.querySelectorAll('tbody tr').length)).toEqual([13, 7, 1]);
+    for (const table of tables) {
+      const headers = Array.from(table.querySelectorAll('th')).map((th) => ({
+        text: th.textContent,
+        scope: th.getAttribute('scope'),
+      }));
+      expect(headers).toEqual([
+        { text: 'Shortcut', scope: 'col' },
+        { text: 'What it does', scope: 'col' },
+      ]);
+      const region = table.parentElement;
+      expect(region?.getAttribute('role')).toBe('region');
+      expect(region?.getAttribute('tabindex')).toBe('0');
+      expect(region?.className).toContain('dx-table');
+    }
     expect(container.textContent).not.toContain('| --');
-
-    const region = container.querySelector('table')?.parentElement;
-    expect(region?.getAttribute('role')).toBe('region');
-    expect(region?.getAttribute('tabindex')).toBe('0');
-    expect(region?.className).toContain('dx-table');
   });
 
   it('keeps lists inside the article text column', () => {
