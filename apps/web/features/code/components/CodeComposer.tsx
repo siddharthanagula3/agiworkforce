@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import {
   ArrowUp,
@@ -9,6 +9,7 @@ import {
   CircleDot,
   Cloud,
   Code2,
+  Folder,
   GitBranch,
   Lightbulb,
   Lock,
@@ -45,6 +46,8 @@ import {
   CLOUD_CODE_TURN_STEP_BOUNDS,
   cloudCodeRepositoryLabel,
   isCloudCodeTurnStepBound,
+  isFreeBillingPlanTier,
+  selectUsageWarning,
   type CloudCodeNetworkAccess,
   type CloudCodeRepositoryReference,
   type CloudCodeRuntime,
@@ -56,12 +59,21 @@ import {
   type DeveloperAgentMode,
 } from '@agiworkforce/local-runtime-contract';
 import Link from 'next/link';
-import { SlashCommandMenu, type CommandSuggestion } from '@agiworkforce/unified-chat';
+import {
+  SlashCommandMenu,
+  UsageWarningBanner,
+  type CommandSuggestion,
+} from '@agiworkforce/unified-chat';
 import { isImeComposingKey } from '@agiworkforce/unified-chat/ime-composition';
 import { ComposerFooter } from '@features/chat/components/Composer/ComposerFooter';
 import { DictationStrip } from '@features/chat/components/Composer/DictationStrip';
 import { useDictation } from '@features/chat/hooks/use-dictation';
-import { useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
+import {
+  readManagedUsageBuckets,
+  useManagedUsageSummary,
+} from '@/lib/hooks/useManagedUsageSummary';
+import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
+import { openUpgrade } from '@shared/lib/app-commands';
 import { listLocalBranches, switchLocalBranch } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import {
@@ -127,6 +139,7 @@ const USAGE_RING_STROKE = 3;
 const RING_RADIUS = 6;
 const RING_CIRCUMFERENCE = 2 * Math.PI * RING_RADIUS;
 const PERCENT_MAX = 100;
+const CHIP_TEXT_TRUNCATE = 'min-w-0 max-w-[12rem] truncate';
 
 export interface CodeDraft {
   environment: CodeEnvironment;
@@ -321,11 +334,94 @@ function EnvironmentSettings({
   );
 }
 
+function LocalFolderItems({
+  local,
+  selectedRootId,
+  onDraftChange,
+  onCloseMenu,
+}: {
+  local: CodeLocalState;
+  selectedRootId: string | null;
+  onDraftChange: (patch: Partial<CodeDraft>) => void;
+  onCloseMenu: () => void;
+}) {
+  return (
+    <>
+      <DropdownMenuRadioGroup
+        value={selectedRootId ?? ''}
+        onValueChange={(value) => onDraftChange({ environment: 'local', localRootId: value })}
+      >
+        {local.folders.map((choice) => {
+          const secondary =
+            choice.unavailable === null ? choice.branch : CODE_COPY.environmentFolderUnavailable;
+          return (
+            <DropdownMenuRadioItem key={choice.rootId} value={choice.rootId}>
+              <span className={styles['menuRowLabel']}>
+                <span className={styles['optionLabel']}>{choice.name}</span>
+                {secondary && <span className={styles['optionCopy']}>{secondary}</span>}
+              </span>
+            </DropdownMenuRadioItem>
+          );
+        })}
+      </DropdownMenuRadioGroup>
+      <DropdownMenuItem
+        disabled={local.adding}
+        onSelect={(event) => {
+          event.preventDefault();
+          onCloseMenu();
+          local.onAddFolder();
+        }}
+      >
+        <Plus size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+        <span className={styles['menuRowLabel']}>
+          {local.adding ? LOCAL_CODE_COPY.addingFolder : LOCAL_CODE_COPY.addFolder}
+        </span>
+      </DropdownMenuItem>
+    </>
+  );
+}
+
+function LocalFolderChip({
+  folder,
+  local,
+  onDraftChange,
+}: {
+  folder: LocalFolderChoice;
+  local: CodeLocalState;
+  onDraftChange: (patch: Partial<CodeDraft>) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+
+  return (
+    <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={styles['chip']}
+          aria-label={`${CODE_COPY.folderMenu}: ${folder.name}`}
+          title={folder.name}
+        >
+          <Folder size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+          <span className={CHIP_TEXT_TRUNCATE}>{folder.name}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="w-72">
+        <DropdownMenuLabel>{CODE_COPY.environmentLocal}</DropdownMenuLabel>
+        <LocalFolderItems
+          local={local}
+          selectedRootId={folder.rootId}
+          onDraftChange={onDraftChange}
+          onCloseMenu={() => setMenuOpen(false)}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function EnvironmentChip({
   draft,
   runtimes,
   local,
-  folder,
   disabled,
   onDraftChange,
   onOpenEmpty,
@@ -333,7 +429,6 @@ function EnvironmentChip({
   draft: CodeDraft;
   runtimes: CloudCodeRuntime[];
   local: CodeLocalState;
-  folder: LocalFolderChoice | null;
   disabled: boolean;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
   onOpenEmpty: () => void;
@@ -352,49 +447,19 @@ function EnvironmentChip({
             ) : (
               <Cloud size={CHIP_GLYPH_SIZE} aria-hidden="true" />
             )}
-            <span>
-              {environmentChipLabel(draft.environment, draft.networkAccess, folder?.name ?? null)}
-            </span>
+            <span>{environmentChipLabel(draft.environment, draft.networkAccess)}</span>
           </button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" side="top" className="w-72">
           {local.supported && (
             <>
               <DropdownMenuLabel>{CODE_COPY.environmentLocal}</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={isLocal ? (draft.localRootId ?? '') : ''}
-                onValueChange={(value) =>
-                  onDraftChange({ environment: 'local', localRootId: value })
-                }
-              >
-                {local.folders.map((choice) => {
-                  const secondary =
-                    choice.unavailable === null
-                      ? choice.branch
-                      : CODE_COPY.environmentFolderUnavailable;
-                  return (
-                    <DropdownMenuRadioItem key={choice.rootId} value={choice.rootId}>
-                      <span className={styles['menuRowLabel']}>
-                        <span className={styles['optionLabel']}>{choice.name}</span>
-                        {secondary && <span className={styles['optionCopy']}>{secondary}</span>}
-                      </span>
-                    </DropdownMenuRadioItem>
-                  );
-                })}
-              </DropdownMenuRadioGroup>
-              <DropdownMenuItem
-                disabled={local.adding}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  setMenuOpen(false);
-                  local.onAddFolder();
-                }}
-              >
-                <Plus size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-                <span className={styles['menuRowLabel']}>
-                  {local.adding ? LOCAL_CODE_COPY.addingFolder : LOCAL_CODE_COPY.addFolder}
-                </span>
-              </DropdownMenuItem>
+              <LocalFolderItems
+                local={local}
+                selectedRootId={isLocal ? draft.localRootId : null}
+                onDraftChange={onDraftChange}
+                onCloseMenu={() => setMenuOpen(false)}
+              />
               <DropdownMenuSeparator />
               {local.worktrees && (
                 <>
@@ -789,7 +854,9 @@ function BranchChip({
       <PopoverTrigger asChild>
         <button type="button" className={styles['chip']} aria-label={CODE_COPY.branchEdit}>
           <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-          <span>{draft.repositoryBranch}</span>
+          <span className={CHIP_TEXT_TRUNCATE} title={draft.repositoryBranch}>
+            {draft.repositoryBranch}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -986,7 +1053,9 @@ function LocalBranchChip({
           disabled={disabled}
         >
           <GitBranch size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-          <span>{branch}</span>
+          <span className={CHIP_TEXT_TRUNCATE} title={branch}>
+            {branch}
+          </span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -1378,6 +1447,30 @@ export function UsageRing({
   );
 }
 
+export function CodeUsageWarning() {
+  const router = useGuardedRouter();
+  const { usage } = useManagedUsageSummary();
+  const [dismissed, setDismissed] = useState(false);
+  const warning = useMemo(
+    () =>
+      selectUsageWarning(readManagedUsageBuckets(usage), Date.now(), {
+        planTier: usage?.plan_tier ?? null,
+      }),
+    [usage],
+  );
+
+  return (
+    <UsageWarningBanner
+      warning={dismissed ? null : warning}
+      {...(isFreeBillingPlanTier(usage?.plan_tier)
+        ? { upgradeLabel: CODE_COPY.upgradeAction }
+        : {})}
+      onUpgrade={() => openUpgrade((href) => router.push(href))}
+      onDismiss={() => setDismissed(true)}
+    />
+  );
+}
+
 export interface CodeComposerProps {
   value: string;
   onChange: (value: string) => void;
@@ -1495,11 +1588,13 @@ export function CodeComposer({
       <div className={styles['center']}>
         {showChips && (
           <div className={styles['chipRow']}>
+            {draft.environment === 'local' && folder && (
+              <LocalFolderChip folder={folder} local={local} onDraftChange={onDraftChange} />
+            )}
             <EnvironmentChip
               draft={draft}
               runtimes={runtimes}
               local={local}
-              folder={folder}
               disabled={disabled || busy}
               onDraftChange={onDraftChange}
               onOpenEmpty={onOpenEmptyEnvironment}
@@ -1533,6 +1628,8 @@ export function CodeComposer({
             </button>
           </div>
         )}
+
+        <CodeUsageWarning />
 
         <div className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}>
           <SlashCommandMenu

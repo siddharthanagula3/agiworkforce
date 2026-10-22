@@ -4,9 +4,14 @@ import {
   CODE_COPY,
   DEFAULT_CODE_ENVIRONMENT,
   contextWindowLabel,
+  DEFAULT_CODE_FILTERS,
   environmentChipLabel,
+  filterAndSortSessions,
+  filtersAreDefault,
   formatTokenCount,
+  sessionTitleMatches,
 } from './code-surface';
+import type { CloudCodeSession } from '@agiworkforce/types';
 
 describe('formatTokenCount', () => {
   it('reads a small count exactly and a large one in place value', () => {
@@ -44,17 +49,44 @@ describe('code surface approval copy', () => {
 
 describe('environmentChipLabel', () => {
   it('names the environment, and the network level only under Cloud', () => {
-    expect(environmentChipLabel('cloud', 'none', null)).toBe('Cloud · Isolated');
-    expect(environmentChipLabel('cloud', 'trusted', 'qa-project')).toBe('Cloud · Trusted hosts');
-    expect(environmentChipLabel('cloud', 'full', null)).toBe('Cloud · Full internet');
+    expect(environmentChipLabel('cloud', 'none')).toBe('Cloud · Isolated');
+    expect(environmentChipLabel('cloud', 'trusted')).toBe('Cloud · Trusted hosts');
+    expect(environmentChipLabel('cloud', 'full')).toBe('Cloud · Full internet');
   });
 
-  it('names the folder under Local, and stands alone before one is chosen', () => {
-    expect(environmentChipLabel('local', 'none', 'qa-project')).toBe('Local · qa-project');
-    expect(environmentChipLabel('local', 'full', null)).toBe('Local');
+  it('reads Local alone, since the folder has its own chip', () => {
+    expect(environmentChipLabel('local', 'none')).toBe('Local');
+    expect(environmentChipLabel('local', 'full')).toBe('Local');
   });
 
   it('starts on Cloud, so a browser never claims a local environment', () => {
     expect(DEFAULT_CODE_ENVIRONMENT).toBe('cloud');
+  });
+});
+
+describe('session search', () => {
+  const session = (id: string, title: string): CloudCodeSession =>
+    ({
+      id,
+      title,
+      networkAccess: 'none',
+      createdAt: '2026-10-01T00:00:00Z',
+      updatedAt: '2026-10-01T00:00:00Z',
+    }) as CloudCodeSession;
+
+  it('matches a title case-insensitively and treats a blank query as no filter', () => {
+    expect(sessionTitleMatches('Fix the Login flow', 'login')).toBe(true);
+    expect(sessionTitleMatches('Fix the Login flow', '  ')).toBe(true);
+    expect(sessionTitleMatches('Fix the Login flow', 'billing')).toBe(false);
+  });
+
+  it('keeps only the sessions whose title holds the query', () => {
+    const sessions = [session('a', 'Refactor billing'), session('b', 'Fix login')];
+    const matched = filterAndSortSessions(sessions, { ...DEFAULT_CODE_FILTERS, query: 'LOGIN' });
+    expect(matched.map((item) => item.id)).toEqual(['b']);
+  });
+
+  it('leaves the filter menu at its default while only a search is typed', () => {
+    expect(filtersAreDefault({ ...DEFAULT_CODE_FILTERS, query: 'login' })).toBe(true);
   });
 });

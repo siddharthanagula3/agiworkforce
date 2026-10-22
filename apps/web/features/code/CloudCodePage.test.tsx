@@ -382,7 +382,7 @@ async function openSession(user: ReturnType<typeof userEvent.setup>, title: stri
 }
 
 async function openEnvironment(user: ReturnType<typeof userEvent.setup>) {
-  await user.click(await screen.findByRole('button', { name: /^(Cloud|Local) ·/ }));
+  await user.click(await screen.findByRole('button', { name: /^(Cloud · .+|Local)$/ }));
   return screen.findByRole('menu');
 }
 
@@ -2633,8 +2633,35 @@ describe('the environment the composer starts a session in', () => {
     ];
     render(<CloudCodePage api={createApi()} />);
 
-    expect(await screen.findByRole('button', { name: 'Local · qa-project' })).toBeInTheDocument();
+    expect(
+      await screen.findByRole('button', { name: 'Change the folder: qa-project' }),
+    ).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Select repository' })).not.toBeInTheDocument();
+  });
+
+  it('shows the folder, Local and the branch as three chips above the composer', async () => {
+    const user = userEvent.setup();
+    host = {};
+    localGroups = [folder({ branch: 'feature/a-very-long-branch-name-that-needs-clipping' })];
+    render(<CloudCodePage api={createApi()} />);
+
+    const folderChip = await screen.findByRole('button', {
+      name: 'Change the folder: qa-project',
+    });
+    expect(folderChip).toHaveTextContent('qa-project');
+    expect(screen.getByRole('button', { name: 'Local' })).toBeInTheDocument();
+    const branchText = within(screen.getByRole('button', { name: 'Change the branch' })).getByText(
+      'feature/a-very-long-branch-name-that-needs-clipping',
+    );
+    expect(branchText).toHaveClass('truncate');
+    expect(branchText).toHaveAttribute(
+      'title',
+      'feature/a-very-long-branch-name-that-needs-clipping',
+    );
+
+    await user.click(folderChip);
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitemradio', { name: /qa-project/ })).toBeChecked();
   });
 
   it('opens the local session a link names, on a cold load', async () => {
@@ -3047,7 +3074,7 @@ describe('the environment the composer starts a session in', () => {
     const api = createApi();
     render(<CloudCodePage api={api} />);
 
-    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
     await user.type(
       screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
       'quote the readme',
@@ -3074,7 +3101,7 @@ describe('the environment the composer starts a session in', () => {
     localGroups = [folder()];
     render(<CloudCodePage api={createApi()} />);
 
-    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
 
     expect(screen.queryByText(CODE_COPY.firstRunHint)).not.toBeInTheDocument();
   });
@@ -3094,7 +3121,7 @@ describe('the model a local session starts on', () => {
     localHostModels = [reachable('qa-provider/first'), reachable('qa-provider/second')];
     render(<CloudCodePage api={createApi()} />);
 
-    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
 
     expect(await screen.findByRole('button', { name: /qa-provider\/first/ })).toBeInTheDocument();
     expect(screen.queryByTestId('model-trigger')).not.toBeInTheDocument();
@@ -3107,7 +3134,7 @@ describe('the model a local session starts on', () => {
     localHostModels = [reachable('qa-provider/first'), reachable('qa-provider/second')];
     render(<CloudCodePage api={createApi()} />);
 
-    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
     await user.click(await screen.findByRole('button', { name: /qa-provider\/first/ }));
     await user.click(await screen.findByRole('menuitemradio', { name: 'qa-provider/second' }));
 
@@ -3140,7 +3167,7 @@ describe('a cloud session open while the draft is local', () => {
     });
     render(<CloudCodePage api={api} />);
 
-    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
     await openSession(user, session.title);
     await screen.findByRole('button', { name: 'Changes' });
 
@@ -3161,7 +3188,7 @@ describe('a cloud session open while the draft is local', () => {
     startDeveloperSession.mockRejectedValueOnce(new Error('the runtime refused'));
     render(<CloudCodePage api={createApi()} />);
 
-    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
     await user.type(
       screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
       'quote the readme',
@@ -3179,7 +3206,7 @@ describe('what the local chip row and menu say about a folder', () => {
     localGroups = [folder({ branch: 'release-1' })];
     const { unmount } = render(<CloudCodePage api={createApi()} />);
 
-    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
     expect(
       within(screen.getByTestId('code-composer-area')).getByText('release-1'),
     ).toBeInTheDocument();
@@ -3188,7 +3215,7 @@ describe('what the local chip row and menu say about a folder', () => {
     localGroups = [folder({ branch: null })];
     render(<CloudCodePage api={createApi()} />);
 
-    await screen.findByRole('button', { name: 'Local · qa-project' });
+    await screen.findByRole('button', { name: 'Change the folder: qa-project' });
     expect(
       within(screen.getByTestId('code-composer-area')).queryByText('release-1'),
     ).not.toBeInTheDocument();
@@ -3215,7 +3242,7 @@ describe('what the local chip row and menu say about a folder', () => {
     await user.click(row);
 
     expect(
-      await screen.findByRole('button', { name: 'Local · moved-project' }),
+      await screen.findByRole('button', { name: 'Change the folder: moved-project' }),
     ).toBeInTheDocument();
     const notices = await screen.findByTestId('code-notices');
     expect(within(notices).getByText(/no longer on this Mac\. Add it again\./)).toBeInTheDocument();

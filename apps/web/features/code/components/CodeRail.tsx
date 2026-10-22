@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   Archive,
   CalendarClock,
@@ -14,8 +14,10 @@ import {
   MonitorPlay,
   PanelLeft,
   Plus,
+  Search,
   Settings,
   SlidersHorizontal,
+  X,
 } from '@agiworkforce/icons';
 import {
   DropdownMenu,
@@ -54,6 +56,7 @@ import {
 import { ContinueOnDesktop, useDesktopHost } from '@/features/desktop-host';
 import { REMOTE_COMPUTER_PATH } from '@/features/remote-dispatch/lib/browser-pairing';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { useAccountFooter } from '@shared/components/layout/AccountFooter';
 import { CodeCustomizeSidebarModal, type CodeRailItem } from './CodeCustomizeSidebarModal';
 import styles from '../CloudCodePage.module.css';
 
@@ -203,12 +206,63 @@ function FilterMenu({
         <DropdownMenuSeparator />
         <DropdownMenuItem
           disabled={filtersAreDefault(filters)}
-          onSelect={() => onChange(DEFAULT_CODE_FILTERS)}
+          onSelect={() =>
+            onChange({
+              status: DEFAULT_CODE_FILTERS.status,
+              environment: DEFAULT_CODE_FILTERS.environment,
+              sort: DEFAULT_CODE_FILTERS.sort,
+            })
+          }
         >
           {CODE_COPY.filterClear}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  );
+}
+
+function SessionSearchField({
+  query,
+  onQueryChange,
+  onClose,
+}: {
+  query: string;
+  onQueryChange: (query: string) => void;
+  onClose: () => void;
+}) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  useEffect(() => inputRef.current?.focus(), []);
+
+  return (
+    <div className="mx-1 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] pl-2 pr-1 focus-within:ring-2 focus-within:ring-focus-ring">
+      <Search
+        size={SECTION_GLYPH_SIZE}
+        className="shrink-0 text-[var(--chat-text-secondary)]"
+        aria-hidden="true"
+      />
+      <input
+        ref={inputRef}
+        type="search"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key !== 'Escape') return;
+          event.preventDefault();
+          onClose();
+        }}
+        placeholder={CODE_COPY.searchSessionsPlaceholder}
+        aria-label={CODE_COPY.searchSessions}
+        className="min-w-0 flex-1 bg-transparent text-[14px] text-[var(--chat-text-primary)] outline-none placeholder:text-[var(--chat-text-muted)] [&::-webkit-search-cancel-button]:appearance-none"
+      />
+      <button
+        type="button"
+        className={styles['railIconButton']}
+        aria-label={CODE_COPY.closeSearch}
+        onClick={onClose}
+      >
+        <X size={SECTION_GLYPH_SIZE} aria-hidden="true" />
+      </button>
+    </div>
   );
 }
 
@@ -245,6 +299,15 @@ export function CodeRail({
   const pinnedItems = railItems.filter((item) => codeRailItemPinned(item.id, pins));
   const morePinnable = railItems.filter((item) => !codeRailItemPinned(item.id, pins));
   const filterHidesSessions = filters.status === 'open' && hiddenSessionsExist;
+  const accountFooter = useAccountFooter();
+  const [searchOpen, setSearchOpen] = useState(filters.query.length > 0);
+  const searchButtonRef = useRef<HTMLButtonElement>(null);
+  const searching = filters.query.trim().length > 0;
+  const closeSearch = () => {
+    onFiltersChange({ query: '' });
+    setSearchOpen(false);
+    searchButtonRef.current?.focus();
+  };
 
   return (
     <>
@@ -267,6 +330,16 @@ export function CodeRail({
               <Code size={SEGMENT_GLYPH_SIZE} aria-hidden="true" />
             </span>
           </div>
+          <button
+            ref={searchButtonRef}
+            type="button"
+            className={`${styles['railIconButton']} ${searchOpen ? styles['railIconButtonActive'] : ''}`}
+            aria-label={CODE_COPY.searchSessions}
+            aria-expanded={searchOpen}
+            onClick={() => (searchOpen ? closeSearch() : setSearchOpen(true))}
+          >
+            <Search size={SECTION_GLYPH_SIZE} aria-hidden="true" />
+          </button>
           {onCollapse && (
             <button
               type="button"
@@ -279,6 +352,14 @@ export function CodeRail({
           )}
         </div>
       </div>
+
+      {searchOpen && (
+        <SessionSearchField
+          query={filters.query}
+          onQueryChange={(query) => onFiltersChange({ query })}
+          onClose={closeSearch}
+        />
+      )}
 
       <button
         type="button"
@@ -353,7 +434,13 @@ export function CodeRail({
             </button>
           ))}
 
-        {!loading && sessions.length === 0 && (
+        {!loading && sessions.length === 0 && searching && (
+          <div className={styles['railEmpty']}>
+            <span>{CODE_COPY.noSearchMatches}</span>
+          </div>
+        )}
+
+        {!loading && sessions.length === 0 && !searching && (
           <div className={styles['railEmpty']}>
             <span>{filterHidesSessions ? CODE_COPY.noOpenSessions : CODE_COPY.noSessions}</span>
             {filterHidesSessions && (
@@ -368,6 +455,15 @@ export function CodeRail({
           </div>
         )}
       </nav>
+
+      {accountFooter && (
+        <div
+          className="shrink-0 border-t border-[var(--chat-border-subtle)] pt-1"
+          data-testid="code-rail-account-footer"
+        >
+          {accountFooter}
+        </div>
+      )}
     </>
   );
 }

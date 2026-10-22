@@ -20,7 +20,7 @@ import { usePathname } from 'next/navigation';
 import { useGuardedRouter } from '@shared/hooks/use-guarded-router';
 import { useTranslation } from 'react-i18next';
 import { useCurrentUser, useSignOut } from '@/lib/identity/client';
-import { ChevronUp, Download, Menu } from '@agiworkforce/icons';
+import { Menu } from '@agiworkforce/icons';
 import {
   Sheet,
   SheetContent,
@@ -67,7 +67,6 @@ import {
   toggleProjectPin,
 } from '@shared/components/layout/sidebar-project-actions';
 import { toSidebarSessions } from '@shared/components/layout/sidebar-session-rows';
-import { SidebarFreePlanNudge, SidebarPlanBadge } from '@shared/components/layout/SidebarPlanNudge';
 import { isBillingPolicyReady } from '@shared/stores/billing-policy';
 import { useIsWorkspaceAdmin } from '@shared/hooks/use-workspace-admin';
 import { useDisabledWorkspaceFeatures } from '@shared/hooks/use-workspace-policy';
@@ -96,6 +95,7 @@ import {
 } from '@/features/chat/hooks/use-keyboard-shortcuts';
 import { onAppCommand } from '@shared/lib/app-commands';
 import { resolveAccountIdentity, type AccountIdentity } from './account-identity';
+import { AccountFooter, AccountFooterProvider } from './AccountFooter';
 
 // A stable empty list, so the nav memoization below keeps its identity.
 const EMPTY_NAV_IDS: string[] = [];
@@ -497,67 +497,18 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
     />
   );
 
-  const footerSlot = isAccountLoading ? (
-    <div
-      role="status"
-      aria-label="Loading account"
-      className="flex w-full items-center gap-2 px-3 py-3"
-    >
-      <span
-        className="h-7 w-7 shrink-0 motion-safe:animate-pulse rounded-full bg-muted"
-        aria-hidden
-      />
-      <span className="flex min-w-0 flex-1 flex-col gap-1.5" aria-hidden>
-        <span className="h-3 w-24 motion-safe:animate-pulse rounded-compact bg-muted" />
-        <span className="h-2.5 w-32 motion-safe:animate-pulse rounded-compact bg-muted/70" />
-      </span>
-      <span className="sr-only">Loading account…</span>
-    </div>
-  ) : (
-    <div className="w-full">
-      {isFreeTier && <SidebarFreePlanNudge onUpgrade={() => openShellSettings('billing')} />}
-      <div className="flex items-center">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <button
-              type="button"
-              aria-label={`Account menu for ${displayName}`}
-              className="flex min-w-0 flex-1 items-center gap-2 px-3 py-3 text-start transition-colors hover:bg-black/[0.04] dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring"
-            >
-              <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                {userInitial}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <p className="truncate text-[13px] font-medium text-foreground">{displayName}</p>
-                  <SidebarPlanBadge tierLabel={tierLabel} isFreeTier={isFreeTier} />
-                </div>
-                {accountUser?.email && (
-                  <p className="truncate text-caption text-muted-foreground">{accountUser.email}</p>
-                )}
-              </div>
-              <ChevronUp
-                className="h-3.5 w-3.5 shrink-0 text-muted-foreground"
-                aria-hidden="true"
-              />
-            </button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-56 mb-1">
-            {accountMenuItems}
-          </DropdownMenuContent>
-        </DropdownMenu>
-        {desktopDownload && (
-          <a
-            href={desktopDownload.href}
-            aria-label={desktopDownload.label}
-            title={desktopDownload.label}
-            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-black/[0.04] hover:text-foreground dark:hover:bg-white/[0.05] outline-none focus-visible:ring-2 focus-visible:ring-focus-ring pointer-coarse:h-11 pointer-coarse:w-11"
-          >
-            <Download className="h-4 w-4" aria-hidden="true" />
-          </a>
-        )}
-      </div>
-    </div>
+  const footerSlot = (
+    <AccountFooter
+      loading={isAccountLoading}
+      displayName={displayName}
+      initial={userInitial}
+      email={accountUser?.email}
+      tierLabel={tierLabel}
+      isFreeTier={isFreeTier}
+      menuItems={accountMenuItems}
+      onFreePlanUpgrade={() => openShellSettings('billing')}
+      desktopDownload={desktopDownload}
+    />
   );
 
   // The icon rail has no room for the full account row, but still needs a way
@@ -698,7 +649,9 @@ export function WebAppShell({ children, narrowHeaderSlot, rail = true }: WebAppS
           data-shell-orientation={shellLayout.orientation}
           className="min-h-0 min-w-0 flex-1 overflow-auto overscroll-contain [scrollbar-width:thin]"
         >
-          {children}
+          <AccountFooterProvider footer={rail ? null : footerSlot}>
+            {children}
+          </AccountFooterProvider>
         </div>
 
         <div id={CONTENT_OVERLAY_ROOT_ID} className="pointer-events-none absolute inset-0" />

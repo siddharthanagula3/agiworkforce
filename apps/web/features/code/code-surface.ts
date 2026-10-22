@@ -198,6 +198,10 @@ export const CODE_COPY = {
   collapseRail: 'Collapse the session list',
   expandRail: 'Expand the session list',
   filterMenu: 'Filter sessions',
+  searchSessions: 'Search sessions',
+  searchSessionsPlaceholder: 'Search sessions',
+  closeSearch: 'Close search',
+  noSearchMatches: 'No sessions match that search.',
   filterStatus: 'Status',
   filterEnvironment: 'Environment',
   filterSort: 'Sort by',
@@ -231,6 +235,7 @@ export const CODE_COPY = {
   environmentLocal: 'Local',
   environmentCloud: 'Cloud',
   environmentFolderUnavailable: 'Cannot run here',
+  folderMenu: 'Change the folder',
 
   repositoryChange: 'Change repository',
   branchEdit: 'Change the branch',
@@ -441,13 +446,8 @@ const ENVIRONMENT_SEPARATOR = ' · ';
 export function environmentChipLabel(
   environment: CodeEnvironment,
   networkAccess: CloudCodeNetworkAccess,
-  folderName: string | null,
 ): string {
-  if (environment === 'local') {
-    return folderName
-      ? `${CODE_COPY.environmentLocal}${ENVIRONMENT_SEPARATOR}${folderName}`
-      : CODE_COPY.environmentLocal;
-  }
+  if (environment === 'local') return CODE_COPY.environmentLocal;
   return `${CODE_COPY.environmentCloud}${ENVIRONMENT_SEPARATOR}${networkAccessLabel(networkAccess)}`;
 }
 
@@ -523,13 +523,20 @@ export interface CodeSessionFilters {
   status: CodeStatusFilter;
   environment: CloudCodeNetworkAccess | 'all';
   sort: CodeSortOption;
+  query: string;
 }
 
 export const DEFAULT_CODE_FILTERS: CodeSessionFilters = {
   status: 'open',
   environment: 'all',
   sort: 'activity',
+  query: '',
 };
+
+export function sessionTitleMatches(title: string, query: string): boolean {
+  const needle = query.trim().toLocaleLowerCase();
+  return needle.length === 0 || title.toLocaleLowerCase().includes(needle);
+}
 
 export function filtersAreDefault(filters: CodeSessionFilters): boolean {
   return (
@@ -544,7 +551,9 @@ export function filterAndSortSessions(
   filters: CodeSessionFilters,
 ): CloudCodeSession[] {
   const matched = sessions.filter(
-    (session) => filters.environment === 'all' || session.networkAccess === filters.environment,
+    (session) =>
+      (filters.environment === 'all' || session.networkAccess === filters.environment) &&
+      sessionTitleMatches(session.title, filters.query),
   );
   const sorted = [...matched];
   if (filters.sort === 'title') {
