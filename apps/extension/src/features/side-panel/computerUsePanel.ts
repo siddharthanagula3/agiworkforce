@@ -379,15 +379,29 @@ export const COMPUTER_USE_PANEL_CSS = `
 
   .sp-cu-guidance {
     display: flex;
-    align-items: flex-end;
-    gap: 8px;
+    flex-direction: column;
+    gap: 6px;
     padding: 10px 14px;
     border-top: 1px solid var(--agi-ext-border);
     flex-shrink: 0;
   }
 
-  .sp-cu-guidance[hidden] {
+  .sp-cu-guidance[hidden],
+  .sp-cu-guidance-notice[hidden] {
     display: none;
+  }
+
+  .sp-cu-guidance-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 8px;
+  }
+
+  .sp-cu-guidance-notice {
+    margin: 0;
+    font-size: var(--type-caption-size);
+    line-height: var(--type-caption-height);
+    color: var(--agi-ext-text-muted);
   }
 
   #sp-cu-guidance-input {
@@ -819,6 +833,7 @@ const RUN_COMMAND_TIMEOUT_MS = 15_000;
 const STOP_REFUSED_MESSAGE =
   'The run could not be stopped and may still be driving the tab. Close the tab to be certain.';
 const GUIDANCE_REFUSED_MESSAGE = 'The details could not be added. Try again, or use Stop.';
+const GUIDANCE_NOT_APPLIED_MESSAGE = 'The task already finished, so these details weren’t used.';
 const RUN_LOST_MESSAGE =
   'The background service stopped reporting on this run, so it is no longer being tracked here.';
 const RUN_STATE_UNAVAILABLE_MESSAGE =
@@ -1233,6 +1248,7 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     }
     runStateRevision += 1;
     cancellationPending = false;
+    if (running && runId && runId !== activeRunId) guidanceNotice.hidden = true;
     activeRunId = running && runId ? runId : running ? activeRunId : null;
     if (running && generation !== undefined && Number.isSafeInteger(generation)) {
       activeRunGeneration = Math.max(activeRunGeneration, generation);
@@ -1671,6 +1687,12 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   guidanceForm.className = 'sp-cu-guidance';
   guidanceForm.noValidate = true;
   guidanceForm.hidden = true;
+  const guidanceNotice = document.createElement('p');
+  guidanceNotice.className = 'sp-cu-guidance-notice';
+  guidanceNotice.setAttribute('role', 'status');
+  guidanceNotice.hidden = true;
+  const guidanceRow = document.createElement('div');
+  guidanceRow.className = 'sp-cu-guidance-row';
   const guidanceInput = document.createElement('textarea');
   guidanceInput.id = 'sp-cu-guidance-input';
   guidanceInput.rows = 1;
@@ -1682,21 +1704,38 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
   guidanceBtn.className = 'sp-cu-run-btn';
   guidanceBtn.textContent = 'Add';
   guidanceBtn.disabled = true;
-  guidanceForm.append(guidanceInput, guidanceBtn);
-  let guidanceInFlight = false;
+  guidanceRow.append(guidanceInput, guidanceBtn);
+  guidanceForm.append(guidanceNotice, guidanceRow);
 
   function renderGuidance(): void {
-    guidanceForm.hidden = activeRunId === null;
-    guidanceInput.disabled = guidanceInFlight;
-    guidanceBtn.disabled = guidanceInFlight || guidanceInput.value.trim().length === 0;
+    guidanceForm.hidden = activeRunId === null && guidanceNotice.hidden;
+    guidanceBtn.disabled = activeRunId === null || guidanceInput.value.trim().length === 0;
+  }
+
+  function showGuidanceNotice(text: string): void {
+    guidanceNotice.textContent = text;
+    guidanceNotice.hidden = false;
+    renderGuidance();
+  }
+
+  function hideGuidanceNotice(): void {
+    guidanceNotice.hidden = true;
+    guidanceNotice.textContent = '';
+    renderGuidance();
+  }
+
+  function restoreUnusedGuidance(text: string, notice: string): void {
+    const draft = guidanceInput.value.trim();
+    guidanceInput.value = draft ? `${text}\n${draft}` : text;
+    showGuidanceNotice(notice);
   }
 
   async function submitGuidance(): Promise<void> {
     const runId = activeRunId;
     const text = guidanceInput.value.trim();
-    if (!runId || !text || guidanceInFlight) return;
-    guidanceInFlight = true;
-    renderGuidance();
+    if (!runId || !text) return;
+    guidanceInput.value = '';
+    hideGuidanceNotice();
     const message: ComputerUseGuidanceMessage = {
       type: 'ADD_COMPUTER_USE_GUIDANCE',
       runId,
@@ -1708,22 +1747,27 @@ export function buildComputerUsePanel(): ComputerUsePanelAPI {
     } catch {
       response = null;
     }
-    guidanceInFlight = false;
-    if (response?.success === true && activeRunId === runId) {
-      guidanceInput.value = '';
+    if (panelClosed) return;
+    if (response?.success === true && response.applied === true) {
       noteRunActivity();
-    } else if (response?.success !== true) {
-      showHandoffBanner(response?.error ?? GUIDANCE_REFUSED_MESSAGE, 'error');
+      return;
     }
-    renderGuidance();
-    if (!guidanceForm.hidden) guidanceInput.focus();
+    restoreUnusedGuidance(
+      text,
+      response?.applied === false
+        ? GUIDANCE_NOT_APPLIED_MESSAGE
+        : (response?.error ?? GUIDANCE_REFUSED_MESSAGE),
+    );
   }
 
   guidanceForm.addEventListener('submit', (event) => {
     event.preventDefault();
     void submitGuidance();
   });
-  guidanceInput.addEventListener('input', renderGuidance);
+  guidanceInput.addEventListener('input', () => {
+    if (!guidanceInput.value.trim() && activeRunId === null) hideGuidanceNotice();
+    else renderGuidance();
+  });
   guidanceInput.addEventListener('keydown', (event) => {
     if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return;
     event.preventDefault();

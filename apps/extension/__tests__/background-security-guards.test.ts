@@ -369,20 +369,48 @@ describe('background service worker security guards', () => {
       tab: { id: RUN_TAB_ID, url: `${SITE_A}/start`, windowId: 7 },
     };
 
-    it('queues the text for the running loop to take as user input', async () => {
+    it('answers applied once the running loop takes the text as user input', async () => {
       const options = await startRun('cu_run_guidance');
-      const response = await dispatch({
+      const response = dispatch({
         type: 'ADD_COMPUTER_USE_GUIDANCE',
         runId: 'cu_run_guidance',
         text: '  Use the saved work address  ',
       });
+      await vi.waitFor(() => {
+        expect(options.takeUserGuidance()).toEqual(['Use the saved work address']);
+      });
 
-      expect(response['success'], String(response['error'])).toBe(true);
-      expect(options.takeUserGuidance()).toEqual(['Use the saved work address']);
+      expect(await response).toMatchObject({ success: true, applied: true });
       expect(options.takeUserGuidance()).toEqual([]);
     });
 
-    it('refuses details for a run that is not the active one', async () => {
+    it('answers not applied when the run ends before the loop takes the text', async () => {
+      let finish: (value: unknown) => void = () => undefined;
+      harness.runAgentLoop.mockImplementationOnce((_goal, _tabId, options) => {
+        harness.captured.options = options;
+        return new Promise((resolve) => {
+          finish = resolve;
+        }) as never;
+      });
+      await startRun('cu_run_guidance_capped');
+      const response = dispatch({
+        type: 'ADD_COMPUTER_USE_GUIDANCE',
+        runId: 'cu_run_guidance_capped',
+        text: 'Use the saved work address',
+      });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      finish({
+        finalMessage: 'Agent reached the maximum step limit (20).',
+        stepsUsed: 20,
+        cappedAtMaxSteps: true,
+        history: [],
+        totalTokens: 0,
+      });
+
+      expect(await response).toMatchObject({ success: true, applied: false });
+    });
+
+    it('answers not applied for a run that is not the active one', async () => {
       const options = await startRun('cu_run_guidance_current');
       const response = await dispatch({
         type: 'ADD_COMPUTER_USE_GUIDANCE',
@@ -390,7 +418,7 @@ describe('background service worker security guards', () => {
         text: 'Use the saved work address',
       });
 
-      expect(response['success']).toBe(false);
+      expect(response).toMatchObject({ success: true, applied: false });
       expect(options.takeUserGuidance()).toEqual([]);
     });
 

@@ -987,6 +987,7 @@ export interface ComputerUseGuidanceMessage extends BaseMessage {
 
 export interface ComputerUseCommandResponse {
   success: boolean;
+  applied?: boolean;
   runId?: string;
   runGeneration?: number;
   running?: boolean;

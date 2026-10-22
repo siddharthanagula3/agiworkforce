@@ -342,44 +342,78 @@ describe('computer-use Add details input', () => {
     expect(form.hidden).toBe(true);
   });
 
-  it('sends the typed details to the owned run and clears the input', async () => {
+  it('sends the typed details to the owned run and clears the input once taken', async () => {
     const api = buildComputerUsePanel();
     api.setRunState(true, 'run-guide');
     sendMessage.mockReset();
-    sendMessage.mockResolvedValue({ success: true, running: true, runId: 'run-guide' });
+    sendMessage.mockResolvedValue({ success: true, applied: true, running: true });
     const { form, input, button } = guidanceControls(api);
     input.value = '  Use the work address  ';
     input.dispatchEvent(new Event('input'));
     expect(button.disabled).toBe(false);
     form.dispatchEvent(new Event('submit', { cancelable: true }));
 
-    await vi.waitFor(() => {
-      expect(sendMessage).toHaveBeenCalledWith({
-        type: 'ADD_COMPUTER_USE_GUIDANCE',
-        runId: 'run-guide',
-        text: 'Use the work address',
-      });
-      expect(input.value).toBe('');
+    expect(sendMessage).toHaveBeenCalledWith({
+      type: 'ADD_COMPUTER_USE_GUIDANCE',
+      runId: 'run-guide',
+      text: 'Use the work address',
     });
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(input.value).toBe('');
+    expect(form.querySelector<HTMLElement>('.sp-cu-guidance-notice')!.hidden).toBe(true);
   });
 
-  it('keeps the text and says why when the background refuses it', async () => {
+  it('puts the text back with an inline notice when the task ended before using it', async () => {
+    const api = buildComputerUsePanel();
+    api.setRunState(true, 'run-guide');
+    let reply: (value: unknown) => void = () => undefined;
+    sendMessage.mockReset();
+    sendMessage.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          reply = resolve;
+        }),
+    );
+    const { form, input, button } = guidanceControls(api);
+    input.value = 'Use the work address';
+    form.dispatchEvent(new Event('submit', { cancelable: true }));
+    expect(input.value).toBe('');
+
+    api.setRunState(false, 'run-guide');
+    reply({ success: true, applied: false, running: false });
+
+    const notice = form.querySelector<HTMLElement>('.sp-cu-guidance-notice')!;
+    await vi.waitFor(() => {
+      expect(notice.hidden).toBe(false);
+    });
+    expect(notice.textContent).toBe('The task already finished, so these details weren’t used.');
+    expect(form.hidden).toBe(false);
+    expect(input.value).toBe('Use the work address');
+    expect(button.disabled).toBe(true);
+    expect(api.panelEl.querySelector('.sp-cu-banner.visible')).toBeNull();
+
+    api.setRunState(true, 'run-next');
+    expect(notice.hidden).toBe(true);
+    expect(input.value).toBe('Use the work address');
+  });
+
+  it('keeps the text and says why inline when the background refuses it', async () => {
     const api = buildComputerUsePanel();
     api.setRunState(true, 'run-guide');
     sendMessage.mockReset();
     sendMessage.mockResolvedValue({
       success: false,
-      running: false,
-      error: 'This task is no longer running, so the details were not added.',
+      running: true,
+      error: 'Type the details to add.',
     });
     const { form, input } = guidanceControls(api);
     input.value = 'Use the work address';
     form.dispatchEvent(new Event('submit', { cancelable: true }));
 
+    const notice = form.querySelector<HTMLElement>('.sp-cu-guidance-notice')!;
     await vi.waitFor(() => {
-      expect(api.panelEl.querySelector('.sp-cu-banner-sub')?.textContent).toBe(
-        'This task is no longer running, so the details were not added.',
-      );
+      expect(notice.textContent).toBe('Type the details to add.');
     });
     expect(input.value).toBe('Use the work address');
   });

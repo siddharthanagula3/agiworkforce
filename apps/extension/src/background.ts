@@ -557,7 +557,11 @@ const SCHEDULED_RECOVERY_MAX_ATTEMPTS = 3;
 const SCHEDULED_HEARTBEAT_INTERVAL_MS = 20_000;
 
 const computerUseRuns = new ComputerUseRunCoordinator();
-const computerUseGuidance = new Map<string, string[]>();
+interface PendingRunGuidance {
+  text: string;
+  settle: (applied: boolean) => void;
+}
+const computerUseGuidance = new Map<string, PendingRunGuidance[]>();
 const computerUseStarts = new ComputerUseStartCoordinator();
 let computerUseStartGeneration = 0;
 
@@ -5327,7 +5331,7 @@ async function handleMessageAsync(
               },
             })
           : undefined;
-      const guidanceQueue: string[] = [];
+      const guidanceQueue: PendingRunGuidance[] = [];
       computerUseGuidance.set(lease.runId, guidanceQueue);
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
@@ -5370,7 +5374,11 @@ async function handleMessageAsync(
         },
         pendingTakeover: () => (lease.takeover ? untilHandedBack(lease, lease.takeover) : null),
         isTakenOver: () => lease.takeover !== null,
-        takeUserGuidance: () => guidanceQueue.splice(0, guidanceQueue.length),
+        takeUserGuidance: () =>
+          guidanceQueue.splice(0, guidanceQueue.length).map((pending) => {
+            pending.settle(true);
+            return pending.text;
+          }),
         onBeforeAction,
         resolveUploadFile,
         onProgress: (step) => {
@@ -5385,6 +5393,8 @@ async function handleMessageAsync(
         .finally(() => {
           if (computerUseGuidance.get(lease.runId) === guidanceQueue)
             computerUseGuidance.delete(lease.runId);
+          for (const pending of guidanceQueue.splice(0, guidanceQueue.length))
+            pending.settle(false);
         })
         .catch(() => undefined);
       watchComputerUseUserInput(cuTabId, true);
@@ -5598,11 +5608,7 @@ async function handleMessageAsync(
       const lease = computerUseRuns.getActive();
       const queue = lease ? computerUseGuidance.get(lease.runId) : undefined;
       if (!lease || lease.runId !== guidanceMessage.runId || !queue) {
-        return {
-          success: false,
-          running: lease !== null,
-          error: 'This task is no longer running, so the details were not added.',
-        } as ExtensionResponse;
+        return { success: true, applied: false, running: lease !== null } as ExtensionResponse;
       }
       const text = typeof guidanceMessage.text === 'string' ? guidanceMessage.text.trim() : '';
       if (!text) {
@@ -5612,7 +5618,7 @@ async function handleMessageAsync(
           error: 'Type the details to add.',
         } as ExtensionResponse;
       }
-      const queued = queue.reduce((total, note) => total + note.length, 0);
+      const queued = queue.reduce((total, pending) => total + pending.text.length, 0);
       if (queued + text.length > MAX_RUN_GUIDANCE_CHARS) {
         return {
           success: false,
@@ -5620,10 +5626,13 @@ async function handleMessageAsync(
           error: `Details are limited to ${MAX_RUN_GUIDANCE_CHARS.toLocaleString()} characters until AGI reads them.`,
         } as ExtensionResponse;
       }
-      queue.push(text);
+      const applied = await new Promise<boolean>((settle) => {
+        queue.push({ text, settle });
+      });
       return {
         success: true,
-        running: true,
+        applied,
+        running: computerUseRuns.isCurrent(lease),
         runId: lease.runId,
         runGeneration: lease.generation,
       } as ExtensionResponse;
