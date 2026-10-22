@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Switch, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
+import { useRouter } from 'expo-router';
 import { EyeOff, X } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -18,10 +19,13 @@ const UNPERSONALIZED_LABEL = 'Unpersonalized';
 const PERSONALIZATION_HINT =
   'Personalized uses your profile, instructions and response style. Unpersonalized leaves them out.';
 
+const DATA_USE_ROUTE = '/(app)/settings/cloud-privacy';
+
 let hasShownThisSession = false;
 
 export function TemporaryChatBanner() {
   const colors = useThemeColors();
+  const router = useRouter();
   const isTemporaryChat = useSettingsStore((s) => s.isTemporaryChat);
   const personalized = useSettingsStore((s) => s.temporaryChatPersonalized);
   const setPersonalized = useSettingsStore((s) => s.setTemporaryChatPersonalized);
@@ -55,7 +59,20 @@ export function TemporaryChatBanner() {
       <EyeOff size={14} color={colors.purple} style={{ marginTop: 1 }} />
       <View style={{ flex: 1, gap: 8 }}>
         <Text style={{ fontSize: typeScale.caption, lineHeight: 17, color: colors.textSecondary }}>
-          {isCloud ? TEMPORARY_CHAT_CLOUD_EXPLAINER : TEMPORARY_CHAT_LOCAL_EXPLAINER}
+          {isCloud ? TEMPORARY_CHAT_CLOUD_EXPLAINER : TEMPORARY_CHAT_LOCAL_EXPLAINER}{' '}
+          <Text
+            accessibilityRole="link"
+            accessibilityLabel="Learn more about how temporary chats use your data"
+            onPress={() => router.push(DATA_USE_ROUTE as Parameters<typeof router.push>[0])}
+            style={{
+              fontSize: typeScale.caption,
+              lineHeight: 17,
+              color: colors.textPrimary,
+              textDecorationLine: 'underline',
+            }}
+          >
+            Learn more
+          </Text>
         </Text>
         {isCloud ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>

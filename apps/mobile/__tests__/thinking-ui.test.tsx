@@ -1,15 +1,29 @@
-
 /* eslint-disable @typescript-eslint/no-require-imports */
 
 import React from 'react';
 import { render, fireEvent, act } from '@testing-library/react-native';
 
 jest.mock('lucide-react-native', () => ({
+  Brain: jest.fn().mockReturnValue(null),
+  Globe: jest.fn().mockReturnValue(null),
   Clock: jest.fn().mockReturnValue(null),
   ChevronDown: jest.fn().mockReturnValue(null),
   ChevronRight: jest.fn().mockReturnValue(null),
   X: jest.fn().mockReturnValue(null),
 }));
+
+jest.mock('react-native-gesture-handler', () => {
+  const { View } = require('react-native');
+  const gesture = new Proxy(
+    {},
+    { get: (target, name) => (name === 'then' ? undefined : () => gesture) },
+  );
+  return {
+    Gesture: { Pan: () => gesture },
+    GestureDetector: ({ children }: { children: React.ReactNode }) => children,
+    GestureHandlerRootView: View,
+  };
+});
 
 jest.mock('react-native-reanimated', () => {
   const mockAnimated = jest.fn().mockImplementation(({ children, ...props }) => {
