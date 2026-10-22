@@ -68,7 +68,8 @@ function chartSvg(spec: ChartSpec, theme: DeckTheme): string {
         const y2 = cy + radius * Math.sin(angle);
         const large = sweep > Math.PI ? 1 : 0;
         const label = escapeHtml(String(rows[index]?.[spec.xKey] ?? ''));
-        return `<path d="M${cx},${cy} L${x1},${y1} A${radius},${radius} 0 ${large} 1 ${x2},${y2} Z" fill="${theme.accent}" fill-opacity="${1 - (index % 5) * 0.16}"><title>${label}: ${value}</title></path><text x="290" y="${70 + index * 24}">${label}: ${value}</text>`;
+        const opacity = (1 - (index / values.length) * 0.75).toFixed(2);
+        return `<path d="M${cx},${cy} L${x1},${y1} A${radius},${radius} 0 ${large} 1 ${x2},${y2} Z" fill="${theme.accent}" fill-opacity="${opacity}" stroke="${theme.background}" stroke-width="2"><title>${label}: ${value}</title></path><g class="legend-row"><rect x="290" y="${58 + index * 24}" width="14" height="14" rx="3" fill="${theme.accent}" fill-opacity="${opacity}"/><text x="312" y="${70 + index * 24}">${label}: ${value}</text></g>`;
       })
       .join('');
     return `<svg viewBox="0 0 ${width} ${height + 20}" role="img" aria-label="${escapeHtml(spec.title ?? 'Pie chart')}">${title}${slices}</svg>`;

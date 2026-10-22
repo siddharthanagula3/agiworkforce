@@ -52,4 +52,12 @@ describe('/agent-permissions, document file creation claims', () => {
   it('does not place generation inside the code sandbox, which never runs it', () => {
     expect(officeFileRowCopy()).not.toMatch(/\bsandbox\b/iu);
   });
+
+  it('says attached Word and Excel files can be edited and the other formats cannot', () => {
+    const copy = officeFileRowCopy();
+    expect(copy).not.toMatch(/never edits/iu);
+    expect(copy).toMatch(/edit a Word document/iu);
+    expect(copy).toMatch(/Excel workbook/iu);
+    expect(copy).toMatch(/PowerPoint and PDF files cannot be edited/iu);
+  });
 });

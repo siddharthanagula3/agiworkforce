@@ -117,7 +117,7 @@ const TOOL_COPY: Readonly<Record<string, { label: string; description: string }>
   create_office_file: {
     label: 'Create a document file',
     description:
-      'Generates a Word document (.docx), a PowerPoint deck (.pptx), an Excel workbook (.xlsx), a PDF (.pdf) or a CSV (.csv) on our servers and attaches it to the conversation for you to download. Those five formats are the whole of it, and it never edits a file you already have. Reversible, no egress path.',
+      'Generates a Word document (.docx), a PowerPoint deck (.pptx), an Excel workbook (.xlsx), a PDF (.pdf) or a CSV (.csv) on our servers and attaches it to the conversation for you to download. Those five formats are the whole of it. It can also edit a Word document (text replacements) or an Excel workbook (cell edits) you attached, saving the result as a new file; PowerPoint and PDF files cannot be edited. Reversible, no egress path.',
   },
   generate_image: {
     label: 'Create an image',

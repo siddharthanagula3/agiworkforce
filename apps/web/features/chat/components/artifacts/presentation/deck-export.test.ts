@@ -54,4 +54,22 @@ describe('deck export', () => {
     const size = pdf.internal.pageSize;
     expect(size.getWidth()).toBeGreaterThan(size.getHeight());
   });
+
+  it('labels every pie slice with a legend swatch in the viewer and the PDF', async () => {
+    const pie = [
+      '## Status',
+      '',
+      '```chart',
+      '{"type":"pie","xKey":"s","data":[{"s":"Approved","v":5},{"s":"Pending","v":3},{"s":"Declined","v":1}],"series":[{"dataKey":"v"}]}',
+      '```',
+    ].join('\n');
+    const html = await buildDeckHtml('Pie', pie);
+    expect(html.match(/class="legend-row"/g)).toHaveLength(3);
+    for (const label of ['Approved: 5', 'Pending: 3', 'Declined: 1']) expect(html).toContain(label);
+    const opacities = [...html.matchAll(/<path [^>]*fill-opacity="([\d.]+)"/g)].map((m) => m[1]);
+    expect(new Set(opacities).size).toBe(3);
+
+    const pdf = await buildDeckPdf('Pie', pie);
+    expect(pdf.getNumberOfPages()).toBe(1);
+  });
 });

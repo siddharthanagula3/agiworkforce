@@ -163,6 +163,17 @@ function seriesColor(theme: DeckTheme, index: number): PdfRgb {
   ];
 }
 
+function pieColor(theme: DeckTheme, index: number, count: number): PdfRgb {
+  const [ar, ag, ab] = hexChannels(theme.accent);
+  const [br, bg, bb] = hexChannels(theme.background);
+  const mix = (index / Math.max(count, 1)) * 0.75;
+  return [
+    Math.round(ar * (1 - mix) + br * mix),
+    Math.round(ag * (1 - mix) + bg * mix),
+    Math.round(ab * (1 - mix) + bb * mix),
+  ];
+}
+
 function drawChart(pdf: jsPDF, spec: ChartSpec, box: PdfArea, theme: DeckTheme): void {
   const [tr, tg, tb] = hexChannels(theme.text);
   const [mr, mg, mb] = hexChannels(theme.muted);
@@ -197,7 +208,7 @@ function drawChart(pdf: jsPDF, spec: ChartSpec, box: PdfArea, theme: DeckTheme):
         const a = angle + (sweep * step) / steps;
         points.push([cx + radius * Math.cos(a), cy + radius * Math.sin(a)]);
       }
-      const [r, g, b] = seriesColor(theme, index);
+      const [r, g, b] = pieColor(theme, index, slices.length);
       pdf.setFillColor(r, g, b);
       const deltas = [
         [points[0]![0] - cx, points[0]![1] - cy],
@@ -205,8 +216,11 @@ function drawChart(pdf: jsPDF, spec: ChartSpec, box: PdfArea, theme: DeckTheme):
       ];
       pdf.lines(deltas, cx, cy, [1, 1], 'F', true);
       const label = String(spec.rows[index]?.[spec.xKey] ?? '');
+      const rowY = top + 10 + index * (LABEL_SIZE + 4);
+      pdf.setFillColor(r, g, b);
+      pdf.rect(cx + radius + 16, rowY - LABEL_SIZE + 1, LABEL_SIZE, LABEL_SIZE, 'F');
       pdf.setTextColor(tr, tg, tb);
-      pdf.text(`${label}: ${value}`, cx + radius + 16, top + 10 + index * (LABEL_SIZE + 4));
+      pdf.text(`${label}: ${value}`, cx + radius + 16 + LABEL_SIZE + 4, rowY);
       angle += sweep;
     });
     return;
