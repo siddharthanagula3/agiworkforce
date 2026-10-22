@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   resolveAutoRoute: vi.fn(),
   reserve: vi.fn(),
   drain: vi.fn(),
+  stream: vi.fn((_request: unknown, _signal: unknown) => ({})),
   lease: {
     providerStarted: vi.fn(),
     completed: vi.fn(),
@@ -42,7 +43,7 @@ vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) =
 }));
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   ...(await importOriginal<ProviderAdapterModule>()),
-  buildServerProviderAdapter: () => ({ stream: () => ({}) }),
+  buildServerProviderAdapter: () => ({ stream: mocks.stream }),
   toGenericUpstreamError: vi.fn(),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-providers', () => ({
@@ -94,7 +95,12 @@ beforeEach(() => {
   });
 });
 
-const CALL = { ref: 'scan:0', system: 'system', prompt: 'prompt', maxOutputTokens: 100 };
+const CALL = {
+  ref: 'scan:0',
+  system: 'SCAN-INSTRUCTIONS',
+  prompt: 'REPOSITORY-SOURCE',
+  maxOutputTokens: 100,
+};
 
 describe('resolveSecurityScanModel', () => {
   it('routes on the managed coding route and settles each call as security scan usage', async () => {
@@ -114,6 +120,9 @@ describe('resolveSecurityScanModel', () => {
       }),
     );
     expect(mocks.lease.completed).toHaveBeenCalled();
+    const request = JSON.stringify(mocks.stream.mock.calls[0]?.[0]);
+    expect(request).toContain('"SCAN-INSTRUCTIONS"');
+    expect(request).toContain('"REPOSITORY-SOURCE"');
   });
 
   it('has no route when the account allows no provider that keeps code out of training', async () => {

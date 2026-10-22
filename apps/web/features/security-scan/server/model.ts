@@ -7,6 +7,7 @@ import { modelDisplayNameById } from '@agiworkforce/types';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
 import { drainToLlmResponse } from '@/app/api/llm/v1/chat/completions/lib/adapter-response';
 import { logger } from '@/lib/logger';
+import { orderInstructionBlocks } from '@/lib/prompts/instruction-precedence';
 import {
   sideCallProviderAllowed,
   sideCallRoutingRequest,
@@ -122,7 +123,12 @@ export async function resolveSecurityScanModel(
 
     const request = openAIWireRequestToChatRequest({
       model: route.providerModelId,
-      messages: [{ role: 'user', content: `${modelCall.system}\n\n${modelCall.prompt}` }],
+      messages: [
+        ...orderInstructionBlocks([{ layer: 'system', text: modelCall.system }]).map(
+          ({ text }) => ({ role: 'system' as const, content: text }),
+        ),
+        { role: 'user' as const, content: modelCall.prompt },
+      ],
       max_tokens: modelCall.maxOutputTokens,
       temperature: 0,
       stream: false,
