@@ -53,7 +53,10 @@ async function loadStreamingService() {
   return require('@/services/streaming') as typeof import('@/services/streaming');
 }
 
-async function sentBody(model: string): Promise<Record<string, unknown>> {
+async function sentBody(
+  model: string,
+  options?: { ignorePickerSpeed?: boolean },
+): Promise<Record<string, unknown>> {
   const { streamChat } = await loadStreamingService();
   await streamChat(
     {
@@ -63,6 +66,8 @@ async function sentBody(model: string): Promise<Record<string, unknown>> {
       operationId: '0190a000-0000-7000-8000-000000000021',
     },
     { onDelta: jest.fn(), onDone: jest.fn(), onError: jest.fn() },
+    undefined,
+    options,
   );
   const init = guardedFetchMock.mock.calls[0]?.[1] as RequestInit | undefined;
   return JSON.parse(String(init?.body));
@@ -89,6 +94,12 @@ describe('streamChat speed', () => {
   it('sends no speed when the shared rule refuses fast mode', async () => {
     fastSpeedForModelMock.mockReset().mockReturnValue(undefined);
     expect((await sentBody(FAST_MODEL_ID)).speed).toBeUndefined();
+  });
+
+  it('sends no speed for the picker model when the caller opts out of the picker speed', async () => {
+    fastSpeedForModelMock.mockReset().mockReturnValue('fast');
+    expect((await sentBody(FAST_MODEL_ID, { ignorePickerSpeed: true })).speed).toBeUndefined();
+    expect(fastSpeedForModelMock).not.toHaveBeenCalled();
   });
 
   it('sends no speed for a model other than the one picked', async () => {

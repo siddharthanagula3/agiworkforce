@@ -93,6 +93,18 @@ describe('CompareScreen Cloud account isolation', () => {
     });
   });
 
+  it('opts both compared answers out of the picker fast speed, like web compare', () => {
+    render(<CompareScreen />);
+
+    fireEvent.press(screen.getByLabelText('Send comparison prompt'));
+
+    expect(mockStreamChat).toHaveBeenCalledTimes(2);
+    for (const call of mockStreamChat.mock.calls) {
+      expect((call[0] as { speed?: string }).speed).toBeUndefined();
+      expect(call[3]).toEqual({ ignorePickerSpeed: true });
+    }
+  });
+
   it('clears account-A results before paint and ignores its buffered callbacks after account B activates', () => {
     render(<CompareScreen />);
 

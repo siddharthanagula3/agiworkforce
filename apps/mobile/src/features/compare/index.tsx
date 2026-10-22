@@ -295,6 +295,7 @@ export default function CompareScreen() {
             },
           },
           controller.signal,
+          { ignorePickerSpeed: true },
         );
       };
 

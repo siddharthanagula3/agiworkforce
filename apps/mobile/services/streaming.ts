@@ -563,10 +563,15 @@ function withPickerSpeed(body: InitialStreamRequest): InitialStreamRequest {
   return speed ? { ...body, speed } : body;
 }
 
+export interface StreamChatOptions {
+  ignorePickerSpeed?: boolean;
+}
+
 export async function streamChat(
   body: InitialStreamRequest | FreeQuotaStreamRequest,
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
+  options: StreamChatOptions = {},
 ): Promise<void> {
   if ('assistant_message_id' in body) return streamFreeQuotaChat(body, callbacks, signal);
   if (getProviderOffering(body.model)) {
@@ -584,7 +589,7 @@ export async function streamChat(
     return;
   }
 
-  const request = withPickerSpeed(body);
+  const request = options.ignorePickerSpeed ? body : withPickerSpeed(body);
   let timeoutController = new AbortController();
   let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
   let combinedSignal = signal
