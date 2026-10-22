@@ -3792,6 +3792,44 @@
     "message": "Review",
     "description": "Button that opens the welcome page."
   },
+  "obTourTabsText": {
+    "message": "AGI reads a page only when you attach it or ask it to act there.",
+    "description": "In-panel tour step one: how AGI uses your tabs."
+  },
+  "obTourShortcutsText": {
+    "message": "Press $OPEN$ to open AGI and $CAPTURE$ to attach the current page.",
+    "description": "In-panel tour step two with the keyboard shortcuts currently bound in Chrome.",
+    "placeholders": {
+      "open": {
+        "content": "$1",
+        "example": "Command+Shift+K"
+      },
+      "capture": {
+        "content": "$2",
+        "example": "Command+Shift+Y"
+      }
+    }
+  },
+  "obTourShortcutsUnset": {
+    "message": "Set keyboard shortcuts for AGI on the Chrome shortcuts page.",
+    "description": "In-panel tour step two when no shortcut is bound."
+  },
+  "obTourNext": {
+    "message": "Next",
+    "description": "Button that moves to the next in-panel tour step."
+  },
+  "obTourFinish": {
+    "message": "Let's go",
+    "description": "Button that finishes the in-panel tour."
+  },
+  "obTourLabel": {
+    "message": "Getting started with AGI",
+    "description": "Accessible name of the in-panel tour."
+  },
+  "spBlockedTitle": {
+    "message": "Page access unavailable",
+    "description": "Title of the card shown when Chrome does not let the extension read the current page."
+  },
   "spQuotaFreeUpgrade": {
     "message": "Upgrade",
     "description": "Single action a Free account sees on its usage card and when it reaches the Free limit; matches the web Free branch."

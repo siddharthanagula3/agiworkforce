@@ -11673,7 +11673,7 @@ function buildUI(): void {
     createElementWith({
       tag: 'span',
       id: 'sp-blocked-title',
-      text: 'Page access unavailable',
+      text: t('spBlockedTitle'),
     }),
   );
   blockedBody.appendChild(

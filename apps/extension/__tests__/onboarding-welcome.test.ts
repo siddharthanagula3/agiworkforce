@@ -7,9 +7,11 @@ import {
   ONBOARDING_COMPLETE_KEY,
   ONBOARDING_DISCLOSURES_KEY,
   PIN_PROMPT_DISMISSED_KEY,
+  SIDE_PANEL_TOUR_DONE_KEY,
   disclosureVersion,
   isOnboardingCurrent,
   markOnboardingComplete,
+  boundShortcuts,
   onboardingPromptKind,
 } from '../src/features/side-panel/onboarding';
 import { mountOnboardingPrompt } from '../src/features/side-panel/onboardingPrompt';
@@ -83,6 +85,7 @@ describe('onboarding state', () => {
     const reviewed = {
       [ONBOARDING_COMPLETE_KEY]: true,
       [ONBOARDING_DISCLOSURES_KEY]: disclosureVersion(),
+      [SIDE_PANEL_TOUR_DONE_KEY]: true,
     };
     chromeWith({ ...reviewed }, false);
     expect(await onboardingPromptKind()).toBe('pin');
@@ -92,6 +95,58 @@ describe('onboarding state', () => {
     expect(await onboardingPromptKind()).toBeNull();
     chromeWith({ ...reviewed }, new Error('unsupported'));
     expect(await onboardingPromptKind()).toBeNull();
+  });
+});
+
+describe('side panel tour', () => {
+  const reviewed = {
+    [ONBOARDING_COMPLETE_KEY]: true,
+    [ONBOARDING_DISCLOSURES_KEY]: disclosureVersion(),
+  };
+
+  it('is offered once after the review and before the pin prompt', async () => {
+    const store: Record<string, unknown> = { ...reviewed };
+    chromeWith(store, false);
+    expect(await onboardingPromptKind()).toBe('tour');
+    store[SIDE_PANEL_TOUR_DONE_KEY] = true;
+    expect(await onboardingPromptKind()).toBe('pin');
+  });
+
+  it('moves from tab access to the bound shortcuts and finishes once', async () => {
+    chromeWith({});
+    const finishTour = vi.fn();
+    const prompt = mountOnboardingPrompt(document.createElement('div'), {
+      kind: async () => 'tour',
+      openWelcome: vi.fn(),
+      dismissPin: vi.fn(),
+      finishTour,
+      shortcuts: async () => ({ open: 'Command+Shift+K', capture: 'Command+Shift+Y' }),
+    });
+    await prompt.shown;
+    const [action] = prompt.element.querySelectorAll('button');
+    expect(action!.textContent).toBe('obTourNext');
+    action!.click();
+    await flush();
+    expect(action!.textContent).toBe('obTourFinish');
+    expect(prompt.element.classList.contains('visible')).toBe(true);
+    expect(finishTour).not.toHaveBeenCalled();
+    action!.click();
+    expect(finishTour).toHaveBeenCalledOnce();
+    expect(prompt.element.classList.contains('visible')).toBe(false);
+  });
+
+  it('reads the real shortcuts from Chrome and tolerates their absence', async () => {
+    vi.stubGlobal('chrome', {
+      commands: {
+        getAll: async () => [
+          { name: '_execute_action', shortcut: 'Alt+Shift+K' },
+          { name: 'capture_page', shortcut: '' },
+        ],
+      },
+    });
+    expect(await boundShortcuts()).toEqual({ open: 'Alt+Shift+K', capture: '' });
+    vi.stubGlobal('chrome', {});
+    expect(await boundShortcuts()).toEqual({ open: '', capture: '' });
   });
 });
 

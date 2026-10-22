@@ -2,9 +2,12 @@ import { t } from '../../i18n';
 import { el } from './dom';
 import {
   WELCOME_PAGE_PATH,
+  boundShortcuts,
   dismissPinPrompt,
+  finishSidePanelTour,
   onboardingPromptKind,
   type OnboardingPromptKind,
+  type TourShortcuts,
 } from './onboarding';
 
 export interface OnboardingPrompt {
@@ -16,6 +19,8 @@ export interface OnboardingPromptDependencies {
   kind(): Promise<OnboardingPromptKind | null>;
   openWelcome(): void;
   dismissPin(): void;
+  finishTour?(): void;
+  shortcuts?(): Promise<TourShortcuts>;
 }
 
 function browserDependencies(): OnboardingPromptDependencies {
@@ -25,6 +30,8 @@ function browserDependencies(): OnboardingPromptDependencies {
       void chrome.tabs.create({ url: chrome.runtime.getURL(WELCOME_PAGE_PATH) });
     },
     dismissPin: dismissPinPrompt,
+    finishTour: finishSidePanelTour,
+    shortcuts: boundShortcuts,
   };
 }
 
@@ -51,11 +58,34 @@ export function mountOnboardingPrompt(
     element.classList.remove('visible');
   };
   dismiss.addEventListener('click', () => {
-    if (element.dataset['kind'] === 'pin') dependencies.dismissPin();
+    const kind = element.dataset['kind'];
+    if (kind === 'pin') dependencies.dismissPin();
+    else if (kind === 'tour') dependencies.finishTour?.();
     close();
   });
+  let tourStep = 0;
+  const showTourStep = async (): Promise<void> => {
+    action.textContent = tourStep === 0 ? t('obTourNext') : t('obTourFinish');
+    if (tourStep === 0) {
+      text.textContent = t('obTourTabsText');
+      return;
+    }
+    const keys = await (dependencies.shortcuts?.() ?? Promise.resolve({ open: '', capture: '' }));
+    text.textContent =
+      keys.open && keys.capture
+        ? t('obTourShortcutsText', [keys.open, keys.capture])
+        : t('obTourShortcutsUnset');
+  };
   action.addEventListener('click', () => {
-    if (element.dataset['kind'] === 'review') dependencies.openWelcome();
+    const kind = element.dataset['kind'];
+    if (kind === 'tour') {
+      if (tourStep === 0) {
+        tourStep = 1;
+        void showTourStep();
+        return;
+      }
+      dependencies.finishTour?.();
+    } else if (kind === 'review') dependencies.openWelcome();
     else dependencies.dismissPin();
     close();
   });
@@ -71,7 +101,11 @@ export function mountOnboardingPrompt(
     .then((kind) => {
       if (!kind) return null;
       element.dataset['kind'] = kind;
-      if (kind === 'review') {
+      if (kind === 'tour') {
+        dismiss.hidden = true;
+        element.setAttribute('aria-label', t('obTourLabel'));
+        void showTourStep();
+      } else if (kind === 'review') {
         text.textContent = t('obReviewText');
         action.textContent = t('obReviewAction');
         dismiss.hidden = true;
