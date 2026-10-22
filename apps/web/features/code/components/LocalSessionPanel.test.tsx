@@ -30,6 +30,11 @@ const listeners = new Set<(rootId: string, event: DeveloperSessionEvent) => void
 let capabilities: ReadonlySet<DeveloperRuntimeCapability> = new Set(DEVELOPER_RUNTIME_CAPABILITIES);
 const capabilityReads: unknown[] = [];
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn() }),
+  usePathname: () => '/code',
+}));
+
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readDeveloperSession,

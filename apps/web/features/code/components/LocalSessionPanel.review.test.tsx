@@ -26,6 +26,11 @@ vi.mock('../services/local-review-client', () => ({
   localWorktreeKeep: vi.fn(),
 }));
 
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), back: vi.fn(), forward: vi.fn() }),
+  usePathname: () => '/code',
+}));
+
 vi.mock('@/features/desktop-host', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   readDeveloperSession,
