@@ -163,6 +163,7 @@ struct ChatMessage {
 enum ChatRole {
     User,
     Assistant,
+    Teammate,
     System,
     Error,
     Detail,
@@ -447,6 +448,7 @@ struct TuiApp {
         tokio::sync::mpsc::UnboundedSender<String>,
         tokio::sync::mpsc::UnboundedReceiver<String>,
     ),
+    team_seen: u64,
     remote: Option<RemoteLink>,
     remote_prompts: Vec<String>,
     remote_label: Option<String>,
@@ -633,6 +635,7 @@ impl TuiApp {
             pasted_texts: Default::default(),
             queued_prompts: Vec::new(),
             side_answers: tokio::sync::mpsc::unbounded_channel(),
+            team_seen: 0,
             remote: None,
             remote_prompts: Vec::new(),
             remote_label: None,
@@ -2162,6 +2165,10 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                     "  ✦ ",
                     Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
                 ),
+                ChatRole::Teammate => (
+                    "  ◆ ",
+                    Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
+                ),
                 ChatRole::System => (
                     "  ℹ ",
                     Style::default()
@@ -2177,18 +2184,27 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
                 ChatRole::Detail => ("  ↳ ", Style::default().fg(ui_muted())),
             };
 
-            // Render prefix line
-            lines.push(Line::from(Span::styled(prefix.to_string(), prefix_style)));
+            let (sender, text) = if msg.role == ChatRole::Teammate {
+                msg.text.split_once('\n').unwrap_or((msg.text.as_str(), ""))
+            } else {
+                ("", msg.text.as_str())
+            };
+            let mut prefix_spans = vec![Span::styled(prefix.to_string(), prefix_style)];
+            if !sender.is_empty() {
+                prefix_spans.push(Span::styled(sender.to_string(), prefix_style));
+            }
+            lines.push(Line::from(prefix_spans));
 
             // Use full markdown renderer for assistant messages
             if msg.role == ChatRole::Assistant {
-                let md_lines = super::markdown_renderer::render_markdown(&msg.text);
+                let md_lines = super::markdown_renderer::render_markdown(text);
                 lines.extend(md_lines);
             } else {
                 // Simple rendering for user/system/error messages
-                for text_line in msg.text.lines() {
+                for text_line in text.lines() {
                     let style = match msg.role {
                         ChatRole::User => Style::default(),
+                        ChatRole::Teammate => Style::default(),
                         ChatRole::System => Style::default(),
                         ChatRole::Error => Style::default(),
                         ChatRole::Detail => Style::default().fg(ui_muted()),
@@ -3801,6 +3817,7 @@ fn find_in_transcript(messages: &[ChatMessage], query: &str) -> String {
         let who = match message.role {
             ChatRole::User => "you",
             ChatRole::Assistant => "assistant",
+            ChatRole::Teammate => "teammate",
             ChatRole::System | ChatRole::Error | ChatRole::Detail => continue,
         };
         for line in message.text.lines() {
@@ -3842,6 +3859,25 @@ fn start_side_query(
         };
         let _ = answers.send(text);
     });
+}
+
+async fn drain_team_messages(app: &mut TuiApp) -> bool {
+    let Some(team) = app.session.team_manager.clone() else {
+        return false;
+    };
+    let (messages, seen) = team.messages_since(app.team_seen).await;
+    app.team_seen = seen;
+    let mut shown = false;
+    for message in &messages {
+        if let Some((sender, text)) = crate::teams::thread_entry(message) {
+            app.chat_messages.push(ChatMessage {
+                role: ChatRole::Teammate,
+                text: sanitize_terminal_text(&format!("{sender}\n{text}")).into_owned(),
+            });
+            shown = true;
+        }
+    }
+    shown
 }
 
 fn drain_side_answers(app: &mut TuiApp) {
@@ -6053,6 +6089,10 @@ async fn run_event_loop(
                     text,
                 });
             }
+            render(terminal, app)?;
+        }
+
+        if drain_team_messages(app).await {
             render(terminal, app)?;
         }
 
@@ -9233,6 +9273,72 @@ mod tests {
         // surfaces lose every warning they print into a queue nothing drains.
         crate::output::print_info("STDERR_ONLY_MARKER_141421");
         assert!(crate::tui::drain_tui_notices().is_empty());
+    }
+
+    #[tokio::test]
+    async fn a_teammate_message_shows_its_sender_in_the_receiving_thread() {
+        let mut app = minimal_app();
+        app.session.enable_team_mode();
+        let team = app.session.team_manager.clone().expect("team mode");
+        team.spawn_teammate("scout", "researcher", "")
+            .await
+            .unwrap();
+        team.spawn_teammate("builder", "engineer", "")
+            .await
+            .unwrap();
+
+        team.send_message("scout", crate::teams::LEAD, "FOUND_THE_LEAK_314159")
+            .await
+            .unwrap();
+        team.send_message("builder", "scout", "NEEDS_A_REVIEW_271828")
+            .await
+            .unwrap();
+        team.send_message(crate::teams::USER, "scout", "TYPED_BY_THE_PERSON_161803")
+            .await
+            .unwrap();
+
+        assert!(drain_team_messages(&mut app).await);
+        assert!(!drain_team_messages(&mut app).await);
+
+        let roles: Vec<_> = app
+            .chat_messages
+            .iter()
+            .map(|message| message.role == ChatRole::Teammate)
+            .collect();
+        assert_eq!(roles, vec![true, true]);
+
+        let rendered = draw_app(&app, 100, 30);
+        assert!(
+            rendered.contains("scout"),
+            "the sender must head the entry:\n{rendered}"
+        );
+        assert!(rendered.contains("FOUND_THE_LEAK_314159"), "{rendered}");
+        assert!(rendered.contains("builder to scout"), "{rendered}");
+        assert!(rendered.contains("NEEDS_A_REVIEW_271828"), "{rendered}");
+        assert!(
+            !rendered.contains("TYPED_BY_THE_PERSON_161803"),
+            "{rendered}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_teammate_message_cannot_inject_terminal_escapes_into_the_thread() {
+        let mut app = minimal_app();
+        app.session.enable_team_mode();
+        let team = app.session.team_manager.clone().expect("team mode");
+        team.spawn_teammate("scout", "researcher", "")
+            .await
+            .unwrap();
+        team.send_message("scout", crate::teams::LEAD, "plain\u{1b}[2Jtext")
+            .await
+            .unwrap();
+
+        drain_team_messages(&mut app).await;
+
+        assert!(app
+            .chat_messages
+            .iter()
+            .all(|message| !message.text.contains('\u{1b}')));
     }
 
     /// Regression: every overlay drew over whatever the transcript had left on

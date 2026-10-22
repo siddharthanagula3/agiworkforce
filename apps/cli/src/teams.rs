@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -137,6 +137,7 @@ pub struct TeamManager {
     next_task_id: Arc<RwLock<u32>>,
     delivered: Arc<Notify>,
     transcript: Arc<RwLock<Vec<TeamMessage>>>,
+    sent: Arc<AtomicU64>,
     stops: Arc<RwLock<HashMap<String, Arc<AtomicBool>>>>,
 }
 
@@ -172,6 +173,7 @@ impl TeamManager {
             next_task_id: Arc::new(RwLock::new(1)),
             delivered: Arc::new(Notify::new()),
             transcript: Arc::new(RwLock::new(Vec::new())),
+            sent: Arc::new(AtomicU64::new(0)),
             stops: Arc::new(RwLock::new(HashMap::new())),
         }
     }
@@ -255,6 +257,7 @@ impl TeamManager {
         {
             let mut transcript = self.transcript.write().await;
             transcript.push(message);
+            self.sent.fetch_add(1, Ordering::AcqRel);
             let overflow = transcript.len().saturating_sub(TRANSCRIPT_LIMIT);
             transcript.drain(..overflow);
         }
@@ -347,6 +350,18 @@ impl TeamManager {
         let transcript = self.transcript.read().await;
         let start = transcript.len().saturating_sub(limit);
         transcript[start..].to_vec()
+    }
+
+    pub async fn messages_since(&self, seen: u64) -> (Vec<TeamMessage>, u64) {
+        let transcript = self.transcript.read().await;
+        let total = self.sent.load(Ordering::Acquire);
+        let first = total.saturating_sub(transcript.len() as u64);
+        let start = if seen > total {
+            0
+        } else {
+            usize::try_from(seen.saturating_sub(first)).unwrap_or(0)
+        };
+        (transcript[start..].to_vec(), total)
     }
 
     async fn next_messages(&self, name: &str, stop: &AtomicBool) -> Option<Vec<TeamMessage>> {
@@ -461,7 +476,29 @@ fn preview(content: &str) -> String {
     }
 }
 
+/// The person's own messages are already echoed where they typed them.
+pub fn thread_entry(message: &TeamMessage) -> Option<(String, String)> {
+    if message.from == USER {
+        return None;
+    }
+    let from = &message.from;
+    let content = message.content.trim();
+    Some(if message.to == USER {
+        (
+            format!("{from} asks you"),
+            format!("{content}\nAnswer with /team {from} <your answer>."),
+        )
+    } else if message.to == LEAD {
+        (from.clone(), content.to_string())
+    } else {
+        (format!("{from} to {}", message.to), content.to_string())
+    })
+}
+
 fn announce(from: &str, to: &str, content: &str) {
+    if crate::tui::tui_active() {
+        return;
+    }
     let text = if to == USER {
         format!(
             "[team] {from} asks you: {}\nAnswer with /team {from} <your answer>.",
@@ -1045,6 +1082,72 @@ mod tests {
         // Messages should be drained after reading
         let messages_after = tm.read_messages("bob").await.unwrap();
         assert!(messages_after.is_empty());
+    }
+
+    #[tokio::test]
+    async fn messages_since_returns_each_message_once_and_follows_a_new_manager() {
+        let tm = TeamManager::new();
+        tm.spawn_teammate("alice", "engineer", "").await.unwrap();
+        tm.send_message("alice", LEAD, "first").await.unwrap();
+
+        let (batch, seen) = tm.messages_since(0).await;
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].from, "alice");
+        assert_eq!(seen, 1);
+
+        assert!(tm.messages_since(seen).await.0.is_empty());
+
+        tm.send_message("alice", LEAD, "second").await.unwrap();
+        let (batch, seen) = tm.messages_since(seen).await;
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].content, "second");
+
+        let fresh = TeamManager::new();
+        fresh.spawn_teammate("bob", "tester", "").await.unwrap();
+        fresh.send_message("bob", LEAD, "hello").await.unwrap();
+        let (batch, _) = fresh.messages_since(seen + 10).await;
+        assert_eq!(batch.len(), 1);
+        assert_eq!(batch[0].from, "bob");
+    }
+
+    #[tokio::test]
+    async fn messages_since_skips_what_the_bounded_transcript_dropped() {
+        let tm = TeamManager::new();
+        tm.spawn_teammate("alice", "engineer", "").await.unwrap();
+        for index in 0..TRANSCRIPT_LIMIT + 5 {
+            tm.send_message("alice", LEAD, &format!("m{index}"))
+                .await
+                .unwrap();
+        }
+        let (batch, seen) = tm.messages_since(0).await;
+        assert_eq!(batch.len(), TRANSCRIPT_LIMIT);
+        assert_eq!(batch[0].content, "m5");
+        assert_eq!(seen, (TRANSCRIPT_LIMIT + 5) as u64);
+    }
+
+    fn message(from: &str, to: &str, content: &str) -> TeamMessage {
+        TeamMessage {
+            from: from.to_string(),
+            to: to.to_string(),
+            content: content.to_string(),
+            timestamp: Utc::now(),
+        }
+    }
+
+    #[test]
+    fn thread_entry_names_the_sender_and_who_it_was_for() {
+        assert_eq!(
+            thread_entry(&message("alice", LEAD, "done")),
+            Some(("alice".to_string(), "done".to_string()))
+        );
+        assert_eq!(
+            thread_entry(&message("alice", "bob", "please review")),
+            Some(("alice to bob".to_string(), "please review".to_string()))
+        );
+        let (header, body) = thread_entry(&message("alice", USER, "ship it?")).unwrap();
+        assert_eq!(header, "alice asks you");
+        assert_eq!(body, "ship it?\nAnswer with /team alice <your answer>.");
+        assert_eq!(thread_entry(&message(USER, "alice", "go")), None);
     }
 
     #[tokio::test]
