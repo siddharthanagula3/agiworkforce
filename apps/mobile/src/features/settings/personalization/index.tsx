@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { View, ScrollView, TextInput, Alert, Modal } from 'react-native';
+import { View, ScrollView, TextInput, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -33,6 +33,7 @@ import {
   PERSONALIZATION_STYLES,
   PERSONALIZATION_TECHNICAL_LEVELS,
 } from './constants';
+import { TraitLevelSheet } from './TraitLevelSheet';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
 import { confirmDiscardChanges } from '@/src/shared/hooks/useUnsavedChangesGuard';
@@ -198,82 +199,6 @@ function TraitRow({
       <Text style={{ color: c.textMuted, fontSize: typeScale.body }}>{valueLabel}</Text>
       <ChevronsUpDown size={16} color={c.textMuted} />
     </Pressable>
-  );
-}
-
-function TraitLevelSheet({
-  trait,
-  level,
-  onSelect,
-  onClose,
-}: {
-  trait: { key: ResponseStyleTraitKey; label: string } | null;
-  level: ResponseStyleTraitLevel;
-  onSelect: (level: ResponseStyleTraitLevel) => void;
-  onClose: () => void;
-}) {
-  const c = useThemeColors();
-  return (
-    <Modal visible={trait !== null} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable
-        accessible={false}
-        style={{ flex: 1, justifyContent: 'flex-end', backgroundColor: c.scrim }}
-        onPress={onClose}
-      >
-        <Pressable accessible={false} onPress={(event) => event.stopPropagation()}>
-          <View
-            accessibilityViewIsModal
-            style={{
-              backgroundColor: c.surfaceOverlay,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
-              paddingTop: 16,
-              paddingBottom: 24,
-            }}
-          >
-            <Text
-              accessibilityRole="header"
-              style={{
-                color: c.textPrimary,
-                fontSize: typeScale.callout,
-                fontWeight: '700',
-                paddingHorizontal: 18,
-                paddingBottom: 12,
-              }}
-            >
-              {trait?.label ?? ''}
-            </Text>
-            {RESPONSE_STYLE_TRAIT_LEVELS.map((option, index) => {
-              const selected = option.value === level;
-              return (
-                <Pressable
-                  key={option.value}
-                  onPress={() => onSelect(option.value)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={`${trait?.label ?? ''} ${option.label}`}
-                  style={({ pressed }) => ({
-                    minHeight: 52,
-                    paddingHorizontal: 18,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: 12,
-                    borderTopWidth: index === 0 ? 0 : 1,
-                    borderTopColor: c.border,
-                    backgroundColor: pressed ? c.surfaceHover : c.transparent,
-                  })}
-                >
-                  <Text style={{ flex: 1, color: c.textPrimary, fontSize: typeScale.body }}>
-                    {option.label}
-                  </Text>
-                  {selected ? <Check size={17} color={c.teal} /> : null}
-                </Pressable>
-              );
-            })}
-          </View>
-        </Pressable>
-      </Pressable>
-    </Modal>
   );
 }
 

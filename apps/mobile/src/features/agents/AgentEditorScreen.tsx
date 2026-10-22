@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react';
-import { KeyboardAvoidingView, Platform, ScrollView, View } from 'react-native';
+import { KeyboardAvoidingView, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type BottomSheet from '@gorhom/bottom-sheet';
@@ -7,6 +7,7 @@ import { agentCanChat } from '@agiworkforce/cloud-contracts';
 
 import { Button } from '@/components/ui/button';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
+import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
   CloudFeatureGate,
@@ -114,10 +115,7 @@ export function AgentEditorScreen() {
           action={<Button title="Try again" variant="outline" onPress={editor.reload} />}
         />
       ) : (
-        <KeyboardAvoidingView
-          style={{ flex: 1 }}
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        >
+        <KeyboardAvoidingView style={{ flex: 1 }} behavior={keyboardAvoidingBehavior('screen')}>
           <ScrollView
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 48, gap: 12 }}
