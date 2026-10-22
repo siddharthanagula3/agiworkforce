@@ -532,6 +532,26 @@ export function ScheduleForm({
           <FieldError field="timezone" errors={errors} />
         </div>
 
+        {(draft.recurrence !== 'once' || draft.expiresLocal) && (
+          <div className="space-y-2">
+            <Label htmlFor={fieldId('expiresLocal')}>End date (optional)</Label>
+            <Input
+              id={fieldId('expiresLocal')}
+              name="expiresLocal"
+              type="datetime-local"
+              autoComplete="off"
+              value={draft.expiresLocal}
+              onChange={(event) => set({ expiresLocal: event.target.value })}
+              aria-invalid={Boolean(errors.expiresLocal)}
+              aria-describedby={describedBy('expiresLocal', errors, 'schedule-end-date-helper')}
+            />
+            <p id="schedule-end-date-helper" className="text-sm text-muted-foreground">
+              No run starts after this, in the time zone above. Leave it empty to keep repeating.
+            </p>
+            <FieldError field="expiresLocal" errors={errors} />
+          </div>
+        )}
+
         {draft.recurrence !== 'event' && (
           <details className="rounded-xl border border-border/70 bg-muted/20 p-4">
             <summary className="cursor-pointer text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
@@ -720,20 +740,6 @@ export function ScheduleForm({
             Execution Limits
           </summary>
           <div className="mt-4 grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor={fieldId('expiresLocal')}>Expire At</Label>
-              <Input
-                id={fieldId('expiresLocal')}
-                name="expiresLocal"
-                type="datetime-local"
-                autoComplete="off"
-                value={draft.expiresLocal}
-                onChange={(event) => set({ expiresLocal: event.target.value })}
-                aria-invalid={Boolean(errors.expiresLocal)}
-                aria-describedby={describedBy('expiresLocal', errors)}
-              />
-              <FieldError field="expiresLocal" errors={errors} />
-            </div>
             <div className="space-y-2">
               <Label htmlFor={fieldId('maxExecutions')}>Maximum Runs</Label>
               <Input
