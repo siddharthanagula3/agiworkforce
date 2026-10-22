@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useCallback, useEffect, useId, useState } from 'react';
 import { ChevronDown, ChevronLeft, ChevronRight, ExternalLink } from '@agiworkforce/icons';
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
-import { codeSessionPath } from '@/features/code/code-surface';
+import { CODE_COPY, codeSessionPath } from '@/features/code/code-surface';
 import { toUserMessage } from '@/lib/user-error-message';
 
 import type {
@@ -343,6 +343,12 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
       {header}
       <section className={styles['launcher']} aria-label={SECURITY_SCAN_COPY.title}>
         <p className={styles['prose']}>{SECURITY_SCAN_COPY.description}</p>
+        {state.session.workingBranch && (
+          <p className={styles['field']}>
+            <span className={styles['label']}>{CODE_COPY.repositoryBranchLabel}</span>
+            <code data-testid="security-scan-branch">{state.session.workingBranch}</code>
+          </p>
+        )}
         <label className={styles['field']} htmlFor={scopeId}>
           <span className={styles['label']}>{SECURITY_SCAN_COPY.scopeLabel}</span>
           <input

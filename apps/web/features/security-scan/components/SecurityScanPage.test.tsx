@@ -77,6 +77,26 @@ function fakeApi(initial: SecurityScanStateResponse): SecurityScanApi {
 }
 
 describe('SecurityScanPage', () => {
+  it('shows the branch the scan reads and its fixes are pushed to', async () => {
+    render(<SecurityScanPage sessionId={SESSION_ID} api={fakeApi(state(null))} />);
+
+    const branch = await screen.findByTestId('security-scan-branch');
+    expect(branch).toHaveTextContent('agi/app-1');
+  });
+
+  it('leaves the branch out when the session has none', async () => {
+    const api = fakeApi(state(null));
+    const base = state(null);
+    vi.mocked(api.read).mockResolvedValue({
+      ...base,
+      session: { ...base.session, workingBranch: null },
+    });
+    render(<SecurityScanPage sessionId={SESSION_ID} api={api} />);
+
+    await screen.findByRole('button', { name: 'Scan repository' });
+    expect(screen.queryByTestId('security-scan-branch')).toBeNull();
+  });
+
   it('scans only after the user consents to sending source files', async () => {
     const user = userEvent.setup();
     const api = fakeApi(state(null));
