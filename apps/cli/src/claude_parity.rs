@@ -107,6 +107,7 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "security-review",
         "pr-comments",
         "autofix-pr",
+        "auto-mode-setup",
         "ultrareview",
         "think-back",
         "debug",
@@ -294,6 +295,7 @@ pub fn handle_shared_command(
         "/vim" => ParityCommandResult::SystemMessage(render_vim(arg)),
         "/recap" => ParityCommandResult::Prompt(recap_prompt(arg)),
         "/security-review" => ParityCommandResult::Prompt(security_review_prompt(arg)),
+        "/auto-mode-setup" => ParityCommandResult::SystemMessage(auto_mode_setup(session, arg)),
         "/pr-comments" | "/autofix-pr" => {
             let mode = if command == "/autofix-pr" {
                 crate::pr_feedback::FeedbackMode::Fix
@@ -2557,6 +2559,203 @@ pub mod connectors {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AutoSetupEntry {
+    TrustRepository,
+    StartInAuto,
+}
+
+impl AutoSetupEntry {
+    fn subcommand(self) -> &'static str {
+        match self {
+            Self::TrustRepository => "trust",
+            Self::StartInAuto => "default",
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct AutoSetupFacts {
+    trusted: bool,
+    trust_grants_allowed: bool,
+    new_sessions_start_in: crate::cli_options::PermissionMode,
+    pinned: Option<crate::cli_options::PermissionMode>,
+}
+
+const AUTO_SETUP_USAGE: &str = "/auto-mode-setup reviews this repository for auto mode. /auto-mode-setup trust and /auto-mode-setup default each approve one suggestion.";
+
+fn auto_setup_entries(facts: &AutoSetupFacts) -> Vec<AutoSetupEntry> {
+    let auto = crate::cli_options::PermissionMode::AcceptEdits;
+    let mut entries = Vec::new();
+    if !facts.trusted && facts.trust_grants_allowed {
+        entries.push(AutoSetupEntry::TrustRepository);
+    }
+    if facts.new_sessions_start_in != auto && auto.within(facts.pinned) == auto {
+        entries.push(AutoSetupEntry::StartInAuto);
+    }
+    entries
+}
+
+fn auto_setup_approval(word: &str, facts: &AutoSetupFacts) -> Result<AutoSetupEntry, String> {
+    let entry = match word {
+        "trust" => AutoSetupEntry::TrustRepository,
+        "default" => AutoSetupEntry::StartInAuto,
+        _ => return Err(AUTO_SETUP_USAGE.to_string()),
+    };
+    if auto_setup_entries(facts).contains(&entry) {
+        return Ok(entry);
+    }
+    Err(match entry {
+        AutoSetupEntry::TrustRepository if facts.trusted => {
+            "This repository is already trusted.".to_string()
+        }
+        AutoSetupEntry::TrustRepository => {
+            "Your organization's managed policy does not allow trusting workspaces on this device."
+                .to_string()
+        }
+        AutoSetupEntry::StartInAuto
+            if facts.new_sessions_start_in == crate::cli_options::PermissionMode::AcceptEdits =>
+        {
+            "New sessions already start in auto.".to_string()
+        }
+        AutoSetupEntry::StartInAuto => format!(
+            "Your organization's policy holds tool approval at {}, so new sessions cannot start in auto.",
+            facts
+                .pinned
+                .unwrap_or_default()
+                .name()
+        ),
+    })
+}
+
+fn auto_setup_facts(root: &std::path::Path) -> (AutoSetupFacts, crate::trust::TrustStatus) {
+    let status = crate::trust::status_for(root);
+    let pinned = crate::permissions::managed_permission_mode();
+    let saved = crate::config::CliConfig::load()
+        .ok()
+        .and_then(|config| config.default.permission_mode)
+        .as_deref()
+        .and_then(crate::cli_options::persisted_permission_mode)
+        .unwrap_or_default();
+    let facts = AutoSetupFacts {
+        trusted: status.state.is_trusted(),
+        trust_grants_allowed: crate::trust::grants_allowed(),
+        new_sessions_start_in: saved.within(pinned),
+        pinned,
+    };
+    (facts, status)
+}
+
+fn mode_word(mode: crate::cli_options::PermissionMode) -> &'static str {
+    match mode {
+        crate::cli_options::PermissionMode::AcceptEdits => "auto",
+        other => other.name(),
+    }
+}
+
+fn auto_mode_setup(session: &AgentSession, arg: &str) -> String {
+    let Some(root) = session
+        .workspace_root()
+        .or_else(|| std::env::current_dir().ok())
+    else {
+        return "Cannot resolve the current directory.".to_string();
+    };
+    let (facts, status) = auto_setup_facts(&root);
+    let word = arg.trim().to_ascii_lowercase();
+    if word.is_empty() {
+        return render_auto_setup_review(session, &facts, &status);
+    }
+    match auto_setup_approval(&word, &facts) {
+        Err(reason) => reason,
+        Ok(AutoSetupEntry::TrustRepository) => match crate::trust::grant(&root) {
+            Ok(granted) => format!(
+                "Trusted {}.\n{}",
+                granted.identity.describe(),
+                crate::terminal_text::sanitize_terminal_text(&granted.render())
+            ),
+            Err(error) => format!("{error:#}"),
+        },
+        Ok(AutoSetupEntry::StartInAuto) => {
+            match crate::onboarding::update_config_permission_mode(
+                crate::cli_options::PermissionMode::AcceptEdits,
+            ) {
+                Ok(()) => "New sessions start in auto. This session keeps its mode; Shift+Tab switches it.".to_string(),
+                Err(error) => format!("New sessions were not changed: {error:#}"),
+            }
+        }
+    }
+}
+
+fn render_auto_setup_review(
+    session: &AgentSession,
+    facts: &AutoSetupFacts,
+    status: &crate::trust::TrustStatus,
+) -> String {
+    let identity = status.identity.describe();
+    let mut lines = vec![
+        format!("Auto mode setup for {}", status.root.display()),
+        format!(
+            "This session runs in {}. In auto, file edits, read-only tools and commands the safety classifier clears run; everything else asks. Shift+Tab switches modes.",
+            mode_word(session.governed_permission_mode())
+        ),
+        String::new(),
+        format!(
+            "Trust: {identity} is {}",
+            if facts.trusted {
+                "trusted"
+            } else {
+                "not trusted"
+            }
+        ),
+        format!(
+            "New sessions start in {}",
+            mode_word(facts.new_sessions_start_in)
+        ),
+    ];
+    let entries = auto_setup_entries(facts);
+    if !facts.trusted && !facts.trust_grants_allowed {
+        lines.push(
+            "Your organization's managed policy does not allow trusting workspaces on this device."
+                .to_string(),
+        );
+    }
+    if let Some(pinned) = facts.pinned.filter(|pinned| {
+        crate::cli_options::PermissionMode::AcceptEdits.within(Some(*pinned))
+            != crate::cli_options::PermissionMode::AcceptEdits
+    }) {
+        lines.push(format!(
+            "Your organization's policy holds tool approval at {}.",
+            pinned.name()
+        ));
+    }
+    lines.push(String::new());
+    if entries.is_empty() {
+        lines.push("Nothing to suggest for this repository.".to_string());
+        return crate::terminal_text::sanitize_terminal_text(&lines.join("\n")).into_owned();
+    }
+    lines.push("Suggested. Nothing is saved until you approve an entry:".to_string());
+    for (index, entry) in entries.iter().enumerate() {
+        let number = index + 1;
+        match entry {
+            AutoSetupEntry::TrustRepository => {
+                lines.push(format!("  {number}. Trust {identity}"));
+                let lifted = status.restrictions().withheld();
+                if !lifted.is_empty() {
+                    lines.push(format!("     Lifts: {}", lifted.join("; ")));
+                }
+            }
+            AutoSetupEntry::StartInAuto => {
+                lines.push(format!("  {number}. Start new sessions in auto"));
+            }
+        }
+        lines.push(format!(
+            "     Approve: /auto-mode-setup {}",
+            entry.subcommand()
+        ));
+    }
+    crate::terminal_text::sanitize_terminal_text(&lines.join("\n")).into_owned()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2841,6 +3040,108 @@ mod tests {
         assert_eq!(
             handle_shared_command("/desktop", "", &mut session),
             ParityCommandResult::NotHandled
+        );
+    }
+
+    fn setup_facts(
+        trusted: bool,
+        trust_grants_allowed: bool,
+        new_sessions_start_in: crate::cli_options::PermissionMode,
+        pinned: Option<crate::cli_options::PermissionMode>,
+    ) -> AutoSetupFacts {
+        AutoSetupFacts {
+            trusted,
+            trust_grants_allowed,
+            new_sessions_start_in,
+            pinned,
+        }
+    }
+
+    #[test]
+    fn auto_mode_setup_suggests_only_what_this_repository_is_missing() {
+        use crate::cli_options::PermissionMode::{AcceptEdits, Default, Plan};
+
+        assert_eq!(
+            auto_setup_entries(&setup_facts(false, true, Default, None)),
+            vec![AutoSetupEntry::TrustRepository, AutoSetupEntry::StartInAuto]
+        );
+        assert_eq!(
+            auto_setup_entries(&setup_facts(true, true, AcceptEdits, None)),
+            Vec::new()
+        );
+        assert_eq!(
+            auto_setup_entries(&setup_facts(false, false, Default, None)),
+            vec![AutoSetupEntry::StartInAuto],
+            "a device whose policy forbids trust grants is never offered one"
+        );
+        assert_eq!(
+            auto_setup_entries(&setup_facts(true, true, Default, Some(Default))),
+            Vec::new(),
+            "a pinned posture below auto is never offered as the default"
+        );
+        assert_eq!(
+            auto_setup_entries(&setup_facts(true, true, Plan, Some(AcceptEdits))),
+            vec![AutoSetupEntry::StartInAuto]
+        );
+    }
+
+    #[test]
+    fn auto_mode_setup_approves_one_suggested_entry_at_a_time() {
+        use crate::cli_options::PermissionMode::{AcceptEdits, Default};
+        let open = setup_facts(false, true, Default, None);
+
+        assert_eq!(
+            auto_setup_approval("trust", &open),
+            Ok(AutoSetupEntry::TrustRepository)
+        );
+        assert_eq!(
+            auto_setup_approval("default", &open),
+            Ok(AutoSetupEntry::StartInAuto)
+        );
+        for word in ["all", "yes", "trust default", "domain github.com", "test"] {
+            assert_eq!(
+                auto_setup_approval(word, &open),
+                Err(AUTO_SETUP_USAGE.to_string()),
+                "{word}"
+            );
+        }
+
+        let refused = |facts: AutoSetupFacts, word: &str| {
+            auto_setup_approval(word, &facts).expect_err("not a current suggestion")
+        };
+        assert!(refused(setup_facts(true, true, Default, None), "trust").contains("already"));
+        assert!(refused(setup_facts(false, false, Default, None), "trust").contains("policy"));
+        assert!(refused(setup_facts(true, true, AcceptEdits, None), "default").contains("already"));
+        assert!(
+            refused(setup_facts(true, true, Default, Some(Default)), "default")
+                .contains("holds tool approval at default")
+        );
+    }
+
+    #[test]
+    fn auto_mode_setup_review_changes_nothing_and_names_each_approval() {
+        let mut session = test_session();
+        let config_before = crate::config::CliConfig::load()
+            .ok()
+            .and_then(|config| config.default.permission_mode);
+
+        let ParityCommandResult::SystemMessage(review) =
+            handle_shared_command("/auto-mode-setup", "", &mut session)
+        else {
+            panic!("/auto-mode-setup must answer with a review");
+        };
+
+        assert!(review.starts_with("Auto mode setup for "), "{review}");
+        assert!(review.contains("safety classifier"), "{review}");
+        if review.contains("Suggested.") {
+            assert!(review.contains("Approve: /auto-mode-setup "), "{review}");
+        }
+        assert_eq!(
+            crate::config::CliConfig::load()
+                .ok()
+                .and_then(|config| config.default.permission_mode),
+            config_before,
+            "reviewing must not save anything"
         );
     }
 
