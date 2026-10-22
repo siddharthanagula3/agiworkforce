@@ -1,17 +1,30 @@
-import { Brain, Mic } from 'lucide-react';
+import { Mic, UserRoundPen } from 'lucide-react';
 import {
   SETTINGS_NAV_GROUPS_WEB,
   SETTINGS_NAV_GROUP_CUSTOMIZE,
   SETTINGS_NAV_GROUP_DESKTOP_APP,
 } from '@agiworkforce/ui';
 import type { SettingsNavGroupResolved, SettingsNavItem, SettingsNavKey } from '@agiworkforce/ui';
-import { isWebSettingsSection } from '../lib/web-settings-sections';
+import { canonicalWebSettingsSection, isWebSettingsSection } from '../lib/web-settings-sections';
 
-const MEMORY_NAV_ITEM: SettingsNavItem = {
-  key: 'memory',
-  label: 'Memory',
-  icon: Brain,
-  keywords: ['facts', 'remember', 'personalization', 'manage memories'],
+const PERSONALIZATION_NAV_ITEM: SettingsNavItem = {
+  key: 'personalization',
+  label: 'Personalization',
+  icon: UserRoundPen,
+  keywords: [
+    'memory',
+    'memories',
+    'facts',
+    'remember',
+    'manage memories',
+    'custom instructions',
+    'instructions',
+    'about you',
+    'nickname',
+    'style',
+    'tone',
+    'characteristics',
+  ],
 };
 
 const VOICE_NAV_ITEM: SettingsNavItem = {
@@ -34,8 +47,8 @@ interface WebSettingsNavPlacement {
 }
 
 export const WEB_SETTINGS_NAV_PLACEMENTS: readonly WebSettingsNavPlacement[] = [
-  { item: VOICE_NAV_ITEM, after: 'notifications' },
-  { item: MEMORY_NAV_ITEM, after: 'slack' },
+  { item: PERSONALIZATION_NAV_ITEM, after: 'notifications' },
+  { item: VOICE_NAV_ITEM, after: 'personalization' },
 ];
 
 function placeWebItems(items: SettingsNavItem[]): SettingsNavItem[] {
@@ -76,6 +89,6 @@ const SECTION_PATH_ALIASES: ReadonlyArray<readonly [prefix: string, section: str
 export function settingsSectionFromPath(pathname: string | null): string | null {
   if (!pathname) return null;
   const segment = /^\/settings\/([^/]+)/.exec(pathname)?.[1];
-  if (segment && isWebSettingsSection(segment)) return segment;
+  if (segment && isWebSettingsSection(segment)) return canonicalWebSettingsSection(segment);
   return SECTION_PATH_ALIASES.find(([prefix]) => pathname.startsWith(prefix))?.[1] ?? null;
 }

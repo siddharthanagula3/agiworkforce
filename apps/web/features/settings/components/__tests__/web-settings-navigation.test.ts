@@ -4,6 +4,8 @@ import {
   WEB_SETTINGS_BUILT_IN_SECTIONS,
   WEB_SETTINGS_CONTENT_SECTIONS,
   WEB_SETTINGS_HOSTED_SECTIONS,
+  WEB_SETTINGS_SECTION_ALIASES,
+  canonicalWebSettingsSection,
   isWebSettingsSection,
 } from '../../lib/web-settings-sections';
 import {
@@ -37,9 +39,11 @@ describe('web settings answer every address from one section list', () => {
     expect(CANDIDATES.length).toBeGreaterThanOrEqual(RENDERED.length + 9);
   });
 
-  it('opens exactly the sections the /settings/<section> route serves, each on itself', () => {
+  it('opens exactly the sections the /settings/<section> route serves, each on its pane', () => {
     const disagreements = CANDIDATES.filter(
-      (key) => pageAdmits(key) !== (settingsSectionFromPath(`/settings/${key}`) === key),
+      (key) =>
+        pageAdmits(key) !==
+        (settingsSectionFromPath(`/settings/${key}`) === canonicalWebSettingsSection(key)),
     );
     expect(disagreements).toEqual([]);
     expect(RENDERED.every((key) => settingsSectionFromPath(`/settings/${key}/`) === key)).toBe(
@@ -55,6 +59,15 @@ describe('web settings answer every address from one section list', () => {
     }
     expect(settingsSectionFromPath(null)).toBeNull();
     expect(settingsSectionFromPath('/chat')).toBeNull();
+  });
+
+  it('opens the pane a folded section now lives in, from its old address', () => {
+    for (const [alias, pane] of Object.entries(WEB_SETTINGS_SECTION_ALIASES)) {
+      expect(settingsSectionFromPath(`/settings/${alias}`)).toBe(pane);
+      expect(RENDERED).not.toContain(alias);
+      expect(RENDERED).toContain(pane);
+    }
+    expect(settingsSectionFromPath('/settings/memory')).toBe('personalization');
   });
 
   it('keeps the directory routes on the sections they have always opened', () => {
@@ -104,6 +117,7 @@ describe('web settings rail order', () => {
     expect(groupKeys(WEB_SETTINGS_NAV_GROUPS, 'Settings')).toEqual([
       'general',
       'notifications',
+      'personalization',
       'voice',
       'capabilities',
       'privacy',
@@ -120,15 +134,23 @@ describe('web settings rail order', () => {
     ]);
   });
 
-  it('keeps Customize after Settings with Memory last', () => {
+  it('keeps Customize after Settings, with Memory moved into Personalization', () => {
     expect(WEB_SETTINGS_NAV_GROUPS.map((group) => group.label)).toEqual(['Settings', 'Customize']);
     expect(groupKeys(WEB_SETTINGS_NAV_GROUPS, 'Customize')).toEqual([
       'skills',
       'connectors',
       'plugins',
       'slack',
-      'memory',
     ]);
+    expect(railKeys(WEB_SETTINGS_NAV_GROUPS)).not.toContain('memory');
+  });
+
+  it('labels the Personalization row and keeps memory findable in settings search', () => {
+    const item = WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find(
+      (entry) => entry.key === 'personalization',
+    );
+    expect(item?.label).toBe('Personalization');
+    expect(item?.keywords).toEqual(expect.arrayContaining(['memory', 'custom instructions']));
   });
 
   it('places every web-only item exactly once, right after its anchor', () => {

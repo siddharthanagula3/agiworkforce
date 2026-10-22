@@ -181,10 +181,12 @@ describe('web settings search reaches the chat font controls', () => {
   it('leaves searches for other settings as they were', () => {
     render(<WebSettingsSearchHarness />);
 
-    expect(resultLabels(searchSettings('custom instructions'))).toEqual(['General']);
+    expect(resultLabels(searchSettings('custom instructions'))).toEqual(['Personalization']);
+    expect(resultLabels(searchSettings('profile'))).toEqual(['General']);
     expect(resultLabels(searchSettings('invoice'))).toEqual(['Billing']);
     expect(resultLabels(searchSettings('dictation'))).toEqual(['Voice']);
-    expect(resultLabels(searchSettings('remember'))).toEqual(['Memory']);
+    expect(resultLabels(searchSettings('remember'))).toEqual(['Personalization']);
+    expect(resultLabels(searchSettings('memory'))).toEqual(['Personalization']);
     expect(resultLabels(searchSettings('referral link'))).toEqual(['Referrals']);
 
     const nav = searchSettings('no such setting');
@@ -194,7 +196,7 @@ describe('web settings search reaches the chat font controls', () => {
 
   it('moves focus to no control for a query that names the section rather than a control', () => {
     render(<WebSettingsSearchHarness />);
-    const nav = searchSettings('custom instructions');
+    const nav = searchSettings('profile');
 
     fireEvent.click(within(nav).getByRole('button', { name: 'General' }));
 

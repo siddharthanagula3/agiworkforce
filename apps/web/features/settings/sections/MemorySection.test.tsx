@@ -1,7 +1,11 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
-const { mockCapabilities } = vi.hoisted(() => ({ mockCapabilities: vi.fn() }));
+const { mockCapabilities, memoryState } = vi.hoisted(() => ({
+  mockCapabilities: vi.fn(),
+  memoryState: { count: 0 },
+}));
 
 vi.mock('../hooks/use-capabilities-preferences', () => ({
   useCapabilitiesPreferences: () => mockCapabilities(),
@@ -23,7 +27,7 @@ vi.mock('@agiworkforce/unified-chat', () => ({
   MemoryEditor: () => null,
   useMemoryStore: (selector: (state: unknown) => unknown) =>
     selector({ memories: [], clear: vi.fn(), hydrateFromServer: vi.fn() }),
-  selectMemoryCount: () => 0,
+  selectMemoryCount: () => memoryState.count,
 }));
 
 import { MemorySection } from './MemorySection';
@@ -111,5 +115,101 @@ describe('MemorySection under a workspace policy', () => {
     for (const label of TOGGLES) {
       expect(screen.getByLabelText(label)).toBeEnabled();
     }
+  });
+});
+
+describe('MemorySection controls', () => {
+  const createObjectURL = vi.fn(() => 'blob:memories');
+  const revokeObjectURL = vi.fn();
+
+  beforeEach(() => {
+    mockCapabilities.mockReset();
+    mockCapabilities.mockReturnValue(capabilities(true));
+    memoryState.count = 3;
+    Object.assign(URL, { createObjectURL, revokeObjectURL });
+  });
+
+  afterEach(() => {
+    memoryState.count = 0;
+    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
+  });
+
+  it('heads Memory as a section of the pane that holds it', () => {
+    render(<MemorySection />);
+
+    expect(screen.getByRole('heading', { level: 2, name: 'Memory' })).toBeVisible();
+    expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+    expect(screen.getByRole('region', { name: 'Memory' })).toBeVisible();
+  });
+
+  it('draws the memory actions as pills and keeps their labels', () => {
+    render(<MemorySection />);
+
+    for (const name of [
+      'Import memories',
+      'Export memories',
+      'Manage memories',
+      'Clear all memories',
+    ]) {
+      const button = screen.getByRole('button', { name });
+      expect(button.style.borderRadius).toBe('var(--corner-pill)');
+      expect(button.style.fontSize).toBe('14px');
+    }
+  });
+
+  it('offers no export while there is nothing to export', () => {
+    memoryState.count = 0;
+    render(<MemorySection />);
+
+    expect(screen.getByRole('button', { name: 'Export memories' })).toBeDisabled();
+  });
+
+  it('downloads the export under the name the server gives it', async () => {
+    const fetchMock = vi.fn(
+      async () =>
+        new Response('[]', {
+          status: 200,
+          headers: {
+            'Content-Type': 'application/json',
+            'Content-Disposition': 'attachment; filename="memories-2026-10-22.json"',
+          },
+        }),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const downloads: string[] = [];
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloads.push(this.download);
+    });
+    render(<MemorySection />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export memories' }));
+
+    expect(fetchMock).toHaveBeenCalledWith('/api/memory/export', { credentials: 'include' });
+    expect(downloads).toEqual(['memories-2026-10-22.json']);
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:memories');
+    expect(screen.getByRole('button', { name: 'Export memories' })).toBeEnabled();
+  });
+
+  it('says the export failed instead of downloading an error page', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: { message: 'Rate limit exceeded' } }), {
+            status: 429,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      ),
+    );
+    const click = vi.spyOn(HTMLAnchorElement.prototype, 'click');
+    render(<MemorySection />);
+
+    await userEvent.click(screen.getByRole('button', { name: 'Export memories' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Rate limit exceeded');
+    expect(click).not.toHaveBeenCalled();
   });
 });

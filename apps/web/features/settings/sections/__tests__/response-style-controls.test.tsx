@@ -87,7 +87,9 @@ vi.mock('@/features/chat/components/dialogs/KeyboardShortcutsDialog', () => ({
   KeyboardShortcutsDialog: () => null,
 }));
 
-import { GeneralSection } from '../GeneralSection';
+vi.mock('../MemorySection', () => ({ MemorySection: () => null }));
+
+import { PersonalizationSection } from '../PersonalizationSection';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -100,7 +102,7 @@ beforeEach(() => {
 // reads, or they become two diverging copies of one preference.
 describe('response style controls on web', () => {
   it('offers the same presets mobile ships', async () => {
-    render(<GeneralSection />);
+    render(<PersonalizationSection />);
 
     const select = await screen.findByLabelText('Response style');
     const values = Array.from(select.querySelectorAll('option')).map((o) => o.value);
@@ -108,7 +110,7 @@ describe('response style controls on web', () => {
   });
 
   it('offers all four characteristics', async () => {
-    render(<GeneralSection />);
+    render(<PersonalizationSection />);
 
     for (const label of ['Warmth', 'Enthusiasm', 'Headers and lists', 'Emoji']) {
       expect(await screen.findByLabelText(label)).toBeVisible();
@@ -116,7 +118,7 @@ describe('response style controls on web', () => {
   });
 
   it('persists to the personalization namespace the server actually reads', async () => {
-    render(<GeneralSection />);
+    render(<PersonalizationSection />);
 
     const select = await screen.findByLabelText('Response style');
     await userEvent.selectOptions(select, 'concise');
@@ -138,7 +140,7 @@ describe('response style controls on web', () => {
       ns === 'personalization' ? { style: 'formal', emoji: 0 } : {},
     );
 
-    render(<GeneralSection />);
+    render(<PersonalizationSection />);
 
     await waitFor(async () => expect(await screen.findByLabelText('Emoji')).toHaveValue('less'));
     expect(await screen.findByLabelText('Response style')).toHaveValue('formal');
@@ -149,7 +151,7 @@ describe('response style controls on web', () => {
       ns === 'personalization' ? { emoji: 0 } : {},
     );
 
-    render(<GeneralSection />);
+    render(<PersonalizationSection />);
 
     const emoji = (await screen.findByLabelText('Emoji')) as HTMLSelectElement;
     await waitFor(() => expect(emoji.selectedOptions[0]?.textContent).toBe('Less'));

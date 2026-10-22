@@ -97,6 +97,15 @@ describe('every settings section can be deep-linked', () => {
   });
 });
 
+describe('a section folded into another pane', () => {
+  it('stays routable and opens the pane that now holds it', () => {
+    expect(isSettingsNavKey('memory')).toBe(true);
+    expect(isWebSettingsSection('memory')).toBe(true);
+    expect(resolveWebSettingsSection('memory')).toBe('personalization');
+    expect(resolveWebSettingsSection('memory', true)).toBe('personalization');
+  });
+});
+
 describe('a desktop-only section', () => {
   // The group exists only inside the shell, so a browser has nothing behind it
   // to render. The link still means "open settings" though, and a link that

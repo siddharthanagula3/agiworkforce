@@ -362,10 +362,10 @@ describe('SettingsModal nav (web IA)', () => {
     expect(screen.queryByText('Enabled')).toBeNull();
   });
 
-  it('finds the real General personalization surface from custom-instructions language', () => {
+  it('finds the General profile surface from profile language', () => {
     renderModal();
     fireEvent.change(screen.getByRole('searchbox', { name: 'Search settings' }), {
-      target: { value: 'custom instructions' },
+      target: { value: 'profile' },
     });
 
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });

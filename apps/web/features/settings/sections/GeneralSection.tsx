@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Check, Monitor, Sun, Moon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -10,10 +10,9 @@ import { useAppTheme as useTheme } from '@shared/hooks/useAppTheme';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useCurrentUser } from '@/lib/identity/client';
 import { LanguageSelector } from '@/features/settings/components/LanguageSelector';
-import { SELECTABLE_LANGUAGES } from '@/app/i18n/index';
+import { SettingsSectionLink } from '@/features/settings/components/SettingsSectionLink';
 import { useTTS } from '@/lib/hooks/useTTS';
 import { clampVoicePace, useVoiceSessionStore } from '@/features/chat/stores/voice-session-store';
-import { useStyleStore } from '@/features/chat/stores/style-store';
 import { useModelStore, type AIModel } from '@shared/stores/model-store';
 import {
   isModelOnPlan,
@@ -46,12 +45,7 @@ import {
 } from '@agiworkforce/unified-chat/shiki-highlighter';
 import { useDesktopHost } from '@/features/desktop-host';
 import { safePlatform } from '@shared/utils/browser-utils';
-import {
-  fetchStoredPreferenceNamespace,
-  refreshProfileConsumers,
-  saveDisplayName,
-  savePreferenceNamespace,
-} from '@/app/settings/_lib/preferences-client';
+import { refreshProfileConsumers, saveDisplayName } from '@/app/settings/_lib/preferences-client';
 import { settingsService } from '@/features/settings/services/user-preferences';
 import {
   EFFORT_LABEL,
@@ -63,10 +57,6 @@ import {
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
 import { toUserMessage } from '@/lib/user-error-message';
-import {
-  WORK_DESCRIPTIONS,
-  type WorkDescription,
-} from '@/features/settings/constants/work-descriptions';
 
 const THEME_OPTIONS = [
   { value: 'system' as const, icon: Monitor, label: 'System' },
@@ -74,133 +64,8 @@ const THEME_OPTIONS = [
   { value: 'dark' as const, icon: Moon, label: 'Dark' },
 ];
 
-const PREF_NAMESPACE = 'general';
-
-// Mobile's personalization panel writes here and the server reads it
-// (user-identity.ts). Web writing anywhere else would give the two surfaces
-// separate, silently diverging copies of the same preference.
-const PERSONALIZATION_NAMESPACE = 'personalization';
-
-const RESPONSE_STYLES = [
-  { value: 'default', label: 'Default' },
-  { value: 'concise', label: 'Concise' },
-  { value: 'explanatory', label: 'Explanatory' },
-  { value: 'formal', label: 'Formal' },
-] as const;
-
-type ResponseStyle = (typeof RESPONSE_STYLES)[number]['value'];
-
-const TECHNICAL_LEVELS = [
-  { value: 'unspecified', label: 'Not set' },
-  { value: 'beginner', label: 'Beginner' },
-  { value: 'intermediate', label: 'Intermediate' },
-  { value: 'expert', label: 'Expert' },
-] as const;
-
-type TechnicalLevel = (typeof TECHNICAL_LEVELS)[number]['value'];
-
-const PREFERRED_FORMATTINGS = [
-  { value: 'unspecified', label: 'Not set' },
-  { value: 'prose', label: 'Prose' },
-  { value: 'bullets', label: 'Bullet lists' },
-  { value: 'headings_and_bullets', label: 'Headings and bullets' },
-  { value: 'tables_and_code', label: 'Tables and code' },
-] as const;
-
-type PreferredFormatting = (typeof PREFERRED_FORMATTINGS)[number]['value'];
-
-const PREFERRED_LENGTHS = [
-  { value: 'default', label: 'Default' },
-  { value: 'shorter', label: 'Shorter' },
-  { value: 'longer', label: 'Longer' },
-] as const;
-
-type PreferredLength = (typeof PREFERRED_LENGTHS)[number]['value'];
-
-const MAX_ABOUT_YOU_CHARS = 1500;
-
-// Separate from the display language on purpose: that picker says in its own
-// help text that conversations are unaffected, and someone reading the
-// interface in one language often writes in another.
-const RESPONSE_LANGUAGE_AUTO = 'auto';
-
-// The four traits mobile ships, on the same 0-100 scale with 50 neutral. The
-// server only acts on a value 20 or more away from neutral, so the three
-// levels below sit safely past that threshold in either direction.
-const STYLE_TRAITS = [
-  { key: 'warmth', label: 'Warmth' },
-  { key: 'enthusiasm', label: 'Enthusiasm' },
-  { key: 'headersLists', label: 'Headers and lists' },
-  { key: 'emoji', label: 'Emoji' },
-] as const;
-
-const TRAIT_LEVELS = [
-  { value: 'less', label: 'Less', score: 20 },
-  { value: 'default', label: 'Default', score: 50 },
-  { value: 'more', label: 'More', score: 80 },
-] as const;
-
-type TraitLevel = (typeof TRAIT_LEVELS)[number]['value'];
-
-function traitLevelFor(value: number): TraitLevel {
-  if (value <= 30) return 'less';
-  if (value >= 70) return 'more';
-  return 'default';
-}
-
-interface PersonalizationSettings {
-  style: ResponseStyle;
-  technicalLevel: TechnicalLevel;
-  preferredFormatting: PreferredFormatting;
-  preferredLength: PreferredLength;
-  responseLanguage: string;
-  warmth: number;
-  enthusiasm: number;
-  headersLists: number;
-  emoji: number;
-}
-
-const DEFAULT_PERSONALIZATION: PersonalizationSettings = {
-  style: 'default',
-  technicalLevel: 'unspecified',
-  preferredFormatting: 'unspecified',
-  preferredLength: 'default',
-  responseLanguage: RESPONSE_LANGUAGE_AUTO,
-  warmth: 50,
-  enthusiasm: 50,
-  headersLists: 50,
-  emoji: 50,
-};
-
-function storedChoice<T extends string>(
-  value: unknown,
-  allowed: readonly { value: T }[],
-  fallback: T,
-): T {
-  return allowed.some((entry) => entry.value === value) ? (value as T) : fallback;
-}
-
-function storedTrait(value: unknown): number | null {
-  if (typeof value !== 'number' || !Number.isFinite(value)) return null;
-  return Math.max(0, Math.min(100, Math.round(value)));
-}
-
 const AVATAR_MAX_MB = MAX_AVATAR_BYTES / (1024 * 1024);
 const AVATAR_ACCEPT = IMAGE_ATTACHMENT_MIME_TYPES.join(',');
-
-interface GeneralSettings {
-  preferredName: string;
-  workDescription: WorkDescription;
-  aboutYou: string;
-  instructions: string;
-  instructionsEnabled: boolean;
-}
-
-function storedText(value: unknown): string | undefined {
-  if (typeof value !== 'string') return undefined;
-  const trimmed = value.trim();
-  return trimmed ? trimmed : undefined;
-}
 
 export function GeneralSection() {
   const { theme: nextTheme, setTheme: setNextTheme } = useTheme();
@@ -209,233 +74,49 @@ export function GeneralSection() {
   const { user: identityUser, isLoaded: identityLoaded } = useCurrentUser();
 
   const [mounted, setMounted] = useState(false);
-  const [preferencesLoaded, setPreferencesLoaded] = useState(false);
+  const [profileReady, setProfileReady] = useState(false);
 
   const serverProfile = user?.profile;
   const accountEmail = user?.email ?? identityUser?.email ?? '';
 
   const [displayName, setDisplayName] = useState('');
-  const [preferredName, setPreferredName] = useState('');
-  const [workDescription, setWorkDescription] = useState<WorkDescription>('');
-  const [aboutYou, setAboutYou] = useState('');
-  const [instructions, setInstructions] = useState<string>('');
-  const [instructionsEnabled, setInstructionsEnabled] = useState(true);
-  const [personalization, setPersonalization] =
-    useState<PersonalizationSettings>(DEFAULT_PERSONALIZATION);
   const [savedAt, setSavedAt] = useState<number | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   const [avatarBusy, setAvatarBusy] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const dirtyRef = useRef(false);
-  const hydratedRef = useRef(false);
-  const mountedRef = useRef(false);
-  const saveInFlightRef = useRef<Promise<void> | null>(null);
-  const saveFailedRef = useRef(false);
-  const keepaliveRef = useRef(false);
   const avatarInputRef = useRef<HTMLInputElement | null>(null);
 
-  function markDirty() {
-    dirtyRef.current = true;
-    saveFailedRef.current = false;
-    setSavedAt(null);
-  }
-
   useEffect(() => {
-    mountedRef.current = true;
-    keepaliveRef.current = false;
     setMounted(true);
-    return () => {
-      mountedRef.current = false;
-    };
   }, []);
 
-  const hydrateProfilePreferences = useCallback(async () => {
-    const fallbackFullName =
+  useEffect(() => {
+    if (profileReady || !identityLoaded || !billingInitialized) return;
+    setDisplayName(
       serverProfile?.display_name ??
-      user?.name ??
-      identityUser?.fullName ??
-      accountEmail.split('@')[0] ??
-      '';
-    const fallbackPreferredName =
-      serverProfile?.preferred_name ??
-      identityUser?.firstName ??
-      fallbackFullName.split(' ')[0] ??
-      '';
-
-    setPreferencesLoaded(false);
-    setLoadError(null);
-    setDisplayName(fallbackFullName);
-    setPreferredName(fallbackPreferredName);
-    dirtyRef.current = false;
-
-    try {
-      const stored = await fetchStoredPreferenceNamespace<GeneralSettings>(PREF_NAMESPACE);
-      setPreferredName(
-        typeof stored.preferredName === 'string'
-          ? stored.preferredName.trim()
-          : fallbackPreferredName,
-      );
-      setWorkDescription(
-        (storedText(stored.workDescription) as WorkDescription | undefined) ??
-          (serverProfile?.work_description as WorkDescription | null) ??
-          '',
-      );
-      setAboutYou(typeof stored.aboutYou === 'string' ? stored.aboutYou : '');
-      setInstructions(typeof stored.instructions === 'string' ? stored.instructions : '');
-      setInstructionsEnabled(stored.instructionsEnabled !== false);
-
-      const storedStyle =
-        await fetchStoredPreferenceNamespace<Partial<PersonalizationSettings>>(
-          PERSONALIZATION_NAMESPACE,
-        );
-      setPersonalization({
-        style: storedChoice(storedStyle.style, RESPONSE_STYLES, 'default'),
-        technicalLevel: storedChoice(storedStyle.technicalLevel, TECHNICAL_LEVELS, 'unspecified'),
-        preferredFormatting: storedChoice(
-          storedStyle.preferredFormatting,
-          PREFERRED_FORMATTINGS,
-          'unspecified',
-        ),
-        preferredLength: storedChoice(storedStyle.preferredLength, PREFERRED_LENGTHS, 'default'),
-        responseLanguage:
-          typeof storedStyle.responseLanguage === 'string' && storedStyle.responseLanguage
-            ? storedStyle.responseLanguage
-            : RESPONSE_LANGUAGE_AUTO,
-        warmth: storedTrait(storedStyle.warmth) ?? 50,
-        enthusiasm: storedTrait(storedStyle.enthusiasm) ?? 50,
-        headersLists: storedTrait(storedStyle.headersLists) ?? 50,
-        emoji: storedTrait(storedStyle.emoji) ?? 50,
-      });
-    } catch (error) {
-      setLoadError(toUserMessage(error, 'Failed to load settings'));
-    } finally {
-      setPreferencesLoaded(true);
-    }
-  }, [accountEmail, identityUser?.firstName, identityUser?.fullName, serverProfile, user?.name]);
-
-  useEffect(() => {
-    if (hydratedRef.current) return;
-    if (!identityLoaded || !billingInitialized) return;
-    hydratedRef.current = true;
-    void hydrateProfilePreferences();
-  }, [billingInitialized, identityLoaded, hydrateProfilePreferences]);
-
-  const profilePreferencesReady = preferencesLoaded && loadError === null;
-
-  const latestFormValuesRef = useRef({
-    preferredName,
-    workDescription,
-    aboutYou,
-    instructions,
-    instructionsEnabled,
-    personalization,
-  });
-  latestFormValuesRef.current = {
-    preferredName,
-    workDescription,
-    aboutYou,
-    instructions,
-    instructionsEnabled,
-    personalization,
-  };
-
-  const flushPendingSave = useCallback((): Promise<void> => {
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-      debounceRef.current = null;
-    }
-    if (saveInFlightRef.current) return saveInFlightRef.current;
-    if (!dirtyRef.current) return Promise.resolve();
-
-    const operation = (async () => {
-      try {
-        while (dirtyRef.current) {
-          dirtyRef.current = false;
-          const values = latestFormValuesRef.current;
-          const options = { keepalive: keepaliveRef.current, merge: true };
-          const results = await Promise.allSettled([
-            savePreferenceNamespace<GeneralSettings>(
-              PREF_NAMESPACE,
-              {
-                preferredName: values.preferredName.trim(),
-                workDescription: values.workDescription,
-                aboutYou: values.aboutYou.trim(),
-                instructions: values.instructions,
-                instructionsEnabled: values.instructionsEnabled,
-              },
-              options,
-            ),
-            savePreferenceNamespace(PERSONALIZATION_NAMESPACE, values.personalization, options),
-          ]);
-          const failure = results.find((result) => result.status === 'rejected');
-          if (failure?.status === 'rejected') {
-            dirtyRef.current = true;
-            throw failure.reason;
-          }
-          await refreshProfileConsumers();
-        }
-        saveFailedRef.current = false;
-        if (mountedRef.current) {
-          setSaveError(null);
-          if (!dirtyRef.current) setSavedAt(Date.now());
-        }
-      } catch (error) {
-        saveFailedRef.current = true;
-        const message = toUserMessage(
-          error,
-          'We could not save your preferences. Try Save profile again.',
-        );
-        if (mountedRef.current) setSaveError(message);
-        else toast.error(message);
-        throw error;
-      } finally {
-        saveInFlightRef.current = null;
-      }
-    })();
-    saveInFlightRef.current = operation;
-    return operation;
-  }, []);
-
-  useEffect(() => {
-    if (!mounted || !preferencesLoaded || !dirtyRef.current || loadError !== null) return;
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => {
-      debounceRef.current = null;
-      void flushPendingSave().catch(() => {});
-    }, 400);
-    return () => {
-      if (debounceRef.current) clearTimeout(debounceRef.current);
-    };
+        user?.name ??
+        identityUser?.fullName ??
+        accountEmail.split('@')[0] ??
+        '',
+    );
+    setProfileReady(true);
   }, [
-    aboutYou,
-    flushPendingSave,
-    instructions,
-    instructionsEnabled,
-    loadError,
-    mounted,
-    personalization,
-    preferencesLoaded,
-    preferredName,
-    workDescription,
+    accountEmail,
+    billingInitialized,
+    identityLoaded,
+    identityUser?.fullName,
+    profileReady,
+    serverProfile?.display_name,
+    user?.name,
   ]);
-
-  useEffect(
-    () => () => {
-      keepaliveRef.current = true;
-      if (!saveFailedRef.current) void flushPendingSave().catch(() => {});
-    },
-    [flushPendingSave],
-  );
 
   const theme = !mounted || !nextTheme ? 'dark' : (nextTheme as 'dark' | 'light' | 'system');
 
   const avatarInitials = (() => {
-    const name = preferredName || displayName || accountEmail || 'A';
+    const name = displayName || accountEmail || 'A';
     const parts = name.trim().split(/\s+/);
     if (parts.length >= 2) {
       return ((parts[0]?.[0] ?? '') + (parts[1]?.[0] ?? '')).toUpperCase();
@@ -488,30 +169,14 @@ export function GeneralSection() {
     }
   }
 
-  function handleResetStyle() {
-    markDirty();
-    setPersonalization(DEFAULT_PERSONALIZATION);
-    useStyleStore.getState().resetToDefault();
-    toast.success('Response style is back to the defaults.');
-  }
-
   async function handleSave() {
-    if (!profilePreferencesReady) return;
+    if (!profileReady) return;
     const trimmedFull = displayName.trim();
     if (!trimmedFull) return;
-    const trimmedPreferred = preferredName.trim();
     setSaving(true);
     setSaveError(null);
     try {
-      latestFormValuesRef.current = {
-        ...latestFormValuesRef.current,
-        preferredName: trimmedPreferred,
-      };
-      dirtyRef.current = true;
-      saveFailedRef.current = false;
-      await flushPendingSave();
       await saveDisplayName(trimmedFull);
-      setPreferredName(trimmedPreferred);
       await refreshProfileConsumers();
       setSavedAt(Date.now());
     } catch (err) {
@@ -523,12 +188,10 @@ export function GeneralSection() {
 
   return (
     <div className="flex flex-col gap-8">
-      {/* Profile section */}
       <div>
         <h2 className="mb-4 text-h4 text-foreground">Profile</h2>
 
         <div className="flex flex-col gap-5">
-          {/* Avatar row */}
           <div className="flex items-start gap-4">
             {avatarUrl ? (
               <img
@@ -569,7 +232,7 @@ export function GeneralSection() {
                   type="button"
                   onClick={() => avatarInputRef.current?.click()}
                   disabled={avatarBusy}
-                  className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                  className="rounded-full border border-border px-3 py-1.5 text-sm font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                 >
                   {avatarBusy ? 'Working…' : avatarUrl ? 'Change photo' : 'Upload photo'}
                 </button>
@@ -578,345 +241,66 @@ export function GeneralSection() {
                     type="button"
                     onClick={() => void handleAvatarRemove()}
                     disabled={avatarBusy}
-                    className="rounded-md px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
+                    className="rounded-full px-3 py-1.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground disabled:opacity-50"
                   >
                     Remove
                   </button>
                 )}
               </div>
-              <span className="text-xs text-muted-foreground">
+              <span className="text-sm text-muted-foreground">
                 PNG, JPEG, GIF, WebP, or HEIC. Up to {AVATAR_MAX_MB} MB.
               </span>
               {avatarError && (
-                <span role="alert" className="text-xs text-danger">
+                <span role="alert" className="text-sm text-danger">
                   {avatarError}
                 </span>
               )}
             </div>
           </div>
 
-          {/* Full name */}
           <FieldRow label="Full name" htmlFor="general-full-name">
             <input
               id="general-full-name"
               type="text"
               value={displayName}
               onChange={(e) => {
-                markDirty();
+                setSavedAt(null);
                 setDisplayName(e.target.value.slice(0, 80));
               }}
               maxLength={80}
-              disabled={!profilePreferencesReady || saving}
+              disabled={!profileReady || saving}
               placeholder="Your name"
               className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring sm:w-64"
             />
           </FieldRow>
 
-          {/* What should AGI call you */}
-          <FieldRow
-            label="What should AGI call you?"
-            helper="The assistant uses this in greetings and follow-ups. Leave it empty to be greeted without a name."
-            htmlFor="general-preferred-name"
-          >
-            <input
-              id="general-preferred-name"
-              type="text"
-              value={preferredName}
-              onChange={(e) => {
-                markDirty();
-                setPreferredName(e.target.value.slice(0, 60));
-              }}
-              maxLength={60}
-              disabled={!profilePreferencesReady || saving}
-              placeholder="Nickname or first name"
-              className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring sm:w-64"
-            />
-          </FieldRow>
-
-          {/* Work description */}
-          <FieldRow label="What best describes your work?" htmlFor="general-work">
-            <select
-              id="general-work"
-              value={workDescription}
-              disabled={!profilePreferencesReady || saving}
-              onChange={(e) => {
-                markDirty();
-                setWorkDescription(e.target.value as WorkDescription);
-              }}
-              className="w-full cursor-pointer rounded-md border border-border bg-background px-3 py-2 text-sm text-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring sm:w-64"
-              style={{ appearance: 'none', WebkitAppearance: 'none' }}
+          <p className="text-sm text-muted-foreground">
+            Response style, instructions and what AGI knows about you are in{' '}
+            <SettingsSectionLink
+              section="personalization"
+              className="font-medium text-foreground underline"
             >
-              <option value="">Select a role...</option>
-              {WORK_DESCRIPTIONS.map((d) => (
-                <option key={d} value={d}>
-                  {d}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
+              Personalization
+            </SettingsSectionLink>
+            .
+          </p>
 
-          <div className="flex flex-col gap-1.5">
-            <label htmlFor="general-about-you" className="text-[13px] font-medium text-foreground">
-              More about you
-            </label>
-            <p
-              id="general-about-you-hint"
-              className="text-xs leading-relaxed text-muted-foreground"
-            >
-              Interests, values or background AGI should keep in mind when it answers.
-            </p>
-            <textarea
-              id="general-about-you"
-              aria-describedby="general-about-you-hint"
-              value={aboutYou}
-              onChange={(e) => {
-                markDirty();
-                setAboutYou(e.target.value.slice(0, MAX_ABOUT_YOU_CHARS));
-              }}
-              maxLength={MAX_ABOUT_YOU_CHARS}
-              rows={3}
-              disabled={!profilePreferencesReady || saving}
-              placeholder="e.g. I run a small bakery and I am learning to code in the evenings"
-              className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring"
-              style={{ fontFamily: 'inherit' }}
-            />
-            <span className="text-end text-caption text-muted-foreground">
-              {aboutYou.length} / {MAX_ABOUT_YOU_CHARS}
-            </span>
-          </div>
-
-          {/*
-            Response style. Mobile has shipped these for a while; web had
-            nothing, and until 2026-08-21 neither surface's values reached the
-            model. Both now write the same `personalization` namespace that
-            user-identity.ts reads, so the two surfaces cannot diverge.
-          */}
-          <FieldRow label="Response style" htmlFor="general-response-style">
-            <select
-              id="general-response-style"
-              value={personalization.style}
-              onChange={(e) => {
-                markDirty();
-                setPersonalization((current) => ({
-                  ...current,
-                  style: e.target.value as ResponseStyle,
-                }));
-              }}
-              disabled={!profilePreferencesReady || saving}
-              className={SELECT_CLASS}
-            >
-              {RESPONSE_STYLES.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-
-          <FieldRow label="Response length" htmlFor="general-preferred-length">
-            <select
-              id="general-preferred-length"
-              value={personalization.preferredLength}
-              onChange={(e) => {
-                markDirty();
-                setPersonalization((current) => ({
-                  ...current,
-                  preferredLength: e.target.value as PreferredLength,
-                }));
-              }}
-              disabled={!profilePreferencesReady || saving}
-              className={SELECT_CLASS}
-            >
-              {PREFERRED_LENGTHS.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-
-          <FieldRow label="Technical level" htmlFor="general-technical-level">
-            <select
-              id="general-technical-level"
-              value={personalization.technicalLevel}
-              onChange={(e) => {
-                markDirty();
-                setPersonalization((current) => ({
-                  ...current,
-                  technicalLevel: e.target.value as TechnicalLevel,
-                }));
-              }}
-              disabled={!profilePreferencesReady || saving}
-              className={SELECT_CLASS}
-            >
-              {TECHNICAL_LEVELS.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-
-          <FieldRow label="Preferred formatting" htmlFor="general-preferred-formatting">
-            <select
-              id="general-preferred-formatting"
-              value={personalization.preferredFormatting}
-              onChange={(e) => {
-                markDirty();
-                setPersonalization((current) => ({
-                  ...current,
-                  preferredFormatting: e.target.value as PreferredFormatting,
-                }));
-              }}
-              disabled={!profilePreferencesReady || saving}
-              className={SELECT_CLASS}
-            >
-              {PREFERRED_FORMATTINGS.map((entry) => (
-                <option key={entry.value} value={entry.value}>
-                  {entry.label}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-
-          <FieldRow label="Response language" htmlFor="general-response-language">
-            <select
-              id="general-response-language"
-              value={personalization.responseLanguage}
-              onChange={(e) => {
-                markDirty();
-                setPersonalization((current) => ({
-                  ...current,
-                  responseLanguage: e.target.value,
-                }));
-              }}
-              disabled={!profilePreferencesReady || saving}
-              className={SELECT_CLASS}
-            >
-              <option value={RESPONSE_LANGUAGE_AUTO}>Match my message</option>
-              {SELECTABLE_LANGUAGES.map((language) => (
-                <option key={language.code} value={language.code}>
-                  {language.nativeName}
-                </option>
-              ))}
-            </select>
-          </FieldRow>
-
-          {STYLE_TRAITS.map((trait) => (
-            <FieldRow key={trait.key} label={trait.label} htmlFor={`general-trait-${trait.key}`}>
-              <select
-                id={`general-trait-${trait.key}`}
-                value={traitLevelFor(personalization[trait.key])}
-                onChange={(e) => {
-                  markDirty();
-                  const level = TRAIT_LEVELS.find((entry) => entry.value === e.target.value);
-                  if (!level) return;
-                  setPersonalization((current) => ({ ...current, [trait.key]: level.score }));
-                }}
-                disabled={!profilePreferencesReady || saving}
-                aria-label={trait.label}
-                className={SELECT_CLASS}
-              >
-                {TRAIT_LEVELS.map((level) => (
-                  <option key={level.value} value={level.value}>
-                    {level.label}
-                  </option>
-                ))}
-              </select>
-            </FieldRow>
-          ))}
-
-          <div className="flex flex-col gap-1">
-            <button
-              type="button"
-              onClick={handleResetStyle}
-              disabled={!profilePreferencesReady || saving}
-              className="self-start rounded-md border border-border px-3 py-1.5 text-[13px] font-medium text-foreground transition-colors hover:bg-muted disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Reset response style
-            </button>
-            <p className="text-xs leading-relaxed text-muted-foreground">
-              Puts style, length, technical level, formatting, language, tone and the composer style
-              back to their defaults. Your name, background and instructions stay.
-            </p>
-          </div>
-
-          {/* Instructions for AGI, full-width textarea (matches reference) */}
-          <div className="flex flex-col gap-1.5 pt-1">
-            <div className="flex items-center justify-between gap-3">
-              <label
-                htmlFor="general-instructions"
-                className="text-[13px] font-medium text-foreground"
-              >
-                Instructions for AGI
-              </label>
-              <Switch
-                checked={instructionsEnabled}
-                aria-label="Apply instructions for AGI"
-                disabled={!profilePreferencesReady || saving}
-                onCheckedChange={(next) => {
-                  markDirty();
-                  setInstructionsEnabled(next);
-                }}
-              />
-            </div>
-            <p
-              id="general-instructions-hint"
-              className="text-xs leading-relaxed text-muted-foreground"
-            >
-              {instructionsEnabled
-                ? 'AGI will keep these in mind across chats. They help tailor tone, format, and explanations to how you work best.'
-                : 'Switched off. Your instructions are kept here and are not sent to the model until you switch them back on.'}
-            </p>
-            <textarea
-              id="general-instructions"
-              aria-describedby="general-instructions-hint"
-              value={instructions}
-              onChange={(e) => {
-                markDirty();
-                setInstructions(e.target.value.slice(0, 2000));
-              }}
-              maxLength={2000}
-              rows={4}
-              disabled={!profilePreferencesReady || saving}
-              placeholder="e.g. when learning new concepts, I find analogies particularly helpful"
-              className="resize-y rounded-md border border-border bg-background px-3 py-2.5 text-[13px] leading-relaxed text-foreground placeholder:text-muted-foreground outline-none disabled:cursor-not-allowed disabled:opacity-60 focus:ring-1 focus:ring-ring"
-              style={{ fontFamily: 'inherit' }}
-            />
-            <span className="text-end text-caption text-muted-foreground">
-              {instructions.length} / 2000
-            </span>
-          </div>
-
-          {/* Save row */}
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
               onClick={handleSave}
-              disabled={!profilePreferencesReady || displayName.trim().length === 0 || saving}
-              className="rounded-md bg-warning-fill px-4 py-2 text-[13px] font-semibold text-warning-on-fill transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
+              disabled={!profileReady || displayName.trim().length === 0 || saving}
+              className="rounded-full bg-warning-fill px-4 py-2 text-sm font-semibold text-warning-on-fill transition-opacity disabled:cursor-not-allowed disabled:opacity-50 hover:opacity-90"
             >
               {saving ? 'Saving...' : 'Save profile'}
             </button>
             {savedAt !== null && saveError === null && !saving && (
-              <span className="text-xs text-muted-foreground">Saved</span>
+              <span className="text-sm text-muted-foreground">Saved</span>
             )}
-            {saveError !== null && <span className="text-xs text-danger">{saveError}</span>}
-            {!preferencesLoaded && (
-              <span role="status" className="text-xs text-muted-foreground">
+            {saveError !== null && <span className="text-sm text-danger">{saveError}</span>}
+            {!profileReady && (
+              <span role="status" className="text-sm text-muted-foreground">
                 Loading profile…
-              </span>
-            )}
-            {loadError !== null && saveError === null && (
-              <span className="flex items-center gap-2 text-xs text-danger">
-                {loadError}
-                <button
-                  type="button"
-                  onClick={() => void hydrateProfilePreferences()}
-                  className="rounded-md border border-border px-2 py-1 font-medium text-foreground hover:bg-muted"
-                >
-                  Retry
-                </button>
               </span>
             )}
           </div>
@@ -954,7 +338,7 @@ export function GeneralSection() {
 
           <AccentColorRow />
 
-          <HighContrastRow />
+          <ContrastRow />
           <MotionRow />
           <SidebarItemsRow />
 
@@ -1318,13 +702,24 @@ function MotionRow() {
   );
 }
 
-function HighContrastRow() {
+const CONTRAST_SYSTEM = 'system';
+const CONTRAST_HIGH = 'high';
+
+function ContrastRow() {
   const highContrast = useSettingsStore((state) => state.highContrast);
   const setHighContrast = useSettingsStore((state) => state.setHighContrast);
 
   return (
-    <Row label="High contrast">
-      <Switch checked={highContrast} aria-label="High contrast" onCheckedChange={setHighContrast} />
+    <Row label="Contrast" hint="System follows your device setting.">
+      <select
+        value={highContrast ? CONTRAST_HIGH : CONTRAST_SYSTEM}
+        onChange={(event) => setHighContrast(event.target.value === CONTRAST_HIGH)}
+        aria-label="Contrast"
+        className={SELECT_CLASS}
+      >
+        <option value={CONTRAST_SYSTEM}>System</option>
+        <option value={CONTRAST_HIGH}>High</option>
+      </select>
     </Row>
   );
 }
@@ -1701,7 +1096,7 @@ function Row({
       <span className={`flex min-w-0 flex-col gap-0.5 ${hint ? '' : 'sm:shrink-0'}`}>
         <span className="text-sm text-foreground">{label}</span>
         {hint && (
-          <span id={hintId} className="text-caption text-muted-foreground">
+          <span id={hintId} className="text-sm text-muted-foreground">
             {hint}
           </span>
         )}
@@ -1725,8 +1120,8 @@ function FieldRow({
   return (
     <div className="flex flex-col items-stretch gap-2 border-b border-border/40 pb-4 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
       <label htmlFor={htmlFor} className="flex min-w-0 flex-col gap-0.5">
-        <span className="text-[13px] font-medium text-foreground">{label}</span>
-        {helper && <span className="text-caption text-muted-foreground">{helper}</span>}
+        <span className="text-sm font-medium text-foreground">{label}</span>
+        {helper && <span className="text-sm text-muted-foreground">{helper}</span>}
       </label>
       <div className="w-full min-w-0 sm:w-auto sm:shrink-0">{children}</div>
     </div>

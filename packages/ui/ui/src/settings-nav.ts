@@ -56,6 +56,7 @@ export type SettingsNavKey =
   | 'desktop'
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer, see apps/desktop settings-ia contract test).
+  | 'personalization'
   | 'security'
   | 'safety'
   | 'team'
@@ -189,6 +190,7 @@ export const SETTINGS_NAV: SettingsNavEntry[] = [
  */
 const SETTINGS_NAV_KEY_SET: ReadonlySet<string> = new Set<SettingsNavKey>([
   ...SETTINGS_NAV.map((entry) => entry.key),
+  'personalization',
   'security',
   'safety',
   'team',
@@ -297,7 +299,7 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
         key: 'general',
         label: 'General',
         icon: Settings2,
-        keywords: ['profile', 'name', 'personalization', 'custom instructions', 'instructions'],
+        keywords: ['profile', 'name', 'photo', 'theme', 'appearance', 'contrast'],
       },
       { key: 'notifications', label: 'Notifications', icon: Bell },
       { key: 'capabilities', label: 'Capabilities', icon: Zap },

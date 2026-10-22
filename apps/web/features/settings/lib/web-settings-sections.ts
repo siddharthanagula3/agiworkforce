@@ -29,7 +29,7 @@ export const WEB_SETTINGS_CONTENT_SECTIONS = [
   'usage',
   'referrals',
   'capabilities',
-  'memory',
+  'personalization',
   'notifications',
   'voice',
   'reflect',
@@ -38,7 +38,20 @@ export const WEB_SETTINGS_CONTENT_SECTIONS = [
   'help',
 ] as const satisfies readonly SettingsNavKey[];
 
-export type WebSettingsContentSection = (typeof WEB_SETTINGS_CONTENT_SECTIONS)[number];
+export type WebSettingsPane = (typeof WEB_SETTINGS_CONTENT_SECTIONS)[number];
+
+/**
+ * Sections that were folded into another pane. Their addresses keep working,
+ * so a saved `/settings/memory` link opens the pane that now holds Memory.
+ */
+export const WEB_SETTINGS_SECTION_ALIASES = {
+  memory: 'personalization',
+} as const satisfies Partial<Record<SettingsNavKey, WebSettingsPane>>;
+
+type WebSettingsSectionAlias = keyof typeof WEB_SETTINGS_SECTION_ALIASES;
+
+/** A section a link may address: a pane, or an alias that opens one. */
+export type WebSettingsContentSection = WebSettingsPane | WebSettingsSectionAlias;
 
 /**
  * Sections the shared SettingsModal shell renders itself from the adapter,
@@ -69,12 +82,23 @@ const WEB_SETTINGS_SECTION_SET: ReadonlySet<string> = new Set<string>([
   ...WEB_SETTINGS_BUILT_IN_SECTIONS,
 ]);
 
+function aliasTarget(value: string): WebSettingsPane | undefined {
+  return Object.hasOwn(WEB_SETTINGS_SECTION_ALIASES, value)
+    ? WEB_SETTINGS_SECTION_ALIASES[value as WebSettingsSectionAlias]
+    : undefined;
+}
+
+/** The pane a section name opens on web: an alias's target, otherwise itself. */
+export function canonicalWebSettingsSection(value: string): string {
+  return aliasTarget(value) ?? value;
+}
+
 const WEB_SETTINGS_HOSTED_SECTION_SET: ReadonlySet<string> = new Set<string>(
   WEB_SETTINGS_HOSTED_SECTIONS,
 );
 
 export function isWebSettingsSection(value: string, hosted = false): boolean {
-  if (WEB_SETTINGS_SECTION_SET.has(value)) return true;
+  if (WEB_SETTINGS_SECTION_SET.has(canonicalWebSettingsSection(value))) return true;
   return hosted && WEB_SETTINGS_HOSTED_SECTION_SET.has(value);
 }
 
@@ -89,7 +113,8 @@ export const WEB_SETTINGS_FALLBACK_SECTION = 'general';
  * is no section anywhere answers null and opens nothing.
  */
 export function resolveWebSettingsSection(value: string, hosted = false): string | null {
-  if (WEB_SETTINGS_SECTION_SET.has(value)) return value;
+  const canonical = canonicalWebSettingsSection(value);
+  if (WEB_SETTINGS_SECTION_SET.has(canonical)) return canonical;
   if (!WEB_SETTINGS_HOSTED_SECTION_SET.has(value)) return null;
   return hosted ? value : WEB_SETTINGS_FALLBACK_SECTION;
 }

@@ -35,7 +35,9 @@ vi.mock('../sections/SharedLinksSection', () => ({ SharedLinksSection: () => nul
 vi.mock('../sections/BillingSection', () => ({ BillingSection: () => null }));
 vi.mock('../sections/UsageSection', () => ({ UsageSection: () => null }));
 vi.mock('../sections/CapabilitiesSection', () => ({ CapabilitiesSection: () => null }));
-vi.mock('../sections/MemorySection', () => ({ MemorySection: () => null }));
+vi.mock('../sections/PersonalizationSection', () => ({
+  PersonalizationSection: () => <div>Personalization settings content</div>,
+}));
 vi.mock('../sections/NotificationsSection', () => ({ NotificationsSection: () => null }));
 vi.mock('../sections/TimeFocusSection', () => ({
   TimeFocusSection: () => <div>Time and focus settings content</div>,
@@ -798,24 +800,26 @@ describe('WebSettingsModal connectors adapter (honest web semantics)', () => {
     expect(within(nav).queryByRole('button', { name: 'Team' })).toBeNull();
   });
 
-  it('lists Memory as its own top-level nav entry, not nested under Capabilities', () => {
+  it('lists Personalization as a top-level nav entry and gives Memory no row of its own', () => {
     stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="general" />);
 
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
-    expect(within(nav).getByRole('button', { name: 'Memory' })).toBeTruthy();
+    expect(within(nav).getByRole('button', { name: 'Personalization' })).toBeTruthy();
+    expect(within(nav).queryByRole('button', { name: 'Memory' })).toBeNull();
     expect(within(nav).getByRole('button', { name: 'Capabilities' })).toBeTruthy();
   });
 
-  it('marks the Memory nav entry current when the memory section is active', () => {
+  it('opens Personalization, marked current, when asked for the memory section', () => {
     stubFetch();
     render(<WebSettingsModal open onClose={vi.fn()} initialSection="memory" />);
 
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
-    expect(within(nav).getByRole('button', { name: 'Memory' })).toHaveAttribute(
+    expect(within(nav).getByRole('button', { name: 'Personalization' })).toHaveAttribute(
       'aria-current',
       'page',
     );
+    expect(screen.getByText('Personalization settings content')).toBeTruthy();
   });
 });
 

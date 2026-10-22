@@ -22,9 +22,10 @@ import {
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
 import { useConnectorsSettingsAdapter } from '@/features/connectors/hooks/use-connectors-settings-adapter';
 import { useSkillsSettingsAdapter } from '@/features/skills/hooks/use-skills-settings-adapter';
-import type {
-  WebSettingsContentSection,
-  WebSettingsHostedSection,
+import {
+  canonicalWebSettingsSection,
+  type WebSettingsHostedSection,
+  type WebSettingsPane,
 } from '../lib/web-settings-sections';
 import { DesktopSettingsSection, useDesktopHost } from '@/features/desktop-host';
 
@@ -42,7 +43,7 @@ import { BillingSection } from '../sections/BillingSection';
 import { UsageSection } from '../sections/UsageSection';
 import { ReferralsSection } from '../sections/ReferralsSection';
 import { CapabilitiesSection } from '../sections/CapabilitiesSection';
-import { MemorySection } from '../sections/MemorySection';
+import { PersonalizationSection } from '../sections/PersonalizationSection';
 import { NotificationsSection } from '../sections/NotificationsSection';
 import { VoiceSection } from '../sections/VoiceSection';
 import { ReflectSection } from '../sections/ReflectSection';
@@ -131,17 +132,20 @@ export function WebSettingsModal({
 
   const sectionFromPath = settingsSectionFromPath(pathname);
 
-  const [activeSection, setActiveSection] = useState<string>(sectionFromPath ?? initialSection);
+  const [activeSection, setActiveSection] = useState<string>(
+    sectionFromPath ?? canonicalWebSettingsSection(initialSection),
+  );
 
   useEffect(() => {
     if (sectionFromPath) {
       setActiveSection(sectionFromPath);
     } else if (open) {
-      setActiveSection(initialSection);
+      setActiveSection(canonicalWebSettingsSection(initialSection));
     }
   }, [open, initialSection, sectionFromPath]);
 
-  const handleSectionChange = useCallback((key: string) => {
+  const handleSectionChange = useCallback((requested: string) => {
+    const key = canonicalWebSettingsSection(requested);
     setActiveSection(key);
     const next = settingsHashForSection(key, window.location.hash);
     if (next !== null) replaceSettingsHash(next);
@@ -209,7 +213,7 @@ export function WebSettingsModal({
   const skillsDecision = useCapabilityDecision('canUseSkills');
   const pluginsDecision = useCapabilityDecision('canUsePlugins');
 
-  const sectionContent: Record<WebSettingsContentSection, React.ReactNode> &
+  const sectionContent: Record<WebSettingsPane, React.ReactNode> &
     Partial<Record<WebSettingsHostedSection | 'skills' | 'plugins', React.ReactNode>> = {
     ...(host ? { desktop: <DesktopSettingsSection /> } : {}),
     ...(skillsDecision?.allowed === false && skillsDecision.reason
@@ -236,7 +240,7 @@ export function WebSettingsModal({
     usage: <UsageSection />,
     referrals: <ReferralsSection />,
     capabilities: <CapabilitiesSection />,
-    memory: <MemorySection />,
+    personalization: <PersonalizationSection />,
     notifications: <NotificationsSection />,
     voice: <VoiceSection />,
     reflect: <ReflectSection />,
