@@ -561,9 +561,12 @@ export default function TermsPage() {
                       /pricing
                     </Link>{' '}
                     or in your order form when you subscribe. <strong>Auto-renewal:</strong>{' '}
-                    subscriptions renew automatically at the end of each billing period until you
-                    cancel. Cancelling stops the next renewal; access continues through the period
-                    you have paid for, and the current period is not automatically refunded. Refund
+                    subscriptions renew automatically at the end of each billing period until you{' '}
+                    <Link href="/settings/billing" className="agi-ds-link">
+                      cancel
+                    </Link>
+                    . Cancelling stops the next renewal; access continues through the period you
+                    have paid for, and the current period is not automatically refunded. Refund
                     terms are at{' '}
                     <Link href="/refund-policy" className="agi-ds-link">
                       /refund-policy
