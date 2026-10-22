@@ -45,6 +45,7 @@ import {
   CLOUD_CODE_GOAL_COMMANDS,
   CLOUD_CODE_TURN_STEP_BOUNDS,
   cloudCodeRepositoryLabel,
+  isBillingPlanTier,
   isCloudCodeTurnStepBound,
   isFreeBillingPlanTier,
   selectUsageWarning,
@@ -1336,11 +1337,15 @@ export function UsageRing({
   contextTokens: number | null;
   contextWindow: number | null;
 }) {
+  const router = useGuardedRouter();
   const { usage, loading } = useManagedUsageSummary();
-  const percent = Math.min(PERCENT_MAX, Math.max(0, usage?.usage_percentage ?? 0));
+  const planTier = usage?.plan_tier ?? null;
+  const freePlan = isFreeBillingPlanTier(planTier);
+  const metered = usage !== null && isBillingPlanTier(planTier) && !freePlan;
+  const percent = metered ? Math.min(PERCENT_MAX, Math.max(0, usage.usage_percentage ?? 0)) : 0;
   const now = Date.now();
 
-  const bars = usage
+  const bars = metered
     ? [
         {
           id: 'session',
@@ -1414,9 +1419,18 @@ export function UsageRing({
               </div>
             </div>
           )}
-          <span className={styles['popoverHeading']}>{CODE_COPY.planUsage}</span>
           {loading && <Spinner size="sm" aria-label={CODE_COPY.usageMenu} />}
-          {!loading && bars.length === 0 && (
+          {!loading && freePlan && (
+            <button
+              type="button"
+              className={styles['primaryButton']}
+              onClick={() => openUpgrade((href) => router.push(href))}
+            >
+              {CODE_COPY.upgradeAction}
+            </button>
+          )}
+          {!freePlan && <span className={styles['popoverHeading']}>{CODE_COPY.planUsage}</span>}
+          {!loading && !freePlan && bars.length === 0 && (
             <span className={styles['formHelp']}>{CODE_COPY.usageUnavailable}</span>
           )}
           {bars.map((bar) => {
@@ -1437,10 +1451,12 @@ export function UsageRing({
               </div>
             );
           })}
-          <Link className={styles['usageLink']} href={CODE_ROUTES.usage}>
-            <span>{CODE_COPY.usageDetail}</span>
-            <ChevronRight size={CHIP_GLYPH_SIZE} aria-hidden="true" />
-          </Link>
+          {metered && (
+            <Link className={styles['usageLink']} href={CODE_ROUTES.usage}>
+              <span>{CODE_COPY.usageDetail}</span>
+              <ChevronRight size={CHIP_GLYPH_SIZE} aria-hidden="true" />
+            </Link>
+          )}
         </div>
       </PopoverContent>
     </Popover>
