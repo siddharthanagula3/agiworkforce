@@ -6,3 +6,9 @@ export const OPEN_SEARCH_SHORTCUT = {
   meta: true,
   shift: true,
 } as const;
+
+export const TOGGLE_SIDEBAR_SHORTCUT = {
+  key: 'B',
+  ctrl: true,
+  meta: true,
+} as const;

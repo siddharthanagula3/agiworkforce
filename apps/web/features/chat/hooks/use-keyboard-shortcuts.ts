@@ -197,7 +197,6 @@ export const RESERVED_SHORTCUTS: readonly ReservedShortcut[] = [
   { id: 'find-in-chat', description: 'Find in conversation', ...platformChord('F') },
   { id: 'code-files', description: 'Files in Code', ...platformChord('P') },
   { id: 'code-review', description: 'Review in Code', ...platformChord('G', true) },
-  { id: 'code-terminal', description: 'Terminal in Code', key: '`', control: true },
   {
     id: 'code-permissions',
     description: 'Switch permissions in Code',

@@ -32,7 +32,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../pri
 import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
 import { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
-import { OPEN_SEARCH_SHORTCUT } from './searchShortcut';
+import { OPEN_SEARCH_SHORTCUT, TOGGLE_SIDEBAR_SHORTCUT } from './searchShortcut';
 import { resolveProjectIcon, resolveProjectAccentHex, hasKnownProjectIcon } from './project-icons';
 import type {
   SidebarMode,
@@ -122,14 +122,12 @@ const SURFACE_SEGMENT = cn(
   FOCUS_RING,
 );
 
-export { OPEN_SEARCH_SHORTCUT };
+export { OPEN_SEARCH_SHORTCUT, TOGGLE_SIDEBAR_SHORTCUT };
 
 export function openSearchShortcutLabel(isMac: boolean = isApplePlatform()): string {
   const { key, shift } = OPEN_SEARCH_SHORTCUT;
   return isMac ? `${shift ? '⇧' : ''}⌘${key}` : `${shift ? 'Shift+' : ''}Ctrl+${key}`;
 }
-
-export const TOGGLE_SIDEBAR_SHORTCUT = { key: 'B', ctrl: true, meta: true } as const;
 
 export function toggleSidebarShortcutLabel(isMac: boolean = isApplePlatform()): string {
   return isMac ? `⌘${TOGGLE_SIDEBAR_SHORTCUT.key}` : `Ctrl+${TOGGLE_SIDEBAR_SHORTCUT.key}`;
