@@ -1,0 +1,82 @@
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_DISABLE_AUTO_MEMORY": "0"
+  },
+  "permissions": {
+    "deny": ["Bash(rm -rf /)", "Bash(sudo *)", "Bash(git push --force*)"]
+  },
+  "skillOverrides": {
+    "supabase-postgres-best-practices": "off",
+    "vercel:ai-sdk": "off",
+    "vercel:auth": "off",
+    "vercel:bootstrap": "off",
+    "vercel:build-agents": "off",
+    "vercel:chat-sdk": "off",
+    "vercel:create-a-backend": "off",
+    "vercel:custom-metrics": "off",
+    "vercel:eve": "off",
+    "vercel:flags-sdk": "off",
+    "vercel:knowledge-update": "off",
+    "vercel:marketplace": "off",
+    "vercel:microfrontends": "off",
+    "vercel:next-forge": "off",
+    "vercel:queues": "off",
+    "vercel:react-best-practices": "off",
+    "vercel:shadcn": "off",
+    "vercel:vercel-agent": "off",
+    "vercel:vercel-connect": "off",
+    "vercel:vercel-sandbox": "off",
+    "vercel:vercel-services": "off",
+    "vercel:vercel-storage": "off",
+    "anthropic-skills:algorithmic-art": "off",
+    "anthropic-skills:brand-guidelines": "off",
+    "anthropic-skills:canvas-design": "off",
+    "anthropic-skills:doc-coauthoring": "off",
+    "anthropic-skills:docs": "off",
+    "anthropic-skills:docx": "off",
+    "anthropic-skills:google-workspace": "off",
+    "anthropic-skills:humanizer": "off",
+    "anthropic-skills:import-memory": "off",
+    "anthropic-skills:internal-comms": "off",
+    "anthropic-skills:morning": "off",
+    "anthropic-skills:pdf": "off",
+    "anthropic-skills:pptx": "off",
+    "anthropic-skills:slack-gif-creator": "off",
+    "anthropic-skills:theme-factory": "off",
+    "anthropic-skills:web-artifacts-builder": "off",
+    "anthropic-skills:xlsx": "off"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/block-lock-files.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"$CLAUDE_PROJECT_DIR\"/.claude/hooks/prettier-format.sh",
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "rust-analyzer-lsp@claude-plugins-official": true,
+    "claude-security@claude-plugins-official": false,
+    "vercel@claude-plugins-official": true
+  }
+}

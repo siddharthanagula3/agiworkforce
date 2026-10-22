@@ -43,6 +43,7 @@ const ROOT_DOCS = new Set([
 // byte-sensitive fixtures, and files a packaging step addresses by exact path.
 const NON_DOC_MARKDOWN = [
   '.agents/skills/',
+  '.claude/agents/',
   '.claude/rules/',
   '.github/',
   'scripts/__fixtures__/',

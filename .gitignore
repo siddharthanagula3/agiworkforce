@@ -215,12 +215,15 @@ ms-playwright/
 # --- Agent/AI temp files ---
 .agent/
 .claude/*
-# but track project-scoped subagent definitions + commands + rules so the
-# whole team / AI sessions get the same orchestration baseline
+# but track the shared project config so a fresh clone or cloud session gets
+# the same agents, rules, skills, plugins and hooks; settings.local.json stays local
 !.claude/README.md
 !.claude/agents/
 !.claude/commands/
+!.claude/hooks/
 !.claude/rules/
+!.claude/settings.json
+!.claude/skills/
 
 # --- Business / personal data ---
 leads/

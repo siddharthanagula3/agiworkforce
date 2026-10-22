@@ -1,3 +1,12 @@
+---
+paths:
+  - 'apps/web/**'
+  - 'packages/ui/**'
+  - 'apps/desktop/src/**'
+  - 'apps/extension/**'
+  - 'apps/extension-vscode/**'
+---
+
 # UI colour tokens and interaction primitives
 
 Applies to `apps/web/**`, `packages/ui/**` and any surface that loads
