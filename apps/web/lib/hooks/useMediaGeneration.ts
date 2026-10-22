@@ -19,12 +19,24 @@ import {
   generateVideo as startVideoGeneration,
   getVideoStatus,
   MediaApiError,
+  type VideoGenerationRequest,
+  type VideoInputImages,
 } from '@features/media/services/media-api-service';
 import { IMAGE_GENERATION_FUNCTION_LIMIT_MS } from '@/lib/deadline-policy';
 
 async function getAuthToken(): Promise<string> {
   const { getAuthToken: getClerkToken } = await import('@shared/lib/get-auth-token');
   return (await getClerkToken()) || '';
+}
+
+function videoInputImageFields(
+  inputImages: VideoInputImages | undefined,
+): Pick<VideoGenerationRequest, 'first_frame_image' | 'reference_images'> {
+  if (!inputImages) return {};
+  if (inputImages.kind === 'first_frame') {
+    return { first_frame_image: { b64_json: inputImages.imageBase64 } };
+  }
+  return { reference_images: inputImages.imagesBase64.map((b64_json) => ({ b64_json })) };
 }
 
 export interface GenerateVideoOptions {
@@ -35,6 +47,7 @@ export interface GenerateVideoOptions {
   modelId?: string;
   conversationId?: string;
   assistantMessageId?: string;
+  inputImages?: VideoInputImages;
 }
 
 export interface StartedVideoGeneration {
@@ -434,6 +447,7 @@ export function useMediaGeneration() {
           ...(options.assistantMessageId
             ? { assistant_message_id: options.assistantMessageId }
             : {}),
+          ...videoInputImageFields(options.inputImages),
         }).catch((err: unknown) => {
           throw toMediaGenerationError(err);
         });

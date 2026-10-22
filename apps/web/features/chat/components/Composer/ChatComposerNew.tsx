@@ -79,6 +79,14 @@ import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { MODEL_MENU_WIDTH_CLASS } from './composer-menu';
 import { VideoCostEstimate } from './VideoCostEstimate';
 import {
+  isVideoInputImage,
+  readVideoInputImages,
+  videoInputImageLimit,
+  videoInputKindFor,
+  type VideoInputKind,
+} from './video-input-images';
+import type { VideoInputImages } from '@features/media/services/media-api-service';
+import {
   ComposerApprovalModeControl,
   ComposerPlusMenu,
   PluginsGlyph,
@@ -513,6 +521,7 @@ interface ChatComposerProps {
       aspectRatio?: string;
       resolution?: string;
       durationSecs?: number;
+      inputImages?: VideoInputImages;
     },
   ) => void;
   /** Website free-plan state. The server owns the unpublished usage ceiling. */
@@ -572,6 +581,11 @@ export const VIDEO_MODELS: VideoModelOption[] = getModels({ modelTypes: ['video'
 
 // Default = first video model in catalog order, same contract as images.
 const VIDEO_MODEL_DEFAULT = VIDEO_MODELS[0]?.id ?? '';
+
+const VIDEO_INPUT_OPTIONS: ReadonlyArray<{ id: VideoInputKind; label: string; hint: string }> = [
+  { id: 'first_frame', label: 'First frame', hint: 'The video opens on this image' },
+  { id: 'reference', label: 'Reference image', hint: 'The image guides how the video looks' },
+];
 
 function splitSlashCommand(value: string): { token: string; argument: string } | null {
   const match = /^\/([A-Za-z0-9][A-Za-z0-9_-]*)(?:[ \t]+([\s\S]*))?$/.exec(value);
@@ -1177,6 +1191,8 @@ const ChatComposerNewComponent = ({
   const [imageAspectRatio, setImageAspectRatio] = useState<ImageAspectRatio>('auto');
   const [imageModelId, setImageModelId] = useState<string>(IMAGE_MODEL_DEFAULT);
   const [videoModelId, setVideoModelId] = useState<string>(VIDEO_MODEL_DEFAULT);
+  const [videoInputKind, setVideoInputKind] = useState<VideoInputKind>('first_frame');
+  const [showVideoInputMenu, setShowVideoInputMenu] = useState(false);
   const [showImageAspectMenu, setShowImageAspectMenu] = useState(false);
   const [showImageStyleMenu, setShowImageStyleMenu] = useState(false);
   const [showImageModelMenu, setShowImageModelMenu] = useState(false);
@@ -1475,7 +1491,7 @@ const ChatComposerNewComponent = ({
     attachments.some((file) => !promotionalVisionChat || !isChatImageMimeType(file.type));
   const hasAttachmentConflict =
     promotionalAttachmentConflict ||
-    (!imageMode && binaryAttachments.length > 0 && !modelCanAcceptImages);
+    (!imageMode && !videoMode && binaryAttachments.length > 0 && !modelCanAcceptImages);
   const attachmentConflictKind: 'image' | 'document' | 'mixed' =
     hasImageAttachments && hasDocumentAttachments
       ? 'mixed'
@@ -1484,14 +1500,27 @@ const ChatComposerNewComponent = ({
         : 'image';
   const mediaModeActive = imageMode || videoMode;
   const mediaModeNoun = imageMode ? 'Image' : 'Video';
-  // Image mode takes an attachment now, as the picture an edit works from, so
-  // the attach rows close only for video and for an image model that cannot
-  // read a source image.
+  const videoInputLimitFor = useCallback(
+    (modelId: string) => videoInputImageLimit(mediaAdmissionFor(modelId), modelId),
+    [mediaAdmissionFor],
+  );
+  const videoInputLimit = selectedVideoIsPromotional ? 0 : videoInputLimitFor(videoModelId);
+  const videoInputCapableModel =
+    availableVideoModels.find(
+      (model) => model.source !== 'promotional' && videoInputLimitFor(model.id) > 0,
+    ) ?? null;
+  const effectiveVideoInputKind = videoInputKindFor(attachments.length, videoInputKind);
+  const videoInputUnusable =
+    attachments.length > videoInputLimit || !attachments.every(isVideoInputImage);
+  // Image mode takes an attachment now, as the picture an edit works from, and
+  // video takes up to the model's image limit, so the attach rows close only
+  // for a video or image model that cannot read a source image.
   const attachmentsUnavailable =
-    videoMode ||
+    (videoMode && videoInputLimit === 0) ||
     (imageMode && !imageModelSupportsEdit) ||
     (restrictedFreeChat && !promotionalVisionChat);
-  const mediaAttachmentConflict = videoMode && attachments.length > 0;
+  const mediaAttachmentConflict =
+    videoMode && attachments.length > 0 && (videoInputLimit === 0 || videoInputUnusable);
   const imageEditConflict = imageMode && attachments.length > 0 && !imageModelSupportsEdit;
   const localSelection = useLocalModelSelection((state) => state.selected);
   const { leaveLocalModel, dialog: leaveLocalModelDialog } = useLeaveLocalModel();
@@ -1819,6 +1848,7 @@ const ChatComposerNewComponent = ({
   const videoQualityTriggerRef = useRef<HTMLButtonElement>(null);
   const videoDurationTriggerRef = useRef<HTMLButtonElement>(null);
   const videoModelTriggerRef = useRef<HTMLButtonElement>(null);
+  const videoInputTriggerRef = useRef<HTMLButtonElement>(null);
   const slashMenuRef = useRef<SlashCommandMenuHandle>(null);
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wasTypingRef = useRef(false);
@@ -2089,7 +2119,7 @@ const ChatComposerNewComponent = ({
   const addChatAttachments = useCallback(
     (files: File[]) => {
       if (files.length === 0) return;
-      if (videoMode) {
+      if (videoMode && videoInputLimit === 0) {
         setLocalNotice(
           plural('counts.videoModeAttachments', files.length, {
             one: 'Video generation works from your prompt only. Attached files are not sent to the video model. Leave video mode first if you want to send this file to the chat model.',
@@ -2097,6 +2127,23 @@ const ChatComposerNewComponent = ({
               'Video generation works from your prompt only. Attached files are not sent to the video model. Leave video mode first if you want to send these files to the chat model.',
           }),
         );
+        return;
+      }
+      if (videoMode) {
+        const images = files.filter(isVideoInputImage);
+        if (images.length === 0) {
+          setLocalNotice(
+            'Video takes PNG, JPEG or WebP images only. Leave video mode to send this file to the chat model.',
+          );
+          return;
+        }
+        const accepted = images.slice(0, Math.max(0, videoInputLimit - attachments.length));
+        setLocalNotice(
+          accepted.length < files.length
+            ? `Video takes up to ${videoInputLimit} PNG, JPEG or WebP images, so only ${accepted.length} of ${files.length} were attached.`
+            : null,
+        );
+        if (accepted.length > 0) addFiles(accepted);
         return;
       }
       if (imageMode) {
@@ -2138,7 +2185,16 @@ const ChatComposerNewComponent = ({
       setLocalNotice(null);
       addFiles(files);
     },
-    [addFiles, imageMode, plural, restrictedFreeChat, promotionalVisionChat, videoMode],
+    [
+      addFiles,
+      attachments.length,
+      imageMode,
+      plural,
+      restrictedFreeChat,
+      promotionalVisionChat,
+      videoInputLimit,
+      videoMode,
+    ],
   );
 
   const handleFileDrop = useCallback(
@@ -2548,6 +2604,30 @@ const ChatComposerNewComponent = ({
     setVideoMode,
     focusComposer,
   ]);
+
+  const videoChipModel =
+    !selectedVideoIsPromotional && videoInputLimitFor(videoModelId) > 0
+      ? (availableVideoModels.find((model) => model.id === videoModelId) ?? null)
+      : videoInputCapableModel;
+  const videoChipOffered =
+    !mediaModeActive &&
+    hostCanGenerateVideo &&
+    billingPolicyReady &&
+    mediaModelsReady &&
+    videoAccess.label === 'included' &&
+    !freeQuotaMediaSelected &&
+    videoChipModel !== null &&
+    attachments.length > 0 &&
+    attachments.length <= videoInputLimitFor(videoChipModel.id) &&
+    attachments.every(isVideoInputImage);
+
+  const handleMakeVideoFromAttachments = useCallback(() => {
+    if (!videoChipModel) return;
+    setVideoModelId(videoChipModel.id);
+    setVideoInputKind('first_frame');
+    setVideoMode(true);
+    setTimeout(focusComposer, FOCUS_AFTER_COMMIT_MS);
+  }, [videoChipModel, setVideoMode, focusComposer]);
 
   const activePickerProject = projectPicker
     ? (projectPicker.projects.find((p) => p.id === projectPicker.activeProjectId) ?? null)
@@ -3513,17 +3593,25 @@ const ChatComposerNewComponent = ({
       // of the streaming turn and is not queued.
       if (videoMode && !freeQuotaMediaSelected) {
         if (isTurnActive) return;
-        // Same contract as image above. The video
-        // request schema has no reference-image field at all, so an attachment
-        // here has nowhere to go and must not be swallowed by the send.
-        if (attachments.length > 0) {
+        // A model that takes no input images has nowhere to send an
+        // attachment, and it must not be swallowed by the send.
+        if (attachments.length > 0 && videoInputLimit === 0) {
           setLocalNotice(
             'Video generation works from your prompt only. Remove the attached files, or leave video mode to send them to the chat model.',
           );
           return;
         }
+        if (attachments.length > 0 && videoInputUnusable) {
+          setLocalNotice(
+            `Video takes up to ${videoInputLimit} PNG, JPEG or WebP images. Remove the others, or leave video mode to send them to the chat model.`,
+          );
+          return;
+        }
         const prompt = outgoingContent.trim();
-        if (!prompt) return;
+        if (!prompt) {
+          if (attachments.length > 0) setLocalNotice('Describe the video you want to make.');
+          return;
+        }
         if (selectedVideoIsPromotional) {
           sendPromotionalMedia(prompt, videoModelId);
           return;
@@ -3555,15 +3643,30 @@ const ChatComposerNewComponent = ({
         // Send the DERIVED tuple, not the raw state: a model switch can leave an
         // unsupported ratio/quality staged, and the derived values are the ones
         // the pills are showing.
-        onGenerateVideo(prompt, {
+        const videoOptions = {
           ...(videoModelId ? { modelId: videoModelId } : {}),
           aspectRatio: effectiveVideoAspectRatio,
           resolution: effectiveVideoResolution,
           ...(effectiveVideoDurationSecs !== undefined
             ? { durationSecs: effectiveVideoDurationSecs }
             : {}),
-        });
+        };
+        if (attachments.length === 0) {
+          onGenerateVideo(prompt, videoOptions);
+          clearComposerState();
+          return;
+        }
+        const inputFiles = attachments;
+        const inputKind = effectiveVideoInputKind;
         clearComposerState();
+        void (async () => {
+          try {
+            const inputImages = await readVideoInputImages(inputFiles, inputKind);
+            onGenerateVideo(prompt, { ...videoOptions, inputImages });
+          } catch {
+            setLocalNotice('That image could not be read. Attach it again and retry.');
+          }
+        })();
         return;
       }
 
@@ -3696,6 +3799,9 @@ const ChatComposerNewComponent = ({
       videoMode,
       selectedVideoIsPromotional,
       videoModelId,
+      videoInputLimit,
+      videoInputUnusable,
+      effectiveVideoInputKind,
       effectiveVideoAspectRatio,
       effectiveVideoResolution,
       effectiveVideoDurationSecs,
@@ -4795,18 +4901,29 @@ const ChatComposerNewComponent = ({
           data-testid="media-attachment-conflict"
         >
           <p className="text-foreground">
-            {plural(
-              'counts.mediaAttachmentsUnused',
-              attachments.length,
-              {
-                one: 'The attached file is not used here: {{mode}} generation works from your prompt only.',
-                other:
-                  'The attached files are not used here: {{mode}} generation works from your prompt only.',
-              },
-              { mode: mediaModeNoun.toLowerCase() },
-            )}
+            {videoInputLimit > 0
+              ? `Video takes up to ${videoInputLimit} PNG, JPEG or WebP images.`
+              : plural(
+                  'counts.mediaAttachmentsUnused',
+                  attachments.length,
+                  {
+                    one: 'The attached file is not used here: {{mode}} generation works from your prompt only.',
+                    other:
+                      'The attached files are not used here: {{mode}} generation works from your prompt only.',
+                  },
+                  { mode: mediaModeNoun.toLowerCase() },
+                )}
           </p>
           <div className="mt-2 flex flex-wrap gap-2">
+            {videoInputLimit === 0 && videoInputCapableModel && (
+              <button
+                type="button"
+                onClick={() => setVideoModelId(videoInputCapableModel.id)}
+                className="rounded-lg border border-border px-3 py-1.5 text-sm font-medium"
+              >
+                {`Use ${videoInputCapableModel.label}`}
+              </button>
+            )}
             <button
               type="button"
               onClick={clearAttachments}
@@ -5344,13 +5461,34 @@ const ChatComposerNewComponent = ({
             previews={previews}
             onRemove={removeFile}
             numberImages={
-              imageMode &&
-              imageModelSupportsEdit &&
-              effectiveImageOperation === 'edit' &&
-              previews.length > 1
+              (imageMode &&
+                imageModelSupportsEdit &&
+                effectiveImageOperation === 'edit' &&
+                previews.length > 1) ||
+              (videoMode &&
+                videoInputLimit > 0 &&
+                effectiveVideoInputKind === 'reference' &&
+                previews.length > 1)
             }
             className="px-1 pt-1 pb-0"
           />
+          {videoChipOffered && (
+            <div className="flex px-1">
+              <button
+                type="button"
+                onClick={handleMakeVideoFromAttachments}
+                className="flex h-8 items-center gap-1.5 rounded-full border border-border/60 bg-muted/40 px-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                aria-label={
+                  attachments.length === 1
+                    ? 'Make a video from the attached image'
+                    : 'Make a video from the attached images'
+                }
+              >
+                <Video className="h-4 w-4" />
+                Video
+              </button>
+            </div>
+          )}
 
           {/* Rest-state row: an existing chat keeps plus, textbox and the right
               cluster on one line. The home composer keeps its separate control
@@ -6014,6 +6152,70 @@ const ChatComposerNewComponent = ({
                     <span>Video</span>
                     <X className="h-4 w-4 opacity-60" />
                   </button>
+
+                  {videoInputLimit > 0 &&
+                    attachments.length > 0 &&
+                    !videoInputUnusable &&
+                    (attachments.length === 1 ? (
+                      <div className="relative">
+                        <button
+                          ref={videoInputTriggerRef}
+                          type="button"
+                          onClick={() => {
+                            setShowVideoInputMenu((p) => !p);
+                            setShowVideoAspectMenu(false);
+                            setShowVideoQualityMenu(false);
+                            setShowVideoDurationMenu(false);
+                            setShowVideoModelMenu(false);
+                          }}
+                          className="flex h-8 items-center gap-1 rounded-full border border-border/60 bg-muted/40 px-2.5 text-sm font-medium text-muted-foreground transition-all hover:bg-muted/60 hover:text-foreground"
+                          aria-label="How the attached image is used"
+                        >
+                          {
+                            VIDEO_INPUT_OPTIONS.find(
+                              (option) => option.id === effectiveVideoInputKind,
+                            )?.label
+                          }
+                          <ChevronDown className="h-4 w-4" />
+                        </button>
+                        <AnchoredComposerMenu
+                          anchorRef={videoInputTriggerRef}
+                          open={showVideoInputMenu}
+                          label="Attached image use"
+                          onRequestClose={() => setShowVideoInputMenu(false)}
+                          className="w-64 p-1"
+                        >
+                          {VIDEO_INPUT_OPTIONS.map((option) => (
+                            <button
+                              key={option.id}
+                              type="button"
+                              onClick={() => {
+                                setVideoInputKind(option.id);
+                                setShowVideoInputMenu(false);
+                              }}
+                              className={cn(
+                                'flex w-full items-start gap-2 rounded-lg px-3 py-1.5 text-sm transition-colors',
+                                effectiveVideoInputKind === option.id
+                                  ? 'bg-primary/10 text-primary'
+                                  : 'hover:bg-muted/60',
+                              )}
+                            >
+                              <span className="flex-1 text-start">
+                                <span className="block font-medium">{option.label}</span>
+                                <span className="block text-muted-foreground">{option.hint}</span>
+                              </span>
+                              {effectiveVideoInputKind === option.id && (
+                                <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                              )}
+                            </button>
+                          ))}
+                        </AnchoredComposerMenu>
+                      </div>
+                    ) : (
+                      <span className="flex h-8 items-center rounded-full border border-border/60 bg-muted/40 px-2.5 text-sm font-medium text-muted-foreground">
+                        Reference images
+                      </span>
+                    ))}
 
                   {/* Aspect ratio. Options come from the model's published
                     `videoGeneration.outputSizes`, so a model that offers only

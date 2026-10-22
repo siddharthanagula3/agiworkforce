@@ -398,6 +398,7 @@ import {
   type GenerateVideoOptions,
   type MediaPaywallRecoveryAction,
 } from '@/lib/hooks/useMediaGeneration';
+import type { VideoInputImages } from '@features/media/services/media-api-service';
 import { classifyTaskLocally } from '@agiworkforce/routing';
 import { routeVisualRequest } from '@features/chat/components/artifacts/structuredVisualArtifact';
 import { explicitlyRequestsArtifact } from '@features/chat/lib/visual-intent';
@@ -3373,6 +3374,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
 
   const watchedVideoTasksRef = useRef<Set<string>>(new Set());
   const autoResumedVideoTasksRef = useRef<Set<string>>(new Set());
+  const videoInputImagesRef = useRef<Map<string, VideoInputImages>>(new Map());
 
   /** Watch one durable task without ever repeating its provider-start POST. */
   const watchVideoMessage = useCallback(
@@ -3428,6 +3430,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         });
         const current = readMessageMetadata(input.conversationId, input.messageId);
         if (result.status === 'completed') {
+          videoInputImagesRef.current.delete(input.messageId);
           updateMessage(
             input.messageId,
             {
@@ -3532,6 +3535,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         aspectRatio?: string;
         resolution?: string;
         durationSecs?: number;
+        inputImages?: VideoInputImages;
       },
     ) => {
       const videoGuardKey = displayedConversationId || NEW_CHAT_SEND_GUARD_KEY;
@@ -3627,8 +3631,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 );
                 assistantMessageId = persisted.messageId;
               },
-              start: () =>
-                startVideoGeneration(prompt, {
+              start: () => {
+                if (videoOptions?.inputImages) {
+                  videoInputImagesRef.current.set(assistantMessageId, videoOptions.inputImages);
+                }
+                return startVideoGeneration(prompt, {
                   ...(videoOptions?.modelId ? { modelId: videoOptions.modelId } : {}),
                   // Composer's aspect/quality pills. Omitted when absent so the
                   // route keeps applying its own defaults for other callers.
@@ -3649,9 +3656,11 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                   ...(videoOptions?.durationSecs !== undefined
                     ? { durationSecs: videoOptions.durationSecs }
                     : {}),
+                  ...(videoOptions?.inputImages ? { inputImages: videoOptions.inputImages } : {}),
                   conversationId: convId,
                   ...(!isTemporaryConversation ? { assistantMessageId } : {}),
-                }),
+                });
+              },
             });
             if (!startResult.ok) {
               const message = `Video was not started because the ${startResult.phase} could not be saved. Try again to recover this turn.`;
@@ -3875,7 +3884,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
         return;
       }
       const failed = assistantMessage.metadata;
+      const inputImages = videoInputImagesRef.current.get(messageId);
+      videoInputImagesRef.current.delete(messageId);
       handleGenerateVideo(userMessage.content, {
+        ...(inputImages ? { inputImages } : {}),
         ...(typeof failed.videoModel === 'string' ? { modelId: failed.videoModel } : {}),
         ...(typeof failed.videoAspect === 'string' ? { aspectRatio: failed.videoAspect } : {}),
         ...(typeof failed.videoResolution === 'string'

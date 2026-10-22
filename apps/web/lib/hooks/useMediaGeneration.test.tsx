@@ -16,6 +16,7 @@ vi.mock('@shared/lib/get-auth-token', () => ({
 
 import { parseManagedMediaIdempotencyKey } from '@agiworkforce/utils';
 import { isExecutableVideoModel, modelsCatalog } from '@agiworkforce/types';
+import type { VideoInputImages } from '@features/media/services/media-api-service';
 import { IMAGE_MODELS } from '@features/chat/lib/imageGenerationOptions';
 import { IMAGE_GENERATION_FUNCTION_LIMIT_MS } from '@/lib/deadline-policy';
 import { useMediaGeneration, MediaGenerationApiError } from './useMediaGeneration';
@@ -340,6 +341,74 @@ describe('useMediaGeneration', () => {
         resolution: '480p',
         duration_secs: 8,
       });
+    });
+
+    it.each([
+      [
+        'a first frame',
+        { kind: 'first_frame', imageBase64: 'Zmlyc3Q=' } satisfies VideoInputImages,
+        { first_frame_image: { b64_json: 'Zmlyc3Q=' } },
+      ],
+      [
+        'reference images',
+        { kind: 'reference', imagesBase64: ['b25l', 'dHdv'] } satisfies VideoInputImages,
+        { reference_images: [{ b64_json: 'b25l' }, { b64_json: 'dHdv' }] },
+      ],
+    ])('serializes %s into the video request', async (_label, inputImages, expected) => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          task_id: VIDEO_TASK_ID,
+          status: 'queued',
+          provider: VIDEO_PROVIDER,
+          model: VIDEO_MODEL.id,
+          estimated_duration_secs: 210,
+        }),
+      } as Response);
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await result.current.startVideoGeneration('animate the photo', {
+          modelId: VIDEO_MODEL.id,
+          inputImages,
+        });
+      });
+
+      const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<
+        string,
+        unknown
+      >;
+      expect(body).toMatchObject(expected);
+      expect(
+        Object.keys(body).filter((key) => key.endsWith('image') || key.endsWith('images')),
+      ).toEqual(Object.keys(expected));
+    });
+
+    it('sends no image fields when the video has no input images', async () => {
+      const fetchMock = vi.spyOn(globalThis, 'fetch').mockResolvedValue({
+        ok: true,
+        json: async () => ({
+          success: true,
+          task_id: VIDEO_TASK_ID,
+          status: 'queued',
+          provider: VIDEO_PROVIDER,
+          model: VIDEO_MODEL.id,
+          estimated_duration_secs: 210,
+        }),
+      } as Response);
+      const { result } = renderHook(() => useMediaGeneration());
+
+      await act(async () => {
+        await result.current.startVideoGeneration('a cat surfing', { modelId: VIDEO_MODEL.id });
+      });
+
+      const body = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body)) as Record<
+        string,
+        unknown
+      >;
+      expect(body).not.toHaveProperty('first_frame_image');
+      expect(body).not.toHaveProperty('reference_images');
     });
 
     it('starts a task, polls status, and resolves with the finished URLs', async () => {

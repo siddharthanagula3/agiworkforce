@@ -140,6 +140,7 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
         aspectRatio: string;
         resolution: string;
         durationSecs: number;
+        inputImages?: { kind: 'first_frame'; imageBase64: string };
       },
     ) => void;
   }) => (
@@ -167,6 +168,20 @@ vi.mock('../../components/Composer/ChatComposerNew', () => ({
         }
       >
         Trigger video generation
+      </button>
+      <button
+        type="button"
+        onClick={() =>
+          onGenerateVideo?.('synthetic page image video prompt', {
+            modelId: mocks.modelId,
+            aspectRatio: '9:16',
+            resolution: '1080p',
+            durationSecs: 8,
+            inputImages: { kind: 'first_frame', imageBase64: 'Zml4dHVyZQ==' },
+          })
+        }
+      >
+        Trigger video generation from an image
       </button>
     </>
   ),
@@ -487,6 +502,40 @@ describe('WebChatPage paid image transcript recovery', () => {
         videoError: 'Provider unavailable',
       },
     });
+  });
+
+  it('hands the composer input images to the video start request', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        const body = JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown>;
+        if (init?.method === 'PATCH') {
+          return jsonResponse(200, {
+            ok: true,
+            applied: true,
+            message: { content: 'Video generation failed: Provider unavailable', metadata: {} },
+          });
+        }
+        return jsonResponse(200, { message: { id: body['id'] } });
+      }),
+    );
+    mocks.startVideoGeneration.mockRejectedValue(
+      new MediaGenerationApiError('Provider unavailable', {
+        status: 503,
+        code: 'service_unavailable',
+      }),
+    );
+    render(<WebChatPage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Trigger video generation from an image' }));
+
+    await waitFor(() => expect(mocks.startVideoGeneration).toHaveBeenCalledTimes(1));
+    expect(mocks.startVideoGeneration).toHaveBeenCalledWith(
+      'synthetic page image video prompt',
+      expect.objectContaining({
+        inputImages: { kind: 'first_frame', imageBase64: 'Zml4dHVyZQ==' },
+      }),
+    );
   });
 
   it('keeps temporary image turns local-only and lets both rows be dismissed', async () => {

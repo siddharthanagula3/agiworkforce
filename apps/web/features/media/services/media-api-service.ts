@@ -4,6 +4,7 @@ import { createManagedMediaIdempotencyKey, type ManagedMediaOperation } from '@a
 import type {
   ManagedMediaImageAspectRatio,
   ManagedMediaImageProvider,
+  ManagedMediaImageRef,
   ManagedMediaVideoAspectRatio,
   ManagedMediaVideoProvider,
   ManagedMediaVideoResolution,
@@ -34,6 +35,9 @@ export interface ImageGenerationResponse {
   error?: string;
 }
 
+export type VideoInputImages =
+  { kind: 'first_frame'; imageBase64: string } | { kind: 'reference'; imagesBase64: string[] };
+
 export interface VideoGenerationRequest {
   prompt: string;
   duration_secs?: number;
@@ -43,6 +47,8 @@ export interface VideoGenerationRequest {
   model?: string;
   conversation_id?: string;
   assistant_message_id?: string;
+  first_frame_image?: ManagedMediaImageRef;
+  reference_images?: ManagedMediaImageRef[];
 }
 
 export interface VideoGenerationResponse {
