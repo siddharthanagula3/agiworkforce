@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ReflectSection } from './ReflectSection';
 import { SettingsSectionNavigationProvider } from '../components/SettingsSectionLink';
@@ -180,5 +180,71 @@ describe('ReflectSection activity chart accessibility', () => {
       expect(bar.getAttribute('aria-label')).toBeNull();
       expect(bar.getAttribute('aria-hidden')).toBe('true');
     }
+  });
+});
+
+describe('ReflectSection topic share bar', () => {
+  beforeEach(() => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockImplementation(() =>
+        response({
+          ...recap,
+          topics: [
+            {
+              id: 'coding',
+              label: 'Coding',
+              description: 'Writing and reviewing code.',
+              conversationCount: 1,
+              percentage: 20,
+            },
+            {
+              id: 'writing',
+              label: 'Writing',
+              description: 'Drafting, editing, and summarization.',
+              conversationCount: 3,
+              percentage: 60,
+            },
+            {
+              id: 'research',
+              label: 'Research',
+              description: 'Finding and comparing sources.',
+              conversationCount: 1,
+              percentage: 20,
+            },
+          ],
+        }),
+      ),
+    );
+  });
+
+  it('draws one stacked bar sized by share, largest first, with a matching legend', async () => {
+    render(<ReflectSection />);
+
+    const bar = await screen.findByRole('img', { name: /share of conversations by topic/i });
+    expect(bar).toHaveAccessibleName(
+      'Share of conversations by topic: Writing 60%, Coding 20%, Research 20%',
+    );
+    const segments = Array.from(bar.querySelectorAll('[data-reflect-topic-segment]'));
+    expect(segments.map((segment) => segment.getAttribute('data-reflect-topic-segment'))).toEqual([
+      'writing',
+      'coding',
+      'research',
+    ]);
+    expect(segments.map((segment) => (segment as HTMLElement).style.flexGrow)).toEqual([
+      '60',
+      '20',
+      '20',
+    ]);
+
+    const legend = screen.getByRole('list', { name: 'Topics by share' });
+    const rows = within(legend).getAllByRole('listitem');
+    expect(rows.map((row) => row.querySelector('h3')?.textContent)).toEqual([
+      'Writing',
+      'Coding',
+      'Research',
+    ]);
+    expect(within(rows[0]!).getByText('60%')).toBeVisible();
+    expect(rows[0]!.querySelector('[aria-hidden="true"]')?.className).toContain('bg-foreground');
   });
 });

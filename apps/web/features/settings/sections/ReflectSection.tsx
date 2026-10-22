@@ -51,6 +51,21 @@ function describeOngoingWork(item: {
     .join(' · ');
 }
 
+const TOPIC_SHADES = [
+  'bg-foreground',
+  'bg-foreground/75',
+  'bg-foreground/55',
+  'bg-foreground/40',
+  'bg-foreground/30',
+  'bg-foreground/20',
+  'bg-foreground/15',
+  'bg-foreground/10',
+] as const;
+
+function topicShade(index: number): string {
+  return TOPIC_SHADES[Math.min(index, TOPIC_SHADES.length - 1)] ?? '';
+}
+
 function formatHour(hour: number | null): string {
   if (hour === null) return 'None';
   return new Intl.DateTimeFormat(undefined, { hour: 'numeric' }).format(new Date(2026, 0, 1, hour));
@@ -114,6 +129,10 @@ export function ReflectSection() {
     return () => controller.abort();
   }, [load, refreshVersion]);
 
+  const topicsByShare = useMemo(
+    () => (recap?.topics ?? []).slice().sort((left, right) => right.percentage - left.percentage),
+    [recap],
+  );
   const visibleActivity = recap?.dailyActivity.slice(-60) ?? [];
   const maxDailyCount = Math.max(
     1,
@@ -294,30 +313,43 @@ export function ReflectSection() {
             <h2 id="reflect-topics-heading" className="text-h3 text-foreground">
               What you spent time on
             </h2>
-            <div>
-              {recap.topics.map((topic, index) => (
+            <div
+              role="img"
+              aria-label={`Share of conversations by topic: ${topicsByShare
+                .map((topic) => `${topic.label} ${topic.percentage}%`)
+                .join(', ')}`}
+              className="flex h-3 w-full gap-0.5 overflow-hidden rounded-full"
+            >
+              {topicsByShare.map((topic, index) => (
                 <div
                   key={topic.id}
-                  className={`py-3 ${index === 0 ? '' : 'border-t border-border/50'}`}
-                >
-                  <div className="flex items-start justify-between gap-4">
-                    <div>
-                      <h3 className="text-h5 text-foreground">{topic.label}</h3>
-                      <p className="mt-1 text-xs text-muted-foreground">{topic.description}</p>
-                    </div>
-                    <span className="text-sm font-semibold text-foreground">
-                      {topic.percentage}%
-                    </span>
-                  </div>
-                  <div className="mt-3 h-1.5 overflow-hidden rounded-full bg-muted">
-                    <div
-                      className="h-full rounded-full bg-primary"
-                      style={{ width: `${topic.percentage}%` }}
-                    />
-                  </div>
-                </div>
+                  aria-hidden="true"
+                  data-reflect-topic-segment={topic.id}
+                  className={`h-full min-w-1 ${topicShade(index)}`}
+                  style={{ flexGrow: topic.percentage, flexBasis: 0 }}
+                />
               ))}
             </div>
+            <ul aria-label="Topics by share">
+              {topicsByShare.map((topic, index) => (
+                <li
+                  key={topic.id}
+                  className={`flex items-start gap-3 py-3 ${index === 0 ? '' : 'border-t border-border/50'}`}
+                >
+                  <span
+                    aria-hidden="true"
+                    className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${topicShade(index)}`}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-sm font-medium text-foreground">{topic.label}</h3>
+                    <p className="mt-1 text-sm text-muted-foreground">{topic.description}</p>
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums text-foreground">
+                    {topic.percentage}%
+                  </span>
+                </li>
+              ))}
+            </ul>
           </section>
 
           {recap.ongoingWork && recap.ongoingWork.length > 0 ? (
