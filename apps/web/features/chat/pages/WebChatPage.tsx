@@ -243,6 +243,8 @@ import {
   type ComposerWorkMode,
 } from '../components/Composer/ChatComposerNew';
 import { GreetingBanner } from '../components/GreetingBanner/GreetingBanner';
+import { HomeActiveTasks } from '../components/HomeActiveTasks';
+import { AgiWorkIntroDialog } from '../components/AgiWorkIntroDialog';
 import { NewChatConnectorSuggestions } from '../components/NewChat/NewChatConnectorSuggestions';
 import { useNewChatDefaultModel } from '../hooks/use-new-chat-default-model';
 import { SidebarBrandRow } from '@shared/components/layout/SidebarBrandRow';
@@ -6954,7 +6956,12 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain [scrollbar-width:thin]">
                 {/* Empty state: greeting banner + centered composer. */}
                 <div className="flex min-h-full w-full flex-col items-center justify-center-safe gap-6">
-                  {!compact && !voiceModeActive && <GreetingBanner showWorkspace />}
+                  {!compact && !voiceModeActive && (
+                    <GreetingBanner
+                      showWorkspace
+                      agiWork={composerToggles?.workMode === AGI_WORK_MODE}
+                    />
+                  )}
                   <div className="mx-auto w-full max-w-3xl px-gutter-compact">
                     {usageBanner}
                     {unavailableModelNotice}
@@ -7010,6 +7017,14 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                           : {})}
                       />
                     )}
+                    {!compact &&
+                      !voiceModeActive &&
+                      composerToggles?.workMode === AGI_WORK_MODE && (
+                        <>
+                          <HomeActiveTasks />
+                          <AgiWorkIntroDialog />
+                        </>
+                      )}
                     {!compact && !voiceModeActive && (
                       <NewChatConnectorSuggestions
                         show={
