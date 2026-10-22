@@ -38,7 +38,14 @@ describe('GET /api/cron/live-artifacts-refresh', () => {
 
   it('runs one bounded pass on the service connection and reports it', async () => {
     mocks.verifyCronRequest.mockReturnValue(true);
-    const summary = { claimed: 2, ready: 1, needsConnection: 1, failed: 0, deferred: 0 };
+    const summary = {
+      claimed: 2,
+      ready: 1,
+      needsConnection: 1,
+      failed: 0,
+      deferred: 0,
+      skipped: 0,
+    };
     mocks.refreshLiveArtifacts.mockResolvedValue(summary);
     const response = await call();
     expect(response.status).toBe(200);

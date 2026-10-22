@@ -1,6 +1,10 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import {
+  UNATTENDED_RUN_DENIED_STATUSES,
+  ownerMayRunUnattendedSql,
+} from '@/lib/auth/account-lifecycle';
 import { logger } from '@/lib/logger';
 import { liveArtifactMissingConnectors } from '@/lib/services/artifact-runtime-service';
 
@@ -9,6 +13,7 @@ export const LIVE_ARTIFACT_REFRESH_BUDGET_MS = 240_000;
 
 const CLAIM_LEASE = '15 minutes';
 const READY_RECHECK = '24 hours';
+const UNCHECKABLE_RECHECK = '24 hours';
 const NEEDS_CONNECTION_RECHECK = '6 hours';
 const FAILURE_BACKOFF_BASE = '15 minutes';
 const FAILURE_BACKOFF_CEILING = '24 hours';
@@ -18,6 +23,8 @@ interface ClaimedLiveArtifact {
   user_id: string;
   artifact_id: string;
   connectors: string[];
+  organization_id: string | null;
+  may_check: boolean;
 }
 
 export interface LiveArtifactRefreshSummary {
@@ -26,6 +33,7 @@ export interface LiveArtifactRefreshSummary {
   needsConnection: number;
   failed: number;
   deferred: number;
+  skipped: number;
 }
 
 export interface LiveArtifactRefreshDeps {
@@ -53,8 +61,40 @@ async function claimDue(db: DatabaseAdapter, limit: number): Promise<ClaimedLive
        from due
       where live.user_id = due.user_id
         and live.artifact_id = due.artifact_id
-      returning live.user_id, live.artifact_id, live.connectors`,
-    [limit, CLAIM_LEASE],
+      returning live.user_id,
+                live.artifact_id,
+                live.connectors,
+                (select conversations.organization_id
+                   from public.web_conversations conversations
+                  where conversations.id = live.conversation_id) as organization_id,
+                (exists (
+                   select 1
+                     from public.web_conversations conversations
+                    where conversations.id = live.conversation_id
+                      and conversations.deleted_at is null
+                      and (
+                        conversations.organization_id is null
+                        or exists (
+                          select 1
+                            from public.organization_members members
+                           where members.organization_id = conversations.organization_id
+                             and members.user_id = live.user_id
+                             and members.status = 'active'
+                        )
+                      )
+                 )
+                 and ${ownerMayRunUnattendedSql('live.user_id', 3)}) as may_check`,
+    [limit, CLAIM_LEASE, UNATTENDED_RUN_DENIED_STATUSES],
+  );
+}
+
+async function setAsideUncheckable(db: DatabaseAdapter, row: ClaimedLiveArtifact): Promise<void> {
+  await db.execute(
+    `update public.live_artifacts
+        set next_check_at = now() + $3::interval
+      where user_id = $1::text
+        and artifact_id = $2::uuid`,
+    [row.user_id, row.artifact_id, UNCHECKABLE_RECHECK],
   );
 }
 
@@ -118,6 +158,7 @@ export async function refreshLiveArtifacts(
     needsConnection: 0,
     failed: 0,
     deferred: 0,
+    skipped: 0,
   };
   for (const row of claimed) {
     if (deps.now() - started > LIVE_ARTIFACT_REFRESH_BUDGET_MS) {
@@ -125,9 +166,15 @@ export async function refreshLiveArtifacts(
       continue;
     }
     try {
+      if (!row.may_check) {
+        await setAsideUncheckable(db, row);
+        summary.skipped += 1;
+        continue;
+      }
       const missing = await deps.missingConnectors({
         db,
         userId: row.user_id,
+        organizationId: row.organization_id,
         connectors: row.connectors,
       });
       await recordReadiness(db, row, missing);

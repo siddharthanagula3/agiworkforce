@@ -21,6 +21,7 @@ import {
   LiveArtifactPolicyRequestSchema,
   type LiveArtifactResponse,
 } from '@/app/chat/live-artifacts/live-artifact-contract';
+import { ownedArtifactOriginRefusal } from '@/app/api/artifacts/runtime/artifact-completion';
 
 export const runtime = 'nodejs';
 
@@ -104,6 +105,8 @@ async function handlePut(request: NextRequest, context: RouteContext): Promise<R
   }
   const artifact = await readOwnedRunnableArtifact(scoped.db, scoped, artifactId);
   if (!artifact) return refusal(404, 'artifact_not_found', NOT_RUNNABLE);
+  const outsideManagedCloud = ownedArtifactOriginRefusal(artifact);
+  if (outsideManagedCloud) return outsideManagedCloud;
 
   const saved = await saveLiveArtifact(scoped.db, {
     owner: scoped,

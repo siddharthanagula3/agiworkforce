@@ -31,6 +31,10 @@ vi.mock('@/lib/security-audit', () => ({
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/services/artifact-runtime-service', () => ({
+  ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
+  buildArtifactConnectorPlan: vi.fn(),
+  completeArtifactPrompt: vi.fn(),
+  selectArtifactRuntimeRoute: vi.fn(),
   readLiveArtifact: mocks.readLiveArtifact,
   readOwnedRunnableArtifact: mocks.readOwnedRunnableArtifact,
   removeLiveArtifact: mocks.removeLiveArtifact,
@@ -47,6 +51,7 @@ const OWNED = {
   messageId: 'c0ffee00-0000-4000-8000-0000000000bb',
   title: 'Weekly growth',
   type: 'react',
+  originPrivacyMode: 'managed',
 };
 const LIVE = {
   artifactId: ARTIFACT_ID,
@@ -124,6 +129,22 @@ describe('/api/artifacts/live/[artifactId]', () => {
     expect(mocks.saveLiveArtifact).not.toHaveBeenCalled();
     expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
+
+  it.each(['byok', 'local', null])(
+    'refuses to bind an artifact whose chat resolved to %s rather than managed cloud',
+    async (originPrivacyMode) => {
+      mocks.readOwnedRunnableArtifact.mockResolvedValue({ ...OWNED, originPrivacyMode });
+      const response = await PUT(
+        ...request('PUT', { connectors: ['google_drive'], allowedTools: [] }),
+      );
+      expect(response.status).toBe(403);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+        'artifact_outside_managed_cloud',
+      );
+      expect(mocks.saveLiveArtifact).not.toHaveBeenCalled();
+      expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
+    },
+  );
 
   it('saves the binding and audits the connector grant', async () => {
     const response = await PUT(

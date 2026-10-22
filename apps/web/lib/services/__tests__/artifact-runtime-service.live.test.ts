@@ -42,8 +42,23 @@ vi.mock(
   }),
 );
 
-const { bindingCovers, liveArtifactMissingConnectors, readOwnedRunnableArtifact } =
-  await import('../artifact-runtime-service');
+const {
+  bindingCovers,
+  liveArtifactMissingConnectors,
+  readConversationOriginPrivacyMode,
+  readOwnedRunnableArtifact,
+} = await import('../artifact-runtime-service');
+
+const MANAGED_MODEL_ID = 'auto-balanced';
+const LOCAL_MODEL_ID = 'ollama/fixture-local-model';
+
+function originSignal(
+  model: string | null,
+  privacyMode: string | null = null,
+  providerMode: string | null = null,
+) {
+  return { model, privacy_mode: privacyMode, provider_mode: providerMode };
+}
 
 function tool(serverId: string, toolName: string) {
   return {
@@ -70,7 +85,12 @@ describe('liveArtifactMissingConnectors', () => {
   it('counts every bound app missing when the account cannot use connected apps, and dials none', async () => {
     mocks.allowedWithoutRequest.mockResolvedValue(false);
     await expect(
-      liveArtifactMissingConnectors({ db: {} as never, userId: 'user-1', connectors: ['slack'] }),
+      liveArtifactMissingConnectors({
+        db: {} as never,
+        userId: 'user-1',
+        organizationId: null,
+        connectors: ['slack'],
+      }),
     ).resolves.toEqual(['slack']);
     expect(mocks.loadCatalog).not.toHaveBeenCalled();
   });
@@ -87,10 +107,19 @@ describe('liveArtifactMissingConnectors', () => {
     const missing = await liveArtifactMissingConnectors({
       db: {} as never,
       userId: 'user-1',
+      organizationId: 'org-1',
       connectors: ['slack', 'linear', 'google_drive'],
     });
 
     expect(missing).toEqual(['linear', 'google_drive']);
+    expect(mocks.allowedWithoutRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', organizationId: 'org-1' }),
+    );
+    expect(mocks.loadPermissions).toHaveBeenCalledWith({}, 'user-1', 'org-1');
+    expect(mocks.loadCatalog).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ organizationId: 'org-1' }),
+    );
     const options = mocks.loadCatalog.mock.calls[0]?.[1] as {
       isConnectorDenied: (id: string) => boolean;
     };
@@ -100,16 +129,19 @@ describe('liveArtifactMissingConnectors', () => {
 });
 
 describe('readOwnedRunnableArtifact', () => {
-  it('reads only the caller’s HTML or React artifact from a live chat', async () => {
-    const query = vi.fn(async () => [
-      {
-        id: 'a1',
-        conversation_id: 'c1',
-        message_id: 'm1',
-        title: 'Dashboard',
-        artifact_type: 'react',
-      },
-    ]);
+  it('reads only the caller’s HTML or React artifact from a live chat, with its chat’s origin', async () => {
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce([
+        {
+          id: 'a1',
+          conversation_id: 'c1',
+          message_id: 'm1',
+          title: 'Dashboard',
+          artifact_type: 'react',
+        },
+      ])
+      .mockResolvedValueOnce([originSignal(MANAGED_MODEL_ID)]);
     const artifact = await readOwnedRunnableArtifact(
       { query } as never,
       { userId: 'user-1', organizationId: null },
@@ -121,12 +153,66 @@ describe('readOwnedRunnableArtifact', () => {
       messageId: 'm1',
       title: 'Dashboard',
       type: 'react',
+      originPrivacyMode: 'managed',
     });
     const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
     expect(sql).toContain('conversations.deleted_at is null');
     expect(sql).toContain('messages.deleted_at is null');
     expect(sql).toContain('conversations.organization_id is not distinct from $4::uuid');
     expect(params).toEqual(['a1', 'user-1', ['html', 'react'], null]);
+    expect(query.mock.calls[1]?.[1]).toEqual(['c1']);
+  });
+
+  it('reads no origin for an artifact the caller does not own', async () => {
+    const query = vi.fn().mockResolvedValueOnce([]);
+    await expect(
+      readOwnedRunnableArtifact(
+        { query } as never,
+        { userId: 'user-1', organizationId: null },
+        'a1',
+      ),
+    ).resolves.toBeNull();
+    expect(query).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('readConversationOriginPrivacyMode', () => {
+  async function originOf(rows: ReturnType<typeof originSignal>[]) {
+    const query = vi.fn(async () => rows);
+    const mode = await readConversationOriginPrivacyMode({ query } as never, 'c1');
+    return { mode, query };
+  }
+
+  it('reads the conversation model and every live turn’s model and labels', async () => {
+    const { mode, query } = await originOf([originSignal(MANAGED_MODEL_ID)]);
+    expect(mode).toBe('managed');
+    const [sql] = query.mock.calls[0] as unknown as [string];
+    expect(sql).toContain('from public.web_conversations conversations');
+    expect(sql).toContain('from public.web_messages messages');
+    expect(sql).toContain("messages.metadata->>'privacyMode'");
+    expect(sql).toContain("messages.metadata->>'providerMode'");
+    expect(sql).toContain('messages.deleted_at is null');
+  });
+
+  it('classes a chat with any Local turn as Local', async () => {
+    const { mode } = await originOf([originSignal(MANAGED_MODEL_ID), originSignal(LOCAL_MODEL_ID)]);
+    expect(mode).toBe('local');
+  });
+
+  it('classes a chat a turn labels as BYOK as BYOK', async () => {
+    const { mode } = await originOf([
+      originSignal(MANAGED_MODEL_ID),
+      originSignal(null, null, 'DirectByok'),
+    ]);
+    expect(mode).toBe('byok');
+    await expect(
+      originOf([originSignal(MANAGED_MODEL_ID), originSignal(null, 'byok')]).then((r) => r.mode),
+    ).resolves.toBe('byok');
+  });
+
+  it('reports no origin when the chat carries no signal at all', async () => {
+    const { mode } = await originOf([originSignal(null), originSignal('not-a-known-model')]);
+    expect(mode).toBeNull();
   });
 });
 

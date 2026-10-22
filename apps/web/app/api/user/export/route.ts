@@ -1567,6 +1567,21 @@ const developerEvalResultExportSchema = z.object({
   updated_at: timestampSchema,
 });
 
+const liveArtifactExportSchema = z.object({
+  artifact_id: z.string(),
+  conversation_id: z.string(),
+  message_id: z.string(),
+  connectors: z.array(z.string()),
+  allowed_tools: z.array(z.string()),
+  refresh_policy: z.string(),
+  last_refreshed_at: nullableTimestampSchema,
+  readiness: z.string(),
+  missing_connectors: z.array(z.string()),
+  checked_at: nullableTimestampSchema,
+  created_at: timestampSchema,
+  updated_at: timestampSchema,
+});
+
 const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
   section: string;
   table: string;
@@ -2265,6 +2280,17 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           limit 1000`,
     schema: developerEvalResultExportSchema,
     rowLimit: EXPORT_ROW_LIMIT,
+  },
+  {
+    section: 'live_artifacts',
+    table: 'live_artifacts',
+    sql: `select artifact_id, conversation_id, message_id, connectors, allowed_tools,
+                 refresh_policy, last_refreshed_at, readiness, missing_connectors, checked_at,
+                 created_at, updated_at
+          from live_artifacts
+          where user_id = $1
+          order by created_at asc`,
+    schema: liveArtifactExportSchema,
   },
 ];
 

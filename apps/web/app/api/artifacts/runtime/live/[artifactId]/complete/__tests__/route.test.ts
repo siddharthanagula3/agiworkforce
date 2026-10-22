@@ -38,9 +38,8 @@ vi.mock('@/lib/services/artifact-runtime-service', () => ({
   readOwnedRunnableArtifact: mocks.readOwnedRunnableArtifact,
   recordLiveArtifactRefresh: mocks.recordLiveArtifactRefresh,
 }));
-vi.mock('@/app/api/artifacts/runtime/artifact-completion', () => ({
-  artifactRuntimeRefusal: (status: number, code: string, message: string) =>
-    NextResponse.json({ error: { code, message } }, { status }),
+vi.mock('@/app/api/artifacts/runtime/artifact-completion', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   respondToArtifactCompletion: mocks.respondToArtifactCompletion,
 }));
 
@@ -53,6 +52,7 @@ const OWNED = {
   messageId: 'c0ffee00-0000-4000-8000-0000000000bb',
   title: 'Weekly growth',
   type: 'html',
+  originPrivacyMode: 'managed',
 };
 const BINDING = {
   artifactId: ARTIFACT_ID,
@@ -122,6 +122,18 @@ describe('POST /api/artifacts/runtime/live/[artifactId]/complete', () => {
     );
     expect(mocks.respondToArtifactCompletion).not.toHaveBeenCalled();
   });
+
+  it.each(['byok', 'local', null])(
+    'refuses an artifact whose chat resolved to %s rather than managed cloud',
+    async (originPrivacyMode) => {
+      mocks.readOwnedRunnableArtifact.mockResolvedValue({ ...OWNED, originPrivacyMode });
+      mocks.readLiveArtifact.mockResolvedValue(BINDING);
+      const response = await call({ prompt: 'hi', connectors: ['google_drive'] });
+      expect(response.status).toBe(403);
+      expect(await errorCode(response)).toBe('artifact_outside_managed_cloud');
+      expect(mocks.respondToArtifactCompletion).not.toHaveBeenCalled();
+    },
+  );
 
   it('refuses connected apps the owner has not bound to this artifact', async () => {
     const response = await call({ prompt: 'hi', connectors: ['google_drive'] });

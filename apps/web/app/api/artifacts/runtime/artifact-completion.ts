@@ -1,7 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  connectorsReleased,
+  formatPrivacyModeLabel,
+} from '@agiworkforce/types';
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
 import { logger } from '@/lib/logger';
 import {
@@ -16,6 +20,7 @@ import {
   completeArtifactPrompt,
   selectArtifactRuntimeRoute,
   type ArtifactRuntimeSubject,
+  type OwnedRunnableArtifact,
 } from '@/lib/services/artifact-runtime-service';
 import { connectorIdsReachGoogleUserData } from '@/lib/connectors/google-user-data-runs';
 import { artifactConnectorsGateResponse } from '@/lib/services/artifact-connector-gate';
@@ -43,6 +48,17 @@ export function artifactRuntimeRefusal(
   return NextResponse.json(
     { error: { code, message } },
     { status, headers: ARTIFACT_RUNTIME_NO_STORE },
+  );
+}
+
+export function ownedArtifactOriginRefusal(
+  artifact: Pick<OwnedRunnableArtifact, 'originPrivacyMode'>,
+): NextResponse | null {
+  if (artifact.originPrivacyMode === 'managed') return null;
+  return artifactRuntimeRefusal(
+    403,
+    'artifact_outside_managed_cloud',
+    `Only an app made in a ${formatPrivacyModeLabel('managed')} chat can use AI and your connected apps.`,
   );
 }
 

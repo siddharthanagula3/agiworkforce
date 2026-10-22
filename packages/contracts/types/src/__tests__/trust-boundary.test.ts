@@ -6,12 +6,18 @@ import { getProviderSurface } from '../model-catalog';
 import { providerSurfaceToProviderMode } from '../suite-contracts';
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../../..');
-const LOCAL_BYOK_HANDOFF = path.join(REPO_ROOT, 'apps/web/features/chat/lib/localByokHandoff.ts');
+const WEB_PROVIDER_MODE_SOURCE = path.join(
+  REPO_ROOT,
+  'apps/web/shared/lib/provider-mode-for-model.ts',
+);
 
 function readHandoffLocalProviderIds(): string[] {
-  const source = fs.readFileSync(LOCAL_BYOK_HANDOFF, 'utf8');
+  const source = fs.readFileSync(WEB_PROVIDER_MODE_SOURCE, 'utf8');
   const prefixArray = /const LOCAL_MODEL_PREFIXES = \[(.*?)\];/s.exec(source);
-  expect(prefixArray, `LOCAL_MODEL_PREFIXES not found in ${LOCAL_BYOK_HANDOFF}`).not.toBeNull();
+  expect(
+    prefixArray,
+    `LOCAL_MODEL_PREFIXES not found in ${WEB_PROVIDER_MODE_SOURCE}`,
+  ).not.toBeNull();
   const ids = [...prefixArray![1]!.matchAll(/'([^']+)'/g)].map((match) =>
     match[1]!.replace(/[/:]$/, '').replace(/-/g, ''),
   );

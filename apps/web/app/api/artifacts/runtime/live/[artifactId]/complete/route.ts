@@ -19,6 +19,7 @@ import {
 } from '@/lib/services/artifact-runtime-service';
 import {
   artifactRuntimeRefusal,
+  ownedArtifactOriginRefusal,
   respondToArtifactCompletion,
 } from '@/app/api/artifacts/runtime/artifact-completion';
 import { LiveArtifactIdSchema } from '@/app/chat/live-artifacts/live-artifact-contract';
@@ -56,6 +57,8 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
 
   const artifact = await readOwnedRunnableArtifact(scoped.db, scoped, artifactId);
   if (!artifact) return artifactRuntimeRefusal(404, 'artifact_not_found', NOT_FOUND_MESSAGE);
+  const outsideManagedCloud = ownedArtifactOriginRefusal(artifact);
+  if (outsideManagedCloud) return outsideManagedCloud;
 
   const connectors = [...new Set(parsed.data.connectors)];
   const binding = await readLiveArtifact(scoped.db, scoped, artifactId);

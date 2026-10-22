@@ -18,6 +18,7 @@ import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution'
 import {
   ARTIFACT_RUNTIME_NO_STORE,
   artifactRuntimeRefusal,
+  ownedArtifactOriginRefusal,
 } from '@/app/api/artifacts/runtime/artifact-completion';
 import {
   LIVE_ARTIFACT_CONNECTORS_PARAM,
@@ -54,6 +55,8 @@ async function handleGet(request: NextRequest, context: RouteContext): Promise<R
 
   const artifact = await readOwnedRunnableArtifact(scoped.db, scoped, artifactId);
   if (!artifact) return artifactRuntimeRefusal(404, 'artifact_not_found', NOT_FOUND_MESSAGE);
+  const outsideManagedCloud = ownedArtifactOriginRefusal(artifact);
+  if (outsideManagedCloud) return outsideManagedCloud;
 
   const entitlement = await resolveEntitlementBundle(scoped.db, scoped.userId);
   const gate = await artifactConnectorsGateResponse(

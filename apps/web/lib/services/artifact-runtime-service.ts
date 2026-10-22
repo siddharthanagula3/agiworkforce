@@ -18,7 +18,10 @@ import {
   getSlotForModel,
   getTierPolicy,
   isFlagshipRoutingSlot,
+  type PrivacyMode,
 } from '@agiworkforce/types';
+import { resolveOriginPrivacyMode } from '@agiworkforce/artifacts';
+import { getProviderModeForModel } from '@shared/lib/provider-mode-for-model';
 import {
   ADAPTER_PROVIDERS,
   resolveWireMode,
@@ -102,6 +105,7 @@ export interface OwnedRunnableArtifact {
   messageId: string;
   title: string | null;
   type: string;
+  originPrivacyMode: PrivacyMode | null;
 }
 
 export type LiveArtifactBinding = LiveArtifact;
@@ -742,15 +746,52 @@ export async function readOwnedRunnableArtifact(
     [artifactId, owner.userId, [...LIVE_ARTIFACT_RUNTIME_TYPES], owner.organizationId],
   );
   const row = rows[0];
-  return row
-    ? {
-        artifactId: row.id,
-        conversationId: row.conversation_id,
-        messageId: row.message_id,
-        title: row.title,
-        type: row.artifact_type,
-      }
-    : null;
+  if (!row) return null;
+  return {
+    artifactId: row.id,
+    conversationId: row.conversation_id,
+    messageId: row.message_id,
+    title: row.title,
+    type: row.artifact_type,
+    originPrivacyMode: await readConversationOriginPrivacyMode(db, row.conversation_id),
+  };
+}
+
+interface ConversationOriginSignalRow {
+  model: string | null;
+  privacy_mode: string | null;
+  provider_mode: string | null;
+}
+
+export async function readConversationOriginPrivacyMode(
+  db: DatabaseAdapter,
+  conversationId: string,
+): Promise<PrivacyMode | null> {
+  const rows = await db.query<ConversationOriginSignalRow>(
+    `select distinct signals.model, signals.privacy_mode, signals.provider_mode
+       from (
+         select conversations.model, null::text as privacy_mode, null::text as provider_mode
+           from public.web_conversations conversations
+          where conversations.id = $1::uuid
+         union all
+         select coalesce(messages.model, messages.metadata->>'model'),
+                messages.metadata->>'privacyMode',
+                messages.metadata->>'providerMode'
+           from public.web_messages messages
+          where messages.conversation_id = $1::uuid
+            and messages.deleted_at is null
+       ) signals`,
+    [conversationId],
+  );
+  return (
+    resolveOriginPrivacyMode(
+      rows.flatMap((row) => [
+        row.privacy_mode,
+        row.provider_mode,
+        getProviderModeForModel(row.model),
+      ]),
+    ) ?? null
+  );
 }
 
 interface LiveArtifactRow {
@@ -944,6 +985,7 @@ export function bindingCovers(
 export async function liveArtifactMissingConnectors(input: {
   db: DatabaseAdapter;
   userId: string;
+  organizationId: string | null;
   connectors: readonly string[];
 }): Promise<string[]> {
   const entitlement = await resolveEntitlementBundle(input.db, input.userId);
@@ -953,7 +995,7 @@ export async function liveArtifactMissingConnectors(input: {
     policy.allowMCP === false ||
     !(await connectorsAllowedWithoutRequest({
       userId: input.userId,
-      organizationId: null,
+      organizationId: input.organizationId,
       planTier: entitlement.plan,
     }))
   ) {
@@ -963,7 +1005,7 @@ export async function liveArtifactMissingConnectors(input: {
     {
       db: input.db,
       userId: input.userId,
-      organizationId: null,
+      organizationId: input.organizationId,
       planTier: entitlement.plan,
       connectors: input.connectors,
     },
