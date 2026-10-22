@@ -5,6 +5,7 @@ import {
   SETTINGS_NAV_GROUP_DESKTOP_APP,
 } from '@agiworkforce/ui';
 import type { SettingsNavGroupResolved, SettingsNavItem, SettingsNavKey } from '@agiworkforce/ui';
+import { featureDefinition, featureMaturityLabel } from '@agiworkforce/types';
 import { canonicalWebSettingsSection, isWebSettingsSection } from '../lib/web-settings-sections';
 
 const PERSONALIZATION_NAV_ITEM: SettingsNavItem = {
@@ -119,6 +120,20 @@ function withFields(
   });
 }
 
+export const SETTINGS_NAV_FEATURES: Partial<Record<SettingsNavKey, string>> = {
+  'computer-use': 'computer_use',
+  plugins: 'plugins',
+};
+
+function withMaturityLabels(items: SettingsNavItem[]): SettingsNavItem[] {
+  return items.map((item) => {
+    const featureId = SETTINGS_NAV_FEATURES[item.key];
+    const definition = featureId ? featureDefinition(featureId) : null;
+    const maturityLabel = definition ? featureMaturityLabel(definition.maturity) : null;
+    return maturityLabel ? { ...item, maturityLabel } : item;
+  });
+}
+
 interface WebSettingsNavPlacement {
   item: SettingsNavItem;
   after: SettingsNavKey;
@@ -141,7 +156,7 @@ function placeWebItems(items: SettingsNavItem[]): SettingsNavItem[] {
 export const WEB_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map(
   (group) => ({
     ...group,
-    items: withFields(placeWebItems(group.items), WEB_SETTINGS_NAV_FIELDS),
+    items: withMaturityLabels(withFields(placeWebItems(group.items), WEB_SETTINGS_NAV_FIELDS)),
   }),
 );
 
@@ -153,7 +168,10 @@ export const HOSTED_SETTINGS_NAV_GROUPS: SettingsNavGroupResolved[] = [
   ...WEB_SETTINGS_NAV_GROUPS.filter((group) => group.label !== SETTINGS_NAV_GROUP_CUSTOMIZE),
   SETTINGS_NAV_GROUP_DESKTOP_APP,
   ...WEB_SETTINGS_NAV_GROUPS.filter((group) => group.label === SETTINGS_NAV_GROUP_CUSTOMIZE),
-].map((group) => ({ ...group, items: withFields(group.items, HOSTED_SETTINGS_NAV_FIELDS) }));
+].map((group) => ({
+  ...group,
+  items: withMaturityLabels(withFields(group.items, HOSTED_SETTINGS_NAV_FIELDS)),
+}));
 
 const SECTION_PATH_ALIASES: ReadonlyArray<readonly [prefix: string, section: string]> = [
   ['/connectors', 'connectors'],

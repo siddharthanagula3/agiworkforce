@@ -2,7 +2,12 @@ import { useState, type ReactNode } from 'react';
 import { afterEach, beforeEach, describe, it, expect, vi, type MockInstance } from 'vitest';
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CreditCard, Settings2 } from 'lucide-react';
-import { NAV_GROUP_LABEL_TESTID, NAV_MATCHED_FIELD_TESTID, SettingsModal } from '../SettingsModal';
+import {
+  NAV_GROUP_LABEL_TESTID,
+  NAV_MATCHED_FIELD_TESTID,
+  NAV_MATURITY_LABEL_TESTID,
+  SettingsModal,
+} from '../SettingsModal';
 import { useUnsavedChangesGuard } from '../../primitives/UnsavedChanges';
 import {
   SETTINGS_NAV_GROUPS_WEB,
@@ -818,6 +823,42 @@ describe('SettingsModal nav badges', () => {
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
     expect(within(nav).getByRole('button', { name: 'Connectors' })).toBeTruthy();
     expect(within(nav).queryByText('0')).toBeNull();
+  });
+});
+
+describe('SettingsModal nav maturity label', () => {
+  const labelledGroups: SettingsNavGroupResolved[] = SETTINGS_NAV_GROUPS_WEB.map((group) => ({
+    ...group,
+    items: group.items.map((item) =>
+      item.key === 'plugins' ? { ...item, maturityLabel: 'Beta' } : item,
+    ),
+  }));
+
+  it('shows the label as a pill on the row the surface marked, and nowhere else', () => {
+    renderModal({ navGroups: labelledGroups });
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+    const plugins = within(nav).getByRole('button', { name: 'Plugins' });
+    expect(within(plugins).getByTestId(NAV_MATURITY_LABEL_TESTID).textContent).toBe('Beta');
+    expect(within(nav).getAllByTestId(NAV_MATURITY_LABEL_TESTID)).toHaveLength(1);
+  });
+
+  it('keeps the row name and reads the label as its description', () => {
+    renderModal({ navGroups: labelledGroups });
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+    const plugins = within(nav).getByRole('button', { name: 'Plugins' });
+    const describedBy = plugins.getAttribute('aria-describedby') ?? '';
+    expect(document.getElementById(describedBy)?.textContent).toBe('Beta');
+    expect(
+      within(nav).getByRole('button', { name: 'Connectors' }).getAttribute('aria-describedby'),
+    ).toBeNull();
+  });
+
+  it('shows no pill when the surface sets no label', () => {
+    renderModal();
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+    expect(within(nav).queryByTestId(NAV_MATURITY_LABEL_TESTID)).toBeNull();
   });
 });
 

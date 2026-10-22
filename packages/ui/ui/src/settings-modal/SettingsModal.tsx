@@ -104,6 +104,7 @@ interface NavEntry {
 
 export const NAV_GROUP_LABEL_TESTID = 'settings-nav-group-label';
 export const NAV_MATCHED_FIELD_TESTID = 'settings-nav-matched-field';
+export const NAV_MATURITY_LABEL_TESTID = 'settings-nav-maturity-label';
 
 interface SearchableNavEntry {
   key: string;
@@ -1904,6 +1905,7 @@ function NavButton({
   onClick,
   badge,
   matchedField,
+  maturityLabel,
 }: {
   itemKey: string;
   label: string;
@@ -1912,8 +1914,13 @@ function NavButton({
   onClick: (key: string) => void;
   badge?: SettingsNavBadge;
   matchedField?: string;
+  maturityLabel?: string;
 }) {
   const matchedFieldId = useId();
+  const maturityLabelId = useId();
+  const describedBy = [matchedField && matchedFieldId, maturityLabel && maturityLabelId]
+    .filter(Boolean)
+    .join(' ');
   return (
     <button
       type="button"
@@ -1927,7 +1934,7 @@ function NavButton({
       )}
       aria-current={isActive ? 'page' : undefined}
       aria-controls="settings-pane"
-      aria-describedby={matchedField ? matchedFieldId : undefined}
+      aria-describedby={describedBy || undefined}
     >
       <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-90' : 'opacity-60')} />
       {matchedField ? (
@@ -1944,6 +1951,19 @@ function NavButton({
         </span>
       ) : (
         <span className="truncate">{label}</span>
+      )}
+      {maturityLabel && (
+        <span
+          id={maturityLabelId}
+          aria-hidden="true"
+          data-testid={NAV_MATURITY_LABEL_TESTID}
+          className={cn(
+            'shrink-0 rounded-full px-2 py-0.5 text-caption font-semibold uppercase tracking-wider',
+            isActive ? 'bg-background text-foreground' : 'bg-accent text-accent-foreground',
+          )}
+        >
+          {maturityLabel}
+        </span>
       )}
       {badge && badge.count > 0 && (
         <span
@@ -2329,6 +2349,7 @@ export function SettingsModal({
                         onClick={selectSection}
                         badge={navBadges?.[item.key]}
                         matchedField={navFieldToReveal(item, navFilter)?.label}
+                        maturityLabel={item.maturityLabel}
                       />
                     ))}
                   </div>

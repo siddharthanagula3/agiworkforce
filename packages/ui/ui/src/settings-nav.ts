@@ -267,6 +267,7 @@ export interface SettingsNavItem {
   icon: LucideIcon;
   keywords?: string[];
   fields?: SettingsNavField[];
+  maturityLabel?: string;
 }
 
 export interface SettingsNavGroupResolved {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SETTINGS_NAV, isSettingsNavKey } from '@agiworkforce/ui';
+import { featureDefinition, featureMaturityLabel } from '@agiworkforce/types';
 import {
   WEB_SETTINGS_BUILT_IN_SECTIONS,
   WEB_SETTINGS_CONTENT_SECTIONS,
@@ -11,6 +12,7 @@ import {
 import {
   HOSTED_SETTINGS_NAV_GROUPS,
   WEB_SETTINGS_NAV_GROUPS,
+  SETTINGS_NAV_FEATURES,
   WEB_SETTINGS_NAV_PLACEMENTS,
   settingsSectionFromPath,
 } from '../web-settings-navigation';
@@ -175,5 +177,45 @@ describe('web settings rail order', () => {
     expect(groupKeys(HOSTED_SETTINGS_NAV_GROUPS, 'Settings')).toEqual(
       groupKeys(WEB_SETTINGS_NAV_GROUPS, 'Settings'),
     );
+  });
+});
+
+describe('web settings rail maturity labels', () => {
+  const rows = (groups: typeof WEB_SETTINGS_NAV_GROUPS) => groups.flatMap((group) => group.items);
+  const registryLabel = (featureId: string) => {
+    const definition = featureDefinition(featureId);
+    return definition ? featureMaturityLabel(definition.maturity) : null;
+  };
+
+  it('maps each labelled row to a feature the registry defines', () => {
+    for (const featureId of Object.values(SETTINGS_NAV_FEATURES)) {
+      expect(featureDefinition(featureId ?? '')).not.toBeNull();
+    }
+  });
+
+  it('labels each row with its feature maturity from the registry, in both rails', () => {
+    for (const groups of [WEB_SETTINGS_NAV_GROUPS, HOSTED_SETTINGS_NAV_GROUPS]) {
+      for (const item of rows(groups)) {
+        const featureId = SETTINGS_NAV_FEATURES[item.key];
+        expect(item.maturityLabel ?? null).toBe(featureId ? registryLabel(featureId) : null);
+      }
+    }
+  });
+
+  it('maps rows that both rails can show, so the labels are not vacuous', () => {
+    const hostedKeys = new Set(rows(HOSTED_SETTINGS_NAV_GROUPS).map((item) => item.key));
+    expect(Object.keys(SETTINGS_NAV_FEATURES).every((key) => hostedKeys.has(key as never))).toBe(
+      true,
+    );
+    expect(Object.keys(SETTINGS_NAV_FEATURES)).toEqual(
+      expect.arrayContaining(['plugins', 'computer-use']),
+    );
+  });
+
+  it('leaves generally available rows unlabelled', () => {
+    const web = rows(WEB_SETTINGS_NAV_GROUPS);
+    for (const key of ['general', 'skills', 'connectors']) {
+      expect(web.find((item) => item.key === key)?.maturityLabel).toBeUndefined();
+    }
   });
 });
