@@ -65,6 +65,7 @@ When comparing arrangements, count all of it:
 - **Verification**: the check you must run before trusting the output. If verifying costs as much as doing, do it yourself.
 - **Retries**: a cheap worker that needs three attempts is not cheap. A worker at the wrong effort level pays on every turn.
 - **Wall-clock time**: parallel independent work finishes sooner; dependent work does not, however many agents it gets.
+- **Machine resources**: sub-agents and workflow agents run inside their parent session and add little memory (measured 2026-10-21: a whole Claude Code session used 0.5 to 1.6 GB); a background session is a separate process of that size. The commands agents run are what exhaust a small machine: a web type check can need 8 GB, a Next.js dev server 10 GB or more, and builds, test suites, browsers and emulators add up fast. Serialise those through a lock and tell every worker in its brief to use it.
 
 ## Sources read
 

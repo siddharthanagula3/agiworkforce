@@ -578,7 +578,7 @@
       "sourceType": "first-party",
       "audience": "developer",
       "declaredVersion": null,
-      "computedHash": "sha256-tree-v1:212ce81c20e1fa6cafe91a98affaa1d6eeee2485f028e9fa85007b3ab25b82c5"
+      "computedHash": "sha256-tree-v1:3ac23953aac3bc9622ff2ef33562613376d529197f2fd71b4b9e9b7c79c96fa2"
     },
     "paywalls": {
       "path": ".agents/skills/paywalls",

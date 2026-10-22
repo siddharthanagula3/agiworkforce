@@ -14,7 +14,7 @@ If the argument starts with `plan`, produce the routing note in step 5 and stop 
 
 ## 1. Frame the task
 
-Write down, for yourself, in a few lines: the objective, the constraints (what must not change, what needs permission, deadlines, budget), and the acceptance criteria (how you will know it is done and correct). If a wrong guess about any of these would waste real work, ask once; otherwise state your assumption and proceed.
+Write down, for yourself, in a few lines: the objective, the constraints (what must not change, what needs permission, deadlines, budget), and the acceptance criteria (how you will know it is done and correct). Name the binding constraint, because it decides how much to parallelise: plan usage on a subscription, money on an API key, wall-clock time, or the machine itself (memory, CPU, disk). Agents that read, think and edit cost tokens but little memory; builds, test suites, dev servers, browsers and emulators cost memory. When tokens are plentiful and the machine is small, run many agents but let their heavy commands through one at a time, using the project's job lock if it has one. If a wrong guess about any of these would waste real work, ask once; otherwise state your assumption and proceed.
 
 ## 2. Choose the smallest arrangement that works
 

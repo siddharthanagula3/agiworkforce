@@ -38,6 +38,8 @@ Context: [paths to read first; conventions to match; findings already verified]
 In scope: [what to build or change]
 Out of scope: [what to leave alone]
 You own: [files you may edit]. If the work needs another file, stop and tell me which and why.
+Heavy commands (builds, full suites, type checks, dev servers, browsers): run them only through
+[the project's job lock, e.g. scripts/dev/heavy-job.sh], one at a time; scoped tests through [the light lock].
 Done means: [acceptance criteria; the commands that must pass]
 Constraints: [no new dependencies, no weakened tests, no destructive or outward-facing actions, ...]
 Reply with: what is not done or not verified; files changed and why; each command and its result;

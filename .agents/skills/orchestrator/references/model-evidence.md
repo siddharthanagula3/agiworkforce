@@ -132,6 +132,7 @@ Checked on 2026-10-21.
 - Agent files accept `model`, `effort`, `tools`, `maxTurns`, `autoCompactWindow`, `isolation`, `background`, `omitClaudeMd`, `memory` and `experimental.cacheTtl`. A `model` or `effort` passed on the Agent call wins over the file.
 - Project settings: `CLAUDE_CODE_SUBAGENT_MODEL=sonnet`, so unconfigured sub-agents run on Sonnet; agent teams off by default; a project `Explore` agent runs searches on Haiku at medium. `orch-builder` and `orch-principal` keep a 1-hour cache because their tool calls often run longer than 5 minutes; scouts stay on 5 minutes.
 - User settings: main model `opus`, Opus effort `high`; the `haiku` alias is pinned through `ANTHROPIC_DEFAULT_HAIKU_MODEL`.
+- Machine: a 16 GB laptop on a Max 20x plan, so memory, not plan usage, is the binding constraint. Heavy commands go through `scripts/dev/heavy-job.sh` (one at a time, waits for 3 GB free) and scoped tests through `scripts/dev/light-job.sh` (two slots); a PreToolUse hook denies unwrapped heavy commands.
 
 ## How to refresh
 
