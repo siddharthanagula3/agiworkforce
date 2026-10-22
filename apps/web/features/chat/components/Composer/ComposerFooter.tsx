@@ -26,6 +26,7 @@ import {
   Lock,
   Monitor,
   Plug,
+  Settings,
   Video,
   type Icon,
 } from '@agiworkforce/icons';
@@ -40,7 +41,10 @@ import {
   Slider,
   Spinner,
   useMenuKeyboard,
+  useUiTranslation,
 } from '@agiworkforce/ui';
+import { useSettingsModal } from '@features/settings/components/SettingsModalProvider';
+import type { WebSettingsContentSection } from '@features/settings/lib/web-settings-sections';
 import { formatLocalModelSize, type LocalModel } from '@agiworkforce/local-runtime-contract';
 import { useLocalModelSelection, useLocalModels } from '@features/desktop-host';
 import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
@@ -73,6 +77,7 @@ import {
   evaluateModelEnvironment,
   featureDefinition,
   featureMaturityLabel,
+  getMinimumRequiredTier,
   getModelMetadataById,
   isFreeBillingPlanTier,
   normalizeBillingPlanTier,
@@ -136,6 +141,14 @@ function ladderOffset(index: number, length: number): string {
   return `${(index / Math.max(length - 1, 1)) * LADDER_FULL_PERCENT}%`;
 }
 const EFFORT_OFF_LABEL = 'Off';
+const TOP_PLAN_BADGE_TIER = 'max';
+const FAST_MODE_LABEL = 'Fast mode';
+const FAST_PILL_LABEL = 'Fast';
+const FAST_PILL_CLASS =
+  'flex min-h-7 shrink-0 items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 sm:min-h-8 sm:text-sm pointer-coarse:min-h-11';
+const FAST_PILL_OFF_CLASS =
+  'border-[var(--chat-border)] text-muted-foreground hover:bg-muted/60 hover:text-foreground';
+const FAST_PILL_ON_CLASS = 'border-transparent bg-muted text-foreground hover:bg-muted/80';
 const MODEL_TRIGGER_CLASS =
   'flex min-h-7 min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm pointer-coarse:min-h-11';
 
@@ -177,10 +190,14 @@ const CAPABILITY_GLYPHS: Readonly<
 
 const LOCAL_SECTION_LABEL = 'On this device';
 const LOCAL_BADGE_LABEL = 'Local';
+const LOCAL_BADGE_TONE_CLASS = 'bg-[var(--chat-info)]/15 text-[var(--chat-info-text)]';
+const LOCAL_GROUP_LABEL_CLASS =
+  'px-3 pb-0.5 pt-1.5 text-xs font-medium uppercase tracking-wide text-muted-foreground';
 const FREE_QUOTA_BADGE_LABEL = 'Free';
 const LOCAL_GRANT_LABEL = 'Use models on this device';
 const LOCAL_GRANT_GUIDANCE = 'Asks once, then lists what Ollama and LM Studio have loaded';
 const LOCAL_EMPTY_TEXT = 'No models loaded on this device yet.';
+const LOCAL_MODELS_SETTINGS_SECTION: WebSettingsContentSection = 'capabilities';
 
 const PLAN_PAGE_LINK_TEXT = 'What each plan includes';
 const AUTO_GUIDANCE = 'Picks the best model for each message';
@@ -486,6 +503,27 @@ function LocalHiddenModels({ reasons }: { reasons: string[] }) {
   );
 }
 
+interface LocalModelGroup {
+  serverId: LocalModel['serverId'];
+  serverLabel: string;
+  models: LocalModel[];
+}
+
+function groupLocalModelsByServer(models: readonly LocalModel[]): LocalModelGroup[] {
+  const groups = new Map<LocalModel['serverId'], LocalModelGroup>();
+  for (const model of models) {
+    const group = groups.get(model.serverId);
+    if (group) group.models.push(model);
+    else
+      groups.set(model.serverId, {
+        serverId: model.serverId,
+        serverLabel: model.serverLabel,
+        models: [model],
+      });
+  }
+  return [...groups.values()];
+}
+
 function LocalModelSection({
   state,
   selectedId,
@@ -499,7 +537,12 @@ function LocalModelSection({
 
   return (
     <>
-      <p className={PICKER_SECTION_LABEL_CLASS}>{LOCAL_SECTION_LABEL}</p>
+      <p className={`${PICKER_SECTION_LABEL_CLASS} flex items-center gap-1.5`}>
+        <span>{LOCAL_SECTION_LABEL}</span>
+        <span className={`${PICKER_BADGE_CLASS} ${LOCAL_BADGE_TONE_CLASS}`}>
+          {LOCAL_BADGE_LABEL}
+        </span>
+      </p>
       {!state.granted ? (
         <button
           type="button"
@@ -520,41 +563,54 @@ function LocalModelSection({
           <p className="px-3 py-2 text-xs text-muted-foreground">{LOCAL_EMPTY_TEXT}</p>
         )
       ) : (
-        state.models.map((model) => {
-          const isSelected = model.id === selectedId;
-          return (
-            <button
-              key={model.id}
-              type="button"
-              {...{ [PICKER_ROW_ATTR]: '' }}
-              className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
-              onClick={() => onSelect(model)}
-              aria-pressed={isSelected}
-              aria-label={`${model.name} - ${model.serverLabel}, runs on this device`}
-            >
-              <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-              <span className="min-w-0 flex-1">
-                <span
-                  className={[
-                    PICKER_ROW_NAME_CLASS,
-                    isSelected ? 'font-medium text-foreground' : 'font-normal text-foreground',
-                  ].join(' ')}
+        groupLocalModelsByServer(state.models).map((group) => (
+          <div key={group.serverId} role="group" aria-label={group.serverLabel}>
+            <p className={LOCAL_GROUP_LABEL_CLASS} aria-hidden="true">
+              {group.serverLabel}
+            </p>
+            {group.models.map((model) => {
+              const isSelected = model.id === selectedId;
+              return (
+                <button
+                  key={model.id}
+                  type="button"
+                  {...{ [PICKER_ROW_ATTR]: '' }}
+                  className={`${PICKER_ROW_CLASS} hover:bg-muted/60 focus-visible:bg-muted/60`}
+                  onClick={() => onSelect(model)}
+                  aria-pressed={isSelected}
+                  aria-label={`${model.name} - ${model.serverLabel}, runs on this device`}
                 >
-                  {model.name}
-                </span>
-                <span className={PICKER_ROW_GUIDANCE_CLASS}>
-                  {model.sizeBillion === undefined
-                    ? model.serverLabel
-                    : `${model.serverLabel} · ${formatLocalModelSize(model.sizeBillion)}`}
-                </span>
-              </span>
-              <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
-                {LOCAL_BADGE_LABEL}
-              </span>
-              {isSelected && <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />}
-            </button>
-          );
-        })
+                  <Monitor className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+                  <span className="min-w-0 flex-1">
+                    <span className="flex min-w-0 items-center gap-1.5">
+                      <span
+                        className={[
+                          PICKER_ROW_NAME_CLASS,
+                          isSelected
+                            ? 'font-medium text-foreground'
+                            : 'font-normal text-foreground',
+                        ].join(' ')}
+                      >
+                        {model.name}
+                      </span>
+                      <span className={`${PICKER_BADGE_CLASS} ${LOCAL_BADGE_TONE_CLASS}`}>
+                        {LOCAL_BADGE_LABEL}
+                      </span>
+                    </span>
+                    {model.sizeBillion !== undefined && (
+                      <span className={PICKER_ROW_GUIDANCE_CLASS}>
+                        {formatLocalModelSize(model.sizeBillion)}
+                      </span>
+                    )}
+                  </span>
+                  {isSelected && (
+                    <Check className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        ))
       )}
       {state.granted && state.models.length > 0 && state.hiddenReasons.length > 0 ? (
         <LocalHiddenModels reasons={state.hiddenReasons} />
@@ -603,6 +659,10 @@ function ModelRow({
   const deprecationWarning = deprecationWarningFor(model);
   const releaseStage = isHardDisabled ? null : resolveModelReleaseStage(model.id, model.name);
   const releaseStageLabel = releaseStage ? MODEL_PICKER_RELEASE_STAGE_LABEL[releaseStage] : null;
+  const topPlanLabel =
+    !isLocked && getMinimumRequiredTier(model.id) === TOP_PLAN_BADGE_TIER
+      ? resolvePlanLockLabel(model.id)
+      : null;
   const guidance = promotionLabel ?? rowGuidance(model, row, degraded, deprecationWarning);
 
   const handleLockedClick = () => {
@@ -620,6 +680,7 @@ function ModelRow({
         : (promotedAriaLabel ?? model.name);
   const ariaLabel = [
     baseAriaLabel,
+    topPlanLabel,
     releaseStageLabel,
     deprecationWarning ? `Leaving on ${deprecationWarning.fullLabel}` : null,
     degraded ? degraded.reason : null,
@@ -692,6 +753,14 @@ function ModelRow({
       )}
       <span className="ms-auto flex shrink-0 items-center gap-2">
         {row?.priceBand && <PriceBand band={row.priceBand} />}
+        {topPlanLabel && (
+          <span
+            data-testid="model-plan-badge"
+            className={`${PICKER_BADGE_CLASS} border border-[var(--chat-border-strong)] normal-case text-muted-foreground`}
+          >
+            {topPlanLabel}
+          </span>
+        )}
         {releaseStageLabel && (
           <span className={`${PICKER_BADGE_CLASS} bg-muted/60 text-muted-foreground`}>
             {releaseStageLabel}
@@ -1016,6 +1085,8 @@ export function ComposerFooter({
   }, [conversationMessages]);
 
   const localModels = useLocalModels(open);
+  const { openSettings } = useSettingsModal();
+  const { t: tModels } = useUiTranslation('models');
   const localSelection = useLocalModelSelection((state) => state.selected);
   const selectLocalModel = useLocalModelSelection((state) => state.select);
   const { leaveLocalModel, dialog: localForkDialog } = useLeaveLocalModel(closeModelPopover);
@@ -1648,6 +1719,22 @@ export function ComposerFooter({
                       {CACHE_RESET_HINT_TEXT}
                     </p>
                   )}
+                  {!catalogueOpen && !freePlan && localModels.available && (
+                    <div className="shrink-0 border-t border-[var(--chat-border)] p-1">
+                      <button
+                        type="button"
+                        {...{ [PICKER_ROW_ATTR]: '' }}
+                        onClick={() => {
+                          closeModelPopover();
+                          openSettings(LOCAL_MODELS_SETTINGS_SECTION);
+                        }}
+                        className={`${PICKER_ROW_CLASS} h-9 w-full text-sm text-muted-foreground hover:bg-muted/60 hover:text-foreground focus-visible:bg-muted/60`}
+                      >
+                        <Settings className="h-4 w-4 shrink-0" aria-hidden="true" />
+                        <span>{tModels('selector.manageLocalModels', 'Manage local models')}</span>
+                      </button>
+                    </div>
+                  )}
                   {!catalogueOpen && !shortList.plan.admitsEveryModel && (
                     <div className="shrink-0 border-t border-[var(--chat-border)] p-1">
                       <button
@@ -1753,14 +1840,13 @@ export function ComposerFooter({
                 <button
                   type="button"
                   className={EFFORT_TRIGGER_CLASS}
-                  aria-label={`Reasoning effort: ${effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}${fastOn ? ', fast mode on' : ''}`}
+                  aria-label={`Reasoning effort: ${effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}`}
                   aria-expanded={effortOpen}
                   title="Reasoning effort"
                 >
                   <Brain className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden="true" />
                   <span className="font-medium">
                     {effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}
-                    {fastOn ? ' · Fast' : ''}
                   </span>
                   <ChevronDown className="h-4 w-4 shrink-0" />
                 </button>
@@ -1860,7 +1946,7 @@ export function ComposerFooter({
                   <div className="mt-3 border-t border-[var(--chat-border)] pt-3">
                     <div className="flex items-center justify-between gap-3">
                       <span className="flex items-center gap-2 text-sm font-medium text-foreground">
-                        Fast mode
+                        {FAST_MODE_LABEL}
                         {fastModeMaturityLabel && (
                           <span className="text-xs font-normal text-muted-foreground">
                             {fastModeMaturityLabel}
@@ -1871,7 +1957,7 @@ export function ComposerFooter({
                         checked={fastOn}
                         disabled={!fastAvailability.allowed}
                         onCheckedChange={setFastEnabled}
-                        aria-label="Fast mode"
+                        aria-label={FAST_MODE_LABEL}
                         className="h-5 w-9"
                       />
                     </div>
@@ -1901,6 +1987,23 @@ export function ComposerFooter({
                 )}
               </PopoverContent>
             </Popover>
+          )}
+
+          {showModelSelector && !lockModelSelector && fastTier && (
+            <button
+              type="button"
+              className={`${FAST_PILL_CLASS} ${fastOn ? FAST_PILL_ON_CLASS : FAST_PILL_OFF_CLASS}`}
+              aria-pressed={fastOn}
+              aria-label={FAST_MODE_LABEL}
+              disabled={!fastAvailability.allowed}
+              title={
+                fastAvailability.reason ??
+                [FAST_MODE_LABEL, fastModeMaturityLabel].filter(Boolean).join(' · ')
+              }
+              onClick={() => setFastEnabled(!fastOn)}
+            >
+              {FAST_PILL_LABEL}
+            </button>
           )}
         </div>
       </div>

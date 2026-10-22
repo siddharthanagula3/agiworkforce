@@ -126,3 +126,49 @@ describe('AttachmentPreview · upload lifecycle', () => {
     expect(screen.getByRole('button', { name: 'Remove notes.txt' })).toBeTruthy();
   });
 });
+
+describe('AttachmentPreview · document type line', () => {
+  it('names the file kind beside its size', () => {
+    const csv: AttachmentPreviewData = {
+      file: new File(['a,b\n1,2'], 'report.csv', { type: 'text/csv' }),
+      url: 'blob:csv-1',
+      type: 'document',
+    };
+    const pdf: AttachmentPreviewData = {
+      file: new File(['pdf'], 'contract.pdf', { type: 'application/pdf' }),
+      url: 'blob:pdf-1',
+      type: 'document',
+    };
+
+    render(<AttachmentPreview previews={[csv, pdf]} onRemove={vi.fn()} />);
+
+    expect(screen.getByText('Spreadsheet · 7 B')).toBeTruthy();
+    expect(screen.getByText('PDF · 3 B')).toBeTruthy();
+  });
+});
+
+describe('AttachmentPreview · image order', () => {
+  function threeImages(): AttachmentPreviewData[] {
+    return ['source.png', 'guide-a.png', 'guide-b.png'].map((name, index) => ({
+      file: new File(['png'], name, { type: 'image/png' }),
+      url: `blob:image-order-${index}`,
+      type: 'image' as const,
+    }));
+  }
+
+  it('numbers images in the order they were added when asked', () => {
+    render(<AttachmentPreview previews={threeImages()} onRemove={vi.fn()} numberImages />);
+
+    expect(screen.getAllByTestId('attachment-order').map((badge) => badge.textContent)).toEqual([
+      'Image 1',
+      'Image 2',
+      'Image 3',
+    ]);
+  });
+
+  it('shows no numbers by default', () => {
+    render(<AttachmentPreview previews={threeImages()} onRemove={vi.fn()} />);
+
+    expect(screen.queryByTestId('attachment-order')).toBeNull();
+  });
+});

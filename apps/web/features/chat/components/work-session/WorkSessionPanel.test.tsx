@@ -6,6 +6,15 @@ import { useArtifactsStore, type Artifact } from '../../stores/artifacts-store';
 import { WorkSessionPanel } from './WorkSessionPanel';
 import { buildTaskDockSummary } from './taskDockSummary';
 import { downloadGeneratedFile } from '../../utils/downloadArtifacts';
+import { CapabilityProvider } from '@agiworkforce/unified-chat';
+import { useCoworkFolderStore } from '@shared/stores/cowork-folder-store';
+import { onLocalFolderAttachRequest } from '../Composer/ComposerPlusMenu';
+
+const desktopHost = vi.hoisted(() => ({ value: null as object | null }));
+vi.mock('@/features/desktop-host/lib/host', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/desktop-host/lib/host')>()),
+  useDesktopHost: () => desktopHost.value,
+}));
 
 vi.mock('../../utils/downloadArtifacts', () => ({
   downloadAllArtifacts: vi.fn().mockResolvedValue(undefined),
@@ -296,5 +305,74 @@ describe('WorkSessionPanel', () => {
     unmount();
     expect(opener).toHaveFocus();
     opener.remove();
+  });
+});
+
+describe('WorkSessionPanel · section disclosure and context actions', () => {
+  beforeEach(() => {
+    useArtifactsStore.getState().clearArtifacts();
+    useChatStore.getState().setActiveConversation('conv-1');
+    desktopHost.value = null;
+    delete (window as { showDirectoryPicker?: unknown }).showDirectoryPicker;
+  });
+
+  it('collapses and reopens Outputs from its header', () => {
+    render(<WorkSessionPanel messages={workMessages()} open onClose={vi.fn()} agiWork />);
+
+    const outputsHeader = screen.getByText('Outputs');
+    const outputs = outputsHeader.closest('details');
+    expect(outputs).toHaveAttribute('open');
+    expect(screen.getByText('report.pdf')).toBeVisible();
+
+    fireEvent.click(outputsHeader);
+    expect(outputs).not.toHaveAttribute('open');
+    expect(screen.getByText('report.pdf')).not.toBeVisible();
+
+    fireEvent.click(outputsHeader);
+    expect(outputs).toHaveAttribute('open');
+  });
+
+  it('gives Progress and Context the same disclosure header', () => {
+    render(<WorkSessionPanel messages={workMessages()} open onClose={vi.fn()} agiWork />);
+
+    expect(screen.getByText('Progress').closest('summary')).not.toBeNull();
+    expect(screen.getByText('Context').closest('summary')).not.toBeNull();
+  });
+
+  it('offers no context actions where neither folder route exists', () => {
+    render(<WorkSessionPanel messages={workMessages()} open onClose={vi.fn()} agiWork />);
+
+    expect(screen.queryByRole('button', { name: 'Add working folder' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Attach from local folder' })).toBeNull();
+  });
+
+  it('picks a working folder from the Context header', () => {
+    (window as { showDirectoryPicker?: unknown }).showDirectoryPicker = vi.fn();
+    const pickFolder = vi.fn().mockResolvedValue(undefined);
+    const original = useCoworkFolderStore.getState().pickFolder;
+    useCoworkFolderStore.setState({ pickFolder });
+
+    render(
+      <CapabilityProvider platform="desktop">
+        <WorkSessionPanel messages={workMessages()} open onClose={vi.fn()} agiWork />
+      </CapabilityProvider>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Add working folder' }));
+
+    expect(pickFolder).toHaveBeenCalledTimes(1);
+    expect(screen.getByText('Context').closest('details')).toHaveAttribute('open');
+    useCoworkFolderStore.setState({ pickFolder: original });
+  });
+
+  it('asks the composer to attach from a local folder in the desktop shell', () => {
+    desktopHost.value = {};
+    const handler = vi.fn();
+    const stop = onLocalFolderAttachRequest(handler);
+
+    render(<WorkSessionPanel messages={workMessages()} open onClose={vi.fn()} agiWork />);
+    fireEvent.click(screen.getByRole('button', { name: 'Attach from local folder' }));
+
+    expect(handler).toHaveBeenCalledTimes(1);
+    stop();
   });
 });

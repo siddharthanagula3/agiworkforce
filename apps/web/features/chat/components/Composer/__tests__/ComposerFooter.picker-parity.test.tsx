@@ -25,7 +25,17 @@ const registryFixtures = await vi.hoisted(async () => {
     return minimumTier !== null && minimumTier !== 'basic';
   });
   if (!locked) throw new Error('catalog exposes no model gated above the entry plan');
+  const topPlan = models.find(
+    (entry) => entry.id !== locked.id && getMinimumRequiredTier(entry.id) === 'max',
+  );
+  if (!topPlan) throw new Error('catalog exposes no model gated to the top plan');
   return {
+    topPlan: {
+      id: topPlan.id,
+      name: topPlan.name,
+      provider: topPlan.provider,
+      planLabel: PLAN_LABEL.max,
+    },
     catalog: { id: catalog.id, name: catalog.name, provider: catalog.provider },
     locked: {
       id: locked.id,
@@ -284,7 +294,9 @@ describe('ComposerFooter · picker rows', () => {
       },
     ]);
     const dialog = mountAndOpen();
-    const row = within(dialog).getByRole('button', { name: catalogFixture.name });
+    const row = within(dialog).getByRole('button', {
+      name: (accessibleName) => accessibleName.startsWith(catalogFixture.name),
+    });
     const descriptionId = row.getAttribute('aria-describedby');
     expect(descriptionId).toBeTruthy();
     const description = document.getElementById(descriptionId!)!;
@@ -292,6 +304,27 @@ describe('ComposerFooter · picker rows', () => {
     expect(description.textContent).toMatch(/Tools/);
     expect(within(row).queryByText('Vision')).not.toBeInTheDocument();
     expect(within(row).queryByText('Tools')).not.toBeInTheDocument();
+  });
+
+  it('marks a model the top plan unlocks with that plan and leaves others plain', () => {
+    const topPlan = registryFixtures.topPlan;
+    useRoster([
+      ...BASE_MODELS,
+      {
+        id: topPlan.id,
+        name: topPlan.name,
+        provider: topPlan.provider,
+        providerKey: topPlan.provider,
+        description: 'top plan fixture',
+      },
+    ]);
+    const dialog = mountAndOpen();
+    const row = within(dialog).getByRole('button', {
+      name: `${topPlan.name} - ${topPlan.planLabel}`,
+    });
+    expect(within(row).getByTestId('model-plan-badge')).toHaveTextContent(topPlan.planLabel);
+    const plain = within(dialog).getByRole('button', { name: 'Primary Fixture' });
+    expect(within(plain).queryByTestId('model-plan-badge')).toBeNull();
   });
 
   it('opens the catalogue from All models and names the plan on a locked row there', () => {
@@ -353,7 +386,9 @@ describe('ComposerFooter · picker rows', () => {
       },
     ]);
     const dialog = mountAndOpen();
-    const row = within(dialog).getByRole('button', { name: catalogFixture.name });
+    const row = within(dialog).getByRole('button', {
+      name: (accessibleName) => accessibleName.startsWith(catalogFixture.name),
+    });
     expect(within(row).queryByLabelText(/^Vision$/)).not.toBeInTheDocument();
     expect(row.querySelector('[aria-label^="Price band"]')).not.toBeNull();
   });

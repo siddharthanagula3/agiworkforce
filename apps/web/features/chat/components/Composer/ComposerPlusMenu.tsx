@@ -16,6 +16,7 @@ import Link from 'next/link';
 import {
   Brain,
   Check,
+  ChevronDown,
   ChevronRight,
   Copy,
   EyeOff,
@@ -32,13 +33,21 @@ import {
   MonitorPlay,
   Paperclip,
   Search,
+  ShieldCheck,
   Sparkles,
   Telescope,
   Terminal,
+  TriangleAlert,
   Video,
   X,
 } from '@agiworkforce/icons';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
   Spinner,
   Tooltip,
   TooltipContent,
@@ -101,6 +110,22 @@ import {
   TEMPORARY_CHAT_RETENTION_NOTE,
 } from '@/lib/temporary-chat-policy';
 import { RESOURCE_RECOVERY_WINDOW_DAYS } from '@/lib/resources/deletion-policies';
+import { toast } from 'sonner';
+import {
+  fetchPreferenceNamespace,
+  readAutonomousToolApprovalsAllowed,
+  savePreferenceNamespace,
+} from '@/app/settings/_lib/preferences-client';
+import {
+  DEFAULT_TOOL_APPROVAL_POLICY,
+  TOOL_APPROVAL_POLICY_OPTIONS,
+  TOOL_APPROVAL_PREFERENCE_NAMESPACE,
+  WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES,
+  isToolApprovalPolicy,
+  toolApprovalPolicyOption,
+  type ToolApprovalPolicy,
+  type ToolApprovalPreferences,
+} from '@shared/types/toolApprovalPolicy';
 
 export const COMPOSER_PALETTE_SEARCH_TESTID = 'composer-palette-search';
 
@@ -112,8 +137,20 @@ const TEMPORARY_ATTACH_RETENTION_NOTE =
 const ROW_LABEL_LIBRARY = 'Add from library';
 const ROW_LABEL_IMAGE = 'Create image';
 const ROW_LABEL_VIDEO = 'Create video';
-const ROW_LABEL_FOLDER = 'Add working folder';
-const ROW_LABEL_LOCAL_FOLDER = 'Attach from local folder';
+export const ROW_LABEL_FOLDER = 'Add working folder';
+export const ROW_LABEL_LOCAL_FOLDER = 'Attach from local folder';
+const LOCAL_FOLDER_ATTACH_EVENT = 'agi:composer-attach-local-folder';
+
+export function requestLocalFolderAttach(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new Event(LOCAL_FOLDER_ATTACH_EVENT));
+}
+
+export function onLocalFolderAttachRequest(handler: () => void): () => void {
+  if (typeof window === 'undefined') return () => undefined;
+  window.addEventListener(LOCAL_FOLDER_ATTACH_EVENT, handler);
+  return () => window.removeEventListener(LOCAL_FOLDER_ATTACH_EVENT, handler);
+}
 const ROW_LABEL_CLIPBOARD = 'Attach clipboard';
 const ROW_LABEL_CLIPBOARD_BUSY = 'Reading clipboard…';
 const ROW_LABEL_LOCAL_COMMAND = 'Run a local command';
@@ -1689,5 +1726,122 @@ function WorkPalette(props: ComposerPlusMenuProps) {
         </div>
       </div>
     </div>
+  );
+}
+
+const APPROVAL_MODE_MENU_LABEL = 'Tool approvals';
+const APPROVAL_MODE_SCOPE_NOTE = 'Applies to every chat and session on this account.';
+const APPROVAL_MODE_SAVE_FAILED = 'Could not change tool approvals. Try again.';
+const AUTONOMOUS_APPROVAL_POLICY: ToolApprovalPolicy = 'autonomous';
+
+interface ApprovalModeState {
+  policy: ToolApprovalPolicy;
+  autonomyAllowed: boolean;
+}
+
+export function ComposerApprovalModeControl({ disabled = false }: { disabled?: boolean }) {
+  const [state, setState] = useState<ApprovalModeState | null>(null);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      fetchPreferenceNamespace<ToolApprovalPreferences>(
+        TOOL_APPROVAL_PREFERENCE_NAMESPACE,
+        WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES,
+      ),
+      readAutonomousToolApprovalsAllowed().catch(() => false),
+    ])
+      .then(([preferences, autonomyAllowed]) => {
+        if (!cancelled) setState({ policy: preferences.defaultPolicy, autonomyAllowed });
+      })
+      .catch(() => {
+        if (!cancelled) setLoadFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const persist = useCallback(
+    async (next: ToolApprovalPolicy) => {
+      if (!state) return;
+      const previous = state.policy;
+      setState({ ...state, policy: next });
+      setSaving(true);
+      try {
+        await savePreferenceNamespace<ToolApprovalPreferences>(TOOL_APPROVAL_PREFERENCE_NAMESPACE, {
+          defaultPolicy: next,
+        });
+      } catch {
+        setState((current) => (current ? { ...current, policy: previous } : current));
+        toast.error(APPROVAL_MODE_SAVE_FAILED);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [state],
+  );
+
+  if (loadFailed) return null;
+
+  const appliedPolicy =
+    state && (state.policy !== AUTONOMOUS_APPROVAL_POLICY || state.autonomyAllowed)
+      ? state.policy
+      : DEFAULT_TOOL_APPROVAL_POLICY;
+  const applied = state ? toolApprovalPolicyOption(appliedPolicy) : null;
+  const options = TOOL_APPROVAL_POLICY_OPTIONS.filter(
+    (option) => option.policy !== AUTONOMOUS_APPROVAL_POLICY || state?.autonomyAllowed === true,
+  );
+  const ModeGlyph = appliedPolicy === AUTONOMOUS_APPROVAL_POLICY ? TriangleAlert : ShieldCheck;
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          data-testid="composer-approval-mode"
+          disabled={disabled || state === null}
+          aria-busy={state === null || saving}
+          aria-label={
+            applied ? `${APPROVAL_MODE_MENU_LABEL}: ${applied.label}` : APPROVAL_MODE_MENU_LABEL
+          }
+          title={applied?.hint}
+          className={cn(
+            'flex h-8 min-h-0 shrink-0 items-center gap-1 rounded-full px-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:h-9 sm:text-sm pointer-coarse:min-h-11',
+            (disabled || state === null) && 'cursor-not-allowed opacity-50',
+          )}
+        >
+          {state === null || saving ? (
+            <Spinner size="sm" />
+          ) : (
+            <ModeGlyph className="h-4 w-4 shrink-0" aria-hidden="true" />
+          )}
+          {applied && <span className="hidden sm:inline">{applied.shortLabel}</span>}
+          <ChevronDown className="h-4 w-4 shrink-0" aria-hidden="true" />
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="w-80">
+        <DropdownMenuLabel>{APPROVAL_MODE_MENU_LABEL}</DropdownMenuLabel>
+        <DropdownMenuRadioGroup
+          value={appliedPolicy}
+          onValueChange={(value) => {
+            if (!isToolApprovalPolicy(value) || value === appliedPolicy) return;
+            void persist(value);
+          }}
+        >
+          {options.map((option) => (
+            <DropdownMenuRadioItem key={option.policy} value={option.policy} disabled={saving}>
+              <span className="flex min-w-0 flex-col">
+                <span className="text-sm text-foreground">{option.label}</span>
+                <span className="text-xs text-muted-foreground">{option.hint}</span>
+              </span>
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+        <p className="px-2 pb-1.5 pt-1 text-xs text-muted-foreground">{APPROVAL_MODE_SCOPE_NOTE}</p>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

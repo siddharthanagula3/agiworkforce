@@ -107,6 +107,7 @@ vi.mock('@shared/stores/thinking-store', () => ({
 vi.mock('@agiworkforce/ui', () => ({
   useConfirmAction: () => ({ confirm: () => undefined, dialog: null }),
   useMenuKeyboard: () => undefined,
+  useUiTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
   Popover: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   PopoverTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
     asChild ? <>{children}</> : <div>{children}</div>,

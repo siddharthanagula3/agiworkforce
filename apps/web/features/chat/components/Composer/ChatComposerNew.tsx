@@ -79,9 +79,11 @@ import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { MODEL_MENU_WIDTH_CLASS } from './composer-menu';
 import { VideoCostEstimate } from './VideoCostEstimate';
 import {
+  ComposerApprovalModeControl,
   ComposerPlusMenu,
   PluginsGlyph,
   connectorToggleId,
+  onLocalFolderAttachRequest,
   type ComposerPlusMenuConnector,
 } from './ComposerPlusMenu';
 import {
@@ -323,6 +325,8 @@ const WORK_MODE_PLACEHOLDERS: Record<ComposerWorkMode, string | null> = {
  * send control is what says a message is waiting.
  */
 const TURN_ACTIVE_PLACEHOLDER = 'Follow up';
+const LOCAL_FOLDER_ATTACH_UNAVAILABLE_NOTICE =
+  'Files cannot be attached with the current mode or model.';
 
 /**
  * The chip on the send control already says a message is waiting, so this row
@@ -1948,6 +1952,16 @@ const ChatComposerNewComponent = ({
   const [localCommandOpen, setLocalCommandOpen] = useState(false);
   const [browserToolsOpen, setBrowserToolsOpen] = useState(false);
   const [readingClipboard, setReadingClipboard] = useState(false);
+  useEffect(() => {
+    if (desktopHost === null) return undefined;
+    return onLocalFolderAttachRequest(() => {
+      if (attachmentsUnavailable) {
+        setLocalNotice(LOCAL_FOLDER_ATTACH_UNAVAILABLE_NOTICE);
+        return;
+      }
+      setLocalFolderPickerOpen(true);
+    });
+  }, [attachmentsUnavailable, desktopHost]);
   useDesktopVoiceHotkey(() => {
     if (dictation.isActive) dictation.stop();
     else startDictation();
@@ -5300,7 +5314,17 @@ const ChatComposerNewComponent = ({
               className="px-1 pt-1 pb-0"
             />
           ) : null}
-          <AttachmentPreview previews={previews} onRemove={removeFile} className="px-1 pt-1 pb-0" />
+          <AttachmentPreview
+            previews={previews}
+            onRemove={removeFile}
+            numberImages={
+              imageMode &&
+              imageModelSupportsEdit &&
+              effectiveImageOperation === 'edit' &&
+              previews.length > 1
+            }
+            className="px-1 pt-1 pb-0"
+          />
 
           {/* Rest-state row: an existing chat keeps plus, textbox and the right
               cluster on one line. The home composer keeps its separate control
@@ -5693,6 +5717,9 @@ const ChatComposerNewComponent = ({
                       );
                     })}
                   </div>
+                )}
+                {canUseAgiWork && workMode === 'agiwork' && !imageMode && !videoMode && (
+                  <ComposerApprovalModeControl disabled={composerDisabled} />
                 )}
               </div>
 

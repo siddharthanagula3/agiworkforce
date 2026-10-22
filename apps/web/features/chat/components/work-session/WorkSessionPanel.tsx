@@ -1,6 +1,6 @@
 'use client';
 
-import { Fragment, useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   CheckCircle2,
   ChevronRight,
@@ -8,8 +8,10 @@ import {
   CircleAlert,
   FileText,
   FolderOpen,
+  FolderPlus,
   Globe,
   Info,
+  Monitor,
   PanelRight,
   Puzzle,
   Sparkles,
@@ -20,6 +22,7 @@ import {
   agiWorkPlanSentence,
   buildAgentActivitySummary,
   getManagedModelPresentationLabel,
+  useCapability,
 } from '@agiworkforce/unified-chat';
 import {
   isAutoModeModelId,
@@ -57,6 +60,13 @@ import {
   TASK_DOCK_SOURCES_LABEL,
   TASK_DOCK_STEPS_LABEL,
 } from '../../lib/agi-work';
+import { useDesktopHost } from '@/features/desktop-host/lib/host';
+import { supportsDirectoryPicker, useCoworkFolderStore } from '@shared/stores/cowork-folder-store';
+import {
+  ROW_LABEL_FOLDER,
+  ROW_LABEL_LOCAL_FOLDER,
+  requestLocalFolderAttach,
+} from '../Composer/ComposerPlusMenu';
 import { OutputsList, useTaskDockSummary } from './OutputsList';
 import {
   type TaskDockContextItem,
@@ -72,6 +82,10 @@ const SECTION_SUMMARY_CLASS =
   'flex min-h-11 cursor-pointer list-none items-center gap-2 px-4 py-2.5 marker:hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden';
 const SECTION_CHEVRON_CLASS =
   'ms-auto h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none';
+const DOCK_CHEVRON_CLASS =
+  'h-3.5 w-3.5 text-muted-foreground transition-transform group-open:rotate-90 motion-reduce:transition-none';
+const DOCK_ACTION_CLASS =
+  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-[var(--chat-surface-hover)] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring motion-reduce:transition-none pointer-coarse:h-11 pointer-coarse:w-11';
 const CLOSE_ACTION_VERB = 'Close';
 const OPEN_ACTION_VERB = 'Open';
 const PAUSED_STATUS_LABEL = 'Paused';
@@ -197,25 +211,101 @@ function ChatDetailsSection({ rows }: { rows: readonly ChatDetailRow[] }) {
   );
 }
 
+function DockDisclosure({
+  label,
+  count,
+  actions,
+  className,
+  children,
+}: {
+  label: string;
+  count?: React.ReactNode;
+  actions?: React.ReactNode;
+  className?: string;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className={cn('relative', className)}>
+      <details
+        open={open}
+        onToggle={(event) => setOpen(event.currentTarget.open)}
+        className="group"
+      >
+        <summary className={SECTION_SUMMARY_CLASS}>
+          <span className={SECTION_LABEL_CLASS}>{label}</span>
+          {count !== undefined && (
+            <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
+          )}
+          <ChevronRight className={DOCK_CHEVRON_CLASS} aria-hidden="true" />
+        </summary>
+        <div className="px-4 pb-3">{children}</div>
+      </details>
+      {actions ? (
+        <div className="absolute end-3 top-1.5 flex items-center gap-0.5 pointer-coarse:top-0">
+          {actions}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function DockSection({
   label,
   count,
+  actions,
   children,
 }: {
   label: string;
   count: number;
+  actions?: React.ReactNode;
   children: React.ReactNode;
 }) {
-  const headingId = useId();
   if (count === 0) return null;
   return (
-    <section aria-labelledby={headingId} className="border-t border-[var(--chat-border)] px-4 py-3">
-      <h3 id={headingId} className="mb-2 flex items-center gap-2">
-        <span className={SECTION_LABEL_CLASS}>{label}</span>
-        <span className="text-xs tabular-nums text-muted-foreground">{count}</span>
-      </h3>
+    <DockDisclosure
+      label={label}
+      count={count}
+      actions={actions}
+      className="border-t border-[var(--chat-border)]"
+    >
       {children}
-    </section>
+    </DockDisclosure>
+  );
+}
+
+function ContextActions() {
+  const canUseWorkingDirectory = useCapability('canUseWorkingDirectory');
+  const pickFolder = useCoworkFolderStore((state) => state.pickFolder);
+  const folderName = useCoworkFolderStore((state) => state.folderName);
+  const desktopHost = useDesktopHost();
+  const canPickFolder = canUseWorkingDirectory && supportsDirectoryPicker();
+  if (!canPickFolder && desktopHost === null) return null;
+  return (
+    <>
+      {canPickFolder && (
+        <button
+          type="button"
+          onClick={() => void pickFolder()}
+          className={DOCK_ACTION_CLASS}
+          aria-label={ROW_LABEL_FOLDER}
+          title={folderName ? `${ROW_LABEL_FOLDER}: ${folderName}` : ROW_LABEL_FOLDER}
+        >
+          <FolderPlus className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
+      {desktopHost !== null && (
+        <button
+          type="button"
+          onClick={requestLocalFolderAttach}
+          className={DOCK_ACTION_CLASS}
+          aria-label={ROW_LABEL_LOCAL_FOLDER}
+          title={ROW_LABEL_LOCAL_FOLDER}
+        >
+          <Monitor className="h-4 w-4" aria-hidden="true" />
+        </button>
+      )}
+    </>
   );
 }
 
@@ -307,20 +397,14 @@ function TaskDockProgressSection({
     : statusLabel(summary.status);
   const planSentence = activity ? agiWorkPlanSentence(activity.entries) : undefined;
   const completed = summary.steps.filter((step) => step.status === 'completed').length;
-  const headingId = useId();
 
   const showEmptySteps = summary.steps.length === 0 && agiWork && isRunning;
 
   return (
-    <section aria-labelledby={headingId} className="px-4 py-3">
-      <h3 id={headingId} className="mb-1.5 flex items-center gap-2">
-        <span className={SECTION_LABEL_CLASS}>{TASK_DOCK_PROGRESS_LABEL}</span>
-        {summary.steps.length > 0 && (
-          <span className="text-xs tabular-nums text-muted-foreground">
-            {completed}/{summary.steps.length}
-          </span>
-        )}
-      </h3>
+    <DockDisclosure
+      label={TASK_DOCK_PROGRESS_LABEL}
+      count={summary.steps.length > 0 ? `${completed}/${summary.steps.length}` : undefined}
+    >
       <p className="flex min-w-0 items-center gap-2 text-sm text-foreground">
         <span className="flex h-4 w-4 shrink-0 items-center justify-center">
           <StatusIcon status={summary.status === 'idle' ? 'pending' : summary.status} />
@@ -363,7 +447,7 @@ function TaskDockProgressSection({
       {showEmptySteps && (
         <p className="mt-1.5 text-xs text-muted-foreground">{TASK_DOCK_PROGRESS_EMPTY}</p>
       )}
-    </section>
+    </DockDisclosure>
   );
 }
 
@@ -542,7 +626,11 @@ export function WorkSessionPanel({
   );
 
   const contextSection = (
-    <DockSection label={TASK_DOCK_CONTEXT_LABEL} count={summary.context.length}>
+    <DockSection
+      label={TASK_DOCK_CONTEXT_LABEL}
+      count={summary.context.length}
+      actions={<ContextActions />}
+    >
       <ul className="space-y-2">
         {summary.context.map((item) => (
           <li key={item.id} className="flex items-center gap-2.5">

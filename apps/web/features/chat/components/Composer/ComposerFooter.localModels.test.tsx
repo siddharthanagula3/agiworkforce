@@ -14,6 +14,11 @@ import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
 
+const openSettings = vi.hoisted(() => vi.fn());
+vi.mock('@features/settings/components/SettingsModalProvider', () => ({
+  useSettingsModal: () => ({ isOpen: false, openSettings, closeSettings: () => undefined }),
+}));
+
 const LOCAL_MODEL: LocalModel = {
   id: 'local:ollama/tiny-chat:1b',
   serverId: 'ollama',
@@ -143,7 +148,7 @@ describe('the model picker on the desktop shell', () => {
     expect(listCalls).toHaveBeenCalled();
   });
 
-  it('marks a listed local model as Local and names its server', async () => {
+  it('groups listed local models under their server and marks each as Local', async () => {
     installHost();
     snapshot = { granted: true, servers: [reachable] };
     await openPicker();
@@ -152,7 +157,28 @@ describe('the model picker on the desktop shell', () => {
       name: 'tiny-chat:1b - Ollama, runs on this device',
     });
     expect(row.textContent).toContain('Local');
-    expect(row.textContent).toContain('Ollama · 1.2B');
+    expect(row.textContent).toContain('1.2B');
+    expect(row.textContent).not.toContain('Ollama');
+    const group = screen.getByRole('group', { name: 'Ollama' });
+    expect(group).toContainElement(row);
+  });
+
+  it('closes the picker into the local model settings from its footer', async () => {
+    installHost();
+    snapshot = { granted: true, servers: [reachable] };
+    openSettings.mockClear();
+    const user = await openPicker();
+
+    await user.click(await screen.findByRole('button', { name: 'Manage local models' }));
+
+    expect(openSettings).toHaveBeenCalledWith('capabilities');
+    expect(screen.queryByRole('button', { name: 'Manage local models' })).not.toBeInTheDocument();
+  });
+
+  it('offers no local model settings row in a browser', async () => {
+    delete window.agiHost;
+    await openPicker();
+    expect(screen.queryByRole('button', { name: 'Manage local models' })).not.toBeInTheDocument();
   });
 
   it('hides a model under the minimum size and says why', async () => {

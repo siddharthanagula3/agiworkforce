@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { getProviderDefaultModel } from '@agiworkforce/types';
+import { getMinimumRequiredTier, getProviderDefaultModel, PLAN_LABEL } from '@agiworkforce/types';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ModelSelector } from '../ModelSelector';
 import { useChatStore } from '../../stores/chatStore';
@@ -477,5 +477,58 @@ describe('ModelSelector BYOK entry from a Local conversation', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
     expect(screen.queryByText(/Use a model with your API key/i)).toBeNull();
+  });
+});
+
+describe('ModelSelector top-plan badge', () => {
+  const topPlanMetadata = requireCatalogModel(
+    (model) => model.modelType !== 'image' && getMinimumRequiredTier(model.id) === 'max',
+    'a chat model that needs the top plan',
+  );
+  const lowerPlanMetadata = requireCatalogModel(
+    (model) => model.modelType !== 'image' && getMinimumRequiredTier(model.id) === 'pro',
+    'a chat model a lower plan reaches',
+  );
+  const topPlanModel = createChatModelInfo({
+    id: topPlanMetadata.id,
+    name: topPlanMetadata.name,
+    provider: topPlanMetadata.provider,
+    isLocal: false,
+    isByok: true,
+  });
+  const lowerPlanModel = createChatModelInfo({
+    id: lowerPlanMetadata.id,
+    name: lowerPlanMetadata.name,
+    provider: lowerPlanMetadata.provider,
+    isLocal: false,
+    isByok: true,
+  });
+
+  afterEach(() => {
+    cleanup();
+    window.localStorage.clear();
+  });
+
+  it('marks only the model the top plan unlocks with that plan', () => {
+    useModelStore.setState({
+      models: [topPlanModel, lowerPlanModel],
+      selectedModelId: lowerPlanModel.id,
+      modelCatalogStatus: 'ready',
+      modelCatalogError: null,
+      recentModelIds: [],
+      lastRoutingDecision: null,
+    });
+    seedConversation('byok', lowerPlanModel.id);
+    render(<ModelSelector />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Select model' }));
+
+    const badges = screen.getAllByTestId('model-plan-badge');
+    expect(badges).toHaveLength(1);
+    expect(badges[0]?.textContent).toBe(PLAN_LABEL.max);
+    const topRow = screen.getByRole('button', {
+      name: (accessibleName) => accessibleName.includes(topPlanModel.name),
+    });
+    expect(topRow.contains(badges[0] ?? null)).toBe(true);
   });
 });

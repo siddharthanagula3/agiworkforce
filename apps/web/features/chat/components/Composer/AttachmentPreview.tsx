@@ -19,6 +19,7 @@ interface AttachmentPreviewProps {
   statuses?: AttachmentUploadVisualStatus[];
   onRetry?: (index: number) => void;
   disableRemove?: boolean;
+  numberImages?: boolean;
   className?: string;
 }
 
@@ -28,9 +29,29 @@ function formatSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function getDocIcon(mimeType: string) {
-  if (mimeType === 'application/pdf') return FileText;
-  if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) return FileSpreadsheet;
+interface DocumentKind {
+  Icon: typeof FileIcon;
+  label: string;
+}
+
+const PDF_KIND: DocumentKind = { Icon: FileText, label: 'PDF' };
+const SPREADSHEET_KIND: DocumentKind = { Icon: FileSpreadsheet, label: 'Spreadsheet' };
+const CODE_KIND: DocumentKind = { Icon: FileCode, label: 'Code' };
+const DOCUMENT_KIND: DocumentKind = { Icon: FileText, label: 'Document' };
+const TEXT_KIND: DocumentKind = { Icon: FileText, label: 'Text' };
+const PRESENTATION_KIND: DocumentKind = { Icon: FileIcon, label: 'Presentation' };
+const FILE_KIND: DocumentKind = { Icon: FileIcon, label: 'File' };
+
+function documentKind(mimeType: string): DocumentKind {
+  if (mimeType === 'application/pdf') return PDF_KIND;
+  if (
+    mimeType.includes('spreadsheet') ||
+    mimeType.includes('excel') ||
+    mimeType === 'text/csv' ||
+    mimeType === 'text/tab-separated-values'
+  ) {
+    return SPREADSHEET_KIND;
+  }
   if (
     mimeType.includes('javascript') ||
     mimeType.includes('typescript') ||
@@ -39,10 +60,19 @@ function getDocIcon(mimeType: string) {
     mimeType.includes('css') ||
     mimeType.includes('xml')
   ) {
-    return FileCode;
+    return CODE_KIND;
   }
-  return FileIcon;
+  if (mimeType.includes('presentation') || mimeType.includes('powerpoint')) {
+    return PRESENTATION_KIND;
+  }
+  if (mimeType.includes('wordprocessing') || mimeType === 'application/msword') {
+    return DOCUMENT_KIND;
+  }
+  if (mimeType.startsWith('text/')) return TEXT_KIND;
+  return FILE_KIND;
 }
+
+const IMAGE_ORDER_PREFIX = 'Image ';
 
 const itemVariants = {
   initial: { opacity: 0, scale: 0.8, y: 8 },
@@ -146,6 +176,7 @@ function UploadStatus({
 function ImageThumbnail({
   preview,
   index,
+  order,
   onRemove,
   status,
   onRetry,
@@ -153,6 +184,7 @@ function ImageThumbnail({
 }: {
   preview: AttachmentPreviewData;
   index: number;
+  order?: number;
   onRemove: (index: number) => void;
   status?: AttachmentUploadVisualStatus;
   onRetry?: (index: number) => void;
@@ -184,6 +216,15 @@ function ImageThumbnail({
           draggable={false}
         />
       </div>
+      {order !== undefined && (
+        <span
+          data-testid="attachment-order"
+          className="absolute bottom-1 start-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-background/90 px-1 text-caption font-semibold tabular-nums text-foreground shadow-e1"
+        >
+          <span className="sr-only">{IMAGE_ORDER_PREFIX}</span>
+          {order}
+        </span>
+      )}
       <UploadStatus
         fileName={preview.file.name}
         status={status}
@@ -208,7 +249,7 @@ function DocumentChip({
   onRetry?: (index: number) => void;
   disableRemove?: boolean;
 }) {
-  const Icon = getDocIcon(preview.file.type);
+  const { Icon, label: kindLabel } = documentKind(preview.file.type);
   const name = preview.file.name;
   const displayName = name.length > 20 ? name.slice(0, 17) + '...' : name;
 
@@ -239,8 +280,8 @@ function DocumentChip({
             {displayName}
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-caption text-muted-foreground">
-              {formatSize(preview.file.size)}
+            <span className="truncate text-caption text-muted-foreground">
+              {`${kindLabel} · ${formatSize(preview.file.size)}`}
             </span>
           </div>
           <UploadStatus
@@ -260,9 +301,16 @@ function AttachmentPreviewComponent({
   statuses,
   onRetry,
   disableRemove,
+  numberImages = false,
   className,
 }: AttachmentPreviewProps) {
   if (previews.length === 0) return null;
+  const imageOrder = new Map<number, number>();
+  if (numberImages) {
+    previews.forEach((preview, index) => {
+      if (preview.type === 'image') imageOrder.set(index, imageOrder.size + 1);
+    });
+  }
 
   return (
     <div className={cn('flex flex-wrap items-center gap-2 pb-2', className)}>
@@ -273,6 +321,7 @@ function AttachmentPreviewComponent({
               key={preview.url}
               preview={preview}
               index={index}
+              order={imageOrder.get(index)}
               onRemove={onRemove}
               status={statuses?.[index]}
               onRetry={onRetry}

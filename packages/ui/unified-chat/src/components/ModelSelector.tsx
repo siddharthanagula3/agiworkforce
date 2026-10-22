@@ -28,6 +28,8 @@ import {
   EFFORT_LABEL,
   getModelReasoning,
   getModelEffortOptions,
+  getMinimumRequiredTier,
+  PLAN_LABEL,
   canAccessAutoRoutingProfileForTier,
   getAutoRoutingProfiles,
   isAutoModeModelId,
@@ -223,6 +225,20 @@ function TierBadge({ tier, className }: TierBadgeProps) {
     >
       <Cpu size={9} />
       standard
+    </span>
+  );
+}
+
+const TOP_PLAN_BADGE_TIER = 'max';
+
+function TopPlanBadge({ modelId }: { modelId: string }) {
+  if (getMinimumRequiredTier(modelId) !== TOP_PLAN_BADGE_TIER) return null;
+  return (
+    <span
+      data-testid="model-plan-badge"
+      className="shrink-0 rounded-compact border border-[var(--chat-border-strong)] px-1 py-0.5 text-caption font-medium text-[var(--chat-text-muted)]"
+    >
+      {PLAN_LABEL[TOP_PLAN_BADGE_TIER]}
     </span>
   );
 }
@@ -855,6 +871,7 @@ export function ModelSelector({
                                       local
                                     </span>
                                   )}
+                                  <TopPlanBadge modelId={m.id} />
                                   {!isSelectable && (
                                     <span className="shrink-0 rounded-compact px-1 py-0.5 text-caption font-semibold uppercase tracking-wide bg-[var(--chat-warning-bg)] text-[var(--chat-warning-fg)]">
                                       {m.availability === 'coming_soon'

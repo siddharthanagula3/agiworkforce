@@ -216,13 +216,14 @@ vi.mock('@/lib/free-trial-config', () => ({
 }));
 
 const thinking = vi.hoisted(() => ({ enabled: true, effort: 'medium' }));
+const setFast = vi.hoisted(() => vi.fn());
 vi.mock('@shared/stores/thinking-store', () => ({
   useThinkingStore: (selector: (s: Record<string, unknown>) => unknown) =>
     selector({
       enabled: thinking.enabled,
       effort: thinking.effort,
       fast: false,
-      setFast: () => undefined,
+      setFast,
       setEnabled: (v: boolean) => {
         thinking.enabled = v;
       },
@@ -379,6 +380,26 @@ describe('ComposerFooter · reasoning/effort flyout', () => {
     expect(screen.getByText(featureMaturityLabel('beta') ?? '')).toHaveClass(
       'text-muted-foreground',
     );
+  });
+
+  it('puts Fast on its own pill beside the effort control', () => {
+    sel.id = 'fixture-fast-mode';
+    setFast.mockClear();
+    render(<ComposerFooter />);
+
+    const pill = screen.getByRole('button', { name: 'Fast mode' });
+    expect(pill).toHaveTextContent('Fast');
+    expect(pill).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('button', { name: /fast mode on/ })).not.toBeInTheDocument();
+
+    fireEvent.click(pill);
+    expect(setFast).toHaveBeenCalledWith(true);
+  });
+
+  it('shows no Fast pill for a model without a fast tier', () => {
+    sel.id = 'fixture-six-level';
+    render(<ComposerFooter />);
+    expect(screen.queryByRole('button', { name: 'Fast mode' })).not.toBeInTheDocument();
   });
 
   it('(a) Six-Level Fixture exposes its six exact levels on the effort slider', () => {
