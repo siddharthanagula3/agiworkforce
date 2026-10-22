@@ -136,6 +136,16 @@ impl TrustStatus {
         restrictions
     }
 
+    /// What a successful grant prints, safe to write to a terminal.
+    pub fn granted_message(&self) -> String {
+        crate::terminal_text::sanitize_terminal_text(&format!(
+            "Trusted {}\n{}",
+            self.identity.describe(),
+            self.render()
+        ))
+        .into_owned()
+    }
+
     pub fn render(&self) -> String {
         let mut lines = vec![
             format!("Workspace: {}", self.root.display()),
@@ -271,6 +281,13 @@ pub fn status_from_registry(
     if status.state.is_trusted() {
         status.grant_covers_checkout = entry.identity.is_none()
             || grant_covers_checkout(registry, &status.identity, &status.root);
+        if !status.grant_covers_checkout {
+            status.state = TrustState::Ask;
+            status.reason = Some(format!(
+                "trust was granted to another checkout of {}, not this folder",
+                status.identity.describe()
+            ));
+        }
     }
     status
 }
@@ -918,9 +935,73 @@ mod tests {
         assert!(here.restrictions().repository_config);
 
         let elsewhere = status_from_registry(&registry, clone.path(), "ada", "laptop");
-        assert_eq!(elsewhere.state, TrustState::Trusted);
-        assert!(elsewhere.restrictions().unrestricted_shell);
-        assert!(!elsewhere.restrictions().repository_config);
+        assert_eq!(elsewhere.state, TrustState::Ask);
+        assert_eq!(elsewhere.restrictions(), TrustRestrictions::RESTRICTED);
+        assert!(elsewhere.reason.unwrap().contains("another checkout"));
+
+        registry.trust(clone.path(), &key, "ada", "laptop").unwrap();
+        let granted_here = status_from_registry(&registry, clone.path(), "ada", "laptop");
+        assert_eq!(granted_here.state, TrustState::Trusted);
+        assert_eq!(granted_here.restrictions(), TrustRestrictions::TRUSTED);
+    }
+
+    #[test]
+    fn an_unrelated_folder_naming_a_trusted_remote_gets_no_shell_network_or_secrets() {
+        let trusted = tempfile::tempdir().unwrap();
+        let unrelated = tempfile::tempdir().unwrap();
+        for dir in [trusted.path(), unrelated.path()] {
+            assert!(std::process::Command::new("git")
+                .args(["init", "-q"])
+                .current_dir(dir)
+                .status()
+                .unwrap()
+                .success());
+        }
+        let config = unrelated.path().join(".git/config");
+        let mut text = std::fs::read_to_string(&config).unwrap();
+        text.push_str("[remote \"origin\"]\n\turl = https://example.test/trusted/repo.git\n");
+        std::fs::write(&config, text).unwrap();
+        assert!(std::process::Command::new("git")
+            .args([
+                "remote",
+                "add",
+                "origin",
+                "https://example.test/trusted/repo.git"
+            ])
+            .current_dir(trusted.path())
+            .status()
+            .unwrap()
+            .success());
+        let key = identity::workspace_identity(trusted.path()).key;
+        assert_eq!(key, identity::workspace_identity(unrelated.path()).key);
+        let mut registry = ProjectRegistry::default();
+        registry
+            .trust(trusted.path(), &key, "ada", "laptop")
+            .unwrap();
+
+        let status = status_from_registry(&registry, unrelated.path(), "ada", "laptop");
+        let restrictions = status.restrictions();
+        assert!(!status.state.is_trusted());
+        assert!(!restrictions.unrestricted_shell);
+        assert!(!restrictions.unrestricted_network);
+        assert!(!restrictions.secret_injection);
+        assert!(!restrictions.mcp_autostart);
+        assert!(!restrictions.repository_config);
+    }
+
+    #[test]
+    fn a_grant_message_cannot_carry_terminal_escapes() {
+        let dir = tempfile::tempdir().unwrap();
+        let hostile = dir.path().join("repo\u{1b}]0;owned\u{7}\u{1b}[2J");
+        std::fs::create_dir(&hostile).unwrap();
+        let registry = registry_with(&hostile, "ada", "laptop");
+        let status = status_from_registry(&registry, &hostile, "ada", "laptop");
+
+        let message = status.granted_message();
+
+        assert!(message.starts_with("Trusted "), "{message}");
+        assert!(!message.contains('\u{1b}'), "{message:?}");
+        assert!(!message.contains('\u{7}'), "{message:?}");
     }
 
     #[test]

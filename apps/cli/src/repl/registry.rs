@@ -714,11 +714,7 @@ pub fn trust_for_display(arg: &str) -> CommandOutcome {
             sanitize_terminal_text(&crate::trust::status_for(&cwd).render()).into_owned(),
         ),
         "grant" | "trust" => match crate::trust::grant(&cwd) {
-            Ok(status) => CommandOutcome::Block(format!(
-                "Trusted {}\n{}",
-                status.root.display(),
-                sanitize_terminal_text(&status.render())
-            )),
+            Ok(status) => CommandOutcome::Block(status.granted_message()),
             Err(error) => CommandOutcome::Error(format!("{error:#}")),
         },
         "revoke" | "untrust" => match crate::trust::revoke(&cwd) {
