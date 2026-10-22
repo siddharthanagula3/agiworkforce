@@ -118,13 +118,8 @@ jest.mock('@/services/docParser', () => ({
 }));
 
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
-import {
-  WORK_USAGE_ADD_CREDITS_LABEL,
-  WORK_USAGE_CARD_TITLE,
-  WORK_USAGE_UPGRADE_LABEL,
-  WorkUsageCard,
-  resolveWorkUsageRecovery,
-} from '@/src/features/chat/components/WorkUsageCard';
+import { WORK_USAGE_COPY } from '@agiworkforce/types';
+import { WorkUsageCard } from '@/src/features/chat/components/WorkUsageCard';
 import { useChatViewStore } from '@/stores/chat/chatViewStore';
 
 beforeEach(() => {
@@ -132,28 +127,6 @@ beforeEach(() => {
   mockTier = 'pro';
   mockFailureCode = null;
   useChatViewStore.setState({ workMode: 'chat' });
-});
-
-describe('DEF-2332 work usage recovery', () => {
-  it('offers credits to a paid plan whose spent usage credits can clear', () => {
-    expect(resolveWorkUsageRecovery('insufficient_credits', 'pro')).toBe('add_credits');
-    expect(resolveWorkUsageRecovery('rolling_five_hour_limit_reached', 'pro')).toBe('add_credits');
-  });
-
-  it('offers only Upgrade to the Free plan', () => {
-    expect(resolveWorkUsageRecovery('free_trial_token_budget_reached', 'free')).toBe('upgrade');
-    expect(resolveWorkUsageRecovery('insufficient_credits', 'free')).toBe('upgrade');
-  });
-
-  it('upgrades a paid plan when credits cannot clear the limit', () => {
-    expect(resolveWorkUsageRecovery('monthly_credit_limit_reached', 'pro')).toBe('upgrade');
-  });
-
-  it('leaves refusals another model or a retry can answer to the send error', () => {
-    expect(resolveWorkUsageRecovery('flagship_weekly_limit_reached', 'pro')).toBeNull();
-    expect(resolveWorkUsageRecovery('rate_limit_exceeded', 'pro')).toBeNull();
-    expect(resolveWorkUsageRecovery(null, 'pro')).toBeNull();
-  });
 });
 
 describe('DEF-2332 work usage card', () => {
@@ -164,8 +137,8 @@ describe('DEF-2332 work usage card', () => {
     render(<ChatInput onSend={jest.fn()} />);
 
     expect(screen.getByTestId('chat.composer.work-usage')).toBeTruthy();
-    expect(screen.getByText(WORK_USAGE_CARD_TITLE)).toBeTruthy();
-    fireEvent.press(screen.getByRole('button', { name: WORK_USAGE_ADD_CREDITS_LABEL }));
+    expect(screen.getByText(WORK_USAGE_COPY.title)).toBeTruthy();
+    fireEvent.press(screen.getByRole('button', { name: WORK_USAGE_COPY.addCredits }));
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
   });
 
@@ -180,8 +153,8 @@ describe('DEF-2332 work usage card', () => {
   it('shows Free an Upgrade action and no usage figures', () => {
     render(<WorkUsageCard recovery="upgrade" />);
 
-    expect(screen.getByRole('button', { name: WORK_USAGE_UPGRADE_LABEL })).toBeTruthy();
-    expect(screen.queryByRole('button', { name: WORK_USAGE_ADD_CREDITS_LABEL })).toBeNull();
+    expect(screen.getByRole('button', { name: WORK_USAGE_COPY.upgrade })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: WORK_USAGE_COPY.addCredits })).toBeNull();
     expect(screen.queryByText(/\d+%|\$|credit/i)).toBeNull();
   });
 });

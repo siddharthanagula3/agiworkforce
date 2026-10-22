@@ -1,3 +1,4 @@
+import { isAccountWideUsageFeature } from '@agiworkforce/types';
 import type { PaywallSlot } from '@/features/chat/types/message-metadata';
 
 /**
@@ -13,12 +14,10 @@ export type AccountUsageBlock = PaywallSlot;
  * suggests a standard model, or that a retry can clear, is answerable by
  * changing the next send and stays an inline card on the turn that caused it.
  */
-const ACCOUNT_WIDE_FEATURES: ReadonlySet<string> = new Set(['token_cap', 'rolling_capacity']);
-
 export function isAccountWideUsageBlock(slot: PaywallSlot): boolean {
   if (slot.freeCapacity) return false;
   if (slot.suggestStandardModel === true) return false;
-  return ACCOUNT_WIDE_FEATURES.has(slot.feature);
+  return isAccountWideUsageFeature(slot.feature);
 }
 
 export function accountUsageBlockEqual(

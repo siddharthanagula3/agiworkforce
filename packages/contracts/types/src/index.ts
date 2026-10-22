@@ -114,6 +114,7 @@ export * from './billing-revenue';
 export * from './country-groups';
 export * from './url';
 export * from './usage-vocabulary';
+export * from './work-usage';
 export * from './paywall-vocabulary';
 export * from './interactive-cards';
 export * from './places-search';

@@ -4,11 +4,8 @@ import type { SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { useBillingStore } from '@shared/stores/web-auth-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { ChatComposerNew, resetSendPendingFlagForTests } from './Composer/ChatComposerNew';
-import {
-  WORK_USAGE_ADD_CREDITS_LABEL,
-  WORK_USAGE_CARD_TITLE,
-  WorkUsageCard,
-} from './WorkUsageCard';
+import { WORK_USAGE_COPY } from '@agiworkforce/types';
+import { WorkUsageCard } from './WorkUsageCard';
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), prefetch: vi.fn(), back: vi.fn() }),
@@ -72,11 +69,11 @@ describe('DEF-2332 work usage card', () => {
     render(<WorkUsageCard creditTopUpTier="pro" resetLabel="Resets in 2 hours" />);
 
     const card = screen.getByTestId('work-usage-card');
-    expect(within(card).getByRole('heading', { name: WORK_USAGE_CARD_TITLE })).toBeVisible();
+    expect(within(card).getByRole('heading', { name: WORK_USAGE_COPY.title })).toBeVisible();
     expect(card).toHaveTextContent('Resets in 2 hours.');
     expect(card.textContent).not.toMatch(/\d+%|\$/);
 
-    fireEvent.click(within(card).getByRole('button', { name: WORK_USAGE_ADD_CREDITS_LABEL }));
+    fireEvent.click(within(card).getByRole('button', { name: WORK_USAGE_COPY.addCredits }));
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByRole('heading', { name: 'Buy credits' })).toBeVisible();
@@ -87,7 +84,7 @@ describe('DEF-2332 work usage card', () => {
     const onSelect = vi.fn();
     render(<WorkUsageCard action={{ label: 'Upgrade to Max', onSelect }} />);
 
-    expect(screen.queryByRole('button', { name: WORK_USAGE_ADD_CREDITS_LABEL })).toBeNull();
+    expect(screen.queryByRole('button', { name: WORK_USAGE_COPY.addCredits })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Upgrade to Max' }));
     expect(onSelect).toHaveBeenCalledTimes(1);
   });
@@ -109,7 +106,7 @@ describe('DEF-2332 work usage card', () => {
 
     expect(screen.getByTestId('work-usage-card')).toBeInTheDocument();
     expect(screen.queryByTestId('composer-usage-block')).toBeNull();
-    expect(screen.getByRole('button', { name: WORK_USAGE_ADD_CREDITS_LABEL })).toBeVisible();
+    expect(screen.getByRole('button', { name: WORK_USAGE_COPY.addCredits })).toBeVisible();
   });
 
   it('keeps the compact strip in Chat mode', () => {

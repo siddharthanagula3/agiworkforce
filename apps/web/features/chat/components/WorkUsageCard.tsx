@@ -9,14 +9,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@agiworkforce/ui';
-import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { WORK_USAGE_COPY } from '@agiworkforce/types';
 import { TopUpPanel } from '@/features/billing/components/TopUpPanel';
-
-export const WORK_USAGE_CARD_TITLE = `You’re out of ${PRODUCT_NAMES.work} usage for now`;
-export const WORK_USAGE_ADD_CREDITS_LABEL = 'Add credits';
-
-const BODY_WITH_CREDITS = 'Add credits to keep going now, or wait for your usage to reset.';
-const BODY_WITHOUT_CREDITS = 'Your usage comes back when it resets.';
 
 export interface WorkUsageCardAction {
   label: string;
@@ -34,7 +28,7 @@ export function WorkUsageCard({ creditTopUpTier, action, resetLabel, footer }: W
   const titleId = useId();
   const [addCreditsOpen, setAddCreditsOpen] = useState(false);
   const canAddCredits = typeof creditTopUpTier === 'string' && creditTopUpTier.length > 0;
-  const body = canAddCredits ? BODY_WITH_CREDITS : BODY_WITHOUT_CREDITS;
+  const body = WORK_USAGE_COPY.body[canAddCredits ? 'add_credits' : 'wait'];
 
   return (
     <section
@@ -45,7 +39,7 @@ export function WorkUsageCard({ creditTopUpTier, action, resetLabel, footer }: W
     >
       <div className="flex flex-col gap-1">
         <h2 id={titleId} className="text-base font-semibold text-[var(--chat-text-primary)]">
-          {WORK_USAGE_CARD_TITLE}
+          {WORK_USAGE_COPY.title}
         </h2>
         <p className="text-sm text-[var(--chat-text-secondary)]">{body}</p>
         {resetLabel ? (
@@ -58,7 +52,7 @@ export function WorkUsageCard({ creditTopUpTier, action, resetLabel, footer }: W
           className="w-full rounded-full font-semibold"
           onClick={() => setAddCreditsOpen(true)}
         >
-          {WORK_USAGE_ADD_CREDITS_LABEL}
+          {WORK_USAGE_COPY.addCredits}
         </Button>
       ) : action ? (
         <Button
@@ -78,8 +72,8 @@ export function WorkUsageCard({ creditTopUpTier, action, resetLabel, footer }: W
         <Dialog open={addCreditsOpen} onOpenChange={setAddCreditsOpen}>
           <DialogContent className="w-[min(94vw,30rem)] border-border/70 bg-background sm:rounded-2xl">
             <DialogHeader className="sr-only">
-              <DialogTitle>{WORK_USAGE_ADD_CREDITS_LABEL}</DialogTitle>
-              <DialogDescription>{BODY_WITH_CREDITS}</DialogDescription>
+              <DialogTitle>{WORK_USAGE_COPY.addCredits}</DialogTitle>
+              <DialogDescription>{WORK_USAGE_COPY.body.add_credits}</DialogDescription>
             </DialogHeader>
             <TopUpPanel tier={creditTopUpTier} canBuy />
           </DialogContent>

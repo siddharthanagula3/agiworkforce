@@ -27,6 +27,7 @@ import {
   canUseBillingPlanCapability,
   getModelMetadataById,
   isAutoModeModelId,
+  resolveWorkUsageRecovery,
   summarizeSendPreview,
   type SendPreviewInput,
 } from '@agiworkforce/types';
@@ -54,7 +55,7 @@ import * as Haptics from 'expo-haptics';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';
-import { WorkUsageCard, resolveWorkUsageRecovery } from './WorkUsageCard';
+import { WorkUsageCard } from './WorkUsageCard';
 import { useTierStore } from '@/src/features/billing/store';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
