@@ -322,7 +322,9 @@ describe('GeneralSection appearance controls', () => {
     ]) {
       const control = screen.getByRole('switch', { name });
       expect(control).toHaveAttribute('data-state');
-      expect(control.className).toContain('data-[state=unchecked]:border-muted-foreground');
+      expect(control.className).toContain(
+        'data-[state=unchecked]:border-[color:var(--switch-off-edge)]',
+      );
     }
   });
 });

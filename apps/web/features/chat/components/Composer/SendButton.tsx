@@ -64,7 +64,7 @@ function SendControl({
           'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-quick sm:h-9 sm:w-9 pointer-coarse:h-11 pointer-coarse:w-11',
           disabled
             ? 'bg-muted text-muted-foreground cursor-not-allowed'
-            : 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-e2 hover:opacity-80',
+            : 'bg-[var(--chat-text-primary)] text-[var(--chat-bg)] hover:opacity-80',
           className,
         )}
         title="Queue message · will send after current response finishes"
@@ -88,18 +88,14 @@ function SendControl({
         className={cn(
           'flex h-8 min-h-0 w-8 shrink-0 items-center justify-center rounded-full transition-all duration-quick sm:h-9 sm:w-9 pointer-coarse:h-11 pointer-coarse:w-11',
           canSend
-            ? 'bg-[var(--chat-accent-primary)] text-[var(--chat-accent-on-primary)] shadow-e2 hover:opacity-80'
+            ? 'bg-[var(--chat-text-primary)] text-[var(--chat-bg)] hover:opacity-80'
             : 'bg-muted text-muted-foreground cursor-not-allowed',
           className,
         )}
         title={isSending ? 'Sending…' : 'Send message'}
         aria-label={isSending ? 'Sending message…' : 'Send message'}
       >
-        {isSending ? (
-          <Spinner size="sm" />
-        ) : (
-          <ArrowUp className="h-5 w-5" aria-hidden="true" />
-        )}
+        {isSending ? <Spinner size="sm" /> : <ArrowUp className="h-5 w-5" aria-hidden="true" />}
       </button>
       {reason ? (
         <span id={reasonId} className="sr-only" data-testid="composer-send-disabled-reason">

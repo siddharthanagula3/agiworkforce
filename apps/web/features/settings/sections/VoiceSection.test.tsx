@@ -23,7 +23,9 @@ describe('VoiceSection', () => {
 
     const toggle = screen.getByRole('switch', { name: 'Dictation' });
     expect(toggle).toHaveAttribute('data-state', 'checked');
-    expect(toggle.className).toContain('data-[state=unchecked]:border-muted-foreground');
+    expect(toggle.className).toContain(
+      'data-[state=unchecked]:border-[color:var(--switch-off-edge)]',
+    );
   });
 
   it('flips the dictation switch and persists the choice', async () => {

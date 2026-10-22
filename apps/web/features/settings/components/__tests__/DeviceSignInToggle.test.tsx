@@ -37,7 +37,9 @@ describe('the device-code sign-in switch', () => {
     const toggle = screen.getByRole('switch', { name: SWITCH_NAME });
     await waitFor(() => expect(toggle).toBeEnabled());
     expect(toggle).toHaveAttribute('data-state', 'unchecked');
-    expect(toggle.className).toContain('data-[state=unchecked]:border-muted-foreground');
+    expect(toggle.className).toContain(
+      'data-[state=unchecked]:border-[color:var(--switch-off-edge)]',
+    );
   });
 
   it('turns device-code sign-in back on from the shared switch and saves it', async () => {

@@ -82,7 +82,9 @@ describe('the start-as-temporary switch', () => {
 
     const toggle = screen.getByRole('switch', { name: 'Start new chats as temporary' });
     expect(toggle).toHaveAttribute('data-state', 'unchecked');
-    expect(toggle.className).toContain('data-[state=unchecked]:border-muted-foreground');
+    expect(toggle.className).toContain(
+      'data-[state=unchecked]:border-[color:var(--switch-off-edge)]',
+    );
   });
 
   it('turns temporary-by-default on from the shared switch', async () => {

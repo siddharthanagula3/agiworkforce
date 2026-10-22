@@ -1496,28 +1496,66 @@ describe('the off-state switch track has a visible boundary (>= 3:1) in both the
     'utf8',
   );
 
-  it('draws the unchecked border with the muted-foreground role', () => {
-    expect(switchSource).toContain('data-[state=unchecked]:border-muted-foreground');
+  const OFF_TOKENS = ['--switch-off-fill', '--switch-off-edge', '--switch-off-thumb'] as const;
+
+  function offColour(block: string, name: string): string | null {
+    const value = token(block, name);
+    if (value === 'transparent') return null;
+    const via = value.match(/^hsl\(\s*var\((--[a-z0-9-]+)\)\s*\)$/);
+    if (via && !PRIMITIVES[via[1]!]) return colorToken(block, via[1]!);
+    return colorToken(block, name);
+  }
+
+  it('draws the unchecked track, edge and thumb from the off-state tokens', () => {
+    expect(switchSource).toContain('data-[state=unchecked]:bg-[var(--switch-off-fill)]');
+    expect(switchSource).toContain('data-[state=unchecked]:border-[color:var(--switch-off-edge)]');
+    expect(switchSource).toContain('data-[state=unchecked]:bg-[var(--switch-off-thumb)]');
+    expect(switchSource).not.toMatch(/data-\[state=unchecked\]:bg-input\b/);
+  });
+
+  it('declares every off-state token in both foundation themes', () => {
+    for (const name of OFF_TOKENS) {
+      expect(token(foundationLight, name), `${name} missing in light`).not.toBe('');
+      expect(token(foundationDark, name), `${name} missing in dark`).not.toBe('');
+    }
   });
 
   for (const theme of ['light', 'dark'] as const) {
-    it(`${theme}: the border clears 3:1 on the page background and on the track fill`, () => {
-      const border = colorToken(web[theme], '--muted-foreground');
-      expect(contrastRatio(border, colorToken(web[theme], '--background'))).toBeGreaterThanOrEqual(
-        WCAG_AA_LARGE,
-      );
-      expect(contrastRatio(border, colorToken(web[theme], '--input'))).toBeGreaterThanOrEqual(
-        WCAG_AA_LARGE,
-      );
-    });
+    const fill = (): string => offColour(web[theme], '--switch-off-fill')!;
+    const boundary = (): string => offColour(web[theme], '--switch-off-edge') ?? fill();
 
-    it(`${theme}: the border clears 3:1 on the card a settings panel sits on`, () => {
-      const border = colorToken(web[theme], '--muted-foreground');
-      expect(contrastRatio(border, colorToken(web[theme], '--card'))).toBeGreaterThanOrEqual(
-        WCAG_AA_LARGE,
-      );
+    it(`${theme}: the off boundary clears 3:1 on the page background and on the card a settings panel sits on`, () => {
+      for (const ground of ['--background', '--card']) {
+        expect(
+          contrastRatio(boundary(), colorToken(web[theme], ground)),
+          `off boundary on ${ground}`,
+        ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+      }
     });
   }
+
+  it('light: the pale track keeps an edge that stands apart from it', () => {
+    const edge = offColour(web.light, '--switch-off-edge');
+    expect(edge).not.toBeNull();
+    expect(contrastRatio(edge!, offColour(web.light, '--switch-off-fill')!)).toBeGreaterThanOrEqual(
+      WCAG_AA_LARGE,
+    );
+  });
+
+  it('dark: the off thumb clears 3:1 on the off track, so the knob shows where the state sits', () => {
+    expect(
+      contrastRatio(
+        offColour(web.dark, '--switch-off-thumb')!,
+        offColour(web.dark, '--switch-off-fill')!,
+      ),
+    ).toBeGreaterThanOrEqual(WCAG_AA_LARGE);
+  });
+
+  it('dark: the off track is lighter than the page, not a near-black well', () => {
+    expect(relativeLuminance(offColour(web.dark, '--switch-off-fill')!)).toBeGreaterThan(
+      relativeLuminance(colorToken(web.dark, '--card')),
+    );
+  });
 
   const SETTINGS_SWITCH_SURFACES = [
     'apps/web/features/settings/sections/GeneralSection.tsx',

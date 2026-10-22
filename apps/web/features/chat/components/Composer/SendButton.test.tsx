@@ -41,10 +41,12 @@ describe('SendButton · send mode', () => {
     expect(btn).toHaveAttribute('aria-label', 'Sending message…');
   });
 
-  it('paints the accent fill and on-fill glyph when it has content and is enabled', () => {
+  it('paints the neutral ink fill with a ground-coloured glyph when it has content and is enabled', () => {
     const { container } = renderButton({ mode: 'send', hasContent: true, onClick: vi.fn() });
     const btn = container.querySelector('button');
-    expect(btn?.className).toContain('bg-[var(--chat-accent-primary)]');
+    expect(btn?.className).toContain('bg-[var(--chat-text-primary)]');
+    expect(btn?.className).toContain('text-[var(--chat-bg)]');
+    expect(btn?.className).not.toContain('chat-accent-primary');
   });
 
   it('applies muted bg class when no content', () => {
@@ -125,10 +127,12 @@ describe('SendButton · queue mode', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
-  it('uses the same brand fill as Send, not a second primary colour', () => {
+  it('uses the same neutral ink fill as Send, not a brand accent', () => {
     const { container } = renderButton({ mode: 'queue', onClick: vi.fn() });
     const btn = container.querySelector('button');
-    expect(btn?.className).toContain('bg-[var(--chat-accent-primary)]');
+    expect(btn?.className).toContain('bg-[var(--chat-text-primary)]');
+    expect(btn?.className).toContain('text-[var(--chat-bg)]');
+    expect(btn?.className).not.toContain('chat-accent-primary');
     expect(btn?.className).not.toContain('bg-amber');
   });
 
