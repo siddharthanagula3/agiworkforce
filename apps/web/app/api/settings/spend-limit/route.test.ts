@@ -4,6 +4,7 @@ type RlsModule = typeof import('@/lib/server/rls-db');
 type CsrfModule = typeof import('@/lib/csrf');
 type RateLimitModule = typeof import('@/lib/rate-limit');
 type SpendModule = typeof import('@/lib/services/spend-limit-service');
+type AuditModule = typeof import('@/lib/security-audit');
 
 const mocks = vi.hoisted(() => ({
   getUserScopedDb: vi.fn(),
@@ -12,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   readPersonalSpendState: vi.fn(),
   upsertPersonalSpendLimit: vi.fn(),
   deletePersonalSpendLimit: vi.fn(),
+  recordAuditEvent: vi.fn(),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -26,6 +28,10 @@ vi.mock('@/lib/csrf', async (importOriginal) => ({
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
   ...(await importOriginal<RateLimitModule>()),
   withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<AuditModule>()),
+  recordAuditEvent: mocks.recordAuditEvent,
 }));
 vi.mock('@/lib/services/spend-limit-service', async (importOriginal) => ({
   ...(await importOriginal<SpendModule>()),
@@ -138,6 +144,36 @@ describe('PUT /api/settings/spend-limit', () => {
 
     expect(response.status).toBe(429);
     expect(mocks.upsertPersonalSpendLimit).not.toHaveBeenCalled();
+  });
+});
+
+describe('spend limit audit trail', () => {
+  it('records a saved limit and a removed one without leaking into a refused write', async () => {
+    await PUT(request('PUT', { monthlyCapCredits: 2_000 }));
+    await DELETE(request('DELETE'));
+
+    expect(mocks.recordAuditEvent.mock.calls.map((call) => call[0])).toEqual([
+      expect.objectContaining({
+        userId: USER_ID,
+        eventType: 'spend_limit_changed',
+        detail: { resourceType: 'spend_limit', source: 'settings', enabled: true, count: 2_000 },
+      }),
+      expect.objectContaining({
+        userId: USER_ID,
+        eventType: 'spend_limit_changed',
+        detail: { resourceType: 'spend_limit', source: 'settings', enabled: false },
+      }),
+    ]);
+  });
+
+  it('records nothing when the write is refused', async () => {
+    await PUT(request('PUT', { monthlyCapCredits: 0 }));
+    mocks.withRateLimit.mockResolvedValueOnce(
+      NextResponse.json({ error: { code: 'RATE_LIMITED' } }, { status: 429 }),
+    );
+    await DELETE(request('DELETE'));
+
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 });
 

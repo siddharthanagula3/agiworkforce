@@ -222,6 +222,7 @@ export type AuditEventType =
   | 'checkout_started'
   | 'billing_portal_opened'
   | 'auto_reload_changed'
+  | 'spend_limit_changed'
   | 'data_exported'
   | 'account_deletion_requested'
   | 'account_deletion_cancelled'

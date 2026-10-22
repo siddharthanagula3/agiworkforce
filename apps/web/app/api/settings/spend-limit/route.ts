@@ -9,6 +9,7 @@ import { requireCsrfToken } from '@/lib/csrf';
 import { SETTINGS_API_ROUTE_DEADLINE_MS } from '@/lib/deadline-policy';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { readValidatedJsonBody } from '@/lib/read-json-body';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -56,6 +57,17 @@ async function handlePut(request: NextRequest): Promise<NextResponse | Response>
     `Enter a whole number of credits up to ${creditsFromCents(MAX_MONTHLY_CAP_CENTS).toLocaleString('en-US')}.`,
   );
   await upsertPersonalSpendLimit(db, userId, body.monthlyCapCredits);
+  await recordAuditEvent({
+    userId,
+    eventType: 'spend_limit_changed',
+    request,
+    detail: {
+      resourceType: 'spend_limit',
+      source: 'settings',
+      enabled: true,
+      count: body.monthlyCapCredits,
+    },
+  });
 
   const payload: PersonalSpendLimitResponse = { state: await readPersonalSpendState(db, userId) };
   return NextResponse.json(payload);
@@ -70,6 +82,12 @@ async function handleDelete(request: NextRequest): Promise<NextResponse | Respon
   if (rateLimitResponse) return rateLimitResponse;
 
   await deletePersonalSpendLimit(db, userId);
+  await recordAuditEvent({
+    userId,
+    eventType: 'spend_limit_changed',
+    request,
+    detail: { resourceType: 'spend_limit', source: 'settings', enabled: false },
+  });
 
   const payload: PersonalSpendLimitResponse = { state: await readPersonalSpendState(db, userId) };
   return NextResponse.json(payload);

@@ -21,7 +21,7 @@ export class ViewerLimitError extends Error {
   }
 }
 
-async function ownedPublicationId(
+export async function ownedPublicationId(
   db: DatabaseAdapter,
   userId: string,
   token: string,

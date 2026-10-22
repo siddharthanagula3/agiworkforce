@@ -6,6 +6,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getNeonDb } from '@/lib/server/neon-db';
+import { recordAuditEvent } from '@/lib/security-audit';
 import { SLACK_REQUEST_TIMEOUT_MS } from '@/lib/slack/slack-api';
 import {
   decideSlackApprovalFromSlack,
@@ -18,6 +19,7 @@ export const runtime = 'nodejs';
 export const maxDuration = 300;
 
 const MAX_BODY_BYTES = 64 * 1024;
+const ENDPOINT = '/api/webhooks/slack-interactions';
 
 async function replyInSlack(responseUrl: string | null, text: string): Promise<void> {
   if (!responseUrl) return;
@@ -66,7 +68,22 @@ async function handleSlackInteraction(request: NextRequest): Promise<NextRespons
   after(async () => {
     const outcome = await decideSlackApprovalFromSlack(getNeonDb(), click);
     await replyInSlack(click.responseUrl, interactionReply(outcome));
-    if (outcome.kind === 'decided') await outcome.resume();
+    if (outcome.kind === 'decided') {
+      await recordAuditEvent({
+        userId: outcome.userId,
+        eventType: 'tool_approval_decided',
+        endpoint: ENDPOINT,
+        organizationId: outcome.organizationId,
+        detail: {
+          resourceType: 'slack_run',
+          resourceId: click.runId,
+          source: 'slack',
+          status: outcome.decision,
+          count: outcome.toolCallCount,
+        },
+      });
+      await outcome.resume();
+    }
   });
   return new NextResponse(null, { status: 200 });
 }

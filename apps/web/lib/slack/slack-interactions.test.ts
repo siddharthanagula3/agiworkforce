@@ -87,7 +87,13 @@ describe('approving in Slack', () => {
     mocks.claimSlackApproval.mockResolvedValue(resume);
     const click = readSlackApprovalClick(payload(SLACK_APPROVE_ACTION_ID))!;
     const outcome = await decideSlackApprovalFromSlack(db(pendingRow), click);
-    expect(outcome).toMatchObject({ kind: 'decided', decision: 'approved' });
+    expect(outcome).toMatchObject({
+      kind: 'decided',
+      decision: 'approved',
+      userId: 'user_1',
+      organizationId: null,
+      toolCallCount: 1,
+    });
     expect(mocks.claimSlackApproval).toHaveBeenCalledWith(
       expect.objectContaining({
         userId: 'user_1',

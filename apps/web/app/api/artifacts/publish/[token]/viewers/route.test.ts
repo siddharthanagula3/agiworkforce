@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
 const mocks = vi.hoisted(() => ({
+  recordAuditEvent: vi.fn(async (..._args: unknown[]) => undefined),
   query: vi.fn(),
   csrf: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
   rateLimit: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
@@ -16,6 +17,9 @@ vi.mock('@/lib/server/rls-db', () => ({
     userId: 'owner-1',
     organizationId: null,
   }),
+}));
+vi.mock('@/lib/security-audit', () => ({
+  recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
 }));
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
@@ -41,6 +45,7 @@ let viewers: Array<{ email: string; created_at: string }> = [];
 beforeEach(() => {
   viewers = [];
   mocks.csrf.mockClear();
+  mocks.recordAuditEvent.mockClear();
   mocks.query.mockReset();
   mocks.query.mockImplementation(async (sql: string, params: unknown[]) => {
     const text = String(sql);
@@ -71,6 +76,41 @@ describe('/api/artifacts/publish/[token]/viewers', () => {
     ]);
     const owner = mocks.query.mock.calls[0] as [string, unknown[]];
     expect(owner[0]).toContain('where token = $1 and user_id = $2');
+  });
+
+  it('records who shared the artifact when a viewer is added or removed', async () => {
+    await POST(request('POST', { email: 'ana@example.com' }), context);
+    await DELETE(request('DELETE', { email: 'ana@example.com' }), context);
+
+    const events = mocks.recordAuditEvent.mock.calls.map((call) => call[0]);
+    expect(events).toEqual([
+      expect.objectContaining({
+        userId: 'owner-1',
+        eventType: 'share_link_updated',
+        detail: {
+          resourceType: 'published_artifact',
+          resourceId: PUBLICATION,
+          status: 'viewer_added',
+          count: 1,
+        },
+      }),
+      expect.objectContaining({
+        userId: 'owner-1',
+        eventType: 'share_link_updated',
+        detail: {
+          resourceType: 'published_artifact',
+          resourceId: PUBLICATION,
+          status: 'viewer_removed',
+          count: 0,
+        },
+      }),
+    ]);
+    expect(JSON.stringify(events)).not.toContain('ana@example.com');
+  });
+
+  it('records nothing for a refused address', async () => {
+    await POST(request('POST', { email: 'not an email' }), context);
+    expect(mocks.recordAuditEvent).not.toHaveBeenCalled();
   });
 
   it('refuses something that is not an email address', async () => {

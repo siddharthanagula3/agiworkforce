@@ -32,7 +32,14 @@ export interface SlackApprovalClick {
 }
 
 export type SlackInteractionOutcome =
-  | { kind: 'decided'; decision: SlackApprovalClick['decision']; resume: () => Promise<void> }
+  | {
+      kind: 'decided';
+      decision: SlackApprovalClick['decision'];
+      userId: string;
+      organizationId: string | null;
+      toolCallCount: number;
+      resume: () => Promise<void>;
+    }
   | { kind: 'refused'; message: string };
 
 function slackResponseUrl(value: string | undefined): string | null {
@@ -120,7 +127,14 @@ export async function decideSlackApprovalFromSlack(
         toolCallIds: pending.data.toolCalls.map((call) => call.id),
       },
     });
-    return { kind: 'decided', decision: click.decision, resume };
+    return {
+      kind: 'decided',
+      decision: click.decision,
+      userId: row.user_id,
+      organizationId: row.organization_id,
+      toolCallCount: pending.data.toolCalls.length,
+      resume,
+    };
   } catch (error) {
     return {
       kind: 'refused',

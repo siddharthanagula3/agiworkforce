@@ -146,6 +146,35 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'github/install/pending/route.ts', reason: 'no_governed_state' },
   { route: 'usage/deduct/route.ts', reason: 'no_governed_state' },
   { route: 'usage/estimate/route.ts', reason: 'no_governed_state' },
+  { route: 'artifacts/[artifactId]/comments/[commentId]/route.ts', reason: 'own_content' },
+  { route: 'artifacts/[artifactId]/comments/route.ts', reason: 'own_content' },
+  { route: 'artifacts/export/google-docs/route.ts', reason: 'own_content' },
+  { route: 'artifacts/library/[itemId]/route.ts', reason: 'own_content' },
+  { route: 'artifacts/library/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/[id]/conversations/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/[id]/files/[fileId]/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/[id]/files/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/[id]/publish/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/[id]/restore/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/[id]/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/[id]/status/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/import/route.ts', reason: 'own_content' },
+  { route: 'custom-agents/route.ts', reason: 'own_content' },
+  { route: 'developers/prompts/[promptId]/cases/[caseId]/route.ts', reason: 'own_content' },
+  { route: 'developers/prompts/[promptId]/cases/route.ts', reason: 'own_content' },
+  { route: 'developers/prompts/[promptId]/route.ts', reason: 'own_content' },
+  {
+    route: 'developers/prompts/[promptId]/runs/[runId]/results/[resultId]/route.ts',
+    reason: 'own_content',
+  },
+  { route: 'developers/prompts/[promptId]/runs/[runId]/results/route.ts', reason: 'own_content' },
+  { route: 'developers/prompts/[promptId]/runs/route.ts', reason: 'own_content' },
+  { route: 'developers/prompts/[promptId]/versions/route.ts', reason: 'own_content' },
+  { route: 'developers/prompts/route.ts', reason: 'own_content' },
+  { route: 'memory/summary/route.ts', reason: 'own_content' },
+  { route: 'projects/[id]/knowledge-files/[fileId]/refresh/route.ts', reason: 'own_content' },
+  { route: 'partners/apply/route.ts', reason: 'pre_account' },
+  { route: 'usage/reset-reminder/route.ts', reason: 'no_governed_state' },
 ] as const;
 
 export interface RequiredRouteAuditEvents {
@@ -295,6 +324,9 @@ export const REQUIRED_ROUTE_AUDIT_EVENTS: readonly RequiredRouteAuditEvents[] = 
     route: 'models/free-quota/completions/route.ts',
     eventTypes: ['provider_egress_refused'],
   },
+  { route: 'webhooks/slack-interactions/route.ts', eventTypes: ['tool_approval_decided'] },
+  { route: 'settings/spend-limit/route.ts', eventTypes: ['spend_limit_changed'] },
+  { route: 'artifacts/publish/[token]/viewers/route.ts', eventTypes: ['share_link_updated'] },
 ] as const;
 
 export type AuditedSurface = 'chrome' | 'vscode' | 'cli' | 'desktop' | 'mobile';
