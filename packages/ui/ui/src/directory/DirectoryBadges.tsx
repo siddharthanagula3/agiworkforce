@@ -6,7 +6,7 @@ import { cn } from '../cn';
 import { DIRECTORY_BADGE_LABELS, VERIFIED_GLYPH_BADGE } from './constants';
 import type { DirectoryBadgeKind } from './types';
 
-const PILL_CLASS = 'shrink-0 rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground';
+const PILL_CLASS = 'shrink-0 rounded-full bg-muted px-2 py-0.5 text-sm text-muted-foreground';
 const GLYPH_CLASS = 'size-4 shrink-0 text-muted-foreground';
 const EMPTY_BADGES: readonly DirectoryBadgeKind[] = [];
 

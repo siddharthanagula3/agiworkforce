@@ -1,6 +1,7 @@
 'use client';
 
 import { Check, ChevronDown, Plus } from 'lucide-react';
+import { useEffect, useRef } from 'react';
 
 import { cn } from '../cn';
 import { SearchInput } from '../primitives/SearchInput';
@@ -27,6 +28,11 @@ import type {
 } from './types';
 
 const TOGGLE_ID_PREFIX = 'directory-toggle';
+const COARSE_POINTER_QUERY = '(pointer: coarse)';
+
+function prefersSoftKeyboard(): boolean {
+  return typeof window.matchMedia === 'function' && window.matchMedia(COARSE_POINTER_QUERY).matches;
+}
 
 export function DirectoryToolbar({
   section,
@@ -48,6 +54,8 @@ export function DirectoryToolbar({
   toggles = [],
   toggleValues = {},
   onToggle,
+  autoFocusSearch = false,
+  onSearchAutoFocused,
 }: {
   section: DirectorySectionKey;
   query: string;
@@ -68,7 +76,17 @@ export function DirectoryToolbar({
   toggles?: readonly DirectoryToggle[];
   toggleValues?: Readonly<Record<string, boolean>>;
   onToggle?: (id: string, checked: boolean) => void;
+  autoFocusSearch?: boolean;
+  onSearchAutoFocused?: () => void;
 }) {
+  const searchRef = useRef<HTMLInputElement | null>(null);
+  const autoFocusRef = useRef({ enabled: autoFocusSearch, done: onSearchAutoFocused });
+  useEffect(() => {
+    const { enabled, done } = autoFocusRef.current;
+    if (!enabled || prefersSoftKeyboard()) return;
+    searchRef.current?.focus({ preventScroll: true });
+    done?.();
+  }, []);
   const chipGroups = filterGroups.filter((group) => group.chips === true);
   const menuGroups = filterGroups.filter((group) => group.chips !== true);
   // The chip row shows its own state, so its selection must not also count
@@ -82,6 +100,7 @@ export function DirectoryToolbar({
   return (
     <div className="flex flex-col gap-3">
       <SearchInput
+        ref={searchRef}
         value={query}
         onChange={(event) => onQueryChange(event.target.value)}
         placeholder={DIRECTORY_SEARCH_PLACEHOLDERS[section]}
@@ -121,7 +140,7 @@ export function DirectoryToolbar({
 
         <div className="ms-auto flex items-center gap-2">
           {countLabel ? (
-            <span className="text-xs text-muted-foreground" data-testid="directory-count">
+            <span className="text-sm text-muted-foreground" data-testid="directory-count">
               {countLabel}
             </span>
           ) : null}
@@ -138,7 +157,7 @@ export function DirectoryToolbar({
                 >
                   {FILTER_MENU_LABEL}
                   {activeFilterCount > 0 ? (
-                    <span className="font-mono text-xs">{activeFilterCount}</span>
+                    <span className="font-mono text-sm">{activeFilterCount}</span>
                   ) : null}
                   <ChevronDown aria-hidden className="size-3.5" />
                 </button>
@@ -149,7 +168,7 @@ export function DirectoryToolbar({
                   {menuGroups.map((group, index) => (
                     <div key={group.id}>
                       {index > 0 ? <MenuSeparator /> : null}
-                      <p className="px-3 py-1.5 text-xs text-muted-foreground">{group.label}</p>
+                      <p className="px-3 py-1.5 text-sm text-muted-foreground">{group.label}</p>
                       {group.options.map((option) => {
                         const checked = (selection[group.id] ?? []).includes(option.value);
                         return (
@@ -277,7 +296,7 @@ export function DirectoryToolbar({
                   checked={toggleValues[toggle.id] === true}
                   onCheckedChange={(checked) => onToggle?.(toggle.id, checked)}
                 />
-                <label htmlFor={id} className="text-xs text-muted-foreground">
+                <label htmlFor={id} className="text-sm text-muted-foreground">
                   {toggle.label}
                 </label>
               </div>

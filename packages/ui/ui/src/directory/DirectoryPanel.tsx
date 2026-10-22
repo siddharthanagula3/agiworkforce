@@ -176,6 +176,7 @@ function DirectorySectionPanel({
   );
   const [uploadSkillOpen, setUploadSkillOpen] = useState(false);
   const [browsing, setBrowsing] = useState(false);
+  const [searchAutoFocused, setSearchAutoFocused] = useState(false);
   const [refreshingSourceId, setRefreshingSourceId] = useState<string | null>(null);
   const openChangeRef = useRef(onOpenEntryChange);
   openChangeRef.current = onOpenEntryChange;
@@ -697,7 +698,7 @@ function DirectorySectionPanel({
     if (shown === 0) return null;
     return (
       <div className="flex flex-col items-center gap-3 py-2">
-        <p className="text-xs text-muted-foreground" data-testid="directory-showing">
+        <p className="text-sm text-muted-foreground" data-testid="directory-showing">
           {`${DIRECTORY_SHOWING_PREFIX} ${shown.toLocaleString()} ${DIRECTORY_SHOWING_OF} ${total.toLocaleString()}`}
         </p>
         {hasMore ? (
@@ -828,10 +829,12 @@ function DirectorySectionPanel({
           toggles={data.toggles}
           toggleValues={toggleValues}
           onToggle={(id, checked) => setToggleOverrides((prev) => ({ ...prev, [id]: checked }))}
+          autoFocusSearch={!searchAutoFocused}
+          onSearchAutoFocused={() => setSearchAutoFocused(true)}
         />
 
         {data.notice ? (
-          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted px-3 py-2 text-xs text-muted-foreground">
+          <div className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
             <p>{data.notice}</p>
             {data.noticeRetry ? (
               <button
@@ -853,7 +856,7 @@ function DirectorySectionPanel({
         <div className="flex flex-col gap-5" aria-busy={remote && data.loading === true}>
           {custom.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 {DIRECTORY_CUSTOM_HEADING}
               </h3>
               <DirectoryGrid section={section} entries={custom} {...gridActions} />
@@ -862,7 +865,7 @@ function DirectorySectionPanel({
 
           {installed.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 {DIRECTORY_INSTALLED_HEADINGS[section]}
               </h3>
               <DirectoryGrid section={section} entries={installed} {...gridActions} />
@@ -871,7 +874,7 @@ function DirectorySectionPanel({
 
           {popular.length > 0 ? (
             <section className="flex flex-col gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 {DIRECTORY_POPULAR_HEADINGS[section]}
               </h3>
               <DirectoryGrid section={section} entries={popular} {...gridActions} />
@@ -880,7 +883,7 @@ function DirectorySectionPanel({
 
           {grouped.map((group) => (
             <section key={group.id} className="flex flex-col gap-2">
-              <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 {group.heading}
               </h3>
               <DirectoryGrid section={section} entries={group.entries} {...gridActions} />
@@ -890,7 +893,7 @@ function DirectorySectionPanel({
           {ungrouped.length > 0 || data.loading || data.error || !groupedAbove ? (
             <section className="flex flex-col gap-2">
               {trailingHeading ? (
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                   {trailingHeading}
                 </h3>
               ) : null}

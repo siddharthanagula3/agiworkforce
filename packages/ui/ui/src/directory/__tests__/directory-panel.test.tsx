@@ -1100,3 +1100,31 @@ describe('DirectoryPanel marketplace refresh', () => {
     expect((await screen.findByRole('alert')).textContent).toContain('Marketplace unreachable.');
   });
 });
+
+describe('DirectoryPanel search focus', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('focuses the search field when the catalog opens', () => {
+    renderPanel('connectors');
+    expect(document.activeElement).toBe(screen.getByPlaceholderText('Search connectors'));
+  });
+
+  it('does not open the soft keyboard on a touch screen', () => {
+    vi.stubGlobal(
+      'matchMedia',
+      vi.fn((query: string) => ({ matches: query === '(pointer: coarse)', media: query })),
+    );
+    renderPanel('connectors');
+    expect(document.activeElement).not.toBe(screen.getByPlaceholderText('Search connectors'));
+  });
+
+  it('does not take focus back when returning from a detail', async () => {
+    renderPanel();
+    fireEvent.click(screen.getByRole('button', { name: '/canvas-design' }));
+    expect(await screen.findByRole('heading', { name: 'canvas-design' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    expect(document.activeElement).not.toBe(screen.getByPlaceholderText('Search skills'));
+  });
+});

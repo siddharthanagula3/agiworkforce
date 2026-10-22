@@ -8,6 +8,7 @@ import { Spinner } from '../primitives/Spinner';
 import { ConnectorLogo, hasConnectorLogo } from '../settings-modal/ConnectorLogo';
 import {
   CARD_INSTALL_LABELS,
+  COMMUNITY_BADGE,
   MANAGE_LABEL,
   CONNECTED_GLYPH_LABEL,
   CONNECTOR_CARD_ACTION_LABELS,
@@ -17,7 +18,7 @@ import {
   NEW_BADGE_LABEL,
   SETTINGS_LABEL,
 } from './constants';
-import { DirectoryBadges, splitDirectoryBadges } from './DirectoryBadges';
+import { DirectoryBadge, DirectoryBadges, splitDirectoryBadges } from './DirectoryBadges';
 import {
   DIRECTORY_ADD_BUTTON,
   DIRECTORY_CARD,
@@ -108,7 +109,9 @@ export function DirectoryCard({
   const TrailingIcon = entry.installed ? SettingsIcon : Plus;
   const comingSoon = entry.connectableMode === 'coming-soon';
   const { glyphs, pills } = splitDirectoryBadges(entry.badges);
-  const hasMeta = pills.length > 0 || publisher;
+  const metaPills = pills.filter((badge) => badge !== COMMUNITY_BADGE);
+  const community = pills.includes(COMMUNITY_BADGE);
+  const hasMeta = metaPills.length > 0 || publisher;
 
   return (
     <div className={DIRECTORY_CARD} data-coming-soon={comingSoon || undefined}>
@@ -135,18 +138,19 @@ export function DirectoryCard({
             </button>
             <DirectoryBadges badges={glyphs} className="mt-0.5" />
             {entry.isNew ? (
-              <span className="shrink-0 text-xs font-medium leading-5 text-muted-foreground">
+              <span className="shrink-0 text-sm font-medium leading-5 text-muted-foreground">
                 {NEW_BADGE_LABEL}
               </span>
             ) : null}
           </div>
           {hasMeta ? (
-            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-xs text-muted-foreground">
-              <DirectoryBadges badges={pills} />
+            <p className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-sm text-muted-foreground">
+              <DirectoryBadges badges={metaPills} />
               {publisher ? <span className="min-w-0 truncate">{publisher}</span> : null}
             </p>
           ) : null}
         </div>
+        {community ? <DirectoryBadge badge={COMMUNITY_BADGE} className="mt-1" /> : null}
         {connectedGlyph ? (
           <CircleCheck
             role="img"
@@ -190,11 +194,11 @@ export function DirectoryCard({
           </button>
         ) : null}
       </div>
-      <p className="line-clamp-2 text-xs text-muted-foreground">{entry.description}</p>
+      <p className="line-clamp-2 text-sm text-muted-foreground">{entry.description}</p>
       {entry.statusLabel ? (
-        <p className="text-xs text-muted-foreground">{entry.statusLabel}</p>
+        <p className="text-sm text-muted-foreground">{entry.statusLabel}</p>
       ) : null}
-      {entry.error ? <p className="text-xs text-danger">{entry.error}</p> : null}
+      {entry.error ? <p className="text-sm text-danger">{entry.error}</p> : null}
     </div>
   );
 }
@@ -267,7 +271,7 @@ export function DirectoryGrid({
         <p className="text-sm text-muted-foreground">
           {emptyCopy ?? DIRECTORY_EMPTY_COPY[section]}
         </p>
-        {emptyHint ? <p className="mt-1 text-xs text-muted-foreground">{emptyHint}</p> : null}
+        {emptyHint ? <p className="mt-1 text-sm text-muted-foreground">{emptyHint}</p> : null}
       </div>
     );
   }

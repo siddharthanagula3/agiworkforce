@@ -408,3 +408,31 @@ describe('DirectoryGrid', () => {
     expect(screen.queryByText('Made by AGI')).toBeNull();
   });
 });
+
+describe('DirectoryGrid card type and badge placement', () => {
+  const community: DirectoryEntry = {
+    id: 'aha',
+    name: 'Aha!',
+    publisher: 'Aha! Labs',
+    description: 'Roadmaps',
+    badges: ['community'],
+  };
+
+  it('sets every card line at 14px or larger', () => {
+    const { container } = renderGrid({
+      entries: [{ ...community, statusLabel: 'Needs setup', error: 'Failed', isNew: true }],
+      onInstall: vi.fn(),
+    });
+    expect(container.querySelector('.text-xs')).toBeNull();
+    expect(screen.getByText('Roadmaps').className).toContain('text-sm');
+  });
+
+  it('shows the Community chip beside the add control, not in the publisher line', () => {
+    renderGrid({ section: 'connectors', entries: [community], onInstall: vi.fn() });
+    const chip = screen.getByText('Community');
+    const publisherLine = screen.getByText('Aha! Labs').parentElement;
+    expect(publisherLine?.contains(chip)).toBe(false);
+    const addControl = screen.getByRole('button', { name: 'Add Aha!' });
+    expect(chip.nextElementSibling).toBe(addControl);
+  });
+});
