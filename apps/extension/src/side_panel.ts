@@ -1734,7 +1734,7 @@ function injectStyles(): void {
       border-radius: var(--corner-field);
       background: var(--agi-ext-bg);
       color: var(--agi-ext-text);
-      font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font: var(--type-code-size)/1.5 ui-monospace, SFMono-Regular, Menlo, monospace;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       user-select: text;
