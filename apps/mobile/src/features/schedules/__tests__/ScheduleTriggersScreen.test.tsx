@@ -1,5 +1,5 @@
 import React from 'react';
-import { Alert } from 'react-native';
+import { Alert, Share } from 'react-native';
 import { fireEvent, render, waitFor } from '@testing-library/react-native';
 
 const mockParams = { id: 'task-1', name: 'Morning brief' };
@@ -8,6 +8,7 @@ const mockPost = jest.fn();
 const mockPatch = jest.fn();
 const mockDelete = jest.fn();
 const mockCopy = jest.fn(async () => true);
+let mockCopyStatus: 'idle' | 'copied' | 'failed' = 'idle';
 
 jest.mock('expo-router', () => ({
   ...jest.requireActual('@/__mocks__/expo-router.mock').expoRouterMock(),
@@ -35,7 +36,8 @@ jest.mock('@/lib/mmkv', () => ({
   storage: { getString: jest.fn(), set: jest.fn(), delete: jest.fn() },
 }));
 jest.mock('@/src/shared/hooks/useCopyAction', () => ({
-  useCopyAction: () => ({ status: 'idle', copy: mockCopy }),
+  ...jest.requireActual('@/src/shared/hooks/useCopyAction'),
+  useCopyAction: () => ({ status: mockCopyStatus, copy: mockCopy }),
 }));
 jest.mock('@/services/api', () => ({
   ApiHttpError: jest.requireActual('@/services/apiErrors').ApiHttpError,
@@ -80,6 +82,7 @@ const TRIGGER = {
 describe('schedule triggers on mobile', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockCopyStatus = 'idle';
     __resetCloudAccountSessionForTests();
     activateCloudAccount('user-1');
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: true, clerkUserId: 'user-1' });
@@ -131,6 +134,51 @@ describe('schedule triggers on mobile', () => {
     ]);
     fireEvent.press(await findByText('Copy signing secret'));
     expect(mockCopy).toHaveBeenCalledWith('whsec_123');
+  });
+
+  describe('the one-time secrets after a trigger is added', () => {
+    async function renderCreatedSecrets() {
+      mockPost.mockResolvedValue({
+        trigger: { ...TRIGGER, id: 'trig-2', source: 'connector', name: 'Webhook trigger' },
+        verificationCode: null,
+        signingSecret: 'whsec_123',
+        webhookPath: '/api/webhooks/triggers/trig-2',
+      });
+      const screen = render(<ScheduleTriggersScreen />);
+      fireEvent.press(await screen.findByLabelText('Add trigger'));
+      fireEvent.press(screen.getByText('Anything else (signed webhook)'));
+      fireEvent.press(screen.getByText('Save trigger'));
+      await screen.findByText('Trigger added');
+      return screen;
+    }
+
+    it('says so when the clipboard refused the write', async () => {
+      mockCopyStatus = 'failed';
+      const { findAllByText, queryByText } = await renderCreatedSecrets();
+
+      expect((await findAllByText('Could not copy')).length).toBe(2);
+      expect(queryByText('Copy signing secret')).toBeNull();
+    });
+
+    it('confirms a copy that landed', async () => {
+      mockCopyStatus = 'copied';
+      const { findAllByText } = await renderCreatedSecrets();
+
+      expect((await findAllByText('Copied')).length).toBe(2);
+    });
+
+    it('offers Share beside each copy, so a refused clipboard does not lose a secret shown once', async () => {
+      const share = jest.spyOn(Share, 'share').mockResolvedValue({ action: 'sharedAction' });
+      const { getByLabelText } = await renderCreatedSecrets();
+
+      fireEvent.press(getByLabelText('Share signing secret'));
+      fireEvent.press(getByLabelText('Share webhook URL'));
+
+      expect(share).toHaveBeenNthCalledWith(1, { message: 'whsec_123' });
+      expect(share).toHaveBeenNthCalledWith(2, {
+        message: expect.stringContaining('/api/webhooks/triggers/trig-2'),
+      });
+    });
   });
 
   it('refuses a condition with no value before calling the server', async () => {

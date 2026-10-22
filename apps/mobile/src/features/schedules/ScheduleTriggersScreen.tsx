@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { ScrollView, Share, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams } from 'expo-router';
 import { X } from 'lucide-react-native';
@@ -29,7 +29,7 @@ import { Button } from '@/components/ui/button';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { Text } from '@/components/ui/text';
 import { API_URL } from '@/lib/constants';
-import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
+import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import {
   Chip,
   CloudFeatureGate,
@@ -160,8 +160,28 @@ function ConditionsEditor({
   );
 }
 
+function CopyableSecret({ label, value }: { label: string; value: string }) {
+  const { status, copy } = useCopyAction();
+  return (
+    <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+      <Button
+        title={copyControlLabel(status, `Copy ${label}`)}
+        size="sm"
+        variant="outline"
+        onPress={() => void copy(value)}
+      />
+      <Button
+        title="Share"
+        size="sm"
+        variant="outline"
+        accessibilityLabel={`Share ${label}`}
+        onPress={() => void Share.share({ message: value }).catch(() => undefined)}
+      />
+    </View>
+  );
+}
+
 function CreatedSecrets({ created }: { created: ManagedCloudEventTriggerCreated }) {
-  const { copy } = useCopyAction();
   const url = `${API_URL}${created.webhookPath}`;
   return (
     <SectionCard
@@ -169,14 +189,9 @@ function CreatedSecrets({ created }: { created: ManagedCloudEventTriggerCreated 
       description="Copy these now. The signing secret is shown once and a new trigger gets a new one."
     >
       <MetaText>{`Webhook URL: ${url}`}</MetaText>
-      <Button title="Copy webhook URL" size="sm" variant="outline" onPress={() => void copy(url)} />
+      <CopyableSecret label="webhook URL" value={url} />
       {created.signingSecret ? (
-        <Button
-          title="Copy signing secret"
-          size="sm"
-          variant="outline"
-          onPress={() => void copy(created.signingSecret!)}
-        />
+        <CopyableSecret label="signing secret" value={created.signingSecret} />
       ) : null}
       {created.verificationCode ? (
         <MetaText>{`Verification code: ${created.verificationCode}`}</MetaText>
