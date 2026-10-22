@@ -106,9 +106,9 @@ describe('ReflectSection', () => {
     );
 
     expect(await screen.findByText('Memory is off')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Open Memory settings' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open Personalization settings' }));
     expect(onNavigate).toHaveBeenCalledTimes(1);
-    expect(onNavigate).toHaveBeenCalledWith('memory');
+    expect(onNavigate).toHaveBeenCalledWith('personalization');
     expect(screen.queryByText('Writing led your past 30 days')).toBeNull();
   });
 
@@ -128,19 +128,18 @@ describe('ReflectSection', () => {
     const navItem = WEB_SETTINGS_NAV_GROUPS.flatMap((group) => group.items).find(
       (item) => item.key === section,
     );
-    expect(navItem?.label).toBe('Memory');
+    expect(navItem?.label).toBe('Personalization');
     expect(setupLink).toHaveAccessibleName(`Open ${navItem?.label} settings`);
     expect(screen.queryByText(/capabilities/i)).toBeNull();
   });
 
-  it('links the memory-required state straight to the Memory page outside the modal', async () => {
+  it('links the memory-required state straight to the Personalization page outside the modal', async () => {
     vi.mocked(fetch).mockImplementation(() => response(memoryRequired, 409));
     render(<ReflectSection />);
 
-    expect(await screen.findByRole('link', { name: 'Open Memory settings' })).toHaveAttribute(
-      'href',
-      '/settings/memory',
-    );
+    expect(
+      await screen.findByRole('link', { name: 'Open Personalization settings' }),
+    ).toHaveAttribute('href', '/settings/personalization');
   });
 
   it('leaves memory preferences untouched when the setup link is followed', async () => {
@@ -152,7 +151,7 @@ describe('ReflectSection', () => {
       </SettingsSectionNavigationProvider>,
     );
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Open Memory settings' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Open Personalization settings' }));
 
     const requests = vi.mocked(fetch).mock.calls;
     expect(requests).toHaveLength(1);

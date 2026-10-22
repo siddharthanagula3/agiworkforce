@@ -942,7 +942,7 @@ export function PrivacySection() {
             Memory preferences
           </div>
           <SettingsSectionLink
-            section="memory"
+            section="personalization"
             style={{
               fontSize: 14,
               color: 'var(--text-2)',

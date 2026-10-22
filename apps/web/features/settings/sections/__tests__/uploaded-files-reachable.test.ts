@@ -17,7 +17,7 @@ describe('Privacy points at every surface holding the user data it describes', (
   });
 
   it('still links the other data surfaces', () => {
-    for (const target of ['shared-links', 'archived', 'deleted-chats', 'memory']) {
+    for (const target of ['shared-links', 'archived', 'deleted-chats', 'personalization']) {
       expect(privacy, `missing link to ${target}`).toContain(`section="${target}"`);
     }
     expect(privacy).toContain('/privacy/requests');

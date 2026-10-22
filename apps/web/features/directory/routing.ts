@@ -3,6 +3,7 @@ import type { DirectorySectionKey } from '@agiworkforce/ui';
 import {
   WEB_SETTINGS_BUILT_IN_SECTIONS,
   WEB_SETTINGS_CONTENT_SECTIONS,
+  WEB_SETTINGS_SECTION_ALIASES,
 } from '@/features/settings/lib/web-settings-sections';
 
 import { SKILLS_PATH } from './constants';
@@ -29,9 +30,10 @@ const SECTION_TO_SLUG: ReadonlyMap<string, string> = new Map<string, string>([
   ...Object.entries(SETTINGS_SECTION_SLUGS),
 ]);
 
-const SLUG_TO_SECTION: ReadonlyMap<string, string> = new Map(
-  [...SECTION_TO_SLUG].map(([section, slug]) => [slug, section]),
-);
+const SLUG_TO_SECTION: ReadonlyMap<string, string> = new Map([
+  ...[...SECTION_TO_SLUG].map(([section, slug]) => [slug, section] as const),
+  ...Object.entries(WEB_SETTINGS_SECTION_ALIASES),
+]);
 
 const DIRECTORY_SECTIONS: ReadonlySet<string> = new Set(Object.keys(SETTINGS_SECTION_SLUGS));
 

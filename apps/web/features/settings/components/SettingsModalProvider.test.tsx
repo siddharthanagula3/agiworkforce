@@ -155,18 +155,21 @@ describe('SettingsModalProvider settings hash', () => {
     expect(screen.queryByTestId('web-settings-modal')).toBeNull();
   });
 
-  it.each(['billing', 'memory', 'time-focus', 'voice'])(
-    'opens the %s pane a deep link names',
-    (section) => {
-      setHash(`#settings/${section}`);
-      render(
-        <SettingsModalProvider>
-          <Harness />
-        </SettingsModalProvider>,
-      );
-      expect(screen.getByTestId('web-settings-modal')).toHaveAttribute('data-section', section);
-    },
-  );
+  it.each([
+    ['billing', 'billing'],
+    ['personalization', 'personalization'],
+    ['memory', 'personalization'],
+    ['time-focus', 'time-focus'],
+    ['voice', 'voice'],
+  ])('opens the pane the %s deep link names', (slug, section) => {
+    setHash(`#settings/${slug}`);
+    render(
+      <SettingsModalProvider>
+        <Harness />
+      </SettingsModalProvider>,
+    );
+    expect(screen.getByTestId('web-settings-modal')).toHaveAttribute('data-section', section);
+  });
 
   it('follows a hash change to another pane while the modal is open', () => {
     setHash('#settings/billing');

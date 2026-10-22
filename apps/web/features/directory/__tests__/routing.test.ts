@@ -131,6 +131,15 @@ describe('parseSettingsDirectoryHash', () => {
     expect(parseSettingsDirectoryHash('#settings/memory')).toBeNull();
   });
 
+  it('opens the pane that absorbed a folded section from its old hash', () => {
+    expect(parseSettingsHash('#settings/memory')).toEqual({
+      section: 'personalization',
+      entryId: null,
+      custom: false,
+    });
+    expect(buildSettingsHash('personalization')).toBe('#settings/personalization');
+  });
+
   it('reads a browse deep link and decodes the id', () => {
     expect(
       parseSettingsDirectoryHash('#settings/customize-connectors/browse/io.github%2Fslack'),

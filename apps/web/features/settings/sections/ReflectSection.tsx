@@ -178,10 +178,10 @@ export function ReflectSection() {
             memories from chats to create a recap.
           </p>
           <SettingsSectionLink
-            section="memory"
+            section="personalization"
             className="mt-4 inline-flex text-sm font-medium text-primary hover:underline"
           >
-            Open Memory settings
+            Open Personalization settings
           </SettingsSectionLink>
         </div>
       ) : null}
