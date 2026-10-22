@@ -17,6 +17,12 @@ jest.mock('expo-router', () => ({
   }),
 }));
 
+const mockShowToast = jest.fn();
+
+jest.mock('../src/shared/components/Toast', () => ({
+  showToast: (...args: unknown[]) => mockShowToast(...args),
+}));
+
 jest.mock('expo-haptics', () => ({
   impactAsync: jest.fn(async () => undefined),
   ImpactFeedbackStyle: { Light: 'light' },
@@ -165,7 +171,7 @@ describe('Schedules screen Cloud boundary', () => {
 
     expect(getByText('No Schedules')).toBeTruthy();
     expect(getByText('Try a template')).toBeTruthy();
-    expect(getByLabelText('Use Daily focus template')).toBeTruthy();
+    expect(getByLabelText('Use Daily briefing template')).toBeTruthy();
     expect(getByLabelText('Schedule a task')).toBeTruthy();
     await waitFor(() => expect(mockFetchSchedules).toHaveBeenCalledTimes(1));
   });
@@ -193,11 +199,11 @@ describe('Schedules screen Cloud boundary', () => {
     useChatAppModeStore.setState({ appMode: 'cloud' });
     const { getByLabelText } = render(<SchedulesScreen />);
 
-    fireEvent.press(getByLabelText('Use Monday kickoff template'));
+    fireEvent.press(getByLabelText('Use Meeting prep template'));
 
     expect(mockPush).toHaveBeenCalledWith({
       pathname: '/(app)/schedules/create',
-      params: { template: 'monday-kickoff' },
+      params: { template: 'meeting-prep' },
     });
   });
 
@@ -328,8 +334,94 @@ describe('Schedules screen Cloud boundary', () => {
     const { getByLabelText, queryByLabelText } = render(<SchedulesScreen />);
 
     expect(queryByLabelText('Schedule a task')).toBeNull();
-    expect(queryByLabelText('Use Daily focus template')).toBeNull();
+    expect(queryByLabelText('Use Daily briefing template')).toBeNull();
     fireEvent.press(getByLabelText('View plans for scheduled tasks'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+  });
+
+  it('titles the header Scheduled and opens the cross-schedule runs screen', () => {
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    const { getByText, queryByText, getByLabelText } = render(<SchedulesScreen />);
+
+    expect(getByText('Scheduled')).toBeTruthy();
+    expect(queryByText('Schedules')).toBeNull();
+    fireEvent.press(getByLabelText('Scheduled runs'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/schedules/runs');
+  });
+
+  describe('composer send', () => {
+    const typeIntoComposer = (utils: ReturnType<typeof render>, text: string) =>
+      fireEvent.changeText(utils.getByLabelText('Schedule a task'), text);
+
+    beforeEach(() => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+    });
+
+    it('creates the task straight from a cadence in the text and clears the composer', async () => {
+      const createSchedule = jest.fn(async () => true);
+      useScheduleStore.setState({ createSchedule });
+      const utils = render(<SchedulesScreen />);
+
+      typeIntoComposer(utils, 'Summarize my inbox every day at 8am');
+      fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+
+      await waitFor(() =>
+        expect(createSchedule).toHaveBeenCalledWith(
+          expect.objectContaining({
+            prompt: 'Summarize my inbox every day at 8am',
+            recurrence: 'daily',
+            timeOfDay: '08:00',
+            isActive: true,
+          }),
+        ),
+      );
+      await waitFor(() =>
+        expect(utils.queryByDisplayValue('Summarize my inbox every day at 8am')).toBeNull(),
+      );
+      expect(utils.queryByText('Quick Schedule')).toBeNull();
+      expect(mockShowToast).toHaveBeenCalledWith('Scheduled. Daily at 08:00.');
+    });
+
+    it('opens the review sheet with the text kept when no cadence can be read', () => {
+      const createSchedule = jest.fn(async () => true);
+      useScheduleStore.setState({ createSchedule });
+      const utils = render(<SchedulesScreen />);
+
+      typeIntoComposer(utils, 'Summarize my inbox');
+      fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+
+      expect(utils.getByText('Quick Schedule')).toBeTruthy();
+      expect(utils.getAllByDisplayValue('Summarize my inbox').length).toBe(2);
+      expect(createSchedule).not.toHaveBeenCalled();
+    });
+
+    it('does not read a time out of an unrelated "at" in the text', () => {
+      const createSchedule = jest.fn(async () => true);
+      useScheduleStore.setState({ createSchedule });
+      const utils = render(<SchedulesScreen />);
+
+      typeIntoComposer(utils, 'Look at my inbox');
+      fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+
+      expect(utils.getByText('Quick Schedule')).toBeTruthy();
+      expect(createSchedule).not.toHaveBeenCalled();
+    });
+
+    it('keeps the text and shows the failure when creation fails', async () => {
+      const createSchedule = jest.fn(async () => {
+        throw new Error('network');
+      });
+      useScheduleStore.setState({ createSchedule });
+      const utils = render(<SchedulesScreen />);
+
+      typeIntoComposer(utils, 'Summarize my inbox every day at 8am');
+      fireEvent.press(utils.getByLabelText('Continue scheduling task'));
+
+      await waitFor(() =>
+        expect(utils.getByText('Failed to create schedule. Please try again.')).toBeTruthy(),
+      );
+      expect(utils.getByDisplayValue('Summarize my inbox every day at 8am')).toBeTruthy();
+      expect(mockShowToast).not.toHaveBeenCalled();
+    });
   });
 });

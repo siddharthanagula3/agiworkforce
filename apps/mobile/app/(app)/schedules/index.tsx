@@ -6,7 +6,7 @@ import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
-import { ArrowLeft, Plus, Calendar, ListFilter } from 'lucide-react-native';
+import { ArrowLeft, Plus, Calendar, Clock, ListFilter } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -115,6 +115,10 @@ export default function SchedulesScreen() {
     [openCreate],
   );
 
+  const handleOpenRuns = useCallback(() => {
+    router.push('/(app)/schedules/runs' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
   const handleBack = useCallback(() => {
     if (router.canGoBack()) router.back();
     else router.replace('/(app)' as Parameters<typeof router.replace>[0]);
@@ -182,6 +186,7 @@ export default function SchedulesScreen() {
       <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
         <Header
           onBackPress={handleBack}
+          onRunsPress={handleOpenRuns}
           onCreatePress={canCreateSchedule ? handleCreate : undefined}
         />
         <View className="px-4 gap-3 mt-2">
@@ -209,6 +214,7 @@ export default function SchedulesScreen() {
     <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
       <Header
         onBackPress={handleBack}
+        onRunsPress={handleOpenRuns}
         onCreatePress={canCreateSchedule ? handleCreate : undefined}
         onSortPress={schedules.length > 0 ? () => setSortOpen((open) => !open) : undefined}
         sortOpen={sortOpen}
@@ -382,11 +388,13 @@ export default function SchedulesScreen() {
 
 function Header({
   onBackPress,
+  onRunsPress,
   onCreatePress,
   onSortPress,
   sortOpen = false,
 }: {
   onBackPress: () => void;
+  onRunsPress: () => void;
   onCreatePress?: () => void;
   onSortPress?: () => void;
   sortOpen?: boolean;
@@ -402,9 +410,23 @@ function Header({
       >
         <ArrowLeft size={20} color={colors.textSecondary} />
       </PressableBox>
-      <Text variant="subheading" className="ml-2 flex-1">
-        Schedules
-      </Text>
+      <View
+        pointerEvents="none"
+        style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center' }}
+      >
+        <Text variant="subheading" accessibilityRole="header">
+          Scheduled
+        </Text>
+      </View>
+      <View className="flex-1" />
+      <PressableBox
+        onPress={onRunsPress}
+        style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+        accessibilityLabel="Scheduled runs"
+        accessibilityRole="button"
+      >
+        <Clock size={20} color={colors.textSecondary} />
+      </PressableBox>
       {onSortPress ? (
         <PressableBox
           onPress={onSortPress}

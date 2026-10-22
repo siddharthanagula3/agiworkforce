@@ -69,16 +69,16 @@ describe('Create schedule template handoff', () => {
   });
 
   it('prefills the form by resolving the allowlisted template ID', () => {
-    mockSearchParams = { template: 'monday-kickoff' };
+    mockSearchParams = { template: 'meeting-prep' };
 
     render(<CreateScheduleScreen />);
 
     expect(mockScheduleForm).toHaveBeenCalledWith(
       expect.objectContaining({
         initialData: expect.objectContaining({
-          name: 'Monday kickoff',
+          name: 'Meeting prep',
           recurrence: 'weekly',
-          daysOfWeek: [1],
+          daysOfWeek: [1, 2, 3, 4, 5],
         }),
       }),
     );

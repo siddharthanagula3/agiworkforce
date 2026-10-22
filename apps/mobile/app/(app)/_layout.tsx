@@ -86,6 +86,7 @@ export default function AppLayout() {
 
         <Drawer.Screen name="schedules/index" options={HIDDEN} />
         <Drawer.Screen name="schedules/create" options={HIDDEN} />
+        <Drawer.Screen name="schedules/runs" options={HIDDEN} />
 
         <Drawer.Screen name="settings/index" options={HIDDEN} />
         <Drawer.Screen name="settings/account-security" options={HIDDEN} />

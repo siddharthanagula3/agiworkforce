@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
+import { api } from '@/services/api';
 import {
   fetchSchedules as apiFetchSchedules,
   createSchedule as apiCreateSchedule,
@@ -10,6 +11,12 @@ import {
   fetchScheduleRuns as apiFetchRuns,
   resolveScheduleRunApproval as apiResolveRunApproval,
 } from './service';
+import {
+  MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE,
+  ManagedCloudScheduleRecentRunListResponseSchema,
+  managedCloudScheduleRecentRunsPath,
+  type ManagedCloudScheduleRecentRun,
+} from '@agiworkforce/cloud-contracts';
 import type {
   ManagedCloudScheduleRecurrence,
   ManagedCloudScheduleRunApproval,
@@ -62,13 +69,57 @@ export interface ScheduleRun {
   timingNote: string | null;
 }
 
+export interface RecentScheduleRun {
+  id: string;
+  scheduleId: string;
+  scheduleName: string;
+  status: ScheduleRun['status'];
+  startedAt: string;
+  completedAt: string | null;
+  summary: string | null;
+}
+
 export type CreateScheduleInput = Omit<
   Schedule,
   'id' | 'createdAt' | 'updatedAt' | 'lastRunAt' | 'nextRunAt' | 'lastRunStatus' | 'pausedReason'
 >;
 
+function recentRunSummary(run: ManagedCloudScheduleRecentRun): string | null {
+  const text = run.result?.['text'];
+  if (typeof text === 'string' && text.trim()) return text.trim();
+  return run.output?.trim() ? run.output.trim() : null;
+}
+
+function toRecentRun(run: ManagedCloudScheduleRecentRun): RecentScheduleRun {
+  return {
+    id: run.id,
+    scheduleId: run.taskId,
+    scheduleName: run.taskName,
+    status: run.status,
+    startedAt: run.startedAt,
+    completedAt: run.completedAt,
+    summary: recentRunSummary(run),
+  };
+}
+
+async function loadRecentRunsPage(
+  cursor: string | null,
+): Promise<{ runs: RecentScheduleRun[]; nextCursor: string | null }> {
+  const value = await api.get<unknown>(
+    managedCloudScheduleRecentRunsPath(MANAGED_CLOUD_SCHEDULE_RUNS_DEFAULT_PAGE_SIZE, cursor),
+  );
+  const parsed = ManagedCloudScheduleRecentRunListResponseSchema.safeParse(value);
+  if (!parsed.success) throw new Error('Scheduled runs returned an invalid response.');
+  return { runs: parsed.data.runs.map(toRecentRun), nextCursor: parsed.data.nextCursor };
+}
+
 interface ScheduleState {
   schedules: Schedule[];
+  recentRuns: RecentScheduleRun[];
+  recentRunsCursor: string | null;
+  recentRunsLoading: boolean;
+  recentRunsLoadingMore: boolean;
+  recentRunsError: string | null;
   runsBySchedule: Record<string, ScheduleRun[]>;
   runsLoadingBySchedule: Record<string, boolean>;
   runsErrorBySchedule: Record<string, string | null>;
@@ -88,6 +139,8 @@ interface ScheduleState {
     decision: ManagedCloudScheduleRunApproval['decision'],
   ) => Promise<void>;
   getRuns: (scheduleId: string) => ScheduleRun[];
+  fetchRecentRuns: () => Promise<void>;
+  fetchMoreRecentRuns: () => Promise<void>;
   clearError: () => void;
   clearAccountSchedules: () => void;
 }
@@ -96,6 +149,11 @@ export const useScheduleStore = create<ScheduleState>()(
   persist(
     (set, get) => ({
       schedules: [],
+      recentRuns: [],
+      recentRunsCursor: null,
+      recentRunsLoading: false,
+      recentRunsLoadingMore: false,
+      recentRunsError: null,
       runsBySchedule: {},
       runsLoadingBySchedule: {},
       runsErrorBySchedule: {},
@@ -322,6 +380,49 @@ export const useScheduleStore = create<ScheduleState>()(
         return get().runsBySchedule[scheduleId] ?? [];
       },
 
+      fetchRecentRuns: async () => {
+        const account = captureCloudAccountEpoch();
+        if (!account) return;
+        set({ recentRunsLoading: true, recentRunsError: null });
+        try {
+          const page = await loadRecentRunsPage(null);
+          if (!isCloudAccountEpochCurrent(account)) return;
+          set({ recentRuns: page.runs, recentRunsCursor: page.nextCursor });
+        } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
+          console.warn('Failed to fetch recent schedule runs:', error);
+          set({
+            recentRunsError: 'Could not load scheduled runs. Check your connection and retry.',
+          });
+        } finally {
+          if (isCloudAccountEpochCurrent(account)) set({ recentRunsLoading: false });
+        }
+      },
+
+      fetchMoreRecentRuns: async () => {
+        const account = captureCloudAccountEpoch();
+        const { recentRunsCursor, recentRunsLoading, recentRunsLoadingMore } = get();
+        if (!account || !recentRunsCursor || recentRunsLoading || recentRunsLoadingMore) return;
+        set({ recentRunsLoadingMore: true, recentRunsError: null });
+        try {
+          const page = await loadRecentRunsPage(recentRunsCursor);
+          if (!isCloudAccountEpochCurrent(account)) return;
+          set((state) => {
+            const known = new Set(state.recentRuns.map((run) => run.id));
+            return {
+              recentRuns: [...state.recentRuns, ...page.runs.filter((run) => !known.has(run.id))],
+              recentRunsCursor: page.nextCursor,
+            };
+          });
+        } catch (error) {
+          if (!isCloudAccountEpochCurrent(account)) return;
+          console.warn('Failed to fetch more schedule runs:', error);
+          set({ recentRunsError: 'Could not load more runs. Check your connection and retry.' });
+        } finally {
+          if (isCloudAccountEpochCurrent(account)) set({ recentRunsLoadingMore: false });
+        }
+      },
+
       clearError: () => {
         set({ error: null });
       },
@@ -329,6 +430,11 @@ export const useScheduleStore = create<ScheduleState>()(
       clearAccountSchedules: () => {
         set({
           schedules: [],
+          recentRuns: [],
+          recentRunsCursor: null,
+          recentRunsLoading: false,
+          recentRunsLoadingMore: false,
+          recentRunsError: null,
           runsBySchedule: {},
           runsLoadingBySchedule: {},
           runsErrorBySchedule: {},

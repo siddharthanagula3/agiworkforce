@@ -18,6 +18,7 @@ import { showVoicePermissionAlert } from '@/src/features/voice/components/voiceP
 import { useScheduleStore, type CreateScheduleInput } from '../store';
 import { requestsSubDailySchedule } from '../policy';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
+import { showToast } from '@/src/shared/components/Toast';
 
 interface ParsedSchedule {
   recurrence: 'daily' | 'weekly' | 'monthly' | 'once';
@@ -63,13 +64,15 @@ function parseTime(raw: string): string | null {
   return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
 }
 
-function extractTime(text: string): string {
+const DEFAULT_TIME_OF_DAY = '09:00';
+
+function findExplicitTime(text: string): string | null {
   const atMatch = text.match(/(?:at|@)\s*([\w:]+(?:\s*(?:am|pm))?)/i);
-  if (atMatch) {
-    const parsed = parseTime(atMatch[1]);
-    if (parsed) return parsed;
-  }
-  return '09:00';
+  return atMatch ? parseTime(atMatch[1]) : null;
+}
+
+function extractTime(text: string): string {
+  return findExplicitTime(text) ?? DEFAULT_TIME_OF_DAY;
 }
 
 export function parseNaturalLanguage(text: string): ParsedSchedule | null {
@@ -149,12 +152,14 @@ export function parseNaturalLanguage(text: string): ParsedSchedule | null {
     };
   }
 
-  if (lower.match(/(?:at|@)\s*([\w:]+(?:\s*(?:am|pm))?)/i)) {
+  if (findExplicitTime(text)) {
     return { recurrence: 'daily', timeOfDay, description: `Daily at ${timeOfDay}` };
   }
 
   return null;
 }
+
+const SCHEDULE_NAME_CHARS = 40;
 
 const SUGGESTIONS = [
   'Every day at 9am',
@@ -196,6 +201,43 @@ export function QuickSchedule({
     setError('');
   }, []);
 
+  const submitSchedule = useCallback(
+    async (cadence: ParsedSchedule, taskPrompt: string, name: string): Promise<boolean> => {
+      setError('');
+      setLoading(true);
+      try {
+        const scheduleInput: CreateScheduleInput = {
+          name:
+            name.length > SCHEDULE_NAME_CHARS ? name.slice(0, SCHEDULE_NAME_CHARS) + '...' : name,
+          prompt: taskPrompt,
+          model: DEFAULT_AUTO_MODE_ID,
+          recurrence: cadence.recurrence,
+          timeOfDay: cadence.timeOfDay,
+          daysOfWeek: cadence.daysOfWeek,
+          dayOfMonth: cadence.dayOfMonth,
+          scheduledAt: null,
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+          isActive: true,
+        };
+        const created = await createSchedule(scheduleInput);
+        if (!created) {
+          setError('Cloud sign-in changed. Sign in again and retry this task.');
+          return false;
+        }
+        setInput('');
+        setPrompt('');
+        onCreated?.();
+        return true;
+      } catch {
+        setError('Failed to create schedule. Please try again.');
+        return false;
+      } finally {
+        setLoading(false);
+      }
+    },
+    [createSchedule, onCreated],
+  );
+
   const handleCreate = useCallback(async () => {
     if (!parsed) {
       setError('Could not understand the schedule. Try "Every day at 9am".');
@@ -205,37 +247,22 @@ export function QuickSchedule({
       setError('Please enter what the AI should do.');
       return;
     }
+    if (await submitSchedule(parsed, prompt.trim(), input)) handleClose();
+  }, [parsed, prompt, input, submitSchedule, handleClose]);
 
-    setError('');
-    setLoading(true);
-    try {
-      const scheduleInput: CreateScheduleInput = {
-        name: input.length > 40 ? input.slice(0, 40) + '...' : input,
-        prompt: prompt.trim(),
-        model: DEFAULT_AUTO_MODE_ID,
-        recurrence: parsed.recurrence,
-        timeOfDay: parsed.timeOfDay,
-        daysOfWeek: parsed.daysOfWeek,
-        dayOfMonth: parsed.dayOfMonth,
-        scheduledAt: null,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        isActive: true,
-      };
-      const created = await createSchedule(scheduleInput);
-      if (!created) {
-        setError('Cloud sign-in changed. Sign in again and retry this task.');
-        return;
-      }
-      handleClose();
-      setInput('');
-      setPrompt('');
-      onCreated?.();
-    } catch {
-      setError('Failed to create schedule. Please try again.');
-    } finally {
-      setLoading(false);
+  const handleSend = useCallback(async () => {
+    const taskPrompt = prompt.trim();
+    if (!taskPrompt || loading) return;
+    const cadence = parseNaturalLanguage(taskPrompt);
+    if (!cadence) {
+      handleOpen();
+      return;
     }
-  }, [parsed, prompt, input, createSchedule, handleClose, onCreated]);
+    Keyboard.dismiss();
+    if (await submitSchedule(cadence, taskPrompt, taskPrompt)) {
+      showToast(`Scheduled. ${cadence.description}.`);
+    }
+  }, [prompt, loading, handleOpen, submitSchedule]);
 
   const handleSuggestion = useCallback((suggestion: string) => {
     setInput(suggestion);
@@ -280,21 +307,25 @@ export function QuickSchedule({
           style={{ flex: 1, minHeight: 44, color: colors.textPrimary, fontSize: typeScale.body }}
           accessibilityLabel="Schedule a task"
           returnKeyType="done"
-          onSubmitEditing={handleOpen}
+          onSubmitEditing={handleSend}
         />
         <View className="h-11 w-11 items-center justify-center">
           <VoiceInputButton onTranscription={handleTranscription} onError={handleVoiceError} />
         </View>
         <PressableBox
-          onPress={handleOpen}
-          disabled={!prompt.trim()}
+          onPress={handleSend}
+          disabled={!prompt.trim() || loading}
           className="h-11 w-11 items-center justify-center rounded-full"
           style={{ backgroundColor: prompt.trim() ? colors.teal : colors.surfaceElevated }}
           accessibilityLabel="Continue scheduling task"
           accessibilityRole="button"
-          accessibilityState={{ disabled: !prompt.trim() }}
+          accessibilityState={{ disabled: !prompt.trim() || loading, busy: loading }}
         >
-          <ArrowUp size={20} color={prompt.trim() ? colors.white : colors.textMuted} />
+          {loading && !visible ? (
+            <ActivityIndicator color={colors.accentText} size="small" />
+          ) : (
+            <ArrowUp size={20} color={prompt.trim() ? colors.white : colors.textMuted} />
+          )}
         </PressableBox>
       </View>
       {error && !visible ? (

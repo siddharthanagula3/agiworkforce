@@ -1,3 +1,7 @@
+import {
+  MANAGED_CLOUD_SCHEDULE_TEMPLATES,
+  type ManagedCloudScheduleTemplate,
+} from '@agiworkforce/cloud-contracts';
 import type { Schedule } from './store';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 
@@ -6,71 +10,43 @@ export interface ScheduleTemplate {
   emoji: string;
   title: string;
   description: string;
+  cadenceLabel: string;
   initialData: Pick<Schedule, 'name' | 'prompt' | 'model' | 'recurrence' | 'timeOfDay'> &
     Partial<Pick<Schedule, 'daysOfWeek' | 'dayOfMonth'>>;
 }
 
-export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] = [
-  {
-    id: 'daily-focus',
-    emoji: '🌅',
-    title: 'Daily focus',
-    description: 'Start the day with priorities, risks, and a concrete first action.',
+const TEMPLATE_EMOJI: Readonly<Record<string, string>> = {
+  'weekly-review': '📝',
+  'meeting-prep': '🗓️',
+  'inbox-triage': '📥',
+  'content-ideas': '💡',
+  'daily-briefing': '🌅',
+  'monitor-topic': '🔎',
+};
+
+const FALLBACK_TEMPLATE_EMOJI = '📅';
+
+function toScheduleTemplate(template: ManagedCloudScheduleTemplate): ScheduleTemplate {
+  const { draft } = template;
+  return {
+    id: template.id,
+    emoji: TEMPLATE_EMOJI[template.id] ?? FALLBACK_TEMPLATE_EMOJI,
+    title: template.name,
+    description: template.description,
+    cadenceLabel: template.cadenceLabel,
     initialData: {
-      name: 'Daily focus',
-      prompt:
-        'Give me a brief for today. Check my connected calendar for today’s meetings and what to prepare, my connected email for anything that needs a reply today, what you remember about my work, and the web for news that bears on it. Then give three priorities, one risk to watch, and the first concrete action. If a calendar or email is not connected, say so in one line and brief from the rest instead of inventing details.',
+      name: draft.name,
+      prompt: draft.prompt,
       model: DEFAULT_AUTO_MODE_ID,
-      recurrence: 'daily',
-      timeOfDay: '09:00',
+      recurrence: draft.recurrence,
+      timeOfDay: draft.timeOfDay,
+      ...(draft.daysOfWeek ? { daysOfWeek: [...draft.daysOfWeek] } : {}),
     },
-  },
-  {
-    id: 'monday-kickoff',
-    emoji: '🗓️',
-    title: 'Monday kickoff',
-    description: 'Set a focused weekly outcome and turn it into manageable steps.',
-    initialData: {
-      name: 'Monday kickoff',
-      prompt:
-        'Create a weekly kickoff worksheet with one desired outcome, the five most useful steps, likely blockers, and a clear definition of done. Mark any missing context as a question for me.',
-      model: DEFAULT_AUTO_MODE_ID,
-      recurrence: 'weekly',
-      daysOfWeek: [1],
-      timeOfDay: '09:00',
-    },
-  },
-  {
-    id: 'weekly-reflection',
-    emoji: '🧭',
-    title: 'Weekly reflection',
-    description: 'Review progress, lessons, and the next improvement to try.',
-    initialData: {
-      name: 'Weekly reflection',
-      prompt:
-        'Guide me through a concise weekly reflection: what moved forward, what stalled, what I learned, and the single improvement to try next week. Use questions when the task has no supporting context.',
-      model: DEFAULT_AUTO_MODE_ID,
-      recurrence: 'weekly',
-      daysOfWeek: [5],
-      timeOfDay: '16:00',
-    },
-  },
-  {
-    id: 'monthly-review',
-    emoji: '📈',
-    title: 'Monthly review',
-    description: 'Close the month with a lightweight review and next-month plan.',
-    initialData: {
-      name: 'Monthly review',
-      prompt:
-        'Prepare a monthly review worksheet covering outcomes, unfinished work, lessons, risks, and three priorities for next month. Clearly label any section that needs information from me.',
-      model: DEFAULT_AUTO_MODE_ID,
-      recurrence: 'monthly',
-      dayOfMonth: 1,
-      timeOfDay: '09:00',
-    },
-  },
-] as const;
+  };
+}
+
+export const SCHEDULE_TEMPLATES: readonly ScheduleTemplate[] =
+  MANAGED_CLOUD_SCHEDULE_TEMPLATES.map(toScheduleTemplate);
 
 export function getScheduleTemplate(
   id: string | string[] | undefined,
