@@ -13,6 +13,7 @@ import {
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import { useUIStore } from '@shared/stores/layout-store';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { getModelMetadata } from '@shared/config/llm';
 import { CODE_COPY, contextWindowLabel } from './code-surface';
 import {
@@ -189,6 +190,7 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  useSettingsStore.setState({ codeFirstRunCompleted: true, codeRailPins: {} });
   host = null;
   hostAfterHydration = null;
   for (const rootId of ['root-recent', 'root-older', WORKTREE_ROOT_ID]) {
@@ -462,34 +464,175 @@ describe('CloudCodePage', () => {
       'href',
       '/chat/library?surface=artifact',
     );
-    expect(screen.getByRole('link', { name: 'Customize' })).toHaveAttribute(
-      'href',
-      '/settings/capabilities',
-    );
+    expect(screen.queryByRole('link', { name: 'Customize' })).not.toBeInTheDocument();
   });
 
-  it('reveals routines and the two local-code destinations behind More', async () => {
+  it('opens More as a menu beside the rail with the unpinned destinations', async () => {
     const user = userEvent.setup();
     render(<CloudCodePage api={createApi()} />);
 
     const more = await screen.findByRole('button', { name: 'More' });
     expect(more).toHaveAttribute('aria-expanded', 'false');
-    expect(screen.queryByRole('link', { name: 'Routines' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menu')).not.toBeInTheDocument();
 
     await user.click(more);
 
+    const menu = await screen.findByRole('menu');
+    expect(more).toHaveAttribute('aria-expanded', 'true');
+    expect(more.className).toContain('railRowActive');
+    expect(within(menu).getByRole('menuitem', { name: 'Routines' })).toHaveAttribute(
+      'href',
+      '/chat/schedules',
+    );
+    expect(within(menu).getByRole('menuitem', { name: 'Your computer' })).toHaveAttribute(
+      'href',
+      '/code/computer',
+    );
+    expect(within(menu).getByRole('link', { name: 'Work with local code' })).toHaveAttribute(
+      'href',
+      '/download',
+    );
+    expect(
+      within(menu).getByRole('menuitem', { name: 'Open in the editor extension' }),
+    ).toHaveAttribute('href', '/vscode-extension');
+    expect(within(menu).getByRole('separator')).toBeInTheDocument();
+    const items = within(menu).getAllByRole('menuitem');
+    expect(items[items.length - 1]).toHaveTextContent('Customize sidebar');
+  });
+
+  it('closes the More menu on Escape and drops the open highlight', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    const more = await screen.findByRole('button', { name: 'More' });
+    await user.click(more);
+    await screen.findByRole('menu');
+
+    await user.keyboard('{Escape}');
+
+    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+    expect(more).toHaveAttribute('aria-expanded', 'false');
+    expect(more.className).not.toContain('railRowActive');
+  });
+
+  it('pins and unpins rail items from the Customize sidebar dialog', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'More' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Customize sidebar' }));
+
+    const dialog = await screen.findByRole('dialog', { name: 'Customize sidebar' });
+    expect(within(dialog).getByText('Choose which items appear in your sidebar.')).toBeVisible();
+    expect(within(dialog).getByRole('checkbox', { name: 'Artifacts' })).toBeChecked();
+    expect(within(dialog).getByRole('checkbox', { name: 'Routines' })).not.toBeChecked();
+
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Routines' }));
+    await user.click(within(dialog).getByRole('checkbox', { name: 'Artifacts' }));
+    await user.click(within(dialog).getByRole('button', { name: 'Done' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(screen.getByRole('link', { name: 'Routines' })).toHaveAttribute(
       'href',
       '/chat/schedules',
     );
-    expect(screen.getByRole('link', { name: 'Work with local code' })).toHaveAttribute(
-      'href',
-      '/download',
-    );
-    expect(screen.getByRole('link', { name: 'Open in the editor extension' })).toHaveAttribute(
+    expect(screen.queryByRole('link', { name: 'Artifacts' })).not.toBeInTheDocument();
+    expect(useSettingsStore.getState().codeRailPins).toEqual({ routines: true, artifacts: false });
+
+    await user.click(screen.getByRole('button', { name: 'More' }));
+    const menu = await screen.findByRole('menu');
+    expect(within(menu).getByRole('menuitem', { name: 'Artifacts' })).toBeInTheDocument();
+    expect(within(menu).queryByRole('menuitem', { name: 'Routines' })).not.toBeInTheDocument();
+  });
+
+  it('closes the Customize sidebar dialog with its close button', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'More' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Customize sidebar' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Customize sidebar' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('offers the other places to code from on an empty home', async () => {
+    render(<CloudCodePage api={createApi()} />);
+
+    const setup = await screen.findByRole('navigation', { name: 'Also code from' });
+    expect(within(setup).getByRole('link', { name: 'Terminal' })).toHaveAttribute('href', '/cli');
+    expect(within(setup).getByRole('link', { name: 'VS Code' })).toHaveAttribute(
       'href',
       '/vscode-extension',
     );
+    expect(within(setup).getByRole('link', { name: 'Desktop app' })).toHaveAttribute(
+      'href',
+      '/download',
+    );
+  });
+
+  it('drops the setup links once the account has a session', async () => {
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await screen.findAllByText(session.title);
+    expect(screen.queryByRole('navigation', { name: 'Also code from' })).not.toBeInTheDocument();
+  });
+
+  it('shows the first-run setup to a new account with no sessions and no GitHub app', async () => {
+    const user = userEvent.setup();
+    useSettingsStore.setState({ codeFirstRunCompleted: false });
+    const api = createApi();
+    render(<CloudCodePage api={api} />);
+
+    const wizard = await screen.findByTestId('code-first-run');
+    expect(within(wizard).getByRole('heading', { name: 'Set up AGI Code' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More' })).not.toBeInTheDocument();
+    expect(api.list).toHaveBeenCalledWith('all', expect.anything());
+
+    await user.click(within(wizard).getByRole('button', { name: 'Get started' }));
+    await user.click(within(wizard).getByRole('button', { name: 'Continue' }));
+    await user.click(within(wizard).getByRole('button', { name: 'Skip this step' }));
+
+    expect(await screen.findByRole('button', { name: 'More' })).toBeInTheDocument();
+    expect(screen.queryByTestId('code-first-run')).not.toBeInTheDocument();
+    expect(useSettingsStore.getState().codeFirstRunCompleted).toBe(true);
+  });
+
+  it('skips the first-run setup and remembers it when the account already has sessions', async () => {
+    useSettingsStore.setState({ codeFirstRunCompleted: false });
+    const api = createApi({
+      list: vi.fn(async (status?: string) => ({
+        availability,
+        sessions: status === 'all' ? [session] : [],
+        runtimes: [],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    expect(await screen.findByRole('button', { name: 'More' })).toBeInTheDocument();
+    expect(screen.queryByTestId('code-first-run')).not.toBeInTheDocument();
+    await waitFor(() => expect(useSettingsStore.getState().codeFirstRunCompleted).toBe(true));
+  });
+
+  it('skips the first-run setup without remembering it when the plan has no environments', async () => {
+    useSettingsStore.setState({ codeFirstRunCompleted: false });
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability: { ...availability, planEntitled: false },
+        sessions: [],
+        runtimes: [],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    expect(await screen.findByTestId('code-upgrade')).toBeInTheDocument();
+    expect(screen.queryByTestId('code-first-run')).not.toBeInTheDocument();
+    expect(useSettingsStore.getState().codeFirstRunCompleted).toBe(false);
   });
 
   it('says there are no sessions yet rather than showing an empty list', async () => {

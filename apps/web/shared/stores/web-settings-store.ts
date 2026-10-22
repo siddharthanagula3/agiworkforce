@@ -52,6 +52,10 @@ interface SettingsState {
   shortcutBindings: Record<string, ShortcutChord>;
   /** Sidebar destinations the user hid. Chat is never hideable. */
   hiddenNavIds: string[];
+  /** AGI Code rail items the user pinned (true) or moved under More (false), by item id. */
+  codeRailPins: Record<string, boolean>;
+  /** The AGI Code first-run setup was finished, skipped, or found unnecessary. */
+  codeFirstRunCompleted: boolean;
   /**
    * Start every new conversation as a temporary chat. Honoured at creation by
    * useConversations, so the very first message is never persisted.
@@ -83,6 +87,8 @@ interface SettingsState {
   setShortcutBinding: (id: string, chord: ShortcutChord | null) => void;
   restoreShortcutDefaults: () => void;
   setNavItemVisible: (id: string, visible: boolean) => void;
+  setCodeRailItemPinned: (id: string, pinned: boolean) => void;
+  setCodeFirstRunCompleted: (completed: boolean) => void;
   setNewChatsTemporary: (temporary: boolean) => void;
   setDictationEnabled: (enabled: boolean) => void;
   setCodeFollowUpQueueMode: (mode: FollowUpQueueMode) => void;
@@ -109,6 +115,8 @@ export const useSettingsStore = create<SettingsState>()(
       disabledShortcutIds: [],
       shortcutBindings: {},
       hiddenNavIds: [],
+      codeRailPins: {},
+      codeFirstRunCompleted: false,
       newChatsTemporary: false,
       dictationEnabled: true,
       codeFollowUpQueueMode: 'steer',
@@ -151,6 +159,9 @@ export const useSettingsStore = create<SettingsState>()(
               ? s.hiddenNavIds
               : [...s.hiddenNavIds, id],
         })),
+      setCodeRailItemPinned: (id, pinned) =>
+        set((s) => ({ codeRailPins: { ...s.codeRailPins, [id]: pinned } })),
+      setCodeFirstRunCompleted: (codeFirstRunCompleted) => set({ codeFirstRunCompleted }),
       setCodeBlockWrap: (wrap) => set({ codeBlockWrap: wrap }),
       setCodeTheme: (codeTheme) => set({ codeTheme }),
       setSendWithEnter: (sendWithEnter) => set({ sendWithEnter }),

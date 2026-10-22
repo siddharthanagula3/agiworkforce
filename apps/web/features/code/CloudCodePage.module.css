@@ -2204,3 +2204,373 @@ svg + .menuRowLabel {
   min-width: 0;
   min-height: 0;
 }
+
+/* ---------- rail More menu and Customize sidebar ---------- */
+
+.moreMenu {
+  min-width: 220px;
+  padding: 6px;
+  border: 1px solid var(--chat-border);
+  border-radius: var(--chat-radius-lg);
+  background: var(--chat-surface-overlay);
+  box-shadow: var(--chat-shadow-lg);
+}
+
+.moreMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+  padding: 0 8px;
+  border-radius: var(--chat-radius-md);
+  color: var(--chat-text-primary);
+  font-size: 14px;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.moreMenuItem > span:first-child {
+  display: grid;
+  place-items: center;
+  color: var(--chat-text-secondary);
+}
+
+.moreMenuItem > svg {
+  flex: 0 0 auto;
+  color: var(--chat-text-secondary);
+}
+
+.customizeDialog {
+  gap: 20px;
+}
+
+.customizeTitle {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 28px;
+}
+
+.customizeDescription {
+  color: var(--chat-text-secondary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.customizeList {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.customizeRow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 0 8px;
+  border-radius: var(--chat-radius-md);
+  color: var(--chat-text-primary);
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.customizeRow:hover {
+  background: var(--chat-surface-hover);
+}
+
+.customizeRow > svg {
+  flex: 0 0 auto;
+  color: var(--chat-text-secondary);
+}
+
+.customizeActions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.pillButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 36px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--corner-pill);
+  background: var(--chat-text-primary);
+  color: var(--chat-bg);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 550;
+  cursor: pointer;
+}
+
+.pillButton:hover {
+  opacity: 0.9;
+}
+
+.pillButton:focus-visible {
+  outline: 2px solid var(--chat-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------- empty home setup links ---------- */
+
+.setupLinks {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 20px;
+}
+
+.setupLabel {
+  color: var(--chat-text-secondary);
+  font-size: 14px;
+}
+
+.setupChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--chat-border-strong);
+  border-radius: var(--corner-pill);
+  color: var(--chat-text-primary);
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.setupChip:hover {
+  background: var(--chat-surface-hover);
+}
+
+.setupChip:focus-visible {
+  outline: 2px solid var(--chat-focus-ring);
+  outline-offset: 2px;
+}
+
+/* ---------- first-run wizard ---------- */
+
+.wizard {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 20px 16px 48px;
+  background: var(--chat-bg);
+  color: var(--chat-text-primary);
+}
+
+.wizardHeader {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 16px;
+  align-self: stretch;
+}
+
+.wizardWordmark {
+  font-size: 18px;
+  font-weight: 600;
+}
+
+.wizardBack {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 32px;
+  padding: 0 8px 0 4px;
+  border: 0;
+  border-radius: var(--chat-radius-md);
+  background: transparent;
+  color: var(--chat-text-secondary);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.wizardBack:hover {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
+.wizardColumn {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 16px;
+  width: min(480px, 100%);
+  margin-top: 12vh;
+  text-align: center;
+}
+
+.wizardStepCount {
+  color: var(--chat-text-secondary);
+  font-size: 14px;
+}
+
+.wizardTitle {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 36px;
+}
+
+.wizardTitle:focus {
+  outline: none;
+}
+
+.wizardSubtitle {
+  margin: -8px 0 8px;
+  color: var(--chat-text-secondary);
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.wizardCard {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  margin: 0;
+  padding: 20px;
+  border: 1px solid var(--chat-border);
+  border-radius: var(--chat-radius-xl);
+  background: var(--chat-surface-elevated);
+  list-style: none;
+  text-align: left;
+}
+
+.wizardValueRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  font-size: 15px;
+  line-height: 22px;
+}
+
+.wizardValueGlyph {
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  color: var(--chat-text-secondary);
+}
+
+.wizardPrimary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 44px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: var(--corner-pill);
+  background: var(--chat-text-primary);
+  color: var(--chat-bg);
+  font: inherit;
+  font-size: 15px;
+  font-weight: 550;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.wizardPrimary:hover {
+  opacity: 0.9;
+}
+
+.wizardPrimary:focus-visible,
+.wizardTextLink:focus-visible,
+.wizardBack:focus-visible,
+.wizardCopy:focus-visible {
+  outline: 2px solid var(--chat-focus-ring);
+  outline-offset: 2px;
+}
+
+.wizardTextLink {
+  align-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--chat-text-secondary);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.wizardTextLink:hover {
+  color: var(--chat-text-primary);
+}
+
+.wizardTerminal {
+  overflow: hidden;
+  border: 1px solid var(--chat-code-border);
+  border-radius: var(--chat-radius-xl);
+  background: var(--chat-code-bg);
+  text-align: left;
+}
+
+.wizardTerminalBar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 8px 8px 16px;
+  border-bottom: 1px solid var(--chat-code-border);
+  background: var(--chat-code-header-bg);
+  color: var(--chat-code-lang-label);
+  font-size: 14px;
+}
+
+.wizardCopy {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: var(--chat-radius-md);
+  background: transparent;
+  color: var(--chat-code-lang-label);
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.wizardCopy:hover {
+  background: var(--chat-code-copy-hover-bg);
+  color: var(--chat-code-copy-hover-fg);
+}
+
+.wizardTerminalBody {
+  margin: 0;
+  padding: 18px 16px;
+  color: var(--chat-code-text);
+  font-family: var(--chat-font-mono);
+  font-size: 15px;
+  line-height: 22px;
+  white-space: pre-wrap;
+}
+
+.wizardOptionTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.wizardOptionCopy {
+  margin: 0;
+  color: var(--chat-text-secondary);
+  font-size: 14px;
+  line-height: 21px;
+}

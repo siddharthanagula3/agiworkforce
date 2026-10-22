@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useId, useState } from 'react';
+import { useState } from 'react';
 import {
   Archive,
   CalendarClock,
@@ -11,11 +11,11 @@ import {
   Code2,
   LibraryBig,
   MessageSquare,
+  MonitorPlay,
   PanelLeft,
   Plus,
   Settings,
   SlidersHorizontal,
-  type Icon,
 } from '@agiworkforce/icons';
 import {
   DropdownMenu,
@@ -38,18 +38,23 @@ import {
 import {
   CODE_COPY,
   CODE_NETWORK_OPTIONS,
+  CODE_RAIL_ITEM_IDS,
   CODE_ROUTES,
   CODE_SORT_LABELS,
   CODE_SORT_OPTIONS,
   CODE_STATUS_FILTERS,
   DEFAULT_CODE_FILTERS,
+  codeRailItemPinned,
   filtersAreDefault,
+  type CodeRailItemId,
   type CodeSessionFilters,
   type CodeSortOption,
   type CodeStatusFilter,
 } from '../code-surface';
-import { ContinueOnDesktop } from '@/features/desktop-host';
-import { RemoteComputerLink } from '@/features/remote-dispatch';
+import { ContinueOnDesktop, useDesktopHost } from '@/features/desktop-host';
+import { REMOTE_COMPUTER_PATH } from '@/features/remote-dispatch/lib/browser-pairing';
+import { useSettingsStore } from '@shared/stores/web-settings-store';
+import { CodeCustomizeSidebarModal, type CodeRailItem } from './CodeCustomizeSidebarModal';
 import styles from '../CloudCodePage.module.css';
 
 const RAIL_GLYPH_SIZE = 16;
@@ -57,21 +62,74 @@ const SECTION_GLYPH_SIZE = 14;
 const SEGMENT_GLYPH_SIZE = 15;
 const ENVIRONMENT_FILTER_ALL = 'all';
 
-interface RailLink {
-  href: string;
-  label: string;
-  glyph: Icon;
+const RAIL_ITEMS: Readonly<Record<CodeRailItemId, Omit<CodeRailItem, 'id'>>> = {
+  artifacts: { href: CODE_ROUTES.artifacts, label: CODE_COPY.artifacts, glyph: LibraryBig },
+  routines: { href: CODE_ROUTES.routines, label: CODE_COPY.routines, glyph: CalendarClock },
+  computer: { href: REMOTE_COMPUTER_PATH, label: CODE_COPY.yourComputer, glyph: MonitorPlay },
+};
+
+function useRailItems(): CodeRailItem[] {
+  const host = useDesktopHost();
+  return CODE_RAIL_ITEM_IDS.filter((id) => id !== 'computer' || !host).map((id) => ({
+    id,
+    ...RAIL_ITEMS[id],
+  }));
 }
 
-const PRIMARY_LINKS: readonly RailLink[] = [
-  { href: CODE_ROUTES.artifacts, label: CODE_COPY.artifacts, glyph: LibraryBig },
-  { href: CODE_ROUTES.customize, label: CODE_COPY.customize, glyph: Settings },
-];
+function MoreMenu({
+  items,
+  onCustomize,
+}: {
+  items: readonly CodeRailItem[];
+  onCustomize: () => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const Chevron = open ? ChevronDown : ChevronRight;
 
-const MORE_LINKS: readonly RailLink[] = [
-  { href: CODE_ROUTES.routines, label: CODE_COPY.routines, glyph: CalendarClock },
-  { href: CODE_ROUTES.editorExtension, label: CODE_COPY.editorExtension, glyph: Code2 },
-];
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={`${styles['railRow']} ${open ? styles['railRowActive'] : ''}`}
+        >
+          <span className={styles['railRowGlyph']}>
+            <Chevron size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+          </span>
+          <span className={styles['railRowLabel']}>{CODE_COPY.more}</span>
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="right" align="start" className={styles['moreMenu']}>
+        {items.map(({ id, href, label, glyph: Glyph }) => (
+          <DropdownMenuItem key={id} asChild className={styles['moreMenuItem']}>
+            <Link href={href}>
+              <Glyph size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+              <span>{label}</span>
+            </Link>
+          </DropdownMenuItem>
+        ))}
+        <DropdownMenuItem asChild className={styles['moreMenuItem']}>
+          <Link href={CODE_ROUTES.editorExtension}>
+            <Code2 size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+            <span>{CODE_COPY.editorExtension}</span>
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild className={styles['moreMenuItem']}>
+          <ContinueOnDesktop
+            label={CODE_COPY.desktop}
+            fallbackHref={CODE_ROUTES.desktop}
+            glyphSize={RAIL_GLYPH_SIZE}
+          />
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem className={styles['moreMenuItem']} onSelect={onCustomize}>
+          <Settings size={RAIL_GLYPH_SIZE} aria-hidden="true" />
+          <span>{CODE_COPY.customizeSidebar}</span>
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
 
 function FilterMenu({
   filters,
@@ -181,8 +239,11 @@ export function CodeRail({
   onCollapse,
   localSection,
 }: CodeRailProps) {
-  const [moreOpen, setMoreOpen] = useState(false);
-  const moreRegionId = useId();
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const pins = useSettingsStore((state) => state.codeRailPins);
+  const railItems = useRailItems();
+  const pinnedItems = railItems.filter((item) => codeRailItemPinned(item.id, pins));
+  const morePinnable = railItems.filter((item) => !codeRailItemPinned(item.id, pins));
   const filterHidesSessions = filters.status === 'open' && hiddenSessionsExist;
 
   return (
@@ -230,8 +291,8 @@ export function CodeRail({
         <span className={styles['railRowLabel']}>{CODE_COPY.newSession}</span>
       </button>
 
-      {PRIMARY_LINKS.map(({ href, label, glyph: Glyph }) => (
-        <Link key={href} href={href} className={styles['railRow']}>
+      {pinnedItems.map(({ id, href, label, glyph: Glyph }) => (
+        <Link key={id} href={href} className={styles['railRow']}>
           <span className={styles['railRowGlyph']}>
             <Glyph size={RAIL_GLYPH_SIZE} aria-hidden="true" />
           </span>
@@ -239,49 +300,12 @@ export function CodeRail({
         </Link>
       ))}
 
-      <button
-        type="button"
-        className={styles['railRow']}
-        aria-expanded={moreOpen}
-        aria-controls={moreRegionId}
-        onClick={() => setMoreOpen((open) => !open)}
-      >
-        <span className={styles['railRowGlyph']}>
-          {moreOpen ? (
-            <ChevronDown size={RAIL_GLYPH_SIZE} aria-hidden="true" />
-          ) : (
-            <ChevronRight size={RAIL_GLYPH_SIZE} aria-hidden="true" />
-          )}
-        </span>
-        <span className={styles['railRowLabel']}>{CODE_COPY.more}</span>
-      </button>
-
-      {moreOpen && (
-        <div id={moreRegionId}>
-          {MORE_LINKS.map(({ href, label, glyph: Glyph }) => (
-            <Link key={href} href={href} className={`${styles['railRow']} ${styles['railSubRow']}`}>
-              <span className={styles['railRowGlyph']}>
-                <Glyph size={SECTION_GLYPH_SIZE} aria-hidden="true" />
-              </span>
-              <span className={styles['railRowLabel']}>{label}</span>
-            </Link>
-          ))}
-          <ContinueOnDesktop
-            label={CODE_COPY.desktop}
-            fallbackHref={CODE_ROUTES.desktop}
-            glyphSize={SECTION_GLYPH_SIZE}
-            className={`${styles['railRow']} ${styles['railSubRow']}`}
-            glyphClassName={styles['railRowGlyph']}
-            labelClassName={styles['railRowLabel']}
-          />
-          <RemoteComputerLink
-            glyphSize={SECTION_GLYPH_SIZE}
-            className={`${styles['railRow']} ${styles['railSubRow']}`}
-            glyphClassName={styles['railRowGlyph']}
-            labelClassName={styles['railRowLabel']}
-          />
-        </div>
-      )}
+      <MoreMenu items={morePinnable} onCustomize={() => setCustomizeOpen(true)} />
+      <CodeCustomizeSidebarModal
+        open={customizeOpen}
+        onOpenChange={setCustomizeOpen}
+        items={railItems}
+      />
 
       {localSection}
 

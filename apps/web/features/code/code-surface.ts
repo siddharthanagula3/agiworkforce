@@ -21,14 +21,32 @@ export const CODE_ROUTES = {
   root: CLOUD_CODE_PAGE_ROUTE,
   chat: '/chat',
   artifacts: '/chat/library?surface=artifact',
-  customize: settingsSectionPath('capabilities'),
   routines: '/chat/schedules',
   editorExtension: '/vscode-extension',
   desktop: '/download',
   connectors: '/connectors',
   usage: settingsSectionPath('usage'),
   githubInstall: '/api/github/install/start',
+  cli: '/cli',
 } as const;
+
+export const CODE_CLI_SIGN_IN_COMMAND = 'agi login';
+
+export const CODE_RAIL_ITEM_IDS = ['artifacts', 'routines', 'computer'] as const;
+export type CodeRailItemId = (typeof CODE_RAIL_ITEM_IDS)[number];
+
+export const CODE_RAIL_DEFAULT_PINS: Readonly<Record<CodeRailItemId, boolean>> = {
+  artifacts: true,
+  routines: false,
+  computer: false,
+};
+
+export function codeRailItemPinned(
+  id: CodeRailItemId,
+  pins: Readonly<Record<string, boolean>>,
+): boolean {
+  return pins[id] ?? CODE_RAIL_DEFAULT_PINS[id];
+}
 
 export const CODE_MISSING_SESSION_PARAM = 'missing';
 
@@ -72,9 +90,17 @@ export const CODE_COPY = {
   toCode: 'AGI Code',
   newSession: 'New',
   artifacts: 'Artifacts',
-  customize: 'Customize',
   more: 'More',
   routines: 'Routines',
+  yourComputer: 'Your computer',
+  customizeSidebar: 'Customize sidebar',
+  customizeSidebarDescription: 'Choose which items appear in your sidebar.',
+  customizeSidebarDone: 'Done',
+  customizeSidebarClose: 'Close',
+  setupLabel: 'Also code from',
+  setupTerminal: 'Terminal',
+  setupEditor: 'VS Code',
+  setupDesktop: 'Desktop app',
   editorExtension: 'Open in the editor extension',
   desktop: 'Work with local code',
   recents: 'Cloud sessions',
@@ -240,6 +266,28 @@ export const CODE_COPY = {
   firstRunInstallTitle: 'Install the GitHub app',
   firstRunInstallCopy: 'Choose which repositories the environment may clone and push.',
   firstRunAction: 'Connect GitHub',
+  wizardBack: 'Back',
+  wizardIntroTitle: 'Set up AGI Code',
+  wizardIntroSubtitle: 'Hand coding tasks to an agent from any device.',
+  wizardIntroCloud: 'Tasks run in an isolated cloud environment, with no local clone to manage.',
+  wizardIntroNetwork: 'Choose how much network access each environment gets.',
+  wizardIntroDevices:
+    'Continue a session in the terminal, the editor extension or the desktop app.',
+  wizardStart: 'Get started',
+  wizardTerminalTitle: 'Connect your terminal',
+  wizardTerminalSubtitle: 'Sign the AGI CLI in to this account to pick up sessions locally.',
+  wizardTerminalCommandLabel: 'Sign-in command',
+  wizardTerminalInstall: 'Install the CLI first',
+  wizardCopyFailed: 'Could not copy the command',
+  wizardContinue: 'Continue',
+  wizardGithubTitle: 'Connect GitHub',
+  wizardGithubSubtitle: 'Choose the repositories the environment may clone and push.',
+  wizardGithubOption: 'Install the GitHub app',
+  wizardGithubOptionCopy:
+    'Sign in to GitHub and pick repositories. Organization repositories may need an admin to approve.',
+  wizardSkip: 'Skip this step',
+  wizardChecking: 'Checking your setup',
+  wizardStepOf: 'Step {step} of {total}',
 
   runningPlaceholder: CLOUD_CODE_SESSION_COPY.runningPlaceholder,
   initializedSession: 'Initialized session',

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
+  Code2,
   PanelLeft,
   PanelsTopLeft,
   RefreshCw,
@@ -73,7 +74,7 @@ import {
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
 import type { ThreadDeleteResponse } from '@agiworkforce/types/protocol';
-import { deleteDeveloperThread } from '@/features/desktop-host';
+import { ContinueOnDesktop, deleteDeveloperThread, useDesktopHost } from '@/features/desktop-host';
 import {
   LOCAL_CODE_COPY,
   LOCAL_FALLBACK_AGENT_MODE,
@@ -109,6 +110,8 @@ import { CodeSessionMenu } from './components/CodeSessionMenu';
 import { CodeShareDialog } from './components/CodeShareDialog';
 import { CodePageFrame, CodePaneTools, type CodePaneControls } from './components/CodePanes';
 import { useCodePanes } from './hooks/use-code-panes';
+import { useCodeFirstRun } from './hooks/use-code-first-run';
+import { CodeFirstRunWizard } from './components/CodeFirstRunWizard';
 import styles from './CloudCodePage.module.css';
 
 const HEADER_GLYPH_SIZE = 16;
@@ -224,6 +227,8 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     [selectedModelId, planTier],
   );
   const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const desktopHost = useDesktopHost();
+  const firstRun = useCodeFirstRun(!pane && !sessionId && desktopHost === null, api);
 
   const leaveLocalEdits = useCallback(
     (proceed: () => void) => {
@@ -1281,6 +1286,27 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     />
   ) : null;
 
+  if (firstRun.state === 'checking' || firstRun.state === 'show') {
+    return (
+      <CodePageFrame pane={pane} narrowHeaderSlot={null}>
+        {firstRun.state === 'show' ? (
+          <CodeFirstRunWizard onFinish={firstRun.finish} />
+        ) : (
+          <div className={styles['wizard']}>
+            <Spinner size="sm" aria-label={CODE_COPY.wizardChecking} />
+          </div>
+        )}
+      </CodePageFrame>
+    );
+  }
+
+  const showSetupLinks =
+    !selectedSession &&
+    !pageLoading &&
+    sessions.length === 0 &&
+    statusFilter === 'open' &&
+    !hiddenSessionsExist;
+
   return (
     <CodePageFrame pane={pane} narrowHeaderSlot={narrowHeaderSlot}>
       {confirmDialog}
@@ -1515,6 +1541,28 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                               ? CODE_COPY.greeting
                               : null}
                         </h1>
+                        {showSetupLinks && (
+                          <nav className={styles['setupLinks']} aria-label={CODE_COPY.setupLabel}>
+                            <span className={styles['setupLabel']}>{CODE_COPY.setupLabel}</span>
+                            <Link href={CODE_ROUTES.cli} className={styles['setupChip']}>
+                              <TerminalSquare size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+                              {CODE_COPY.setupTerminal}
+                            </Link>
+                            <Link
+                              href={CODE_ROUTES.editorExtension}
+                              className={styles['setupChip']}
+                            >
+                              <Code2 size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+                              {CODE_COPY.setupEditor}
+                            </Link>
+                            <ContinueOnDesktop
+                              label={CODE_COPY.setupDesktop}
+                              fallbackHref={CODE_ROUTES.desktop}
+                              glyphSize={NOTICE_GLYPH_SIZE}
+                              className={styles['setupChip']}
+                            />
+                          </nav>
+                        )}
                       </div>
                     </div>
                   )}
