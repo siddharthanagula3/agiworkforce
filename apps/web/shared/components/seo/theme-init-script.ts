@@ -45,6 +45,9 @@ export const THEME_INIT_SCRIPT = `/* global document, localStorage, window */
   const host = window.agiHost;
   if (host && typeof host.platform === 'string') {
     root.setAttribute('data-desktop-host', host.platform);
+    if (host.platform.includes('darwin') && host.navigation) {
+      root.setAttribute('data-host-navigation', '');
+    }
   }
 })();
 `;
