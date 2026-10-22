@@ -1,16 +1,18 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  SECURITY_SCAN_DECISIONS,
+  SECURITY_SCAN_FINDING_ID_PATTERN,
+  SecurityScanDecisionRequestSchema,
+  type SecurityScanDecisionResponse,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { securityScanRouteContext } from '@/features/security-scan/server/route-access';
 import { rethrowSecurityScanError } from '@/features/security-scan/server/route-errors';
-import {
-  decideSecurityScanFinding,
-  parseSecurityScanDecision,
-  parseSecurityScanIds,
-} from '@/features/security-scan/server/service';
+import { decideSecurityScanFinding } from '@/features/security-scan/server/service';
 
 export const runtime = 'nodejs';
 export const maxDuration = 120;
@@ -31,12 +33,17 @@ async function handleDecision(request: NextRequest, context: RouteContext) {
     if (body === null || typeof body !== 'object' || Array.isArray(body)) {
       throw createError.validation('Request body must be an object');
     }
-    const record = body as Record<string, unknown>;
-    const decision = parseSecurityScanDecision(record['decision']);
-    const ids = parseSecurityScanIds(record['scanId'], findingId);
-    const result = await decideSecurityScanFinding(scan, {
-      scanId: ids.scanId,
-      findingId: ids.id,
+    const parsed = SecurityScanDecisionRequestSchema.safeParse(body);
+    if (!parsed.success) {
+      throw createError.validation(
+        `Give a scanId and a decision of ${SECURITY_SCAN_DECISIONS.join(' or ')}`,
+      );
+    }
+    if (!SECURITY_SCAN_FINDING_ID_PATTERN.test(findingId)) throw createError.notFound();
+    const { scanId, decision } = parsed.data;
+    const result: SecurityScanDecisionResponse = await decideSecurityScanFinding(scan, {
+      scanId,
+      findingId,
       decision,
     });
     await recordAuditEvent({

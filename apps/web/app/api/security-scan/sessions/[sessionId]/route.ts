@@ -1,6 +1,11 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import {
+  SecurityScanRequestSchema,
+  type SecurityScanResponse,
+  type SecurityScanStateResponse,
+} from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
 import { recordAuditEvent } from '@/lib/security-audit';
@@ -32,7 +37,8 @@ async function handleRead(request: NextRequest, context: RouteContext) {
   try {
     const scan = await securityScanRouteContext(request, sessionId, { mutation: false });
     if (scan instanceof Response) return scan;
-    return NextResponse.json(await readSecurityScanState(scan));
+    const state: SecurityScanStateResponse = await readSecurityScanState(scan);
+    return NextResponse.json(state);
   } catch (error) {
     rethrowSecurityScanError(error);
   }
@@ -49,7 +55,9 @@ async function handleScan(request: NextRequest, context: RouteContext) {
         'Confirm that repository files may be sent to the model before scanning',
       );
     }
-    const scope = parseScanScope(body['scope']);
+    const parsed = SecurityScanRequestSchema.safeParse(body);
+    if (!parsed.success) throw createError.validation('scope must be a folder path');
+    const scope = parseScanScope(parsed.data.scope);
     const report = await runSecurityScan(scan, scope);
     await recordAuditEvent({
       userId: scan.owner.userId,
@@ -63,7 +71,8 @@ async function handleScan(request: NextRequest, context: RouteContext) {
         count: report.findings.length,
       },
     });
-    return NextResponse.json({ report });
+    const reply: SecurityScanResponse = { report };
+    return NextResponse.json(reply);
   } catch (error) {
     rethrowSecurityScanError(error);
   }

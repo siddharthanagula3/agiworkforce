@@ -17,7 +17,7 @@ import {
   type CloudCodeOwner,
 } from '@/lib/services/cloud-code-session-service';
 
-import type { SecurityScanReport } from '../contract';
+import type { SecurityScanReport } from '@agiworkforce/cloud-contracts';
 import { openSecurityScanReport, sealSecurityScanReport } from './report-signing';
 
 const SCAN_STATE_DIRECTORY = '.agi-security-scan';

@@ -3,12 +3,7 @@ import 'server-only';
 import { createHmac, hkdfSync, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
-import {
-  SECURITY_SCAN_FINDING_STATES,
-  SECURITY_SCAN_SEVERITIES,
-  SECURITY_SCAN_STATUS,
-  type SecurityScanReport,
-} from '../contract';
+import { SecurityScanReportSchema, type SecurityScanReport } from '@agiworkforce/cloud-contracts';
 
 const SIGNING_SECRET_ENV = 'CSRF_SECRET';
 const MIN_SECRET_BYTES = 32;
@@ -37,76 +32,11 @@ function signatureFor(payload: string): string {
   return createHmac('sha256', signingKey()).update(payload).digest('base64url');
 }
 
-const FindingSchema = z
-  .object({
-    id: z.string().regex(/^[0-9a-f]{16}$/),
-    path: z.string().min(1).max(512),
-    line: z.number().int().positive(),
-    severity: z.enum(SECURITY_SCAN_SEVERITIES),
-    category: z.string().min(1).max(80),
-    title: z.string().min(1).max(160),
-    explanation: z.string().min(1).max(1500),
-    evidence: z.string().min(1).max(1200),
-    verification: z.string().min(1).max(600),
-    patch: z.string().min(1).max(20_000),
-    state: z.enum(SECURITY_SCAN_FINDING_STATES),
-    decidedAt: z.string().nullable(),
-  })
-  .strict();
-
-const CountSchema = z.number().int().nonnegative();
-
-const ReportSchema = z.discriminatedUnion('status', [
-  z
-    .object({
-      status: z.literal(SECURITY_SCAN_STATUS.completed),
-      scanId: z.uuid(),
-      startedAt: z.string(),
-      completedAt: z.string(),
-      commit: z.string().nullable(),
-      model: z.string(),
-      coverage: z
-        .object({
-          scope: z.string().nullable(),
-          candidateFiles: CountSchema,
-          scannedFiles: CountSchema,
-          scannedBytes: CountSchema,
-          skippedFiles: CountSchema,
-        })
-        .strict(),
-      dropped: z
-        .object({
-          unanchored: CountSchema,
-          patchRejected: CountSchema,
-          refuted: CountSchema,
-          unparsable: CountSchema,
-        })
-        .strict(),
-      findings: z.array(FindingSchema),
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal(SECURITY_SCAN_STATUS.running),
-      scanId: z.uuid(),
-      startedAt: z.string(),
-    })
-    .strict(),
-  z
-    .object({
-      status: z.literal(SECURITY_SCAN_STATUS.failed),
-      scanId: z.uuid(),
-      startedAt: z.string(),
-      error: z.string().max(500),
-    })
-    .strict(),
-]);
-
 const PayloadSchema = z
   .object({
     userId: z.string().min(1),
     sessionId: z.string().min(1),
-    report: ReportSchema,
+    report: SecurityScanReportSchema,
   })
   .strict();
 

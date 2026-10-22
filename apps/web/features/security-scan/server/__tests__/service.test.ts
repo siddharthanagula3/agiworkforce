@@ -45,7 +45,10 @@ import {
   CloudCodeConflictError,
   CloudCodeValidationError,
 } from '@/lib/services/cloud-code-session-service';
-import type { SecurityScanCompletedReport, SecurityScanReport } from '../../contract';
+import type {
+  SecurityScanCompletedReport,
+  SecurityScanReport,
+} from '@agiworkforce/cloud-contracts';
 import type { SecurityScanModel, SecurityScanModelCall } from '../model';
 import { decideSecurityScanFinding, runSecurityScan } from '../service';
 

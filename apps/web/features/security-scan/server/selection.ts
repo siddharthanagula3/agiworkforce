@@ -1,4 +1,4 @@
-import { SECURITY_SCAN_SCOPE_MAX_LENGTH } from '../contract';
+import { SECURITY_SCAN_SCOPE_MAX_LENGTH } from '@agiworkforce/cloud-contracts';
 
 const REGULAR_FILE_MODES = new Set(['100644', '100755']);
 

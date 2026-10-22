@@ -6,7 +6,7 @@ import type {
   SecurityScanCompletedReport,
   SecurityScanFinding,
   SecurityScanStateResponse,
-} from '../contract';
+} from '@agiworkforce/cloud-contracts';
 import type { SecurityScanApi } from '../services/security-scan-api';
 import { SecurityScanPage } from './SecurityScanPage';
 

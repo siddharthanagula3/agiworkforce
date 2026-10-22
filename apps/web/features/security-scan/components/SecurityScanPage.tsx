@@ -13,8 +13,11 @@ import type {
   SecurityScanDeliveryResult,
   SecurityScanFinding,
   SecurityScanStateResponse,
-} from '../contract';
-import { SECURITY_SCAN_SCOPE_MAX_LENGTH, SECURITY_SCAN_STATUS } from '../contract';
+} from '@agiworkforce/cloud-contracts';
+import {
+  SECURITY_SCAN_SCOPE_MAX_LENGTH,
+  SECURITY_SCAN_STATUS,
+} from '@agiworkforce/cloud-contracts';
 import {
   SECURITY_SCAN_COPY,
   SEVERITY_LABEL,

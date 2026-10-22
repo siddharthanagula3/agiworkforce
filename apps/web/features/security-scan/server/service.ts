@@ -16,7 +16,6 @@ import {
 } from '@/lib/services/cloud-code-session-service';
 
 import {
-  SECURITY_SCAN_DECISIONS,
   SECURITY_SCAN_STATUS,
   type SecurityScanCompletedReport,
   type SecurityScanDecision,
@@ -26,7 +25,7 @@ import {
   type SecurityScanFinding,
   type SecurityScanReport,
   type SecurityScanStateResponse,
-} from '../contract';
+} from '@agiworkforce/cloud-contracts';
 import {
   anchorCandidate,
   compareSeverity,
@@ -58,8 +57,6 @@ const SCAN_OUTPUT_TOKENS = 4096;
 const VERIFY_OUTPUT_TOKENS = 4096;
 const RUNNING_STALE_MS = 6 * 60 * 1000;
 const COMMIT_SUBJECT_PREFIX = 'fix: ';
-const FINDING_ID_RE = /^[0-9a-f]{16}$/;
-const SCAN_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const GENERIC_SCAN_FAILURE = 'The scan could not finish. Try again.';
 const STALE_SCAN_FAILURE = 'The scan stopped before it finished. Run it again.';
 
@@ -405,23 +402,6 @@ export async function readSecurityScanState(
     (workspace) => workspace.readReport(),
   );
   return { session: summary, report: presentReport(report, Date.now()) };
-}
-
-export function parseSecurityScanDecision(value: unknown): SecurityScanDecision {
-  if (typeof value === 'string' && (SECURITY_SCAN_DECISIONS as readonly string[]).includes(value)) {
-    return value as SecurityScanDecision;
-  }
-  throw new CloudCodeValidationError(
-    `decision must be one of ${SECURITY_SCAN_DECISIONS.join(', ')}`,
-  );
-}
-
-export function parseSecurityScanIds(scanId: unknown, id: unknown): { scanId: string; id: string } {
-  if (typeof scanId !== 'string' || !SCAN_ID_RE.test(scanId)) {
-    throw new CloudCodeValidationError('scanId must name a scan');
-  }
-  if (typeof id !== 'string' || !FINDING_ID_RE.test(id)) throw new CloudCodeNotFoundError();
-  return { scanId, id };
 }
 
 function deliveryError(error: unknown): string {

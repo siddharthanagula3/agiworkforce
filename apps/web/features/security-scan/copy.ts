@@ -1,4 +1,4 @@
-import type { SecurityScanSeverity } from './contract';
+import type { SecurityScanSeverity } from '@agiworkforce/cloud-contracts';
 
 export const SECURITY_SCAN_COPY = {
   title: 'Security scan',

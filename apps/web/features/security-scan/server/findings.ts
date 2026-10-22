@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
-import { SECURITY_SCAN_SEVERITIES, type SecurityScanSeverity } from '../contract';
+import { SECURITY_SCAN_SEVERITIES, type SecurityScanSeverity } from '@agiworkforce/cloud-contracts';
 
 export const MAX_FINDINGS_PER_BATCH = 8;
 const EVIDENCE_LINE_WINDOW = 3;

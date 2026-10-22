@@ -1,6 +1,6 @@
 import { fenceUntrustedContent } from '@agiworkforce/utils/fence';
 
-import { SECURITY_SCAN_SEVERITIES } from '../contract';
+import { SECURITY_SCAN_SEVERITIES } from '@agiworkforce/cloud-contracts';
 import { MAX_FINDINGS_PER_BATCH } from './findings';
 
 const SOURCE_TAG = 'repository_source';

@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-import type { SecurityScanReport } from '../../contract';
+import type { SecurityScanReport } from '@agiworkforce/cloud-contracts';
 import {
   SecurityScanSigningUnavailableError,
   openSecurityScanReport,

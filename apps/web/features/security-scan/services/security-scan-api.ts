@@ -2,14 +2,17 @@
 
 import { getCsrfToken as getBrowserCsrfToken } from '@/lib/client/csrf';
 
-import type {
-  SecurityScanCompletedReport,
-  SecurityScanDecision,
-  SecurityScanDecisionResponse,
-  SecurityScanStateResponse,
-} from '../contract';
-
-const API_ROOT = '/api/security-scan/sessions';
+import {
+  securityScanFindingPath,
+  securityScanSessionPath,
+  type SecurityScanCompletedReport,
+  type SecurityScanDecision,
+  type SecurityScanDecisionRequest,
+  type SecurityScanDecisionResponse,
+  type SecurityScanRequest,
+  type SecurityScanResponse,
+  type SecurityScanStateResponse,
+} from '@agiworkforce/cloud-contracts';
 
 export class SecurityScanApiError extends Error {
   readonly status: number;
@@ -68,22 +71,21 @@ export function createSecurityScanApi(
     });
   }
 
-  const sessionPath = (sessionId: string) => `${API_ROOT}/${encodeURIComponent(sessionId)}`;
-
   return {
-    read: (sessionId) => request<SecurityScanStateResponse>(sessionPath(sessionId)),
+    read: (sessionId) => request<SecurityScanStateResponse>(securityScanSessionPath(sessionId)),
     async scan(sessionId, input) {
-      const result = await post<{ report: SecurityScanCompletedReport }>(sessionPath(sessionId), {
+      const body: SecurityScanRequest = {
         consent: true,
         ...(input.scope ? { scope: input.scope } : {}),
-      });
+      };
+      const result = await post<SecurityScanResponse>(securityScanSessionPath(sessionId), body);
       return result.report;
     },
     decide: (sessionId, input) =>
-      post<SecurityScanDecisionResponse>(
-        `${sessionPath(sessionId)}/findings/${encodeURIComponent(input.findingId)}`,
-        { scanId: input.scanId, decision: input.decision },
-      ),
+      post<SecurityScanDecisionResponse>(securityScanFindingPath(sessionId, input.findingId), {
+        scanId: input.scanId,
+        decision: input.decision,
+      } satisfies SecurityScanDecisionRequest),
   };
 }
 
