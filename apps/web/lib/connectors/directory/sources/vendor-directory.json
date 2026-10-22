@@ -600,6 +600,26 @@
     "source": "vendor-directory"
   },
   {
+    "id": "autodesk-fusion",
+    "externalDirectoryId": null,
+    "name": "Autodesk Fusion",
+    "summary": "Create and modify Fusion 3D designs and assemblies through conversation.",
+    "description": "The Fusion Compute MCP server is hosted by Autodesk and drives Fusion in the cloud, so no local Fusion installation is needed. Ask the assistant to create parts, change dimensions, rearrange components of an assembly such as an exploded view, or work with documents in your Fusion hub. Requires an Autodesk account with a Fusion license and a Fusion Team hub; the server is in public beta.",
+    "mcpUrl": "https://developer.api.autodesk.com/da/v3/mcp/fusion",
+    "transport": "streamable-http",
+    "publisher": {
+      "name": "Autodesk, Inc.",
+      "url": "https://www.autodesk.com/"
+    },
+    "websiteUrl": "https://www.autodesk.com/products/fusion-360/",
+    "documentationUrl": "https://help.autodesk.com/view/ADSKMCP/ENU/",
+    "privacyPolicyUrl": "https://www.autodesk.com/company/legal-notices-trademarks/privacy-statement",
+    "supportUrl": "https://www.autodesk.com/support",
+    "categories": ["Design", "Productivity"],
+    "capabilities": ["read-write"],
+    "source": "vendor-directory"
+  },
+  {
     "id": "autodesk-product-help",
     "externalDirectoryId": "1f5a311c-ea2d-4b9c-b78b-197e8f2974b9",
     "name": "Autodesk Product Help",
@@ -817,6 +837,26 @@
     "supportUrl": "https://www.blackbaud.com/training-support/support/howto",
     "categories": ["Data", "Code", "Productivity"],
     "capabilities": ["read"],
+    "source": "vendor-directory"
+  },
+  {
+    "id": "blender",
+    "externalDirectoryId": null,
+    "name": "Blender",
+    "summary": "Inspect scenes and batch-apply changes in Blender from a desktop MCP client.",
+    "description": "The Blender Lab MCP server pairs a Blender add-on with a local server that an MCP client starts on your computer, giving the assistant access to the Blender Python API, the bundled manual and the open scene. Use it to find heavy or misnamed objects, explain a geometry nodes setup, or rename and edit many objects at once. It requires Blender 5.1 or newer and has no hosted endpoint, so it cannot be connected from the browser. The add-on runs generated code in Blender without safeguards; Blender recommends a machine without sensitive data.",
+    "mcpUrl": null,
+    "transport": null,
+    "publisher": {
+      "name": "Blender Foundation",
+      "url": "https://www.blender.org/"
+    },
+    "websiteUrl": "https://www.blender.org/",
+    "documentationUrl": "https://www.blender.org/lab/mcp-server/",
+    "privacyPolicyUrl": "https://www.blender.org/about/website/privacy-policy/",
+    "supportUrl": "https://projects.blender.org/lab/blender_mcp",
+    "categories": ["Design", "Code"],
+    "capabilities": ["read-write"],
     "source": "vendor-directory"
   },
   {

@@ -180,6 +180,27 @@ describe('vendor-directory.json', () => {
     expect(merged?.remotes.map((remote) => remote.url)).toEqual(['https://mcp.dropbox.com/mcp']);
   });
 
+  it('lists the hosted Fusion server as a CAD connector that edits models', () => {
+    const fusion = entry('autodesk-fusion');
+    expect(fusion.mcpUrl).toBe('https://developer.api.autodesk.com/da/v3/mcp/fusion');
+    expect(fusion.transport).toBe('streamable-http');
+    expect(fusion.capabilities).toContain('read-write');
+    expect(fusion.categories).toContain('Design');
+    expect(buildVendorRecord(fusion).remotes).toEqual([
+      { url: fusion.mcpUrl, transport: 'streamable-http' },
+    ]);
+  });
+
+  it('lists Blender without an endpoint because its server only runs beside the desktop app', () => {
+    const blender = entry('blender');
+    expect(blender.mcpUrl).toBeNull();
+    expect(blender.transport).toBeNull();
+    expect(blender.capabilities).toContain('read-write');
+    const built = buildVendorRecord(blender);
+    expect(built.remotes).toEqual([]);
+    expect(built.listingNote).toBe(listingNoteFor(blender));
+  });
+
   it('maps every category onto the eleven directory categories', () => {
     for (const candidate of VENDOR_DIRECTORY_ENTRIES) {
       expect(candidate.categories.length).toBeGreaterThan(0);
