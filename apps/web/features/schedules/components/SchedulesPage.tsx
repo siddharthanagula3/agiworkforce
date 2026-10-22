@@ -923,7 +923,7 @@ export function SchedulesPage({
           ) : (
             <div className="max-w-3xl space-y-1">
               <h1 className="text-balance font-[var(--chat-font-sans)] text-[28px] font-medium">
-                Schedules
+                Scheduled
               </h1>
               <p className="text-pretty text-sm leading-relaxed text-muted-foreground sm:text-base">
                 Run a task once at a future time or on a recurring schedule.

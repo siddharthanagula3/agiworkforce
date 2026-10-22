@@ -17,7 +17,7 @@ const RETURN: Record<ProductLinkTarget, { href: string; label: string }> = {
   artifact: { href: '/chat/library?surface=artifact', label: 'Open Library' },
   work: { href: '/tasks', label: 'Open Work history' },
   research: { href: '/chat', label: 'Back to chats' },
-  schedule: { href: '/chat/schedules', label: 'Open Schedules' },
+  schedule: { href: '/chat/schedules', label: 'Open Scheduled' },
   'browser-task': { href: '/tasks', label: 'Open Work history' },
 };
 

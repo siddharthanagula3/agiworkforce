@@ -157,7 +157,7 @@ describe('SchedulesPage', () => {
     render(<SchedulesPage api={api} onOpenChat={() => undefined} />);
     await screen.findByText('No schedules yet');
 
-    expect(screen.getByRole('heading', { name: 'Schedules' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Scheduled' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New task' })).toBeInTheDocument();
     expect(screen.queryByText('Managed Cloud')).not.toBeInTheDocument();
     expect(screen.queryByText('Text Output')).not.toBeInTheDocument();

@@ -17,7 +17,7 @@ describe('ProductLinkUnavailable', () => {
     render(<ProductLinkUnavailable target="schedule" state="expired" />);
 
     expect(screen.getByRole('heading', { name: 'This schedule has ended' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Open Schedules' })).toHaveAttribute(
+    expect(screen.getByRole('link', { name: 'Open Scheduled' })).toHaveAttribute(
       'href',
       '/chat/schedules',
     );

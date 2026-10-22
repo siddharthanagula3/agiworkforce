@@ -4,7 +4,7 @@ import { WebAppShell } from '@shared/components/layout/WebAppShell';
 import { SchedulesPageWithProjects } from '@/features/schedules';
 
 export const metadata: Metadata = {
-  title: 'Schedules',
+  title: 'Scheduled',
   description: 'Create and manage recurring Managed Cloud tasks.',
   robots: { index: false, follow: false },
 };

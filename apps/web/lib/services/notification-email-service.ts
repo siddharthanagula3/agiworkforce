@@ -44,7 +44,7 @@ export async function sendScheduleCompletionEmail(
       ? `Scheduled task completed: ${input.taskName}`
       : `Scheduled task ${verb}: ${input.taskName}`;
   const statement = awaitingApproval
-    ? `Your scheduled task “${input.taskName}” is paused until you approve or deny its next step${input.approvalSummary ? `: ${input.approvalSummary}` : ''}. Open Schedules to review it.`
+    ? `Your scheduled task “${input.taskName}” is paused until you approve or deny its next step${input.approvalSummary ? `: ${input.approvalSummary}` : ''}. Open Scheduled to review it.`
     : `Your scheduled task “${input.taskName}” ${verb}.`;
 
   const lines = [
