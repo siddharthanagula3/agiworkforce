@@ -17,8 +17,11 @@ vi.mock('electron', () => ({
   },
 }));
 
+type FsModule = typeof import('node:fs');
+type ChildProcessModule = typeof import('node:child_process');
+
 vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:fs')>();
+  const actual = await importOriginal<FsModule>();
   const helperOnDisk = { existsSync: () => true, statSync: () => ({ mtimeMs: 1 }) };
   return { ...actual, ...helperOnDisk, default: { ...actual, ...helperOnDisk } };
 });
@@ -44,7 +47,7 @@ function spawnHelper() {
 }
 
 vi.mock('node:child_process', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('node:child_process')>();
+  const actual = await importOriginal<ChildProcessModule>();
   return { ...actual, spawn: spawnHelper, default: { ...actual, spawn: spawnHelper } };
 });
 

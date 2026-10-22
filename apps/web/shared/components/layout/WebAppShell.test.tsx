@@ -74,6 +74,7 @@ const providerState = vi.hoisted(() => ({
   } | null,
 }));
 
+type UiModule = typeof import('@agiworkforce/ui');
 type SurfaceStatusModule = typeof import('@/lib/surface-status');
 
 const settingsModalState = vi.hoisted(() => ({ openSettings: vi.fn() }));
@@ -189,7 +190,7 @@ vi.mock('@/features/chat/components/dialogs/GlobalSearchDialog', () => ({
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => {
   const React = await import('react');
-  const actual = await importOriginal<typeof import('@agiworkforce/ui')>();
+  const actual = await importOriginal<UiModule>();
   return {
     ...actual,
     confirmNavigation: (proceed: () => void) => proceed(),
