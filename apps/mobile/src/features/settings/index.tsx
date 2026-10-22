@@ -44,7 +44,7 @@ import {
   type PostAuthDestination,
 } from '@/src/features/auth/services/postAuthIntent';
 import { useTierStore } from '@/src/features/billing/store';
-import { getBillingPlanPricing, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import { getBillingPlanPricing } from '@agiworkforce/types';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
@@ -376,6 +376,7 @@ export default function SettingsTabScreen() {
   const accentColor = isCloud ? cloudAccentColor : localAccentColor;
   const billingTier = useTierStore((s) => s.billingTier);
   const remoteStatus = useConnectionStore((s) => s.status);
+  const remoteDesktopName = useConnectionStore((s) => s.desktopName);
   const { user: clerkUser } = useUser();
   const signOut = useAuthStore((s) => s.signOut);
   const isClerkLoaded = useAuthStore((s) => s.isClerkLoaded);
@@ -500,17 +501,6 @@ export default function SettingsTabScreen() {
             icon: SlidersHorizontal,
             onPress: push('/(app)/settings/general'),
           },
-          ...(FEATURES.companion
-            ? [
-                {
-                  key: 'remote',
-                  label: MOBILE_REMOTE_SCREEN_LABEL,
-                  icon: MonitorSmartphone,
-                  value: remoteConnectionLabel(remoteStatus),
-                  onPress: push('/(app)/companion'),
-                },
-              ]
-            : []),
           {
             key: 'notifications',
             label: 'Notifications',
@@ -563,6 +553,25 @@ export default function SettingsTabScreen() {
           },
         ],
       },
+      ...(FEATURES.companion
+        ? [
+            {
+              title: 'Remote control',
+              rows: [
+                {
+                  key: 'remote',
+                  label: 'Connections',
+                  icon: MonitorSmartphone,
+                  value:
+                    remoteStatus === 'connected' && remoteDesktopName
+                      ? remoteDesktopName
+                      : remoteConnectionLabel(remoteStatus),
+                  onPress: push('/(app)/companion'),
+                },
+              ],
+            },
+          ]
+        : []),
       {
         title: 'Assistant',
         rows: [
@@ -704,6 +713,7 @@ export default function SettingsTabScreen() {
       push,
       router,
       remoteStatus,
+      remoteDesktopName,
       themeMode,
       billingTier,
       clerkUser,

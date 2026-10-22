@@ -15,7 +15,7 @@ function codeSessionHref(rootId: string, threadId: string) {
   return `/(app)/companion/code/${encodeURIComponent(threadId)}?rootId=${encodeURIComponent(rootId)}`;
 }
 
-function NewCodeSession() {
+export function NewCodeSession({ onStarted }: { onStarted?: () => void }) {
   const colors = useThemeColors();
   const router = useRouter();
   const roots = useRemoteCodeStore((state) => state.roots);
@@ -40,6 +40,7 @@ function NewCodeSession() {
       forgetCodeSessionStart(pending);
       setPending(null);
       setTask('');
+      onStarted?.();
       router.push(
         codeSessionHref(start.rootId, start.threadId) as Parameters<typeof router.push>[0],
       );
@@ -48,7 +49,7 @@ function NewCodeSession() {
       setPending(null);
       setError(start.error);
     }
-  }, [pending, router, start]);
+  }, [onStarted, pending, router, start]);
 
   if (roots.length === 0) return null;
 

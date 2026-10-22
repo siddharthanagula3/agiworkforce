@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
-import { Monitor, RefreshCw } from 'lucide-react-native';
+import { ActivityIndicator, Modal, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Monitor, RefreshCw, X } from 'lucide-react-native';
 import type { DevicePresence } from '@agiworkforce/cloud-contracts';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -10,6 +11,10 @@ import { listAccountComputers, type AccountComputer } from '@/src/features/devic
 import { useAuthStore } from '@/src/features/auth/store';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useThemeColors } from '@/src/ui/theme';
+import { useConnectionStore } from '@/stores/connectionStore';
+import { QRScanner } from './QRScanner';
+import { NewCodeSession } from './CodeSessionsCard';
+import { listCodeSessions } from '../remote-code/service';
 
 const PRESENCE_LABELS: Record<DevicePresence, string> = {
   online: 'Online',
@@ -50,6 +55,34 @@ function capabilityLine(computer: AccountComputer): string | null {
   return offered.length > 0 ? offered.join(' · ') : 'Remote control off';
 }
 
+type ComputerAction = 'start' | 'pair';
+
+function SessionSheet({ name, onClose }: { name: string; onClose: () => void }) {
+  const colors = useThemeColors();
+  return (
+    <Modal visible animationType="slide" onRequestClose={onClose}>
+      <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
+        <View className="flex-row items-center gap-2 px-4" style={{ minHeight: 48 }}>
+          <Text className="flex-1 text-sm font-medium text-white" accessibilityRole="header">
+            {`New session on ${name}`}
+          </Text>
+          <Pressable
+            onPress={onClose}
+            accessibilityRole="button"
+            accessibilityLabel="Close"
+            style={{ width: 44, height: 44, alignItems: 'center', justifyContent: 'center' }}
+          >
+            <X size={18} color={colors.textSecondary} />
+          </Pressable>
+        </View>
+        <View className="px-4">
+          <NewCodeSession onStarted={onClose} />
+        </View>
+      </SafeAreaView>
+    </Modal>
+  );
+}
+
 export function AccountComputersCard({ connectedName }: { connectedName: string | null }) {
   const colors = useThemeColors();
   const cloudUnlocked = useWaitlistStore((state) => state.cloudUnlocked);
@@ -57,6 +90,11 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
   const [computers, setComputers] = useState<AccountComputer[] | null>(null);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [sheet, setSheet] = useState<{ action: ComputerAction; name: string } | null>(null);
+  const capabilities = useConnectionStore((state) => state.desktopMetadata?.capabilities);
+  const connect = useConnectionStore((state) => state.connect);
+  const canStartSession =
+    Array.isArray(capabilities) && capabilities.includes('code-session-start');
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -73,6 +111,11 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
   useEffect(() => {
     if (cloudUnlocked) void load();
   }, [cloudUnlocked, clerkUserId, load]);
+
+  const openSheet = (action: ComputerAction, name: string) => {
+    if (action === 'start') void listCodeSessions();
+    setSheet({ action, name });
+  };
 
   if (!cloudUnlocked) return null;
 
@@ -112,14 +155,31 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
           <View className="gap-1">
             {computers.map((computer) => {
               const connected = connectedName !== null && computer.name === connectedName;
+              const displayName = computer.name ?? 'Computer';
+              const action: ComputerAction | null = connected
+                ? canStartSession
+                  ? 'start'
+                  : null
+                : connectedName === null && computer.presence === 'online'
+                  ? 'pair'
+                  : null;
+              const status = connected ? 'connected' : PRESENCE_LABELS[computer.presence];
+              const hint =
+                action === 'start'
+                  ? 'Starts a new session'
+                  : action === 'pair'
+                    ? 'Scan the code shown on this computer to pair'
+                    : undefined;
               return (
-                <View
+                <Pressable
                   key={computer.id}
+                  disabled={action === null}
+                  onPress={action ? () => openSheet(action, displayName) : undefined}
+                  accessibilityRole={action ? 'button' : undefined}
+                  accessibilityHint={hint}
                   className="flex-row items-center gap-2"
                   style={{ minHeight: 44 }}
-                  accessibilityLabel={`${computer.name ?? 'Computer'}, ${
-                    connected ? 'connected' : PRESENCE_LABELS[computer.presence]
-                  }`}
+                  accessibilityLabel={`${displayName}, ${status}`}
                 >
                   <View className="flex-1">
                     <Text className="text-xs font-medium text-white" numberOfLines={1}>
@@ -138,7 +198,7 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
                     label={connected ? 'Connected' : PRESENCE_LABELS[computer.presence]}
                     color={connected ? 'blue' : PRESENCE_COLORS[computer.presence]}
                   />
-                </View>
+                </Pressable>
               );
             })}
           </View>
@@ -149,6 +209,20 @@ export function AccountComputersCard({ connectedName }: { connectedName: string 
           </Text>
         ) : null}
       </Card>
+      {sheet?.action === 'start' ? (
+        <SessionSheet name={sheet.name} onClose={() => setSheet(null)} />
+      ) : null}
+      {sheet?.action === 'pair' ? (
+        <Modal visible animationType="slide" onRequestClose={() => setSheet(null)}>
+          <QRScanner
+            onScan={(code) => {
+              setSheet(null);
+              connect(code);
+            }}
+            onClose={() => setSheet(null)}
+          />
+        </Modal>
+      ) : null}
     </View>
   );
 }

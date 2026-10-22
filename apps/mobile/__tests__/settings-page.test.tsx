@@ -8,6 +8,7 @@ const mockNavigate = jest.fn();
 const mockBack = jest.fn();
 const mockCanGoBack = jest.fn<boolean, []>();
 let mockRemoteStatus = 'disconnected';
+let mockRemoteDesktopName: string | null = null;
 const mockClerkState: {
   user: null | {
     fullName?: string | null;
@@ -22,8 +23,9 @@ jest.mock('@clerk/expo', () => ({
 }));
 
 jest.mock('@/stores/connectionStore', () => ({
-  useConnectionStore: (selector: (state: { status: string }) => unknown) =>
-    selector({ status: mockRemoteStatus }),
+  useConnectionStore: (
+    selector: (state: { status: string; desktopName: string | null }) => unknown,
+  ) => selector({ status: mockRemoteStatus, desktopName: mockRemoteDesktopName }),
 }));
 
 jest.mock('expo-router', () => ({
@@ -101,6 +103,7 @@ describe('Settings page', () => {
     useChatAppModeStore.setState({ appMode: 'local' });
     useAuthStore.setState({ isClerkLoaded: true, isClerkSignedIn: false });
     mockRemoteStatus = 'disconnected';
+    mockRemoteDesktopName = null;
     useTierStore.setState({
       tier: 'free',
       billingTier: 'free',
@@ -139,19 +142,21 @@ describe('Settings page', () => {
     expect(getByText('Shared Links')).toBeTruthy();
     expect(getByText('Account Security')).toBeTruthy();
     expect(getByText('Device Integrations')).toBeTruthy();
-    expect(getByText('Remote')).toBeTruthy();
+    expect(getByText('Remote control')).toBeTruthy();
+    expect(getByText('Connections')).toBeTruthy();
     expect(getByText('Storage')).toBeTruthy();
     expect(queryByText(/byok/i)).toBeNull();
   });
 
-  it('opens Remote from Settings and reflects the paired Desktop state', () => {
+  it('opens Remote control from Settings and names the paired computer', () => {
     const screen = render(<SettingsTabScreen />);
 
-    expect(screen.getByLabelText('Remote. Not paired')).toBeTruthy();
+    expect(screen.getByLabelText('Connections. Not paired')).toBeTruthy();
     mockRemoteStatus = 'connected';
+    mockRemoteDesktopName = 'Studio Mac';
     screen.rerender(<SettingsTabScreen />);
-    expect(screen.getByLabelText('Remote. Connected')).toBeTruthy();
-    fireEvent.press(screen.getByLabelText('Remote. Connected'));
+    expect(screen.getByLabelText('Connections. Studio Mac')).toBeTruthy();
+    fireEvent.press(screen.getByLabelText('Connections. Studio Mac'));
 
     expect(mockPush).toHaveBeenCalledWith('/(app)/companion');
   });
