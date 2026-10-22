@@ -25,6 +25,8 @@ import { ensureCloudSendConsent, ensureLlmGateOpen } from './llmGate';
 import { surfaceTermsNotice } from './termsNotice';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useModelStore } from '@/src/features/model-picker/store';
+import { fastSpeedForModel } from '@/src/features/model-picker/fastMode';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
 import { createChatStreamDedupe } from '@/src/lib/chat-stream-dedupe';
 import type { ManagedMemoryCitations, ResearchDeliverableSpec } from '@agiworkforce/types';
@@ -300,6 +302,7 @@ interface InitialStreamRequest {
   skill_name?: string;
   personalization?: false;
   routing_profile?: RoutingProfileChoice;
+  speed?: 'fast';
   tool_choice?: 'auto' | 'none' | 'required';
   memory_enabled?: boolean;
   connector_tools_enabled?: boolean;
@@ -554,6 +557,12 @@ function isNetworkError(err: unknown): boolean {
   return false;
 }
 
+function withPickerSpeed(body: InitialStreamRequest): InitialStreamRequest {
+  if (body.speed || body.model !== useModelStore.getState().selectedModel) return body;
+  const speed = fastSpeedForModel(body.model);
+  return speed ? { ...body, speed } : body;
+}
+
 export async function streamChat(
   body: InitialStreamRequest | FreeQuotaStreamRequest,
   callbacks: StreamCallbacks,
@@ -575,6 +584,7 @@ export async function streamChat(
     return;
   }
 
+  const request = withPickerSpeed(body);
   let timeoutController = new AbortController();
   let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
   let combinedSignal = signal
@@ -745,7 +755,7 @@ export async function streamChat(
     }
 
     try {
-      const completed = await attemptStream(body, timedCallbacks, combinedSignal);
+      const completed = await attemptStream(request, timedCallbacks, combinedSignal);
       if (completed) {
         clearTimeout(timeoutId);
         return;

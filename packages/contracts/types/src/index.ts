@@ -43,6 +43,7 @@ export * from './time-focus';
 export * from './model-favourites';
 export * from './tool-approval-policy';
 export * from './routing-profile-choice';
+export * from './fast-mode';
 export * from './auto-route-explanation';
 export * from './tool-request-diff';
 export * from './tool-approval-stakes';

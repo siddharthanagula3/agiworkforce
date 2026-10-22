@@ -11,6 +11,7 @@ import { Check, Cpu, Search, X as XIcon } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { Text } from '@/components/ui/text';
 import { ModelRow } from './ModelRow';
+import { SpeedControl } from './SpeedControl';
 import {
   DEFAULT_EFFORT_SCOPE,
   EffortSlider,
@@ -765,6 +766,8 @@ export function ModelPickerSheet({
             />
           </View>
         ) : null}
+
+        {modelScope === 'cloud' ? <SpeedControl modelId={selectedModel} /> : null}
 
         {readingInstalled ? (
           <View
