@@ -643,10 +643,13 @@ impl AgentSession {
                         && !crate::cloud::account_memory_off(&home)
                 })
                 .unwrap_or(true);
+        let privacy_mode = provider_privacy_mode(&provider);
         let persistent_memory = crate::config::CliConfig::config_dir()
             .ok()
             .filter(|_| memory_enabled)
-            .map(|home| crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home))
+            .map(|home| {
+                crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home, privacy_mode)
+            })
             .unwrap_or_default();
 
         let discovered = skills::discover_skills();
@@ -662,8 +665,6 @@ impl AgentSession {
             .filter(|rule| rule.globs.is_empty())
             .map(|rule| rule.source.clone())
             .collect();
-
-        let privacy_mode = provider_privacy_mode(&provider);
 
         let account_memory = crate::config::CliConfig::config_dir()
             .ok()
@@ -1093,6 +1094,11 @@ impl AgentSession {
             anyhow::bail!(
                 "Cannot carry an established {} transcript into Managed Cloud; start a fresh Managed session or use a reviewed continuation",
                 self.privacy_mode.label()
+            );
+        }
+        if self.carries_local_origin_memory() {
+            anyhow::bail!(
+                "This session's instructions include memory from Local sessions, which never leaves this device; start a new Managed session instead"
             );
         }
         if !crate::models::gateway_models::cached_model_is_available(model) {
@@ -1564,6 +1570,19 @@ impl AgentSession {
         }))
     }
 
+    /// Whether a system message carries memory from Local sessions, which
+    /// only a Local session may send.
+    pub(crate) fn carries_local_origin_memory(&self) -> bool {
+        let tag = crate::memory_pipeline::LOCAL_ORIGIN_MEMORY_TAG;
+        let plain = format!("<{tag}>");
+        let encoded = format!("\\u003c{tag}\\u003e");
+        self.messages
+            .iter()
+            .filter(|message| message.role == "system")
+            .map(Message::text_content)
+            .any(|text| text.contains(&plain) || text.contains(&encoded))
+    }
+
     pub fn validate_privacy_boundary(&self) -> Result<()> {
         let provider_mode = self.provider_privacy_mode();
         if self.privacy_mode == PrivacyMode::Local && provider_mode != PrivacyMode::Local {
@@ -1587,6 +1606,12 @@ impl AgentSession {
                 self.privacy_mode.label(),
                 self.model,
                 provider_mode.label()
+            );
+        }
+        if self.privacy_mode != PrivacyMode::Local && self.carries_local_origin_memory() {
+            anyhow::bail!(
+                "Privacy boundary blocked: this {} session's instructions include memory from Local sessions, which never leaves this device. Start a new session.",
+                self.privacy_mode.trust_word()
             );
         }
         Ok(())
@@ -2407,7 +2432,7 @@ impl AgentSession {
             config,
             &self.provider,
             &self.model,
-            self.privacy_mode == PrivacyMode::Local,
+            self.privacy_mode,
         )
         .await
     }
@@ -3591,6 +3616,76 @@ mod tests {
             serde_json::to_value(&session.messages).expect("serialize messages"),
             messages_before
         );
+    }
+
+    fn system_prompt_with_memory_for(privacy: PrivacyMode) -> Message {
+        let home = tempfile::tempdir().expect("memory home");
+        let memories = home.path().join("memories");
+        std::fs::create_dir_all(&memories).expect("memories dir");
+        std::fs::write(memories.join("raw_memories.md"), "- local secret plan").expect("local");
+        std::fs::write(memories.join("cloud_memories.md"), "- byok fact").expect("cloud");
+        let memory =
+            crate::memory_pipeline::MemoryPipeline::load_persistent_memory(home.path(), privacy);
+        Message::text(
+            "system",
+            prompt::build_system_prompt(&test_context(), None, None, "", &memory, ""),
+        )
+    }
+
+    #[test]
+    fn a_cloud_session_never_sends_instructions_that_carry_local_origin_memory() {
+        let mut session = AgentSession::new_with_provider(
+            "fixture-hosted-model:tag",
+            &test_context(),
+            None,
+            Provider::Ollama(models::OllamaMode::Cloud),
+        );
+        assert_eq!(session.privacy_mode, PrivacyMode::Byok);
+
+        session.messages[0] = system_prompt_with_memory_for(PrivacyMode::Byok);
+        let scoped = session.messages[0].text_content();
+        assert!(scoped.contains("byok fact"), "{scoped}");
+        assert!(!scoped.contains("local secret plan"), "{scoped}");
+        assert!(session.validate_privacy_boundary().is_ok());
+
+        session.messages[0] = system_prompt_with_memory_for(PrivacyMode::Local);
+        let error = session
+            .validate_privacy_boundary()
+            .expect_err("Local-origin memory must not leave the device");
+        assert!(
+            error.to_string().contains("memory from Local sessions"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    fn a_local_session_carries_and_sends_all_memory() {
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+
+        session.messages[0] = system_prompt_with_memory_for(PrivacyMode::Local);
+        let prompt = session.messages[0].text_content();
+
+        assert!(prompt.contains("local secret plan"), "{prompt}");
+        assert!(prompt.contains("byok fact"), "{prompt}");
+        assert!(session.carries_local_origin_memory());
+        assert!(session.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn a_fresh_local_session_carrying_local_memory_cannot_move_to_managed_cloud() {
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.messages[0] = system_prompt_with_memory_for(PrivacyMode::Local);
+
+        let error = session
+            .switch_managed_model("not-even-consulted")
+            .expect_err("Local-origin memory must not enter Managed Cloud");
+
+        assert!(
+            error.to_string().contains("memory from Local sessions"),
+            "{error}"
+        );
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
     }
 
     #[test]

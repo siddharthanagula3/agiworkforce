@@ -403,9 +403,12 @@ pub fn assemble_system_prompt(
         })
         .unwrap_or_default();
 
+    let privacy = crate::config::CliConfig::load()
+        .unwrap_or_default()
+        .account_privacy_mode();
     let persistent_memory = crate::config::CliConfig::config_dir()
         .ok()
-        .map(|home| crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home))
+        .map(|home| crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home, privacy))
         .unwrap_or_default();
 
     let discovered = skills::discover_skills();

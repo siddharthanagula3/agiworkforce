@@ -5,8 +5,12 @@
 //!   learnings, and save them to `~/.agiworkforce/memories/session_summaries/{session_id}.md`.
 //!
 //! Phase 2, Consolidation (on startup, max once per hour):
-//!   Read all session summaries, merge/deduplicate into `~/.agiworkforce/memories/raw_memories.md`,
-//!   and prune summaries older than 30 days.
+//!   Read all session summaries, merge/deduplicate them by origin, and prune
+//!   summaries older than 30 days. Summaries from Local sessions (and any
+//!   without an origin label) merge on the device into
+//!   `~/.agiworkforce/memories/raw_memories.md`; summaries from BYOK and Managed
+//!   sessions merge into `~/.agiworkforce/memories/cloud_memories.md`. Only a
+//!   Local session's prompt carries the first.
 //!
 //! All operations are best-effort: errors are logged to stderr and never
 //! block the main agent loop.
@@ -16,8 +20,19 @@ use anyhow::Result;
 use std::fs;
 use std::path::Path;
 
+use crate::agent::PrivacyMode;
 use crate::config::CliConfig;
 use crate::models::{self, ContentBlock, Message, MessageContent, Provider};
+
+/// Merged memory from Local sessions, and from files written before summaries
+/// carried an origin.
+const LOCAL_MEMORY_FILE: &str = "raw_memories.md";
+/// Merged memory from BYOK and Managed sessions.
+const CLOUD_MEMORY_FILE: &str = "cloud_memories.md";
+
+/// Wraps Local-origin memory inside a Local session's prompt. A session whose
+/// system prompt carries it must not send that prompt off the device.
+pub(crate) const LOCAL_ORIGIN_MEMORY_TAG: &str = "local_origin_memory";
 
 /// Maximum number of message characters to include in the extraction prompt.
 const MAX_MESSAGE_CHARS: usize = 20_000; // ~5000 tokens at 4 chars/token
@@ -113,7 +128,9 @@ fn cap_consolidated_facts(consolidated: &str, max_facts: usize) -> String {
 }
 
 pub fn stored_fact_count(home: &Path) -> usize {
-    fs::read_to_string(home.join("memories").join("raw_memories.md"))
+    [LOCAL_MEMORY_FILE, CLOUD_MEMORY_FILE]
+        .into_iter()
+        .filter_map(|file| fs::read_to_string(memory_file(home, file)).ok())
         .map(|content| {
             content
                 .lines()
@@ -125,7 +142,104 @@ pub fn stored_fact_count(home: &Path) -> usize {
                 })
                 .count()
         })
-        .unwrap_or(0)
+        .sum()
+}
+
+fn memory_file(home: &Path, file: &str) -> std::path::PathBuf {
+    home.join("memories").join(file)
+}
+
+/// The trust boundary a stored summary came from. A summary without a label
+/// predates labelling and counts as Local, so it never leaves the device.
+fn summary_origin(content: &str) -> PrivacyMode {
+    let trimmed = content.trim_start();
+    let Some(after_open) = trimmed.strip_prefix("---") else {
+        return PrivacyMode::Local;
+    };
+    let Some(end) = after_open.find("\n---") else {
+        return PrivacyMode::Local;
+    };
+    after_open[..end]
+        .lines()
+        .find_map(|line| line.trim().strip_prefix("origin:"))
+        .and_then(PrivacyMode::from_arg)
+        .unwrap_or(PrivacyMode::Local)
+}
+
+#[derive(Default)]
+struct SummariesByOrigin {
+    local: String,
+    local_count: u32,
+    off_device: String,
+    off_device_count: u32,
+}
+
+impl SummariesByOrigin {
+    fn push(&mut self, origin: PrivacyMode, body: &str) {
+        let (text, count) = if origin == PrivacyMode::Local {
+            (&mut self.local, &mut self.local_count)
+        } else {
+            (&mut self.off_device, &mut self.off_device_count)
+        };
+        text.push_str("---\n");
+        text.push_str(body.trim());
+        text.push_str("\n\n");
+        *count += 1;
+    }
+}
+
+fn collect_summaries(summaries_dir: &Path) -> Result<SummariesByOrigin> {
+    let mut entries: Vec<_> = fs::read_dir(summaries_dir)?
+        .filter_map(|e| e.ok())
+        .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("md"))
+        .collect();
+
+    entries.sort_by_key(|e| {
+        e.metadata()
+            .ok()
+            .and_then(|m| m.modified().ok())
+            .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
+    });
+
+    let mut summaries = SummariesByOrigin::default();
+    for entry in &entries {
+        if let Ok(content) = fs::read_to_string(entry.path()) {
+            let body = strip_frontmatter(&content);
+            if !body.trim().is_empty() {
+                summaries.push(summary_origin(&content), body);
+            }
+        }
+    }
+    Ok(summaries)
+}
+
+fn write_consolidated(
+    home: &Path,
+    file: &str,
+    body: &str,
+    count: u32,
+    max_facts: u32,
+) -> Result<()> {
+    let header = format!(
+        "# Persistent Memory\n\n\
+         _Last consolidated: {} | {} session summaries merged_\n\n",
+        chrono::Utc::now().to_rfc3339(),
+        count,
+    );
+    let body = cap_consolidated_facts(body, max_facts as usize);
+    fs::write(memory_file(home, file), format!("{}{}\n", header, body))?;
+    Ok(())
+}
+
+/// Memory text safe to place inside a prompt block: our own block tags in a
+/// stored fact cannot end the block early.
+fn neutralize_memory_tags(content: &str) -> String {
+    ["persistent_memory", LOCAL_ORIGIN_MEMORY_TAG]
+        .into_iter()
+        .fold(content.to_string(), |text, tag| {
+            text.replace(&format!("<{tag}>"), &format!("[{tag}]"))
+                .replace(&format!("</{tag}>"), &format!("[/{tag}]"))
+        })
 }
 
 pub struct MemoryPipeline;
@@ -143,10 +257,10 @@ impl MemoryPipeline {
     ///
     /// If the LLM call fails or times out, falls back to saving raw message
     /// content as the summary.
-    /// `local_only` MUST be true whenever the source session is in Local privacy
-    /// mode. When true, summarization runs entirely on-device (deterministic
-    /// fallback, no network), Local-session content must never reach a cloud
-    /// summarizer (locked never-silent-egress invariant).
+    /// `origin` is the source session's privacy mode and is recorded on the
+    /// summary. A Local origin summarizes on the device (deterministic
+    /// fallback, no network): Local-session content never reaches a cloud
+    /// summarizer.
     pub async fn extract_session_summary(
         home: &Path,
         session_id: &str,
@@ -154,7 +268,7 @@ impl MemoryPipeline {
         config: &CliConfig,
         provider: &Provider,
         model: &str,
-        local_only: bool,
+        origin: PrivacyMode,
     ) -> Result<()> {
         let summaries_dir = home.join("memories").join("session_summaries");
         fs::create_dir_all(&summaries_dir)?;
@@ -177,7 +291,7 @@ impl MemoryPipeline {
         // Privacy boundary (locked invariant): a Local session's content must never
         // be sent off-device. Summarize on-device with the deterministic fallback
         // instead of routing recent_text to the (possibly cloud) fast model.
-        let (summary_body, model_label) = if local_only {
+        let (summary_body, model_label) = if origin == PrivacyMode::Local {
             (
                 build_raw_summary(&recent_text),
                 "on-device fallback (local privacy: no network)".to_string(),
@@ -201,8 +315,12 @@ impl MemoryPipeline {
 
         // Write with metadata header
         let content = format!(
-            "---\nsession_id: {}\ntimestamp: {}\nmodel: {}\n---\n\n{}\n",
-            session_id, timestamp, model_label, summary_body
+            "---\nsession_id: {}\ntimestamp: {}\nmodel: {}\norigin: {}\n---\n\n{}\n",
+            session_id,
+            timestamp,
+            model_label,
+            origin.label(),
+            summary_body
         );
 
         fs::write(&output_path, content)?;
@@ -261,93 +379,71 @@ impl MemoryPipeline {
     // Phase 2, Consolidation
     // -----------------------------------------------------------------
 
-    /// Consolidate all session summaries into `raw_memories.md`.
+    /// Consolidate session summaries into the merged memory files.
     ///
-    /// Reads all files in `session_summaries/`, concatenates them, and either
-    /// calls the LLM to merge/deduplicate or (if the LLM call fails) writes
-    /// the concatenation directly.
-    /// `route` is the active session's own off-device route
-    /// ([`crate::subagent::InheritedRoute::off_device`]). Without one, summaries
-    /// merge on the device and nothing leaves it.
+    /// Local-origin summaries (unlabelled ones included) always merge on the
+    /// device into `raw_memories.md`. BYOK and Managed summaries merge into
+    /// `cloud_memories.md`, through `route`, the active session's own
+    /// off-device route ([`crate::subagent::InheritedRoute::off_device`]), when
+    /// it has one, and on the device otherwise.
     pub async fn consolidate(
         home: &Path,
         config: &CliConfig,
         route: Option<&crate::subagent::InheritedRoute>,
     ) -> Result<()> {
         let summaries_dir = home.join("memories").join("session_summaries");
-        let raw_path = home.join("memories").join("raw_memories.md");
-
         if !summaries_dir.exists() {
             return Ok(());
         }
 
-        // Read all summary files
-        let mut all_summaries = String::new();
-        let mut count = 0u32;
-
-        let mut entries: Vec<_> = fs::read_dir(&summaries_dir)?
-            .filter_map(|e| e.ok())
-            .filter(|e| e.path().extension().and_then(|ext| ext.to_str()) == Some("md"))
-            .collect();
-
-        // Sort by modification time (newest last)
-        entries.sort_by_key(|e| {
-            e.metadata()
-                .ok()
-                .and_then(|m| m.modified().ok())
-                .unwrap_or(std::time::SystemTime::UNIX_EPOCH)
-        });
-
-        for entry in &entries {
-            if let Ok(content) = fs::read_to_string(entry.path()) {
-                // Strip frontmatter for consolidation input
-                let body = strip_frontmatter(&content);
-                if !body.trim().is_empty() {
-                    all_summaries.push_str("---\n");
-                    all_summaries.push_str(body.trim());
-                    all_summaries.push_str("\n\n");
-                    count += 1;
-                }
-            }
-        }
-
-        if count == 0 {
+        let summaries = collect_summaries(&summaries_dir)?;
+        if summaries.local_count == 0 && summaries.off_device_count == 0 {
             return Ok(());
         }
 
-        let consolidated = if let Some(route) = route {
-            let model = consolidation_model(config, route);
-            let consolidation = tokio::time::timeout(
-                std::time::Duration::from_secs(LLM_TIMEOUT_SECS * 2), // Allow more time
-                Self::call_consolidation_llm(&all_summaries, &route.provider, &model, config),
-            )
-            .await;
-
-            match consolidation {
-                Ok(Ok(text)) if !text.trim().is_empty() => text,
-                _ => {
-                    // Fallback: deduplicate lines manually
-                    deduplicate_lines(&all_summaries)
-                }
-            }
-        } else {
-            deduplicate_lines(&all_summaries)
-        };
-
-        let header = format!(
-            "# Persistent Memory\n\n\
-             _Last consolidated: {} | {} session summaries merged_\n\n",
-            chrono::Utc::now().to_rfc3339(),
-            count,
-        );
-
         // Honor the user's /memories max_facts cap (default 500 = no-op in practice).
         let (_, _, max_facts) = load_memory_settings(home);
-        let consolidated = cap_consolidated_facts(&consolidated, max_facts as usize);
 
-        fs::write(&raw_path, format!("{}{}\n", header, consolidated))?;
+        if summaries.local_count > 0 {
+            write_consolidated(
+                home,
+                LOCAL_MEMORY_FILE,
+                &deduplicate_lines(&summaries.local),
+                summaries.local_count,
+                max_facts,
+            )?;
+        }
 
-        // Prune old summaries
+        if summaries.off_device_count > 0 {
+            let merged = match route {
+                Some(route) => {
+                    let model = consolidation_model(config, route);
+                    let consolidation = tokio::time::timeout(
+                        std::time::Duration::from_secs(LLM_TIMEOUT_SECS * 2),
+                        Self::call_consolidation_llm(
+                            &summaries.off_device,
+                            &route.provider,
+                            &model,
+                            config,
+                        ),
+                    )
+                    .await;
+                    match consolidation {
+                        Ok(Ok(text)) if !text.trim().is_empty() => text,
+                        _ => deduplicate_lines(&summaries.off_device),
+                    }
+                }
+                None => deduplicate_lines(&summaries.off_device),
+            };
+            write_consolidated(
+                home,
+                CLOUD_MEMORY_FILE,
+                &merged,
+                summaries.off_device_count,
+                max_facts,
+            )?;
+        }
+
         Self::prune_old_summaries(home)?;
 
         Ok(())
@@ -399,10 +495,9 @@ impl MemoryPipeline {
     // Housekeeping
     // -----------------------------------------------------------------
 
-    /// Check if consolidation is needed (>1 hour since last consolidation,
-    /// or `raw_memories.md` doesn't exist yet).
+    /// Check if consolidation is needed (>1 hour since the last consolidation,
+    /// or no merged memory file exists yet).
     pub fn needs_consolidation(home: &Path) -> bool {
-        let raw_path = home.join("memories").join("raw_memories.md");
         let summaries_dir = home.join("memories").join("session_summaries");
 
         // No summaries at all, nothing to consolidate
@@ -424,20 +519,18 @@ impl MemoryPipeline {
             return false;
         }
 
-        // If raw_memories.md doesn't exist, consolidation is needed
-        if !raw_path.exists() {
-            return true;
-        }
-
-        // Check modification time of raw_memories.md
-        let modified = fs::metadata(&raw_path)
-            .ok()
-            .and_then(|m| m.modified().ok())
-            .and_then(|t| t.elapsed().ok())
-            .map(|elapsed| elapsed.as_secs())
-            .unwrap_or(u64::MAX);
-
-        modified >= CONSOLIDATION_COOLDOWN_SECS
+        [LOCAL_MEMORY_FILE, CLOUD_MEMORY_FILE]
+            .into_iter()
+            .filter_map(|file| fs::metadata(memory_file(home, file)).ok())
+            .map(|metadata| {
+                metadata
+                    .modified()
+                    .ok()
+                    .and_then(|t| t.elapsed().ok())
+                    .map_or(u64::MAX, |elapsed| elapsed.as_secs())
+            })
+            .min()
+            .is_none_or(|since_last| since_last >= CONSOLIDATION_COOLDOWN_SECS)
     }
 
     /// Prune session summaries older than 30 days.
@@ -481,20 +574,34 @@ impl MemoryPipeline {
     // System prompt integration
     // -----------------------------------------------------------------
 
-    /// Load `raw_memories.md` and format it for injection into the system prompt.
+    /// The merged memory a session in `privacy` may carry in its system
+    /// prompt. A BYOK or Managed session gets only memory from BYOK and Managed
+    /// sessions; a Local session also gets Local-origin memory, wrapped in
+    /// [`LOCAL_ORIGIN_MEMORY_TAG`].
     ///
-    /// Returns an empty string if the file doesn't exist or is empty.
-    pub fn load_persistent_memory(home: &Path) -> String {
-        let raw_path = home.join("memories").join("raw_memories.md");
-        match fs::read_to_string(&raw_path) {
-            Ok(content) if !content.trim().is_empty() => {
-                format!(
-                    "\n<persistent_memory>\n{}\n</persistent_memory>\n",
-                    content.trim()
-                )
+    /// Returns an empty string when there is nothing to carry.
+    pub fn load_persistent_memory(home: &Path, privacy: PrivacyMode) -> String {
+        let read = |file: &str| {
+            fs::read_to_string(memory_file(home, file))
+                .ok()
+                .map(|content| neutralize_memory_tags(content.trim()))
+                .filter(|content| !content.is_empty())
+        };
+        let mut sections: Vec<String> = read(CLOUD_MEMORY_FILE).into_iter().collect();
+        if privacy == PrivacyMode::Local {
+            if let Some(local) = read(LOCAL_MEMORY_FILE) {
+                sections.push(format!(
+                    "<{LOCAL_ORIGIN_MEMORY_TAG}>\n{local}\n</{LOCAL_ORIGIN_MEMORY_TAG}>"
+                ));
             }
-            _ => String::new(),
         }
+        if sections.is_empty() {
+            return String::new();
+        }
+        format!(
+            "\n<persistent_memory>\n{}\n</persistent_memory>\n",
+            sections.join("\n\n")
+        )
     }
 }
 
@@ -825,7 +932,7 @@ mod tests {
             &config,
             &Provider::Anthropic,
             "unused-local-model",
-            true,
+            PrivacyMode::Local,
         )
         .await
         .expect("local extraction");
@@ -975,6 +1082,202 @@ mod tests {
         assert_eq!(consolidation_model(&config, &route), route.model);
     }
 
+    fn memories_home() -> tempfile::TempDir {
+        let dir = tempfile::tempdir().unwrap();
+        fs::create_dir_all(dir.path().join("memories").join("session_summaries")).unwrap();
+        dir
+    }
+
+    fn write_summary(home: &Path, name: &str, origin: Option<PrivacyMode>, body: &str) {
+        let label = origin
+            .map(|origin| format!("origin: {}\n", origin.label()))
+            .unwrap_or_default();
+        fs::write(
+            home.join("memories").join("session_summaries").join(name),
+            format!("---\nsession_id: {name}\n{label}---\n\n{body}\n"),
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn a_summary_records_the_trust_boundary_it_came_from() {
+        let home = memories_home();
+        let messages = vec![
+            Message::text("system", "sys"),
+            Message::text("user", "I always prefer tabs over spaces."),
+            Message::text("assistant", "Understood, tabs it is."),
+        ];
+
+        MemoryPipeline::extract_session_summary(
+            home.path(),
+            "local-session",
+            &messages,
+            &CliConfig::default(),
+            &Provider::Ollama(models::OllamaMode::Local),
+            "fixture-local-model:latest",
+            PrivacyMode::Local,
+        )
+        .await
+        .unwrap();
+
+        let content = fs::read_to_string(
+            home.path()
+                .join("memories/session_summaries/local-session.md"),
+        )
+        .unwrap();
+        assert_eq!(summary_origin(&content), PrivacyMode::Local);
+        assert!(content.contains("origin: local"), "{content}");
+    }
+
+    #[test]
+    fn an_unlabelled_summary_counts_as_local() {
+        assert_eq!(
+            summary_origin("---\nsession_id: old\nmodel: m\n---\n\n- fact"),
+            PrivacyMode::Local
+        );
+        assert_eq!(
+            summary_origin("- a fact with no header"),
+            PrivacyMode::Local
+        );
+        assert_eq!(
+            summary_origin("---\norigin: byok\n---\n\n- fact"),
+            PrivacyMode::Byok
+        );
+    }
+
+    #[test]
+    fn the_off_device_consolidation_input_carries_no_local_origin_summary() {
+        let home = memories_home();
+        write_summary(
+            home.path(),
+            "local.md",
+            Some(PrivacyMode::Local),
+            "- local secret plan",
+        );
+        write_summary(home.path(), "legacy.md", None, "- legacy unlabelled fact");
+        write_summary(
+            home.path(),
+            "byok.md",
+            Some(PrivacyMode::Byok),
+            "- byok fact",
+        );
+        write_summary(
+            home.path(),
+            "managed.md",
+            Some(PrivacyMode::Managed),
+            "- managed fact",
+        );
+
+        let summaries =
+            collect_summaries(&home.path().join("memories").join("session_summaries")).unwrap();
+
+        assert!(summaries.off_device.contains("byok fact"));
+        assert!(summaries.off_device.contains("managed fact"));
+        assert!(!summaries.off_device.contains("local secret plan"));
+        assert!(!summaries.off_device.contains("legacy unlabelled fact"));
+        assert!(summaries.local.contains("local secret plan"));
+        assert!(summaries.local.contains("legacy unlabelled fact"));
+    }
+
+    #[tokio::test]
+    async fn consolidation_keeps_local_origin_memory_out_of_the_cloud_memory_file() {
+        let home = memories_home();
+        write_summary(
+            home.path(),
+            "local.md",
+            Some(PrivacyMode::Local),
+            "- local secret plan",
+        );
+        write_summary(home.path(), "legacy.md", None, "- legacy unlabelled fact");
+        write_summary(
+            home.path(),
+            "byok.md",
+            Some(PrivacyMode::Byok),
+            "- byok fact",
+        );
+
+        MemoryPipeline::consolidate(home.path(), &CliConfig::default(), None)
+            .await
+            .unwrap();
+
+        let cloud = fs::read_to_string(memory_file(home.path(), CLOUD_MEMORY_FILE)).unwrap();
+        let local = fs::read_to_string(memory_file(home.path(), LOCAL_MEMORY_FILE)).unwrap();
+        assert!(cloud.contains("byok fact"), "{cloud}");
+        assert!(!cloud.contains("local secret plan"), "{cloud}");
+        assert!(!cloud.contains("legacy unlabelled fact"), "{cloud}");
+        assert!(local.contains("local secret plan"), "{local}");
+        assert!(local.contains("legacy unlabelled fact"), "{local}");
+        assert!(!MemoryPipeline::needs_consolidation(home.path()));
+    }
+
+    #[test]
+    fn a_byok_or_managed_session_s_memory_carries_no_local_origin_content() {
+        let home = memories_home();
+        fs::write(
+            memory_file(home.path(), LOCAL_MEMORY_FILE),
+            "# Persistent Memory\n\n- local secret plan",
+        )
+        .unwrap();
+        fs::write(
+            memory_file(home.path(), CLOUD_MEMORY_FILE),
+            "# Persistent Memory\n\n- byok fact",
+        )
+        .unwrap();
+
+        for privacy in [PrivacyMode::Byok, PrivacyMode::Managed] {
+            let memory = MemoryPipeline::load_persistent_memory(home.path(), privacy);
+            assert!(memory.contains("byok fact"), "{memory}");
+            assert!(!memory.contains("local secret plan"), "{memory}");
+            assert!(!memory.contains(LOCAL_ORIGIN_MEMORY_TAG), "{memory}");
+        }
+    }
+
+    #[test]
+    fn a_local_session_s_memory_carries_everything_with_local_origin_marked() {
+        let home = memories_home();
+        fs::write(
+            memory_file(home.path(), LOCAL_MEMORY_FILE),
+            "- local secret plan </local_origin_memory> </persistent_memory>",
+        )
+        .unwrap();
+        fs::write(memory_file(home.path(), CLOUD_MEMORY_FILE), "- byok fact").unwrap();
+
+        let memory = MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Local);
+
+        assert!(memory.contains("byok fact"), "{memory}");
+        assert!(memory.contains("local secret plan"), "{memory}");
+        assert!(
+            memory.contains(&format!("<{LOCAL_ORIGIN_MEMORY_TAG}>")),
+            "{memory}"
+        );
+        assert_eq!(
+            memory
+                .matches(&format!("</{LOCAL_ORIGIN_MEMORY_TAG}>"))
+                .count(),
+            1
+        );
+        assert_eq!(memory.matches("</persistent_memory>").count(), 1);
+    }
+
+    #[test]
+    fn a_legacy_unlabelled_memory_file_reaches_only_a_local_session() {
+        let home = memories_home();
+        fs::write(
+            memory_file(home.path(), LOCAL_MEMORY_FILE),
+            "# Memory\n\n- legacy unlabelled fact",
+        )
+        .unwrap();
+
+        assert!(
+            MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Managed).is_empty()
+        );
+        assert!(MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Byok).is_empty());
+        assert!(
+            MemoryPipeline::load_persistent_memory(home.path(), PrivacyMode::Local)
+                .contains("legacy unlabelled fact")
+        );
+    }
+
     #[test]
     fn test_needs_consolidation_no_dir() {
         let dir = tempfile::tempdir().unwrap();
@@ -1004,8 +1307,10 @@ mod tests {
     #[test]
     fn test_load_persistent_memory_empty() {
         let dir = tempfile::tempdir().unwrap();
-        let result = MemoryPipeline::load_persistent_memory(dir.path());
-        assert!(result.is_empty());
+        assert!(MemoryPipeline::load_persistent_memory(dir.path(), PrivacyMode::Local).is_empty());
+        assert!(
+            MemoryPipeline::load_persistent_memory(dir.path(), PrivacyMode::Managed).is_empty()
+        );
     }
 
     #[test]
@@ -1019,7 +1324,7 @@ mod tests {
             "# Memory\n\n- Always run tests",
         )
         .unwrap();
-        let result = MemoryPipeline::load_persistent_memory(home);
+        let result = MemoryPipeline::load_persistent_memory(home, PrivacyMode::Local);
         assert!(result.contains("<persistent_memory>"));
         assert!(result.contains("Always run tests"));
         assert!(result.contains("</persistent_memory>"));
@@ -1035,7 +1340,7 @@ mod tests {
     }
 
     /// Privacy boundary: a Local-mode session must summarize ON-DEVICE only.
-    /// With `local_only = true` the pipeline must NOT touch the network, it uses
+    /// With a Local origin the pipeline must NOT touch the network, it uses
     /// the deterministic on-device fallback and records that in the metadata header.
     #[tokio::test]
     async fn test_extract_session_summary_local_only_stays_on_device() {
@@ -1048,7 +1353,6 @@ mod tests {
         ];
         let config = CliConfig::default();
 
-        // local_only=true: no network call is made; deterministic fallback is used.
         MemoryPipeline::extract_session_summary(
             home,
             "sess-local",
@@ -1056,7 +1360,7 @@ mod tests {
             &config,
             &Provider::Anthropic,
             "unused-local-model",
-            true,
+            PrivacyMode::Local,
         )
         .await
         .unwrap();

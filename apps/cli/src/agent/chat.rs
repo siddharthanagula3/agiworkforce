@@ -1601,10 +1601,10 @@ message -- revise and call `update_plan` again.\n\n",
         let config = config.clone();
         let provider = self.provider.clone();
         let model = self.model.clone();
-        let local_only = self.privacy_mode == super::PrivacyMode::Local;
+        let origin = self.privacy_mode;
         let task = tokio::spawn(async move {
             if let Err(error) = crate::memory_pipeline::MemoryPipeline::extract_session_summary(
-                &home, &window_id, &window, &config, &provider, &model, local_only,
+                &home, &window_id, &window, &config, &provider, &model, origin,
             )
             .await
             {
