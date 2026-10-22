@@ -36,6 +36,7 @@ export const STATIC_SEGMENTS_BESIDE_PARAMS: Readonly<Record<string, readonly str
     'health',
     'images',
     'library',
+    'live-artifacts',
     'projects',
     'schedules',
     'sites',

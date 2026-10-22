@@ -52,6 +52,7 @@ const CUSTOMER_CONTENT = [
   'feedback',
   'image_generation_job_assets',
   'image_generation_jobs',
+  'live_artifacts',
   'mcp_app_payloads',
   'media_assets',
   'message_bookmarks',

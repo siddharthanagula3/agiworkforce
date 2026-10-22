@@ -11,6 +11,10 @@
   },
   "crons": [
     {
+      "path": "/api/cron/live-artifacts-refresh",
+      "schedule": "*/15 * * * *"
+    },
+    {
       "path": "/api/cron/notify-upgrade-waitlist",
       "schedule": "4,19,34,49 * * * *"
     },

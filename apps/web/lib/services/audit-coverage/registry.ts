@@ -165,6 +165,14 @@ export interface RouteHandlerDelegate {
  * follows these declared handlers one hop further and no others.
  */
 export const ROUTE_HANDLER_DELEGATES: readonly RouteHandlerDelegate[] = [
+  {
+    route: 'artifacts/runtime/[token]/complete/route.ts',
+    handler: 'app/api/artifacts/runtime/artifact-completion.ts',
+  },
+  {
+    route: 'artifacts/runtime/live/[artifactId]/complete/route.ts',
+    handler: 'app/api/artifacts/runtime/artifact-completion.ts',
+  },
   { route: 'models/free-quota/completions/route.ts', handler: 'lib/server/free-quota-turn.ts' },
   {
     route: 'voice/live/sessions/[sessionId]/close/route.ts',

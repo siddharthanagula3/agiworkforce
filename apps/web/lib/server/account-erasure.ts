@@ -46,6 +46,7 @@ export const USER_SCOPED_TABLES: ReadonlyArray<{
   { table: 'web_artifact_index', column: 'user_id' },
   { table: 'artifact_comments', column: 'user_id' },
   { table: 'studio_library_items', column: 'user_id' },
+  { table: 'live_artifacts', column: 'user_id' },
   { table: 'developer_eval_results', column: 'user_id' },
   { table: 'developer_eval_runs', column: 'user_id' },
   { table: 'developer_eval_cases', column: 'user_id' },
