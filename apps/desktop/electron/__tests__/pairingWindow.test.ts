@@ -32,7 +32,9 @@ class FakeWindow {
   }
 }
 
-vi.mock('electron', () => ({ BrowserWindow: FakeWindow }));
+const writeText = vi.fn();
+
+vi.mock('electron', () => ({ BrowserWindow: FakeWindow, clipboard: { writeText } }));
 
 const { closePairingWindow, showPairingWindow } = await import('../remote/pairingWindow');
 
@@ -44,6 +46,7 @@ const PAIRING = {
 
 beforeEach(() => {
   created.length = 0;
+  writeText.mockClear();
   closePairingWindow();
 });
 
@@ -77,10 +80,36 @@ describe('the pairing window main draws the QR code in', () => {
     expect(openHandler({ url: 'https://example.com/' })).toEqual({ action: 'deny' });
 
     const navigation = on.mock.calls.find(([event]) => event === 'will-navigate');
-    const willNavigate = navigation?.[1] as (event: { preventDefault: () => void }) => void;
-    const event = { preventDefault: vi.fn() };
+    const willNavigate = navigation?.[1] as (event: {
+      url: string;
+      preventDefault: () => void;
+    }) => void;
+    const event = { url: 'https://example.com/', preventDefault: vi.fn() };
     willNavigate(event);
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(writeText).not.toHaveBeenCalled();
+  });
+
+  it('copies the code, never the QR secret, and says so on the page', async () => {
+    await showPairingWindow(null, PAIRING, vi.fn());
+    const first = decodeURIComponent(created[0]?.loaded ?? '');
+    expect(first).toContain('Copy code');
+    const href = /href="([^"]+)"/u.exec(first)?.[1] ?? '';
+
+    const navigation = created[0]!.webContents.on.mock.calls.find(
+      ([event]) => event === 'will-navigate',
+    );
+    const willNavigate = navigation?.[1] as (event: {
+      url: string;
+      preventDefault: () => void;
+    }) => void;
+    const event = { url: href, preventDefault: vi.fn() };
+    willNavigate(event);
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(writeText).toHaveBeenCalledWith(PAIRING.code);
+    expect(writeText).not.toHaveBeenCalledWith(PAIRING.qrPayload);
+    expect(decodeURIComponent(created[0]?.loaded ?? '')).toContain('Code copied');
   });
 
   it('cancels pairing when the user closes it, and not when main closes it', async () => {

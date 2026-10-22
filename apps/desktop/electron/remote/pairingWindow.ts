@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, clipboard } from 'electron';
 import QRCode from 'qrcode';
 import { REMOTE_SESSION_PARTITION } from '../config';
 import type { RemotePairingDisplay } from '@agiworkforce/utils/remote-control';
@@ -10,6 +10,9 @@ const QR_SIZE = 240;
 
 const TITLE = 'Pair a phone';
 const HOW_TO_PAIR = `Open ${PRODUCT_NAMES.mobile} on your phone, choose Pair with Desktop, and scan this code. It works once and expires in a few minutes.`;
+const COPY_CODE = 'Copy code';
+const CODE_COPIED = 'Code copied';
+const COPY_ACTION_URL = 'agi-pairing:copy-code';
 const CLOSE_TO_CANCEL = 'Closing this window cancels pairing.';
 
 let current: BrowserWindow | null = null;
@@ -23,7 +26,7 @@ function escapeHtml(value: string): string {
     .replace(/"/gu, '&quot;');
 }
 
-function pairingPage(qrSvg: string, code: string): string {
+function pairingPage(qrSvg: string, code: string, copied: boolean): string {
   return `<!doctype html>
 <html lang="en">
 <head>
@@ -37,6 +40,7 @@ function pairingPage(qrSvg: string, code: string): string {
   p { margin: 0 0 16px; }
   .qr { display: inline-block; padding: 12px; border-radius: 12px; background: white; line-height: 0; }
   .qr svg { width: ${QR_SIZE}px; height: ${QR_SIZE}px; }
+  .copy { display: inline-block; margin: 0 0 16px; padding: 6px 14px; border: 1px solid GrayText; border-radius: 999px; font-size: 14px; color: inherit; text-decoration: none; }
   .code { margin: 16px 0 8px; font: 18px/1.2 ui-monospace, Menlo, monospace; letter-spacing: 0.2em; }
 </style>
 </head>
@@ -45,6 +49,7 @@ function pairingPage(qrSvg: string, code: string): string {
 <p>${HOW_TO_PAIR}</p>
 <div class="qr">${qrSvg}</div>
 <div class="code">${escapeHtml(code)}</div>
+<a class="copy" href="${COPY_ACTION_URL}" role="button">${copied ? CODE_COPIED : COPY_CODE}</a>
 <p>${CLOSE_TO_CANCEL}</p>
 </body>
 </html>`;
@@ -94,7 +99,16 @@ export async function showPairingWindow(
   current = win;
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-  win.webContents.on('will-navigate', (event) => event.preventDefault());
+  const loadPage = (copied: boolean) =>
+    win.loadURL(
+      `data:text/html;charset=utf-8,${encodeURIComponent(pairingPage(qrSvg, pairing.code, copied))}`,
+    );
+  win.webContents.on('will-navigate', (event) => {
+    event.preventDefault();
+    if (event.url !== COPY_ACTION_URL || current !== win) return;
+    clipboard.writeText(pairing.code);
+    void loadPage(true);
+  });
   win.once('ready-to-show', () => {
     if (!win.isDestroyed()) win.show();
   });
@@ -104,7 +118,5 @@ export async function showPairingWindow(
     onDismissed();
   });
 
-  void win.loadURL(
-    `data:text/html;charset=utf-8,${encodeURIComponent(pairingPage(qrSvg, pairing.code))}`,
-  );
+  void loadPage(false);
 }
