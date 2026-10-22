@@ -256,10 +256,10 @@ test('two VS Code commands on one chord under different conditions are not a con
 
 test('a web chord the browser keeps for itself fails', () => {
   const root = fixture({
-    [WEB_REGISTRY_PATH]: (source) =>
+    [WEB_SHARED_SHORTCUT_PATH]: (source) =>
       source.replace(
-        "    key: 'B',\n    ctrl: true,\n    meta: true,\n    id: 'toggle-sidebar',",
-        "    key: 'T',\n    ctrl: true,\n    meta: true,\n    id: 'toggle-sidebar',",
+        "  key: 'B',\n  ctrl: true,\n  meta: true,\n} as const;",
+        "  key: 'T',\n  ctrl: true,\n  meta: true,\n} as const;",
       ),
   });
   const failures = checkShortcutRegistry(root);
@@ -271,10 +271,10 @@ test('a web chord the browser keeps for itself fails', () => {
 
 test('a web chord VoiceOver claims fails', () => {
   const root = fixture({
-    [WEB_REGISTRY_PATH]: (source) =>
+    [WEB_SHARED_SHORTCUT_PATH]: (source) =>
       source.replace(
-        "    key: 'B',\n    ctrl: true,\n    meta: true,\n    id: 'toggle-sidebar',",
-        "    key: 'B',\n    ctrl: true,\n    alt: true,\n    id: 'toggle-sidebar',",
+        "  key: 'B',\n  ctrl: true,\n  meta: true,\n} as const;",
+        "  key: 'B',\n  ctrl: true,\n  alt: true,\n} as const;",
       ),
   });
   const failures = checkShortcutRegistry(root);
