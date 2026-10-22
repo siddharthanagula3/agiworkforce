@@ -34,10 +34,24 @@ import { WEB_SETTINGS_NAV_GROUPS } from '@features/settings/components/web-setti
 type TypesModule = typeof import('@agiworkforce/types');
 
 const connectorRelease = vi.hoisted(() => ({ released: true }));
-vi.mock('@agiworkforce/types', async (importOriginal) => ({
-  ...(await importOriginal<TypesModule>()),
-  connectorsReleased: () => connectorRelease.released,
+const videoQualityCatalog = vi.hoisted(() => ({
+  override: null as
+    | ((
+        modelId: string | undefined,
+        aspectRatio: string | undefined,
+      ) => import('@agiworkforce/types').VideoQualityOption[] | null)
+    | null,
 }));
+vi.mock('@agiworkforce/types', async (importOriginal) => {
+  const actual = await importOriginal<TypesModule>();
+  return {
+    ...actual,
+    connectorsReleased: () => connectorRelease.released,
+    getVideoQualityOptionsForModel: (modelId?: string, aspectRatio?: string) =>
+      videoQualityCatalog.override?.(modelId, aspectRatio) ??
+      actual.getVideoQualityOptionsForModel(modelId, aspectRatio),
+  };
+});
 
 const chatComposerMocks = vi.hoisted(() => ({
   skillResult: {
@@ -247,6 +261,7 @@ describe('ChatComposerNew', () => {
     chatComposerMocks.connectors.error = null;
     chatComposerMocks.memoryCapabilityEnabled = true;
     chatComposerMocks.memoryCapabilityListeners.clear();
+    videoQualityCatalog.override = null;
     originalModelId = useModelStore.getState().selectedModelId;
     originalFeatureFlags = useBillingStore.getState().featureFlags;
     originalSubscription = useBillingStore.getState().subscription;
@@ -2987,13 +3002,14 @@ describe('ChatComposerNew', () => {
 
     it('carries a catalog-required duration for a restricted video quality', async () => {
       useBillingStore.setState({ subscription: MAX_15X_SUBSCRIPTION });
-      const restricted = VIDEO_MODELS.map((model) => ({
-        model,
-        quality: getVideoQualityOptionsForModel(model.id, '16:9').find(
-          (option) => option.durationSecs?.length === 1,
-        ),
-      })).find((candidate) => candidate.quality);
-      expect(restricted).toBeDefined();
+      const model = VIDEO_MODELS[0]!;
+      const catalogQualities = getVideoQualityOptionsForModel(model.id, '16:9');
+      const restrictedQuality = { id: '4k', label: '4K', durationSecs: [8] };
+      expect(catalogQualities.some((option) => option.id === restrictedQuality.id)).toBe(false);
+      videoQualityCatalog.override = (modelId, aspectRatio) =>
+        modelId === model.id && aspectRatio === '16:9'
+          ? [...catalogQualities, restrictedQuality]
+          : null;
 
       const onGenerateVideo = vi.fn();
       render(<ChatComposerNew onSend={vi.fn()} onGenerateVideo={onGenerateVideo} />);
@@ -3002,18 +3018,16 @@ describe('ChatComposerNew', () => {
 
       const textarea = screen.getByRole('textbox', { name: /message input/i });
       await userEvent.type(textarea, 'a high resolution mountain clip');
-      fireEvent.click(screen.getByRole('button', { name: /select video model/i }));
-      fireEvent.click(screen.getByRole('button', { name: restricted!.model.label }));
       fireEvent.click(screen.getByRole('button', { name: 'Select video quality' }));
-      fireEvent.click(screen.getByText(restricted!.quality!.label));
+      fireEvent.click(screen.getByText(restrictedQuality.label));
       fireEvent.keyDown(textarea, { key: 'Enter' });
 
       await waitFor(() => {
         expect(onGenerateVideo).toHaveBeenCalledWith('a high resolution mountain clip', {
-          modelId: restricted!.model.id,
+          modelId: model.id,
           aspectRatio: '16:9',
-          resolution: restricted!.quality!.id,
-          durationSecs: restricted!.quality!.durationSecs![0],
+          resolution: restrictedQuality.id,
+          durationSecs: restrictedQuality.durationSecs[0],
         });
       });
     });
