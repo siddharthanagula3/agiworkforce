@@ -167,6 +167,7 @@ function harness() {
     renderMessages: vi.fn(),
     updateSendButton: vi.fn(),
     updateContextButton: vi.fn(),
+    updateAgentPageIndicator: vi.fn(),
     clearPendingPageContext: vi.fn(),
     trimLiveMessages: vi.fn(),
     classifyTaskLocally,

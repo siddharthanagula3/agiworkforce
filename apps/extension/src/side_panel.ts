@@ -4553,13 +4553,36 @@ function injectStyles(): void {
     #sp-empty-greeting[hidden] { display: none; }
 
     #sp-blocked {
-      align-items: center;
-      gap: 7px;
-      padding: 0 2px;
-      border: 0;
-      border-radius: 0;
-      background: none;
+      align-items: flex-start;
+      gap: 10px;
+      padding: 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-panel);
+      background: var(--agi-ext-surface);
     }
+    #sp-blocked-shield { margin-top: 2px; }
+    #sp-blocked-body { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; min-width: 0; }
+    #sp-blocked-title {
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-height);
+      font-weight: 600;
+      color: var(--agi-ext-text);
+    }
+    .sp-agent-page {
+      display: none;
+      flex: none;
+      order: -1;
+      align-items: center;
+      gap: 6px;
+      min-width: 0;
+      padding: 0 2px;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      color: var(--agi-ext-text-muted);
+    }
+    .sp-agent-page.visible { display: flex; }
+    .sp-agent-page svg { flex: none; }
+    #sp-agent-page-host { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #sp-blocked-shield {
       width: 16px;
       height: 16px;
@@ -6503,6 +6526,7 @@ function finishComposerBrowserTask(
   if (run.activityTimer) clearTimeout(run.activityTimer);
   const ownsConversation = ownsComposerBrowserConversation(run);
   composerBrowserRun = null;
+  updateAgentPageIndicator();
   for (const dismiss of [...run.pendingApprovals]) dismiss();
   run.controls.setRunning(false);
   if (!run.nested) {
@@ -6629,6 +6653,7 @@ function startComposerBrowserTask(
     settle,
   };
   composerBrowserRun = run;
+  updateAgentPageIndicator();
   if (!nested) {
     _ctx.isStreaming = true;
     _ctx.messages.push(
@@ -6670,6 +6695,7 @@ function startComposerBrowserTask(
       }
       run.startSent = true;
       run.tabId = tab.id;
+      updateAgentPageIndicator();
       noteComposerBrowserActivity(run);
       const response = (await chrome.runtime.sendMessage({
         type: 'AGI_START_COMPUTER_USE',
@@ -9085,6 +9111,7 @@ function updateActivePage(url: string, tabId?: number): void {
   activePageSource = typeof tabId === 'number' ? { tabId, url } : null;
   currentPageHostname = pageChipLabel(url);
   setBlockedState(isRestrictedPageUrl(url));
+  updateAgentPageIndicator();
   updateContextButton();
   refreshComputerUseSiteHook();
 }
@@ -9125,6 +9152,37 @@ function setBlockedState(blocked: boolean): void {
   }
   updateSendButton();
   updateEmptyStateActions();
+}
+
+let agentPageIndicatorRequest = 0;
+
+function updateAgentPageIndicator(): void {
+  const indicator = document.getElementById('sp-agent-page');
+  const host = document.getElementById('sp-agent-page-host');
+  if (!indicator || !host) return;
+  const run = composerBrowserRun;
+  const request = ++agentPageIndicatorRequest;
+  const show = (label: string): void => {
+    if (request !== agentPageIndicatorRequest) return;
+    host.textContent = label;
+    indicator.setAttribute('aria-label', label);
+    indicator.classList.toggle('visible', label !== '');
+  };
+  if (!run) {
+    show('');
+    return;
+  }
+  if (run.tabId === null) {
+    show(currentPageHostname);
+    return;
+  }
+  try {
+    chrome.tabs.get(run.tabId, (tab) => {
+      show(chrome.runtime.lastError || !tab?.url ? '' : pageChipLabel(tab.url));
+    });
+  } catch {
+    show('');
+  }
 }
 
 function refreshPageHostname(): void {
@@ -11610,14 +11668,41 @@ function buildUI(): void {
   shield.appendChild(shieldLine);
   shield.appendChild(shieldCircle);
   blockedState.appendChild(shield);
-  blockedState.appendChild(
+  const blockedBody = el('div', { id: 'sp-blocked-body' });
+  blockedBody.appendChild(
+    createElementWith({
+      tag: 'span',
+      id: 'sp-blocked-title',
+      text: 'Page access unavailable',
+    }),
+  );
+  blockedBody.appendChild(
     createElementWith({
       tag: 'span',
       id: 'sp-blocked-desc',
       text: "You can still chat, but Chrome does not let extensions read or automate this page. That covers Chrome's own pages, the Web Store, and pages an administrator has restricted.",
     }),
   );
+  const blockedRetry = el(
+    'button',
+    { id: 'sp-blocked-retry', class: 'sp-bubble-retry-btn', type: 'button' },
+    t('spBubbleRetry'),
+  );
+  blockedRetry.addEventListener('click', refreshPageHostname);
+  blockedBody.appendChild(blockedRetry);
+  blockedState.appendChild(blockedBody);
   msgsArea.appendChild(blockedState);
+
+  const agentPage = el('div', {
+    id: 'sp-agent-page',
+    class: 'sp-agent-page',
+    role: 'status',
+    'aria-live': 'polite',
+  });
+  agentPage.appendChild(renderIcon(Globe, 14));
+  agentPage.appendChild(el('span', { id: 'sp-agent-page-host' }));
+  msgsArea.appendChild(agentPage);
+  updateAgentPageIndicator();
 
   chatPanel.appendChild(artifactOutputs.panelEl);
   chatPanel.appendChild(msgsArea);
