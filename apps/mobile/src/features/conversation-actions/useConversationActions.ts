@@ -45,8 +45,18 @@ export interface ConversationRenameState {
   menu: ConversationMenuState;
 }
 
+export interface ConversationActionOptions {
+  extraActions?: ConversationMenuAction[];
+  onDeleted?: () => void;
+}
+
 export interface ConversationActions {
-  openActions: (conversationId: string, title: string, pinned: boolean) => void;
+  openActions: (
+    conversationId: string,
+    title: string,
+    pinned: boolean,
+    options?: ConversationActionOptions,
+  ) => void;
   rename: ConversationRenameState;
 }
 
@@ -97,7 +107,12 @@ export function useConversationActions(): ConversationActions {
   const [openMenu, setOpenMenu] = useState<OpenMenu | null>(null);
 
   const openActions = useCallback(
-    (conversationId: string, title: string, pinned: boolean) => {
+    (
+      conversationId: string,
+      title: string,
+      pinned: boolean,
+      options: ConversationActionOptions = {},
+    ) => {
       const conversation = findConversation(conversationId, conversations, cloudConversations);
       if (!conversation) return;
       // `archived` is a column on web_conversations, so archiving only exists
@@ -247,6 +262,7 @@ export function useConversationActions(): ConversationActions {
           label: pinned ? 'Unpin' : 'Pin',
           run: guard(() => void pinConversation(conversationId)),
         },
+        ...(options.extraActions ?? []),
         ...(canMove ? [{ key: 'move', label: 'Move to project', run: move }] : []),
         ...(conversation.temporary
           ? []
@@ -274,7 +290,10 @@ export function useConversationActions(): ConversationActions {
                 {
                   text: 'Delete',
                   style: 'destructive',
-                  onPress: guard(() => void deleteConversation(conversationId)),
+                  onPress: guard(() => {
+                    void deleteConversation(conversationId);
+                    options.onDeleted?.();
+                  }),
                 },
               ],
             ),

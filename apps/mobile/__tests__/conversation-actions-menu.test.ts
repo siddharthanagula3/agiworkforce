@@ -99,6 +99,7 @@ describe('conversation row actions reach every action on both platforms', () => 
       'share',
       'rename',
       'pin',
+      'duplicate',
       'unread',
       'archive',
       'delete',
@@ -117,6 +118,7 @@ describe('conversation row actions reach every action on both platforms', () => 
     expect(result.current.rename.menu.actions.map((action) => action.key)).toEqual([
       'rename',
       'pin',
+      'duplicate',
       'unread',
       'delete',
     ]);
@@ -145,5 +147,46 @@ describe('conversation row actions reach every action on both platforms', () => 
     act(() => result.current.rename.menu.close());
 
     expect(result.current.rename.menu.visible).toBe(false);
+  });
+  it("adds a caller's extra actions and reports a confirmed delete to the caller", () => {
+    seedCloudRow('c-1');
+    const { result } = renderHook(() => useConversationActions());
+    const extraRun = jest.fn();
+    const onDeleted = jest.fn();
+
+    act(() =>
+      result.current.openActions('c-1', 'Chat c-1', false, {
+        extraActions: [{ key: 'export', label: 'Export', run: extraRun }],
+        onDeleted,
+      }),
+    );
+
+    const actions = result.current.rename.menu.actions;
+    expect(actions.map((action) => action.key)).toContain('export');
+    expect(actions.map((action) => action.key).indexOf('export')).toBeGreaterThan(
+      actions.map((action) => action.key).indexOf('pin'),
+    );
+    act(() => actions.find((action) => action.key === 'export')?.run());
+    expect(extraRun).toHaveBeenCalledTimes(1);
+
+    act(() => actions.find((action) => action.key === 'delete')?.run());
+    expect(onDeleted).not.toHaveBeenCalled();
+    const buttons = (Alert.alert as jest.Mock).mock.calls[0][2] as Array<{
+      text: string;
+      onPress?: () => void;
+    }>;
+    act(() => buttons.find((button) => button.text === 'Delete')?.onPress?.());
+    expect(onDeleted).toHaveBeenCalledTimes(1);
+  });
+
+  it('labels the pin action Unpin for a pinned chat', () => {
+    seedCloudRow('c-1');
+    const { result } = renderHook(() => useConversationActions());
+
+    act(() => result.current.openActions('c-1', 'Chat c-1', true));
+
+    expect(result.current.rename.menu.actions.find((action) => action.key === 'pin')?.label).toBe(
+      'Unpin',
+    );
   });
 });

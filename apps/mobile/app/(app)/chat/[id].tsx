@@ -4,13 +4,9 @@ import {
   View,
   ActivityIndicator,
   KeyboardAvoidingView,
-  Platform,
-  ActionSheetIOS,
   Alert,
   Keyboard,
   Linking,
-  Modal,
-  TextInput,
 } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -68,6 +64,10 @@ import { LiveVoiceComposer } from '@/src/features/voice/components/LiveVoiceComp
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
 import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/capabilities';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
+import {
+  RenameConversationModal,
+  useConversationActions,
+} from '@/src/features/conversation-actions';
 import { takeConversationSend } from '@/src/features/chat/conversationSendHandoff';
 import {
   useVoiceConversation,
@@ -211,11 +211,8 @@ export default function ChatScreen() {
     import('@/src/features/chat/components/ChatInput').ChatInputHandle | null
   >(null);
   useComposerAttachmentHandoff(id, chatInputAttachRef);
-  const [renameModalVisible, setRenameModalVisible] = useState(false);
-  const [renameText, setRenameText] = useState('');
   const [quotedMessage, setQuotedMessage] = useState<ChatMessage | null>(null);
   const quotedMessageScopeRef = useRef<ConversationUiActionScope | null>(null);
-  const renameScopeRef = useRef<ConversationUiActionScope | null>(null);
   const currentConversationScopeRef = useRef<{
     conversationId: string;
     scope: 'local' | 'cloud';
@@ -246,7 +243,6 @@ export default function ChatScreen() {
   const resumeResearch = useChatStore((s) => s.resumeResearch);
   const editMessage = useChatStore((s) => s.editMessage);
   const resolveToolApproval = useChatStore((s) => s.resolveToolApproval);
-  const renameConversation = useChatStore((s) => s.renameConversation);
   const setConversationModel = useChatStore((s) => s.setConversationModel);
   const forkConversation = useChatStore((s) => s.forkConversation);
   const messageLoadFailed = useChatStore(
@@ -295,6 +291,8 @@ export default function ChatScreen() {
 
   const setAppMode = useChatAppModeStore((s) => s.setAppMode);
 
+  const conversationActions = useConversationActions();
+  const { openActions } = conversationActions;
   const conversation = conversations.find((c) => c.id === id);
   // Branches are resolved here rather than in the store so the abandoned turns
   // stay in memory for the pager, and so a conversation that has never branched
@@ -387,19 +385,7 @@ export default function ChatScreen() {
       quotedMessageScopeRef.current = null;
       setQuotedMessage(null);
     }
-    if (renameModalVisible && !isConversationActionCurrent(renameScopeRef.current)) {
-      renameScopeRef.current = null;
-      setRenameModalVisible(false);
-      setRenameText('');
-    }
-  }, [
-    clerkUserId,
-    conversationExecutionMode,
-    id,
-    isConversationActionCurrent,
-    quotedMessage,
-    renameModalVisible,
-  ]);
+  }, [clerkUserId, conversationExecutionMode, id, isConversationActionCurrent, quotedMessage]);
 
   useEffect(() => {
     if (!id) return;
@@ -1462,35 +1448,6 @@ export default function ChatScreen() {
     }
   }, [router, stopSpeaking]);
 
-  const closeRenameModal = useCallback(() => {
-    renameScopeRef.current = null;
-    setRenameModalVisible(false);
-    setRenameText('');
-  }, []);
-
-  const confirmDeleteConversation = useCallback(
-    (actionScope: ConversationUiActionScope) => {
-      if (!id || !isConversationActionCurrent(actionScope)) return;
-      Alert.alert(
-        'Delete chat?',
-        'This chat and its messages are removed from every device on this account. It cannot be recovered.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Delete',
-            style: 'destructive',
-            onPress: () => {
-              if (!isConversationActionCurrent(actionScope)) return;
-              deleteConversation(id);
-              handleBack();
-            },
-          },
-        ],
-      );
-    },
-    [deleteConversation, handleBack, id, isConversationActionCurrent],
-  );
-
   const canEditImages =
     conversationExecutionMode === 'cloud' &&
     isClerkSignedIn &&
@@ -1585,94 +1542,44 @@ export default function ChatScreen() {
 
   const handleMenuPress = useCallback(() => {
     const actionScope = captureConversationAction();
-    if (!actionScope || !isConversationActionCurrent(actionScope)) return;
-    const linkSharing = conversationExecutionMode === 'cloud';
-    const options = linkSharing
-      ? ['Share link', 'Export', 'Rename', 'What is in context', 'Delete', 'Cancel']
-      : ['Share', 'Rename', 'What is in context', 'Delete', 'Cancel'];
-    const offset = linkSharing ? 1 : 0;
-    const destructiveIndex = 3 + offset;
-    const cancelIndex = 4 + offset;
-
-    if (Platform.OS === 'ios') {
-      ActionSheetIOS.showActionSheetWithOptions(
-        {
-          options,
-          cancelButtonIndex: cancelIndex,
-          destructiveButtonIndex: destructiveIndex,
-        },
-        (rawIndex) => {
-          if (linkSharing && rawIndex === 0) {
-            shareConversationLink(actionScope);
-            return;
-          }
-          const buttonIndex = rawIndex - offset;
-          if (buttonIndex === 0) {
-            if (!isConversationActionCurrent(actionScope)) return;
-            setExportSheetVisible(true);
-          } else if (buttonIndex === 1 && id) {
-            if (!isConversationActionCurrent(actionScope)) return;
-            Alert.prompt(
-              'Rename Conversation',
-              'Enter a new title:',
-              (newTitle) => {
-                if (newTitle?.trim() && isConversationActionCurrent(actionScope)) {
-                  renameConversation(id, newTitle.trim());
-                }
+    if (!id || !actionScope || !isConversationActionCurrent(actionScope)) return;
+    const cloud = conversationExecutionMode === 'cloud';
+    const whenCurrent = (run: () => void) => () => {
+      if (isConversationActionCurrent(actionScope)) run();
+    };
+    openActions(id, title, conversation?.pinned === true, {
+      extraActions: [
+        ...(cloud && conversation?.temporary
+          ? [
+              {
+                key: 'share-temporary',
+                label: 'Share link',
+                run: () => shareConversationLink(actionScope),
               },
-              'plain-text',
-              title,
-            );
-          } else if (buttonIndex === 2) {
-            if (!isConversationActionCurrent(actionScope)) return;
-            setContextSheetVisible(true);
-          } else if (buttonIndex === 3) {
-            confirmDeleteConversation(actionScope);
-          }
-        },
-      );
-    } else {
-      Alert.alert('Conversation', undefined, [
-        ...(linkSharing
-          ? [{ text: 'Share link', onPress: () => shareConversationLink(actionScope) }]
+            ]
           : []),
         {
-          text: linkSharing ? 'Export' : 'Share',
-          onPress: () => {
-            if (!isConversationActionCurrent(actionScope)) return;
-            setExportSheetVisible(true);
-          },
+          key: 'export',
+          label: 'Export',
+          run: whenCurrent(() => setExportSheetVisible(true)),
         },
         {
-          text: 'Rename',
-          onPress: () => {
-            if (!isConversationActionCurrent(actionScope)) return;
-            renameScopeRef.current = actionScope;
-            setRenameText(title);
-            setRenameModalVisible(true);
-          },
+          key: 'context',
+          label: 'What is in context',
+          run: whenCurrent(() => setContextSheetVisible(true)),
         },
-        {
-          text: 'What is in context',
-          onPress: () => {
-            if (!isConversationActionCurrent(actionScope)) return;
-            setContextSheetVisible(true);
-          },
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: () => confirmDeleteConversation(actionScope),
-        },
-      ]);
-    }
+      ],
+      onDeleted: handleBack,
+    });
   }, [
     captureConversationAction,
-    confirmDeleteConversation,
+    conversation?.pinned,
+    conversation?.temporary,
     conversationExecutionMode,
+    handleBack,
     id,
     isConversationActionCurrent,
-    renameConversation,
+    openActions,
     shareConversationLink,
     title,
   ]);
@@ -1781,7 +1688,23 @@ export default function ChatScreen() {
             </Pressable>
           ) : null}
 
-          <View style={{ flex: 1 }} />
+          <Pressable
+            onPress={handleMenuPress}
+            style={{ flex: 1, minHeight: 32, justifyContent: 'center', paddingHorizontal: 4 }}
+            accessibilityLabel={`${title}. Open conversation menu`}
+            accessibilityRole="button"
+          >
+            <Text
+              numberOfLines={1}
+              style={{
+                fontSize: typeScale.callout,
+                fontWeight: '600',
+                color: colors.textPrimary,
+              }}
+            >
+              {title}
+            </Text>
+          </Pressable>
 
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <ProjectSourcesButton projectId={conversation?.projectId} />
@@ -1866,47 +1789,49 @@ export default function ChatScreen() {
           onDismiss={clearMessageLoadError}
         />
 
-        {isLoadingMessages && conversationMessages.length === 0 ? (
-          <MessageSkeleton />
-        ) : (
-          <MessageList
-            messages={conversationMessages}
-            onDeleteMessage={handleDeleteMessage}
-            onReaction={handleReaction}
-            onRetryMessage={handleRetryMessage}
-            onRetryWithModel={handleRetryWithModel}
-            onBranch={conversation?.temporary ? undefined : handleBranchFromMessage}
-            onScheduleMessage={
-              conversationExecutionMode === 'cloud' && !conversation?.temporary
-                ? handleScheduleMessage
-                : undefined
-            }
-            footer={
-              followUpTarget && id ? (
-                <FollowUpSuggestions
-                  conversationId={id}
-                  messageId={followUpTarget}
-                  onSelect={(prompt) => void handleSend(prompt)}
-                />
-              ) : null
-            }
-            onEditImageArea={canEditImages ? handleEditImageArea : undefined}
-            onDeleteImageConversation={handleDeleteImageConversation}
-            variantInfoByMessageId={variantInfo}
-            onSelectVariant={handleSelectVariant}
-            onSwitchModel={handleOpenModelPicker}
-            onResearchPlanDecision={handleResearchPlanDecision}
-            onRetryResearch={handleRetryResearch}
-            onStopResearch={handleStop}
-            onPauseResearch={handlePauseResearch}
-            resumingResearchMessageId={resumingResearchMessageId}
-            onEditMessage={handleEditMessage}
-            onRefresh={handleRefresh}
-            refreshing={refreshing}
-            onQuoteReply={handleQuoteReply}
-            onResolveToolApproval={handleResolveToolApproval}
-          />
-        )}
+        <View style={liveVoiceVisible ? { display: 'none' } : { flex: 1 }}>
+          {isLoadingMessages && conversationMessages.length === 0 ? (
+            <MessageSkeleton />
+          ) : (
+            <MessageList
+              messages={conversationMessages}
+              onDeleteMessage={handleDeleteMessage}
+              onReaction={handleReaction}
+              onRetryMessage={handleRetryMessage}
+              onRetryWithModel={handleRetryWithModel}
+              onBranch={conversation?.temporary ? undefined : handleBranchFromMessage}
+              onScheduleMessage={
+                conversationExecutionMode === 'cloud' && !conversation?.temporary
+                  ? handleScheduleMessage
+                  : undefined
+              }
+              footer={
+                followUpTarget && id ? (
+                  <FollowUpSuggestions
+                    conversationId={id}
+                    messageId={followUpTarget}
+                    onSelect={(prompt) => void handleSend(prompt)}
+                  />
+                ) : null
+              }
+              onEditImageArea={canEditImages ? handleEditImageArea : undefined}
+              onDeleteImageConversation={handleDeleteImageConversation}
+              variantInfoByMessageId={variantInfo}
+              onSelectVariant={handleSelectVariant}
+              onSwitchModel={handleOpenModelPicker}
+              onResearchPlanDecision={handleResearchPlanDecision}
+              onRetryResearch={handleRetryResearch}
+              onStopResearch={handleStop}
+              onPauseResearch={handlePauseResearch}
+              resumingResearchMessageId={resumingResearchMessageId}
+              onEditMessage={handleEditMessage}
+              onRefresh={handleRefresh}
+              refreshing={refreshing}
+              onQuoteReply={handleQuoteReply}
+              onResolveToolApproval={handleResolveToolApproval}
+            />
+          )}
+        </View>
 
         {quotedMessage && <QuotedReplyBar message={quotedMessage} onDismiss={handleDismissQuote} />}
 
@@ -2153,99 +2078,7 @@ export default function ChatScreen() {
           onCancel={handleModeSwitchCancel}
         />
 
-        {/* Rename modal (Android, Alert.prompt is iOS-only) */}
-        <Modal
-          visible={renameModalVisible}
-          transparent
-          animationType="fade"
-          onRequestClose={closeRenameModal}
-          accessibilityViewIsModal
-        >
-          <Pressable
-            style={{
-              flex: 1,
-              backgroundColor: colors.scrim,
-              alignItems: 'center',
-              justifyContent: 'center',
-              padding: 24,
-            }}
-            onPress={closeRenameModal}
-          >
-            <Pressable
-              style={{
-                width: '100%',
-                backgroundColor: colors.surfaceElevated,
-                borderRadius: 14,
-                padding: 20,
-                borderWidth: 1,
-                borderColor: colors.border,
-              }}
-              onPress={() => undefined}
-            >
-              <Text
-                style={{
-                  fontSize: typeScale.callout,
-                  fontWeight: '600',
-                  color: colors.textPrimary,
-                  marginBottom: 12,
-                }}
-              >
-                Rename Conversation
-              </Text>
-              <TextInput
-                style={{
-                  backgroundColor: colors.inputSurface,
-                  borderRadius: 8,
-                  padding: 12,
-                  fontSize: typeScale.body,
-                  color: colors.textPrimary,
-                  borderWidth: 1,
-                  borderColor: colors.border,
-                  marginBottom: 16,
-                }}
-                value={renameText}
-                onChangeText={setRenameText}
-                autoFocus
-                placeholder="Enter a new title"
-                placeholderTextColor={colors.textMuted}
-                selectTextOnFocus
-              />
-              <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 16 }}>
-                <Pressable
-                  style={{ padding: 8 }}
-                  onPress={closeRenameModal}
-                  accessibilityRole="button"
-                  accessibilityLabel="Cancel rename"
-                >
-                  <Text style={{ color: colors.textSecondary, fontSize: typeScale.body }}>
-                    Cancel
-                  </Text>
-                </Pressable>
-                <Pressable
-                  style={{ padding: 8 }}
-                  onPress={() => {
-                    const actionScope = renameScopeRef.current;
-                    if (!isConversationActionCurrent(actionScope)) {
-                      closeRenameModal();
-                      return;
-                    }
-                    const trimmed = renameText.trim();
-                    if (trimmed && id) {
-                      renameConversation(id, trimmed);
-                    }
-                    closeRenameModal();
-                  }}
-                  accessibilityRole="button"
-                  accessibilityLabel="Submit rename"
-                >
-                  <Text style={{ color: colors.teal, fontSize: typeScale.body, fontWeight: '600' }}>
-                    Rename
-                  </Text>
-                </Pressable>
-              </View>
-            </Pressable>
-          </Pressable>
-        </Modal>
+        <RenameConversationModal rename={conversationActions.rename} />
       </KeyboardAvoidingView>
     </SafeAreaView>
   );

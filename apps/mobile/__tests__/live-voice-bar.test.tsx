@@ -1,4 +1,5 @@
 import React from 'react';
+import { Dimensions, StyleSheet } from 'react-native';
 jest.mock('@/services/fileCreation', () => ({
   downloadGeneratedFile: jest.fn(),
   shareFile: jest.fn().mockResolvedValue(undefined),
@@ -7,7 +8,7 @@ jest.mock('@/services/fileCreation', () => ({
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
 import { downloadGeneratedFile, shareFile } from '@/services/fileCreation';
 import { SafeAreaProvider, type Metrics } from 'react-native-safe-area-context';
-import { LiveVoiceBar } from '@/src/features/voice/components/LiveVoiceBar';
+import { LiveVoiceBar, liveVoiceOrbSize } from '@/src/features/voice/components/LiveVoiceBar';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
 import {
   LIVE_VOICE_LOCAL_MODE_REASON,
@@ -56,6 +57,33 @@ describe('LiveVoiceBar', () => {
   it('renders nothing when it is not the active composer', () => {
     const { queryByTestId } = renderLiveBar({ visible: false });
     expect(queryByTestId('live-voice-bar')).toBeNull();
+  });
+
+  it('fills the transcript area with a stage and centres the orb in it', () => {
+    const { getByTestId } = renderLiveBar();
+
+    const bar = getByTestId('live-voice-bar');
+    expect(StyleSheet.flatten(bar.props.style).flex).toBe(1);
+    const stage = StyleSheet.flatten(getByTestId('live-voice-stage').props.style);
+    expect(stage).toMatchObject({ flex: 1, alignItems: 'center', justifyContent: 'center' });
+  });
+
+  it('sizes the orb to about half the window width and never past its stage', () => {
+    const { width } = Dimensions.get('window');
+    const { getByTestId } = renderLiveBar();
+
+    expect(StyleSheet.flatten(getByTestId('voice-orb').props.style).width).toBe(
+      liveVoiceOrbSize(width, 0),
+    );
+    expect(liveVoiceOrbSize(390, 0)).toBe(203);
+    expect(liveVoiceOrbSize(390, 200)).toBe(140);
+
+    fireEvent(getByTestId('live-voice-stage'), 'layout', {
+      nativeEvent: { layout: { x: 0, y: 0, width, height: 200 } },
+    });
+    expect(StyleSheet.flatten(getByTestId('voice-orb').props.style).width).toBe(
+      liveVoiceOrbSize(width, 200),
+    );
   });
 
   it('says it is connecting before the session starts', () => {

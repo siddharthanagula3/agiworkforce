@@ -1,5 +1,11 @@
-import { useEffect, useRef } from 'react';
-import { ActivityIndicator, ScrollView, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  ScrollView,
+  useWindowDimensions,
+  View,
+  type LayoutChangeEvent,
+} from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
@@ -47,6 +53,8 @@ export interface LiveVoiceBarProps {
 }
 
 const TRANSCRIPT_MAX_HEIGHT = 180;
+const ORB_WIDTH_RATIO = 0.52;
+const ORB_STAGE_HEIGHT_RATIO = 0.7;
 const APPROVAL_TITLE = 'Waiting for your approval';
 const BACKEND_BUSY_LABEL = 'Working on your request';
 const SLOW_TOOL_SUFFIX = 'is taking longer than usual';
@@ -56,6 +64,12 @@ const TOOL_OUTPUT_LINES = 3;
 
 function activityMessage(activity: LiveVoiceToolActivity): string {
   return activity.state === 'timed_out' ? `${activity.label} ${SLOW_TOOL_SUFFIX}` : activity.label;
+}
+
+export function liveVoiceOrbSize(windowWidth: number, stageHeight: number): number {
+  const byWidth = windowWidth * ORB_WIDTH_RATIO;
+  if (stageHeight <= 0) return Math.round(byWidth);
+  return Math.round(Math.min(byWidth, stageHeight * ORB_STAGE_HEIGHT_RATIO));
 }
 
 function statusLabel(
@@ -98,6 +112,10 @@ export function LiveVoiceBar({
   const hapticsEnabled = useSettingsStore((s) => s.hapticsEnabled);
   const insets = useSafeAreaInsets();
   const transcriptRef = useRef<ScrollView>(null);
+  const { width: windowWidth } = useWindowDimensions();
+  const [stageHeight, setStageHeight] = useState(0);
+  const handleStageLayout = (event: LayoutChangeEvent) =>
+    setStageHeight(event.nativeEvent.layout.height);
 
   useEffect(() => {
     transcriptRef.current?.scrollToEnd({ animated: true });
@@ -131,24 +149,30 @@ export function LiveVoiceBar({
       testID="live-voice-bar"
       entering={FadeIn.duration(motion.quick)}
       exiting={FadeOut.duration(motion.quick)}
-      style={{ paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
+      style={{ flex: 1, paddingHorizontal: 16, paddingTop: 8, paddingBottom: insets.bottom + 12 }}
       accessibilityLiveRegion="polite"
     >
-      <View style={{ alignItems: 'center', marginBottom: 10 }}>
-        <VoiceOrb phase={orbPhase} audioLevel={assistantSpeaking ? 0.6 : 0} />
-      </View>
-
-      <Text
-        testID="live-voice-status"
-        style={{
-          color: colors.textSecondary,
-          fontSize: typeScale.footnote,
-          textAlign: 'center',
-          marginBottom: 8,
-        }}
+      <View
+        testID="live-voice-stage"
+        onLayout={handleStageLayout}
+        style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}
       >
-        {statusLabel(status, muted, assistantSpeaking, interrupted, reconnecting)}
-      </Text>
+        <VoiceOrb
+          phase={orbPhase}
+          audioLevel={assistantSpeaking ? 0.6 : 0}
+          size={liveVoiceOrbSize(windowWidth, stageHeight)}
+        />
+        <Text
+          testID="live-voice-status"
+          style={{
+            color: colors.textSecondary,
+            fontSize: typeScale.footnote,
+            textAlign: 'center',
+          }}
+        >
+          {statusLabel(status, muted, assistantSpeaking, interrupted, reconnecting)}
+        </Text>
+      </View>
 
       {error ? (
         <View
