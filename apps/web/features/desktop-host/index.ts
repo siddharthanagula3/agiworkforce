@@ -108,6 +108,7 @@ export { useHomeHref } from './hooks/use-home-href';
 export { useHostCommands } from './hooks/use-host-commands';
 export { useHostShortcuts, type HostShortcutRow } from './hooks/use-host-shortcuts';
 export { CODE_AGENT_MODE_CYCLE_ROW, CODE_AGENT_MODE_CYCLE_SHORTCUT } from './lib/code-shortcuts';
+export { useHostNavigation, type HostNavigationControls } from './hooks/use-host-navigation';
 export { useWindowZoom } from './hooks/use-window-zoom';
 export { useDesktopVoiceHotkey } from './hooks/use-desktop-voice-hotkey';
 export { usePairedDesktop, type PairedDesktop } from './hooks/use-paired-desktop';
@@ -119,6 +120,7 @@ export { BrowserToolsDialog, type BrowserToolsDialogProps } from './components/B
 export { DesktopRouteMessage } from './components/DesktopRouteMessage';
 export { DesktopRouteSurface } from './components/DesktopRouteSurface';
 export { DesktopSettingsSection } from './components/DesktopSettingsSection';
+export { DesktopHistoryControls } from './components/DesktopHistoryControls';
 export { DesktopTitleStrip } from './components/DesktopTitleStrip';
 export { DesktopUpdateRow } from './components/DesktopUpdateRow';
 export { DesktopUpdateNotice } from './components/DesktopUpdateNotice';

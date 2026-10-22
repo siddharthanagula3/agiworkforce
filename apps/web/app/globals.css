@@ -2072,8 +2072,18 @@ body:has([data-public-palette='flagship']) [data-theme='light'][data-design='agi
 html[data-desktop-host^='electron-darwin'] {
   --agi-window-zoom: 1;
   --agi-window-title-strip: calc(var(--chat-window-title-strip) / var(--agi-window-zoom));
+  --agi-window-history-width: 108px;
+  --agi-window-traffic-inset: calc(var(--chat-window-title-strip-inset) / var(--agi-window-zoom));
+  --agi-window-title-strip-inset: var(--agi-window-traffic-inset);
+}
+
+/* The history controls the page draws beside the window buttons take the next
+   108px of the strip, so everything that steps aside for the buttons steps aside
+   for them too. The attribute is written by DesktopHistoryControls only while
+   they are drawn. */
+html[data-desktop-host^='electron-darwin'][data-host-navigation] {
   --agi-window-title-strip-inset: calc(
-    var(--chat-window-title-strip-inset) / var(--agi-window-zoom)
+    var(--agi-window-traffic-inset) + var(--agi-window-history-width)
   );
 }
 

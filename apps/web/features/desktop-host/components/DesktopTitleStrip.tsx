@@ -1,6 +1,7 @@
 'use client';
 
 import { useDesktopHost } from '../lib/host';
+import { DesktopHistoryControls } from './DesktopHistoryControls';
 
 /**
  * The band a desktop shell reserves at the top of its window.
@@ -14,17 +15,21 @@ import { useDesktopHost } from '../lib/host';
  * independent of paint order, while a transparent strip painted on top would
  * win the renderer's hit test and swallow clicks on the controls beneath it.
  * Those controls are already `no-drag`, so the window server lets their clicks
- * through and the band drags everywhere else. Renders nothing in a browser.
+ * through and the band drags everywhere else. The history controls sit beside
+ * it for the same reason. Renders nothing in a browser.
  */
 export function DesktopTitleStrip() {
   const host = useDesktopHost();
   if (!host) return null;
 
   return (
-    <div
-      data-app-header=""
-      aria-hidden="true"
-      className="fixed inset-x-0 top-0 z-[var(--z-behind)] h-[var(--agi-window-title-strip)]"
-    />
+    <>
+      <div
+        data-app-header=""
+        aria-hidden="true"
+        className="fixed inset-x-0 top-0 z-[var(--z-behind)] h-[var(--agi-window-title-strip)]"
+      />
+      <DesktopHistoryControls host={host} />
+    </>
   );
 }
