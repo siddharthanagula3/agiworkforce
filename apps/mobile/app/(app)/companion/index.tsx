@@ -38,12 +38,13 @@ import {
   manualReconnect,
 } from '@/services/companion';
 import { setupCompanionNotifications } from '@/services/companionNotifications';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme } from '@/src/ui/theme';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 
 export default function CompanionScreen() {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const router = useRouter();
   const { pairingCode: deepLinkCode } = useLocalSearchParams<{ pairingCode?: string }>();
   const [showScanner, setShowScanner] = useState(false);
@@ -164,7 +165,7 @@ export default function CompanionScreen() {
     status === 'connected' || status === 'stale' || status === 'reconnecting';
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }}>
       <View className="flex-row items-center px-3 h-12">
         <PressableBox
           onPress={handleBack}

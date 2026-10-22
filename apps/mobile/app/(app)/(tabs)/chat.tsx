@@ -82,7 +82,7 @@ import {
   useModelInstallStore,
 } from '@/src/features/model-picker/installStore';
 import { useTierStore } from '@/src/features/billing/store';
-import { useThemeColors } from '@/src/ui/theme';
+import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { API_URL } from '@/lib/constants';
@@ -117,7 +117,8 @@ const STYLE_SHEET_HANDOFF_DELAY_MS = 450;
 export default function ChatTabScreen() {
   const router = useRouter();
   const navigation = useNavigation();
-  const c = useThemeColors();
+  const { colors: c, isDark } = useTheme();
+  const pageBackground = isDark ? c.background : c.surfaceBase;
   const modelPickerRef = useRef<BottomSheet>(null);
   const addToChatRef = useRef<BottomSheet>(null);
   const chatInputAttachRef = useRef<
@@ -829,7 +830,7 @@ export default function ChatTabScreen() {
   });
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: c.surfaceBase }} edges={['top']}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
       <View className="flex-row items-center justify-between px-4 h-12">
         <DrawerButton onPress={handleOpenDrawer} />
         {workSwitchVisible ? (

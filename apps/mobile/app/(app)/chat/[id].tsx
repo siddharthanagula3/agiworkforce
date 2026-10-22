@@ -164,7 +164,7 @@ import { useChatViewStore } from '@/stores/chat/chatViewStore';
 import { resolveMobileImageGenerationRequest } from '@/src/features/chat/actions/resolveMobileImageGenerationRequest';
 import { freeImageOfferFor } from '@/src/features/chat/actions/freeImageOffer';
 import { alertBlockedImageRequest } from '@/src/features/chat/actions/alertBlockedImageRequest';
-import { useThemeColors, radii } from '@/src/ui/theme';
+import { useTheme, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useAuthStore } from '@/src/features/auth/store';
@@ -190,7 +190,8 @@ interface ConversationUiActionScope {
 }
 
 export default function ChatScreen() {
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const params = useLocalSearchParams<{ id: string; prompt?: string; voice?: string }>();
   const id = Array.isArray(params.id) ? params.id[0] : params.id;
   useFocusEffect(
@@ -1718,7 +1719,7 @@ export default function ChatScreen() {
     return (
       <SafeAreaView
         className="flex-1 items-center justify-center"
-        style={{ backgroundColor: colors.surfaceBase }}
+        style={{ backgroundColor: pageBackground }}
       >
         <Text style={{ color: colors.textMuted }}>No conversation selected</Text>
       </SafeAreaView>
@@ -1726,11 +1727,7 @@ export default function ChatScreen() {
   }
 
   return (
-    <SafeAreaView
-      className="flex-1"
-      style={{ backgroundColor: colors.surfaceBase }}
-      edges={['top']}
-    >
+    <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }} edges={['top']}>
       {/* Android: adjustResize (Expo default softwareKeyboardLayoutMode) already
           resizes the window; stacking behavior="height" on top double-handles
           the keyboard and causes resize jumps. iOS keeps "padding". */}

@@ -50,7 +50,7 @@ import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
-import { useThemeColors, cardRadius } from '@/src/ui/theme';
+import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
@@ -364,7 +364,8 @@ function formatAccent(accent: string) {
 
 export default function SettingsTabScreen() {
   const router = useRouter();
-  const colors = useThemeColors();
+  const { colors, isDark } = useTheme();
+  const pageBackground = isDark ? colors.background : colors.surfaceBase;
   const insets = useSafeAreaInsets();
   const appMode = useChatAppModeStore((s) => s.appMode);
   const isCloud = appMode === 'cloud';
@@ -721,7 +722,7 @@ export default function SettingsTabScreen() {
   );
 
   return (
-    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
+    <SafeAreaView className="flex-1" style={{ backgroundColor: pageBackground }}>
       {/* The header sits outside the ScrollView so the close control stays
           pinned; inside it, X scrolled away for most of this ~30-row list and
           the tab bar is hidden on this route, leaving no visible way out. */}
