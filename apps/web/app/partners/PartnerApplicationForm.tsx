@@ -185,7 +185,13 @@ export function PartnerApplicationForm() {
           {error}
         </p>
       ) : null}
-      <button type="submit" className="agi-ds-btn" data-variant="primary" disabled={submitting}>
+      <button
+        type="submit"
+        className="agi-ds-btn"
+        data-variant="primary"
+        disabled={submitting}
+        aria-busy={submitting}
+      >
         {submitting ? 'Sending…' : 'Send application'}
       </button>
     </form>

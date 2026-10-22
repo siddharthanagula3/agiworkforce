@@ -119,6 +119,7 @@ export function MemorySection() {
     useCapabilitiesPreferences();
   const togglesDisabled = loadError !== null || !organizationMemoryAllowed;
   const memoryCount = useMemoryStore(selectMemoryCount);
+  const isEmpty = memoryCount === 0;
   const clearAllMemories = useMemoryStore((s) => s.clear);
   const hydrateMemories = useMemoryStore((s) => s.hydrateFromServer);
   const { confirm, dialog: confirmDialog } = useConfirmAction();
@@ -148,7 +149,7 @@ export function MemorySection() {
   }, [hydrateMemories]);
 
   const onClearAll = useCallback(() => {
-    if (memoryCount === 0) return;
+    if (isEmpty) return;
     confirm({
       title: 'Delete all memory facts?',
       description: translateUiPlural('settings', 'counts.deleteAllMemoryFacts', memoryCount, {
@@ -167,7 +168,7 @@ export function MemorySection() {
         }
       },
     });
-  }, [memoryCount, confirm, clearAllMemories]);
+  }, [isEmpty, memoryCount, confirm, clearAllMemories]);
 
   return (
     <section
@@ -288,25 +289,26 @@ export function MemorySection() {
             <button
               type="button"
               onClick={() => void onExport()}
-              disabled={memoryCount === 0 || exporting}
-              style={pillButtonStyle(memoryCount === 0 || exporting)}
+              disabled={isEmpty || exporting}
+              aria-busy={exporting}
+              style={pillButtonStyle(isEmpty || exporting)}
             >
               {exporting ? 'Exporting…' : 'Export memories'}
             </button>
             <button
               type="button"
               onClick={onManageMemories}
-              disabled={memoryCount === 0}
-              style={pillButtonStyle(memoryCount === 0)}
+              disabled={isEmpty}
+              style={pillButtonStyle(isEmpty)}
             >
               Manage memories
             </button>
             <button
               type="button"
               onClick={onClearAll}
-              disabled={memoryCount === 0}
+              disabled={isEmpty}
               style={{
-                ...pillButtonStyle(memoryCount === 0),
+                ...pillButtonStyle(isEmpty),
                 color: 'var(--settings-destructive-text)',
               }}
             >
