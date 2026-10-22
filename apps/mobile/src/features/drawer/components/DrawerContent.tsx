@@ -15,6 +15,7 @@ import {
   CalendarClock,
   ChevronDown,
   ChevronRight,
+  CircleArrowUp,
   Code2,
   FolderOpen,
   HelpCircle,
@@ -30,7 +31,11 @@ import {
   UserCircle,
   type LucideIcon,
 } from 'lucide-react-native';
-import { canUseBillingPlanCapability, MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
+import {
+  canUseBillingPlanCapability,
+  isFreeBillingPlanTier,
+  MOBILE_REMOTE_SCREEN_LABEL,
+} from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
@@ -87,6 +92,7 @@ type RoutePath =
   | '/(app)/notifications'
   | '/(app)/(tabs)/settings'
   | '/(app)/settings/cloud-usage'
+  | '/(app)/settings/cloud-billing'
   | '/(app)/about'
   | '/(app)/profile'
   | '/(app)/projects/[id]'
@@ -386,6 +392,7 @@ export function DrawerContent(props: DrawerContentComponentProps) {
   }, [drawerOpen, usesPersistentDrawer, appMode, isClerkSignedIn, clerkUserId, refreshUsage]);
 
   const visibleUsage = usageOwnerId === clerkUserId ? usageSnapshot : null;
+  const isFreePlan = isFreeBillingPlanTier(visibleUsage?.planTier ?? subscriptionTier);
   const remainingUsage =
     visibleUsage && !usageError
       ? visibleUsage.weeklyResetAt !== null
@@ -812,13 +819,19 @@ export function DrawerContent(props: DrawerContentComponentProps) {
             onPress={workspace.open}
           />
         ) : null}
-        {appMode === 'cloud' && isClerkSignedIn && clerkUserId ? (
+        {appMode !== 'cloud' || !isClerkSignedIn || !clerkUserId ? null : isFreePlan ? (
+          <NavRow
+            label={t('navUpgrade')}
+            icon={CircleArrowUp}
+            onPress={() => navigate('/(app)/settings/cloud-billing')}
+          />
+        ) : (
           <NavRow
             label={`Usage remaining${remainingUsage ? ` · ${remainingUsage}` : usageLoading ? ' · Checking…' : usageError ? ' · Unavailable' : ''}`}
             icon={BarChart3}
             onPress={() => navigate('/(app)/settings/cloud-usage')}
           />
-        ) : null}
+        )}
         <NavRow
           label="Settings"
           icon={Settings}

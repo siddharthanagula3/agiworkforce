@@ -73,6 +73,8 @@ jest.mock('../src/features/chat/components/ModeSwitchModal', () => {
   };
 });
 
+import { resources } from '@agiworkforce/i18n';
+import i18n from '../src/i18n';
 import { DrawerContent } from '../src/features/drawer/components/DrawerContent';
 import { useChatStore } from '../stores/chatStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
@@ -345,6 +347,7 @@ describe('DrawerContent', () => {
   });
 
   it('shows account-scoped remaining Cloud usage and opens the full usage screen', () => {
+    useTierStore.setState({ tier: 'pro' });
     useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'user-1' });
     useChatAppModeStore.setState({ appMode: 'cloud' });
     useCloudUsageStore.setState({
@@ -381,6 +384,47 @@ describe('DrawerContent', () => {
 
     useChatAppModeStore.setState({ appMode: 'local' });
     expect(renderDrawer().queryByLabelText('Usage remaining')).toBeNull();
+  });
+
+  it('shows a Free plan an Upgrade row to Billing instead of a usage meter', () => {
+    useTierStore.setState({ tier: 'pro' });
+    useAuthStore.setState({ isClerkSignedIn: true, clerkUserId: 'user-1' });
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    useCloudUsageStore.setState({
+      ownerId: 'user-1',
+      error: null,
+      snapshot: {
+        planTier: 'free',
+        usagePercentage: 40,
+        usageResetAt: '2026-10-01T00:00:00Z',
+        hasUsageRemaining: true,
+        periodStart: null,
+        periodEnd: null,
+        subscriptionStatus: 'none',
+        sessionUsagePercentage: 0,
+        sessionResetAt: null,
+        weeklyUsagePercentage: 65,
+        weeklyResetAt: '2026-09-29T00:00:00Z',
+        flagshipWeeklyUsagePercentage: 0,
+        flagshipWeeklyResetAt: null,
+        credits: null,
+      },
+    });
+
+    const upgradeLabel = resources.en.common.navUpgrade;
+    expect(i18n.t('navUpgrade', { lng: 'en' })).toBe(upgradeLabel);
+    const drawer = renderDrawer();
+    expect(drawer.queryByText(/Usage remaining/)).toBeNull();
+    expect(drawer.queryByText(/Week \d+%|Period \d+%/)).toBeNull();
+    fireEvent.press(drawer.getByLabelText(upgradeLabel));
+    expect(mockNavigate).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    drawer.unmount();
+
+    useCloudUsageStore.setState({ ownerId: 'another-user' });
+    useTierStore.setState({ tier: 'free' });
+    const beforeUsageLoads = renderDrawer();
+    expect(beforeUsageLoads.queryByText(/Usage remaining/)).toBeNull();
+    expect(beforeUsageLoads.getByLabelText(upgradeLabel)).toBeTruthy();
   });
 
   it('opens Cloud schedules from the drawer', () => {

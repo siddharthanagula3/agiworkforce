@@ -276,6 +276,34 @@ describe('Cloud Usage screen, session (rolling 5h) + weekly limits', () => {
     expect(getByText('29% used')).toBeTruthy();
   });
 
+  it('captions every meter with a reset countdown rather than a weekday', async () => {
+    const inSeventeenHours = new Date(
+      Date.now() + 17 * 60 * 60 * 1000 + 21 * 60 * 1000 + 30 * 1000,
+    ).toISOString();
+    mockFetchUsageSnapshot.mockResolvedValue(
+      snap({
+        planTier: 'pro',
+        usagePercentage: 25,
+        sessionUsagePercentage: 2,
+        sessionResetAt: new Date(
+          Date.now() + 3 * 60 * 60 * 1000 + 51 * 60 * 1000 + 30 * 1000,
+        ).toISOString(),
+        weeklyUsagePercentage: 83,
+        weeklyResetAt: inSeventeenHours,
+        flagshipWeeklyUsagePercentage: 100,
+        flagshipWeeklyResetAt: inSeventeenHours,
+      }),
+    );
+
+    const { getByText, getAllByText } = render(<CloudUsageScreen />);
+
+    await waitFor(() => {
+      expect(getByText('Weekly limits')).toBeTruthy();
+    });
+    expect(getByText('Resets in 3 hr 51 min')).toBeTruthy();
+    expect(getAllByText('Resets in 17 hr 21 min')).toHaveLength(2);
+  });
+
   it('hides Current session and Weekly limits when their windows are inactive', async () => {
     mockFetchUsageSnapshot.mockResolvedValue(
       snap({
