@@ -1,9 +1,16 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { ArticleFeedback } from '@/features/docs/components/ArticleFeedback';
+import { ArticleSupportCards } from '@/features/docs/components/ArticleSupportCards';
 import { CopyPageButton } from '@/features/docs/components/CopyPageButton';
 import { DocsArticleBody } from '@/features/docs/components/DocsArticleBody';
 import { DocsShell } from '@/features/docs/components/DocsShell';
-import { DOCS_HOME_PATH, docsNavGroups, docsNeighbours } from '@/features/docs/lib/docs-nav';
+import {
+  DOCS_HOME_PATH,
+  docsNavGroups,
+  docsNeighbours,
+  docsRelated,
+} from '@/features/docs/lib/docs-nav';
 import { buildMetadata } from '@/lib/seo/metadata';
 import {
   DOC_AUDIENCE_LABELS,
@@ -48,6 +55,7 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
   const groups = docsNavGroups();
   const group = groups.find((candidate) => candidate.links.some((link) => link.href === path));
   const { previous, next } = docsNeighbours(groups, path);
+  const related = docsRelated(groups, path);
   const metadata = docMetadataFor(article.id);
   const toc = article.sections
     .filter((section) => section.heading)
@@ -65,6 +73,7 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
               <Link href={DOCS_HOME_PATH}>Documentation</Link>
             </li>
             {group ? <li>{group.label}</li> : null}
+            <li aria-current="page">{article.title}</li>
           </ol>
         </nav>
         <div className="dx-head">
@@ -88,6 +97,8 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
         </ul>
         <hr className="dx-rule" />
         <DocsArticleBody sections={article.sections} />
+        <ArticleFeedback articleId={article.id} articleTitle={article.title} path={path} />
+        <ArticleSupportCards related={related} />
         <nav className="dx-pager" aria-label="More guides">
           {previous ? (
             <Link href={previous.href} className="dx-pager-link" data-dir="previous">

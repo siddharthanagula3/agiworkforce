@@ -47,3 +47,20 @@ export function docsNeighbours(
   if (index === -1) return { previous: null, next: null };
   return { previous: pages[index - 1] ?? null, next: pages[index + 1] ?? null };
 }
+
+export const RELATED_ARTICLE_LIMIT = 3;
+
+export function docsRelated(
+  groups: readonly DocsNavGroup[],
+  href: string,
+  limit = RELATED_ARTICLE_LIMIT,
+): readonly DocsNavLink[] {
+  const group = groups.find(
+    (candidate) =>
+      candidate.id !== OVERVIEW_GROUP.id && candidate.links.some((link) => link.href === href),
+  );
+  if (!group) return [];
+  const index = group.links.findIndex((link) => link.href === href);
+  const following = [...group.links.slice(index + 1), ...group.links.slice(0, index)];
+  return following.slice(0, limit);
+}
