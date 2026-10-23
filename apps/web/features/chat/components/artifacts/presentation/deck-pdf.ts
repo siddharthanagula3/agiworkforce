@@ -339,7 +339,7 @@ function drawShapes(
         'FD',
         true,
       );
-    } else if (shape.kind === 'rounded')
+    } else if (shape.kind === 'rounded-rect')
       pdf.roundedRect(x, y, w, h, Math.min(w, h) * 0.18, Math.min(w, h) * 0.18, 'FD');
     else pdf.rect(x, y, w, h, 'FD');
     if (shape.text) {

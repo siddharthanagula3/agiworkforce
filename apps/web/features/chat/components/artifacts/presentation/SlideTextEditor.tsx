@@ -3,6 +3,7 @@
 import { useMemo, useRef, type ReactNode } from 'react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { Markdown } from '@tiptap/markdown';
+import { cn } from '@shared/lib/utils';
 import { ArtifactCodeEditor } from '../ArtifactCodeEditor';
 import { DocumentFormattingToolbar } from '../DocumentFormattingToolbar';
 import {
@@ -48,7 +49,10 @@ function RichSlideEditor({
     <div className="flex flex-col gap-2">
       {editor ? <DocumentFormattingToolbar editor={editor} /> : null}
       <div
-        className={styles['slide']}
+        className={cn(
+          styles['slide'],
+          'focus-within:ring-2 focus-within:ring-inset focus-within:ring-focus-ring',
+        )}
         style={deckThemeStyle(theme)}
         data-testid="deck-slide-editor"
       >

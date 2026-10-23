@@ -132,7 +132,7 @@ function shapesSvg(shapes: readonly DeckShape[], theme: DeckTheme): string {
         case 'diamond':
           return `<polygon points="${x + w / 2},${y} ${x + w},${y + h / 2} ${x + w / 2},${y + h} ${x},${y + h / 2}" ${paint}/>${label}`;
         default:
-          return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${shape.kind === 'rounded' ? Math.min(w, h) * 0.18 : 0}" ${paint}/>${label}`;
+          return `<rect x="${x}" y="${y}" width="${w}" height="${h}" rx="${shape.kind === 'rounded-rect' ? Math.min(w, h) * 0.18 : 0}" ${paint}/>${label}`;
       }
     })
     .join('');

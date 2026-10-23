@@ -93,7 +93,7 @@ const NEW_SLIDE = '## New slide\n\n- First point\n- Second point';
 
 const SHAPE_ICONS: Record<ShapeKind, typeof Square> = {
   rect: Square,
-  rounded: RectangleHorizontal,
+  'rounded-rect': RectangleHorizontal,
   oval: Circle,
   diamond: Diamond,
   line: Minus,
@@ -576,7 +576,7 @@ export function PresentationWorkspace({
                 }}
                 placeholder={`What should change on slide ${current + 1}?`}
                 autoComplete="off"
-                className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none sm:min-h-9"
+                className="min-h-11 min-w-0 flex-1 rounded-lg bg-transparent px-2.5 text-sm text-foreground placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-focus-ring sm:min-h-9"
               />
               <button
                 type="button"
@@ -773,7 +773,7 @@ export function PresentationWorkspace({
           role="dialog"
           aria-modal="true"
           aria-label={`Presenting ${title}`}
-          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-black outline-none"
+          className="fixed inset-0 z-[var(--z-modal)] flex items-center justify-center bg-background outline-none"
           onKeyDown={(event) => {
             if (event.key === 'ArrowRight' || event.key === ' ' || event.key === 'PageDown') {
               event.preventDefault();
@@ -795,7 +795,7 @@ export function PresentationWorkspace({
               event.stopPropagation();
               setPresenting(false);
             }}
-            className="absolute end-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full text-white/80 hover:bg-white/10"
+            className="absolute end-4 top-4 inline-flex h-11 w-11 items-center justify-center rounded-full text-foreground hover:bg-[var(--chat-surface-hover)]"
             aria-label="Stop presenting"
           >
             <X className="h-5 w-5" aria-hidden="true" />

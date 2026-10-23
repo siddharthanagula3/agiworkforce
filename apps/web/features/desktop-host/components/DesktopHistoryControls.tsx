@@ -16,9 +16,9 @@ const HOST_NAVIGATION_ATTRIBUTE = 'data-host-navigation';
 const TOOLTIP_DELAY_MS = 200;
 
 const BUTTON_CLASS = cn(
-  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground outline-none',
+  'flex h-8 w-8 items-center justify-center rounded-md text-muted-foreground',
   'transition-colors hover:bg-accent hover:text-foreground',
-  'focus-visible:ring-2 focus-visible:ring-focus-ring',
+  'outline-none focus-visible:ring-2 focus-visible:ring-focus-ring',
   'disabled:pointer-events-none disabled:opacity-40',
 );
 

@@ -132,7 +132,7 @@ export function SlackChannelPolicies({
                 <a
                   href={`https://app.slack.com/client/${encodeURIComponent(data.teamId)}/${encodeURIComponent(channel.channelId)}`}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="font-mono text-xs text-foreground underline underline-offset-2"
                 >
                   {channel.channelId}

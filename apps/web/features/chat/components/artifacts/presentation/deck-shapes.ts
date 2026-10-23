@@ -1,9 +1,9 @@
-export const SHAPE_KINDS = ['rect', 'rounded', 'oval', 'diamond', 'line', 'arrow'] as const;
+export const SHAPE_KINDS = ['rect', 'rounded-rect', 'oval', 'diamond', 'line', 'arrow'] as const;
 export type ShapeKind = (typeof SHAPE_KINDS)[number];
 
 export const SHAPE_LABELS: Record<ShapeKind, string> = {
   rect: 'Rectangle',
-  rounded: 'Rounded rectangle',
+  'rounded-rect': 'Rounded rectangle',
   oval: 'Oval',
   diamond: 'Diamond',
   line: 'Line',

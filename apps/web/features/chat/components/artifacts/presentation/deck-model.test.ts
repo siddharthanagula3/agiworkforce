@@ -12,7 +12,7 @@ import {
   slideTitle,
   splitSlideForEditing,
 } from './deck-model';
-import { newShape, parseShapes, serializeShapes } from './deck-shapes';
+import { SHAPE_KINDS, newShape, parseShapes, serializeShapes } from './deck-shapes';
 import {
   DECK_THEMES,
   brandThemeMeta,
@@ -77,6 +77,16 @@ describe('deck model', () => {
     const source = block.kind === 'markdown' ? '' : block.source;
     expect(parseShapes(source).map((shape) => shape.id)).toEqual(['shape-1', 'shape-2']);
     expect(replaceShapesBlock(slide, null)).toBe('## Plan');
+  });
+
+  it('round-trips every shape kind through the saved block', () => {
+    const shapes = SHAPE_KINDS.reduce<ReturnType<typeof newShape>[]>(
+      (list, kind) => [...list, newShape(kind, list)],
+      [],
+    );
+    expect(parseShapes(serializeShapes(shapes)).map((shape) => shape.kind)).toEqual([
+      ...SHAPE_KINDS,
+    ]);
   });
 
   it('names a slide by its heading', () => {

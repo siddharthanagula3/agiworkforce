@@ -65,7 +65,7 @@ function ShapeGeometry({ shape, theme }: { shape: DeckShape; theme: DeckTheme })
           y={y}
           width={w}
           height={h}
-          rx={shape.kind === 'rounded' ? Math.min(w, h) * 0.18 : 0}
+          rx={shape.kind === 'rounded-rect' ? Math.min(w, h) * 0.18 : 0}
           fill={fill}
           stroke={stroke}
           strokeWidth={STROKE}

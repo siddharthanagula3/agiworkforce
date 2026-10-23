@@ -557,7 +557,7 @@ export function VoiceModeSurface({
       </div>
 
       {callTime !== null || agentStatus !== null ? (
-        <div className="relative z-10 flex w-full max-w-md flex-col items-center gap-2 text-sm">
+        <div className="relative z-[var(--z-control)] flex w-full max-w-md flex-col items-center gap-2 text-sm">
           {callTime !== null ? (
             <p
               role="timer"

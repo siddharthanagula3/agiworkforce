@@ -123,6 +123,8 @@ export function RefuseAppPicker({
               <li
                 key={app.bundleId}
                 {...getOptionProps(app)}
+                role="option"
+                aria-selected={app === activeItem}
                 onClick={() => pick(app)}
                 className={cn(
                   'cursor-pointer truncate rounded-md px-2.5 py-2 text-sm text-foreground pointer-coarse:min-h-11',

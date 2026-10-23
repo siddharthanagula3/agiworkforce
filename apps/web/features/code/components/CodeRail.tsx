@@ -237,7 +237,7 @@ function SessionSearchField({
   useEffect(() => inputRef.current?.focus(), []);
 
   return (
-    <div className="mx-1 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] pl-2 pr-1 focus-within:ring-2 focus-within:ring-focus-ring">
+    <div className="mx-1 mb-2 flex h-9 shrink-0 items-center gap-2 rounded-[var(--chat-radius-md)] border border-[var(--chat-border-strong)] bg-[var(--chat-input-bg)] pl-2 pr-1 focus-within:ring-2 focus-within:ring-focus-ring [&_input]:outline-none">
       <Search
         size={SECTION_GLYPH_SIZE}
         className="shrink-0 text-[var(--chat-text-secondary)]"
@@ -255,7 +255,7 @@ function SessionSearchField({
         }}
         placeholder={CODE_COPY.searchSessionsPlaceholder}
         aria-label={CODE_COPY.searchSessions}
-        className="min-w-0 flex-1 bg-transparent text-[14px] text-[var(--chat-text-primary)] outline-none placeholder:text-[var(--chat-text-muted)] [&::-webkit-search-cancel-button]:appearance-none"
+        className="min-w-0 flex-1 bg-transparent text-[14px] text-[var(--chat-text-primary)] placeholder:text-[var(--chat-text-muted)] [&::-webkit-search-cancel-button]:appearance-none"
       />
       <button
         type="button"

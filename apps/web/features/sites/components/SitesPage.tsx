@@ -2,9 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
-import { Globe } from '@agiworkforce/icons';
+import { Globe, RefreshCw } from '@agiworkforce/icons';
 import { Button, SearchInput, Spinner } from '@agiworkforce/ui';
-import { RefreshCw } from 'lucide-react';
 import { NEW_CHAT_PATH } from '@features/chat/lib/new-chat-entry';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useSiteActions } from '../hooks/useSiteActions';
