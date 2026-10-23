@@ -242,3 +242,26 @@ describe('ArtifactSandboxFrame degradation', () => {
     );
   });
 });
+
+describe('ArtifactSandboxFrame on an opaque desktop origin', () => {
+  it('answers no AI or storage request from its own frame, so no bridge rests on a null origin', () => {
+    configureArtifactSandboxOrigin(SANDBOX_ORIGIN);
+    renderFrame();
+    const frame = screen.getByTestId('frame') as HTMLIFrameElement;
+    const { contentWindow, postMessage } = stubContentWindow(frame);
+
+    dispatchFromSandbox(contentWindow, { type: 'sandbox-ready' }, 'null');
+    postMessage.mockClear();
+    dispatchFromSandbox(
+      contentWindow,
+      {
+        type: 'runtime-request',
+        id: 'runtime-1',
+        request: { op: 'complete', prompt: 'spend the viewer’s credits', connectors: [] },
+      },
+      'null',
+    );
+
+    expect(postMessage).not.toHaveBeenCalled();
+  });
+});

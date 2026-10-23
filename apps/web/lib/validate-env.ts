@@ -1673,6 +1673,15 @@ const CONFIG_KEY_DESCRIPTORS: readonly ConfigKeyDescriptor[] = [
     requiredIn: [],
     description: 'the Google Cloud project number the Drive connector OAuth client belongs to',
   }),
+  published('AGI_ARTIFACT_AI_ENABLED', {
+    type: 'boolean',
+    owner: 'apps/web/app/api/artifacts/runtime',
+    defaultValue: '0',
+    requiredIn: [],
+    validate: isBooleanish,
+    description:
+      'whether apps made in chat may call AI from inside the page, off until its security review passes',
+  }),
   published('SOFT_DELETED_RESOURCE_PURGE_ENABLED', {
     type: 'boolean',
     owner: 'apps/web/app/api/cron',

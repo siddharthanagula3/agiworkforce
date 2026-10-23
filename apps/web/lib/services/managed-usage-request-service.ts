@@ -10,6 +10,7 @@ import {
   normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 import {
+  getArtifactRuntimeUsageLimits,
   getPlanFlagshipWeeklyUsageCapMicrousd,
   getPlanSessionUsageCapMicrousd,
   getPlanWeeklyUsageCapMicrousd,
@@ -417,6 +418,12 @@ function reservationError(decision: string): ManagedUsageRequestError {
         402,
         'extra_usage_required',
       );
+    case 'artifact_limit':
+      return new ManagedUsageRequestError(
+        'This app has used as much AI as one app may in 5 hours. Your other chats and apps are not affected.',
+        429,
+        'artifact_runtime_limit_reached',
+      );
     case 'session_limit':
       return new ManagedUsageRequestError(
         'Your rolling 5-hour usage limit is reached. Wait for earlier usage to leave the window or upgrade for a higher limit.',
@@ -660,6 +667,25 @@ export async function usageCreditsEnabled(db: DatabaseAdapter, userId: string): 
   return (await getSpendableCredits(db, userId)).overageEnabled;
 }
 
+export type ArtifactRuntimeUsageSubject =
+  { kind: 'published'; publishedArtifactId: string } | { kind: 'owned'; artifactId: string };
+
+const ARTIFACT_USAGE_ID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+
+export function artifactUsageSubjectKey(subject: ArtifactRuntimeUsageSubject): string {
+  const id = (
+    subject.kind === 'published' ? subject.publishedArtifactId : subject.artifactId
+  ).toLowerCase();
+  if (!ARTIFACT_USAGE_ID.test(id)) {
+    throw new ManagedUsageRequestError(
+      'This app could not be identified for billing. No model request was sent.',
+      400,
+      'artifact_runtime_subject_invalid',
+    );
+  }
+  return `${subject.kind}:${id}`;
+}
+
 export async function reserveManagedUsageRequest(
   input: {
     db: DatabaseAdapter;
@@ -679,8 +705,20 @@ export async function reserveManagedUsageRequest(
     conversationId?: string;
     /** Extra usage bills the request to usage credits whatever the plan windows hold, only while they are turned on. */
     funding?: 'plan' | 'extra_usage';
+    /** The app whose page made this call; its calls and spend are capped per app as well. */
+    artifactSubject?: ArtifactRuntimeUsageSubject;
   } & ManagedUsageAmount,
 ): Promise<ManagedUsageRequestReservation> {
+  if (input.artifactSubject && input.funding === 'extra_usage') {
+    throw new ManagedUsageRequestError(
+      'An app cannot bill AI to usage credits.',
+      400,
+      'artifact_runtime_funding_unsupported',
+    );
+  }
+  const artifactSubjectKey = input.artifactSubject
+    ? artifactUsageSubjectKey(input.artifactSubject)
+    : null;
   const spendCapOrganizationId = await resolveSpendCapOrganizationId(
     input.db,
     input.organizationId,
@@ -696,32 +734,16 @@ export async function reserveManagedUsageRequest(
   const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
   const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);
+  const artifactLimits = artifactSubjectKey ? getArtifactRuntimeUsageLimits(allowance) : null;
   const row =
-    input.funding === 'extra_usage'
+    artifactSubjectKey && artifactLimits
       ? await queryOne(
           input.db,
-          `select * from public.reserve_managed_usage_request_on_extra_usage_microusd(
+          `select * from public.reserve_artifact_runtime_usage_microusd(
             $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
-            $7::text, $8::integer, $9::boolean
+            $7::text, $8::integer, $9::bigint, $10::bigint, $11::bigint, $12::boolean,
+            $13::text, $14::integer, $15::integer, $16::bigint
           )`,
-          [
-            input.userId,
-            idempotencyKey,
-            input.requestHash,
-            input.provider,
-            input.model,
-            resolveEstimatedMicrousd(input),
-            leaseToken,
-            input.leaseSeconds ?? 900,
-            input.isFlagship,
-          ],
-        )
-      : await queryOne(
-          input.db,
-          `select * from public.reserve_managed_usage_request_with_limits_microusd(
-      $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
-      $7::text, $8::integer, $9::bigint, $10::bigint, $11::bigint, $12::boolean
-    )`,
           [
             input.userId,
             idempotencyKey,
@@ -735,8 +757,52 @@ export async function reserveManagedUsageRequest(
             weeklyCapMicrousd,
             flagshipWeeklyCapMicrousd,
             input.isFlagship,
+            artifactSubjectKey,
+            artifactLimits.windowHours,
+            artifactLimits.maxCalls,
+            artifactLimits.capMicrousd,
           ],
-        );
+        )
+      : input.funding === 'extra_usage'
+        ? await queryOne(
+            input.db,
+            `select * from public.reserve_managed_usage_request_on_extra_usage_microusd(
+            $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
+            $7::text, $8::integer, $9::boolean
+          )`,
+            [
+              input.userId,
+              idempotencyKey,
+              input.requestHash,
+              input.provider,
+              input.model,
+              resolveEstimatedMicrousd(input),
+              leaseToken,
+              input.leaseSeconds ?? 900,
+              input.isFlagship,
+            ],
+          )
+        : await queryOne(
+            input.db,
+            `select * from public.reserve_managed_usage_request_with_limits_microusd(
+      $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
+      $7::text, $8::integer, $9::bigint, $10::bigint, $11::bigint, $12::boolean
+    )`,
+            [
+              input.userId,
+              idempotencyKey,
+              input.requestHash,
+              input.provider,
+              input.model,
+              resolveEstimatedMicrousd(input),
+              leaseToken,
+              input.leaseSeconds ?? 900,
+              sessionCapMicrousd,
+              weeklyCapMicrousd,
+              flagshipWeeklyCapMicrousd,
+              input.isFlagship,
+            ],
+          );
 
   const decision =
     typeof row['reservation_decision'] === 'string' ? row['reservation_decision'] : '';

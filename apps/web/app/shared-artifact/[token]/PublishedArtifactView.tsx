@@ -29,6 +29,7 @@ export interface PublishedArtifactViewProps {
   /** Who the publication is for. Drives the line under the title, nothing else. */
   audience?: 'public' | 'organization' | 'invited';
   token?: string;
+  aiEnabled?: boolean;
 }
 
 function connectorList(connectors: readonly string[]): string {
@@ -57,11 +58,12 @@ export function PublishedArtifactView({
   publishedAt,
   audience = 'public',
   token,
+  aiEnabled = false,
 }: PublishedArtifactViewProps) {
   const { t } = useTranslation('chat');
   const sandboxed = isSandboxedPublishedKind(kind);
   const runnable = kind === 'html' || kind === 'react';
-  const runtime = usePublishedArtifactRuntime(runnable ? token : undefined, content);
+  const runtime = usePublishedArtifactRuntime(runnable ? token : undefined, content, aiEnabled);
   const [renderError, setRenderError] = useState<string | null>(null);
   const router = useRouter();
   const [copying, setCopying] = useState(false);

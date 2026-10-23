@@ -18,6 +18,11 @@ vi.mock('@/lib/server/managed-usage-policy', () => ({
   getPlanSessionUsageCapMicrousd: vi.fn(() => 10_000_000_000),
   getPlanWeeklyUsageCapMicrousd: vi.fn(() => 10_000_000_000),
   getPlanFlagshipWeeklyUsageCapMicrousd: vi.fn(() => 10_000_000_000),
+  getArtifactRuntimeUsageLimits: vi.fn(() => ({
+    windowHours: 5,
+    maxCalls: 200,
+    capMicrousd: 2_500_000_000,
+  })),
 }));
 vi.mock('@/lib/services/cogs-ledger-service', () => ({
   recordSettledProviderCost: vi.fn(),

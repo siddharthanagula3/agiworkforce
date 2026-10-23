@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead, with Legal/compliance co-owning section 1
-Last updated: 2026-10-19
+Last updated: 2026-10-23
 Rotation cadence: every 12 months per key, plus immediately on suspected exposure
 
 The single security document for this repository. Four live policies live here as
@@ -1174,5 +1174,24 @@ subresource integrity on the sandbox CDN loads. An adversarial pass the same day
 returned needs-revision and added five items, the worst being that the natural
 billing path charges the artifact publisher, which turns the public shared-artifact
 surface into a wallet drain aimed at one named user. Verdict as it stands: the
-precondition is unmet, so no build starts. The capability row is
-`CAP-052` in `audit/registers/capability-gaps.csv`.
+precondition is unmet. The capability row is `CAP-052` in
+`audit/registers/capability-gaps.csv`.
+
+The bridge was nevertheless built for signed-in viewers, so the owner scheduled
+its redesign on 2026-10-22 and asked for an independent review before release.
+The redesign answers the adversarial items in code. Every call bills the
+signed-in viewer, never the publisher, and a signed-out visitor reaches no
+reservation (RT-1). The bridge listens only to its own frame on the exact
+sandbox origin. The shared desktop frame, whose origin can be opaque, and the
+extension refuse every runtime request (RT-2). One renderer serves every
+surface, so absence cannot be structural. Tests instead pin that the srcDoc
+fallback carries no bridge, and that a request from a signed-out visitor, or
+from a page with the switch off, never reaches the server (RT-3).
+Remembered consent is bound to the exact published code. Each app's calls and
+spend are attributed to it and capped per viewer under the reservation lock by
+migration 0390 (RT-4). Every call takes a concurrent-turn slot that refuses on
+any limiter outage (RT-5a). An app's prompt also counts as untrusted content,
+so a tool that could send data out never runs unattended beside a private
+source. The whole bridge stays behind `AGI_ARTIFACT_AI_ENABLED`, off by default.
+This is not a passing verdict: the switch stays off until the independent
+review signs off.

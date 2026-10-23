@@ -47,6 +47,7 @@ const ROUTE = {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('AGI_ARTIFACT_AI_ENABLED', '1');
   mocks.sideCallRouting.mockImplementation(async (_db, _user, request) => request);
   mocks.resolveAutoRoute.mockReturnValue({ status: 'ok', harnessId: 'deepseek/chat', ...ROUTE });
   mocks.keepsOutOfTraining.mockReturnValue(true);

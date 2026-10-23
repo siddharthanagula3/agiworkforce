@@ -129,6 +129,56 @@ describe('the sandbox document allowlist', () => {
   });
 });
 
+describe('SandboxedIframe AI bridge origin checks', () => {
+  it('ignores an AI request its own frame posts from an opaque origin', () => {
+    const runtime = { handle: vi.fn(async () => 'answer') };
+    const { container } = render(
+      <SandboxedIframe
+        title="Published app"
+        payload={{ type: 'render', kind: 'html', html: '<h1>App</h1>' }}
+        fallbackSrcDoc="<h1>App</h1>"
+        runtime={runtime}
+      />,
+    );
+    const frame = container.querySelector('iframe')!;
+
+    act(() =>
+      post(frame.contentWindow, 'null', {
+        type: 'runtime-request',
+        id: 'runtime-1',
+        request: { op: 'complete', prompt: 'hello', connectors: [] },
+      }),
+    );
+
+    expect(runtime.handle).not.toHaveBeenCalled();
+  });
+
+  it('never hands the srcDoc fallback an AI bridge', () => {
+    vi.stubEnv('NEXT_PUBLIC_SANDBOX_ORIGIN', '');
+    const runtime = { handle: vi.fn(async () => 'answer') };
+    const { container } = render(
+      <SandboxedIframe
+        title="Published app"
+        payload={{ type: 'render', kind: 'html', html: '<h1>App</h1>' }}
+        fallbackSrcDoc="<h1>App</h1>"
+        runtime={runtime}
+      />,
+    );
+    const frame = container.querySelector('iframe')!;
+    expect(frame.getAttribute('srcdoc')).not.toBeNull();
+
+    act(() =>
+      post(frame.contentWindow, 'null', {
+        type: 'runtime-request',
+        id: 'runtime-1',
+        request: { op: 'complete', prompt: 'hello', connectors: [] },
+      }),
+    );
+
+    expect(runtime.handle).not.toHaveBeenCalled();
+  });
+});
+
 it('does not deliver a late runtime result into a frame showing replacement content', async () => {
   let finish!: (value: unknown) => void;
   const runtime = {

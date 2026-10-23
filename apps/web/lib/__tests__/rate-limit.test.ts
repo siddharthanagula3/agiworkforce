@@ -432,6 +432,78 @@ describe('managed concurrent-turn ceiling', () => {
   });
 });
 
+describe('managed concurrent-turn ceiling that refuses on any outage', () => {
+  const POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
+  const PAID_TIER = 'pro';
+
+  beforeEach(() => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    upstash.pipeline.exec.mockResolvedValue([0, 1, 1, ['turn-1']]);
+    process.env['UPSTASH_REDIS_REST_URL'] = 'https://redis.invalid';
+    process.env['UPSTASH_REDIS_REST_TOKEN'] = 'token';
+    process.env[KEY_VALUE_PROVIDER_ENV] = 'upstash';
+    delete process.env[POLICY_ENV];
+  });
+
+  afterEach(() => {
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    process.env[KEY_VALUE_PROVIDER_ENV] = NO_SHARED_STORE;
+    delete process.env[POLICY_ENV];
+  });
+
+  async function acquireRefusingOnOutage(turnId: string) {
+    const { acquireManagedTurnSlot } = await import('../rate-limit');
+    return acquireManagedTurnSlot({
+      userId: `user-${turnId}`,
+      planTier: PAID_TIER,
+      turnId,
+      outage: 'refuse',
+    });
+  }
+
+  it('still admits and records a turn while Redis answers', async () => {
+    const result = await acquireRefusingOnOutage('strict-up');
+
+    expect(result.admitted).toBe(true);
+    expect(upstash.pipeline.zadd).toHaveBeenCalledTimes(1);
+  });
+
+  it('refuses when the shared store quota is exhausted, where chat would admit', async () => {
+    upstash.pipeline.exec.mockRejectedValue(
+      new Error('Command failed: ERR max requests limit exceeded. Limit: 500000, Usage: 500002.'),
+    );
+
+    const result = await acquireRefusingOnOutage('strict-quota');
+
+    expect(result.admitted).toBe(false);
+    expect(result.denial).toBe('limiter-unavailable');
+    expect(result.slot).toBeNull();
+  });
+
+  it('refuses on a Redis failure even when an operator configured fail-open', async () => {
+    process.env[POLICY_ENV] = 'fail-open';
+    upstash.pipeline.exec.mockRejectedValue(new Error('redis unavailable'));
+
+    const result = await acquireRefusingOnOutage('strict-fail-open');
+
+    expect(result.admitted).toBe(false);
+    expect(result.denial).toBe('limiter-unavailable');
+  });
+
+  it('refuses on a Redis-less box that would otherwise run fail-open', async () => {
+    delete process.env['UPSTASH_REDIS_REST_URL'];
+    delete process.env['UPSTASH_REDIS_REST_TOKEN'];
+    process.env[KEY_VALUE_PROVIDER_ENV] = NO_SHARED_STORE;
+
+    const result = await acquireRefusingOnOutage('strict-no-redis');
+
+    expect(result.admitted).toBe(false);
+    expect(result.denial).toBe('limiter-unavailable');
+  });
+});
+
 describe('rate-limit failure policy', () => {
   const POLICY_ENV = 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY';
 

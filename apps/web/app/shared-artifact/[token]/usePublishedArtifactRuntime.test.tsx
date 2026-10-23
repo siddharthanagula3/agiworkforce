@@ -23,9 +23,10 @@ beforeEach(() => {
 
 describe('published artifact host ownership across asynchronous waits', () => {
   it('retires consent for a replaced artifact without running the old request or saving it under the new artifact', async () => {
-    const { result, rerender } = renderHook(({ token }) => usePublishedArtifactRuntime(token), {
-      initialProps: { token: 'artifact-a' },
-    });
+    const { result, rerender } = renderHook(
+      ({ token }) => usePublishedArtifactRuntime(token, undefined, true),
+      { initialProps: { token: 'artifact-a' } },
+    );
     let pending!: Promise<unknown>;
     act(() => {
       pending = result.current
@@ -92,7 +93,7 @@ it('keeps a live request context after StrictMode setup and cleanup replay', asy
 
 it('retires a pending request when the visible content changes under the same publication', async () => {
   const { result, rerender } = renderHook(
-    ({ content }) => usePublishedArtifactRuntime('artifact-a', content),
+    ({ content }) => usePublishedArtifactRuntime('artifact-a', content, true),
     { initialProps: { content: 'first revision' } },
   );
   let pending!: Promise<unknown>;
@@ -118,7 +119,7 @@ it('does not let a late connector description overwrite the replacement artifact
     )
     .mockResolvedValueOnce([{ id: 'gmail', label: 'Current app', connected: true, tools: [] }]);
   const { result, rerender, unmount } = renderHook(
-    ({ token }) => usePublishedArtifactRuntime(token),
+    ({ token }) => usePublishedArtifactRuntime(token, undefined, true),
     { initialProps: { token: 'artifact-a' } },
   );
   let first!: Promise<unknown>;
@@ -146,4 +147,100 @@ it('does not let a late connector description overwrite the replacement artifact
   unmount();
   expect(await second).toMatch(/changed/);
   expect(mocks.call).not.toHaveBeenCalled();
+});
+
+describe('published artifact AI while AI in apps is switched off', () => {
+  it('refuses an AI request without asking for consent or calling the server', async () => {
+    const { result } = renderHook(() => usePublishedArtifactRuntime('artifact-a', 'code'));
+
+    await expect(
+      result.current.host!.handle({ op: 'complete', prompt: 'hello', connectors: [] }),
+    ).rejects.toThrow('AI in apps is not available yet.');
+    expect(result.current.askingForAi).toBeNull();
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
+
+  it('refuses an anonymous visitor the same way, without a sign-in prompt for AI', async () => {
+    mocks.session = { isLoaded: true, isSignedIn: false, userId: null };
+    const { result } = renderHook(() => usePublishedArtifactRuntime('artifact-a', 'code'));
+
+    await expect(
+      result.current.host!.handle({ op: 'complete', prompt: 'hello', connectors: [] }),
+    ).rejects.toThrow('AI in apps is not available yet.');
+    expect(result.current.signInNeeded).toBe(false);
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
+
+  it('keeps saved data working', async () => {
+    const { result } = renderHook(() => usePublishedArtifactRuntime('artifact-a', 'code'));
+
+    await expect(
+      result.current.host!.handle({ op: 'storage.get', key: 'counter', shared: false }),
+    ).resolves.toBe('owned result');
+  });
+});
+
+describe('published artifact AI for a signed-out visitor', () => {
+  it('asks the visitor to sign in and never calls the server', async () => {
+    mocks.session = { isLoaded: true, isSignedIn: false, userId: null };
+    const { result } = renderHook(() => usePublishedArtifactRuntime('artifact-a', 'code', true));
+
+    let refusal!: Promise<unknown>;
+    act(() => {
+      refusal = result.current
+        .host!.handle({ op: 'complete', prompt: 'hello', connectors: [] })
+        .catch((error: unknown) => error);
+    });
+    await refusal;
+    expect(result.current.signInNeeded).toBe(true);
+    expect(result.current.askingForAi).toBeNull();
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
+});
+
+describe('remembered AI consent across republished code', () => {
+  async function allowOnce(content: string) {
+    const hook = await settledHook(content);
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = hook.result.current.host!.handle({ op: 'complete', prompt: 'hi', connectors: [] });
+    });
+    await waitFor(() => expect(hook.result.current.askingForAi).not.toBeNull());
+    act(() => hook.result.current.answerAiRequest({ allowed: true, allowedTools: [] }));
+    await pending;
+    hook.unmount();
+  }
+
+  async function settledHook(content: string) {
+    const hook = renderHook(() => usePublishedArtifactRuntime('artifact-a', content, true));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    return hook;
+  }
+
+  it('reuses consent for the exact code the viewer allowed', async () => {
+    await allowOnce('version one');
+    mocks.call.mockClear();
+    const { result } = await settledHook('version one');
+
+    await expect(
+      result.current.host!.handle({ op: 'complete', prompt: 'again', connectors: [] }),
+    ).resolves.toBe('owned result');
+    expect(result.current.askingForAi).toBeNull();
+  });
+
+  it('asks again when the publisher replaces the code under the same link', async () => {
+    await allowOnce('version one');
+    mocks.call.mockClear();
+    const { result } = await settledHook('version two');
+
+    act(() => {
+      void result.current
+        .host!.handle({ op: 'complete', prompt: 'again', connectors: [] })
+        .catch(() => undefined);
+    });
+    await waitFor(() => expect(result.current.askingForAi).not.toBeNull());
+    expect(mocks.call).not.toHaveBeenCalled();
+  });
 });

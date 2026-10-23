@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ArtifactRuntimeConnector } from '@agiworkforce/cloud-contracts';
 import type { ArtifactRuntimeHost } from '@/lib/artifact-sandbox';
 import { useSession } from '@/lib/identity/client';
@@ -10,6 +10,7 @@ import {
   describeArtifactRuntimeConnectors,
 } from '@/features/chat/components/artifacts/artifactRuntimeClient';
 import { toUserMessage } from '@/lib/user-error-message';
+import { ARTIFACT_AI_OFF_MESSAGE } from '@/lib/artifact-ai';
 
 const CONSENT_DECLINED = 'You chose not to let this app use AI.';
 const CONNECTORS_DECLINED = 'You chose not to let this app use your connected apps.';
@@ -78,6 +79,32 @@ function forgetConsent(scope: string, key: string): void {
   }
 }
 
+// Consent is kept per exact revision: republishing new code under the same
+// link must ask again rather than inherit what the earlier code was allowed.
+function useRevisionDigest(revision: string | undefined): string | null {
+  const source = revision ?? '';
+  const [digest, setDigest] = useState<{ source: string; value: string } | null>(null);
+  useEffect(() => {
+    const subtle = globalThis.crypto?.subtle;
+    if (!subtle) return undefined;
+    let current = true;
+    void subtle.digest('SHA-256', new TextEncoder().encode(source)).then(
+      (buffer) => {
+        if (!current) return;
+        const value = Array.from(new Uint8Array(buffer), (byte) =>
+          byte.toString(16).padStart(2, '0'),
+        ).join('');
+        setDigest({ source, value });
+      },
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [source]);
+  return digest?.source === source ? digest.value : null;
+}
+
 export interface PublishedArtifactRuntime {
   host: ArtifactRuntimeHost | undefined;
   signInNeeded: boolean;
@@ -97,9 +124,15 @@ interface Waiter {
 export function usePublishedArtifactRuntime(
   token: string | undefined,
   revision?: string,
+  aiEnabled = false,
 ): PublishedArtifactRuntime {
   const { isLoaded, isSignedIn, userId } = useSession();
-  const consentScope = token && userId ? `${userId}:${token}` : null;
+  const revisionDigest = useRevisionDigest(revision);
+  const consentScopeRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    consentScopeRef.current =
+      token && userId && revisionDigest ? `${userId}:${token}:${revisionDigest}` : null;
+  }, [token, userId, revisionDigest]);
   const [signInNeeded, setSignInNeeded] = useState(false);
   const [askingForAi, setAskingForAi] = useState<ArtifactConsentRequest | null>(null);
   const [grantedConnectorSets, setGrantedConnectorSets] = useState<string[][]>([]);
@@ -137,6 +170,7 @@ export function usePublishedArtifactRuntime(
     (connectorIds: string[]) => {
       const context = current();
       if (!context) return;
+      const consentScope = consentScopeRef.current;
       const stored = consentScope ? readConsent(consentScope, consentKey(connectorIds)) : null;
       setAskingForAi({
         connectorIds,
@@ -164,7 +198,7 @@ export function usePublishedArtifactRuntime(
         },
       );
     },
-    [token, consentScope, current],
+    [token, current],
   );
 
   const rememberGranted = useCallback((connectorIds: readonly string[]) => {
@@ -189,6 +223,7 @@ export function usePublishedArtifactRuntime(
       const settled = waitingRef.current.filter(
         (waiter) => waiter.key === key && waiter.context === context,
       );
+      const consentScope = consentScopeRef.current;
       if (consentScope) {
         if (consent) storeConsent(consentScope, key, consent);
         else forgetConsent(consentScope, key);
@@ -201,7 +236,7 @@ export function usePublishedArtifactRuntime(
       else setAskingForAi(null);
       for (const waiter of settled) waiter.resolve(consent);
     },
-    [ask, rememberGranted, consentScope, current],
+    [ask, rememberGranted, current],
   );
 
   const consentFor = useCallback(
@@ -212,6 +247,7 @@ export function usePublishedArtifactRuntime(
       if (!review) {
         const answered = answersRef.current.get(key);
         if (answered !== undefined) return Promise.resolve(answered);
+        const consentScope = consentScopeRef.current;
         const stored = consentScope ? readConsent(consentScope, key) : null;
         if (stored) {
           answersRef.current.set(key, stored);
@@ -227,7 +263,7 @@ export function usePublishedArtifactRuntime(
         waitingRef.current.push({ context, key, connectorIds: [...connectorIds], resolve });
       });
     },
-    [ask, rememberGranted, consentScope, current],
+    [ask, rememberGranted, current],
   );
 
   const reviewConnectors = useCallback(
@@ -243,6 +279,7 @@ export function usePublishedArtifactRuntime(
       handle: async (request) => {
         const context = current();
         if (!context) throw new Error(CONTEXT_CHANGED);
+        if (request.op === 'complete' && !aiEnabled) throw new Error(ARTIFACT_AI_OFF_MESSAGE);
         if (!isLoaded) throw new Error('Wait for your sign-in state before using this app.');
         if (!isSignedIn || !userId) {
           setSignInNeeded(true);
@@ -272,7 +309,7 @@ export function usePublishedArtifactRuntime(
         }
       },
     };
-  }, [consentFor, token, isLoaded, isSignedIn, userId, current]);
+  }, [consentFor, token, isLoaded, isSignedIn, userId, current, aiEnabled]);
 
   return {
     host,

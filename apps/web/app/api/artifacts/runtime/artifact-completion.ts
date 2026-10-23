@@ -7,6 +7,10 @@ import {
   formatPrivacyModeLabel,
 } from '@agiworkforce/types';
 import { applySecretHandlingToTexts } from '@/app/api/llm/v1/chat/completions/lib/secret-handling-gate';
+import { randomUUID } from 'node:crypto';
+import { ARTIFACT_AI_OFF_CODE, ARTIFACT_AI_OFF_MESSAGE } from '@/lib/artifact-ai';
+import { acquireManagedTurnSlot, type ManagedTurnSlotResult } from '@/lib/rate-limit';
+import { artifactAiEnabled } from '@/lib/server/artifact-ai-switch';
 import { logger } from '@/lib/logger';
 import {
   buildModelPolicyGateResponse,
@@ -79,6 +83,28 @@ const WORDING = {
   },
 } as const;
 
+function turnSlotRefusal(turn: ManagedTurnSlotResult): NextResponse {
+  if (turn.denial === 'ceiling-reached') {
+    return artifactRuntimeRefusal(
+      429,
+      'concurrent_turn_limit_reached',
+      'Your plan allows a set number of AI responses at a time and they are all running. Wait for one to finish, then try again.',
+    );
+  }
+  if (turn.denial === 'plan-excluded') {
+    return artifactRuntimeRefusal(
+      403,
+      'concurrent_turn_limit_reached',
+      'Your plan does not include AI responses in apps. Upgrade to use this part of the app.',
+    );
+  }
+  return artifactRuntimeRefusal(
+    503,
+    'concurrency_limiter_unavailable',
+    'AI in this app cannot be checked against your limits right now. No model request was sent. Try again in a moment.',
+  );
+}
+
 export interface ArtifactCompletionInput {
   request: NextRequest;
   scoped: UserScopedDb;
@@ -94,6 +120,9 @@ export async function respondToArtifactCompletion(
   input: ArtifactCompletionInput,
 ): Promise<Response> {
   const { request, scoped, subject } = input;
+  if (!artifactAiEnabled()) {
+    return artifactRuntimeRefusal(403, ARTIFACT_AI_OFF_CODE, ARTIFACT_AI_OFF_MESSAGE);
+  }
   const wording = WORDING[subject.kind];
   const connectors = [...new Set(input.connectors)];
   if (connectors.length > 0 && !connectorsReleased()) {
@@ -249,6 +278,14 @@ export async function respondToArtifactCompletion(
     );
   }
 
+  const turn = await acquireManagedTurnSlot({
+    userId: scoped.userId,
+    planTier: entitlement.plan,
+    turnId: `artifact-runtime-${randomUUID()}`,
+    outage: 'refuse',
+  });
+  if (!turn.admitted || !turn.slot) return turnSlotRefusal(turn);
+
   try {
     const text = await completeArtifactPrompt({
       db: scoped.db,
@@ -277,5 +314,7 @@ export async function respondToArtifactCompletion(
       return artifactRuntimeRefusal(503, 'model_unavailable', error.message);
     }
     throw error;
+  } finally {
+    await turn.slot.release();
   }
 }

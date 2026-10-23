@@ -40,6 +40,28 @@ describe('runsUnattendedWithoutAsking', () => {
     ).toBe(false);
   });
 
+  it('keeps a tool that can send data out from running unattended in a run carrying untrusted content beside a private source', () => {
+    const permissions = allowed('notes', 'archive_note');
+    const untrusted = { untrustedContentInContext: true, sensitiveSourceAvailable: true };
+
+    expect(runsUnattendedWithoutAsking(ARCHIVE, 'ask_every_time', permissions)).toBe(true);
+    expect(
+      runsUnattendedWithoutAsking(ARCHIVE, 'ask_every_time', permissions, undefined, untrusted),
+    ).toBe(false);
+  });
+
+  it('still runs an allowed read in a run carrying untrusted content', () => {
+    expect(
+      runsUnattendedWithoutAsking(
+        READ_FILE,
+        'ask_every_time',
+        allowed('onedrive', 'read_file'),
+        undefined,
+        { untrustedContentInContext: true, sensitiveSourceAvailable: true },
+      ),
+    ).toBe(true);
+  });
+
   it('never runs a blocked tool', () => {
     const blocked = connectorToolPermissionsFromEntries([
       { connectorId: 'onedrive', toolName: 'read_file', level: 'deny' },

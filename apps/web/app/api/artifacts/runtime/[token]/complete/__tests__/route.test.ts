@@ -30,6 +30,8 @@ const mocks = vi.hoisted(() => ({
   buildModelPolicyGateResponse: vi.fn(),
   buildProviderEgressGateResponse: vi.fn(),
   allowsConnectors: vi.fn(),
+  acquireTurnSlot: vi.fn(),
+  releaseTurnSlot: vi.fn(),
   db: { query: vi.fn() },
 }));
 
@@ -61,7 +63,7 @@ vi.mock('@/lib/csrf', () => ({
 }));
 vi.mock('@/lib/rate-limit', () => ({
   REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
-  acquireManagedTurnSlot: vi.fn(),
+  acquireManagedTurnSlot: mocks.acquireTurnSlot,
   checkRateLimit: vi.fn(),
   clientIpRateLimitIdentifier: vi.fn(),
   getClientIpForRateLimit: vi.fn(),
@@ -243,7 +245,7 @@ type ManagedUsageRequestServiceModule =
 type TypesModule = typeof import('@agiworkforce/types');
 
 const TOKEN = 'Abcdefghijklmnopqrstuv_1';
-const ARTIFACT = { token: TOKEN, ownerId: 'owner-9', publishedArtifactId: 'published-1' };
+const ARTIFACT = { ownerUserId: 'owner-9', publishedArtifactId: 'published-1' };
 const ROUTE = { provider: 'anthropic', modelKey: 'claude-fast' };
 
 function call(body: unknown, token = TOKEN) {
@@ -263,6 +265,14 @@ async function errorCode(response: Response): Promise<string> {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('AGI_ARTIFACT_AI_ENABLED', '1');
+  mocks.releaseTurnSlot.mockResolvedValue(undefined);
+  mocks.acquireTurnSlot.mockResolvedValue({
+    admitted: true,
+    limit: 3,
+    active: 1,
+    slot: { release: mocks.releaseTurnSlot },
+  });
   mocks.requireCsrfToken.mockResolvedValue(null);
   mocks.withRateLimit.mockResolvedValue(null);
   mocks.getUserScopedDb.mockResolvedValue({
@@ -287,6 +297,108 @@ beforeEach(() => {
   mocks.buildArtifactConnectorPlan.mockResolvedValue({ unusable: [] });
   mocks.completeArtifactPrompt.mockResolvedValue('A short summary');
   mocks.allowsConnectors.mockResolvedValue(true);
+});
+
+afterEach(() => {
+  vi.unstubAllEnvs();
+});
+
+describe('POST /api/artifacts/runtime/[token]/complete while AI in apps is switched off', () => {
+  it.each([undefined, '0', 'false', 'off', 'enabled'])(
+    'refuses with the switch set to %s before any gate or billing',
+    async (value) => {
+      vi.stubEnv('AGI_ARTIFACT_AI_ENABLED', value);
+
+      const response = await call({ prompt: 'Summarize' });
+
+      expect(response.status).toBe(403);
+      expect(await errorCode(response)).toBe('artifact_ai_off');
+      expect(mocks.evaluateActiveWorkspacePolicy).not.toHaveBeenCalled();
+      expect(mocks.acquireTurnSlot).not.toHaveBeenCalled();
+      expect(mocks.completeArtifactPrompt).not.toHaveBeenCalled();
+    },
+  );
+});
+
+describe('POST /api/artifacts/runtime/[token]/complete concurrency', () => {
+  it('takes a turn slot that refuses on any limiter outage, and releases it after the call', async () => {
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.acquireTurnSlot).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1', planTier: 'pro', outage: 'refuse' }),
+    );
+    expect(mocks.releaseTurnSlot).toHaveBeenCalledOnce();
+  });
+
+  it('refuses without calling a model when the limiter cannot answer', async () => {
+    mocks.acquireTurnSlot.mockResolvedValue({
+      admitted: false,
+      limit: 3,
+      active: 0,
+      slot: null,
+      denial: 'limiter-unavailable',
+    });
+
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(503);
+    expect(await errorCode(response)).toBe('concurrency_limiter_unavailable');
+    expect(mocks.completeArtifactPrompt).not.toHaveBeenCalled();
+  });
+
+  it('refuses at the plan concurrency ceiling without calling a model', async () => {
+    mocks.acquireTurnSlot.mockResolvedValue({
+      admitted: false,
+      limit: 3,
+      active: 3,
+      slot: null,
+      denial: 'ceiling-reached',
+    });
+
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(429);
+    expect(await errorCode(response)).toBe('concurrent_turn_limit_reached');
+    expect(mocks.completeArtifactPrompt).not.toHaveBeenCalled();
+  });
+
+  it('releases the slot when the completion fails', async () => {
+    mocks.completeArtifactPrompt.mockRejectedValue(
+      new ManagedUsageRequestError('limit', 429, 'artifact_runtime_limit_reached'),
+    );
+
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(429);
+    expect(await errorCode(response)).toBe('artifact_runtime_limit_reached');
+    expect(mocks.releaseTurnSlot).toHaveBeenCalledOnce();
+  });
+});
+
+describe('POST /api/artifacts/runtime/[token]/complete billing identity', () => {
+  it('bills the signed-in viewer for a published app and never its publisher', async () => {
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(200);
+    const billed = mocks.completeArtifactPrompt.mock.calls[0]![0] as Record<string, unknown>;
+    expect(billed['userId']).toBe('user-1');
+    expect(JSON.stringify(billed)).not.toContain(ARTIFACT.ownerUserId);
+    expect(mocks.acquireTurnSlot).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: 'user-1' }),
+    );
+  });
+
+  it('reads nothing and bills no one for a signed-out visitor', async () => {
+    mocks.getUserScopedDb.mockRejectedValue(createError.unauthorized());
+
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(401);
+    expect(mocks.readRunnableArtifact).not.toHaveBeenCalled();
+    expect(mocks.acquireTurnSlot).not.toHaveBeenCalled();
+    expect(mocks.completeArtifactPrompt).not.toHaveBeenCalled();
+  });
 });
 
 describe('POST /api/artifacts/runtime/[token]/complete', () => {

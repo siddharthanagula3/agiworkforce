@@ -1295,12 +1295,21 @@ function managedTurnSlotKey(userId: string): string {
   return `agi-turns:${userId}`;
 }
 
+/**
+ * What a turn does when the slot store cannot answer. `policy` follows the
+ * deployment's Redis outage policy, as chat does. `refuse` denies the turn
+ * whatever that policy says and even when the store's quota is exhausted, for
+ * callers whose fan-out this slot is the only bound on.
+ */
+export type ManagedTurnSlotOutage = 'policy' | 'refuse';
+
 function unavailableTurnSlot(
   userId: string,
   limit: number,
-  reason: 'redis-not-configured' | 'redis-error',
+  reason: 'redis-not-configured' | 'redis-error' | 'redis-quota-exhausted',
+  outage: ManagedTurnSlotOutage,
 ): ManagedTurnSlotResult {
-  const policy = resolveRedisOutagePolicy();
+  const policy = outage === 'refuse' ? 'fail-closed' : resolveRedisOutagePolicy();
 
   if (policy === 'fail-open') {
     logger.warn(
@@ -1325,8 +1334,10 @@ export async function acquireManagedTurnSlot(input: {
   userId: string;
   planTier: string | null | undefined;
   turnId: string;
+  outage?: ManagedTurnSlotOutage;
 }): Promise<ManagedTurnSlotResult> {
   const limit = getPlanMaxConcurrentTurns(input.planTier);
+  const outage = input.outage ?? 'policy';
 
   if (limit === null) {
     return { admitted: true, limit: null, active: 0, slot: NOOP_SLOT };
@@ -1336,7 +1347,7 @@ export async function acquireManagedTurnSlot(input: {
   }
   const store = getKeyValueStore();
   if (!store) {
-    return unavailableTurnSlot(input.userId, limit, 'redis-not-configured');
+    return unavailableTurnSlot(input.userId, limit, 'redis-not-configured', outage);
   }
 
   const key = managedTurnSlotKey(input.userId);
@@ -1385,13 +1396,16 @@ export async function acquireManagedTurnSlot(input: {
       'GOV-3: concurrent-turn slot check failed',
     );
     if (isSharedStoreQuotaExhausted(error)) {
+      if (outage === 'refuse') {
+        return unavailableTurnSlot(input.userId, limit, 'redis-quota-exhausted', outage);
+      }
       logger.warn(
         { userId: input.userId, limit },
         'GOV-3: shared store quota exhausted; admitting the turn without a recorded slot',
       );
       return { admitted: true, limit, active: 0, slot: NOOP_SLOT };
     }
-    return unavailableTurnSlot(input.userId, limit, 'redis-error');
+    return unavailableTurnSlot(input.userId, limit, 'redis-error', outage);
   }
 }
 

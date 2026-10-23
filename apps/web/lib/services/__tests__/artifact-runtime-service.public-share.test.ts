@@ -56,6 +56,7 @@ function input(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.stubEnv('AGI_ARTIFACT_AI_ENABLED', '1');
   mocks.reserve.mockRejectedValue(new Error('stop after the gate'));
 });
 

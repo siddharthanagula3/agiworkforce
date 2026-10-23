@@ -37,6 +37,7 @@ import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/req
 import { runsUnattendedWithoutAsking } from '@/lib/services/unattended-tool-gate';
 import { loadToolApprovalPolicy } from '@/app/api/llm/v1/chat/completions/lib/tool-approval-policy';
 import { runToolLoop } from '@/app/api/llm/v1/chat/completions/lib/tool-loop';
+import { sensitiveSourceReachable } from '@/app/api/llm/v1/chat/completions/lib/tool-call-gate';
 import { classifyToolLoopInputs } from '@/app/api/llm/v1/chat/completions/lib/tool-loop-routing';
 import type { WebMcpToolDef } from '@/lib/mcp-tool-executor';
 import {
@@ -58,6 +59,7 @@ import {
 } from '@/lib/services/managed-usage-accounting-service';
 import {
   ManagedUsageRequestError,
+  type ArtifactRuntimeUsageSubject,
   finalizeManagedUsageRequest,
   fingerprintManagedUsageRequest,
   markManagedUsageProviderStarted,
@@ -82,6 +84,8 @@ import {
   type ArtifactRuntimeConnectorTool,
 } from '@agiworkforce/cloud-contracts';
 import { logger } from '@/lib/logger';
+import { ARTIFACT_AI_OFF_CODE, ARTIFACT_AI_OFF_MESSAGE } from '@/lib/artifact-ai';
+import { artifactAiEnabled } from '@/lib/server/artifact-ai-switch';
 import type {
   LiveArtifact,
   LiveArtifactReadiness,
@@ -99,8 +103,7 @@ export interface RunnableArtifact {
   ownerUserId: string;
 }
 
-export type ArtifactRuntimeSubject =
-  { kind: 'published'; publishedArtifactId: string } | { kind: 'owned'; artifactId: string };
+export type ArtifactRuntimeSubject = ArtifactRuntimeUsageSubject;
 
 export const LIVE_ARTIFACT_RUNTIME_TYPES = ['html', 'react'] as const;
 
@@ -370,6 +373,9 @@ async function readArtifactConnectorAccess(
   };
 }
 
+// An app's prompt is written by the app's code, not typed by the person, so
+// every run counts as carrying untrusted content: a tool that could send the
+// person's data out never runs unattended beside one that reads it.
 function artifactToolStanding(
   tool: WebMcpToolDef,
   access: ArtifactConnectorAccess,
@@ -380,6 +386,14 @@ function artifactToolStanding(
     access.toolApprovalPolicy,
     access.connectorPermissions,
     tool.annotations,
+    {
+      untrustedContentInContext: true,
+      sensitiveSourceAvailable: sensitiveSourceReachable({
+        privateContextPresent: false,
+        offeredTools: access.tools,
+        availableToolNames: [],
+      }),
+    },
   )
     ? 'available'
     : 'needs_approval';
@@ -514,6 +528,7 @@ async function runArtifactToolLoop(input: {
     requestId: `artifact-runtime-${randomUUID()}`,
     chatSurface: 'web',
     sensitiveContextPresent: false,
+    untrustedContextPresent: true,
     organizationId: input.organizationId,
     managedUsage: input.reservation,
     chatRequest: {
@@ -601,6 +616,9 @@ export async function completeArtifactPrompt(input: {
   plan?: ArtifactConnectorPlan | null;
   idempotencyKey: string | null;
 }): Promise<string> {
+  if (!artifactAiEnabled()) {
+    throw new ManagedUsageRequestError(ARTIFACT_AI_OFF_MESSAGE, 403, ARTIFACT_AI_OFF_CODE);
+  }
   const { route } = input;
   const estimatedPromptTokens = Math.ceil(input.prompt.length / 3.5) + 32;
   const estimatedCostMicrousd = LLMCostCalculator.estimateCostMicrousd(
@@ -656,6 +674,7 @@ export async function completeArtifactPrompt(input: {
     planTier: input.planTier,
     isFlagship: isFlagshipRoutingSlot(getSlotForModel(route.modelKey)),
     attribution: { workload: 'chat' },
+    artifactSubject: input.subject,
   });
 
   const observedUsage = createObservedProviderUsage();

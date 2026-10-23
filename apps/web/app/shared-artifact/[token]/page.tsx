@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import { getNeonDb } from '@/lib/server/neon-db';
 import { getCurrentUserRlsDb } from '@/lib/server/rls-db';
+import { artifactAiEnabled } from '@/lib/server/artifact-ai-switch';
 import {
   PUBLISHED_TOKEN_REGEX,
   getPublishedArtifactByToken,
@@ -83,6 +84,7 @@ export default async function PublishedArtifactPage({ params }: Props) {
         publishedAt={artifact.updatedAt}
         audience={artifact.visibility}
         token={token}
+        aiEnabled={artifactAiEnabled()}
       />
       <ReportContentLink publicPath={`/shared-artifact/${token}`} />
     </>

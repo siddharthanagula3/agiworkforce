@@ -145,6 +145,31 @@ describe('liveArtifactMissingConnectors', () => {
       expect.anything(),
       expect.anything(),
       { destructiveHint: true },
+      expect.anything(),
+    );
+  });
+
+  it('judges every tool as if the run carries untrusted content, since the app writes the prompt', async () => {
+    mocks.allowedWithoutRequest.mockResolvedValue(true);
+    mocks.loadCatalog.mockResolvedValue({
+      tools: [tool('slack', 'search')],
+      dropped: [],
+      limit: null,
+    });
+
+    await liveArtifactMissingConnectors({
+      db: {} as never,
+      userId: 'user-1',
+      organizationId: null,
+      connectors: ['slack'],
+    });
+
+    expect(mocks.unattended).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.anything(),
+      expect.anything(),
+      undefined,
+      { untrustedContentInContext: true, sensitiveSourceAvailable: true },
     );
   });
 });
