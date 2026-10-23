@@ -467,11 +467,8 @@
     --popover: 0 0% 100%;
     --popover-foreground: 222.2 84% 4.9%;
 
-    /* Light mode uses the accessible shade from the brand terra-cotta ramp.
-       The raw #da7756 swatch is only 3.11:1 against white, while this
-       terra-cotta-700 value also keeps small text readable on primary tints. */
-    --primary: 15.75 52.63% 29.8%;
-    --primary-foreground: 0 0% 100%;
+    --primary: var(--neutral-0);
+    --primary-foreground: var(--neutral-fg-1);
 
     --secondary: 210 40% 96.1%;
     --secondary-foreground: 222.2 47.4% 11.2%;
@@ -598,8 +595,8 @@
     --popover: var(--neutral-3);
     --popover-foreground: var(--neutral-fg-1);
 
-    --primary: 15 64.1% 59.6%;
-    --primary-foreground: 180 3.1% 12.5%;
+    --primary: var(--neutral-fg-1);
+    --primary-foreground: var(--neutral-0);
 
     --secondary: var(--neutral-4);
     --secondary-foreground: var(--neutral-fg-1);

@@ -4,10 +4,10 @@ import { describe, expect, it } from 'vitest';
 
 const repoRoot = resolve(import.meta.dirname, '../../../..');
 
-const BRAND_PRIMARY = '15 64.1% 59.6%';
-const LIGHT_PRIMARY = '15.75 52.63% 29.8%';
-const LIGHT_PRIMARY_FOREGROUND = '0 0% 100%';
-const BRAND_PRIMARY_FOREGROUND = '180 3.1% 12.5%';
+const LIGHT_PRIMARY = 'var(--neutral-0)';
+const DARK_PRIMARY = 'var(--neutral-fg-1)';
+const LIGHT_PRIMARY_FOREGROUND = 'var(--neutral-fg-1)';
+const DARK_PRIMARY_FOREGROUND = 'var(--neutral-0)';
 const WCAG_AA_NORMAL = 4.5;
 
 function read(path: string): string {
@@ -126,18 +126,18 @@ function expectRgbClose(actual: Rgb, expected: Rgb): void {
 }
 
 describe('brand accent', () => {
-  it('uses the accessible brand shade in light mode and the raw brand in dark mode', () => {
+  it('fills the primary action with the neutral inverse of the page in both modes', () => {
     const web = read('apps/web/app/globals.css');
     const values = primaryValues(web);
 
-    expect(values.slice(0, 2)).toEqual([LIGHT_PRIMARY, BRAND_PRIMARY]);
+    expect(values.slice(0, 2)).toEqual([LIGHT_PRIMARY, DARK_PRIMARY]);
   });
 
   it('pairs each mode with a filled-control foreground that passes WCAG AA', () => {
     const web = read('apps/web/app/globals.css');
     expect(primaryValues(web, 'primary-foreground').slice(0, 2)).toEqual([
       LIGHT_PRIMARY_FOREGROUND,
-      BRAND_PRIMARY_FOREGROUND,
+      DARK_PRIMARY_FOREGROUND,
     ]);
 
     const { light, dark } = webThemeBlocks();
@@ -148,18 +148,12 @@ describe('brand accent', () => {
     }
   });
 
-  it('uses shades from the shared desktop terra-cotta ramp', () => {
-    const desktop = read('apps/desktop/src/styles/globals.css');
+  it('carries no hue in either mode', () => {
     const { light, dark } = webThemeBlocks();
-
-    expectRgbClose(
-      cssColorToRgb(tokenValue(light, 'primary')),
-      cssColorToRgb(tokenValue(desktop, 'color-terra-cotta-700')),
-    );
-    expectRgbClose(
-      cssColorToRgb(tokenValue(dark, 'primary')),
-      cssColorToRgb(tokenValue(desktop, 'color-terra-cotta-500')),
-    );
+    for (const block of [light, dark]) {
+      const [r, g, b] = cssColorToRgb(tokenValue(block, 'primary'));
+      expectRgbClose([g, b, r], [r, g, b]);
+    }
   });
 
   it('keeps text-primary readable on every configured light surface and tint', () => {
