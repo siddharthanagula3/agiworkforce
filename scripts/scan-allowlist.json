@@ -38,30 +38,30 @@
       "id": "10055-4",
       "scanner": "zap",
       "owner": "@siddharthanagula3",
-      "expires": "2026-10-20",
+      "expires": "2026-11-22",
       "locations": ["http://127.0.0.1:3000"],
       "otherinfo": "img-src",
-      "reason": "img-src admits any https: origin, and \"otherinfo\" limits this entry to that one directive. The page still shows images from hosts the product does not choose: a reply image once the reader presses Load image, search and citation favicons the provider supplies (CitationChip.tsx, WebSearchCard.tsx, ResearchPanel.tsx), connector directory icons (DirectoryGrid.tsx, ConnectorDetailView.tsx) and map tiles from AGI_MAP_TILE_URL_TEMPLATE. Model output no longer reaches the directive unasked. MarkdownImage (packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx) fetches on its own only same-origin, data: and blob: sources and the exact URLs of the turn's own search results and citations; any other host renders as a placeholder that names it and loads, with no referrer, only when the reader clicks. MermaidDiagram refuses a diagram whose image nodes, actor icons or styles would fetch from another site. A pass-through same-origin image proxy would clear this alert while still fetching the same URLs server-side, and it would add SSRF surface, so the directive keeps https: until those hosts are served through a vetted path."
+      "reason": "Re-triaged 2026-10-23: img-src keeps https: because the page still renders images from hosts nobody can list in advance, and \"otherinfo\" limits this entry to that one directive. Those hosts are the favicon URLs a search provider returns with each result (WebSearchCard.tsx and CitationPill.tsx in packages/ui/unified-chat, ResearchPanel.tsx and WorkSessionPanel.tsx in apps/web), the iconUrl each connector registry entry carries (DirectoryGrid.tsx and ConnectorDetailView.tsx in packages/ui/ui/src/directory), and a reply image the reader chooses to load. MarkdownImage (packages/ui/unified-chat/src/components/markdown/MarkdownContent.tsx) fetches unasked only same-origin, data:, blob: and the turn's own result and citation URLs; any other host stays a placeholder until the reader clicks, and then loads with no referrer. Map tiles and place photos no longer need it: they come through the same-origin /api/maps/tile and /api/maps/place-photo routes. Clearing the alert needs an authenticated, SSRF-hardened image proxy for those remaining URLs. That is a new server feature, not a header change, so this entry is renewed until that work is scheduled."
     },
     {
       "id": "10055-6",
       "scanner": "zap",
       "owner": "@siddharthanagula3",
-      "expires": "2026-10-20",
+      "expires": "2026-11-22",
       "locations": ["http://127.0.0.1:3000"],
-      "reason": "style-src keeps 'unsafe-inline' because a nonce covers style elements, not style attributes: apps/web and packages/ui render about 2,300 React style props across 215 components, and Clerk documents 'unsafe-inline' as required for its components to inject their styles (clerk.com/docs/guides/secure/best-practices/csp-headers, read 2026-10-01). script-src stays nonce-only, which scripts/check-security-response-headers.mjs enforces. The exemption is disclosed on /security and pinned by apps/web/app/trust/posture-claims.test.ts."
+      "reason": "Re-triaged 2026-10-23: style-src keeps 'unsafe-inline' because a nonce covers style elements, not style attributes. apps/web and packages/ui render 2,344 React style props across 217 non-test components, and Clerk's CSP guide, read 2026-10-23 at clerk.com/docs/guides/secure/best-practices/csp-headers, still says style-src 'unsafe-inline' is required for its components to inject their styles; removing that requirement is on Clerk's roadmap. Moving 'unsafe-inline' into style-src-attr and putting nonces on style elements would also need every runtime style injector (Clerk, Stripe, Leaflet) to carry the nonce, so it waits on that vendor change. script-src stays nonce-only, which scripts/check-security-response-headers.mjs enforces. The exemption is disclosed on /security and pinned by apps/web/app/trust/posture-claims.test.ts."
     },
     {
       "id": "90003",
       "scanner": "zap",
       "owner": "@siddharthanagula3",
-      "expires": "2026-10-20",
+      "expires": "2026-11-22",
       "locations": ["http://127.0.0.1:3000"],
       "evidence": [
         "https://clerk-ci.invalid/npm/@clerk/clerk-js@",
         "https://clerk-ci.invalid/npm/@clerk/ui@"
       ],
-      "reason": "Both flagged tags are Clerk's, served from its Frontend API host: @clerk/nextjs renders clerk-js (/npm/@clerk/clerk-js@6/dist/clerk.browser.js) and preloads @clerk/ui (/npm/@clerk/ui@1/dist/ui.browser.js) with no integrity attribute. Each URL names a major version Clerk updates in place, so no fixed hash can match it. \"evidence\" limits the entry to those two paths on clerk-ci.invalid, the host the scan's placeholder publishable key decodes to, so any other cross-origin script or preload without integrity still fails. First-party scripts are same-origin and outside this alert. Removing the CDN load means bundling @clerk/clerk-js and @clerk/ui into the build, a dependency change."
+      "reason": "Re-triaged 2026-10-23: both flagged tags are emitted by @clerk/nextjs 7.9.9 itself (dist/esm/utils/clerk-script-tags.js): a script for /npm/@clerk/clerk-js@6/dist/clerk.browser.js and a preload for /npm/@clerk/ui@1/dist/ui.browser.js, both on the Frontend API host. The component builds them without an integrity attribute and has no prop to add one. Each URL names a major version that Clerk updates in place, so no pinned hash could match. The only way to change the URLs is the __internal_clerkJSUrl and __internal_clerkUIUrl props, which are internal and unsupported, so self-hosting a hashed copy is not a supported fix. \"evidence\" limits the entry to those two paths on clerk-ci.invalid, the host the scan's placeholder publishable key decodes to, so any other cross-origin script or preload without integrity still fails."
     },
     {
       "id": "10099",
