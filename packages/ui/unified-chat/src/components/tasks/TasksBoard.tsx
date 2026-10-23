@@ -194,7 +194,7 @@ export function TasksBoard({
                         <span className="flex flex-wrap items-center gap-1.5 text-sm text-muted-foreground">
                           <span
                             className={cn(
-                              'rounded-full border px-2 py-0.5 text-caption font-medium',
+                              'rounded-full border px-2 py-0.5 text-sm font-medium',
                               TASK_TONE_BADGE_CLASS[taskStateTone(workState)],
                             )}
                           >
