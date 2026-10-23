@@ -387,56 +387,71 @@ pub(crate) fn encode_untrusted_context(content: &str, source: &str, note: &str) 
 
 /// Assemble the full system prompt without instantiating a session.
 /// Used by `--dump-system-prompt` and tooling that inspects the model's view.
+/// `privacy` is the mode the session would send in; with none, nothing would
+/// be sent and no trust-boundary memory is shown.
 pub fn assemble_system_prompt(
     sys_context: &SystemContext,
     custom_system_prompt: Option<&str>,
+    privacy: Option<super::PrivacyMode>,
 ) -> String {
-    let instructions = std::env::current_dir()
-        .ok()
-        .and_then(|cwd| compaction::load_instructions(&cwd));
-
-    let memory_context = std::env::current_dir()
-        .ok()
-        .map(|cwd| {
-            let mgr = MemoryManager::new(&cwd);
-            mgr.get_context_prompt()
-        })
-        .unwrap_or_default();
-
-    let privacy = crate::config::CliConfig::load()
-        .unwrap_or_default()
-        .account_privacy_mode();
-    let nonce = uuid::Uuid::new_v4().simple().to_string();
-    let persistent_memory = crate::config::CliConfig::config_dir()
-        .ok()
-        .map(|home| {
-            crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home, privacy, &nonce)
-        })
-        .unwrap_or_default();
-
-    let discovered = skills::discover_skills();
-    let skills_content = skills::format_skill_catalog_for_prompt(&discovered);
-
-    let rules = std::env::current_dir()
-        .ok()
-        .map(|cwd| memory::load_rules(&cwd))
-        .unwrap_or_default();
-    let rules_context = memory::always_on_rules_context(&rules);
-
-    let combined_memory = if persistent_memory.is_empty() {
-        memory_context
-    } else {
-        format!("{}\n{}", memory_context, persistent_memory)
+    let parts = super::SystemPromptParts {
+        sys_context: sys_context.clone(),
+        custom_system_prompt: custom_system_prompt.map(str::to_string),
+        instructions: std::env::current_dir()
+            .ok()
+            .and_then(|cwd| compaction::load_instructions(&cwd)),
+        memory_context: std::env::current_dir()
+            .ok()
+            .map(|cwd| MemoryManager::new(&cwd).get_context_prompt())
+            .unwrap_or_default(),
+        skills_content: skills::format_skill_catalog_for_prompt(&skills::discover_skills()),
+        rules_context: memory::always_on_rules_context(
+            &std::env::current_dir()
+                .ok()
+                .map(|cwd| memory::load_rules(&cwd))
+                .unwrap_or_default(),
+        ),
     };
+    let nonce = uuid::Uuid::new_v4().simple().to_string();
+    let message = match privacy {
+        Some(privacy) => parts.compose(
+            privacy,
+            super::session_memory_enabled(),
+            &nonce,
+            crate::config::CliConfig::config_dir().ok().as_deref(),
+        ),
+        None => parts.compose(super::PrivacyMode::Local, false, &nonce, None),
+    };
+    message.text_content()
+}
 
-    build_system_prompt(
-        sys_context,
-        custom_system_prompt,
-        instructions.as_deref(),
-        &skills_content,
-        &combined_memory,
-        &rules_context,
-    )
+/// The privacy mode a session for `model` would send in: its route's mode,
+/// or none when no route can run it or the configured privacy mode would
+/// refuse that route.
+pub(crate) fn privacy_for_dump(
+    config: &crate::config::CliConfig,
+    account: &crate::models::AccountRoute,
+    model: &str,
+    provider_override: Option<&str>,
+) -> Option<super::PrivacyMode> {
+    let resolved = crate::models::plan_first_provider_override(
+        account,
+        model,
+        &config.default.model,
+        &config.default.provider,
+        provider_override,
+    );
+    let provider =
+        crate::models::select_turn_route(config, account, model, resolved.as_deref()).ok()?;
+    let route_mode = super::provider_privacy_mode(&provider);
+    let configured = config
+        .ui
+        .privacy_mode
+        .as_deref()
+        .and_then(super::PrivacyMode::from_arg);
+    configured
+        .is_none_or(|configured| configured == route_mode)
+        .then_some(route_mode)
 }
 
 pub(super) fn build_system_prompt(
@@ -874,5 +889,54 @@ mod tests {
         assert!(prompt.contains("fix the implementation when the test states the contract"));
         assert!(prompt.contains("Never make a test pass by weakening it"));
         assert!(prompt.contains("replace the unit under test with a stand-in"));
+    }
+
+    fn signed_out() -> crate::models::AccountRoute {
+        crate::models::AccountRoute::with(false, None)
+    }
+
+    #[test]
+    fn the_dumped_prompt_uses_the_mode_the_route_would_send_in() {
+        let config = crate::config::CliConfig::default();
+        assert_eq!(
+            super::privacy_for_dump(
+                &config,
+                &signed_out(),
+                "fixture-local-model:latest",
+                Some("ollama")
+            ),
+            Some(super::super::PrivacyMode::Local)
+        );
+    }
+
+    #[test]
+    fn nothing_is_dumped_as_sendable_when_the_configured_mode_refuses_the_route() {
+        let mut config = crate::config::CliConfig::default();
+        config.ui.privacy_mode = Some("managed".to_string());
+        assert_eq!(
+            super::privacy_for_dump(
+                &config,
+                &signed_out(),
+                "fixture-local-model:latest",
+                Some("ollama")
+            ),
+            None
+        );
+        assert_eq!(
+            super::privacy_for_dump(
+                &crate::config::CliConfig::default(),
+                &signed_out(),
+                "fixture-model-with-no-route",
+                None
+            ),
+            None
+        );
+    }
+
+    #[test]
+    fn a_prompt_with_no_sending_route_carries_no_boundary_memory() {
+        let prompt =
+            super::assemble_system_prompt(&crate::context::gather_system_context(), None, None);
+        assert!(!prompt.contains("_origin_memory:"), "{prompt}");
     }
 }

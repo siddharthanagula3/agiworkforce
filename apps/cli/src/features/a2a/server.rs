@@ -459,6 +459,7 @@ async fn execute_delegated_task(
         ),
     )?;
     configure_delegated_session(&mut session, delegated_file_reads_enabled());
+    session.apply_privacy_config(config);
 
     let prompt = build_delegated_prompt(request);
 

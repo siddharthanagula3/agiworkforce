@@ -71,6 +71,7 @@ pub async fn run_review(
             None,
         ),
     )?;
+    session.apply_privacy_config(config);
     session.max_turns = Some(1);
     session.quiet = true;
     let extra_instructions = options

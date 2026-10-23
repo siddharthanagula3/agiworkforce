@@ -32,6 +32,7 @@ pub use executor::ToolCall;
 pub(crate) use history::{close_orphaned_tool_calls, mark_interrupted_tool_calls};
 pub use prompt::assemble_system_prompt;
 pub(crate) use prompt::encode_untrusted_context;
+pub(crate) use prompt::privacy_for_dump;
 
 // ---------------------------------------------------------------------------
 // Tool definitions (native API JSON Schema), test-only helpers
@@ -155,6 +156,19 @@ impl SdkStreamContext {
     pub(crate) fn emit_text_delta(&self, delta: &str) {
         let _ = crate::sdk_io::write_event_stdout(&self.text_delta_event(delta));
     }
+}
+
+/// Whether a new session carries memory. Memory off on the account binds every
+/// session on this machine, local and BYOK included, as it binds the web and
+/// desktop chat.
+fn session_memory_enabled() -> bool {
+    crate::cli_options::memory_enabled()
+        && crate::config::CliConfig::config_dir()
+            .map(|home| {
+                crate::memory_pipeline::load_memory_settings(&home).0
+                    && !crate::cloud::account_memory_off(&home)
+            })
+            .unwrap_or(true)
 }
 
 /// The parts of a session's system prompt that do not depend on its trust
@@ -716,15 +730,7 @@ impl AgentSession {
             crate::shell_snapshot::ShellSnapshot::cleanup_stale(&home);
         }
 
-        // Memory off on the account binds every session on this machine, local
-        // and BYOK included, as it binds the web and desktop chat.
-        let memory_enabled = crate::cli_options::memory_enabled()
-            && crate::config::CliConfig::config_dir()
-                .map(|home| {
-                    crate::memory_pipeline::load_memory_settings(&home).0
-                        && !crate::cloud::account_memory_off(&home)
-                })
-                .unwrap_or(true);
+        let memory_enabled = session_memory_enabled();
         let privacy_mode = provider_privacy_mode(&provider);
         let memory_nonce = uuid::Uuid::new_v4().simple().to_string();
 
@@ -1448,6 +1454,12 @@ impl AgentSession {
         if let Some(style) = config.ui.output_style.as_deref() {
             self.apply_output_style(style);
         }
+        self.apply_privacy_config(config);
+    }
+
+    /// Bind the session to the privacy mode the account or project configures,
+    /// so a send through a route in another mode is refused.
+    pub fn apply_privacy_config(&mut self, config: &CliConfig) {
         if let Some(mode) = config
             .ui
             .privacy_mode
@@ -3873,6 +3885,18 @@ mod tests {
         session.messages[0] = foreign;
 
         assert_eq!(session.memory_from_outside(PrivacyMode::Managed), None);
+    }
+
+    #[test]
+    fn a_configured_local_mode_keeps_a_cloud_routed_session_from_sending() {
+        let mut session = byok_session();
+        let mut config = CliConfig::default();
+        config.ui.privacy_mode = Some("local".to_string());
+
+        session.apply_privacy_config(&config);
+
+        assert_eq!(session.privacy_mode, PrivacyMode::Local);
+        assert!(session.validate_privacy_boundary().is_err());
     }
 
     #[test]

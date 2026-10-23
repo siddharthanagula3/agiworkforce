@@ -7832,10 +7832,19 @@ async fn run_cli(cli: Cli) -> Result<()> {
     };
 
     // --dump-system-prompt: assemble the system prompt the way AgentSession::new
-    // would, print it to stdout, and exit. No API call. Useful for debugging.
+    // would for this route, print it to stdout, and exit. No API call.
     if cli.dump_system_prompt {
-        let prompt =
-            agent::assemble_system_prompt(&sys_context, effective_system_prompt.as_deref());
+        let privacy = agent::privacy_for_dump(
+            &app_config,
+            &models::AccountRoute::load(),
+            &model,
+            effective_provider_override,
+        );
+        let prompt = agent::assemble_system_prompt(
+            &sys_context,
+            effective_system_prompt.as_deref(),
+            privacy,
+        );
         println!("{}", prompt);
         return Ok(());
     }

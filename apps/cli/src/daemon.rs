@@ -1298,6 +1298,7 @@ async fn execute_trigger(
         selection.provider_override.as_deref(),
     )?;
     configure_daemon_session(&mut session);
+    session.apply_privacy_config(config);
     session.max_turns = Some(25);
 
     let result = session
