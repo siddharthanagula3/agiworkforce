@@ -69,6 +69,11 @@
           "date": "2026-10-08",
           "digest": "e567f50b22efc153",
           "note": "The Free plan’s default route changed in the model registry on 2026-10-13: OpenRouter’s free router was removed from the catalogue on the owner’s instruction because it kept answering that it was overloaded, and the Free plan’s own model became an OpenAI model that AGI pays for out of the Free usage allowance. The Managed Cloud providers paragraph named Alibaba Cloud Model Studio or OpenRouter’s free router as the recipient of a Free plan chat on the default model; it now names Alibaba Cloud Model Studio or OpenAI. The date does not move: this corrects the name of one recipient in a paragraph that points to /subprocessors for the current list, OpenAI was already a named provider, and no right or obligation changes, so it does not open a new terms acceptance version. The privacy policy, the India privacy notice, the data use page and the subprocessor list carry the change under a new date and a public summary."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "44111b2fbfcf0402",
+          "note": "The word cancel in the auto-renewal sentence now links to billing settings, where a subscription is cancelled. The wording of the sentence is unchanged, no right, obligation or commitment changes, and the owner decided on 2026-10-22 to keep the date and record this as a presentation revision."
         }
       ]
     },
@@ -192,6 +197,11 @@
           "digest": "b581eb89ebed549a",
           "note": "Chrome extension wording for its Chrome Web Store submission: the tool-calls row no longer calls the extension unreleased, and adds the affirmative statement the Chrome Web Store Limited Use policy requires on the extension's website. No new collection; the sale and advertising statements repeat sections already on the page.",
           "summary": "Describes the Chrome extension without a release status and states that data it receives follows the Chrome Web Store User Data Policy, including Limited Use: used only for the task you ask for, never sold and never used for advertising."
+        },
+        {
+          "date": "2026-10-18",
+          "digest": "e20f13cedee0907d",
+          "note": "The legal-basis section is now a table with a visible header row reading Purpose and Legal basis, the two column headings the owner approved on 2026-10-22. Every purpose, data list and basis in the section is unchanged word for word, and no provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
