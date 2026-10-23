@@ -1,4 +1,8 @@
 import JSZip from 'jszip';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   XLSX_NOT_CALCULATED,
@@ -93,6 +97,29 @@ describe('pptxToSlidesMarkdown tables and pictures', () => {
     expect(markdown).toContain('# Numbers');
     expect(markdown).toContain('| Region | Sales |\n| --- | --- |\n| EU | 12 |');
     expect(markdown).toContain('![Logo](data:image/png;base64,');
+  });
+});
+
+describe('pptxToSlidesMarkdown table cell escaping', () => {
+  async function tableDeck(...cells: string[]): Promise<string> {
+    const row = cells
+      .map((text) => `<a:tc><a:txBody><a:p><a:r><a:t>${text}</a:t></a:r></a:p></a:txBody></a:tc>`)
+      .join('');
+    const table = `<p:graphicFrame><a:graphic><a:graphicData><a:tbl><a:tr>${row}</a:tr><a:tr>${row}</a:tr></a:tbl></a:graphicData></a:graphic></p:graphicFrame>`;
+    return pptxToSlidesMarkdown(await deck(shape('title', 'Paths'), table));
+  }
+
+  function renderedCells(markdown: string): string[] {
+    const html = renderToStaticMarkup(
+      createElement(ReactMarkdown, { remarkPlugins: [remarkGfm] }, markdown),
+    );
+    const body = new DOMParser().parseFromString(html, 'text/html');
+    return Array.from(body.querySelectorAll('tbody td')).map((cell) => cell.textContent ?? '');
+  }
+
+  it('keeps every backslash and pipe a cell contains inside that cell', async () => {
+    const markdown = await tableDeck('C:\\a\\|b', 'x|y', 'end\\');
+    expect(renderedCells(markdown)).toEqual(['C:\\a\\|b', 'x|y', 'end\\']);
   });
 });
 

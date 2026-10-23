@@ -1704,6 +1704,7 @@ export async function runCollectors(collectors, ctx, { onResult = () => {} } = {
 
 function cell(text) {
   return String(text ?? '')
+    .replace(/\\/g, '\\\\')
     .replace(/\|/g, '\\|')
     .replace(/\n/g, ' ');
 }

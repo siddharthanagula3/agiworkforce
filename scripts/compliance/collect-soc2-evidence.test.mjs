@@ -832,3 +832,31 @@ test('the summary names every collector status, the manual checklist and the gap
     /\| BR-04 Changes are committed \| A1\.3 \| not-yet-operated \| out-of-scope \|/,
   );
 });
+
+test('the summary escapes backslashes before pipes so a reason stays in its own cell', () => {
+  const text = renderSummary({
+    catalog: catalog([control()]),
+    results: [
+      {
+        collector: 'github.main-history',
+        area: 'change-management',
+        status: 'error',
+        reason: 'C:\\repo\\|x failed\\',
+      },
+    ],
+    meta: {
+      generatedAt: '2026-10-18T00:00:00.000Z',
+      since: '2026-09-17T00:00:00.000Z',
+      until: '2026-10-18T00:00:00.000Z',
+      gitHead: 'abc',
+      uncommittedFiles: 0,
+      catalogSha256: 'f'.repeat(64),
+    },
+  });
+  assert.ok(
+    text.includes(
+      '| `github.main-history` | change-management | error | C:\\\\repo\\\\\\|x failed\\\\ |',
+    ),
+    text,
+  );
+});
