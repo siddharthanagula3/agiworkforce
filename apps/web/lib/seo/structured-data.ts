@@ -8,14 +8,7 @@
  * or `aggregateRating` we cannot substantiate.
  */
 
-import {
-  OG_IMAGE_URL,
-  SITE_LEGAL_NAME,
-  SITE_NAME,
-  SITE_URL,
-  SOCIAL_PROFILES,
-  SUPPORT_EMAIL,
-} from './site';
+import { OG_IMAGE_URL, SITE_LEGAL_NAME, SITE_NAME, SITE_URL, SUPPORT_EMAIL } from './site';
 import {
   AVAILABLE_NOW_LABEL,
   RELEASED_SURFACES,
@@ -39,7 +32,6 @@ export function organizationSchema(): JsonLdObject {
     url: SITE_URL,
     logo: `${SITE_URL}/logo.png`,
     description: `AI workspace for chat, code, research, files, tools, artifacts, connectors, memory, and automation. ${RELEASED_ON}`,
-    sameAs: [...SOCIAL_PROFILES],
     contactPoint: {
       '@type': 'ContactPoint',
       contactType: 'Customer Support',

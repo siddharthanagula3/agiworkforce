@@ -1,6 +1,6 @@
 import type { Metadata } from 'next';
 
-import { OG_IMAGE, SITE_NAME, TWITTER_HANDLE, absoluteUrl } from './site';
+import { OG_IMAGE, SITE_NAME, absoluteUrl } from './site';
 
 export interface BuildMetadataOptions {
   title: string;
@@ -67,8 +67,6 @@ export function buildMetadata(options: BuildMetadataOptions): Metadata {
     },
     twitter: {
       card: 'summary_large_image',
-      site: TWITTER_HANDLE,
-      creator: TWITTER_HANDLE,
       title: resolvedOgTitle,
       description: resolvedOgDescription,
       images: [image.url],

@@ -46,22 +46,7 @@ export default function CommunityPage() {
                   meta: 'Release notes',
                   title: 'Follow the release notes',
                   href: '/release-notes',
-                  body: (
-                    <>
-                      A dated archive of what shipped. The fastest way to track where the product is
-                      going. We also post it on{' '}
-                      <a
-                        href="https://twitter.com/agiworkforce"
-                        className="agi-ds-link"
-                        style={{ backgroundSize: '100% 1px' }}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        X
-                      </a>
-                      , but we do not reply to support there.
-                    </>
-                  ),
+                  body: 'A dated archive of what shipped. The fastest way to track where the product is going.',
                 },
                 {
                   meta: 'Email',

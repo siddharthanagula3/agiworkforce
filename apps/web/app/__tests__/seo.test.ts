@@ -68,6 +68,12 @@ describe('buildMetadata', () => {
     expect(twitter.title).toBe('BYOK: Bring Your Own Keys to the CLI');
   });
 
+  it('names no X account, since none is confirmed as ours', () => {
+    const twitter = meta.twitter as Record<string, unknown>;
+    expect(twitter).not.toHaveProperty('site');
+    expect(twitter).not.toHaveProperty('creator');
+  });
+
   it('honors ogTitle/ogDescription overrides', () => {
     const m = buildMetadata({
       title: 'Getting Started',
@@ -238,6 +244,12 @@ describe('structured data', () => {
     const schema = organizationSchema();
     expect(schema['@type']).toBe('Organization');
     expect(schema['url']).toBe(SITE_URL);
+  });
+
+  it('Organization schema lists no social profile, since none is confirmed as ours', () => {
+    const serialized = JSON.stringify(organizationSchema());
+    expect(organizationSchema()).not.toHaveProperty('sameAs');
+    expect(serialized).not.toMatch(/twitter\.com|x\.com|github\.com/);
   });
 
   it('SoftwareApplication carries no offers, rating, download or install claims', () => {

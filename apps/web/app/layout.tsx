@@ -17,7 +17,7 @@ import { SupportWidgetEntry } from '@/features/support/components/SupportWidgetE
 import { SkipLinks } from '@shared/components/accessibility/SkipLinks';
 import { JsonLd } from '@shared/components/seo/JsonLd';
 import { BrowserIdentityBoundary } from './BrowserIdentityBoundary';
-import { OG_IMAGE, SITE_LEGAL_NAME, SITE_NAME, SITE_URL, TWITTER_HANDLE } from '@/lib/seo/site';
+import { OG_IMAGE, SITE_LEGAL_NAME, SITE_NAME, SITE_URL } from '@/lib/seo/site';
 import {
   organizationSchema,
   softwareApplicationSchema,
@@ -107,7 +107,6 @@ export const metadata: Metadata = {
     title: 'AGI | One AI workspace across models and tools.',
     description:
       'Chat, code, research, files, artifacts, tools, connectors, and automation in one AGI workspace.',
-    creator: TWITTER_HANDLE,
     images: [OG_IMAGE.url],
   },
   robots: {

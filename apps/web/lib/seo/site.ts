@@ -7,8 +7,6 @@ export const SITE_NAME = 'AGI';
 
 export const SITE_LEGAL_NAME = 'AGI Automation LLC';
 
-export const TWITTER_HANDLE = '@agiworkforce';
-
 export const OG_IMAGE_PATH = '/api/og';
 
 export const OG_IMAGE = {
@@ -19,11 +17,6 @@ export const OG_IMAGE = {
 } as const;
 
 export const OG_IMAGE_URL = `${SITE_URL}${OG_IMAGE.url}`;
-
-export const SOCIAL_PROFILES = [
-  'https://twitter.com/agiworkforce',
-  'https://github.com/agiworkforce',
-] as const;
 
 export const SUPPORT_EMAIL = 'contact@agiworkforce.com';
 

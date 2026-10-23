@@ -103,6 +103,14 @@ describe('MarketingFooter', () => {
     expect(opened).toContain(COOKIE_CONSENT_OPEN_EVENT);
   });
 
+  it('shows no social account links, since none is confirmed as ours', () => {
+    render(<MarketingFooter />);
+    const hosts = /twitter\.com|x\.com|github\.com|linkedin\.com|youtube\.com|instagram\.com/;
+    for (const link of within(screen.getByRole('contentinfo')).getAllByRole('link')) {
+      expect(link.getAttribute('href')).not.toMatch(hosts);
+    }
+  });
+
   it('keeps the Legal landmark and the cookie control in the condensed footer', () => {
     render(<MarketingFooter condensed />);
 
