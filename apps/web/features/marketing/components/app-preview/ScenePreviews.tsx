@@ -523,12 +523,43 @@ export type MemorySceneView = 'controls' | 'facts';
 
 const MEMORY_SIDEBAR_CHATS = ['Weekly plan', 'Trip packing list', 'Release notes'];
 const MEMORY_FACTS = [
-  { request: { content: 'I prefer concise answers.', source: 'web' }, age: '2h ago' },
-  { request: { content: 'My reports use British spelling.', source: 'web' }, age: '2h ago' },
-  { request: { content: 'Our team plans in two-week sprints.', source: 'web' }, age: '3d ago' },
-  { request: { content: 'I work in Pacific time.', source: 'web' }, age: '5d ago' },
-  { request: { content: 'I use metric units.', source: 'web' }, age: '12d ago' },
-] as const satisfies ReadonlyArray<{ request: ManagedMemoryCreateRequest; age: string }>;
+  {
+    request: { content: 'I prefer concise answers.', source: 'web' },
+    updatedAt: '2026-10-21T12:00:00.000Z',
+  },
+  {
+    request: { content: 'My reports use British spelling.', source: 'web' },
+    updatedAt: '2026-10-21T12:00:00.000Z',
+  },
+  {
+    request: { content: 'Our team plans in two-week sprints.', source: 'web' },
+    updatedAt: '2026-10-18T12:00:00.000Z',
+  },
+  {
+    request: { content: 'I work in Pacific time.', source: 'web' },
+    updatedAt: '2026-10-14T12:00:00.000Z',
+  },
+  {
+    request: { content: 'I use metric units.', source: 'web' },
+    updatedAt: '2026-09-29T12:00:00.000Z',
+  },
+] as const satisfies ReadonlyArray<{ request: ManagedMemoryCreateRequest; updatedAt: string }>;
+
+export const MEMORY_SCENE_UPDATED_AT: readonly string[] = MEMORY_FACTS.map(
+  (fact) => fact.updatedAt,
+);
+
+function memoryFactUpdated(updatedAt: string): string {
+  const date = new Date(updatedAt);
+  const sameYear = date.getUTCFullYear() === new Date().getUTCFullYear();
+  const format = new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(sameYear ? {} : { year: 'numeric' }),
+    timeZone: 'UTC',
+  });
+  return ` · Updated ${format.format(date)}`;
+}
 
 export const MEMORY_SCENE_REQUESTS: readonly ManagedMemoryCreateRequest[] = MEMORY_FACTS.map(
   (fact) => fact.request,
@@ -578,7 +609,6 @@ function MemoryControls() {
         <div className="agi-scene-memory-count">
           <span>{MEMORY_FACTS.length} saved memories</span>
           <span className="agi-scene-btnrow">
-            <span className="agi-scene-btn">Import memories</span>
             <span className="agi-scene-btn">Export memories</span>
             <span className="agi-scene-btn">Manage memories</span>
             <span className="agi-scene-btn" data-danger="true">
@@ -597,6 +627,15 @@ function MemoryControls() {
             <Toggle on={on} />
           </div>
         ))}
+        <div className="agi-scene-setting">
+          <span>
+            <span className="agi-scene-setting-title">Import memory from other AI providers</span>
+            <span className="agi-scene-setting-note">
+              Bring what another assistant knows about you into your saved memories.
+            </span>
+          </span>
+          <span className="agi-scene-btn">Start import</span>
+        </div>
       </div>
     </>
   );
@@ -621,11 +660,11 @@ function MemoryFacts() {
         Search memory
       </span>
       <div className="agi-scene-facts">
-        {MEMORY_FACTS.map(({ request, age }) => (
+        {MEMORY_FACTS.map(({ request, updatedAt }) => (
           <span key={request.content} className="agi-scene-fact">
             <span>{request.content}</span>
             <span className="agi-scene-fact-foot">
-              <span>Added by you {age}</span>
+              <span>Added by you{memoryFactUpdated(updatedAt)}</span>
               <span className="agi-scene-fact-actions">
                 <Pin className="agi-app-icon agi-app-icon--sm" />
                 <Trash2 className="agi-app-icon agi-app-icon--sm" />

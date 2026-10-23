@@ -56,6 +56,7 @@ import {
   ComposerScenePreview,
   ConsoleScenePreview,
   MEMORY_SCENE_REQUESTS,
+  MEMORY_SCENE_UPDATED_AT,
   MemoryScenePreview,
   PROJECT_SCENE_DRAFT,
   ProjectScenePreview,
@@ -492,17 +493,19 @@ describe('memory settings', () => {
       'Save memories from chats',
       'Search past chats',
       'Allow memory generation from tool-assisted chats',
+      'Import memory from other AI providers',
     ]);
     expect(texts(controls, '.agi-scene-setting-note')).toEqual([
       'Allow AGI to remember details across conversations',
       'Let AGI save lasting details you mention in a chat without being asked. When this is off, it saves only what you ask it to remember.',
       'Let AGI look up excerpts from your other conversations when answering. Never used in temporary chats.',
       'Create memories from chats that use tools, connectors, code, or web search',
+      'Bring what another assistant knows about you into your saved memories.',
     ]);
     expect(controls.querySelector('.agi-scene-panel .agi-scene-switch')).toHaveAttribute('data-on');
     expect(text(controls, '.agi-scene-memory-count > span')).toBe('5 saved memories');
+    expect(texts(controls, '.agi-scene-setting .agi-scene-btn')).toEqual(['Start import']);
     expect(texts(controls, '.agi-scene-memory-count .agi-scene-btn')).toEqual([
-      'Import memories',
       'Export memories',
       'Manage memories',
       'Clear all memories',
@@ -520,10 +523,9 @@ describe('memory settings', () => {
     expect(text(facts, '.agi-scene-editor-count')).toBe('0 / 280');
     const rows = facts.querySelectorAll('.agi-scene-fact');
     expect(rows).toHaveLength(5);
-    expect(texts(facts, '.agi-scene-fact-foot > span:first-child').slice(0, 2)).toEqual([
-      'Added by you 2h ago',
-      'Added by you 2h ago',
-    ]);
+    for (const footer of texts(facts, '.agi-scene-fact-foot > span:first-child')) {
+      expect(footer).toMatch(/^Added by you · Updated [A-Z][a-z]{2} \d{1,2}(?:, \d{4})?$/u);
+    }
     for (const row of rows) expect(row.querySelectorAll('svg')).toHaveLength(2);
     expect(facts.querySelector('.agi-scene-pane-title')).toBeNull();
   });
@@ -537,7 +539,9 @@ describe('memory settings', () => {
       "'Persistent memory',",
       "'Allow AGI to remember details across conversations',",
       "other: '{{count}} saved memories',",
-      'Import memories',
+      'Import memory from other AI providers',
+      'Bring what another assistant knows about you into your saved memories.',
+      'Start import',
       'Export memories',
       'Manage memories',
       'Clear all memories',
@@ -556,8 +560,9 @@ describe('memory settings', () => {
       '{draft.length} / {MAX_FACT_CHARS}',
       'placeholder="Search memory"',
       "return <>{fact.source ? 'Added by you' : 'Added'}</>;",
-      'return `${hours}h ago`;',
-      'return `${days}d ago`;',
+      "{ month: 'short', day: 'numeric' }",
+      "{ month: 'short', day: 'numeric', year: 'numeric' }",
+      'return ` · Updated ${new Intl.DateTimeFormat(undefined, options).format(date)}`;',
       '<Pin size={13} strokeWidth={1.75} />',
       '<Trash2 size={13} strokeWidth={1.75} />',
     ]);
@@ -1338,12 +1343,7 @@ describe('memory facts correspond to the native editor', () => {
     );
 
   beforeAll(async () => {
-    const ages = texts(facts(), '.agi-scene-fact-foot > span:first-child').map((footer) => {
-      const age = /(\d+)([hd]) ago$/u.exec(footer ?? '');
-      if (!age) throw new Error('A scene fact footer does not end in a native relative age.');
-      return Number(age[1]) * (age[2] === 'h' ? 3_600_000 : 86_400_000);
-    });
-    expect(ages).toHaveLength(requests.length);
+    expect(MEMORY_SCENE_UPDATED_AT).toHaveLength(requests.length);
     const storage = Array.from({ length: localStorage.length }, (_, index) => {
       const key = localStorage.key(index) ?? '';
       return [key, localStorage.getItem(key) ?? ''] as const;
@@ -1465,11 +1465,10 @@ describe('memory facts correspond to the native editor', () => {
       expect(csrfCalls).toBeGreaterThan(0);
       fireEvent.change(input, { target: { value: '' } });
       expect(form.lastElementChild?.textContent?.trim()).toBe(counter);
-      const now = Date.now();
       await act(async () => {
         useMemoryStore.setState({
           facts: requests.map((request, index) => {
-            const at = new Date(now - (ages[index] ?? 0) - index * 60_000).toISOString();
+            const at = MEMORY_SCENE_UPDATED_AT[index] ?? '';
             return {
               id: `scene-fact-${index}`,
               text: request.content,
@@ -1562,7 +1561,7 @@ describe('memory facts correspond to the native editor', () => {
       })),
     ).toEqual(native.rows);
     expect(native.rows.map((row) => row.text)).toEqual(requests.map((request) => request.content));
-    for (const row of native.rows) expect(row.footer).toMatch(/^Added by you \d+[hd] ago$/u);
+    for (const row of native.rows) expect(row.footer).toMatch(/^Added by you · Updated /u);
     expect(sceneRoot(root).getAttribute('aria-label')).toMatch(/authored example/iu);
     requireMemoryEditor(pane(root), native);
     expect(text(draw(<MemoryScenePreview />), '.agi-scene-memory-count > span')).toBe(
