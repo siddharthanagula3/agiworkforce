@@ -73,9 +73,7 @@ describe('windowDocument', () => {
   });
 
   it('returns one window for a document shorter than the window size', () => {
-    expect(windowDocument('A short note.')).toEqual([
-      { start: 0, end: 13, text: 'A short note.' },
-    ]);
+    expect(windowDocument('A short note.')).toEqual([{ start: 0, end: 13, text: 'A short note.' }]);
   });
 
   it('returns nothing for an empty document', () => {
@@ -115,7 +113,10 @@ describe('selectKnowledgePassages', () => {
   });
 
   it('stays inside the budget it was given', () => {
-    const content = documentWithAnswerAt('end', 'The evacuation muster point is the north car park.');
+    const content = documentWithAnswerAt(
+      'end',
+      'The evacuation muster point is the north car park.',
+    );
     const selection = selectKnowledgePassages({
       content,
       query: 'evacuation muster point',
@@ -127,7 +128,10 @@ describe('selectKnowledgePassages', () => {
   });
 
   it('returns passages in document order, however they scored', () => {
-    const content = documentWithAnswerAt('end', 'The evacuation muster point is the north car park.');
+    const content = documentWithAnswerAt(
+      'end',
+      'The evacuation muster point is the north car park.',
+    );
     const selection = selectKnowledgePassages({
       content,
       query: 'evacuation muster point car park',

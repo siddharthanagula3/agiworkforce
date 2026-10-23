@@ -29,8 +29,9 @@ beforeEach(() => {
  */
 describe('resolveUserRoutingPreferences', () => {
   it('reads the preference the user saved', async () => {
-    await expect(resolveUserRoutingPreferences(dbReturning({ us_only: true }), USER_ID)).resolves
-      .toEqual({ usOnly: true });
+    await expect(
+      resolveUserRoutingPreferences(dbReturning({ us_only: true }), USER_ID),
+    ).resolves.toEqual({ usOnly: true });
   });
 
   it('treats an unset preference as not asked for', async () => {

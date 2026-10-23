@@ -80,7 +80,9 @@ describe('usage history summary', () => {
 
   it('keeps a label the server resolved over the shared one', () => {
     const summary = summarizeUsageHistory(
-      history({ byWorkload: [{ key: 'work', label: 'Launch automation', requests: 2, credits: 3 }] }),
+      history({
+        byWorkload: [{ key: 'work', label: 'Launch automation', requests: 2, credits: 3 }],
+      }),
     );
 
     expect(summary.byWorkload[0]?.label).toBe('Launch automation');
@@ -111,7 +113,12 @@ describe('usage history summary', () => {
 
 describe('credit window rows', () => {
   const credits = {
-    monthly: { allowance: 2_000, used: 800, remaining: 1_200, reset_at: '2026-10-01T00:00:00.000Z' },
+    monthly: {
+      allowance: 2_000,
+      used: 800,
+      remaining: 1_200,
+      reset_at: '2026-10-01T00:00:00.000Z',
+    },
     weekly: { allowance: 500, used: 520, remaining: 0, reset_at: '2026-09-29T12:00:00.000Z' },
     five_hour: { allowance: 50, used: 12.5, remaining: 37.5, reset_at: '2026-09-27T14:30:00.000Z' },
     flagship_weekly: null,
