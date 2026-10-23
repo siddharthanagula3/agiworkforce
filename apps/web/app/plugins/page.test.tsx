@@ -56,6 +56,18 @@ beforeEach(() => {
   useCurrentUserMock.mockReturnValue({ isLoaded: true, isSignedIn: false, user: null });
 });
 
+describe('PluginsPage heading', () => {
+  it('shows its one level-one heading to sighted readers', async () => {
+    loadPluginCatalogMock.mockResolvedValue({ status: 'ok', entries: [] });
+
+    render(await PluginsPage());
+
+    const heading = screen.getByRole('heading', { level: 1 });
+    expect(heading).toHaveTextContent('Workflow packs, not loose parts.');
+    expect(heading).not.toHaveClass('sr-only');
+  });
+});
+
 describe('PluginsPage availability claim', () => {
   it('does not claim the catalogue is uninstallable when the registry is unreachable', async () => {
     loadPluginCatalogMock.mockResolvedValue({ status: 'unavailable' });

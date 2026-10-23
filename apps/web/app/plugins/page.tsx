@@ -48,7 +48,7 @@ export default async function PluginsPage() {
           <div className="agi-ds-container agi-lp-hero-grid">
             <div className="agi-lp-hero-copy">
               <Eyebrow>Plugins</Eyebrow>
-              <h1 className="sr-only" id="agi-plugins-title">
+              <h1 className="agi-ds-h1" id="agi-plugins-title">
                 Workflow packs, <em className="agi-ds-accent">not loose parts.</em>
               </h1>
               <p className="agi-ds-prose" data-size="sm" role="status">

@@ -6,7 +6,6 @@ import { Reveal } from './Reveal';
 import { ScrollDeck } from './motion/ScrollDeck';
 import { Stage } from './motion/Stage';
 
-const TICKER_REPEATS = 6;
 const TRUST_STAGGER_MS = 80;
 const CAP_STAGGER_MS = 60;
 const CAP_COLUMNS = 3;
@@ -56,7 +55,6 @@ export function LandingHero({
   lede?: string;
   ctas: LandingCta[];
   ctas2?: LandingCta[];
-  modeRibbon: string[];
   visual: ReactNode;
   announcement?: FlagshipAnnouncement;
 }) {
@@ -124,33 +122,6 @@ export function LandingHero({
         </Stage>
       </div>
     </section>
-  );
-}
-
-export function LandingSurfaceTicker({ words }: { words: string[] }) {
-  const repeated = [...Array(TICKER_REPEATS)].flatMap(() => words);
-
-  const row = (key: string) => (
-    <span className="agi-fl-ticker-row" aria-hidden="true">
-      {repeated.map((word, i) => (
-        <span key={`${key}-${i}`} className="agi-fl-ticker-word">
-          {word}
-          <span className="agi-fl-ticker-dot" aria-hidden="true">
-            ·
-          </span>
-        </span>
-      ))}
-    </span>
-  );
-
-  return (
-    <div className="agi-fl-ticker" role="presentation">
-      <span className="sr-only">{words.join(', ')}</span>
-      <div className="agi-fl-ticker-track" aria-hidden="true">
-        {row('a')}
-        {row('b')}
-      </div>
-    </div>
   );
 }
 

@@ -23,7 +23,6 @@ import {
   LandingDevBand,
   LandingHero,
   LandingSurfaceIndex,
-  LandingSurfaceTicker,
   LandingTrustTriptych,
   LatestBlock,
   ProofRow,
@@ -67,7 +66,6 @@ export function MarketingLanding({
           titleLines={[]}
           em=""
           ctas={[{ href: WEB_ENTRY_HREF, label: 'Try AGI Chat' }, surfaceCta('desktop')]}
-          modeRibbon={[]}
           visual={<MobileHeroVisual />}
           announcement={landingAnnouncement(freeMediaOffer, {
             tag: 'New',
@@ -75,8 +73,6 @@ export function MarketingLanding({
             href: '/providers',
           })}
         />
-
-        <LandingSurfaceTicker words={['Web', 'Desktop', 'Mobile', 'CLI', 'Chrome', 'VS Code']} />
 
         <ProofRow
           label="Product facts"

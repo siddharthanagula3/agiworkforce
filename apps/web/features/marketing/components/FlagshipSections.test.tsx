@@ -21,7 +21,6 @@ describe('landing section ownership', () => {
         em="You choose where it runs."
         lede="Run each request where it belongs."
         ctas={[{ href: '/chat', label: 'Try AGI Chat' }]}
-        modeRibbon={['Local · on-device', 'BYOK · your keys', 'Cloud · public alpha']}
         visual={<div>Product preview</div>}
       />,
     );
@@ -33,7 +32,6 @@ describe('landing section ownership', () => {
     expect(screen.getByText('the AI application suite')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Try AGI Chat' })).toHaveAttribute('href', '/chat');
     expect(screen.getByText('Product preview')).toBeInTheDocument();
-    expect(screen.queryByRole('list', { name: 'Trust modes' })).not.toBeInTheDocument();
     expect(screen.queryByText('Run each request where it belongs.')).not.toBeInTheDocument();
   });
 });

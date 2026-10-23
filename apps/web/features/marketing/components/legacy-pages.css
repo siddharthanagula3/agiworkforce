@@ -2614,70 +2614,6 @@
   animation: hero-fade-up 0.7s var(--agi-ease-out) 0.3s both;
 }
 
-[data-design='agi'] .agi-fl-mode-ribbon {
-  display: flex;
-  flex-wrap: nowrap;
-  gap: 0;
-  margin: 20px 0 0;
-  padding: 0;
-  list-style: none;
-  border: 1px solid var(--agi-rule);
-  border-radius: var(--corner-menu);
-  width: fit-content;
-  overflow: hidden;
-  background: var(--agi-console-tint);
-  animation: hero-fade-up 0.7s var(--agi-ease-out) 0.4s both;
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon li {
-  padding: 9px 16px;
-  font-family: var(--agi-font-mono);
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: var(--agi-ink-2);
-  white-space: nowrap;
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon li + li {
-  border-left: 1px solid var(--agi-rule);
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon li::first-letter,
-[data-design='agi'] .agi-fl-mode-ribbon li strong {
-  color: var(--agi-ink);
-}
-
-/* Explained variant: label + note pairs instead of short strings */
-[data-design='agi'] .agi-fl-mode-ribbon.agi-fl-mode-ribbon--explained {
-  flex-wrap: wrap;
-  width: fit-content;
-  max-width: 100%;
-}
-
-[data-design='agi'] .agi-fl-mode-ribbon--explained li {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  white-space: normal;
-  min-width: 0;
-  flex: 1 1 0%;
-}
-
-[data-design='agi'] .agi-fl-mode-label {
-  display: block;
-  font-weight: 600;
-  color: var(--agi-ink);
-  letter-spacing: 0.06em;
-}
-
-[data-design='agi'] .agi-fl-mode-note {
-  display: block;
-  font-weight: 400;
-  color: var(--agi-ink-2);
-  opacity: 0.75;
-  line-height: 1.35;
-}
-
 /* ─── Availability strip ─── */
 [data-design='agi'] .agi-fl-avail {
   padding: clamp(48px, 6vw, 80px) var(--agi-gutter);
@@ -5763,51 +5699,7 @@
   overflow: clip;
 }
 
-/* ── surface ticker (continuous mono words) + text-only surface rows ── */
-
-[data-design='agi'] .agi-fl-ticker {
-  overflow: hidden;
-  border-bottom: 1px solid var(--agi-rule);
-  padding: 18px 0;
-  margin-inline: calc(50% - 50vw);
-}
-
-[data-design='agi'] .agi-fl-ticker-track {
-  display: flex;
-  width: max-content;
-  animation: agi-provider-marquee 48s linear infinite;
-}
-
-[data-design='agi'] .agi-fl-ticker:hover .agi-fl-ticker-track {
-  animation-play-state: paused;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  [data-design='agi'] .agi-fl-ticker-track {
-    animation: none;
-  }
-}
-
-[data-design='agi'] .agi-fl-ticker-row {
-  display: inline-flex;
-  align-items: center;
-  white-space: nowrap;
-}
-
-[data-design='agi'] .agi-fl-ticker-word {
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--agi-font-mono);
-  font-size: 13px;
-  letter-spacing: 0.22em;
-  text-transform: uppercase;
-  color: var(--agi-ink-quiet);
-}
-
-[data-design='agi'] .agi-fl-ticker-dot {
-  margin: 0 22px;
-  color: var(--agi-ink-faint);
-}
+/* ── text-only surface rows ── */
 
 [data-design='agi'] .agi-fl-surface-row--text {
   grid-template-columns: 1fr !important;
@@ -6143,11 +6035,6 @@
   [data-design='agi'] .agi-fl-cta {
     text-align: center;
     justify-content: center;
-  }
-
-  /* Mode ribbon: wrap pills */
-  [data-design='agi'] .agi-fl-mode-ribbon {
-    flex-wrap: wrap;
   }
 
   /* Trust grid: single column already at 860px but keep gap small */
