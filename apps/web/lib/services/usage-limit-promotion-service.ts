@@ -624,7 +624,7 @@ function recostOf(
   const covers =
     Date.parse(claim.expiresAt) >= Date.parse(promotion.endsAt) &&
     claim.committedMicrousd >= exposureMicrousd;
-  return covers ? null : Math.max(0, exposureMicrousd - claim.committedMicrousd);
+  return covers ? null : exposureMicrousd;
 }
 
 function upliftHeldOrFunded(
@@ -645,7 +645,9 @@ function fitsCeiling(promotion: UpliftPromotion, additionalMicrousd: number): bo
  * outgrown, if the promotion's ceiling still covers the most it can add. A
  * claim whose expiry predates the promotion's end, or whose commitment is
  * below the exposure at the promotion's current terms, is extended and charged
- * the difference under the same row lock, so an edit never lifts the ceiling.
+ * the full current exposure again under the same row lock. That over-counts what
+ * the earlier commitment already covered, which keeps the ceiling above the true
+ * worst case after any edit.
  */
 async function claimUplift(
   db: DatabaseAdapter,
@@ -681,10 +683,13 @@ async function claimUplift(
           where g.promotion_id = $1 and g.user_id = $2 and g.reference_id = $3`,
         [promotion.id, userId, UPLIFT_REFERENCE],
       );
-      const committedBefore =
-        existing && !existing.lapsed ? amount(existing.committed_microusd) : 0;
-      const additional = Math.max(0, exposureMicrousd - committedBefore);
-      if (existing && !existing.lapsed && !existing.ends_short && additional === 0) return true;
+      const covered =
+        existing !== undefined &&
+        !existing.lapsed &&
+        !existing.ends_short &&
+        amount(existing.committed_microusd) >= exposureMicrousd;
+      if (covered) return true;
+      const additional = exposureMicrousd;
       if (amount(locked.committed_microusd) + additional > amount(locked.cost_ceiling_microusd)) {
         throw new CeilingReached();
       }

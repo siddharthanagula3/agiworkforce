@@ -328,7 +328,7 @@ describe('uplift claims follow the promotion as it is edited', () => {
     expect(calls.some((sql) => sql.includes('for update'))).toBe(false);
   });
 
-  it('charges the difference when an edit raised the percent after the claim', async () => {
+  it('charges the full current exposure again when an edit raised the percent after the claim', async () => {
     const { db, writes } = claimedScript(
       { uplift_percent: 100 },
       claim({ committed_microusd: EXPOSURE }),
@@ -339,26 +339,42 @@ describe('uplift claims follow the promotion as it is edited', () => {
       weekly: 20_000_000,
       flagshipWeekly: 6_000_000,
     });
-    expect(committedWrites(writes).map((write) => write.params)).toEqual([['code-week', EXPOSURE]]);
+    expect(committedWrites(writes).map((write) => write.params)).toEqual([
+      ['code-week', 2 * EXPOSURE],
+    ]);
     const grantUpdate = writes.find((write) =>
       write.sql.includes('update public.usage_limit_promotion_grants'),
     );
-    expect(grantUpdate?.params).toEqual(['code-week', 'user-1', 'uplift', EXPOSURE]);
+    expect(grantUpdate?.params).toEqual(['code-week', 'user-1', 'uplift', 2 * EXPOSURE]);
   });
 
-  it('moves the expiry forward and charges nothing when only the end date moved', async () => {
+  it('moves the expiry forward and charges the exposure again when the end date moved', async () => {
     const { db, writes } = claimedScript(
       { ends_at: '2026-11-05T00:00:00.000Z' },
       claim({ expires_at: '2026-10-25T00:00:00.000Z' }),
       { committed_microusd: EXPOSURE, lapsed: false, ends_short: true },
     );
     await expect(resolvePromotionalCaps(request, NOW, () => db)).resolves.toEqual(RAISED);
-    expect(committedWrites(writes)).toHaveLength(0);
+    expect(committedWrites(writes).map((write) => write.params)).toEqual([['code-week', EXPOSURE]]);
     const grantUpdate = writes.find((write) =>
       write.sql.includes('update public.usage_limit_promotion_grants'),
     );
     expect(grantUpdate?.sql).toContain('greatest(g.expires_at, p.ends_at)');
-    expect(grantUpdate?.params[3]).toBe(0);
+    expect(grantUpdate?.params[3]).toBe(EXPOSURE);
+  });
+
+  it('holds the plan caps when extending the end date would pass the ceiling', async () => {
+    const { db, writes } = claimedScript(
+      {
+        ends_at: '2026-11-05T00:00:00.000Z',
+        cost_ceiling_microusd: 12_000_000,
+        committed_microusd: 5_000_000,
+      },
+      claim({ expires_at: '2026-10-25T00:00:00.000Z' }),
+      { committed_microusd: EXPOSURE, lapsed: false, ends_short: true },
+    );
+    await expect(resolvePromotionalCaps(request, NOW, () => db)).resolves.toEqual(CAPS);
+    expect(writes).toEqual([]);
   });
 
   it('holds the plan caps when an edit would push the claim past the ceiling', async () => {

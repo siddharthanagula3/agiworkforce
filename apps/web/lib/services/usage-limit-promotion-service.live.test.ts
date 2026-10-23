@@ -412,7 +412,7 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
         weekly: 20_000_000,
         flagshipWeekly: 6_000_000,
       });
-      expect((await promotion(account, 'qa-edit'))?.committed_microusd).toBe('20000000');
+      expect((await promotion(account, 'qa-edit'))?.committed_microusd).toBe('25000000');
 
       await account.db.execute(
         `update public.usage_limit_promotions
