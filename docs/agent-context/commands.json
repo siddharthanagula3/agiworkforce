@@ -117,6 +117,8 @@
       "check": "cargo check -p agiworkforce-cli",
       "test": "cargo test -p agiworkforce-cli --lib",
       "testSingle": "cargo test -p agiworkforce-cli --lib <test-name>",
+      "notices": "node apps/cli/scripts/generate-third-party-notices.mjs",
+      "noticesCheck": "node apps/cli/scripts/generate-third-party-notices.mjs --check",
       "build": "cargo build --release -p agiworkforce-cli"
     },
     "chromeExtension": {

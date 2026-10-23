@@ -33,6 +33,7 @@ function actions() {
     openLogs: vi.fn(),
     copyDiagnostics: vi.fn(),
     openSupport: vi.fn(),
+    openOpenSourceNotices: vi.fn(),
     checkForUpdates: vi.fn(),
     sendHostCommand: vi.fn(),
     goBack: vi.fn(),
@@ -151,7 +152,7 @@ describe('the application menu', () => {
     const { menu, actions: spies } = template();
     const help = submenu(menu, 'Help');
 
-    for (const label of ['AGI Workforce Support', 'Open Logs']) {
+    for (const label of ['AGI Workforce Support', 'Open Logs', 'Open-Source Licenses']) {
       const entry = help.find((candidate) => candidate.label === label);
       expect(entry, label).toBeDefined();
       (entry?.click as () => void)();
@@ -160,6 +161,7 @@ describe('the application menu', () => {
 
     expect(spies.openSupport).toHaveBeenCalledTimes(1);
     expect(spies.openLogs).toHaveBeenCalledTimes(1);
+    expect(spies.openOpenSourceNotices).toHaveBeenCalledTimes(1);
     expect(spies.checkForUpdates).toHaveBeenCalledTimes(1);
   });
 

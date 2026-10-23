@@ -36,6 +36,7 @@ export interface AppMenuActions {
   openLogs: () => void;
   copyDiagnostics: () => void;
   openSupport: () => void;
+  openOpenSourceNotices: () => void;
   checkForUpdates: () => void;
   sendHostCommand: (command: HostCommand) => void;
   goBack: () => void;
@@ -285,6 +286,7 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
       { type: 'separator' },
       { label: 'Open Logs', click: actions.openLogs },
       { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
+      { label: 'Open-Source Licenses', click: actions.openOpenSourceNotices },
       ...(isMac ? [] : [{ label: 'Check for Updates', click: actions.checkForUpdates }]),
     ],
   };

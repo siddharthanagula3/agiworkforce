@@ -72,6 +72,7 @@ export function readNoticeFiles(dir, extraFile) {
 // same way, and lifting them would publish a mangled license.
 function isCopyrightLine(line) {
   if (!/^\s*(?:copyright\b|\(c\)|©)/i.test(line)) return false;
+  if (/^\s*\(c\)/i.test(line)) return /\b(?:19|20)\d{2}\b/.test(line);
   return /(?:\b(?:19|20)\d{2}\b|©|\(c\))/i.test(line);
 }
 
@@ -199,4 +200,101 @@ export function buildNotices(records) {
     texts: Object.fromEntries([...texts.entries()].sort(([a], [b]) => a.localeCompare(b))),
     packages,
   };
+}
+
+export function packageRootOfModule(modulePath) {
+  const segments = modulePath.split(/[\\/]/);
+  const index = segments.lastIndexOf('node_modules');
+  if (index === -1 || index + 1 >= segments.length) return null;
+  const length = segments[index + 1].startsWith('@') ? index + 3 : index + 2;
+  if (segments.length < length) return null;
+  return segments.slice(0, length).join('/');
+}
+
+export function cargoRuntimeClosure(metadata, rootName) {
+  const packages = new Map(metadata.packages.map((pkg) => [pkg.id, pkg]));
+  const nodes = new Map(metadata.resolve.nodes.map((node) => [node.id, node]));
+  const root = metadata.packages.find((pkg) => pkg.name === rootName && pkg.source === null);
+  if (!root) throw new Error(`cargo metadata has no workspace package ${rootName}`);
+  const reached = new Set([root.id]);
+  const queue = [root.id];
+  while (queue.length > 0) {
+    const node = nodes.get(queue.shift());
+    for (const dep of node?.deps ?? []) {
+      const runtime = (dep.dep_kinds ?? []).some((kind) => kind.kind === null);
+      if (!runtime || reached.has(dep.pkg)) continue;
+      reached.add(dep.pkg);
+      queue.push(dep.pkg);
+    }
+  }
+  return [...reached].map((id) => packages.get(id)).filter((pkg) => pkg && pkg.source !== null);
+}
+
+export function addCargoPackage(records, pkg, source) {
+  addPackage(
+    records,
+    {
+      ecosystem: 'cargo',
+      name: pkg.name,
+      version: pkg.version,
+      license: pkg.license ?? (pkg.license_file ? 'See license file' : 'UNKNOWN'),
+      url: projectUrl(pkg.homepage, pkg.repository),
+      files: readNoticeFiles(path.dirname(pkg.manifest_path), pkg.license_file),
+    },
+    source,
+  );
+}
+
+function titleOfText(body) {
+  const line = body
+    .split('\n')
+    .map((candidate) => candidate.replace(/^[\s#=*`-]+|[\s#=*`-]+$/g, ''))
+    .find(Boolean);
+  if (!line) return 'License text';
+  return line.length > 72 ? `${line.slice(0, 71).trimEnd()}...` : line;
+}
+
+export function renderNoticesText(notices, { title, intro }) {
+  const usage = new Map();
+  for (const pkg of notices.packages) {
+    for (const id of pkg.textIds) usage.set(id, (usage.get(id) ?? 0) + 1);
+  }
+  const numbered = Object.entries(notices.texts)
+    .filter(([id]) => usage.has(id))
+    .map(([id, body]) => ({ id, body, title: titleOfText(body), usedBy: usage.get(id) }))
+    .sort(
+      (a, b) => b.usedBy - a.usedBy || a.title.localeCompare(b.title) || a.id.localeCompare(b.id),
+    )
+    .map((text, index) => ({ ...text, number: index + 1 }));
+  const numberOf = new Map(numbered.map((text) => [text.id, text.number]));
+
+  const heading = `Packages (${notices.packages.length})`;
+  const lines = [
+    title,
+    '='.repeat(title.length),
+    '',
+    intro,
+    '',
+    heading,
+    '-'.repeat(heading.length),
+    '',
+  ];
+  for (const pkg of notices.packages) {
+    lines.push(`${pkg.name} ${pkg.version} (${pkg.license})`);
+    if (pkg.url) lines.push(`  ${pkg.url}`);
+    for (const line of pkg.copyright) lines.push(`  ${line}`);
+    if (pkg.textIds.length > 0) {
+      const refs = pkg.textIds.map((id) => numberOf.get(id)).sort((a, b) => a - b);
+      lines.push(`  License text: ${refs.join(', ')}`);
+    }
+    lines.push('');
+  }
+  lines.push('License texts', '-'.repeat('License texts'.length), '');
+  for (const text of numbered) {
+    lines.push(`[${text.number}] ${text.title}`, '', text.body, '', '');
+  }
+  return `${lines
+    .join('\n')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trimEnd()}\n`;
 }

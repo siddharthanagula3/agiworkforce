@@ -90,6 +90,7 @@ import {
 } from './remote/remoteControlService';
 import { getRoot, listRoots } from './runtime/workspaceStore';
 import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
+import { openOpenSourceNotices, openSourceNoticesPath } from './openSourceNoticesFile';
 import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
 import { createNativeNotification, showNativeMessage } from './runtime/nativeSurface';
 import { askNativeQuestion, NOT_ASKED_MESSAGES } from './runtime/nativeQuestions';
@@ -1729,6 +1730,26 @@ function openSupport(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
 }
 
+async function showOpenSourceNotices(): Promise<void> {
+  const failure = await openOpenSourceNotices(
+    openSourceNoticesPath({
+      isPackaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      buildOutputDir: __dirname,
+    }),
+    (target) => shell.openPath(target),
+  );
+  if (failure === null) return;
+  await showNativeMessage(mainWindow, {
+    type: 'info',
+    buttons: ['OK'],
+    title: 'Open-Source Licenses',
+    message: 'The licenses file could not be opened',
+    detail: `Reinstall ${PRODUCT_NAMES.desktop} to restore it.`,
+    noLink: true,
+  }).catch(() => undefined);
+}
+
 /**
  * The window a menu command acts on: the one in front, and the primary only
  * when nothing is. A menu bar belongs to the front window, so sending Back or
@@ -1877,6 +1898,7 @@ function installMenu(): void {
       openLogs: openLogsFolder,
       copyDiagnostics,
       openSupport,
+      openOpenSourceNotices: () => void showOpenSourceNotices(),
       checkForUpdates: garnishHandlers.onCheckForUpdates,
       sendHostCommand,
       goBack,

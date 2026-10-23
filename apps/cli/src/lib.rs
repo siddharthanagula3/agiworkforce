@@ -120,6 +120,7 @@ pub mod model_catalog;
 pub mod model_reachability;
 pub mod oauth;
 pub mod onboarding;
+pub mod open_source_notices;
 pub mod subagent_audit;
 pub use features::plugins::plugins;
 pub mod project_registry;
@@ -825,6 +826,8 @@ enum Command {
         #[arg(value_name = "SHELL", value_enum)]
         shell: ShellType,
     },
+    /// Print the open-source notices for the crates this tool includes.
+    Licenses,
     /// Run app server for IDE integration.
     AppServer {
         /// Canonical folder explicitly approved by a native host for this stdio process.
@@ -6370,6 +6373,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 generate_shell_completion(*shell, "agi", &mut io::stdout());
                 Ok(())
             }
+            Command::Licenses => {
+                print!("{}", open_source_notices::OPEN_SOURCE_NOTICES);
+                Ok(())
+            }
             Command::Acp => {
                 crate::tools::forbid_terminal_questions();
                 let workspace_root = std::env::current_dir()?;
@@ -9763,6 +9770,14 @@ mod tests {
             Some(Command::Completion { shell }) => assert_eq!(shell, ShellType::Zsh),
             other => panic!("expected completion command, got {other:?}"),
         }
+    }
+
+    #[test]
+    fn licenses_subcommand_parses_without_a_trusted_folder() {
+        let cli = Cli::try_parse_from(["agiworkforce", "licenses"])
+            .expect("licenses subcommand should parse");
+        assert!(matches!(cli.command, Some(Command::Licenses)));
+        assert!(!invocation_requires_project_trust(&cli));
     }
 
     #[test]

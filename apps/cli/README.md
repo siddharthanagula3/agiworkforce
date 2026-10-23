@@ -308,7 +308,7 @@ agi help
 Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
 `app-server`, `acp`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
 `auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`,
-`models`, `usage`, `plans`, `plugin`, `sync`, `marketplace`, `hooks`, and `ecosystem`. Managed-cloud
+`models`, `usage`, `plans`, `plugin`, `sync`, `marketplace`, `hooks`, `licenses`, and `ecosystem`. Managed-cloud
 models use the normal model/session path after the explicit privacy handoff;
 there is no separate cloud-task command.
 
@@ -331,7 +331,15 @@ agi mcp logout <name>              # forget its stored token
 agi hooks list
 agi hooks add PreToolUse "echo before every tool"
 agi hooks remove PreToolUse 1
+
+agi licenses                       # open-source notices for the crates this tool includes
 ```
+
+`agi licenses` prints the copyright and license text of every Rust crate in the
+release binary. The text is generated from the release targets' dependency
+tree into `assets/THIRD_PARTY_NOTICES.txt`; after changing dependencies run
+`node apps/cli/scripts/generate-third-party-notices.mjs` and commit the result
+(`--check` fails when the file is stale).
 
 ### Zed and JetBrains (agent client protocol)
 
