@@ -39,8 +39,8 @@ folder you start `agi` in and only applies once you trust that workspace.
 
 - `[default] model` and `provider` choose the default route; both start from
   the model catalog.
-- `[default] permission_mode` is `default`, `plan`, `acceptEdits` or
-  `dontAsk`. Skipping every approval cannot be saved as a default; it is only
+- `[default] permission_mode` is `default`, `plan`, `auto` (also spelled
+  `acceptEdits`) or `dontAsk`. Skipping every approval cannot be saved as a default; it is only
   available for one run with a command-line flag.
 - `[default] reasoning_effort` is `low`, `medium`, `high` or `max`.
 - `max_tokens` is between 1 and 200000 (8192 by default) and `temperature`

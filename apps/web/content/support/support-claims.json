@@ -4891,13 +4891,13 @@
       "doc": "configuration",
       "section": "Useful settings",
       "kind": "prose",
-      "sentence": "`[default] permission_mode` is `default`, `plan`, `acceptEdits` or `dontAsk`.",
+      "sentence": "`[default] permission_mode` is `default`, `plan`, `auto` (also spelled `acceptEdits`) or `dontAsk`.",
       "implementation": ["apps/cli/src/config.rs"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/cli/src/config.rs",
-          "text": "`default`, `plan`, `acceptEdits` or `dontAsk`."
+          "text": "`default`, `plan`, `auto` (also spelled `acceptEdits`) or `dontAsk`."
         }
       ]
     },
