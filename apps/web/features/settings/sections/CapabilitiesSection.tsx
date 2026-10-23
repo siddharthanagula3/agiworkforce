@@ -79,7 +79,7 @@ export function CapabilitiesSection() {
         <ul className="divide-y divide-border">
           {row(
             'Cloud code execution and file creation',
-            'Lets AGI run code and create files in a sandbox while it answers you.',
+            'Lets AGI run code and create files in a sandbox that can reach only GitHub, npm and PyPI.',
             <Switch
               aria-label="Cloud code execution and file creation"
               checked={settings.cloudCodeExecution}
