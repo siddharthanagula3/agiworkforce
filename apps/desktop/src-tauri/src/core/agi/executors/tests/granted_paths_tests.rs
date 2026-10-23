@@ -3,91 +3,14 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::core::agi::executors::{
-        ExecutorContext, GrantedFolders, ToolExecutor, UiExecutor, NO_GRANTED_FOLDER,
-    };
-    use crate::core::agi::{ExecutionContext, Goal, Priority, ResourceState};
-    use serde_json::{json, Value};
-    use std::collections::HashMap;
+    use crate::core::agi::executors::GrantedFolders;
     use std::path::PathBuf;
-    use std::sync::Arc;
     use tempfile::TempDir;
-
-    fn context(granted_directories: Vec<PathBuf>) -> ExecutorContext {
-        ExecutorContext {
-            app_handle: None,
-            router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
-            tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
-            security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
-            change_tracker: None,
-            session_id: "granted_paths_session".to_string(),
-            tool_id: "granted_paths_test".to_string(),
-            granted_directories,
-        }
-    }
-
-    fn execution_context() -> ExecutionContext {
-        ExecutionContext {
-            goal: Goal {
-                id: "granted_paths_goal".to_string(),
-                description: "Granted path checks".to_string(),
-                priority: Priority::Medium,
-                deadline: None,
-                constraints: vec![],
-                success_criteria: vec![],
-                trust_mode: None,
-            },
-            current_state: HashMap::new(),
-            available_resources: ResourceState {
-                cpu_usage_percent: 0.0,
-                memory_usage_mb: 0,
-                network_usage_mbps: 0.0,
-                storage_usage_mb: 0,
-                available_tools: vec![],
-            },
-            tool_results: vec![],
-            context_memory: vec![],
-        }
-    }
-
-    fn params(pairs: &[(&str, Value)]) -> HashMap<String, Value> {
-        pairs
-            .iter()
-            .map(|(key, value)| (key.to_string(), value.clone()))
-            .collect()
-    }
 
     fn file_in(folder: &TempDir, name: &str) -> PathBuf {
         let file = folder.path().join(name);
         std::fs::write(&file, "data").unwrap();
         file
-    }
-
-    async fn run(
-        executor: &dyn ToolExecutor,
-        tool: &str,
-        parameters: &HashMap<String, Value>,
-        granted: Vec<PathBuf>,
-    ) -> String {
-        executor
-            .execute(tool, parameters, &context(granted), &execution_context())
-            .await
-            .unwrap_err()
-            .to_string()
-    }
-
-    fn assert_refused(error: &str) {
-        assert!(
-            error.contains(NO_GRANTED_FOLDER) || error.contains("Access denied"),
-            "expected a refusal, got: {error}"
-        );
-    }
-
-    fn assert_not_refused(error: &str) {
-        assert!(
-            !error.contains(NO_GRANTED_FOLDER) && !error.contains("Access denied"),
-            "expected the granted path to be allowed, got: {error}"
-        );
     }
 
     #[test]
@@ -207,24 +130,108 @@ mod tests {
     }
 
     #[cfg(unix)]
-    #[tokio::test]
-    async fn ui_image_ocr_needs_a_granted_folder() {
-        let folder = TempDir::new().unwrap();
-        let image = file_in(&folder, "image.png");
-        let ocr = params(&[("image_path", json!(image.to_string_lossy()))]);
-        let executor = UiExecutor::new();
+    mod ui_executor {
+        use super::file_in;
+        use crate::core::agi::executors::{
+            ExecutorContext, ToolExecutor, UiExecutor, NO_GRANTED_FOLDER,
+        };
+        use crate::core::agi::{ExecutionContext, Goal, Priority, ResourceState};
+        use serde_json::{json, Value};
+        use std::collections::HashMap;
+        use std::path::PathBuf;
+        use std::sync::Arc;
+        use tempfile::TempDir;
 
-        assert_refused(&run(&executor, "image_ocr", &ocr, vec![]).await);
-        if let Err(error) = executor
-            .execute(
-                "image_ocr",
-                &ocr,
-                &context(vec![folder.path().to_path_buf()]),
-                &execution_context(),
-            )
-            .await
-        {
-            assert_not_refused(&error.to_string());
+        fn context(granted_directories: Vec<PathBuf>) -> ExecutorContext {
+            ExecutorContext {
+                app_handle: None,
+                router: Arc::new(tokio::sync::RwLock::new(crate::core::llm::LLMRouter::new())),
+                tool_cache: Arc::new(crate::data::cache::ToolResultCache::new()),
+                security_guard: Arc::new(crate::sys::security::ToolExecutionGuard::new()),
+                change_tracker: None,
+                session_id: "granted_paths_session".to_string(),
+                tool_id: "granted_paths_test".to_string(),
+                granted_directories,
+            }
+        }
+
+        fn execution_context() -> ExecutionContext {
+            ExecutionContext {
+                goal: Goal {
+                    id: "granted_paths_goal".to_string(),
+                    description: "Granted path checks".to_string(),
+                    priority: Priority::Medium,
+                    deadline: None,
+                    constraints: vec![],
+                    success_criteria: vec![],
+                    trust_mode: None,
+                },
+                current_state: HashMap::new(),
+                available_resources: ResourceState {
+                    cpu_usage_percent: 0.0,
+                    memory_usage_mb: 0,
+                    network_usage_mbps: 0.0,
+                    storage_usage_mb: 0,
+                    available_tools: vec![],
+                },
+                tool_results: vec![],
+                context_memory: vec![],
+            }
+        }
+
+        fn params(pairs: &[(&str, Value)]) -> HashMap<String, Value> {
+            pairs
+                .iter()
+                .map(|(key, value)| (key.to_string(), value.clone()))
+                .collect()
+        }
+
+        async fn run(
+            executor: &dyn ToolExecutor,
+            tool: &str,
+            parameters: &HashMap<String, Value>,
+            granted: Vec<PathBuf>,
+        ) -> String {
+            executor
+                .execute(tool, parameters, &context(granted), &execution_context())
+                .await
+                .unwrap_err()
+                .to_string()
+        }
+
+        fn assert_refused(error: &str) {
+            assert!(
+                error.contains(NO_GRANTED_FOLDER) || error.contains("Access denied"),
+                "expected a refusal, got: {error}"
+            );
+        }
+
+        fn assert_not_refused(error: &str) {
+            assert!(
+                !error.contains(NO_GRANTED_FOLDER) && !error.contains("Access denied"),
+                "expected the granted path to be allowed, got: {error}"
+            );
+        }
+
+        #[tokio::test]
+        async fn ui_image_ocr_needs_a_granted_folder() {
+            let folder = TempDir::new().unwrap();
+            let image = file_in(&folder, "image.png");
+            let ocr = params(&[("image_path", json!(image.to_string_lossy()))]);
+            let executor = UiExecutor::new();
+
+            assert_refused(&run(&executor, "image_ocr", &ocr, vec![]).await);
+            if let Err(error) = executor
+                .execute(
+                    "image_ocr",
+                    &ocr,
+                    &context(vec![folder.path().to_path_buf()]),
+                    &execution_context(),
+                )
+                .await
+            {
+                assert_not_refused(&error.to_string());
+            }
         }
     }
 

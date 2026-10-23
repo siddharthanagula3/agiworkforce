@@ -194,6 +194,7 @@ impl PendingApproval {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
     use super::super::types::HookEventType;
     use super::*;
 
