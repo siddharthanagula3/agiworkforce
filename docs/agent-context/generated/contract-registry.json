@@ -58,6 +58,7 @@
     "event-triggers",
     "experiment-registry",
     "external-resource-reference",
+    "fast-mode",
     "feature-registry",
     "feature-release",
     "file-input",
@@ -246,5 +247,5 @@
     "web-search-allowance",
     "workspaces"
   ],
-  "generatedProtocolTypeCount": 479
+  "generatedProtocolTypeCount": 480
 }
