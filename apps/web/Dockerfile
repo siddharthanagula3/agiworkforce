@@ -5,8 +5,8 @@
 # The root .dockerignore keeps .git, node_modules and every .env out of it.
 # docs/runbooks/web-container-portability-drill.md owns the operating procedure.
 
-ARG NODE_BUILD_IMAGE=node:24-bookworm
-ARG NODE_RUNTIME_IMAGE=node:24-bookworm-slim
+ARG NODE_BUILD_IMAGE=node:24-bookworm@sha256:6449e19d8184d84062525b6a7524def03146c2cb04a7f08b076680d0e8e4240a
+ARG NODE_RUNTIME_IMAGE=node:24-bookworm-slim@sha256:55fb5f5a527ea2c5c4a95f963e48ef90aa38c7b346054fdc8ee9957a2b55d205
 
 FROM ${NODE_BUILD_IMAGE} AS builder
 
