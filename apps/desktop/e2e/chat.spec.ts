@@ -259,46 +259,48 @@ test.describe('Chat Workflow', () => {
   });
 });
 
-test.describe('Chat AGI Integration', () => {
+test.describe('Chat agent turns', () => {
+  const ASSISTANT_REPLY = 'Goal turn reply from the chat loop.';
+
   test.beforeEach(async ({ page }) => {
     await injectMockCloudAuth(page);
-    await mockCloudApi(page, { models: SEEDED_MODELS });
+    await mockCloudApi(page, { models: SEEDED_MODELS, assistantReply: ASSISTANT_REPLY });
     await page.goto('/', { waitUntil: 'domcontentloaded' });
     await expectCloudShellReady(page);
   });
 
-  test('should detect and submit goal-like messages', async ({ page }) => {
-    const chatInput = page.getByRole('textbox', { name: /message/i });
-    await expect(chatInput, 'Chat input not available').toBeVisible();
+  // Commit 7b1724ae97 removed the goal-handoff chip and the agent-task store: every
+  // local agent turn runs on the one chat loop, so a task-shaped message is an
+  // ordinary chat turn and never offers or starts a separate agent task.
+  for (const [label, message] of [
+    ['a goal-shaped message', 'Create a React component for user authentication'],
+    ['a plain greeting', 'Hello'],
+  ] as const) {
+    test(`should run ${label} as an ordinary chat turn without a task handoff`, async ({
+      page,
+    }) => {
+      const chatInput = page.getByRole('textbox', { name: /message/i });
+      await expect(chatInput, 'Chat input not available').toBeVisible();
 
-    await chatInput.fill('Create a React component for user authentication');
-    const sendButton = page.getByRole('button', { name: /send/i });
-    await sendButton.click();
+      const completion = page.waitForRequest(
+        (request) =>
+          request.method() === 'POST' &&
+          request.url().includes('/api/llm/v1/chat/completions') &&
+          (request.postData() ?? '').includes(message),
+      );
 
-    // Detection offers the handoff; it never submits on its own. Spawning agent
-    // compute from a message the user only meant as chat would spend their
-    // budget without asking, so agi-submitted appears after the offer is
-    // accepted, not on send.
-    const offer = page.getByTestId('agi-goal-detected');
-    await expect(offer, 'Goal handoff offer not rendered').toBeVisible({ timeout: 5000 });
+      await chatInput.fill(message);
+      await page.getByRole('button', { name: /send/i }).click();
 
-    await offer.getByRole('button', { name: /run as task/i }).click();
+      await completion;
+      await expect(page.locator('[data-role="user"]').last()).toContainText(message);
+      await expect(page.locator('[data-role="assistant"]').last()).toContainText(ASSISTANT_REPLY, {
+        timeout: 30000,
+      });
 
-    await expect(page.getByTestId('agi-submitted')).toBeVisible({ timeout: 5000 });
-  });
-
-  test('should not submit non-goal messages to AGI', async ({ page }) => {
-    const chatInput = page.getByRole('textbox', { name: /message/i });
-    await expect(chatInput, 'Chat input not available').toBeVisible();
-
-    await chatInput.fill('Hello');
-    const sendButton = page.getByRole('button', { name: /send/i });
-    await sendButton.click();
-
-    // Assert the OFFER is absent, not just the submitted state: the submitted
-    // state is absent for every input until someone clicks, so asserting only
-    // that would pass even with detection completely broken.
-    await expect(page.getByTestId('agi-goal-detected')).toHaveCount(0);
-    await expect(page.getByTestId('agi-submitted')).toHaveCount(0);
-  });
+      await expect(page.getByTestId('agi-goal-detected')).toHaveCount(0);
+      await expect(page.getByTestId('agi-submitted')).toHaveCount(0);
+      await expect(page.getByRole('button', { name: /run as task/i })).toHaveCount(0);
+    });
+  }
 });
