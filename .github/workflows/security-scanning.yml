@@ -52,7 +52,15 @@ env:
   # a scanner that silently follows a floating tag changes what CI blocks on
   # without a commit to point at.
   TRIVY_IMAGE: aquasec/trivy:0.74.0
-  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0
+  # The 2.17.0 tag is rebuilt in place, so the digest pins the bundled add-ons
+  # (pscanrules 76, commonlib 1.44.0) that decide which passive rules run.
+  ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:5ccfff9a411743ab2615136a2edd7416bec9ce41572fa94e935df38c14adb2b6
+  # zap-baseline.py fetches pscanrulesBeta from the add-on marketplace on every run
+  # and discards that step's output, so a failed fetch silently dropped rules such
+  # as 10099 and turned their allowlist entries stale. The add-on is pinned here
+  # and ZAP runs with -silent, so the rule set changes only with a commit.
+  ZAP_PSCANRULES_BETA_URL: https://github.com/zaproxy/zap-extensions/releases/download/pscanrulesBeta-v50/pscanrulesBeta-beta-50.zap
+  ZAP_PSCANRULES_BETA_SHA256: a979f7cd5d8be10e0338b417e006ec1e2f6ec79101010d570ddb5199892e921b
 
 jobs:
   iac-scan:
@@ -267,19 +275,27 @@ jobs:
       - name: DAST baseline (OWASP ZAP)
         run: |
           set -euo pipefail
-          mkdir -p zap-out
+          mkdir -p zap-out zap-addons
           chmod 777 zap-out
+          curl -fsSL --retry 3 --output zap-addons/pscanrulesBeta.zap "$ZAP_PSCANRULES_BETA_URL"
+          echo "$ZAP_PSCANRULES_BETA_SHA256  zap-addons/pscanrulesBeta.zap" | sha256sum --check --strict
           docker run --rm \
             --network=host \
             --volume "$PWD/zap-out:/zap/wrk" \
             --volume "$PWD/.github/zap-baseline-rules.tsv:/zap/rules.tsv:ro" \
+            --volume "$PWD/zap-addons/pscanrulesBeta.zap:/zap/plugin/pscanrulesBeta-beta-50.zap:ro" \
             "$ZAP_IMAGE" zap-baseline.py \
               -t "$SCAN_APP_ORIGIN" \
               -c /zap/rules.tsv \
               -J zap.json \
               -r zap.html \
               -m 5 \
-              -I || true
+              -z "-silent" \
+              -I | tee zap-out/baseline.txt || true
+          if ! grep -q '\[10099\]' zap-out/baseline.txt; then
+            echo "::error::ZAP ran without the pinned pscanrulesBeta rules (no rule 10099 in its output)."
+            exit 1
+          fi
 
       - name: DAST gate (unaccepted alerts block the merge)
         run: node scripts/check-scan-findings.mjs --format zap --min-severity MEDIUM zap-out/zap.json
