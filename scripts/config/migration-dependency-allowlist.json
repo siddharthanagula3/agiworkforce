@@ -82,6 +82,11 @@
       "reason": "Reads or writes the web_conversations.instructions column that 0368 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0368 is applied."
     },
     {
+      "file": "apps/web/lib/server/workspace-scope/switch-surfaces.ts",
+      "migration": 370,
+      "reason": "Places the user_agents table that 0370 adds on its workspace switch surface. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0370 is applied."
+    },
+    {
       "file": "apps/web/lib/services/artifact-comment-service.ts",
       "migration": 369,
       "reason": "Reads or writes the artifact_comments table that 0369 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0369 is applied."
