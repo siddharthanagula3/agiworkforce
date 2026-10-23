@@ -285,6 +285,17 @@ const ALLOWLIST = [
     match: /api\/webhooks\//,
     reason: 'inbound webhooks resolve their subject from the signed payload',
   },
+  {
+    match: /lib\/triggers\/trigger-service\.ts$/,
+    tables: ['event_triggers'],
+    functions: ['readConnectorTriggerSalt'],
+    reason:
+      'the api/webhooks/connectors entry reached through the trigger service: an inbound ' +
+      'connector event names only its trigger id and is unauthenticated until its HMAC is ' +
+      'checked, so there is no owner to constrain by yet. The statement reads one column, the ' +
+      'signing salt of that connector trigger, which the route uses only to verify the ' +
+      'signature before anything about the trigger or its owner is touched',
+  },
   { match: /api\/admin\//, reason: 'platform-admin routes are deliberately cross-user' },
   { match: /api\/health/, reason: 'health probe touches no user data' },
   { match: /api\/releases/, reason: 'release metadata is global, not user-owned' },
