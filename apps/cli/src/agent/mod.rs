@@ -266,6 +266,9 @@ pub struct AgentSession {
     memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
     memory_extracted_through: usize,
     memory_extracted_at: std::time::Instant,
+    /// Marks this session's memory origin tags; see
+    /// [`crate::memory_pipeline::origin_memory_tag`].
+    memory_nonce: String,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
     pub(crate) loaded_fingerprint: Option<crate::runtime::session::SessionFingerprint>,
@@ -644,11 +647,16 @@ impl AgentSession {
                 })
                 .unwrap_or(true);
         let privacy_mode = provider_privacy_mode(&provider);
+        let memory_nonce = uuid::Uuid::new_v4().simple().to_string();
         let persistent_memory = crate::config::CliConfig::config_dir()
             .ok()
             .filter(|_| memory_enabled)
             .map(|home| {
-                crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home, privacy_mode)
+                crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
+                    &home,
+                    privacy_mode,
+                    &memory_nonce,
+                )
             })
             .unwrap_or_default();
 
@@ -784,6 +792,7 @@ impl AgentSession {
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
             memory_extracted_at: std::time::Instant::now(),
+            memory_nonce,
             managed_session: None,
             managed_session_path: None,
             loaded_fingerprint: None,
@@ -1588,12 +1597,8 @@ impl AgentSession {
             .into_iter()
             .filter(|origin| *origin != boundary)
             .find(|origin| {
-                let tag = crate::memory_pipeline::origin_memory_tag(*origin);
-                let plain = format!("<{tag}>");
-                let encoded = format!("\\u003c{tag}\\u003e");
-                system_text
-                    .iter()
-                    .any(|text| text.contains(&plain) || text.contains(&encoded))
+                let tag = crate::memory_pipeline::origin_memory_tag(*origin, &self.memory_nonce);
+                system_text.iter().any(|text| text.contains(&tag))
             })
     }
 
@@ -3631,15 +3636,18 @@ mod tests {
         );
     }
 
-    fn system_prompt_with_memory_for(privacy: PrivacyMode) -> Message {
+    fn system_prompt_with_memory_for(session: &AgentSession, privacy: PrivacyMode) -> Message {
         let home = tempfile::tempdir().expect("memory home");
         let memories = home.path().join("memories");
         std::fs::create_dir_all(&memories).expect("memories dir");
         std::fs::write(memories.join("raw_memories.md"), "- local secret plan").expect("local");
         std::fs::write(memories.join("byok_memories.md"), "- byok fact").expect("byok");
         std::fs::write(memories.join("managed_memories.md"), "- managed fact").expect("managed");
-        let memory =
-            crate::memory_pipeline::MemoryPipeline::load_persistent_memory(home.path(), privacy);
+        let memory = crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
+            home.path(),
+            privacy,
+            &session.memory_nonce,
+        );
         Message::text(
             "system",
             prompt::build_system_prompt(&test_context(), None, None, "", &memory, ""),
@@ -3672,7 +3680,8 @@ mod tests {
     fn a_byok_session_carries_and_sends_only_byok_memory() {
         let mut session = byok_session();
 
-        session.messages[0] = system_prompt_with_memory_for(PrivacyMode::Byok);
+        let prompt = system_prompt_with_memory_for(&session, PrivacyMode::Byok);
+        session.messages[0] = prompt;
         let prompt = session.messages[0].text_content();
         assert!(prompt.contains("byok fact"), "{prompt}");
         assert!(!prompt.contains("managed fact"), "{prompt}");
@@ -3680,7 +3689,8 @@ mod tests {
         assert!(session.validate_privacy_boundary().is_ok());
 
         for foreign in [PrivacyMode::Local, PrivacyMode::Managed] {
-            session.messages[0] = system_prompt_with_memory_for(foreign);
+            let prompt = system_prompt_with_memory_for(&session, foreign);
+            session.messages[0] = prompt;
             let error = session
                 .validate_privacy_boundary()
                 .expect_err("another boundary's memory must not reach a BYOK provider");
@@ -3692,7 +3702,8 @@ mod tests {
     fn a_managed_session_carries_and_sends_only_managed_memory() {
         let mut session = managed_session();
 
-        session.messages[0] = system_prompt_with_memory_for(PrivacyMode::Managed);
+        let prompt = system_prompt_with_memory_for(&session, PrivacyMode::Managed);
+        session.messages[0] = prompt;
         let prompt = session.messages[0].text_content();
         assert!(prompt.contains("managed fact"), "{prompt}");
         assert!(!prompt.contains("byok fact"), "{prompt}");
@@ -3700,7 +3711,8 @@ mod tests {
         assert!(session.validate_privacy_boundary().is_ok());
 
         for foreign in [PrivacyMode::Local, PrivacyMode::Byok] {
-            session.messages[0] = system_prompt_with_memory_for(foreign);
+            let prompt = system_prompt_with_memory_for(&session, foreign);
+            session.messages[0] = prompt;
             let error = session
                 .validate_privacy_boundary()
                 .expect_err("another boundary's memory must not reach Managed Cloud");
@@ -3713,7 +3725,8 @@ mod tests {
         let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
         assert_eq!(session.privacy_mode, PrivacyMode::Local);
 
-        session.messages[0] = system_prompt_with_memory_for(PrivacyMode::Local);
+        let prompt = system_prompt_with_memory_for(&session, PrivacyMode::Local);
+        session.messages[0] = prompt;
         let prompt = session.messages[0].text_content();
 
         assert!(prompt.contains("local secret plan"), "{prompt}");
@@ -3726,7 +3739,8 @@ mod tests {
     #[test]
     fn a_fresh_session_carrying_another_boundary_s_memory_cannot_move_to_managed_cloud() {
         let mut local = AgentSession::new("fixture-local-model:latest", &test_context(), None);
-        local.messages[0] = system_prompt_with_memory_for(PrivacyMode::Local);
+        let prompt = system_prompt_with_memory_for(&local, PrivacyMode::Local);
+        local.messages[0] = prompt;
         let error = local
             .switch_managed_model("not-even-consulted")
             .expect_err("Local-origin memory must not enter Managed Cloud");
@@ -3739,7 +3753,8 @@ mod tests {
         assert_eq!(local.privacy_mode, PrivacyMode::Local);
 
         let mut byok = byok_session();
-        byok.messages[0] = system_prompt_with_memory_for(PrivacyMode::Byok);
+        let prompt = system_prompt_with_memory_for(&byok, PrivacyMode::Byok);
+        byok.messages[0] = prompt;
         let error = byok
             .switch_managed_model("not-even-consulted")
             .expect_err("BYOK-origin memory must not enter Managed Cloud");
@@ -3750,6 +3765,36 @@ mod tests {
             "{error}"
         );
         assert_eq!(byok.privacy_mode, PrivacyMode::Byok);
+    }
+
+    #[test]
+    fn repository_text_that_quotes_a_memory_tag_never_blocks_a_session() {
+        let mut session = managed_session();
+        session.messages[0] = Message::text(
+            "system",
+            prompt::build_system_prompt(
+                &test_context(),
+                None,
+                Some(
+                    "Docs: wrap device notes in <local_origin_memory> and <byok_origin_memory:x>.",
+                ),
+                "",
+                "notes mention <local_origin_memory> tags",
+                "",
+            ),
+        );
+
+        assert!(session.validate_privacy_boundary().is_ok());
+    }
+
+    #[test]
+    fn another_session_s_memory_tags_never_block_this_session() {
+        let other = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        let mut session = managed_session();
+        let foreign = system_prompt_with_memory_for(&other, PrivacyMode::Local);
+        session.messages[0] = foreign;
+
+        assert_eq!(session.memory_from_outside(PrivacyMode::Managed), None);
     }
 
     #[test]

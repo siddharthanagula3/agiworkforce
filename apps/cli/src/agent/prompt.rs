@@ -406,9 +406,12 @@ pub fn assemble_system_prompt(
     let privacy = crate::config::CliConfig::load()
         .unwrap_or_default()
         .account_privacy_mode();
+    let nonce = uuid::Uuid::new_v4().simple().to_string();
     let persistent_memory = crate::config::CliConfig::config_dir()
         .ok()
-        .map(|home| crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home, privacy))
+        .map(|home| {
+            crate::memory_pipeline::MemoryPipeline::load_persistent_memory(&home, privacy, &nonce)
+        })
         .unwrap_or_default();
 
     let discovered = skills::discover_skills();
