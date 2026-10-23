@@ -1234,8 +1234,10 @@ describe('routine credit caps', () => {
     );
 
     const [sql, params] = query.mock.calls[0] as [string, unknown[]];
-    expect(sql).toContain('credit_cap_microusd');
-    expect(params.at(-1)).toBe(CAP_MICROUSD);
+    expect(sql).toContain('credit_cap_microusd, agent_id');
+    expect(sql).toContain('$24, $25');
+    expect(params[23]).toBe(CAP_MICROUSD);
+    expect(params.at(-1)).toBeNull();
   });
 
   it('reads what a routine spent in the same statement that locks it', async () => {
