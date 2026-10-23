@@ -36,7 +36,8 @@ export const EMPTY_BRIEF: DesignBrief = {
 };
 
 const MAX_FIELD_CHARS = 1_000;
-const BRIEF_COMMENT = /<!--\s*brief:\s*(\{[\s\S]*?\})\s*-->/i;
+// \x3C is `<`: Semgrep reads a regex literal that opens with it as an HTML comment and drops the file.
+const BRIEF_COMMENT = /\x3C!--\s*brief:\s*(\{[\s\S]*?\})\s*-->/i;
 
 function field(value: unknown): string {
   return typeof value === 'string' ? value.trim().slice(0, MAX_FIELD_CHARS) : '';

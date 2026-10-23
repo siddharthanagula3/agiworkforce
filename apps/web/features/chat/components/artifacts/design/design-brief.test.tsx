@@ -19,6 +19,8 @@ const BRIEF: DesignBrief = {
   layout: 'Single column',
 };
 
+const BRIEF_COMMENT_PATTERN = /\x3C!-- brief: .* -->/;
+
 const ARTIFACT_ID = '5d4c3b2a-1f0e-4d9c-8b7a-6e5f4d3c2b1a';
 
 describe('design briefs', () => {
@@ -30,7 +32,7 @@ describe('design briefs', () => {
     const prompt = buildDesignFromBriefRequest(BRIEF);
     expect(prompt).toContain('Design a landing page from this brief');
     expect(prompt).toContain('- Audience: Indie developers');
-    const comment = /<!-- brief: .* -->/.exec(prompt)![0];
+    const comment = BRIEF_COMMENT_PATTERN.exec(prompt)![0];
     expect(readDesignBrief(`<!-- @artifact -->\n${comment}\n<main></main>`)).toEqual(BRIEF);
     expect(buildBriefRevisionRequest('Beta page', BRIEF)).toContain(
       'Revise the design "Beta page"',
@@ -61,7 +63,7 @@ describe('design briefs', () => {
   });
 
   it('opens the kept brief from the panel and sends a revision', () => {
-    const comment = /<!-- brief: .* -->/.exec(buildDesignFromBriefRequest(BRIEF))![0];
+    const comment = BRIEF_COMMENT_PATTERN.exec(buildDesignFromBriefRequest(BRIEF))![0];
     useArtifactsStore.getState().addArtifact({
       id: ARTIFACT_ID,
       type: 'html',

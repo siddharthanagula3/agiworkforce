@@ -14,6 +14,7 @@ import {
   getVideoQualityOptionsForModel,
   isExecutableVideoModel,
   isModelLive,
+  type VideoQualityOption,
 } from '@agiworkforce/types';
 import {
   getAllowedAutoModesForTier,
@@ -38,7 +39,7 @@ const videoQualityCatalog = vi.hoisted(() => ({
     | ((
         modelId: string | undefined,
         aspectRatio: string | undefined,
-      ) => import('@agiworkforce/types').VideoQualityOption[] | null)
+      ) => VideoQualityOption[] | null)
     | null,
 }));
 vi.mock('@agiworkforce/types', async (importOriginal) => {
