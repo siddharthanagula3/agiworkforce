@@ -104,7 +104,8 @@ vi.mock('@shared/stores/thinking-store', () => ({
     }),
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
   useConfirmAction: () => ({ confirm: () => undefined, dialog: null }),
   useMenuKeyboard: () => undefined,
   useUiTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
