@@ -93,7 +93,21 @@ function start(
   });
 }
 
+async function settleOnFakeClock<T>(pending: Promise<T>): Promise<T> {
+  let settled = false;
+  const tracked = pending.finally(() => {
+    settled = true;
+  });
+  tracked.catch(() => undefined);
+  while (!settled) {
+    if (vi.getTimerCount() === 0) await Promise.resolve();
+    else await vi.advanceTimersToNextTimerAsync();
+  }
+  return tracked;
+}
+
 afterEach(() => {
+  vi.useRealTimers();
   vi.restoreAllMocks();
 });
 
@@ -183,6 +197,7 @@ describe('the caller keeps control of a turn that is waiting to retry', () => {
 
 describe('a retry never buys the turn more time than the caller granted', () => {
   it('arms the second attempt with a smaller first-token deadline than the first', async () => {
+    vi.useFakeTimers();
     const attempts = { count: 0 };
     const waitSeconds = 1;
     const adapter = makeAdapter(async function* (_request: ChatRequest, signal: AbortSignal) {
@@ -204,7 +219,7 @@ describe('a retry never buys the turn more time than the caller granted', () => 
       yield { type: 'text-delta', delta: 'too late' } as StreamChunk;
     });
 
-    const failure = await start(adapter, new AbortController().signal).then(
+    const failure = await settleOnFakeClock(start(adapter, new AbortController().signal)).then(
       () => null,
       (error: unknown) => error as ProviderFirstTokenDeadlineError,
     );
@@ -216,11 +231,11 @@ describe('a retry never buys the turn more time than the caller granted', () => 
   });
 
   it('clamps a long Retry-After to what is left rather than overrunning the turn', async () => {
+    vi.useFakeTimers();
     const attempts = { count: 0 };
     const startedAt = Date.now();
-    const chunks = await start(
-      failingAdapter([overload('overloaded', 60)], attempts),
-      new AbortController().signal,
+    const chunks = await settleOnFakeClock(
+      start(failingAdapter([overload('overloaded', 60)], attempts), new AbortController().signal),
     );
 
     expect(await drain(chunks)).toHaveLength(2);
