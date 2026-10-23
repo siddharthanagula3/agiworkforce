@@ -15,6 +15,12 @@ vi.mock('@shared/components/legal/PolicyVersionsLink', () => ({
   PolicyVersionsLink: () => null,
 }));
 
+function withoutHeader(section: HTMLElement): HTMLElement {
+  const copy = section.cloneNode(true) as HTMLElement;
+  copy.querySelector('thead')?.remove();
+  return copy;
+}
+
 function renderBasisSection(): HTMLElement {
   const { container } = render(<PrivacyPage />);
   const section = container.querySelector<HTMLElement>('#s-03');
@@ -29,14 +35,22 @@ describe('privacy legal-basis section', () => {
       'utf8',
     ).trim();
 
-    expect(sectionWords(renderBasisSection()).join(' ')).toBe(before);
+    expect(sectionWords(withoutHeader(renderBasisSection())).join(' ')).toBe(before);
   });
 
-  it('presents one row per purpose as a three column table', () => {
+  it('heads the table with exactly Purpose and Legal basis', () => {
+    const table = within(renderBasisSection()).getByRole('table');
+    const headings = within(table).getAllByRole('columnheader');
+
+    expect(headings.map((heading) => heading.textContent)).toEqual(['Purpose', 'Legal basis']);
+    expect(headings[0]?.getAttribute('colspan')).toBe('2');
+  });
+
+  it('presents one body row per purpose as a three column table', () => {
     const table = within(renderBasisSection()).getByRole('table', {
       name: 'How we use it, and on what basis',
     });
-    const rows = within(table).getAllByRole('row');
+    const rows = within(table).getAllByRole('row').slice(1);
 
     expect(rows).toHaveLength(12);
     for (const row of rows) {
@@ -47,7 +61,7 @@ describe('privacy legal-basis section', () => {
 
   it('puts the data in the second column and the basis in the third', () => {
     const table = within(renderBasisSection()).getByRole('table');
-    const rows = within(table).getAllByRole('row');
+    const rows = within(table).getAllByRole('row').slice(1);
 
     for (const row of rows) {
       const [data, basis] = within(row).getAllByRole('cell');

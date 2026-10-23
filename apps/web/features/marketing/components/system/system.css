@@ -522,6 +522,19 @@
   font-weight: 500;
 }
 
+[data-design='agi'] .agi-ds-legal-table thead {
+  border-bottom: 1px solid var(--agi-rule-strong);
+  background: var(--agi-surface-wash);
+}
+
+[data-design='agi'] .agi-ds-legal-table thead th {
+  color: var(--agi-ink-2);
+}
+
+[data-design='agi'] .agi-ds-legal-table thead th[colspan] {
+  width: 66.666%;
+}
+
 [data-design='agi'] .agi-ds-availability {
   margin-top: var(--agi-space-4);
 }
@@ -564,7 +577,16 @@
     width: auto;
   }
 
-  [data-design='agi'] .agi-ds-legal-table th {
+  [data-design='agi'] .agi-ds-legal-table thead {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  [data-design='agi'] .agi-ds-legal-table tbody th {
     padding-bottom: 0;
   }
 

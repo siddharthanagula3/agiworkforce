@@ -1183,7 +1183,12 @@ export default function PrivacyPage() {
                     <em>legitimate interests</em>, it also says why we think ours do not override
                     yours. That balancing test is the part a bare list omits.
                   </Prose>
-                  <LegalTable caption="How we use it, and on what basis" rows={BASIS_LEDGER} />
+                  <LegalTable
+                    caption="How we use it, and on what basis"
+                    purposeHeading="Purpose"
+                    basisHeading="Legal basis"
+                    rows={BASIS_LEDGER}
+                  />
                   <Prose size="sm">
                     <strong>India works differently and has its own page.</strong> Under the Digital
                     Personal Data Protection Act, 2023 consent is the default ground rather than one

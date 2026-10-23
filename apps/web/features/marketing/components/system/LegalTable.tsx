@@ -27,11 +27,29 @@ function Lines({ lines }: { lines: ReactNode[][] }) {
   ));
 }
 
-export function LegalTable({ rows, caption }: { rows: readonly LedgerRow[]; caption: string }) {
+export function LegalTable({
+  rows,
+  caption,
+  purposeHeading,
+  basisHeading,
+}: {
+  rows: readonly LedgerRow[];
+  caption: string;
+  purposeHeading: string;
+  basisHeading: string;
+}) {
   return (
     <div className="agi-ds-legal-table">
       <table>
         <caption className="sr-only">{caption}</caption>
+        <thead>
+          <tr>
+            <th scope="col" colSpan={2}>
+              {purposeHeading}
+            </th>
+            <th scope="col">{basisHeading}</th>
+          </tr>
+        </thead>
         <tbody>
           {rows.map((row, index) => {
             const lines = splitLines(row.value);
