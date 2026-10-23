@@ -6,6 +6,7 @@
 
 use anyhow::{bail, Result};
 
+use crate::agent::PrivacyMode;
 use crate::config::CliConfig;
 use crate::models::{self, Message, Provider};
 
@@ -79,41 +80,96 @@ fn provider_has_key(provider_name: &str) -> bool {
     }
 }
 
+fn advisor_rank(model: &crate::model_catalog::Model) -> (u8, usize, usize) {
+    let tier_rank = match crate::model_catalog::quality_tier_for_model(&model.id).as_deref() {
+        Some("best") => 3,
+        Some("balanced") => 2,
+        Some("fast") => 1,
+        _ => 0,
+    };
+    (tier_rank, model.context_window, model.max_output_tokens)
+}
+
 fn best_catalog_model_for_provider(provider_name: &str) -> Option<String> {
     crate::model_catalog::models_for(provider_name)
         .into_iter()
         .filter(|model| model.status == "active")
-        .max_by_key(|model| {
-            let tier_rank = match crate::model_catalog::quality_tier_for_model(&model.id).as_deref()
-            {
-                Some("best") => 3,
-                Some("balanced") => 2,
-                Some("fast") => 1,
-                _ => 0,
-            };
-            (tier_rank, model.context_window, model.max_output_tokens)
-        })
+        .max_by_key(|model| advisor_rank(model))
         .map(|model| model.id.clone())
 }
 
-/// Consult a higher-tier model with a one-shot question.
+fn best_managed_model(account: &models::AccountRoute) -> Option<String> {
+    crate::model_catalog::cloud_models()
+        .into_iter()
+        .filter(|model| model.status == "active" && account.runs_managed(&model.id))
+        .max_by_key(|model| advisor_rank(model))
+        .map(|model| model.id.clone())
+}
+
+/// The model and provider the advisor may use for a session in `privacy`.
+/// The question carries session context, so it never leaves that session's
+/// trust boundary: none for Local, the account for Managed, a provider key
+/// for BYOK.
+fn advisor_route(
+    model: Option<String>,
+    privacy: PrivacyMode,
+    account: &models::AccountRoute,
+) -> Result<(String, Provider)> {
+    let model = model.filter(|model| !model.trim().is_empty());
+    let (model, provider) = match privacy {
+        PrivacyMode::Local => bail!(
+            "advisor: unavailable in a Local session; its context must not leave this device."
+        ),
+        PrivacyMode::Managed => {
+            let model = match model {
+                Some(model) => model,
+                None => best_managed_model(account).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "advisor: no model on this account's plan can answer from a Managed session."
+                    )
+                })?,
+            };
+            if !account.runs_managed(&model) {
+                bail!(
+                    "advisor: model '{}' is not on this account's plan, and a Managed session's question never goes to a provider key.",
+                    model
+                );
+            }
+            (model, Provider::ManagedCloud)
+        }
+        PrivacyMode::Byok => match model {
+            Some(model) => {
+                let provider = models::try_detect_provider(&model).ok_or_else(|| {
+                    anyhow::anyhow!(
+                        "advisor: model '{}' is not recognized. Use a catalog model from `agi models list`.",
+                        model
+                    )
+                })?;
+                (model, provider)
+            }
+            None => pick_default_advisor_model()?,
+        },
+    };
+    let route_mode = crate::agent::provider_privacy_mode(&provider);
+    if route_mode != privacy {
+        bail!(
+            "advisor: model '{}' routes through {} mode, outside this {} session's trust boundary.",
+            model,
+            route_mode.trust_word(),
+            privacy.trust_word()
+        );
+    }
+    Ok((model, provider))
+}
+
+/// Consult a higher-tier model with a one-shot question, inside the trust
+/// boundary of the session asking.
 ///
 /// Returns an error if no API key is configured for the chosen provider.
-pub async fn consult(req: AdvisorRequest) -> Result<AdvisorResponse> {
+pub async fn consult(req: AdvisorRequest, privacy: PrivacyMode) -> Result<AdvisorResponse> {
     let config = CliConfig::load().unwrap_or_default();
 
-    let (model, provider) = if let Some(m) = req.model.filter(|m| !m.is_empty()) {
-        // Detect the provider from the explicitly requested model.
-        let prov = models::try_detect_provider(&m).ok_or_else(|| {
-            anyhow::anyhow!(
-                "advisor: model '{}' is not recognized. Use a catalog model from `agi models list`.",
-                m
-            )
-        })?;
-        (m, prov)
-    } else {
-        pick_default_advisor_model()?
-    };
+    let (model, provider) = advisor_route(req.model, privacy, &models::AccountRoute::load())?;
 
     // Validate the chosen provider has credentials before attempting a call.
     let has_key = match &provider {
@@ -224,7 +280,7 @@ mod tests {
             question: "test question".to_string(),
             model: Some(model),
         };
-        let result = consult(req).await;
+        let result = consult(req, PrivacyMode::Byok).await;
         assert!(result.is_err(), "expected error when no API key configured");
         assert!(
             result
@@ -238,5 +294,60 @@ mod tests {
         if let Some(v) = original {
             std::env::set_var("ANTHROPIC_API_KEY", v);
         }
+    }
+
+    fn signed_out() -> models::AccountRoute {
+        models::AccountRoute::with(false, None)
+    }
+
+    #[test]
+    fn a_managed_session_never_routes_the_advisor_to_a_provider_key() {
+        let vendor_model = best_catalog_model_for_provider("anthropic")
+            .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
+
+        for model in [Some(vendor_model), None] {
+            let error = advisor_route(model, PrivacyMode::Managed, &signed_out())
+                .expect_err("a Managed session's question stays on the account");
+            assert!(error.to_string().contains("Managed"), "{error}");
+        }
+    }
+
+    #[test]
+    fn a_managed_session_routes_the_advisor_through_the_account() {
+        let vendor_model = best_catalog_model_for_provider("anthropic")
+            .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
+        let account = models::AccountRoute::with(true, None).with_plan_models(&[&vendor_model]);
+
+        let (model, provider) =
+            advisor_route(Some(vendor_model.clone()), PrivacyMode::Managed, &account)
+                .expect("a plan model routes through the account");
+
+        assert_eq!(model, vendor_model);
+        assert_eq!(provider, Provider::ManagedCloud);
+    }
+
+    #[test]
+    fn a_byok_session_keeps_the_advisor_on_a_provider_key() {
+        let vendor_model = best_catalog_model_for_provider("anthropic")
+            .unwrap_or_else(|| crate::model_catalog::default_model().to_string());
+        let (_, provider) = advisor_route(Some(vendor_model), PrivacyMode::Byok, &signed_out())
+            .expect("a catalog vendor model routes through a provider key");
+        assert_eq!(
+            crate::agent::provider_privacy_mode(&provider),
+            PrivacyMode::Byok
+        );
+
+        let error = advisor_route(
+            Some("fixture-local-model:latest".to_string()),
+            PrivacyMode::Byok,
+            &signed_out(),
+        )
+        .expect_err("a device model is outside a BYOK session's boundary");
+        assert!(error.to_string().contains("outside this"), "{error}");
+    }
+
+    #[test]
+    fn a_local_session_never_consults_the_advisor() {
+        assert!(advisor_route(None, PrivacyMode::Local, &signed_out()).is_err());
     }
 }

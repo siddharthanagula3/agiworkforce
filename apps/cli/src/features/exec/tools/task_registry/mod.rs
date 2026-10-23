@@ -266,7 +266,7 @@ pub(super) async fn execute_advisor(
     );
 
     let req = crate::runtime::advisor::AdvisorRequest { question, model };
-    match crate::runtime::advisor::consult(req).await {
+    match crate::runtime::advisor::consult(req, privacy_mode).await {
         Ok(resp) => Ok(ToolResult {
             tool_name: "advisor".into(),
             success: true,
@@ -984,6 +984,27 @@ mod advisor_privacy_tests {
                 .contains("unavailable in Local privacy mode"),
             "the Local invocation must not contaminate the BYOK invocation: {}",
             not_blocked.output
+        );
+    }
+    #[tokio::test]
+    async fn a_managed_session_s_advisor_never_leaves_the_managed_boundary() {
+        let args = HashMap::from([
+            ("question".to_string(), "Which index fits?".to_string()),
+            (
+                "model".to_string(),
+                "fixture-model-off-the-plan".to_string(),
+            ),
+        ]);
+
+        let result = execute_advisor(&args, PrivacyMode::Managed)
+            .await
+            .expect("execute_advisor returns Ok");
+
+        assert!(!result.success, "{}", result.output);
+        assert!(
+            result.output.contains("Managed"),
+            "the refusal names the session's boundary: {}",
+            result.output
         );
     }
 }

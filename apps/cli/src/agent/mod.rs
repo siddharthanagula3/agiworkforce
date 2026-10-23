@@ -2722,7 +2722,7 @@ pub(crate) fn linked_cloud_project() -> Option<String> {
     registry.cloud_project_for(&cwd).map(str::to_string)
 }
 
-fn provider_privacy_mode(provider: &Provider) -> PrivacyMode {
+pub(crate) fn provider_privacy_mode(provider: &Provider) -> PrivacyMode {
     match provider {
         Provider::ManagedCloud => PrivacyMode::Managed,
         Provider::Ollama(models::OllamaMode::Local) => PrivacyMode::Local,
