@@ -63,11 +63,7 @@ import {
   type SelfServeIndividualPlanTier,
   type SelfServePaidPlanTier,
 } from '@agiworkforce/types';
-import {
-  freeMediaAccess,
-  freeMediaPlanStanding,
-  type FreeMediaCategoryOffer,
-} from '@/features/models/lib/free-media-offer';
+import { freeMediaPlanIncludes } from '@/features/models/lib/free-media';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { useMounted } from '@shared/hooks/useMounted';
 import { formatBytes } from '@shared/utils/format';
@@ -97,7 +93,6 @@ import {
   resolveUpgradeWaitlistStatus,
 } from '@features/billing/hooks/use-upgrade-waitlist';
 import { useLocalizedPricing } from '@features/billing/hooks/use-localized-pricing';
-import { useFreeMediaOffer } from '@features/billing/hooks/use-free-media-offer';
 import {
   CHECKOUT_AVAILABILITY_ERROR_NOTICE,
   CHECKOUT_AVAILABILITY_LOADING_NOTICE,
@@ -214,16 +209,8 @@ function connectorLimitCell(
 function mediaCapabilityCell(
   plan: BillingPlanTier,
   category: FreeQuotaMediaCategory,
-  offer: FreeMediaCategoryOffer | null,
-  limitedPreview: string,
 ): PlanComparisonCell {
-  const standing = freeMediaPlanStanding(plan, category);
-  const access = freeMediaAccess({
-    planIncludes: standing === 'included',
-    offer: standing === 'offer_eligible' ? offer : null,
-  });
-  if (access.label === 'included') return INCLUDED_CELL;
-  return access.label === 'limited' ? textCell(limitedPreview) : EXCLUDED_CELL;
+  return freeMediaPlanIncludes(plan, category) ? INCLUDED_CELL : EXCLUDED_CELL;
 }
 
 const CONTEXT_WINDOW_FORMAT = new Intl.NumberFormat('en', {
@@ -293,7 +280,6 @@ export default function PricingPage() {
   }, [billing?.plan, refetchBilling]);
 
   const { localizedPricing, pricingStatus } = useLocalizedPricing();
-  const freeMediaOffer = useFreeMediaOffer();
   const priceLocale = useMounted() ? undefined : SERVER_RENDER_PRICE_LOCALE;
   const [pendingPlan, setPendingPlan] = useState<CheckoutPlan | null>(null);
   const [portalPending, setPortalPending] = useState(false);
@@ -759,7 +745,7 @@ export default function PricingPage() {
     category: FreeQuotaMediaCategory,
   ) =>
     comparisonRow(capability, planCapabilityLabel(capability), (plan) =>
-      mediaCapabilityCell(plan, category, freeMediaOffer[category], t('compareLimitedPreview')),
+      mediaCapabilityCell(plan, category),
     );
   const usageCell = (plan: ComparedPlan): PlanComparisonCell => {
     const lines = usageComparisonCopy(plan, t);
@@ -904,7 +890,7 @@ export default function PricingPage() {
         </div>
         <ul className="agi-tier-features">
           {lead ? <li className="agi-tier-features-lead">{lead}</li> : null}
-          {individualPlanFeatures(plan, t, freeMediaOffer).map((feature) => (
+          {individualPlanFeatures(plan, t).map((feature) => (
             <li key={feature}>
               <CheckIcon />
               {feature}

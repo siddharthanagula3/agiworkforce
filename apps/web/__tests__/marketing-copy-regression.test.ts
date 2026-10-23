@@ -323,7 +323,6 @@ describe('public marketing copy regressions', () => {
       "from '@features/billing/lib/plan-card-copy'",
       "from '@features/billing/lib/localized-pricing'",
       "from '@features/billing/hooks/use-localized-pricing'",
-      "from '@features/billing/hooks/use-free-media-offer'",
     ]) {
       expect(dialog, `dialog must read ${shared}`).toContain(shared);
       expect(pricing, `pricing page must read ${shared}`).toContain(shared);

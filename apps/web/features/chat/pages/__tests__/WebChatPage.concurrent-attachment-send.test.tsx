@@ -270,8 +270,6 @@ vi.mock('@shared/components/agi/SidebarWordmark', () => ({ SidebarWordmark: () =
 
 import WebChatPage from '../WebChatPage';
 import { classifyTaskLocally } from '@agiworkforce/routing';
-import { getProviderOfferings } from '@agiworkforce/types';
-import type { FreeQuotaCatalogue } from '@agiworkforce/cloud-contracts';
 import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-store';
 import { firstParkedSend, selectParkedSends, useChatStore } from '@shared/stores/web-chat-store';
 import type { SEND_GUARD_BLOCKED } from '../../components/Composer/ChatComposerNew';
@@ -446,10 +444,6 @@ describe('WebChatPage concurrent send during attachment upload', () => {
 
 const PROMPT = 'Generate an image of a red kite over a beach';
 const IMAGE_TITLE = 'Image generation';
-const [imageKey, imageOffering] = Object.entries(getProviderOfferings()).find(
-  ([, offering]) =>
-    offering.identityStatus === 'exact' && offering.quotaProbeProtocol === 'image-sync',
-)!;
 
 function subscription(tier: SubscriptionPlan['tier']): SubscriptionPlan {
   return {
@@ -461,41 +455,13 @@ function subscription(tier: SubscriptionPlan['tier']): SubscriptionPlan {
   };
 }
 
-function limitedCatalogue(): FreeQuotaCatalogue {
-  return {
-    issuer: 'Fixture Cloud',
-    observedOn: '2026-09-19',
-    evidenceUrl: 'https://provider.example/free-quota',
-    reportedEligible: 1,
-    reportedUnavailable: 0,
-    models: [
-      {
-        key: imageKey,
-        displayName: imageOffering.displayName,
-        providerModelId: imageOffering.providerModelId,
-        category: 'image',
-        limit: 100,
-        unit: 'images',
-        consumedApproximate: 0,
-        expiresOn: '2026-10-21',
-        status: 'ready',
-      },
-    ],
-    mediaUseOrder: [imageKey],
-    limitedOffer: [
-      { category: 'image', dailyCap: 5, remainingToday: 5, resetsAt: '2026-10-05T00:00:00.000Z' },
-    ],
-  };
-}
-
-function stubCatalogue(answer: () => Response | Promise<Response>) {
+function stubFetch() {
   const requests: string[] = [];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
-      const url = String(input);
-      requests.push(url);
-      return url === '/api/models/free-quota' ? answer() : Response.json({});
+      requests.push(String(input));
+      return Response.json({});
     }),
   );
   return requests;
@@ -513,7 +479,7 @@ async function sendTyped() {
   });
 }
 
-describe('WebChatPage typed image request on a plan without paid image generation', () => {
+describe('WebChatPage typed image request by plan', () => {
   let originalSubscription: ReturnType<typeof useBillingStore.getState>['subscription'];
 
   beforeEach(() => {
@@ -534,86 +500,19 @@ describe('WebChatPage typed image request on a plan without paid image generatio
     expect(classifyTaskLocally(PROMPT, []).type).toBe('image_generation');
   });
 
-  it('sends it to the free offering as a chat turn while the limited offer is ready', async () => {
-    useBillingStore.setState({ subscription: subscription('free') });
-    const requests = stubCatalogue(() => Response.json(limitedCatalogue()));
+  it.each(['free', 'pro'] as const)(
+    'takes the image path on the %s plan and never sends it to a free model as a chat turn',
+    async (tier) => {
+      useBillingStore.setState({ subscription: subscription(tier) });
+      const requests = stubFetch();
 
-    await sendTyped();
+      await sendTyped();
 
-    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
-    expect(mocks.sendMessage).toHaveBeenCalledWith(
-      PROMPT,
-      expect.objectContaining({
-        model: imageKey,
-        workMode: 'chat',
-        webSearch: false,
-        codeExecution: false,
-      }),
-    );
-    expect(requests.filter((url) => url === '/api/models/free-quota')).toHaveLength(1);
-    expect(conversationTitles()).not.toContain(IMAGE_TITLE);
-  });
-
-  it('keeps the plan path, with its upgrade answer, when the account is offered no free image', async () => {
-    useBillingStore.setState({ subscription: subscription('free') });
-    stubCatalogue(() => Response.json({ error: 'not offered' }, { status: 403 }));
-
-    await sendTyped();
-
-    await waitFor(() => expect(mocks.createConversation).toHaveBeenCalled());
-    expect(conversationTitles()).toEqual([IMAGE_TITLE]);
-    expect(mocks.sendMessage).not.toHaveBeenCalled();
-  });
-
-  it('hands the request back with a notice, and no upgrade answer, when the free offer cannot be checked', async () => {
-    useBillingStore.setState({ subscription: subscription('free') });
-    stubCatalogue(() => Response.json({ error: 'unavailable' }, { status: 503 }));
-
-    await sendTyped();
-
-    await waitFor(() => expect(useChatStore.getState().getDraftContent(null)).toBe(PROMPT));
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('could not be checked'));
-    expect(mocks.sendMessage).not.toHaveBeenCalled();
-    expect(mocks.createConversation).not.toHaveBeenCalled();
-  });
-
-  it('keeps the request out of a chat that opened while the free offer was being checked', async () => {
-    useBillingStore.setState({ subscription: subscription('free') });
-    let answerCatalogue!: (response: Response) => void;
-    stubCatalogue(
-      () =>
-        new Promise<Response>((resolve) => {
-          answerCatalogue = resolve;
-        }),
-    );
-    const LATER_MESSAGE = 'What is the capital of France?';
-    expect(classifyTaskLocally(LATER_MESSAGE, []).type).not.toBe('image_generation');
-
-    await sendTyped();
-    act(() => {
-      mocks.composerOnSend!(LATER_MESSAGE, undefined, undefined, {});
-    });
-    await waitFor(() => expect(mocks.sendMessage).toHaveBeenCalledTimes(1));
-    await act(async () => {
-      answerCatalogue(Response.json(limitedCatalogue()));
-    });
-
-    await waitFor(() => expect(useChatStore.getState().getDraftContent(null)).toBe(PROMPT));
-    expect(mocks.toastError).toHaveBeenCalledWith(expect.stringContaining('the chat changed'));
-    expect(mocks.sendMessage).toHaveBeenCalledTimes(1);
-    expect(mocks.sendMessage.mock.calls[0]![0]).toBe(LATER_MESSAGE);
-    expect(conversationTitles()).not.toContain(IMAGE_TITLE);
-  });
-
-  it('does not ask for the free offer on a plan that includes image generation', async () => {
-    useBillingStore.setState({ subscription: subscription('pro') });
-    const requests = stubCatalogue(() => Response.json(limitedCatalogue()));
-
-    await sendTyped();
-
-    await waitFor(() => expect(mocks.createConversation).toHaveBeenCalled());
-    expect(conversationTitles()).toEqual([IMAGE_TITLE]);
-    expect(requests).not.toContain('/api/models/free-quota');
-    expect(mocks.sendMessage).not.toHaveBeenCalled();
-  });
+      await waitFor(() => expect(mocks.createConversation).toHaveBeenCalled());
+      expect(conversationTitles()).toEqual([IMAGE_TITLE]);
+      expect(requests).not.toContain('/api/models/free-quota');
+      expect(mocks.sendMessage).not.toHaveBeenCalled();
+      expect(mocks.toastError).not.toHaveBeenCalled();
+    },
+  );
 });

@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
 import {
@@ -101,7 +101,6 @@ vi.mock('react-i18next', async (importOriginal) => {
           key === 'models:selector.comingSoon' ||
           key === 'compareDeveloperSurfaceStatus' ||
           key === 'compareLocalByokNote' ||
-          key === 'compareLimitedPreview' ||
           key === 'compareContextTokens' ||
           key === 'compareSandboxLimit' ||
           key === 'freeLocalByok' ||
@@ -1495,21 +1494,7 @@ describe('PricingPage', () => {
     expect(note).toBeVisible();
   });
 
-  describe('the limited free image and video preview', () => {
-    function mockFreeMediaOffer(offer: unknown) {
-      const read = vi.fn(async () => offer);
-      vi.mocked(global.fetch).mockImplementation(async (input) => {
-        if (String(input).includes('/api/models/free-quota/media-offer')) {
-          return { ok: true, json: read } as unknown as Response;
-        }
-        return new Promise<Response>(() => undefined);
-      });
-      return async () => {
-        await waitFor(() => expect(read).toHaveBeenCalled());
-        await act(async () => undefined);
-      };
-    }
-
+  describe('image and video generation for plans without it', () => {
     function mediaCells(plan: string): string[] {
       const column = comparisonColumn(plan);
       return [CAPABILITY.image_generation, CAPABILITY.video_generation].map(
@@ -1517,52 +1502,23 @@ describe('PricingPage', () => {
       );
     }
 
-    it('keeps every plan at included or not included when the offer is not running', async () => {
-      const offerRead = mockFreeMediaOffer({ image: null, video: null });
+    it('marks Free and Basic as not including either kind and offers no preview', () => {
       render(<PricingPage />);
 
-      await offerRead();
       expect(mediaCells('Free')).toEqual([NOT_INCLUDED, NOT_INCLUDED]);
       expect(mediaCells('Basic')).toEqual([NOT_INCLUDED, NOT_INCLUDED]);
       expect(mediaCells('Pro')).toEqual([INCLUDED, NOT_INCLUDED]);
       expect(mediaCells('Max 20x')).toEqual([INCLUDED, INCLUDED]);
+      expect(mediaCells('Team')).toEqual([INCLUDED, NOT_INCLUDED]);
       expect(screen.queryByText(/^freeMedia/)).toBeNull();
+      expect(screen.queryByText(/preview/iu)).toBeNull();
     });
 
-    it('says Limited preview for plans without the capability while it runs, with no line under the page title', async () => {
-      mockFreeMediaOffer({ image: { lastDay: '2026-10-20' }, video: { lastDay: '2026-11-04' } });
+    it('never asks for a free media offer', () => {
       render(<PricingPage />);
 
-      await waitFor(() =>
-        expect(mediaCells('Free')).toEqual(['Limited preview', 'Limited preview']),
-      );
-      expect(mediaCells('Basic')).toEqual(['Limited preview', 'Limited preview']);
-      expect(mediaCells('Pro')).toEqual([INCLUDED, 'Limited preview']);
-      expect(mediaCells('Max 20x')).toEqual([INCLUDED, INCLUDED]);
-      expect(screen.queryByText(/^freeMediaLine/)).toBeNull();
-      const freeCard = within(screen.getByRole('heading', { name: 'Free' }).closest('article')!);
-      expect(freeCard.getByText('freeMediaFeatureBoth')).toBeVisible();
-
-      expect(mediaCells('Team')).toEqual([INCLUDED, 'Limited preview']);
-    });
-
-    it('names only the kind that is ready', async () => {
-      mockFreeMediaOffer({ image: { lastDay: '2026-10-20' }, video: null });
-      render(<PricingPage />);
-
-      await waitFor(() => expect(mediaCells('Free')).toEqual(['Limited preview', NOT_INCLUDED]));
-      expect(mediaCells('Pro')).toEqual([INCLUDED, NOT_INCLUDED]);
-      expect(screen.queryByText(/^freeMediaLine/)).toBeNull();
-      expect(screen.getByText('freeMediaFeatureImage')).toBeVisible();
-    });
-
-    it('promises nothing when the answer is not the offer it expects', async () => {
-      const offerRead = mockFreeMediaOffer({ image: { lastDay: 'soon' }, video: true });
-      render(<PricingPage />);
-
-      await offerRead();
-      expect(mediaCells('Free')).toEqual([NOT_INCLUDED, NOT_INCLUDED]);
-      expect(screen.queryByText(/^freeMedia/)).toBeNull();
+      const requested = vi.mocked(global.fetch).mock.calls.map(([input]) => String(input));
+      expect(requested.some((url) => url.includes('media-offer'))).toBe(false);
     });
   });
 

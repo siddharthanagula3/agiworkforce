@@ -30,7 +30,6 @@ import { useUpgradeWaitlistStatus } from '@features/billing/hooks/use-upgrade-wa
 import { upgradeNeedsWaitlist } from '@features/billing/services/upgrade-waitlist';
 import type { SelectablePaidPlan } from '@features/billing/lib/plan-display';
 import { useLocalizedPricing } from '@features/billing/hooks/use-localized-pricing';
-import { useFreeMediaOffer } from '@features/billing/hooks/use-free-media-offer';
 import {
   CHECKOUT_AVAILABILITY_ERROR_NOTICE,
   CHECKOUT_AVAILABILITY_LOADING_NOTICE,
@@ -62,7 +61,6 @@ import {
   type PricingT,
   type TeamSeatRow,
 } from '@features/billing/lib/plan-card-copy';
-import type { FreeQuotaMediaOffer } from '@agiworkforce/cloud-contracts';
 
 export type UpgradeTarget = SelectablePaidPlan;
 export type UpgradeAction = 'checkout' | 'join-waitlist' | 'open-waitlist';
@@ -121,7 +119,6 @@ function buildPlanCard(
   plan: PlanCard,
   t: PricingT,
   plans: LocalizedPlanPrices | undefined,
-  freeMediaOffer: FreeQuotaMediaOffer,
 ): PlanCardModel {
   const name = BILLING_PLAN_PRICING[plan].label;
   if (isEnterprisePlanTier(plan)) {
@@ -168,7 +165,7 @@ function buildPlanCard(
     seats: [],
     body: planTierBody(plan, t),
     lead: planFeatureLead(plan, t),
-    features: individualPlanFeatures(plan, t, freeMediaOffer),
+    features: individualPlanFeatures(plan, t),
   };
 }
 
@@ -377,7 +374,6 @@ export function UpgradePlanDialog({
   const [expanded, setExpanded] = useState(false);
   const [audienceChoice, setAudienceChoice] = useState<Audience | null>(null);
   const { localizedPricing, pricingStatus } = useLocalizedPricing(open);
-  const freeMediaOffer = useFreeMediaOffer(open);
   const plans = localizedPricing?.plans;
 
   const currentTier = isFreeOfChargePlanTier(reportedTier)
@@ -412,7 +408,7 @@ export function UpgradePlanDialog({
     [onOpenChange],
   );
 
-  const cards = PLAN_ORDER.map((plan) => buildPlanCard(plan, t, plans, freeMediaOffer));
+  const cards = PLAN_ORDER.map((plan) => buildPlanCard(plan, t, plans));
   const currentIdx = tierKnown ? PLAN_ORDER.indexOf(currentTier as PlanCard) : -1;
   const currentPlan = currentIdx >= 0 ? cards[currentIdx] : cards[0];
   const focusedPlan = targetTier

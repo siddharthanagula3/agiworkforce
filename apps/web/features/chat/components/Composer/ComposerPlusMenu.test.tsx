@@ -588,9 +588,7 @@ describe('ComposerPlusMenu, working folder row', () => {
   });
 });
 
-describe('ComposerPlusMenu, free image and video offer', () => {
-  const LAST_DAY = '2026-10-20';
-  const NOTE = "Today's free limit is used. Resets in 3 hours.";
+describe('ComposerPlusMenu, image and video rows by plan', () => {
   const mediaRows = {
     hostCanGenerateVideo: true,
     videoModelsAvailable: true,
@@ -598,42 +596,8 @@ describe('ComposerPlusMenu, free image and video offer', () => {
     canUseVideoGeneration: false,
   };
 
-  it('shows Limited with a clock and the plain line instead of Upgrade while the offer is ready', () => {
-    renderMenu({
-      ...mediaRows,
-      imageAccess: { label: 'limited', lastDay: LAST_DAY },
-      imageOfferNote: NOTE,
-      videoAccess: { label: 'upgrade' },
-      videoOfferNote: null,
-    });
-
-    const image = screen.getByText('Create image').closest('button')!;
-    expect(image).toHaveTextContent('Limited');
-    expect(image).not.toHaveTextContent(/upgrade/i);
-    expect(
-      image.querySelector('svg[aria-hidden="true"]:not(.text-muted-foreground)'),
-    ).not.toBeNull();
-    expect(image).not.toHaveAttribute('title');
-    expect(image).toHaveAccessibleDescription(NOTE);
-    expect(screen.getByText(NOTE)).toBeVisible();
-
-    const video = screen.getByText('Create video').closest('button')!;
-    expect(video).toHaveTextContent(/upgrade/i);
-    expect(video).not.toHaveTextContent('Limited');
-    expect(video).toHaveAttribute(
-      'title',
-      expect.stringMatching(/^Video generation is available on /),
-    );
-    expect(screen.getAllByText(NOTE)).toHaveLength(1);
-  });
-
-  it('says Upgrade by itself when the offer is not ready, and names no free capacity', () => {
-    renderMenu({
-      ...mediaRows,
-      imageAccess: { label: 'upgrade' },
-      imageOfferNote: NOTE,
-      videoAccess: { label: 'upgrade' },
-    });
+  it('shows Upgrade by itself on a plan without the capability, and offers no free or limited mark', () => {
+    renderMenu(mediaRows);
 
     const image = screen.getByText('Create image').closest('button')!;
     expect(image).toHaveTextContent(/upgrade/i);
@@ -641,29 +605,22 @@ describe('ComposerPlusMenu, free image and video offer', () => {
       'title',
       `Image generation is available on ${billingPlanCapabilityPlanLabels('image_generation')}.`,
     );
+    const video = screen.getByText('Create video').closest('button')!;
+    expect(video).toHaveTextContent(/upgrade/i);
+    expect(video).toHaveAttribute(
+      'title',
+      expect.stringMatching(/^Video generation is available on /),
+    );
     expect(screen.queryByText('Limited')).not.toBeInTheDocument();
-    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
-  });
-
-  it('holds back both labels while the offer is still being checked', () => {
-    renderMenu({ ...mediaRows, imageAccess: { label: 'upgrade' }, freeMediaOfferChecking: true });
-
-    const image = screen.getByText('Create image').closest('button')!;
-    expect(image).toHaveTextContent('Checking');
-    expect(image).not.toHaveTextContent(/upgrade|limited/i);
+    expect(screen.queryByText(/free limit/i)).not.toBeInTheDocument();
   });
 
   it('adds no label to a plan that includes the capability', () => {
-    renderMenu({
-      ...mediaRows,
-      canUseImageGeneration: true,
-      imageAccess: { label: 'included' },
-      imageOfferNote: NOTE,
-    });
+    renderMenu({ ...mediaRows, canUseImageGeneration: true });
 
     const image = screen.getByText('Create image').closest('button')!;
     expect(image).not.toHaveTextContent(/upgrade|limited|checking/i);
-    expect(screen.queryByText(NOTE)).not.toBeInTheDocument();
+    expect(image).not.toHaveAttribute('title');
   });
 });
 

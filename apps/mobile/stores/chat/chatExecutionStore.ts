@@ -202,7 +202,7 @@ import { managedCloudChat } from '@/services/managedCloudChat';
 import { ManagedCloudChatHttpError } from '@agiworkforce/cloud-contracts';
 import { getProviderOffering } from '@agiworkforce/types';
 import {
-  ensureReadyFreeQuotaOffering,
+  ensureReadyFreeQuotaChatOffering,
   useFreeQuotaCatalogueStore,
 } from '@/src/features/model-picker/freeQuotaCatalogue';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
@@ -1491,7 +1491,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
       if (!isTurnAccountCurrent()) return false;
 
       if (isFreeQuotaChat) {
-        const freeOffering = await ensureReadyFreeQuotaOffering(requestedModel);
+        const freeOffering = await ensureReadyFreeQuotaChatOffering(requestedModel);
         if (!isTurnAccountCurrent()) return false;
         if (!freeOffering) {
           set({

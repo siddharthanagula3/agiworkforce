@@ -1,5 +1,4 @@
 import type { TFunction } from 'i18next';
-import type { FreeQuotaMediaOffer } from '@agiworkforce/cloud-contracts';
 import {
   BILLING_PLAN_PRICING,
   compareManagedUsage,
@@ -55,12 +54,6 @@ export const ENTERPRISE_TIER_BODY =
 const ENTERPRISE_GOVERNANCE_FEATURE =
   "SSO, SCIM directory sync, and audit logs: shipped, gated on the Enterprise plan's entitlement. Retention windows stay contract-scoped.";
 
-const FREE_MEDIA_FEATURE = {
-  both: 'freeMediaFeatureBoth',
-  image: 'freeMediaFeatureImage',
-  video: 'freeMediaFeatureVideo',
-} as const;
-
 const TIER_BODY_KEYS = {
   free: 'freeTierBody',
   basic: 'basicTierBody',
@@ -72,13 +65,6 @@ const TIER_BODY_KEYS = {
 
 export function presentCopy(parts: Array<string | null>): string[] {
   return parts.filter((part): part is string => Boolean(part));
-}
-
-function freeMediaFeatureKey(
-  offer: FreeQuotaMediaOffer,
-): (typeof FREE_MEDIA_FEATURE)[keyof typeof FREE_MEDIA_FEATURE] | null {
-  if (!offer.image && !offer.video) return null;
-  return FREE_MEDIA_FEATURE[offer.image && offer.video ? 'both' : offer.image ? 'image' : 'video'];
 }
 
 export function usageComparisonCopy(plan: BillingPlanTier, t: PricingT): string[] {
@@ -149,23 +135,16 @@ function projectsAndStorageFeature(plan: BillingPlanTier, connectorKey: string, 
   });
 }
 
-export function individualPlanFeatures(
-  plan: IndividualPlanCard,
-  t: PricingT,
-  freeMediaOffer: FreeQuotaMediaOffer,
-): string[] {
+export function individualPlanFeatures(plan: IndividualPlanCard, t: PricingT): string[] {
   switch (plan) {
-    case 'free': {
-      const mediaFeature = freeMediaFeatureKey(freeMediaOffer);
+    case 'free':
       return presentCopy([
-        mediaFeature ? t(mediaFeature) : null,
         t('freeFeature1'),
         projectsWithStorageFeature('free', t),
         dailyUploadsFeature('free', t),
         t('freeFeature2'),
         t('freeLocalByok', { surface: SURFACE_NAMES.cli, status: pricingSurfaceStatus('cli', t) }),
       ]);
-    }
     case 'basic':
       return presentCopy([
         t('basicFeature2'),

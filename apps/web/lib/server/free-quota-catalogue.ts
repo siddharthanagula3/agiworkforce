@@ -1,19 +1,13 @@
 import 'server-only';
 
 import type { KeyValueStore } from '@agiworkforce/key-value';
-import type { FreeQuotaMediaCategory } from '@agiworkforce/cloud-contracts';
 import {
   getProviderOffering,
   getProviderOfferingMediaOutput,
   type ProviderOffering,
   type ProviderOfferingCategory,
 } from '@agiworkforce/types';
-import {
-  freeMediaPlanStanding,
-  isFreeMediaCategory,
-  readyFreeMediaOffer,
-  type FreeMediaCategoryOffer,
-} from '@/features/models/lib/free-media-offer';
+import { freeMediaPlanIncludes, isFreeMediaCategory } from '@/features/models/lib/free-media';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
 import {
   PolicySchema,
@@ -33,12 +27,10 @@ import { isFreePlanTier } from '@/lib/services/free-trial-service';
 import { isGeneratedMediaStorageConfigured } from '@/lib/server/media-storage';
 import freePoolsDocument from '@/config/free-pools.json';
 import {
-  limitedMediaDailyCap,
   loadFreePools,
   reviewedQuotaOfferingKeys,
   type FreeQuotaInventory,
   type FreeQuotaObservation,
-  type LimitedMediaOffer,
 } from './free-pools';
 
 const ENDED_STATUS = 'expired' satisfies FreeQuotaDecision['status'];
@@ -76,21 +68,12 @@ export function freeQuotaPlanAllows(planTier: string | null | undefined): boolea
   return isFreePlanTier(planTier);
 }
 
-export type FreeQuotaAdmission =
-  { terms: 'included' } | { terms: 'limited'; category: FreeQuotaMediaCategory; dailyCap: number };
-
-export function freeQuotaPlanAdmission(
+export function freeQuotaPlanAdmits(
   planTier: string | null | undefined,
   category: ProviderOfferingCategory,
-  offer: LimitedMediaOffer | undefined,
-): FreeQuotaAdmission | null {
-  if (category === 'chat') return freeQuotaPlanAllows(planTier) ? { terms: 'included' } : null;
-  if (!isFreeMediaCategory(category)) return null;
-  const standing = freeMediaPlanStanding(planTier, category);
-  if (standing === 'included') return { terms: 'included' };
-  const dailyCap = limitedMediaDailyCap(offer, category);
-  if (dailyCap === null || standing !== 'offer_eligible') return null;
-  return { terms: 'limited', category, dailyCap };
+): boolean {
+  if (category === 'chat') return freeQuotaPlanAllows(planTier);
+  return isFreeMediaCategory(category) && freeMediaPlanIncludes(planTier, category);
 }
 
 export function sharedFreeQuotaStore(nodeEnv: string | undefined): KeyValueStore | null {
@@ -252,15 +235,6 @@ export function freeQuotaMediaUseOrder(decisions: Pick<FreeQuotaDecisions, 'offe
     )
     .sort(expiringCapacityFirst)
     .map(({ entry }) => entry.offeringKey);
-}
-
-export function freeMediaOfferFor(
-  catalogue: Pick<FreeQuotaCatalogue, 'models'> | null,
-  offer: LimitedMediaOffer | undefined,
-  category: FreeQuotaMediaCategory,
-): FreeMediaCategoryOffer | null {
-  if (!catalogue || limitedMediaDailyCap(offer, category) === null) return null;
-  return readyFreeMediaOffer(catalogue.models, category);
 }
 
 export async function resolveReadyFreeQuotaOffering(

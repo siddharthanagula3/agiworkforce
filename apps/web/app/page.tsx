@@ -1,6 +1,5 @@
 import type { Metadata } from 'next';
 import { MarketingLanding } from '@/features/marketing/components/MarketingLanding';
-import { readFreeMediaOfferForRender } from '@/lib/server/free-media-offer-reader';
 import { OG_IMAGE, SITE_URL } from '@/lib/seo/site';
 import { surfaceAvailabilitySummary } from '@/lib/surface-status';
 
@@ -42,6 +41,6 @@ export const metadata: Metadata = {
   },
 };
 
-export default async function Home() {
-  return <MarketingLanding freeMediaOffer={await readFreeMediaOfferForRender()} />;
+export default function Home() {
+  return <MarketingLanding />;
 }

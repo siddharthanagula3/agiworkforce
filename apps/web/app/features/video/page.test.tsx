@@ -12,7 +12,6 @@ import {
   getTierPolicy,
   interactionMode,
 } from '@agiworkforce/types';
-import { FREE_MEDIA_LIMITED_LABEL } from '@/features/models/lib/free-media-offer';
 
 vi.mock('@shared/components/layout/Header', () => ({ Header: () => <div /> }));
 vi.mock('@/features/marketing/components/MarketingFooter', () => ({
@@ -119,9 +118,8 @@ describe('VideoFeaturePage', () => {
     const text = container.textContent ?? '';
     expect(source(PLUS_MENU)).toContain(`'${createVideo}'`);
     expect(text).toContain(`choose ${createVideo}.`);
-    expect(text).toContain(
-      `the ${createVideo} row shows Upgrade, or ${FREE_MEDIA_LIMITED_LABEL} while a temporary free video offer is running.`,
-    );
+    expect(text).toContain(`the ${createVideo} row shows Upgrade.`);
+    expect(text).not.toMatch(/free video|temporary free|limited free/iu);
     expect(PAGE_SOURCE).not.toContain(createVideo);
   });
 

@@ -1,7 +1,6 @@
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import React from 'react';
-import { FREE_QUOTA_MEDIA_OFFER_PATH } from '@agiworkforce/cloud-contracts';
 import {
   BILLING_PLAN_PRICING,
   getNextUpgradeTier,
@@ -111,8 +110,6 @@ import {
 } from '@features/billing/lib/plan-card-copy';
 import { UpgradePlanDialog } from './UpgradePlanDialog';
 
-const NO_MEDIA_OFFER = { image: null, video: null };
-
 function usd(cents: number | null): string {
   if (cents === null) throw new Error('catalog price missing');
   return new Intl.NumberFormat(undefined, {
@@ -159,7 +156,6 @@ function localizedCatalog(
 const fetchState = vi.hoisted(() => ({
   pricing: null as unknown,
   pricingOk: true,
-  mediaOffer: null as unknown,
 }));
 
 function t(): PricingT {
@@ -206,7 +202,6 @@ beforeEach(() => {
   waitlistState.enabled = [];
   fetchState.pricing = localizedCatalog();
   fetchState.pricingOk = true;
-  fetchState.mediaOffer = NO_MEDIA_OFFER;
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: RequestInfo | URL) => {
@@ -215,9 +210,6 @@ beforeEach(() => {
         return new Response(JSON.stringify(fetchState.pricing), {
           status: fetchState.pricingOk ? 200 : 503,
         });
-      }
-      if (url === FREE_QUOTA_MEDIA_OFFER_PATH) {
-        return new Response(JSON.stringify(fetchState.mediaOffer), { status: 200 });
       }
       throw new Error(`unexpected fetch ${url}`);
     }),
@@ -243,7 +235,7 @@ describe('UpgradePlanDialog tells the pricing page story', () => {
       expect(view.getByText(price)).toBeTruthy();
       expect(view.getByText('/month')).toBeTruthy();
       expect(view.getByText(planTierBody(plan, t()))).toBeTruthy();
-      for (const feature of individualPlanFeatures(plan, t(), NO_MEDIA_OFFER)) {
+      for (const feature of individualPlanFeatures(plan, t())) {
         expect(view.getByText(feature)).toBeTruthy();
       }
     }
@@ -349,10 +341,10 @@ describe('UpgradePlanDialog tells the pricing page story', () => {
     expect(card('Team').getByText('billed yearly')).toBeTruthy();
   });
 
-  it('carries the free media offer line the pricing page shows on Free', async () => {
-    fetchState.mediaOffer = { image: { lastDay: null }, video: null };
+  it('lists no free image or video on the Free card', async () => {
     renderDialog();
-    expect(await card('Free').findByText(t()('freeMediaFeatureImage'))).toBeTruthy();
+    expect(await card('Free').findByText(t()('freeFeature1'))).toBeTruthy();
+    expect(card('Free').queryByText(/image|video/iu)).toBeNull();
   });
 
   it('blocks a paid CTA the pricing page would block for the region', async () => {

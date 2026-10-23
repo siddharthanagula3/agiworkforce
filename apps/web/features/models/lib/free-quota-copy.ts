@@ -1,5 +1,4 @@
 import {
-  FREE_QUOTA_CHAT_DAILY_USE_KIND,
   FREE_QUOTA_DAILY_LIMIT_CODE,
   FREE_QUOTA_EXHAUSTED_CODE,
   FREE_QUOTA_EXPIRED_CODE,
@@ -89,17 +88,12 @@ function dailyLimitMessage(context: FreeQuotaFailureContext): string {
   if (!dailyLimit) {
     return `You have used today's free requests for ${modelName}, each account's daily share of ${issuer}'s free capacity. Try again tomorrow, or upgrade to a plan that includes it.`;
   }
-  const { category, cap, resetsAtMs } = dailyLimit;
+  const { cap, resetsAtMs } = dailyLimit;
   const resetsAt = new Date(resetsAtMs).toISOString().slice(UTC_CLOCK_START, UTC_CLOCK_END);
-  if (category === FREE_QUOTA_CHAT_DAILY_USE_KIND) {
-    const instead = context.alternativeName
-      ? ` Choose ${context.alternativeName} to keep chatting now.`
-      : '';
-    return `Today's free chat share does not have enough left for this message. Each account has ${cap.toLocaleString('en-US')} tokens a day across every free chat model from ${issuer}, and each message counts the whole conversation so far plus room for the reply. The share resets at ${resetsAt} UTC.${instead}`;
-  }
-  const used =
-    cap === 1 ? `today's free ${category} request` : `today's ${cap} free ${category} requests`;
-  return `You have used ${used}. That is each account's daily share of ${issuer}'s free capacity, and it resets at ${resetsAt} UTC. Plans that include ${category} generation are not held to this limit.`;
+  const instead = context.alternativeName
+    ? ` Choose ${context.alternativeName} to keep chatting now.`
+    : '';
+  return `Today's free chat share does not have enough left for this message. Each account has ${cap.toLocaleString('en-US')} tokens a day across every free chat model from ${issuer}, and each message counts the whole conversation so far plus room for the reply. The share resets at ${resetsAt} UTC.${instead}`;
 }
 
 function shareTooLongMessage(context: FreeQuotaFailureContext): string {

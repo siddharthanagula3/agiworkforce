@@ -6,7 +6,6 @@ import {
   eligibleFreeEligibility,
   evaluateFreePoolEntry,
   freeAutoQuotaFirstRoute,
-  limitedMediaDailyCap,
   loadFreePools,
   parseFreePoolsDocument,
   reviewedQuotaOfferingKeys,
@@ -277,37 +276,17 @@ describe('the shipped configuration', () => {
   });
 });
 
-describe('the limited free media offer configuration', () => {
-  function withOffer(limitedMediaOffer: unknown) {
-    return parseFreePoolsDocument({ ...document([entry()]), limitedMediaOffer });
-  }
-
-  it('is off for both kinds when the block is absent', () => {
-    const { limitedMediaOffer } = parseFreePoolsDocument(document([entry()]));
-    expect(limitedMediaOffer).toBeUndefined();
-    expect(limitedMediaDailyCap(limitedMediaOffer, 'image')).toBeNull();
-    expect(limitedMediaDailyCap(limitedMediaOffer, 'video')).toBeNull();
+describe('the free media offer configuration', () => {
+  it('ships no limited free image or video offer', () => {
+    expect(loadFreePools()).not.toHaveProperty('limitedMediaOffer');
   });
 
-  it('reads a cap of zero as off for that kind only', () => {
-    const { limitedMediaOffer } = withOffer({ dailyCapPerUser: { image: 4, video: 0 } });
-    expect(limitedMediaDailyCap(limitedMediaOffer, 'image')).toBe(4);
-    expect(limitedMediaDailyCap(limitedMediaOffer, 'video')).toBeNull();
-  });
-
-  it('rejects a cap that is negative, fractional, missing or misnamed', () => {
-    for (const dailyCapPerUser of [
-      { image: -1, video: 1 },
-      { image: 1.5, video: 1 },
-      { image: '5', video: 1 },
-      { image: 5 },
-      { image: 5, video: 1, audio: 1 },
-      { images: 5, video: 1 },
-    ]) {
-      expect(() => withOffer({ dailyCapPerUser }), JSON.stringify(dailyCapPerUser)).toThrow();
-    }
-    expect(() => withOffer({})).toThrow();
-    expect(() => withOffer({ dailyCapPerUser: { image: 5, video: 1 }, enabled: true })).toThrow();
+  it('ignores a retired limited media offer block instead of reading an offer from it', () => {
+    const parsed = parseFreePoolsDocument({
+      ...document([entry()]),
+      limitedMediaOffer: { dailyCapPerUser: { image: 5, video: 1 } },
+    });
+    expect(parsed).not.toHaveProperty('limitedMediaOffer');
   });
 });
 

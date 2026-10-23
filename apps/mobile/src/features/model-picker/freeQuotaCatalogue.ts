@@ -2,12 +2,7 @@ import { create } from 'zustand';
 import {
   FREE_QUOTA_CATALOGUE_PATH,
   FreeQuotaCatalogueSchema,
-  chooseLimitedFreeMedia,
-  isFreeMediaCategory,
-  orderedReadyFreeMedia,
-  limitedFreeMedia,
   type FreeQuotaCatalogue,
-  type FreeQuotaMediaCategory,
   type FreeQuotaModel,
 } from '@agiworkforce/cloud-contracts';
 import { getProviderOffering } from '@agiworkforce/types';
@@ -115,41 +110,4 @@ export async function ensureReadyFreeQuotaChatOffering(
 ): Promise<FreeQuotaModel | null> {
   await useFreeQuotaCatalogueStore.getState().refresh();
   return getReadyFreeQuotaChatOffering(key);
-}
-
-function currentAccountCatalogue(): FreeQuotaCatalogue | null {
-  const state = useFreeQuotaCatalogueStore.getState();
-  const account = captureCloudAccountEpoch();
-  if (
-    !account ||
-    !state.account ||
-    account.ownerId !== state.account.ownerId ||
-    account.epoch !== state.account.epoch
-  ) {
-    return null;
-  }
-  return state.catalogue;
-}
-
-function readyLimitedFreeMediaOffering(key: string): FreeQuotaModel | null {
-  const catalogue = currentAccountCatalogue();
-  const model = catalogue?.models.find((entry) => entry.key === key);
-  if (!catalogue || !model || !isFreeMediaCategory(model.category)) return null;
-  if (!limitedFreeMedia(catalogue, model.category)) return null;
-  return orderedReadyFreeMedia(catalogue, model.category).some((entry) => entry.key === key)
-    ? model
-    : null;
-}
-
-export async function ensureReadyFreeQuotaOffering(key: string): Promise<FreeQuotaModel | null> {
-  await useFreeQuotaCatalogueStore.getState().refresh();
-  return getReadyFreeQuotaChatOffering(key) ?? readyLimitedFreeMediaOffering(key);
-}
-
-export async function ensureLimitedFreeMediaModel(
-  category: FreeQuotaMediaCategory,
-): Promise<string | null> {
-  if (!captureCloudAccountEpoch()) return null;
-  await useFreeQuotaCatalogueStore.getState().refresh();
-  return chooseLimitedFreeMedia(currentAccountCatalogue(), category);
 }

@@ -112,7 +112,6 @@ import { useSkillsList, type SkillItem } from '@features/chat/hooks/use-skills-l
 import { readFolderForMention, useMentionFolders } from '@features/chat/hooks/use-mention-folders';
 import { useMediaModelAvailability } from '@features/chat/hooks/use-media-model-availability';
 import { usePromotionalMediaModels } from '@features/chat/hooks/use-promotional-media-models';
-import { freeMediaAccess, freeMediaOfferNote } from '@/features/models/lib/free-media-offer';
 import { planCapabilityEntitlementHint } from '@/features/billing/lib/plan-capability-release';
 import { useSearchAllowance } from '@features/chat/hooks/use-search-allowance';
 import {
@@ -1214,47 +1213,15 @@ const ChatComposerNewComponent = ({
     admissionFor: mediaAdmissionFor,
     retry: retryMediaAvailability,
   } = useMediaModelAvailability();
-  const [freeMediaOfferRequested, setFreeMediaOfferRequested] = useState(false);
-  useEffect(() => {
-    if (showOverflowMenu || showSlashMenu) setFreeMediaOfferRequested(true);
-  }, [showOverflowMenu, showSlashMenu]);
   const {
     models: promotionalMediaModels,
     issuer: promotionalMediaIssuer,
-    limited: limitedMedia,
     status: promotionalMediaStatus,
     retry: retryPromotionalMedia,
-    refresh: refreshPromotionalMedia,
-  } = usePromotionalMediaModels(
-    canUseImageGeneration ||
-      canUseVideoGeneration ||
-      (billingPolicyReady &&
-        (hostCanGenerateImage || hostCanGenerateVideo) &&
-        (freeMediaOfferRequested || showOverflowMenu || showSlashMenu || imageMode || videoMode)),
-  );
-  const imageAccess = freeMediaAccess({
-    planIncludes: canUseImageGeneration,
-    offer: limitedMedia.image,
-  });
-  const videoAccess = freeMediaAccess({
-    planIncludes: canUseVideoGeneration,
-    offer: limitedMedia.video,
-  });
-  const imageOfferLimited = imageAccess.label === 'limited';
-  const videoOfferLimited = videoAccess.label === 'limited';
-  const freeMediaOfferChecking = promotionalMediaStatus === 'loading';
-  const limitedMediaListed = imageOfferLimited || videoOfferLimited;
-  const overflowMenuWasOpenRef = useRef(false);
-  useEffect(() => {
-    if (showOverflowMenu && !overflowMenuWasOpenRef.current && limitedMediaListed) {
-      refreshPromotionalMedia();
-    }
-    overflowMenuWasOpenRef.current = showOverflowMenu;
-  }, [showOverflowMenu, limitedMediaListed, refreshPromotionalMedia]);
+  } = usePromotionalMediaModels(canUseImageGeneration || canUseVideoGeneration);
   const mediaModelsReady =
     mediaAvailabilityStatus === 'ready' ||
-    ((canUseImageGeneration || canUseVideoGeneration || limitedMediaListed) &&
-      promotionalMediaStatus === 'ready');
+    ((canUseImageGeneration || canUseVideoGeneration) && promotionalMediaStatus === 'ready');
   const mediaModelsSettled =
     mediaAvailabilityStatus !== 'loading' && promotionalMediaStatus !== 'loading';
   const availableImageModels = useMemo(
@@ -1266,13 +1233,13 @@ const ChatComposerNewComponent = ({
           label: model.displayName,
           source: 'promotional' as const,
         })),
-      ...(mediaAvailabilityStatus === 'ready' && !imageOfferLimited
+      ...(mediaAvailabilityStatus === 'ready'
         ? IMAGE_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled').map(
             (model) => ({ ...model, source: 'paid' as const }),
           )
         : []),
     ],
-    [imageOfferLimited, mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels],
+    [mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels],
   );
   const availableVideoModels = useMemo(
     () => [
@@ -1283,13 +1250,13 @@ const ChatComposerNewComponent = ({
           label: model.displayName,
           source: 'promotional' as const,
         })),
-      ...(mediaAvailabilityStatus === 'ready' && !videoOfferLimited
+      ...(mediaAvailabilityStatus === 'ready'
         ? VIDEO_MODELS.filter((model) => mediaAdmissionFor(model.id)?.state === 'enabled').map(
             (model) => ({ ...model, source: 'paid' as const }),
           )
         : []),
     ],
-    [mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels, videoOfferLimited],
+    [mediaAdmissionFor, mediaAvailabilityStatus, promotionalMediaModels],
   );
   const selectedImageIsPromotional = availableImageModels.some(
     (model) => model.id === imageModelId && model.source === 'promotional',
@@ -1664,34 +1631,18 @@ const ChatComposerNewComponent = ({
       setComposerToggles({ officeCreationEnabled: false, officeOutputFormat: null });
   }, [billingPolicyReady, officeCreationEnabled, modelSupportsOfficeCreation, setComposerToggles]);
 
-  // A downgrade (or a stale per-conversation flag) must not
-  // leave the composer in image mode once the account has neither the plan
-  // capability nor a ready limited free offering, because that send is always
-  // refused. It waits for the offer read so a limited account keeps its mode.
+  // A downgrade (or a stale per-conversation flag) must not leave the
+  // composer in image or video mode once the plan lacks the capability,
+  // because that send is always refused.
   useEffect(() => {
-    if (!billingPolicyReady || freeMediaOfferChecking) return;
-    if (imageMode && imageAccess.label === 'upgrade') setComposerToggles({ imageMode: false });
-  }, [
-    billingPolicyReady,
-    freeMediaOfferChecking,
-    imageMode,
-    imageAccess.label,
-    setComposerToggles,
-  ]);
+    if (!billingPolicyReady) return;
+    if (imageMode && !canUseImageGeneration) setComposerToggles({ imageMode: false });
+  }, [billingPolicyReady, imageMode, canUseImageGeneration, setComposerToggles]);
 
-  // Same guarantee for video, whose plan capability is narrower still: a stale
-  // per-conversation flag must not survive a downgrade into a send that is
-  // always refused, while a ready limited free offering keeps the mode.
   useEffect(() => {
-    if (!billingPolicyReady || freeMediaOfferChecking) return;
-    if (videoMode && videoAccess.label === 'upgrade') setComposerToggles({ videoMode: false });
-  }, [
-    billingPolicyReady,
-    freeMediaOfferChecking,
-    videoMode,
-    videoAccess.label,
-    setComposerToggles,
-  ]);
+    if (!billingPolicyReady) return;
+    if (videoMode && !canUseVideoGeneration) setComposerToggles({ videoMode: false });
+  }, [billingPolicyReady, videoMode, canUseVideoGeneration, setComposerToggles]);
 
   // A deployment can lose a provider key/storage independently of the user's
   // tier. Do not leave a persisted media mode active once the no-store server
@@ -2504,11 +2455,7 @@ const ChatComposerNewComponent = ({
       );
       return;
     }
-    if (imageAccess.label === 'upgrade') {
-      if (freeMediaOfferChecking) {
-        setLocalNotice('Checking image model availability…');
-        return;
-      }
+    if (!canUseImageGeneration) {
       const reason = isFreeTrial ? null : (imageDecision?.reason ?? null);
       if (reason && reason !== 'requires_upgrade') {
         setLocalNotice(describeCapabilityDenial(reason).message);
@@ -2532,8 +2479,7 @@ const ChatComposerNewComponent = ({
     retryPromotionalMedia,
     availableImageModels,
     mediaModelsSettled,
-    imageAccess.label,
-    freeMediaOfferChecking,
+    canUseImageGeneration,
     isFreeTrial,
     imageDecision,
     onUpgradeRequest,
@@ -2570,11 +2516,7 @@ const ChatComposerNewComponent = ({
       );
       return;
     }
-    if (videoAccess.label === 'upgrade') {
-      if (freeMediaOfferChecking) {
-        setLocalNotice('Checking video model availability…');
-        return;
-      }
+    if (!canUseVideoGeneration) {
       const reason = isFreeTrial ? null : (videoDecision?.reason ?? null);
       if (reason && reason !== 'requires_upgrade') {
         setLocalNotice(describeCapabilityDenial(reason).message);
@@ -2598,8 +2540,7 @@ const ChatComposerNewComponent = ({
     retryPromotionalMedia,
     availableVideoModels,
     mediaModelsSettled,
-    videoAccess.label,
-    freeMediaOfferChecking,
+    canUseVideoGeneration,
     isFreeTrial,
     videoDecision,
     onUpgradeRequest,
@@ -2616,7 +2557,7 @@ const ChatComposerNewComponent = ({
     hostCanGenerateVideo &&
     billingPolicyReady &&
     mediaModelsReady &&
-    videoAccess.label === 'included' &&
+    canUseVideoGeneration &&
     !freeQuotaMediaSelected &&
     videoChipModel !== null &&
     attachments.length > 0 &&
@@ -3105,12 +3046,10 @@ const ChatComposerNewComponent = ({
                   : 'No image model is currently available in this deployment.',
             };
           }
-          if (imageAccess.label === 'upgrade') {
+          if (!canUseImageGeneration) {
             return {
               status: 'unavailable',
-              notice: freeMediaOfferChecking
-                ? 'Checking image model availability…'
-                : planCapabilityEntitlementHint('image_generation'),
+              notice: planCapabilityEntitlementHint('image_generation'),
             };
           }
           return { status: 'applied', content: argument, toggles: { imageMode: true } };
@@ -3145,8 +3084,7 @@ const ChatComposerNewComponent = ({
       modelSupportsSearch,
       modelSupportsThinkingCap,
       modelSupportsCodeExecution,
-      imageAccess.label,
-      freeMediaOfferChecking,
+      canUseImageGeneration,
       composerSelectedModelId,
       hostCanGenerateImage,
       mediaModelsReady,
@@ -3512,8 +3450,8 @@ const ChatComposerNewComponent = ({
           sendPromotionalMedia(prompt, imageModelId);
           return;
         }
-        if (imageAccess.label !== 'included') {
-          setLocalNotice('No free image model is available right now. Try again in a moment.');
+        if (!canUseImageGeneration) {
+          setLocalNotice(planCapabilityEntitlementHint('image_generation'));
           return;
         }
         if (!onGenerateImage) {
@@ -3619,8 +3557,8 @@ const ChatComposerNewComponent = ({
           sendPromotionalMedia(prompt, videoModelId);
           return;
         }
-        if (videoAccess.label !== 'included') {
-          setLocalNotice('No free video model is available right now. Try again in a moment.');
+        if (!canUseVideoGeneration) {
+          setLocalNotice(planCapabilityEntitlementHint('video_generation'));
           return;
         }
         if (!onGenerateVideo) {
@@ -3787,8 +3725,8 @@ const ChatComposerNewComponent = ({
       attachmentPreparing,
       trialExhausted,
       freeQuotaMediaSelected,
-      imageAccess.label,
-      videoAccess.label,
+      canUseImageGeneration,
+      canUseVideoGeneration,
       onUpgradeRequest,
       imageMode,
       selectedImageIsPromotional,
@@ -5761,20 +5699,11 @@ const ChatComposerNewComponent = ({
                     hostCanGenerateImage={hostCanGenerateImage}
                     imageModelsAvailable={availableImageModels.length > 0}
                     canUseImageGeneration={canUseImageGeneration}
-                    imageAccess={imageAccess}
-                    imageOfferNote={
-                      limitedMedia.image ? freeMediaOfferNote(limitedMedia.image) : null
-                    }
-                    freeMediaOfferChecking={freeMediaOfferChecking}
                     imageMode={imageMode}
                     onCreateImage={handleCreateImageFromMenu}
                     hostCanGenerateVideo={hostCanGenerateVideo}
                     videoModelsAvailable={availableVideoModels.length > 0}
                     canUseVideoGeneration={canUseVideoGeneration}
-                    videoAccess={videoAccess}
-                    videoOfferNote={
-                      limitedMedia.video ? freeMediaOfferNote(limitedMedia.video) : null
-                    }
                     videoMode={videoMode}
                     onCreateVideo={handleCreateVideoFromMenu}
                     showWorkingFolderRow={!projectPicker && canUseWorkingDirectory}

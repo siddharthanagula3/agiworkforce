@@ -39,7 +39,6 @@ import {
   saveNamedProviderConsent,
   type NamedProviderConsentRequiredDetail,
 } from '@/features/models/lib/named-provider-consent-client';
-import { resolveLimitedFreeMedia } from '../lib/free-media-choice';
 import { regenerateModelOptions as selectableRegenerateModelOptions } from '../lib/regenerate-model-options';
 import { pickFreePoolModel } from '../lib/eligible-model';
 import { useModelCatalogue } from '../lib/use-model-catalogue';
@@ -156,7 +155,6 @@ import {
   type CloudWorkMode,
   type ProviderMode,
   type SendPreviewPresentation,
-  canUseBillingPlanCapability,
   hasSelfServeUpgradePath,
   isFreeBillingPlanTier,
 } from '@agiworkforce/types';
@@ -538,10 +536,6 @@ const BLOCKED_SEND_TOAST =
   'Your last message is still starting. This one was saved here, send it again in a moment.';
 const PROJECT_TURN_NOT_STARTED_TOAST =
   'The project turn did not start. Your draft is ready to send again.';
-const FREE_IMAGE_LOOKUP_FAILED_TOAST =
-  'Free image availability could not be checked, so your request was not sent. It is back in the message box: try again in a moment.';
-const FREE_IMAGE_CHAT_CHANGED_TOAST =
-  'Your image request was not sent because the chat changed while it was being prepared. It is saved as a draft in the chat you wrote it in.';
 const SEND_FINGERPRINT_FIELD_SEPARATOR = '|';
 const SEND_FINGERPRINT_ATTACHMENT_SEPARATOR = ',';
 const SEND_FINGERPRINT_ATTACHMENT_FIELD_SEPARATOR = ':';
@@ -1345,14 +1339,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   // resolves it before any await, so this ref is the one case that can honor
   // the contract instead of discarding it through `void sendContent(...)`.
   const lastSendGuardBlockedRef = useRef(false);
-  const sendTypedImageRef = useRef<
-    | ((
-        content: string,
-        skillId: string | undefined,
-        meta: SendMeta,
-      ) => false | typeof SEND_GUARD_BLOCKED | void)
-    | null
-  >(null);
   // Conversations whose auto-title read has already been started. The effect below
   // re-runs on every `conversations` change, including the one its own adoption
   // causes, so without this it would start a second read pass mid-flight.
@@ -3966,7 +3952,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       attachments?: File[],
       skillId?: string,
       meta?: SendMeta,
-      typedImageResolved = false,
     ): false | typeof SEND_GUARD_BLOCKED | void => {
       let resolvedMeta = skillId && !meta?.skillName ? { ...meta, skillName: skillId } : meta;
       const outgoingContent = content;
@@ -4023,53 +4008,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ...resolvedMeta,
             artifactInstruction: visualRoute.target.directive,
           };
-        } else if (!freeQuotaSelection(targetModelId) && !typedImageResolved) {
+        } else if (!freeQuotaSelection(targetModelId)) {
           const defaultImageModel = IMAGE_MODELS[0];
-          const sentFromConversationId = displayedConversationId ?? null;
-          const handBackUnsent = () => parkUnsentDraft(sentFromConversationId, content);
-          const sendAsChatTurn = (turnMeta: SendMeta) => {
-            if (sendTypedImageRef.current?.(content, skillId, turnMeta) === false) {
-              handBackUnsent();
-            }
-          };
-          const generateOnPlan = () => {
-            if (defaultImageModel) {
-              handleGenerateImage(content, { aspectRatio: 'auto', modelId: defaultImageModel.id });
-            } else {
-              sendAsChatTurn({ ...resolvedMeta });
-            }
-          };
-          if (
-            billingPolicyReady &&
-            !canUseBillingPlanCapability(subscriptionTier, 'image_generation')
-          ) {
-            void resolveLimitedFreeMedia('image').then((lookup) => {
-              if ((displayedConversationIdRef.current ?? null) !== sentFromConversationId) {
-                handBackUnsent();
-                toast.error(FREE_IMAGE_CHAT_CHANGED_TOAST);
-                return;
-              }
-              if (lookup.status === 'unknown') {
-                handBackUnsent();
-                toast.error(FREE_IMAGE_LOOKUP_FAILED_TOAST);
-                return;
-              }
-              if (lookup.status === 'not_offered') {
-                generateOnPlan();
-                return;
-              }
-              sendAsChatTurn({
-                ...resolvedMeta,
-                workMode: 'chat',
-                modelOverrideId: lookup.modelId,
-                webSearchEnabled: false,
-                codeExecutionEnabled: false,
-              });
-            });
-            return;
-          }
           if (defaultImageModel) {
-            generateOnPlan();
+            handleGenerateImage(content, { aspectRatio: 'auto', modelId: defaultImageModel.id });
             return;
           }
         }
@@ -4142,7 +4084,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       displayedConversationId,
       displayedMessages,
       activeModelId,
-      billingPolicyReady,
       subscriptionTier,
       handleGenerateImage,
       sendContent,
@@ -4181,11 +4122,6 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
       if (!saved) toast.error('Could not save this conversation’s model. Try again.');
     });
   }, [handleConversationModelChange, handleDeclineProviderNotice, subscriptionTier]);
-
-  useEffect(() => {
-    sendTypedImageRef.current = (content, skillId, meta) =>
-      handleSend(content, undefined, skillId, meta, true);
-  }, [handleSend]);
 
   useEffect(() => {
     if (!pendingByokHandoff) return;

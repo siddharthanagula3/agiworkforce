@@ -3,8 +3,6 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import type { FreeQuotaCatalogue } from '@agiworkforce/cloud-contracts';
 import { usePromotionalMediaModels } from './use-promotional-media-models';
 
-const RESETS_AT = '2026-10-05T00:00:00.000Z';
-
 function catalogue(patch: Partial<FreeQuotaCatalogue> = {}): FreeQuotaCatalogue {
   const base = {
     providerModelId: 'fixture',
@@ -62,7 +60,6 @@ function catalogue(patch: Partial<FreeQuotaCatalogue> = {}): FreeQuotaCatalogue 
       },
     ],
     mediaUseOrder: ['image-early', 'video', 'image-late'],
-    limitedOffer: [{ category: 'image', dailyCap: 5, remainingToday: 3, resetsAt: RESETS_AT }],
     ...patch,
   };
 }
@@ -106,34 +103,6 @@ describe('usePromotionalMediaModels', () => {
     expect(result.current.issuer).toBe('Fixture Cloud');
   });
 
-  it('reports the limited offer per kind, with the last day a ready offering serves and the daily terms', async () => {
-    vi.stubGlobal('fetch', answer(catalogue()));
-    const { result } = renderHook(() => usePromotionalMediaModels(true));
-
-    await waitFor(() => expect(result.current.status).toBe('ready'));
-    expect(result.current.limited).toEqual({
-      image: { lastDay: '2026-11-25', dailyCap: 5, remainingToday: 3, resetsAt: RESETS_AT },
-      video: null,
-    });
-  });
-
-  it('reports no limited offer once nothing of that kind is ready', async () => {
-    const spent = catalogue();
-    vi.stubGlobal(
-      'fetch',
-      answer({
-        ...spent,
-        models: spent.models.map((model) =>
-          model.category === 'image' ? { ...model, status: 'exhausted' } : model,
-        ),
-      }),
-    );
-    const { result } = renderHook(() => usePromotionalMediaModels(true));
-
-    await waitFor(() => expect(result.current.status).toBe('ready'));
-    expect(result.current.limited.image).toBeNull();
-  });
-
   it.each([401, 403, 404])(
     'treats HTTP %s as a plan that is offered no free media, not as a failure',
     async (status) => {
@@ -142,24 +111,14 @@ describe('usePromotionalMediaModels', () => {
 
       await waitFor(() => expect(result.current.status).toBe('ready'));
       expect(result.current.models).toEqual([]);
-      expect(result.current.limited).toEqual({ image: null, video: null });
     },
   );
 
-  it('reports a failed check, and refreshes without dropping what it already has', async () => {
+  it('reports a failed check and reads the catalogue again on retry', async () => {
     const fetchMock = vi
       .fn()
       .mockResolvedValueOnce(Response.json({}, { status: 500 }))
-      .mockResolvedValueOnce(Response.json(catalogue()))
-      .mockResolvedValueOnce(
-        Response.json(
-          catalogue({
-            limitedOffer: [
-              { category: 'image', dailyCap: 5, remainingToday: 0, resetsAt: RESETS_AT },
-            ],
-          }),
-        ),
-      );
+      .mockResolvedValueOnce(Response.json(catalogue()));
     vi.stubGlobal('fetch', fetchMock);
     const { result } = renderHook(() => usePromotionalMediaModels(true));
 
@@ -167,11 +126,6 @@ describe('usePromotionalMediaModels', () => {
     act(() => result.current.retry());
     expect(result.current.status).toBe('loading');
     await waitFor(() => expect(result.current.status).toBe('ready'));
-    expect(result.current.limited.image?.remainingToday).toBe(3);
-
-    act(() => result.current.refresh());
-    expect(result.current.status).toBe('ready');
     expect(result.current.models.length).toBeGreaterThan(0);
-    await waitFor(() => expect(result.current.limited.image?.remainingToday).toBe(0));
   });
 });

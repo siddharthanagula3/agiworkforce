@@ -20,11 +20,10 @@ import {
 } from '@/lib/free-quota-authorization';
 import {
   buildFreeQuotaCatalogue,
-  freeMediaOfferFor,
   freeQuotaChatUseOrder,
   freeQuotaContextFor,
   freeQuotaMediaUseOrder,
-  freeQuotaPlanAdmission,
+  freeQuotaPlanAdmits,
   isLocalQuotaRequest,
   loadFreeQuotaPolicy,
   resolveFreeQuotaAlternative,
@@ -585,64 +584,25 @@ describe('a free quota model is offered only on current quota-only evidence', ()
   });
 });
 
-describe('which plan may use a free quota offering, and on which terms', () => {
+describe('which plan may use a free quota offering', () => {
   const PLANS = Object.keys(BILLING_PLAN_PRICING);
-  const offer = { dailyCapPerUser: { image: 5, video: 1 } };
   const planHas = (plan: string, capability: BillingPlanCapability) =>
     (BILLING_PLAN_CAPABILITY_TIERS[capability] as readonly string[]).includes(plan);
 
-  it('keeps every plan exactly where it was while the limited offer is not configured', () => {
+  it('admits chat on the Free plan and image or video only on plans that include the capability', () => {
     for (const plan of PLANS) {
-      expect(freeQuotaPlanAdmission(plan, 'chat', undefined), plan).toEqual(
-        isFreeBillingPlanTier(plan) ? { terms: 'included' } : null,
-      );
-      expect(freeQuotaPlanAdmission(plan, 'image', undefined), plan).toEqual(
-        planHas(plan, 'image_generation') ? { terms: 'included' } : null,
-      );
-      expect(freeQuotaPlanAdmission(plan, 'video', undefined), plan).toEqual(
-        planHas(plan, 'video_generation') ? { terms: 'included' } : null,
-      );
+      expect(freeQuotaPlanAdmits(plan, 'chat'), plan).toBe(isFreeBillingPlanTier(plan));
+      expect(freeQuotaPlanAdmits(plan, 'image'), plan).toBe(planHas(plan, 'image_generation'));
+      expect(freeQuotaPlanAdmits(plan, 'video'), plan).toBe(planHas(plan, 'video_generation'));
+      expect(freeQuotaPlanAdmits(plan, 'audio'), plan).toBe(false);
     }
   });
 
-  it('admits a managed cloud plan without the paid capability on limited terms, and no other', () => {
-    const limited: string[] = [];
-    for (const plan of PLANS) {
-      const withoutOffer = {
-        image: freeQuotaPlanAdmission(plan, 'image', undefined),
-        video: freeQuotaPlanAdmission(plan, 'video', undefined),
-      };
-      for (const category of ['image', 'video'] as const) {
-        const admission = freeQuotaPlanAdmission(plan, category, offer);
-        if (withoutOffer[category]) {
-          expect(admission, `${plan} ${category}`).toEqual({ terms: 'included' });
-        } else if (!planHas(plan, 'managed_chat')) {
-          expect(admission, `${plan} ${category}`).toBeNull();
-        } else {
-          limited.push(`${plan} ${category}`);
-          expect(admission, `${plan} ${category}`).toEqual({
-            terms: 'limited',
-            category,
-            dailyCap: offer.dailyCapPerUser[category],
-          });
-        }
-      }
-      expect(freeQuotaPlanAdmission(plan, 'chat', offer), plan).toEqual(
-        freeQuotaPlanAdmission(plan, 'chat', undefined),
-      );
-      expect(freeQuotaPlanAdmission(plan, 'audio', offer), plan).toBeNull();
-    }
-    expect(limited).toContain('free image');
-    expect(limited).toContain('free video');
-    expect(PLANS.filter((plan) => !planHas(plan, 'managed_chat')).length).toBeGreaterThan(0);
-    expect(freeQuotaPlanAdmission(null, 'image', offer)).toBeNull();
-    expect(freeQuotaPlanAdmission('not-a-plan', 'video', offer)).toBeNull();
-  });
-
-  it('treats a cap of zero as no offer for that kind', () => {
-    const imagesOnly = { dailyCapPerUser: { image: 5, video: 0 } };
-    expect(freeQuotaPlanAdmission('free', 'image', imagesOnly)?.terms).toBe('limited');
-    expect(freeQuotaPlanAdmission('free', 'video', imagesOnly)).toBeNull();
+  it('gives the Free plan no free image or video and admits no unknown plan', () => {
+    expect(freeQuotaPlanAdmits('free', 'image')).toBe(false);
+    expect(freeQuotaPlanAdmits('free', 'video')).toBe(false);
+    expect(freeQuotaPlanAdmits(null, 'image')).toBe(false);
+    expect(freeQuotaPlanAdmits('not-a-plan', 'video')).toBe(false);
   });
 });
 
@@ -792,17 +752,13 @@ describe('which free media offering is used first', () => {
   );
 
   it.each(CATEGORIES)(
-    'reports the limited %s offer only while it is configured and an offering is ready, with the last UTC day one is served',
+    'refuses a %s offering from 00:00 UTC on its end date and serves it through the day before',
     async (category) => {
       const [first, second] = await interchangeableRows(category);
       const rows = [
         { ...allowanceFor(first!, 100), expiresOn: ENDS_LATER },
         { ...allowanceFor(second!, 100), expiresOn: ENDS_SOONER },
       ];
-      const catalogue = buildFreeQuotaCatalogue(await mediaDecisions({ rows }));
-      const offer = { dailyCapPerUser: { image: 5, video: 1 } };
-
-      expect(freeMediaOfferFor(catalogue, offer, category)).toEqual({ lastDay: LAST_DAY_SERVED });
       const endOfLastDay = Date.parse(`${LAST_DAY_SERVED}T23:59:59.999Z`);
       const statusAt = async (nowMs: number) =>
         (await mediaDecisions({ rows, nowMs })).offerings.find(
@@ -810,19 +766,6 @@ describe('which free media offering is used first', () => {
         )!.decision.status;
       expect(await statusAt(endOfLastDay)).toBe('ready');
       expect(await statusAt(endOfLastDay + 1)).toBe('expired');
-
-      expect(freeMediaOfferFor(catalogue, undefined, category)).toBeNull();
-      expect(
-        freeMediaOfferFor(catalogue, { dailyCapPerUser: { image: 0, video: 0 } }, category),
-      ).toBeNull();
-      expect(freeMediaOfferFor(null, offer, category)).toBeNull();
-
-      const unattested = buildFreeQuotaCatalogue(
-        (await resolveFreeQuotaDecisions(context({ mediaServed: true }), {
-          inventory: { ...reviewedInventory, entries: rows },
-        }))!,
-      );
-      expect(freeMediaOfferFor(unattested, offer, category)).toBeNull();
     },
   );
 });
@@ -1050,9 +993,6 @@ describe('how a free image or video offering is described and matched', () => {
       });
     }
     expect([...catalogue.mediaUseOrder!].sort()).toEqual(rows.map((row) => row.offeringKey).sort());
-    expect(
-      freeMediaOfferFor(catalogue, { dailyCapPerUser: { image: 5, video: 1 } }, 'image'),
-    ).not.toBeNull();
   });
 
   it.each([

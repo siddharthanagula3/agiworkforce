@@ -31,7 +31,6 @@ import {
   IMAGE_SCENE_PROMPT,
   ImageScene,
 } from '@/features/marketing/components/scenes/ImageScene';
-import { FREE_MEDIA_LIMITED_LABEL } from '@/features/models/lib/free-media-offer';
 import { APP_NAV_DESTINATIONS } from '@/shared/components/layout/app-nav-items';
 import ImageGenerationPage from './page';
 
@@ -153,12 +152,13 @@ describe('ImageGenerationPage claims', () => {
     }
   });
 
-  it('takes the menu label, the reference limit and the offer badge from their owners', () => {
+  it('takes the menu label and the reference limit from their owners', () => {
     const text = pageText();
 
     expect(text).toContain(`choose ${interactionMode('image').label}.`);
     expect(text).toContain(`up to ${MANAGED_MEDIA_MAX_IMAGE_REFERENCES} more images`);
-    expect(text).toContain(`carries a ${FREE_MEDIA_LIMITED_LABEL} badge`);
+    expect(text).toContain(`row shows Upgrade.`);
+    expect(text).not.toMatch(/free image|temporary free|limited free/iu);
     expect(text).toContain(`one of ${IMAGE_STYLE_PRESETS.length} preset phrases`);
   });
 

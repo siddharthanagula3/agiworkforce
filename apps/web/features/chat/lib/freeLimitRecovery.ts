@@ -8,23 +8,14 @@ import {
   type FreeLimitReason,
 } from '@agiworkforce/cloud-contracts';
 import {
-  SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
-  canUseBillingPlanCapability,
   getModelMetadataById,
   getNextUpgradeTier,
   getProviderOffering,
-  isContractPricedPlan,
   isFreeBillingPlanTier,
-  isPerSeatBillingPlan,
   normalizeBillingPlanTier,
-  type SelfServeIndividualPlanTier,
 } from '@agiworkforce/types';
 
 import type { PaywallSlot } from '@/features/chat/types/message-metadata';
-import {
-  FREE_MEDIA_PLAN_CAPABILITY,
-  isFreeMediaCategory,
-} from '@/features/models/lib/free-media-offer';
 import {
   BYOK_RECOVERY_ACTION,
   findRecoveryHref,
@@ -49,26 +40,6 @@ const FREE_LIMIT_REASON_BY_CODE: Readonly<Record<string, FreeLimitReason>> = {
   [FREE_ALLOWANCE_EXHAUSTED_CODE]: 'shared_pool_used',
   [FREE_QUOTA_DAILY_LIMIT_CODE]: 'daily_limit_reached',
 };
-
-function isFreeMediaOffering(modelId: string): boolean {
-  const category = getProviderOffering(modelId)?.category;
-  return category !== undefined && isFreeMediaCategory(category);
-}
-
-function planIncludingFreeOffering(
-  modelId: string,
-  planTier: string | null | undefined,
-): SelfServeIndividualPlanTier | null {
-  const category = getProviderOffering(modelId)?.category;
-  const capability =
-    category && isFreeMediaCategory(category) ? FREE_MEDIA_PLAN_CAPABILITY[category] : null;
-  const current = normalizeBillingPlanTier(planTier);
-  if (!capability || isPerSeatBillingPlan(current) || isContractPricedPlan(current)) return null;
-  const reachable = SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER.slice(
-    (SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER as readonly string[]).indexOf(current) + 1,
-  );
-  return reachable.find((tier) => canUseBillingPlanCapability(tier, capability)) ?? null;
-}
 
 function limitFromCode(
   code: string | undefined,
@@ -99,17 +70,14 @@ export function resolveFreeLimitPaywallSlot(input: {
   const resetAt = limit.resets_at ?? input.resetAt;
   const byokHref = findRecoveryHref(input.recovery, BYOK_RECOVERY_ACTION);
   const dailyLimit = limit.reason === 'daily_limit_reached';
-  const mediaDailyLimit = dailyLimit && isFreeMediaOffering(limit.model);
-  const nextTier = mediaDailyLimit
-    ? planIncludingFreeOffering(limit.model, input.planTier)
-    : getNextUpgradeTier(input.planTier);
+  const nextTier = getNextUpgradeTier(input.planTier);
   const freePlan = isFreeBillingPlanTier(normalizeBillingPlanTier(input.planTier));
   return {
     feature: FREE_LIMIT_FEATURE,
     requiredTier: nextTier ?? DEFAULT_REQUIRED_TIER,
     reason: input.message,
     recoveryAction: 'upgrade',
-    showUpgradeCta: (mediaDailyLimit || freePlan) && nextTier !== null,
+    showUpgradeCta: freePlan && nextTier !== null,
     showResetTime: resetAt !== undefined,
     suggestStandardModel: !dailyLimit && !freePlan && alternativeModel === null,
     ...(resetAt ? { resetAt } : {}),

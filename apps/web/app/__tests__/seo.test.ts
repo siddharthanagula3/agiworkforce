@@ -25,9 +25,6 @@ import {
 vi.mock('@/features/marketing/components/MarketingLanding', () => ({
   MarketingLanding: () => null,
 }));
-vi.mock('@/lib/server/free-media-offer-reader', () => ({
-  readFreeMediaOfferForRender: async () => null,
-}));
 
 function og(meta: ReturnType<typeof buildMetadata>) {
   return meta.openGraph as {

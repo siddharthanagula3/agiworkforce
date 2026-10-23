@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-18
+Last updated: 2026-10-22
 
 A free quota model is a QwenCloud model served from the promotional free quota
 on the company's QwenCloud account. Free plan accounts reach one in two ways:
@@ -767,8 +767,8 @@ has a daily share of it.
   shipped-configuration test in `apps/web/lib/server/free-pools.test.ts` pins
   the number: update it in the same change.
 - It is counted in the shared state store under
-  `agi-fquota:daily:chat:<account hash>:<date>`, beside the image and video
-  counts, and expires on its own once the day has passed.
+  `agi-fquota:daily:chat:<account hash>:<date>`, and expires on its own once the
+  day has passed.
 - The turn reserves the same units the model's allowance reserves, immediately
   before that reservation, and settles them to the total the provider reports.
 - The share follows the model's allowance. It is settled only where the
@@ -866,135 +866,58 @@ notice and agrees, or uses Auto instead.
   notice, so those turns are refused with that code until the account has
   agreed on web.
 
-## Limited free image and video offer
+## Free image and video
 
-The owner decided on 2026-10-04 to let accounts whose plan has no paid image or
-video generation use the free quota image and video offerings for as long as
-that free capacity lasts. The offer widens who may use those offerings and
-changes nothing about what may serve: the terms review, the console check, each
-offering's allowance and expiry, the billing signal and the provider holds apply
-to these requests exactly as to any other. An account admitted by the offer is
-only ever sent to a free quota offering, never to the paid image or video
-routes.
+The Free plan has no free image or video generation. The limited free media
+offer of 2026-10-04 ended on 2026-10-22 (owner decision): its configuration
+block, daily cap, public offer endpoint, Limited labels and home page pill are
+gone. A Free account that asks for an image or video gets the plan answer,
+Upgrade, with no request sent to any provider.
 
-### What turns it on and off
+Free quota image and video offerings still serve plans that include the paid
+capability, and only those: `freeQuotaPlanAdmits` in
+`apps/web/lib/server/free-quota-catalogue.ts` is the one place that decides it,
+for the picker and for the request. Chat is admitted on the Free plan only.
+Local-only and BYOK accounts are admitted to none of them.
 
-The `limitedMediaOffer` block in `apps/web/config/free-pools.json`, beside the
-inventory, holds one daily cap per account for each kind:
-`dailyCapPerUser.image` and `dailyCapPerUser.video`, 10 and 5 since 2026-10-07.
-
-- A cap above zero turns the offer on for that kind. A cap of 0 turns that kind
-  off, and removing the block turns both off. Each is a change to the file and a
-  deploy; `LimitedMediaOfferSchema` in `apps/web/lib/server/free-pools.ts`
-  refuses a negative, fractional, missing or misnamed cap at load.
-- With it off every plan is back on the plan rule: free quota images for plans
-  that include image generation, free quota video for plans that include video
-  generation. `freeQuotaPlanAdmission` in
-  `apps/web/lib/server/free-quota-catalogue.ts` is the one place that decides
-  it, for the picker and for the request.
-- Only managed cloud plans are admitted: Free, and paid plans that lack the
-  capability, so no paid plan has less than Free. Local-only and BYOK accounts
-  are not admitted, and free quota chat stays with the Free plan.
-- No switch stops this offer alone without a deploy. The stop that needs no
-  deploy is a console check recorded with Only the models I select and the
-  image or video models unticked (see Recording it): a model the record leaves
-  out is off at once for every plan, and plans that include the capability keep
-  their paid image and video generation. Whatever stops every free quota model
-  stops the offer too. The operator switches for paid image and video
-  generation (`canUseImages`, `canUseVideoGeneration`) do not reach free quota
-  requests.
-
-### The daily cap
-
-- It is counted per account, per kind and per UTC day in the shared state store,
-  under `agi-fquota:daily:<kind>:<account hash>:<date>`, and the count expires
-  on its own once the day has passed.
-- One request counts as one, whichever model serves it: one image or one video,
-  never its seconds. A video still takes its clip length in seconds (the
-  offering's `quotaVideoSeconds` in the model catalogue: 5, or 3 for the
-  HappyHorse offerings) from that offering's allowance, or the seconds the
-  provider reports when its answer states them, rounded up. A report above the
-  clip length is settled as reported and logged as a warning that names the
-  offering and both figures, since it means the catalogue entry is too short.
-- An image offering takes one image from its allowance whether the provider
-  answers at once or through a task that is polled.
-- An offering whose allowance has less than one request left, one image or one
-  clip, counts as spent and is refused before any provider request.
-- `serveFreeQuotaTurn` in `apps/web/lib/server/free-quota-turn.ts` takes the
-  count after every gate has passed and before the provider request.
-- The count is given back when no provider request starts; when the provider
-  answers that the offering itself is spent, withdrawn or refused, an answer
-  that places a hold while the account is offered another model; and when the
-  provider answers that it is too busy to start, the refusal that tells the
-  user to wait a moment and send again.
-- The count is kept when the provider was asked and failed for that turn only,
-  or when the outcome is unknown (a timeout or an interrupted status check), so
-  a failing prompt cannot be repeated without limit, and each such failure
-  uses one of that account's free requests for the day.
-- A media task the provider accepted is never settled as failed because a status
-  poll was refused (429, 5xx or an error body): polling continues to its limit
-  and the turn ends as interrupted with the reservation kept.
-- That limit is `quotaExperimentPolicy.maxPolls` waits of `pollIntervalMs`.
-  Together with the submit timeout (`requestTimeoutMs`) it has to stay under
-  the time the completions route is allowed (`maxDuration` in
+- The terms review, the console check, each offering's allowance and expiry, the
+  billing signal and the provider holds apply to every request exactly as to
+  chat.
+- Plans with the capability are not counted or capped per day. The ceiling on
+  spend is each offering's shared allowance
+  (`quotaExperimentPolicy.allowanceUsablePercent`): reaching it ends the
+  offering and costs nothing.
+- One image takes one unit from its allowance whether the provider answers at
+  once or through a task that is polled. A video takes its clip length in
+  seconds (the offering's `quotaVideoSeconds` in the model catalogue: 5, or 3
+  for the HappyHorse offerings), or the seconds the provider reports when its
+  answer states them, rounded up. A report above the clip length is settled as
+  reported and logged as a warning that names the offering and both figures,
+  since it means the catalogue entry is too short.
+- An offering whose allowance has less than one image or one clip left counts
+  as spent and is refused before any provider request.
+- A media task the provider accepted is never settled as failed because a
+  status poll was refused (429, 5xx or an error body): polling continues to its
+  limit and the turn ends as interrupted with the reservation kept. The limit
+  is `quotaExperimentPolicy.maxPolls` waits of `pollIntervalMs`. Together with
+  the submit timeout (`requestTimeoutMs`) it has to stay under the time the
+  completions route is allowed (`maxDuration` in
   `apps/web/app/api/models/free-quota/completions/route.ts`), with time left to
   download, check and store the result: a request the platform cuts off settles
-  nothing, so the reservation and the day's count stand and the user gets no
-  answer.
-- At the cap the request is refused before any provider request with HTTP 429
-  and code `free_quota_daily_limit`. The message states the cap, the reset at
-  the next UTC midnight and that plans with the capability are not held to it;
-  the card offers the first plan that includes the capability.
-- Plans that include the capability are neither counted nor capped.
-- The cap is per account, so many new accounts can still drain a pool together.
-  The ceiling on spend is each offering's shared allowance
-  (`quotaExperimentPolicy.allowanceUsablePercent`): reaching it ends the offer
-  early and costs nothing.
-
-### What users see
-
-- In the chat composer's plus menu, Create image and Create video say Limited
-  with a clock where they said Upgrade. While today's share lasts there is no
-  line under the row; once it is used, one line says so, with the time to the
-  reset (`freeMediaTodayLine` in
-  `apps/web/features/models/lib/free-media-offer.ts`).
-- `readyFreeMediaOffer` in the same file derives the last UTC day on which an
-  offering of that kind is still served in full: the day before the latest end
-  date among the ready offerings, because `decideFreeQuotaOffering` refuses an
-  offering from 00:00 UTC on its end date. An offering the provider retires
-  partway through a day (`retiresAt`) is served into that day, so when such an
-  offering is the latest to end, that day understates by less than a day. It
-  never overstates. No surface prints the day.
-- Choosing either, or typing a request for an image, uses the ready offering
+  nothing, so the reservation stands and the user gets no answer.
+- Choosing a model, or typing a request for an image, uses the ready offering
   whose allowance ends soonest, the one with most allowance left on a tie
   (`freeQuotaMediaUseOrder`), so capacity that is about to expire goes first.
-- A typed image request reads the account's catalogue before it is sent
-  (`apps/web/features/chat/lib/free-media-choice.ts`). If that read fails, or
-  the chat on screen changed while it ran, the text is handed back to the
-  message box with a notice and nothing is sent; only an answer that the
-  account is offered no free image leads to the plan's own answer.
 - The free image and video models are listed in the model picker's Free section
-  with the same mark.
-- The pricing page says "Limited preview" in the image and video columns for
-  plans without the capability, and the Free plan card lists the running kind
-  first (`freeMediaFeatureKey` in
-  `apps/web/features/billing/lib/plan-card-copy.ts`). It reads
-  `apps/web/app/api/models/free-quota/media-offer/route.ts`, which is public,
-  cached for a minute and answers only which kind is running and its last day.
-- The home page hero pill reads "Limited" and "Free image and video" (or the one
-  kind that is ready) and links to the pricing page while a kind is ready. It
-  reads the same catalogue entry as the pricing endpoint through
-  `apps/web/lib/server/free-media-offer-reader.ts`, waits at most half a second
-  for it, and shows the usual pill when the offer is over or cannot be read.
+  for plans that include the capability, and nowhere for any other plan.
 
-### What ends it
+### What ends an offering
 
-A spent pool ends the offer by itself. Once no free quota offering of a kind is
+A spent pool ends an offering by itself. Once no free quota offering of a kind is
 ready, because its allowances are used, its offers have expired, a gate has
-lapsed or a billing signal stands, the catalogue stops listing the offer within
-about a minute and the pricing page goes back to Yes and No within about two,
-with no change to the configuration: the catalogue is decided once a minute and
-the public answer is cached for another.
+lapsed or a billing signal stands, the catalogue stops listing it within about a
+minute, with no change to the configuration: the catalogue is decided once a
+minute.
 
 A provider hold or a billing signal does not wait for that minute. The request
 that records one expires the cached catalogue (`expireFreeQuotaCatalogue` in
@@ -1017,8 +940,8 @@ answer that only mentions them takes the model off offer
 (`classifyFreeQuotaRefusal` in `apps/web/lib/free-quota-authorization.ts`, over
 `classifyModelStudioError` in `packages/ai/provider-runtime/src/errors.ts`).
 
-A composer already on screen keeps the label it last read. It reads the
-catalogue again when the plus menu or the model picker is opened, not on a
-timer, so a Limited label can outlast the offer until then. What holds in that
-window is the refusal at send time: a spent or expired allowance refuses the
-request with the reason before it reaches the provider, so nothing is charged.
+A composer already on screen keeps the list it last read. It reads the
+catalogue again when the model picker is opened, not on a timer, so a model can
+outlast its allowance until then. What holds in that window is the refusal at
+send time: a spent or expired allowance refuses the request with the reason
+before it reaches the provider, so nothing is charged.

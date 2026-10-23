@@ -5,13 +5,11 @@ import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkfor
 import { providerOfferingDisplayName } from '@agiworkforce/types';
 import {
   credentialSha256,
-  freeQuotaDayResetsAtMs,
   recordFreeQuotaHold,
-  reserveFreeQuotaDailyUse,
   writeQuotaAttestation,
 } from '@/lib/free-quota-authorization';
 import type { FreeQuotaCatalogue } from '@/features/models/lib/free-quota-types';
-import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
+import { loadFreePools } from '@/lib/server/free-pools';
 import { freeQuotaFixtureNow } from '@/test/free-quota-fixtures';
 type ScanModule0 = typeof import('@/lib/api-auth');
 type ScanModule1 = typeof import('@/lib/rate-limit');
@@ -24,7 +22,6 @@ type ScanModule6 = typeof import('@/lib/server/media-storage');
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore | null,
   plan: vi.fn(),
-  limitedOffer: undefined as LimitedMediaOffer | undefined,
   mediaStorage: false,
 }));
 
@@ -63,7 +60,6 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
       const inventory = document.inventory!;
       return {
         ...document,
-        limitedMediaOffer: mocks.limitedOffer,
         inventory: {
           ...inventory,
           termsReview: {
@@ -106,7 +102,6 @@ beforeEach(() => {
   vi.stubEnv('QWEN_API_KEY', API_KEY);
   mocks.store = createMemoryKeyValueStore();
   mocks.plan.mockResolvedValue('free');
-  mocks.limitedOffer = undefined;
   mocks.mediaStorage = false;
 });
 
@@ -212,78 +207,41 @@ function categories(body: FreeQuotaCatalogue): string[] {
   return [...new Set(body.models.map((model) => model.category))].sort();
 }
 
-it('lists free image and video offerings for a Free account while the limited offer runs, with its own daily terms', async () => {
-  mocks.limitedOffer = { dailyCapPerUser: { image: 3, video: 1 } };
+it('lists no image or video for a Free account even with media storage on and every model attested', async () => {
   mocks.mediaStorage = true;
   await attestAll();
-  await reserveFreeQuotaDailyUse(mocks.store!, {
-    userId: 'fixture-user',
-    category: 'image',
-    cap: 3,
-    nowMs: Date.now(),
-  });
 
   const { status, body } = await catalogue();
 
   expect(status).toBe(200);
-  expect(categories(body)).toEqual(['chat', 'image', 'video']);
-  const resetsAt = new Date(freeQuotaDayResetsAtMs(NOW)).toISOString();
-  expect(body.limitedOffer).toEqual([
-    { category: 'image', dailyCap: 3, remainingToday: 2, resetsAt },
-    { category: 'video', dailyCap: 1, remainingToday: 1, resetsAt },
-  ]);
-  const listed = new Set(body.models.map((model) => model.key));
-  const readyMedia = body.models
-    .filter((model) => model.category !== 'chat' && model.status === 'ready')
-    .map((model) => model.key);
-  expect(readyMedia.length).toBeGreaterThan(0);
-  expect([...body.mediaUseOrder!].sort()).toEqual([...readyMedia].sort());
-  expect(body.mediaUseOrder!.every((key) => listed.has(key))).toBe(true);
+  expect(categories(body)).toEqual(['chat']);
+  expect(body.mediaUseOrder ?? []).toEqual([]);
+  expect(body).not.toHaveProperty('limitedOffer');
 });
 
-it('marks only the kinds a paid plan lacks as limited', async () => {
-  mocks.limitedOffer = { dailyCapPerUser: { image: 3, video: 1 } };
-
-  mocks.plan.mockResolvedValue('basic');
-  const basic = (await catalogue()).body;
-  expect(categories(basic)).toEqual(['image', 'video']);
-  expect(basic.limitedOffer?.map((offer) => offer.category)).toEqual(['image', 'video']);
+it('lists only the media kinds a paid plan includes, in the order the server will use them', async () => {
+  mocks.mediaStorage = true;
+  await attestAll();
 
   mocks.plan.mockResolvedValue('pro');
   const pro = (await catalogue()).body;
-  expect(categories(pro)).toEqual(['image', 'video']);
-  expect(pro.limitedOffer?.map((offer) => offer.category)).toEqual(['video']);
+  expect(categories(pro)).toEqual(['image']);
 
   mocks.plan.mockResolvedValue('max_15x');
   const max = (await catalogue()).body;
   expect(categories(max)).toEqual(['image', 'video']);
-  expect(max.limitedOffer).toBeUndefined();
+  expect(max).not.toHaveProperty('limitedOffer');
+  const listed = new Set(max.models.map((model) => model.key));
+  const readyMedia = max.models.filter((model) => model.status === 'ready').map((m) => m.key);
+  expect(readyMedia.length).toBeGreaterThan(0);
+  expect([...max.mediaUseOrder!].sort()).toEqual([...readyMedia].sort());
+  expect(max.mediaUseOrder!.every((key) => listed.has(key))).toBe(true);
 });
 
-it('leaves a kind whose cap is zero off the offer', async () => {
-  mocks.limitedOffer = { dailyCapPerUser: { image: 2, video: 0 } };
-
-  const { body } = await catalogue();
-
-  expect(categories(body)).toEqual(['chat', 'image']);
-  expect(body.limitedOffer?.map((offer) => offer.category)).toEqual(['image']);
-});
-
-it('does not list the offer for an account kept off managed cloud', async () => {
-  mocks.limitedOffer = { dailyCapPerUser: { image: 5, video: 5 } };
+it('does not list any offering for an account kept off managed cloud', async () => {
   mocks.plan.mockResolvedValue('byok');
 
   const response = await GET(new NextRequest('https://agiworkforce.com/api/models/free-quota'));
 
   expect(response.status).toBe(403);
-});
-
-it('names no limited terms when the deployment has no shared state store to count in', async () => {
-  mocks.limitedOffer = { dailyCapPerUser: { image: 5, video: 5 } };
-  mocks.store = null;
-
-  const { body } = await catalogue();
-
-  expect(body.limitedOffer).toBeUndefined();
-  expect(ready(body)).toEqual([]);
 });

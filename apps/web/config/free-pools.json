@@ -3495,12 +3495,6 @@
       "spendOnCapacityShortage": false
     }
   },
-  "limitedMediaOffer": {
-    "dailyCapPerUser": {
-      "image": 10,
-      "video": 5
-    }
-  },
   "freeChatDailyShare": {
     "tokensPerUser": 120000
   },

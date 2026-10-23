@@ -1,4 +1,3 @@
-import type { FreeQuotaMediaOffer } from '@agiworkforce/cloud-contracts';
 import {
   CONNECTORS_COMING_SOON_MESSAGE,
   PRODUCT_NAMES,
@@ -28,7 +27,6 @@ import {
   ProofRow,
   StartCards,
 } from '@/features/marketing/components/FlagshipSections';
-import { landingAnnouncement } from '@/features/marketing/components/landing-announcement';
 import { RELEASES } from '@/lib/changelog-entries';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
@@ -51,11 +49,7 @@ const LATEST_ENTRIES = RELEASES.slice(0, LATEST_ENTRY_COUNT).map((release) => ({
   summary: release.body[0] ?? '',
 }));
 
-export function MarketingLanding({
-  freeMediaOffer,
-}: {
-  freeMediaOffer: FreeQuotaMediaOffer | null;
-}) {
+export function MarketingLanding() {
   return (
     <div data-design="agi" data-public-palette="flagship">
       <Header />
@@ -67,11 +61,11 @@ export function MarketingLanding({
           em=""
           ctas={[{ href: WEB_ENTRY_HREF, label: 'Try AGI Chat' }, surfaceCta('desktop')]}
           visual={<MobileHeroVisual />}
-          announcement={landingAnnouncement(freeMediaOffer, {
+          announcement={{
             tag: 'New',
             label: `${approximateCount(CATALOG_SCOPES.byokModelEntries.value)} models across ${CATALOG_SCOPES.byokProviders.text}`,
             href: '/providers',
-          })}
+          }}
         />
 
         <ProofRow

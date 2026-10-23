@@ -18,7 +18,6 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FREE_MEDIA_LIMITED_LABEL } from '@/features/models/lib/free-media-offer';
 
 const VIDEO_PLANS = billingPlanCapabilityPlanLabels('video_generation');
 const CREATE_VIDEO = interactionMode('video').label;
@@ -179,9 +178,8 @@ export default function VideoFeaturePage() {
               </h2>
               <p className="agi-lp-lede">
                 Video generation is included on {VIDEO_PLANS} plans, up to any monthly allowance the
-                plan sets. On other plans the {CREATE_VIDEO} row shows Upgrade, or{' '}
-                {FREE_MEDIA_LIMITED_LABEL} while a temporary free video offer is running. Model
-                choices also depend on what the deployment has available.
+                plan sets. On other plans the {CREATE_VIDEO} row shows Upgrade. Model choices also
+                depend on what the deployment has available.
               </p>
               <ButtonRow>
                 <Button href="/pricing#pricing-compare-title">See which plans include it</Button>

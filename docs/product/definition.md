@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-10-10
+Last updated: 2026-10-22
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -330,11 +330,11 @@ beside it. The catalogue entry is `team_premium` in
 subscription and cannot be checked out as a plan of its own.
 
 The Image generation and Video generation columns state what each plan includes
-as a paid capability. Separately, and only while it is configured and free
-provider capacity remains, the limited free media offer (owner decision
-2026-10-04) lets managed cloud plans without the capability use the free quota
-image and video offerings within a daily cap per account. It adds no plan to
-either capability; see `docs/runbooks/free-quota-models.md`.
+as a paid capability. The Free plan has neither: the limited free media offer
+of 2026-10-04 ended by owner decision on 2026-10-22, and a Free account that
+asks for an image or video is shown Upgrade. Free quota image and video
+offerings serve only plans that include the capability; see
+`docs/runbooks/free-quota-models.md`.
 
 The provider-funded free chat models on the Free plan are the same kind of
 offer: a separate, temporary layer with its own route, inventory and ledger,

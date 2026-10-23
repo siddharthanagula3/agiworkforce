@@ -51,7 +51,6 @@ export type MobileImageGenerationRequestDecision =
       code: MobileImageGenerationBlockCode;
       alert: MobileImageGenerationAlert;
       switchModel?: MobileImageModelOption;
-      prompt?: string;
     }
   | {
       status: 'ready';
@@ -254,10 +253,7 @@ export function resolveMobileImageGenerationRequest(
     !input.grantedCapabilities.includes('canUseImages') ||
     !canUseBillingPlanCapability(input.subscriptionTier, 'image_generation')
   ) {
-    const refusal = blocked('plan_required');
-    return attachments.length === 0 && refusal.status === 'blocked'
-      ? { ...refusal, prompt }
-      : refusal;
+    return blocked('plan_required');
   }
   if (!input.isOnline) return blocked('offline');
 

@@ -227,10 +227,7 @@ describe('pricing locale bundles, plan feature claims', () => {
     const t = instance.getFixedT('en', 'pricing');
     for (const plan of ['basic', 'pro', 'max', 'max_15x'] as const) {
       const { maxScheduledTasks, sandboxTtlMs } = BILLING_PLAN_PRODUCT_LIMITS[plan];
-      expect(
-        individualPlanFeatures(plan, t, { image: null, video: null }),
-        `${plan} card`,
-      ).toContain(
+      expect(individualPlanFeatures(plan, t), `${plan} card`).toContain(
         `${maxScheduledTasks} scheduled tasks and ${sandboxTtlMs / 60_000}-minute managed sandboxes`,
       );
     }

@@ -14,7 +14,6 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FREE_MEDIA_LIMITED_LABEL } from '@/features/models/lib/free-media-offer';
 
 const IMAGE_PLANS = billingPlanCapabilityPlanLabels('image_generation');
 const CREATE_IMAGE = interactionMode('image').label;
@@ -183,10 +182,9 @@ export default function ImageGenerationPage() {
                 Choose a plan <em className="agi-lp-accent">with image&nbsp;generation.</em>
               </h2>
               <p className="agi-lp-lede">
-                Image generation is included on {IMAGE_PLANS} plans. When a limited free image offer
-                is running, {CREATE_IMAGE} carries a {FREE_MEDIA_LIMITED_LABEL} badge on plans
-                without it, with a daily limit and text-only prompts. Availability also depends on
-                account and workspace&nbsp;access.
+                Image generation is included on {IMAGE_PLANS} plans. On other plans the{' '}
+                {CREATE_IMAGE} row shows Upgrade. Availability also depends on account and
+                workspace&nbsp;access.
               </p>
               <ButtonRow>
                 <Button href="/pricing#pricing-compare-title">See which plans include it</Button>

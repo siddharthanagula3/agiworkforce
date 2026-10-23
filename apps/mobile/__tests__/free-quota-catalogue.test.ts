@@ -6,14 +6,15 @@ import {
   __resetCloudAccountSessionForTests,
 } from '../src/features/auth/services/cloudAccountSession';
 import {
-  ensureLimitedFreeMediaModel,
   ensureReadyFreeQuotaChatOffering,
-  ensureReadyFreeQuotaOffering,
   getFreeQuotaChatOffering,
   getReadyFreeQuotaChatOffering,
   useFreeQuotaCatalogueStore,
 } from '../src/features/model-picker/freeQuotaCatalogue';
-import { getModelListForCloudAccess } from '../src/features/model-picker/service';
+import {
+  getModelListForCloudAccess,
+  isFreeQuotaTurnModelId,
+} from '../src/features/model-picker/service';
 
 jest.mock('../services/api', () => ({
   api: { get: jest.fn() },
@@ -205,14 +206,15 @@ describe('mobile provider-funded Free catalogue', () => {
     );
   });
 
-  describe('limited Free media, the same rule as web', () => {
+  describe('Free media', () => {
     const imageKey = Object.entries(getProviderOfferings()).find(
       ([, offering]) => offering.category === 'image' && offering.quotaProbeProtocol,
     )?.[0];
 
-    function mediaCatalogue(withOffer: boolean, remainingToday = 2) {
+    it('is never a Free turn model, even when the server lists a ready image model', async () => {
       if (!imageKey) throw new Error('Expected an image offering in the generated catalog.');
-      return {
+      activateCloudAccount('account-a');
+      getMock.mockResolvedValue({
         ...catalogue('ready'),
         models: [
           ...catalogue('ready').models,
@@ -228,42 +230,10 @@ describe('mobile provider-funded Free catalogue', () => {
             status: 'ready',
           },
         ],
-        ...(withOffer
-          ? {
-              limitedOffer: [
-                {
-                  category: 'image',
-                  dailyCap: 3,
-                  remainingToday,
-                  resetsAt: '2026-10-19T00:00:00.000Z',
-                },
-              ],
-            }
-          : {}),
-      };
-    }
-
-    it('names the ready image model when the server runs a limited offer', async () => {
-      activateCloudAccount('account-a');
-      getMock.mockResolvedValue(mediaCatalogue(true));
-
-      await expect(ensureLimitedFreeMediaModel('image')).resolves.toBe(imageKey);
-      await expect(ensureReadyFreeQuotaOffering(imageKey!)).resolves.toMatchObject({
-        key: imageKey,
       });
-    });
 
-    it('offers no media model when the server lists models but runs no limited offer', async () => {
-      activateCloudAccount('account-a');
-      getMock.mockResolvedValue(mediaCatalogue(false));
-
-      await expect(ensureLimitedFreeMediaModel('image')).resolves.toBeNull();
-      await expect(ensureReadyFreeQuotaOffering(imageKey!)).resolves.toBeNull();
-    });
-
-    it('offers nothing while signed out', async () => {
-      await expect(ensureLimitedFreeMediaModel('image')).resolves.toBeNull();
-      expect(getMock).not.toHaveBeenCalled();
+      await expect(ensureReadyFreeQuotaChatOffering(imageKey)).resolves.toBeNull();
+      expect(isFreeQuotaTurnModelId(imageKey)).toBe(false);
     });
   });
 });

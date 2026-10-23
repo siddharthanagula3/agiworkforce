@@ -28,11 +28,7 @@ import {
   getReadyFreeQuotaChatOffering,
   useFreeQuotaCatalogueStore,
 } from './freeQuotaCatalogue';
-import {
-  isFreeMediaCategory,
-  type FreeQuotaCatalogue,
-  type FreeQuotaModel,
-} from '@agiworkforce/cloud-contracts';
+import type { FreeQuotaCatalogue, FreeQuotaModel } from '@agiworkforce/cloud-contracts';
 import { isCloudAccountEpochCurrent } from '@/src/features/auth/services/cloudAccountSession';
 
 export type ModelTier = PickerModelTier;
@@ -256,9 +252,7 @@ export function getSelectableModelById(id: string): ModelDef | undefined {
 export function isFreeQuotaTurnModelId(id: string): boolean {
   const offering = getProviderOffering(id);
   if (!offering?.quotaProbeProtocol) return false;
-  return offering.category === 'chat'
-    ? offering.quotaProbeProtocol === 'chat'
-    : isFreeMediaCategory(offering.category);
+  return offering.category === 'chat' && offering.quotaProbeProtocol === 'chat';
 }
 
 export function isCloudManagedModelId(id: string): boolean {

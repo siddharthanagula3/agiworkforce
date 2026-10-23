@@ -7,7 +7,6 @@ import { extractEmbeddedProvenance } from '@agiworkforce/compliance';
 import { getProviderOfferings } from '@agiworkforce/types';
 import {
   credentialSha256,
-  readFreeQuotaDailyUse,
   readFreeQuotaState,
   reserveFreeQuotaAllowance,
   usableAllowance,
@@ -22,7 +21,7 @@ import {
   MODEL_MAY_TRAIN_MESSAGE,
   PROVIDER_TRAINING_OPT_OUT_KEY,
 } from '@/lib/server/provider-training-opt-out';
-import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
+import { loadFreePools } from '@/lib/server/free-pools';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
 import type { UserScopedDb } from '@/lib/server/rls-db';
 import {
@@ -58,7 +57,6 @@ const mocks = vi.hoisted(() => ({
   expireCatalogue: vi.fn(),
   after: vi.fn(),
   consent: vi.fn(),
-  limitedOffer: undefined as LimitedMediaOffer | undefined,
   keepsOutOfTraining: vi.fn<(providerId: string) => boolean | null>(() => null),
 }));
 
@@ -132,7 +130,6 @@ vi.mock('@/lib/server/free-pools', async (importOriginal) => {
       const inventory = document.inventory!;
       return {
         ...document,
-        limitedMediaOffer: mocks.limitedOffer,
         freeChatDailyShare: document.freeChatDailyShare && {
           ...document.freeChatDailyShare,
           tokensPerUser: PROJECT_TURN_SHARE_TOKENS,
@@ -183,7 +180,7 @@ const API_KEY = 'fixture-provider-key';
 const USER_ID = 'fixture-user';
 const ARTIFACT_URL = 'https://provider.example/generated/artifact';
 const MEDIA_ASSET_ID = 'a2d14f7e-0b3d-40c7-952d-987e841033c5';
-const OFFER: LimitedMediaOffer = { dailyCapPerUser: { image: 5, video: 5 } };
+const MEDIA_PLAN = 'max_15x';
 const OVER_CLIP_WARNING = expect.stringContaining('more seconds than the catalogued clip length');
 const inventory = loadFreePools().inventory!;
 const NOW = freeQuotaFixtureNow(inventory);
@@ -212,7 +209,12 @@ const scoped = {
   db: { query: mocks.query },
 } as unknown as UserScopedDb;
 
-function send(model: string, turn: string) {
+function send(
+  model: string,
+  turn: string,
+  plan: string = getProviderOfferings()[model]?.category === 'chat' ? 'free' : MEDIA_PLAN,
+) {
+  mocks.plan.mockResolvedValue(plan);
   return serveFreeQuotaTurn(
     new NextRequest('https://agiworkforce.com/api/models/free-quota/completions', {
       method: 'POST',
@@ -244,10 +246,6 @@ async function sharedState(key: string) {
 
 async function meterReads(key: string): Promise<number> {
   return (await sharedState(key)).used.get(key)!;
-}
-
-function usedToday(category: 'image' | 'video') {
-  return readFreeQuotaDailyUse(mocks.store, { userId: USER_ID, category, nowMs: Date.now() });
 }
 
 function usableFor(key: string): number {
@@ -321,7 +319,6 @@ beforeEach(async () => {
     parentFileId: null,
     file: { id: MEDIA_ASSET_ID, uri: `/api/files/${MEDIA_ASSET_ID}` },
   });
-  mocks.limitedOffer = OFFER;
   mocks.keepsOutOfTraining.mockReset().mockReturnValue(null);
   await writeQuotaAttestation(mocks.store, {
     sourceUrl: 'https://home.qwencloud.com/benefits',
@@ -391,7 +388,7 @@ describe('what a free video takes from its allowance', () => {
   });
 
   it.each(VIDEO_BY_CLIP_LENGTH)(
-    'reserves %i seconds before the provider request and settles them, for one request of the daily cap',
+    'reserves %i seconds before the provider request and settles them',
     async (clipSeconds, key) => {
       const reserved = generates('video/mp4');
 
@@ -401,7 +398,6 @@ describe('what a free video takes from its allowance', () => {
       expect(await response.text()).toContain(`/api/files/${MEDIA_ASSET_ID}`);
       expect(reserved.units).toBe(clipSeconds);
       expect(await meterReads(key)).toBe(clipSeconds);
-      expect(await usedToday('video')).toBe(1);
     },
   );
 
@@ -497,7 +493,6 @@ describe('what a free video takes from its allowance', () => {
       expect((await response.json()).error.code).toBe('free_quota_exhausted');
       expect(mocks.media).not.toHaveBeenCalled();
       expect(await meterReads(key)).toBe(usableFor(key) - secondsLeft);
-      expect(await usedToday('video')).toBe(0);
     },
   );
 
@@ -519,7 +514,7 @@ describe('what a free image takes from its allowance', () => {
   it.each([
     ['answered at once', syncImage],
     ['made through a polled task', polledImage],
-  ])('counts an image %s as one image and one request', async (_label, key) => {
+  ])('counts an image %s as one image', async (_label, key) => {
     const reserved = generates('image/png');
 
     const response = await send(key, `image-${key}`);
@@ -531,7 +526,6 @@ describe('what a free image takes from its allowance', () => {
     expect(mocks.stream).not.toHaveBeenCalled();
     expect(reserved.units).toBe(1);
     expect(await meterReads(key)).toBe(1);
-    expect(await usedToday('image')).toBe(1);
   });
 
   it('serves the last image of a polled offering and refuses the next before any provider request', async () => {
@@ -553,6 +547,34 @@ describe('what a free image takes from its allowance', () => {
     expect((await send(polledImage, 'image-with-seconds')).status).toBe(200);
 
     expect(await meterReads(polledImage)).toBe(1);
+  });
+});
+
+describe('a free image or video on the Free plan', () => {
+  it.each([
+    ['an image answered at once', syncImage],
+    ['an image made through a polled task', polledImage],
+    ['a video', VIDEO_BY_CLIP_LENGTH[0]![1]],
+  ])('refuses %s with the plan answer before any provider request', async (_label, key) => {
+    const response = await send(key, `free-plan-${key}`, 'free');
+
+    expect(response.status).toBe(403);
+    expect((await response.json()).error.code).toBe('model_not_available');
+    expect(mocks.media).not.toHaveBeenCalled();
+    expect(mocks.stream).not.toHaveBeenCalled();
+    expect(mocks.persist).not.toHaveBeenCalled();
+  });
+
+  it('still serves free chat on the Free plan', async () => {
+    mocks.stream.mockResolvedValue(
+      sse(
+        JSON.stringify({ choices: [{ index: 0, delta: { content: 'Hi' }, finish_reason: null }] }),
+        '[DONE]',
+      ),
+    );
+
+    expect((await send(chatModel, 'free-plan-chat')).status).toBe(200);
+    expect(mocks.stream).toHaveBeenCalledOnce();
   });
 });
 

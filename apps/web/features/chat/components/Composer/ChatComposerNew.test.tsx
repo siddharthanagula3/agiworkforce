@@ -28,7 +28,6 @@ import { useBillingStore, type SubscriptionPlan } from '@shared/stores/web-auth-
 import { PENDING_CONVERSATION_KEY, useChatStore } from '@shared/stores/web-chat-store';
 import { CapabilityProvider } from '@agiworkforce/unified-chat';
 import { onePixelPng } from '@features/chat/lib/__tests__/picture-fixtures';
-import type { LimitedPromotionalMedia } from '@features/chat/hooks/use-promotional-media-models';
 import { WEB_SETTINGS_NAV_GROUPS } from '@features/settings/components/web-settings-navigation';
 
 type TypesModule = typeof import('@agiworkforce/types');
@@ -83,10 +82,8 @@ const chatComposerMocks = vi.hoisted(() => ({
       durationSeconds?: number;
     }>,
     issuer: 'QwenCloud',
-    limited: { image: null, video: null } as LimitedPromotionalMedia,
     status: 'ready' as 'loading' | 'ready' | 'error',
     retry: vi.fn(),
-    refresh: vi.fn(),
   },
   connectors: {
     connectedIds: new Set<string>(),
@@ -249,10 +246,8 @@ describe('ChatComposerNew', () => {
     }));
     chatComposerMocks.mediaAvailability.retry.mockReset();
     chatComposerMocks.promotionalMedia.models = [];
-    chatComposerMocks.promotionalMedia.limited = { image: null, video: null };
     chatComposerMocks.promotionalMedia.status = 'ready';
     chatComposerMocks.promotionalMedia.retry.mockReset();
-    chatComposerMocks.promotionalMedia.refresh.mockReset();
     chatComposerMocks.connectors.connectedIds = new Set();
     chatComposerMocks.connectors.sources = {};
     chatComposerMocks.connectors.customNames = {};
@@ -3059,24 +3054,15 @@ describe('ChatComposerNew', () => {
     });
   });
 
-  describe('the limited free image and video offer', () => {
-    const TERMS = {
-      lastDay: '2026-10-20',
-      dailyCap: 5,
-      remainingToday: 5,
-      resetsAt: '2026-10-05T00:00:00.000Z',
-    };
+  describe('image and video generation on a plan without it', () => {
     const [imageKey, imageOffering] = Object.entries(getProviderOfferings()).find(
       ([, candidate]) => candidate.quotaProbeProtocol === 'image-sync',
     )!;
     const [videoKey, videoOffering] = Object.entries(getProviderOfferings()).find(
       ([, candidate]) => candidate.quotaProbeProtocol === 'video-async',
     )!;
-    const freeChatKey = Object.entries(getProviderOfferings()).find(
-      ([, candidate]) => candidate.quotaProbeProtocol === 'chat',
-    )![0];
 
-    function offerImage() {
+    function listReadyFreeMedia() {
       chatComposerMocks.promotionalMedia.models = [
         {
           key: imageKey,
@@ -3085,12 +3071,6 @@ describe('ChatComposerNew', () => {
           status: 'ready',
           outputSize: imageOffering.quotaImageSize ?? '1024*1024',
         },
-      ];
-      chatComposerMocks.promotionalMedia.limited = { image: TERMS, video: null };
-    }
-
-    function offerVideo() {
-      chatComposerMocks.promotionalMedia.models = [
         {
           key: videoKey,
           displayName: videoOffering.displayName,
@@ -3100,186 +3080,100 @@ describe('ChatComposerNew', () => {
           durationSeconds: 2,
         },
       ];
-      chatComposerMocks.promotionalMedia.limited = { image: null, video: TERMS };
     }
 
-    function renderFree(handlers: {
-      onSend?: Mock;
-      onUpgradeRequest?: Mock;
-      onGenerateImage?: Mock;
-    }) {
+    function renderFree(handlers: { onSend?: Mock; onUpgradeRequest?: Mock }) {
       useBillingStore.setState({ subscription: FREE_SUBSCRIPTION });
       return render(
         <ChatComposerNew
           onSend={handlers.onSend ?? vi.fn()}
           onUpgradeRequest={handlers.onUpgradeRequest ?? vi.fn()}
-          onGenerateImage={handlers.onGenerateImage ?? vi.fn()}
+          onGenerateImage={vi.fn()}
+          onGenerateVideo={vi.fn()}
           freeTrial={{ enabled: true, limitReached: false }}
         />,
       );
     }
 
-    it('shows Limited on Create image for a Free account and sends through the free offering without a model pick', () => {
-      offerImage();
-      const onSend = vi.fn();
-      const onUpgradeRequest = vi.fn();
-      const onGenerateImage = vi.fn();
-      renderFree({ onSend, onUpgradeRequest, onGenerateImage });
+    it.each([
+      ['Create image', /exit image generation mode/i],
+      ['Create video', /exit video generation mode/i],
+    ])(
+      'says Upgrade on %s for a Free account and opens the upgrade path, never a free mode',
+      (label, modeButton) => {
+        const onSend = vi.fn();
+        const onUpgradeRequest = vi.fn();
+        renderFree({ onSend, onUpgradeRequest });
 
-      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-      const row = screen.getByText('Create image').closest('button')!;
-      expect(row).toHaveTextContent('Limited');
-      expect(row).not.toHaveTextContent(/upgrade/i);
-      expect(screen.queryByText(/Free while our free capacity lasts/)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
+        const row = screen.getByText(label).closest('button')!;
+        expect(row).toHaveTextContent(/upgrade/i);
+        expect(row).not.toHaveTextContent(/limited|free/i);
+        expect(screen.queryByText(/Today's free limit/)).toBeNull();
 
-      fireEvent.click(row);
-      expect(onUpgradeRequest).not.toHaveBeenCalled();
-      expect(
-        screen.getByRole('button', { name: /exit image generation mode/i }),
-      ).toBeInTheDocument();
+        fireEvent.click(row);
+        expect(onUpgradeRequest).toHaveBeenCalledTimes(1);
+        expect(screen.queryByRole('button', { name: modeButton })).toBeNull();
+        expect(onSend).not.toHaveBeenCalled();
+      },
+    );
 
-      const textarea = screen.getByRole('textbox', { name: /message input/i });
-      fireEvent.change(textarea, { target: { value: 'a blue paper boat' } });
-      fireEvent.keyDown(textarea, { key: 'Enter' });
-
-      expect(onSend).toHaveBeenCalledWith(
-        'a blue paper boat',
-        undefined,
-        undefined,
-        expect.objectContaining({ modelOverrideId: imageKey, webSearchEnabled: false }),
-      );
-      expect(onGenerateImage).not.toHaveBeenCalled();
-    });
-
-    it('lists no paid image model to an account admitted by the offer', () => {
-      offerImage();
-      renderFree({});
-
-      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-      fireEvent.click(screen.getByText('Create image'));
-      fireEvent.click(screen.getByRole('button', { name: /select image model/i }));
-
-      expect(screen.getByRole('button', { name: imageOffering.displayName })).toHaveTextContent(
-        'Free · QwenCloud quota',
-      );
-      for (const paid of IMAGE_MODELS) {
-        expect(screen.queryByRole('button', { name: paid.label })).toBeNull();
-      }
-    });
-
-    it('keeps image mode open while a free chat model is selected in the main picker', () => {
-      offerImage();
-      act(() => useModelStore.getState().setSelectedModelId(freeChatKey));
-      const onSend = vi.fn();
-      renderFree({ onSend });
-
-      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-      fireEvent.click(screen.getByText('Create image'));
-      expect(
-        screen.getByRole('button', { name: /exit image generation mode/i }),
-      ).toBeInTheDocument();
-
-      const textarea = screen.getByRole('textbox', { name: /message input/i });
-      fireEvent.change(textarea, { target: { value: 'a red kite' } });
-      fireEvent.keyDown(textarea, { key: 'Enter' });
-
-      expect(onSend).toHaveBeenCalledWith(
-        'a red kite',
-        undefined,
-        undefined,
-        expect.objectContaining({ modelOverrideId: imageKey }),
-      );
-    });
-
-    it('says Upgrade again, and opens the upgrade path, once no free image offering is ready', () => {
-      chatComposerMocks.promotionalMedia.limited = { image: null, video: null };
+    it('keeps a Free account out of image mode even when a free image model is listed', () => {
+      listReadyFreeMedia();
       const onUpgradeRequest = vi.fn();
       renderFree({ onUpgradeRequest });
 
       fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       const row = screen.getByText('Create image').closest('button')!;
       expect(row).toHaveTextContent(/upgrade/i);
-      expect(row).not.toHaveTextContent('Limited');
-      expect(screen.queryByText(/Free while our free capacity lasts/)).toBeNull();
 
       fireEvent.click(row);
       expect(onUpgradeRequest).toHaveBeenCalledTimes(1);
       expect(screen.queryByRole('button', { name: /exit image generation mode/i })).toBeNull();
     });
 
-    it('holds the row at Checking, not Upgrade, while the offer is being read', () => {
-      chatComposerMocks.promotionalMedia.status = 'loading';
-      const onUpgradeRequest = vi.fn();
-      renderFree({ onUpgradeRequest });
+    it('answers a typed /image on a Free account with the plan answer, not a free send', () => {
+      listReadyFreeMedia();
+      const onSend = vi.fn();
+      renderFree({ onSend });
 
-      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-      const row = screen.getByText('Create image').closest('button')!;
-      expect(row).toHaveTextContent('Checking');
+      const textarea = screen.getByRole('textbox', { name: /message input/i });
+      fireEvent.change(textarea, { target: { value: '/image a blue paper boat' } });
+      fireEvent.keyDown(textarea, { key: 'Enter' });
 
-      fireEvent.click(row);
-      expect(onUpgradeRequest).not.toHaveBeenCalled();
+      expect(onSend).not.toHaveBeenCalledWith(
+        expect.anything(),
+        undefined,
+        undefined,
+        expect.objectContaining({ modelOverrideId: imageKey }),
+      );
     });
 
-    it("says today's free limit is used instead of promising more", () => {
-      offerImage();
-      chatComposerMocks.promotionalMedia.limited = {
-        image: {
-          ...TERMS,
-          remainingToday: 0,
-          resetsAt: new Date(Date.now() + 7_200_000).toISOString(),
-        },
-        video: null,
-      };
-      renderFree({});
-
-      fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
-      expect(screen.getByText('Create image').closest('button')).toHaveTextContent('Limited');
-      expect(screen.getByText(/^Today's free limit is used\. Resets in /)).toBeVisible();
-      expect(screen.queryByText(/Free while our free capacity lasts/)).toBeNull();
-    });
-
-    it('opens video on a paid plan without it and keeps the paid video route out of reach', () => {
-      offerVideo();
+    it('asks a plan without paid video to upgrade even when a free video model is listed', () => {
+      listReadyFreeMedia();
       useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
       const onSend = vi.fn();
       const onUpgradeRequest = vi.fn();
-      const onGenerateVideo = vi.fn();
       render(
         <ChatComposerNew
           onSend={onSend}
           onUpgradeRequest={onUpgradeRequest}
-          onGenerateVideo={onGenerateVideo}
+          onGenerateVideo={vi.fn()}
         />,
       );
 
       fireEvent.click(screen.getByRole('button', { name: /add attachments and tools/i }));
       const row = screen.getByText('Create video').closest('button')!;
-      expect(row).toHaveTextContent('Limited');
+      expect(row).toHaveTextContent(/upgrade/i);
+      expect(row).not.toHaveTextContent('Limited');
       fireEvent.click(row);
-      expect(onUpgradeRequest).not.toHaveBeenCalled();
 
-      fireEvent.click(screen.getByRole('button', { name: /select video model/i }));
-      expect(screen.getByRole('button', { name: videoOffering.displayName })).toBeInTheDocument();
-      for (const paid of VIDEO_MODELS) {
-        expect(screen.queryByRole('button', { name: paid.label })).toBeNull();
-      }
-
-      const textarea = screen.getByRole('textbox', { name: /message input/i });
-      fireEvent.change(textarea, { target: { value: 'a paper boat on water' } });
-      fireEvent.keyDown(textarea, { key: 'Enter' });
-
-      expect(onSend).toHaveBeenCalledWith(
-        'a paper boat on water',
-        undefined,
-        undefined,
-        expect.objectContaining({ modelOverrideId: videoKey, webSearchEnabled: false }),
-      );
-      expect(onGenerateVideo).not.toHaveBeenCalled();
+      expect(onUpgradeRequest).toHaveBeenCalledTimes(1);
+      expect(screen.queryByRole('button', { name: /exit video generation mode/i })).toBeNull();
+      expect(onSend).not.toHaveBeenCalled();
     });
 
     it('leaves a plan that includes images on its paid models, with no Limited label', () => {
-      offerImage();
-      chatComposerMocks.promotionalMedia.limited = { image: null, video: null };
       useBillingStore.setState({ subscription: PRO_SUBSCRIPTION });
       render(<ChatComposerNew onSend={vi.fn()} onGenerateImage={vi.fn()} />);
 

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { FREE_QUOTA_MEDIA_OFFER_PATH, LOCALIZED_PRICING_PATH } from '@agiworkforce/cloud-contracts';
+import { LOCALIZED_PRICING_PATH } from '@agiworkforce/cloud-contracts';
 import { getPublishedPlanPriceCents, type SelfServePaidPlanTier } from '@agiworkforce/types';
 import type { SubscriptionPlan } from '@shared/stores/web-auth-store';
 
@@ -106,13 +106,6 @@ function serve(status: 'held' | 'rate-limited' | { body: unknown }) {
     const url = String(input);
     if (url === LOCALIZED_PRICING_PATH) {
       return { ok: true, status: 200, json: async () => LOCALIZED_PRICING } as Response;
-    }
-    if (url === FREE_QUOTA_MEDIA_OFFER_PATH) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ image: null, video: null }),
-      } as Response;
     }
     if (url.includes('/api/status/notices')) {
       return { ok: true, json: async () => ({ notices: [] }) } as Response;

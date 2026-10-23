@@ -14,7 +14,7 @@ const CAP = 30_000;
 const share = { userId: 'fixture-user', category: FREE_QUOTA_CHAT_DAILY_USE_KIND, nowMs: NOON };
 
 describe("an account's daily share of free chat, counted in tokens", () => {
-  it('reserves the units of a turn, not one request, and keeps its own key apart from media', async () => {
+  it('reserves the units of a turn, not one request, under a key that never holds the account id', async () => {
     const store = createMemoryKeyValueStore();
 
     const reservation = await reserveFreeQuotaDailyUse(store, { ...share, cap: CAP, units: 5_120 });
@@ -23,7 +23,6 @@ describe("an account's daily share of free chat, counted in tokens", () => {
     expect(reservation!.key).toContain(':daily:chat:');
     expect(reservation!.key).not.toContain(share.userId);
     expect(await readFreeQuotaDailyUse(store, share)).toBe(5_120);
-    expect(await readFreeQuotaDailyUse(store, { ...share, category: 'image' })).toBe(0);
   });
 
   it('rounds a fractional estimate up, as the model allowance does', async () => {
