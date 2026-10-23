@@ -61,7 +61,7 @@
       "minClientVersion": null,
       "minBackendVersion": null,
       "gates": {
-        "entitlement": "skills_connectors",
+        "entitlement": "skills",
         "policy": "skills",
         "permission": null,
         "trustBoundary": null,
@@ -87,7 +87,7 @@
         "userFacing": true
       },
       "gates": {
-        "entitlement": "skills_connectors",
+        "entitlement": "skills",
         "policy": "plugins",
         "permission": null,
         "trustBoundary": null,
@@ -438,7 +438,7 @@
       "minClientVersion": null,
       "minBackendVersion": null,
       "gates": {
-        "entitlement": "skills_connectors",
+        "entitlement": "connectors",
         "policy": null,
         "permission": null,
         "trustBoundary": "managed-cloud",
@@ -464,7 +464,7 @@
         "userFacing": true
       },
       "gates": {
-        "entitlement": "skills_connectors",
+        "entitlement": "connectors",
         "policy": null,
         "permission": null,
         "trustBoundary": "managed-cloud",

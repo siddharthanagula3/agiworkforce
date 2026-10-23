@@ -6505,7 +6505,8 @@
       "sentence": "How many custom MCP connections you can keep depends on your plan; the pricing page lists the figures once connectors are open.",
       "implementation": [
         "packages/contracts/types/src/billing-catalog.ts#BILLING_PLAN_PRODUCT_LIMITS",
-        "apps/web/features/billing/lib/plan-display.ts#getBillingPlanDisplay"
+        "apps/web/features/billing/lib/plan-display.ts#getBillingPlanDisplay",
+        "apps/web/lib/services/connector-policy-gate.ts#evaluateConnectorPolicyForUser"
       ],
       "proof": [
         {
@@ -6516,7 +6517,7 @@
         {
           "kind": "test",
           "file": "apps/web/app/api/connectors/custom/route.test.ts",
-          "name": "rejects a second custom remote MCP for a free user before network work"
+          "name": "refuses a custom remote MCP for a free user with the upgrade path before network work"
         },
         {
           "kind": "test",

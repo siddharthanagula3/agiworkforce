@@ -3,6 +3,7 @@ import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel, type PricedModel } from '@agiworkforce/types';
 import { MODEL_MAY_TRAIN_MESSAGE } from '@/lib/server/provider-training-opt-out';
 type ScanModule0 = typeof import('@/lib/server/neon-db');
+type SideCallTrainingPolicyModule = typeof import('@/lib/server/side-call-training-policy');
 
 const CHAT_MODEL = requireProviderDefaultModel('anthropic');
 
@@ -17,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
+  ...(await importOriginal<SideCallTrainingPolicyModule>()),
   sideCallProviderAllowed: (...args: unknown[]) => mocks.providerAllowed(...args),
 }));
 vi.mock('@/lib/server/neon-chat', () => ({

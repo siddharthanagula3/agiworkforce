@@ -1679,6 +1679,211 @@
           "name": "refuses to save and never reaches the memory store"
         }
       ]
+    },
+    {
+      "id": "artifact-bridge-bills-the-viewer",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "Every call bills the signed-in viewer, never the publisher, and a signed-out visitor reaches no reservation (RT-1).",
+      "implementation": [
+        "apps/web/lib/services/artifact-runtime-service.ts",
+        "apps/web/app/api/artifacts/runtime/artifact-completion.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/artifacts/runtime/[token]/complete/__tests__/route.test.ts",
+          "name": "bills the signed-in viewer for a published app and never its publisher"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/artifacts/runtime/[token]/complete/__tests__/route.test.ts",
+          "name": "reads nothing and bills no one for a signed-out visitor"
+        }
+      ]
+    },
+    {
+      "id": "artifact-bridge-trusts-only-its-own-frame",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "The bridge listens only to its own frame on the exact sandbox origin.",
+      "implementation": ["apps/web/features/chat/components/SandboxedIframe.tsx"],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
+          "name": "ignores a message from an origin that is not the configured sandbox"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
+          "name": "ignores a render error from another window on the sandbox origin"
+        }
+      ]
+    },
+    {
+      "id": "artifact-bridge-refused-on-opaque-origins",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "The shared desktop frame, whose origin can be opaque, and the extension refuse every runtime request (RT-2).",
+      "implementation": [
+        "packages/ui/unified-chat/src/components/artifact-components/ArtifactSandboxFrame.tsx",
+        "apps/extension/src/features/side-panel/artifactPanel.ts",
+        "apps/web/features/chat/components/SandboxedIframe.tsx"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "packages/ui/unified-chat/src/components/__tests__/artifactSandboxFrame.test.tsx",
+          "name": "answers no AI or storage request from its own frame, so no bridge rests on a null origin"
+        },
+        {
+          "kind": "test",
+          "file": "apps/extension/__tests__/side-panel-artifacts.test.ts",
+          "name": "refuses AI and saved-data requests, which the side panel cannot serve"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
+          "name": "ignores an AI request its own frame posts from an opaque origin"
+        }
+      ]
+    },
+    {
+      "id": "artifact-bridge-absent-without-sign-in-or-switch",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "Tests instead pin that the srcDoc fallback carries no bridge, and that a request from a signed-out visitor, or from a page with the switch off, never reaches the server (RT-3).",
+      "implementation": [
+        "apps/web/features/chat/components/SandboxedIframe.tsx",
+        "apps/web/app/shared-artifact/[token]/usePublishedArtifactRuntime.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
+          "name": "never hands the srcDoc fallback an AI bridge"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/shared-artifact/[token]/usePublishedArtifactRuntime.test.tsx",
+          "name": "asks the visitor to sign in and never calls the server"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/shared-artifact/[token]/usePublishedArtifactRuntime.test.tsx",
+          "name": "refuses an AI request without asking for consent or calling the server"
+        }
+      ]
+    },
+    {
+      "id": "artifact-bridge-caps-each-app-per-viewer",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "Each app's calls and spend are attributed to it and capped per viewer under the reservation lock by migration 0391, at the first reservation and at every later provider step (RT-4).",
+      "implementation": [
+        "apps/web/lib/services/managed-usage-request-service.ts",
+        "apps/web/db/neon/0391_artifact_runtime_usage_cap.sql"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/managed-usage-request-service.artifact-cap.test.ts",
+          "name": "reserves through the per-app ceiling, naming the app and the policy limits"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/managed-usage-request-service.artifact-cap.test.ts",
+          "name": "rechecks the app’s ceiling on every later provider step"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/artifact-runtime-usage-cap-migration.test.ts",
+          "name": "counts and refuses under the same per-user lock the plan ceilings take"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/db/neon/artifact-runtime-usage-cap-migration.test.ts",
+          "name": "applies the app spend ceiling to every new provider step before the plan ceilings"
+        }
+      ]
+    },
+    {
+      "id": "artifact-bridge-turn-slot-refuses-on-outage",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "On a plan with a concurrency ceiling, every call takes a turn slot that refuses on any limiter outage; a plan without one has no slot to take, and the per-app caps bound it (RT-5a).",
+      "implementation": [
+        "apps/web/lib/rate-limit.ts",
+        "apps/web/app/api/artifacts/runtime/artifact-completion.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/artifacts/runtime/[token]/complete/__tests__/route.test.ts",
+          "name": "takes a turn slot that refuses on any limiter outage, and releases it after the call"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/artifacts/runtime/[token]/complete/__tests__/route.test.ts",
+          "name": "refuses without calling a model when the limiter cannot answer"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/__tests__/rate-limit.test.ts",
+          "name": "refuses on a Redis failure even when an operator configured fail-open"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/managed-usage-request-service.artifact-cap.test.ts",
+          "name": "reads the call count from the plan catalog, where a tier can be unlimited"
+        }
+      ]
+    },
+    {
+      "id": "artifact-prompt-is-untrusted-content",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "An app's prompt also counts as untrusted content, so a tool that could send data out never runs unattended beside a private source.",
+      "implementation": [
+        "apps/web/lib/services/unattended-tool-gate.ts",
+        "apps/web/lib/services/artifact-runtime-service.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/unattended-tool-gate.test.ts",
+          "name": "keeps a tool that can send data out from running unattended in a run carrying untrusted content beside a private source"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/lib/services/__tests__/artifact-runtime-service.live.test.ts",
+          "name": "judges every tool as if the run carries untrusted content, since the app writes the prompt"
+        }
+      ]
+    },
+    {
+      "id": "artifact-shared-data-and-connected-apps-stay-apart",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "A viewer of an app its publisher bound to connected apps cannot write data the publisher and other viewers read, and an app not so bound cannot use a viewer's connected apps.",
+      "implementation": [
+        "apps/web/app/api/artifacts/runtime/[token]/storage/route.ts",
+        "apps/web/app/api/artifacts/runtime/[token]/complete/route.ts",
+        "apps/web/lib/services/published-artifact-service.ts"
+      ],
+      "proof": [
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/artifacts/runtime/[token]/storage/__tests__/route.handler.test.ts",
+          "name": "refuses a viewer’s write to data the publisher can read, without writing"
+        },
+        {
+          "kind": "test",
+          "file": "apps/web/app/api/artifacts/runtime/[token]/complete/__tests__/route.test.ts",
+          "name": "refuses a viewer’s connected apps before any gate or billing"
+        }
+      ]
     }
   ],
   "unproven": [
@@ -2097,6 +2302,22 @@
       "sentence": "The owner deferred replacement and offline escrow on 2026-10-17; Tauri signing is not cleared to resume.",
       "implementation": ["docs/security/security.md"],
       "why": "historical-record"
+    },
+    {
+      "id": "artifact-bridge-is-one-renderer-on-every-surface",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "One renderer serves every surface, so absence cannot be structural.",
+      "implementation": ["apps/web/features/chat/components/SandboxedIframe.tsx"],
+      "why": "historical-record"
+    },
+    {
+      "id": "artifact-bridge-review-has-not-signed-off",
+      "section": "6. Closed reviews",
+      "kind": "prose",
+      "sentence": "This is not a passing verdict: the switch stays off until the independent review signs off.",
+      "implementation": ["apps/web/lib/server/artifact-ai-switch.ts"],
+      "why": "blocked-by-human"
     }
   ]
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, lazy, Suspense } from 'react';
 import { toast } from 'sonner';
+import type { BillingPlanCapability } from '@agiworkforce/types';
 import { Terminal as TerminalIcon, X } from 'lucide-react';
 import { Spinner } from '@/ui/Spinner';
 import { listCloudSkills } from '@/api/cloudSkills';
@@ -593,7 +594,7 @@ export function DesktopShellV3({
 
   const handleNavigateView = useCallback(
     (view: string) => {
-      if (view === 'projects') {
+      if (view === ('projects' satisfies BillingPlanCapability)) {
         setActivePanel('projects');
         return;
       }
@@ -754,7 +755,9 @@ export function DesktopShellV3({
                     onOpenScheduled={() => handleNavigateView('work-scheduled')}
                     onSetUpLocalModel={isManagedCloud ? undefined : onModelSelectorClick}
                     needsLocalModelSetup={needsLocalModelSetup}
-                    onOpenConnectors={() => handleNavigateView('connectors')}
+                    onOpenConnectors={() =>
+                      handleNavigateView('connectors' satisfies BillingPlanCapability)
+                    }
                     hasConnectedTools={hasConnectedTools}
                   />
                 }
