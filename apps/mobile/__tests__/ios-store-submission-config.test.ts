@@ -235,10 +235,10 @@ describe('iOS submission config', () => {
       'utf8',
     ).split('\n');
     const cited: Array<[number, string]> = [
-      [708, "openExternalUrl('https://agiworkforce.com/billing')"],
-      [436, "openExternalUrl('https://agiworkforce.com/settings/team')"],
-      [243, 'openExternalUrl(managementUrl)'],
-      [719, 'openExternalUrl(PURCHASE_HELP_URL)'],
+      [729, "openExternalUrl('https://agiworkforce.com/billing')"],
+      [451, "openExternalUrl('https://agiworkforce.com/settings/team')"],
+      [258, 'openExternalUrl(managementUrl)'],
+      [740, 'openExternalUrl(PURCHASE_HELP_URL)'],
     ];
     for (const [line, call] of cited) {
       expect([line, lines[line - 1]?.includes(call)]).toEqual([line, true]);
@@ -289,11 +289,11 @@ describe('iOS submission config', () => {
 
   it('discloses account and billing links reachable from the current app', () => {
     const CALL_SITES: Array<[string, RegExp]> = [
-      ['cloud-billing invoices', /cloud-billing\/index\.tsx:708/],
-      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:436/],
-      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:243/],
+      ['cloud-billing invoices', /cloud-billing\/index\.tsx:729/],
+      ['cloud-billing workspace admin', /cloud-billing\/index\.tsx:451/],
+      ['cloud-billing owner-guard alert', /cloud-billing\/index\.tsx:258/],
       ['paywall contact sales', /PaywallBottomSheet\.tsx:130/],
-      ['purchase help', /cloud-billing\/index\.tsx:719/],
+      ['purchase help', /cloud-billing\/index\.tsx:740/],
       ['cloud-account change email', /cloud-account\/index\.tsx:98/],
       ['workspace empty state', /workspace\.tsx:456/],
       ['workspace rename or delete', /workspace\.tsx:584/],
