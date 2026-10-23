@@ -25,7 +25,7 @@ import {
   type TaskViews,
 } from './task-display';
 
-const CARD_ACTION_CLASS = 'h-7 px-2 text-xs text-muted-foreground pointer-coarse:min-h-11';
+const CARD_ACTION_CLASS = 'h-7 px-2 text-sm text-muted-foreground pointer-coarse:min-h-11';
 
 export interface TasksBoardProps {
   runs: CloudAgentRun[];
@@ -144,10 +144,10 @@ export function TasksBoard({
               className="flex items-center justify-between px-1 text-sm font-medium text-foreground"
             >
               <span>{column.label}</span>
-              <span className="text-xs text-muted-foreground">{columnRuns.length}</span>
+              <span className="text-sm text-muted-foreground">{columnRuns.length}</span>
             </h2>
             {columnRuns.length === 0 ? (
-              <p className="px-1 py-4 text-center text-xs text-muted-foreground">Nothing here</p>
+              <p className="px-1 py-4 text-center text-sm text-muted-foreground">Nothing here</p>
             ) : (
               <ul className="flex flex-col gap-2">
                 {columnRuns.map((run) => {
@@ -207,7 +207,7 @@ export function TasksBoard({
                         </span>
                       </button>
                       {pending ? (
-                        <p className="break-words text-xs text-muted-foreground">
+                        <p className="break-words text-sm text-muted-foreground">
                           Wants to run {pending.toolCalls.map((call) => call.name).join(', ')}
                         </p>
                       ) : null}
@@ -217,7 +217,7 @@ export function TasksBoard({
                             <Button
                               variant="outline"
                               size="sm"
-                              className="h-7 px-2 text-xs pointer-coarse:min-h-11"
+                              className="h-7 px-2 text-sm pointer-coarse:min-h-11"
                               disabled={resolving}
                               aria-label={`${TOOL_APPROVAL_ACTION_LABELS.approve}: ${title}`}
                               onClick={() => move(run, () => onApprove(run))}

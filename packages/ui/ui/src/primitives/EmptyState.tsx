@@ -32,7 +32,7 @@ export function EmptyState({ icon: Icon, title, description, action, className }
       )}
       <div className="space-y-1 max-w-xs">
         <p className="text-sm font-medium text-foreground">{title}</p>
-        {description && <p className="text-xs text-muted-foreground">{description}</p>}
+        {description && <p className="text-sm text-muted-foreground">{description}</p>}
       </div>
       {action && (
         <button

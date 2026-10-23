@@ -395,7 +395,7 @@ export default function ProjectDetailPage() {
               color: 'var(--agi-ink-2)',
               padding: 'var(--space-2) var(--space-3)',
               borderRadius: 'var(--corner-field)',
-              fontSize: 12,
+              fontSize: 14,
               cursor: 'pointer',
             }}
           >
@@ -436,7 +436,7 @@ export default function ProjectDetailPage() {
               color: 'var(--agi-ink-2)',
               padding: 'var(--space-2) var(--space-3)',
               borderRadius: 'var(--corner-field)',
-              fontSize: 12,
+              fontSize: 14,
               cursor: 'pointer',
             }}
           >
@@ -469,7 +469,7 @@ export default function ProjectDetailPage() {
                 color: 'var(--agi-ink-2)',
                 padding: 'var(--space-2) var(--space-3)',
                 borderRadius: 'var(--corner-field)',
-                fontSize: 12,
+                fontSize: 14,
                 cursor: 'pointer',
               }}
               data-testid="project-detail-back"
@@ -486,7 +486,7 @@ export default function ProjectDetailPage() {
             >
               Project not found
             </h1>
-            <p style={{ fontSize: 13, color: 'var(--agi-ink-2)', margin: 0 }}>
+            <p style={{ fontSize: 14, color: 'var(--agi-ink-2)', margin: 0 }}>
               {projectStatus === 'signed-out'
                 ? 'Sign in to view this cloud project.'
                 : 'This cloud project does not exist, is unavailable to this account, or was deleted.'}
@@ -627,7 +627,7 @@ export default function ProjectDetailPage() {
                           background: 'transparent',
                           border: 0,
                           textAlign: 'start',
-                          fontSize: 13,
+                          fontSize: 14,
                           color: 'hsl(var(--foreground))',
                           cursor: 'pointer',
                         }}
@@ -665,7 +665,7 @@ export default function ProjectDetailPage() {
                           background: 'transparent',
                           border: 0,
                           textAlign: 'start',
-                          fontSize: 13,
+                          fontSize: 14,
                           color: 'hsl(var(--foreground))',
                           cursor: 'pointer',
                         }}
@@ -703,7 +703,7 @@ export default function ProjectDetailPage() {
                           background: 'transparent',
                           border: 0,
                           textAlign: 'start',
-                          fontSize: 13,
+                          fontSize: 14,
                           color: 'hsl(var(--foreground))',
                           cursor: 'pointer',
                         }}
@@ -821,7 +821,7 @@ export default function ProjectDetailPage() {
                   <p
                     style={{
                       margin: '0 0 var(--space-2)',
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: 600,
                       color: 'var(--agi-ink-2)',
                     }}
@@ -905,7 +905,7 @@ export default function ProjectDetailPage() {
                   <p
                     style={{
                       margin: '0 0 var(--space-2)',
-                      fontSize: 12,
+                      fontSize: 14,
                       fontWeight: 600,
                       color: 'var(--agi-ink-2)',
                     }}
@@ -979,7 +979,7 @@ export default function ProjectDetailPage() {
                         borderRadius: 'var(--corner-field)',
                         background: 'transparent',
                         color: 'var(--agi-ink-2)',
-                        fontSize: 13,
+                        fontSize: 14,
                         cursor: 'pointer',
                         textAlign: 'start',
                       }}
@@ -1008,7 +1008,7 @@ export default function ProjectDetailPage() {
                 style={{
                   alignSelf: 'flex-start',
                   marginTop: 'var(--space-2)',
-                  fontSize: 12,
+                  fontSize: 14,
                   padding: 'var(--space-1) var(--space-2)',
                   borderRadius: 'var(--corner-pill)',
                   border: '1px solid var(--agi-rule)',
@@ -1024,7 +1024,7 @@ export default function ProjectDetailPage() {
                 style={{
                   margin: 'var(--space-2) 0 0',
                   maxWidth: 540,
-                  fontSize: 13,
+                  fontSize: 14,
                   lineHeight: 1.5,
                   color: 'var(--agi-ink-2)',
                 }}
@@ -1039,7 +1039,7 @@ export default function ProjectDetailPage() {
                 style={{
                   margin: 'var(--space-2) 0 0',
                   maxWidth: 540,
-                  fontSize: 13,
+                  fontSize: 14,
                   lineHeight: 1.5,
                   color: 'var(--agi-ink-2)',
                 }}
@@ -1092,7 +1092,7 @@ export default function ProjectDetailPage() {
               style={{
                 marginBottom: 'var(--space-4)',
                 padding: 'var(--space-2) var(--space-3)',
-                fontSize: 12,
+                fontSize: 14,
                 lineHeight: 1.5,
                 flexShrink: 0,
               }}
@@ -1136,7 +1136,7 @@ export default function ProjectDetailPage() {
                   borderBottom:
                     tab === t ? '2px solid var(--color-primary)' : '2px solid transparent',
                   color: tab === t ? 'var(--agi-ink)' : 'var(--agi-ink-2)',
-                  fontSize: 13,
+                  fontSize: 14,
                   fontWeight: tab === t ? 600 : 400,
                   cursor: 'pointer',
                   textTransform: 'capitalize',
@@ -1163,13 +1163,13 @@ export default function ProjectDetailPage() {
               projectChatsLoading ? (
                 <p
                   role="status"
-                  style={{ color: 'var(--agi-ink-2)', fontSize: 13, textAlign: 'center' }}
+                  style={{ color: 'var(--agi-ink-2)', fontSize: 14, textAlign: 'center' }}
                 >
                   Loading chats...
                 </p>
               ) : projectChatsError ? (
                 <div style={{ textAlign: 'center', padding: 'var(--space-6) var(--space-4)' }}>
-                  <p role="alert" style={{ color: 'var(--agi-ink-2)', fontSize: 13 }}>
+                  <p role="alert" style={{ color: 'var(--agi-ink-2)', fontSize: 14 }}>
                     {projectChatsError}
                   </p>
                   <button
@@ -1181,7 +1181,7 @@ export default function ProjectDetailPage() {
                       color: 'var(--agi-ink-2)',
                       padding: 'var(--space-2) var(--space-3)',
                       borderRadius: 'var(--corner-field)',
-                      fontSize: 12,
+                      fontSize: 14,
                       cursor: 'pointer',
                     }}
                   >
@@ -1248,7 +1248,7 @@ export default function ProjectDetailPage() {
                             <span
                               style={{
                                 color: 'var(--color-foreground)',
-                                fontSize: 13,
+                                fontSize: 14,
                                 fontWeight: 500,
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
@@ -1263,7 +1263,7 @@ export default function ProjectDetailPage() {
                               <span
                                 style={{
                                   color: 'var(--agi-ink-2)',
-                                  fontSize: 12,
+                                  fontSize: 14,
                                   flexShrink: 0,
                                 }}
                               >
@@ -1293,7 +1293,7 @@ export default function ProjectDetailPage() {
                           color: 'var(--agi-ink-2)',
                           padding: 'var(--space-2) var(--space-3)',
                           borderRadius: 'var(--corner-field)',
-                          fontSize: 12,
+                          fontSize: 14,
                           cursor: isLoadingMoreProjectChats ? 'default' : 'pointer',
                           opacity: isLoadingMoreProjectChats ? 0.6 : 1,
                         }}
@@ -1391,7 +1391,7 @@ function EmptyChatsState({ projectName }: EmptyChatsStateProps) {
       </p>
       <p
         style={{
-          fontSize: 13,
+          fontSize: 14,
           color: 'var(--agi-ink-2)',
           margin: '0 auto',
           maxWidth: 400,

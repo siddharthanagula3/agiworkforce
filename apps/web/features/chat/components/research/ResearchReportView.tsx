@@ -216,7 +216,7 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
           'no-underline transition-colors hover:border-border/50 hover:bg-muted/40',
         )}
       >
-        <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-compact bg-primary/10 px-1 text-caption font-semibold text-primary">
+        <span className="mt-0.5 flex h-5 min-w-[20px] shrink-0 items-center justify-center rounded-compact bg-primary/10 px-1 text-sm font-semibold text-primary">
           {citation.id || index + 1}
         </span>
         <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center">
@@ -235,10 +235,10 @@ function CitationRow({ citation, index }: { citation: Citation; index: number })
           )}
         </span>
         <span className="min-w-0 flex-1">
-          <span className="block truncate text-[13px] font-medium text-foreground group-hover:text-primary">
+          <span className="block truncate text-sm font-medium text-foreground group-hover:text-primary">
             {citation.title || host}
           </span>
-          <span className="block truncate text-caption text-muted-foreground">
+          <span className="block truncate text-sm text-muted-foreground">
             {[host, citationDateLabel(citation)].filter(Boolean).join(' · ')}
           </span>
         </span>
@@ -456,7 +456,7 @@ export function ResearchReportView({
             <h2 className="truncate text-h5 text-foreground">
               {report.title || 'Research report'}
             </h2>
-            <p className="mt-0.5 text-caption text-muted-foreground">
+            <p className="mt-0.5 text-sm text-muted-foreground">
               {translateUiPlural('chat', 'counts.sources', report.sourcesConsulted, {
                 one: '{{count}} source',
                 other: '{{count}} sources',
@@ -475,7 +475,7 @@ export function ResearchReportView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2 text-xs"
+              className="h-7 gap-1 px-2 text-sm"
               onClick={() => onRunAgain(report.query!)}
               data-testid="research-report-run-again"
               aria-label="Run this research again for current sources"
@@ -488,7 +488,7 @@ export function ResearchReportView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2 text-xs"
+              className="h-7 gap-1 px-2 text-sm"
               onClick={() => onCreateArtifact(researchReportToArtifact(report))}
               data-testid="research-report-create-artifact"
               aria-label="Turn this report into an artifact"
@@ -501,7 +501,7 @@ export function ResearchReportView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2 text-xs"
+              className="h-7 gap-1 px-2 text-sm"
               disabled={savingToLibrary}
               onClick={() => void handleSaveToLibrary()}
               data-testid="research-report-save-to-library"
@@ -517,7 +517,7 @@ export function ResearchReportView({
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="h-7 gap-1 px-2 text-xs"
+                  className="h-7 gap-1 px-2 text-sm"
                   disabled={savingProjectId !== null}
                   data-testid="research-report-save-to-project"
                   aria-label="Save this report to a project"
@@ -543,7 +543,7 @@ export function ResearchReportView({
               key={format.id}
               variant="ghost"
               size="sm"
-              className="h-7 gap-1 px-2 text-xs"
+              className="h-7 gap-1 px-2 text-sm"
               disabled={exportingFormat !== null}
               onClick={() => void handleExport(format.id)}
               data-testid={`research-report-export-${format.id}`}
@@ -573,7 +573,7 @@ export function ResearchReportView({
             <Button
               variant="ghost"
               size="sm"
-              className="h-7 px-2 text-xs"
+              className="h-7 px-2 text-sm"
               onClick={onClose}
               aria-label="Close research report"
             >
@@ -586,7 +586,7 @@ export function ResearchReportView({
       {exportError && (
         <p
           role="alert"
-          className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-xs text-danger"
+          className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-danger"
         >
           {exportError}
         </p>
@@ -595,7 +595,7 @@ export function ResearchReportView({
       {saveError && (
         <p
           role="alert"
-          className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-xs text-danger"
+          className="border-b border-destructive/30 bg-destructive/5 px-4 py-2 text-sm text-danger"
         >
           {saveError}
         </p>
@@ -605,7 +605,7 @@ export function ResearchReportView({
         <p
           role="status"
           data-testid="research-report-saved-to-project"
-          className="border-b border-border/30 bg-muted/30 px-4 py-2 text-xs text-muted-foreground"
+          className="border-b border-border/30 bg-muted/30 px-4 py-2 text-sm text-muted-foreground"
         >
           Saved to {savedProjectName}. It is one of that project&rsquo;s sources now.
         </p>
@@ -615,14 +615,14 @@ export function ResearchReportView({
         <p
           role="status"
           data-testid="research-report-saved-to-library"
-          className="border-b border-border/30 bg-muted/30 px-4 py-2 text-xs text-muted-foreground"
+          className="border-b border-border/30 bg-muted/30 px-4 py-2 text-sm text-muted-foreground"
         >
           Saved to your library. It is a file of its own now, and it outlives this conversation.
         </p>
       )}
 
       {incomplete && (
-        <p className="flex items-center gap-2 border-b border-border/30 bg-muted/30 px-4 py-2 text-xs text-muted-foreground">
+        <p className="flex items-center gap-2 border-b border-border/30 bg-muted/30 px-4 py-2 text-sm text-muted-foreground">
           <TriangleAlert className="h-3.5 w-3.5 shrink-0" aria-hidden="true" />
           {isPausedResearchReport(report)
             ? `This research is paused. Resume it from its card in the chat to continue from where it stopped.`
@@ -645,7 +645,7 @@ export function ResearchReportView({
             <section className="mb-4" aria-labelledby="research-report-key-findings">
               <h3
                 id="research-report-key-findings"
-                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                className="mb-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
               >
                 Key findings
               </h3>
@@ -661,7 +661,7 @@ export function ResearchReportView({
             <section className="mb-4" aria-labelledby="research-report-questions">
               <h3
                 id="research-report-questions"
-                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                className="mb-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
               >
                 Planned questions
               </h3>
@@ -673,7 +673,7 @@ export function ResearchReportView({
                     </span>{' '}
                     {gap.question}
                     {gap.status === 'open' ? (
-                      <span className="block text-caption text-muted-foreground">{gap.reason}</span>
+                      <span className="block text-sm text-muted-foreground">{gap.reason}</span>
                     ) : null}
                   </li>
                 ))}
@@ -686,7 +686,7 @@ export function ResearchReportView({
               className="mb-4 rounded-lg border border-border/30 bg-muted/20 p-3"
               aria-label="Report contents"
             >
-              <p className="mb-1.5 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              <p className="mb-1.5 flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                 <List className="h-3.5 w-3.5" aria-hidden="true" />
                 Contents
               </p>
@@ -701,7 +701,7 @@ export function ResearchReportView({
                     <button
                       type="button"
                       onClick={() => scrollToHeading(heading.id)}
-                      className="block w-full truncate text-start text-xs text-muted-foreground transition-colors hover:text-primary"
+                      className="block w-full truncate text-start text-sm text-muted-foreground transition-colors hover:text-primary"
                     >
                       {heading.text}
                     </button>
@@ -726,7 +726,7 @@ export function ResearchReportView({
             <section className="mt-5" aria-labelledby="research-report-sources">
               <h3
                 id="research-report-sources"
-                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                className="mb-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
               >
                 Sources
               </h3>
@@ -746,12 +746,12 @@ export function ResearchReportView({
             <section className="mt-5" aria-labelledby="research-report-sources">
               <h3
                 id="research-report-sources"
-                className="mb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground"
+                className="mb-1.5 text-sm font-semibold uppercase tracking-wide text-muted-foreground"
               >
                 Sources
               </h3>
               <p
-                className="text-xs text-muted-foreground"
+                className="text-sm text-muted-foreground"
                 data-testid="research-report-uncaptured-sources"
               >
                 {translateUiPlural('chat', 'counts.uncapturedSources', uncapturedSources.length, {
@@ -791,12 +791,12 @@ export function ResearchReportView({
               rows={2}
               placeholder="Ask a follow-up about this report"
               aria-label="Ask a follow-up about this report"
-              className="min-w-0 flex-1 resize-none bg-transparent text-[13px] text-foreground outline-none placeholder:text-muted-foreground"
+              className="min-w-0 flex-1 resize-none bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground"
             />
             <Button
               type="submit"
               size="sm"
-              className="h-7 gap-1 px-2 text-xs"
+              className="h-7 gap-1 px-2 text-sm"
               disabled={followUp.trim().length === 0}
               data-testid="research-report-follow-up-send"
             >
@@ -804,7 +804,7 @@ export function ResearchReportView({
               Ask
             </Button>
           </div>
-          <p className={cn('mt-1 text-caption text-muted-foreground', readingColumn)}>
+          <p className={cn('mt-1 text-sm text-muted-foreground', readingColumn)}>
             The report travels with your question, so the answer stays grounded in it.
           </p>
         </form>
