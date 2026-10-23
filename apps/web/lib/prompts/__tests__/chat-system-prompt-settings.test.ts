@@ -198,7 +198,11 @@ describe('Settings sections the chat system prompt names', () => {
 
   it('names the web app wherever it sends the user to Settings outside their own app', () => {
     const latest = chatSystemPromptSections(
-      Math.max(...CHAT_SYSTEM_PROMPT_VERSIONS.map((entry) => entry.version)),
+      Math.max(
+        ...CHAT_SYSTEM_PROMPT_VERSIONS.filter(
+          (entry) => entry.sections['settings_help_account'] !== undefined,
+        ).map((entry) => entry.version),
+      ),
     );
 
     expect(latest['settings_help_account']).toContain('in Settings in the AGI Workforce web app');

@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 35,
+    "policyVersion": 36,
     "records": [
       {
         "version": 1,
@@ -319,6 +319,14 @@
         "channel": "internal",
         "effectiveOn": "2026-10-22",
         "reason": "web, desktop and account Settings guidance sends the user to Personalization for memory, past-chat search, custom instructions and response style, and to General for profile, appearance and language, because memory moved out of its own Settings section into Personalization; otherwise renders as chat.system@10; enters on internal. A prompt release record routes no traffic: the pin and any canary are unchanged and a canary advance carries its eval quality signal"
+      },
+      {
+        "version": 36,
+        "artifact": "prompt",
+        "id": "chat.system@12",
+        "channel": "internal",
+        "effectiveOn": "2026-10-23",
+        "reason": "chat.system@7 plus one correction: the memory lines send the user to Settings, under Personalization instead of Memory, because memory moved into Personalization; chat.system@11 carried the same wording on the chat.system@4 lineage and lost the people-and-privacy rules, so it failed chat-prompt/private-person-home-address on every Haiku sample; otherwise renders as chat.system@7; enters on internal. A prompt release record routes no traffic: the pin and any canary are unchanged and a canary advance carries its eval quality signal"
       }
     ]
   },

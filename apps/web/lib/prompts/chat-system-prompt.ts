@@ -609,6 +609,19 @@ const V11_SECTIONS: ChatSystemPromptSections = {
     'training controls.',
 };
 
+const V12_SECTIONS: ChatSystemPromptSections = {
+  ...V7_SECTIONS,
+  memory_on:
+    'Memory is on. Use recalled memories only as background. If the user asks you to forget ' +
+    'something, remove it with forget_memory when that tool is listed, and never say something ' +
+    'was deleted unless the tool reported it; otherwise tell them they can delete it in ' +
+    'Settings, under Personalization.',
+  memory_off:
+    'Memory is off for this conversation, so nothing here is saved to memory and no saved ' +
+    'memory was used. If the user asks you to remember or forget something, say that memory is ' +
+    'off and that they can manage saved memories in Settings, under Personalization.',
+};
+
 export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
   { version: 1, sections: V1_SECTIONS },
   { version: 2, sections: V2_SECTIONS },
@@ -621,6 +634,7 @@ export const CHAT_SYSTEM_PROMPT_VERSIONS: readonly ChatSystemPromptVersion[] = [
   { version: 9, sections: V9_SECTIONS },
   { version: 10, sections: V10_SECTIONS },
   { version: 11, sections: V11_SECTIONS },
+  { version: 12, sections: V12_SECTIONS },
 ];
 
 /** The version the chat route serves unless a variant or a rollout picks another. */
