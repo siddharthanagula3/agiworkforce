@@ -632,18 +632,25 @@ describe('auto-route cross-language conformance', () => {
     /**
      * The HEAD only. An allowlist naming one model makes every other model
      * `model_not_allowed`, so the fallback tail correctly empties out; what must
-     * survive is the model the administrator explicitly approved.
+     * survive is the model the administrator explicitly approved. The scenario
+     * blocks the ungoverned route's prefix, which is the transport when that
+     * route runs through an aggregator, and a model allow never excepts a
+     * transport, so the same model may move to its vendor's own route.
      */
     it('lets an explicit model allow survive a block on its vendor', () => {
-      const head = (decision: string | undefined): string =>
-        (decision ?? '').split(';').slice(0, 3).join(';');
+      const fields = (decision: string | undefined): string[] => (decision ?? '').split(';');
       const drifted = Object.entries(policyRecorded)
         .filter(([key]) => key.endsWith('model_allow_over_vendor_block'))
-        .filter(
-          ([key, value]) =>
-            head(policyRecorded[key.replace('model_allow_over_vendor_block', 'ungoverned')]) !==
-            head(value),
-        );
+        .filter(([key, value]) => {
+          const ungoverned = fields(
+            policyRecorded[key.replace('model_allow_over_vendor_block', 'ungoverned')],
+          );
+          const governed = fields(value);
+          if (governed[0] !== ungoverned[0] || governed[1] !== ungoverned[1]) return true;
+          if (governed[2] === ungoverned[2]) return false;
+          const blockedPrefix = `${ungoverned[2]?.split('/')[0]}/`;
+          return governed[2]?.startsWith(blockedPrefix) ?? true;
+        });
       expect(drifted).toEqual([]);
     });
   });
