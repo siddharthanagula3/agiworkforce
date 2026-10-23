@@ -53,6 +53,57 @@ describe('policy archive extractor', () => {
     ]);
   });
 
+  it('reads a header row inside a table head as the header and every body row as data', () => {
+    expect(
+      blocksOf(
+        `<table>
+          <thead><tr><th scope="col" colspan="2">Purpose</th><th scope="col">Legal basis</th></tr></thead>
+          <tbody>
+            <tr><th scope="row">Taking payment</th><td>Data used: plan.</td><td>Basis: contract.</td></tr>
+            <tr><th scope="row">Security</th><td>Data used: logs.</td><td>Basis: legitimate interests.</td></tr>
+          </tbody>
+        </table>`,
+      ),
+    ).toEqual([
+      {
+        type: 'table',
+        header: ['Purpose', '', 'Legal basis'],
+        rows: [
+          [
+            [{ text: 'Taking payment' }],
+            [{ text: 'Data used: plan.' }],
+            [{ text: 'Basis: contract.' }],
+          ],
+          [
+            [{ text: 'Security' }],
+            [{ text: 'Data used: logs.' }],
+            [{ text: 'Basis: legitimate interests.' }],
+          ],
+        ],
+      },
+    ]);
+  });
+
+  it('keeps the first row as data when a table has no header row', () => {
+    expect(
+      blocksOf(
+        `<table>
+          <tr><th scope="row">Taking payment</th><td>Plan.</td></tr>
+          <tr><th scope="row">Security</th><td>Logs.</td></tr>
+        </table>`,
+      ),
+    ).toEqual([
+      {
+        type: 'table',
+        header: [],
+        rows: [
+          [[{ text: 'Taking payment' }], [{ text: 'Plan.' }]],
+          [[{ text: 'Security' }], [{ text: 'Logs.' }]],
+        ],
+      },
+    ]);
+  });
+
   it('turns a row of link buttons into a list that keeps every label and target', () => {
     expect(
       blocksOf(

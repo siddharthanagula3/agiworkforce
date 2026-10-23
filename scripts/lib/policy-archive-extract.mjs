@@ -148,6 +148,21 @@ function hasBlockChild(element) {
   );
 }
 
+function columnHeadings(row) {
+  const cells = Array.from(row.querySelectorAll('th, td'));
+  return (
+    cells.length > 0 &&
+    cells.every((cell) => cell.tagName === 'TH' && !/^row/.test(cell.getAttribute('scope') ?? ''))
+  );
+}
+
+function headerCells(row) {
+  return Array.from(row.querySelectorAll('th, td')).flatMap((cell) => {
+    const span = Math.max(1, Number.parseInt(cell.getAttribute('colspan') ?? '1', 10) || 1);
+    return [plain(content(cell)), ...Array(span - 1).fill('')];
+  });
+}
+
 export function extract(root) {
   const blocks = [];
   let anchor;
@@ -199,14 +214,16 @@ export function extract(root) {
         }));
         blocks.push({ type: 'rows', rows });
       } else if (tag === 'TABLE') {
-        const cells = Array.from(child.querySelectorAll('tr')).map((row) =>
-          Array.from(row.querySelectorAll('th, td')).map((cell) => content(cell)),
-        );
-        const header = (cells[0] ?? []).map(plain);
+        const rows = Array.from(child.querySelectorAll('tr'));
+        const headerRow =
+          rows.find((row) => row.parentElement?.tagName === 'THEAD') ??
+          rows.find((row, index) => index === 0 && columnHeadings(row));
         blocks.push({
           type: 'table',
-          header,
-          rows: cells.slice(1),
+          header: headerRow ? headerCells(headerRow) : [],
+          rows: rows
+            .filter((row) => row !== headerRow)
+            .map((row) => Array.from(row.querySelectorAll('th, td')).map((cell) => content(cell))),
         });
       } else if (LABEL_CLASS.test(className)) {
         const segments = content(child);
