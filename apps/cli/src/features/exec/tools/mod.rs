@@ -8,7 +8,6 @@ use agiworkforce_protocol::tool_primitive::{
     ToolErrorClass, ToolResult as ContractToolResult, ToolResultStatus,
 };
 use anyhow::Result;
-use dialoguer::Confirm;
 use serde::Deserialize;
 use serde_json::Value;
 
@@ -723,13 +722,9 @@ async fn execute_tool_with_scoped_permissions(
                     {
                         approval_allows(decision)
                     } else {
-                        Confirm::new()
-                            .with_prompt(format!(
+                        crate::output::confirm(format!(
                                 "Workspace policy requires approval for `{canonical_name}`. Allow it?"
-                            ))
-                            .default(false)
-                            .interact()
-                            .unwrap_or(false)
+                            ), false)
                     };
                     if !allowed {
                         return Ok(ToolResult {
@@ -792,11 +787,7 @@ async fn execute_tool_with_scoped_permissions(
         let allowed = match request_approval(opts.approval_callback.as_ref(), request).await {
             Some(decision) => approval_allows(decision),
             None if !std::io::stdin().is_terminal() => false,
-            None => Confirm::new()
-                .with_prompt(summary)
-                .default(false)
-                .interact()
-                .unwrap_or(false),
+            None => crate::output::confirm(summary, false),
         };
         if !allowed {
             return Ok(ToolResult {
@@ -920,13 +911,10 @@ async fn execute_tool_with_scoped_permissions(
                 None if !std::io::stdin().is_terminal() => false,
                 None => {
                     eprintln!("{preview}");
-                    Confirm::new()
-                        .with_prompt(
-                            crate::terminal_text::sanitize_terminal_text(&summary).as_ref(),
-                        )
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false)
+                    crate::output::confirm(
+                        crate::terminal_text::sanitize_terminal_text(&summary).as_ref(),
+                        false,
+                    )
                 }
             };
             if !allowed {
@@ -1001,11 +989,7 @@ async fn execute_tool_with_scoped_permissions(
             let allowed =
                 match request_approval(opts.approval_callback.as_ref(), request.clone()).await {
                     Some(decision) => approval_allows(decision),
-                    None => Confirm::new()
-                        .with_prompt(format!("{} Allow it?", request.summary))
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false),
+                    None => crate::output::confirm(format!("{} Allow it?", request.summary), false),
                 };
             if !allowed {
                 return Ok(ToolResult {
@@ -1545,11 +1529,7 @@ async fn execute_resolve_conflict(
         );
         let allowed = match request_approval(approval_callback, request.clone()).await {
             Some(decision) => approval_allows(decision),
-            None => Confirm::new()
-                .with_prompt(format!("{} Allow it?", request.summary))
-                .default(false)
-                .interact()
-                .unwrap_or(false),
+            None => crate::output::confirm(format!("{} Allow it?", request.summary), false),
         };
         if !allowed {
             return refuse("`resolve_conflict` was not approved and did not run.".to_string());
@@ -1577,11 +1557,7 @@ async fn execute_resolve_conflict(
             );
             let allowed = match request_approval(approval_callback, request.clone()).await {
                 Some(decision) => approval_allows(decision),
-                None => Confirm::new()
-                    .with_prompt(format!("{} Allow it?", request.summary))
-                    .default(false)
-                    .interact()
-                    .unwrap_or(false),
+                None => crate::output::confirm(format!("{} Allow it?", request.summary), false),
             };
             if !allowed {
                 return refuse(
@@ -1618,11 +1594,7 @@ async fn execute_resolve_conflict(
         );
         let allowed = match request_approval(approval_callback, request.clone()).await {
             Some(decision) => approval_allows(decision),
-            None => Confirm::new()
-                .with_prompt(format!("{} Allow it?", request.summary))
-                .default(false)
-                .interact()
-                .unwrap_or(false),
+            None => crate::output::confirm(format!("{} Allow it?", request.summary), false),
         };
         if !allowed {
             return refuse(
@@ -2432,11 +2404,7 @@ async fn execute_powershell(
                         _ => {}
                     }
                 } else {
-                    let confirmed = Confirm::new()
-                        .with_prompt("Allow this PowerShell command?")
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false);
+                    let confirmed = crate::output::confirm("Allow this PowerShell command?", false);
 
                     if !confirmed {
                         return Ok(ToolResult {
@@ -2595,11 +2563,7 @@ async fn execute_notebook_edit(
     );
 
     if require_confirm {
-        let confirmed = dialoguer::Confirm::new()
-            .with_prompt("Allow this notebook edit?")
-            .default(true)
-            .interact()
-            .unwrap_or(false);
+        let confirmed = crate::output::confirm("Allow this notebook edit?", true);
         if !confirmed {
             return Ok(ToolResult {
                 tool_name: "notebook_edit".into(),

@@ -1831,11 +1831,7 @@ impl TurnHostAdapter<'_> {
         if crate::tui::tui_active() || !crate::interactive::can_prompt() {
             return false;
         }
-        dialoguer::Confirm::new()
-            .with_prompt(question)
-            .default(false)
-            .interact()
-            .unwrap_or(false)
+        crate::output::confirm(question, false)
     }
 
     /// The rate limit `--demo` stands in for the primary model's first call.

@@ -36,10 +36,15 @@ pub(super) fn print_tool_status(tool_name: &str, display: &str) {
     if crate::tui::tui_active() {
         return;
     }
+    let display = redact_tool_output(display);
+    if let Some(line) = crate::output::screen_reader_tool_line(tool_name, &display) {
+        eprintln!("{line}");
+        return;
+    }
     eprintln!(
         "  {} {}",
         ts::accent_header(format!("[{}]", tool_name)),
-        ts::muted(redact_tool_output(display))
+        ts::muted(display)
     );
 }
 

@@ -142,11 +142,7 @@ async fn ask(callback: Option<&ApprovalCallback>, call: &PendingCall) -> bool {
     if !crate::interactive::can_prompt() {
         return false;
     }
-    dialoguer::Confirm::new()
-        .with_prompt(title)
-        .default(false)
-        .interact()
-        .unwrap_or(false)
+    crate::output::confirm(title, false)
 }
 
 fn text_field<'a>(value: &'a Value, key: &str) -> Option<&'a str> {

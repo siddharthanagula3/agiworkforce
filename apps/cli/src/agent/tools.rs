@@ -159,13 +159,10 @@ async fn request_mcp_tool_approval(
         return false;
     }
 
-    dialoguer::Confirm::new()
-        .with_prompt(format!(
-            "Allow MCP tool '{tool_name}' from server '{server_name}'?"
-        ))
-        .default(false)
-        .interact()
-        .unwrap_or(false)
+    crate::output::confirm(
+        format!("Allow MCP tool '{tool_name}' from server '{server_name}'?"),
+        false,
+    )
 }
 
 #[cfg(test)]

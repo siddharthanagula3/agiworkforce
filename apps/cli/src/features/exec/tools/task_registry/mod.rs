@@ -392,11 +392,9 @@ pub(super) async fn execute_ask_user(
         );
         let approved = match super::request_approval(approval_callback, request).await {
             Some(decision) => super::approval_allows(decision),
-            None if super::terminal_questions_allowed() => dialoguer::Confirm::new()
-                .with_prompt(question.as_str())
-                .default(false)
-                .interact()
-                .unwrap_or(false),
+            None if super::terminal_questions_allowed() => {
+                crate::output::confirm(question.as_str(), false)
+            }
             None => return Ok(answer(
                 false,
                 "No one can answer here, so nothing was approved. Do not proceed with the action."
@@ -465,11 +463,7 @@ pub(super) async fn execute_ask_user(
         );
         let mut items = options.clone();
         items.push("Type your own answer".to_string());
-        let picked = dialoguer::Select::new()
-            .items(&items)
-            .default(0)
-            .interact_opt()
-            .unwrap_or(None);
+        let picked = crate::output::choose_option("", &items, 0);
         match picked {
             Some(index) if index < options.len() => {
                 return Ok(answer(true, format!("User responded: {}", options[index])));

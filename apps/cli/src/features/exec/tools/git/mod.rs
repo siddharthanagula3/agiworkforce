@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use dialoguer::Confirm;
 
 use super::common::describe_command;
 use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
@@ -96,11 +95,7 @@ async fn worktree_approval_denial(
                 }
                 None
             } else {
-                let confirmed = Confirm::new()
-                    .with_prompt(prompt)
-                    .default(false)
-                    .interact()
-                    .unwrap_or(false);
+                let confirmed = crate::output::confirm(prompt, false);
 
                 if !confirmed {
                     return Some(ToolResult {

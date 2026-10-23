@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 
 use anyhow::Result;
-use dialoguer::Confirm;
 
 use crate::safety::argv::parse_simple_command;
 use crate::safety::network_target::internal_destination;
@@ -406,11 +405,9 @@ pub(super) async fn execute_command_output(
             let allowed = match request_approval(approval_callback, request).await {
                 Some(decision) => approval_allows(decision),
                 None if !std::io::IsTerminal::is_terminal(&std::io::stdin()) => false,
-                None => Confirm::new()
-                    .with_prompt("Allow sending input to this running command?")
-                    .default(false)
-                    .interact()
-                    .unwrap_or(false),
+                None => {
+                    crate::output::confirm("Allow sending input to this running command?", false)
+                }
             };
             if !allowed {
                 return Ok(result(
@@ -629,11 +626,7 @@ pub(super) async fn approve_command(
                             );
                         }
 
-                        let confirmed = Confirm::new()
-                            .with_prompt(prompt_msg)
-                            .default(default)
-                            .interact()
-                            .unwrap_or(false);
+                        let confirmed = crate::output::confirm(prompt_msg, default);
 
                         if !confirmed {
                             return Ok(Err(ToolResult {
@@ -730,11 +723,10 @@ async fn sandbox_network_policy(
     );
     let allowed = match request_approval(approval_callback, request).await {
         Some(decision) => approval_allows(decision),
-        None => Confirm::new()
-            .with_prompt(format!("{summary} Allow external network access for it?"))
-            .default(false)
-            .interact()
-            .unwrap_or(false),
+        None => crate::output::confirm(
+            format!("{summary} Allow external network access for it?"),
+            false,
+        ),
     };
     if allowed {
         crate::sandbox::NetworkPolicy::AllowExternal

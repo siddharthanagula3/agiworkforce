@@ -1873,11 +1873,7 @@ pub fn review_project_servers(project: &Path) {
                     crate::terminal_text::sanitize_terminal_text(&line)
                 );
             }
-            dialoguer::Confirm::new()
-                .with_prompt(shown.question.clone())
-                .default(false)
-                .interact()
-                .unwrap_or(false)
+            crate::output::confirm(shown.question.clone(), false)
         };
         match ask_until_unchanged(first, &look, &mut ask) {
             Answer::Approved(shown) => {

@@ -300,16 +300,21 @@ fn label_assistant_lines(text: &str, mut line_open: bool) -> String {
     labelled
 }
 
-fn read_numbered_choice(
+fn read_numbered_choice<S: AsRef<str>>(
     input: &mut impl std::io::BufRead,
     output: &mut impl std::io::Write,
     prompt: &str,
-    items: &[&str],
+    items: &[S],
     default: usize,
 ) -> std::io::Result<Option<usize>> {
     writeln!(output, "{BELL}{}", sanitize_terminal_text(prompt))?;
     for (index, item) in items.iter().enumerate() {
-        writeln!(output, "{}. {}", index + 1, sanitize_terminal_text(item))?;
+        writeln!(
+            output,
+            "{}. {}",
+            index + 1,
+            sanitize_terminal_text(item.as_ref())
+        )?;
     }
     let range = format!("a number from 1 to {}", items.len());
     writeln!(output, "Type {range}, or press Enter for {}.", default + 1)?;
@@ -332,7 +337,7 @@ fn read_numbered_choice(
 /// Ask the user to pick one of `items`. In screen reader mode the options are
 /// numbered lines answered by typing the number; otherwise it is the arrow-key
 /// menu. `None` means the question was cancelled or could not be asked.
-pub fn choose_option(prompt: &str, items: &[&str], default: usize) -> Option<usize> {
+pub fn choose_option<S: AsRef<str>>(prompt: &str, items: &[S], default: usize) -> Option<usize> {
     if items.is_empty() {
         return None;
     }
@@ -348,13 +353,51 @@ pub fn choose_option(prompt: &str, items: &[&str], default: usize) -> Option<usi
         .ok()
         .flatten();
     }
-    dialoguer::Select::new()
-        .with_prompt(prompt)
-        .items(items)
-        .default(default)
-        .interact_opt()
+    let labels: Vec<&str> = items.iter().map(AsRef::as_ref).collect();
+    let menu = dialoguer::Select::new().items(&labels).default(default);
+    let menu = if prompt.is_empty() {
+        menu
+    } else {
+        menu.with_prompt(prompt)
+    };
+    menu.interact_opt().ok().flatten()
+}
+
+/// Ask a yes/no question. In screen reader mode it is a numbered menu with a
+/// bell; otherwise the usual prompt. Anything but a clear yes is a no.
+pub fn confirm(prompt: impl Into<String>, default: bool) -> bool {
+    let prompt = prompt.into();
+    if screen_reader() {
+        return read_numbered_choice(
+            &mut std::io::stdin().lock(),
+            &mut std::io::stderr(),
+            &prompt,
+            &["Yes", "No"],
+            if default { 0 } else { 1 },
+        )
         .ok()
         .flatten()
+            == Some(0);
+    }
+    dialoguer::Confirm::new()
+        .with_prompt(prompt)
+        .default(default)
+        .interact()
+        .unwrap_or(false)
+}
+
+/// The line a tool announces itself with. In screen reader mode it carries the
+/// `tool:` label and closes any assistant line left open.
+pub fn screen_reader_tool_line(tool_name: &str, display: &str) -> Option<String> {
+    if !screen_reader() {
+        return None;
+    }
+    print_assistant_end();
+    Some(format!(
+        "tool: {} {}",
+        sanitize_terminal_text(tool_name),
+        sanitize_terminal_text(display)
+    ))
 }
 
 /// The response is the only thing on stdout; every message below goes to
@@ -1394,6 +1437,90 @@ mod tests {
         let (picked, shown) = ask("0\nfour\n4\n3\n", 0);
         assert_eq!(picked, Some(2));
         assert_eq!(shown.matches("Type a number from 1 to 3.\n").count(), 3);
+    }
+
+    #[test]
+    fn a_tool_announces_itself_with_the_tool_label_only_in_screen_reader_mode() {
+        let _guard = print_state_test_lock();
+        set_screen_reader(false);
+        assert_eq!(screen_reader_tool_line("read_file", "Read(a.rs)"), None);
+
+        set_screen_reader(true);
+        record_assistant_output("an open assistant line");
+        let line = screen_reader_tool_line("read_file", "Read(a.rs)");
+        let still_open = ASSISTANT_LINE_OPEN.load(Ordering::Relaxed);
+        set_screen_reader(false);
+        assert_eq!(line.as_deref(), Some("tool: read_file Read(a.rs)"));
+        assert!(
+            !still_open,
+            "the next assistant text must open a labelled line"
+        );
+    }
+
+    #[test]
+    fn a_yes_no_question_is_a_numbered_menu_whose_default_follows_the_question() {
+        let ask = |answers: &str, default: usize| {
+            let mut shown = Vec::new();
+            let picked = read_numbered_choice(
+                &mut std::io::Cursor::new(answers.as_bytes()),
+                &mut shown,
+                "Allow it?",
+                &["Yes", "No"],
+                default,
+            )
+            .expect("read the answer");
+            (picked, String::from_utf8(shown).expect("utf-8 prompt"))
+        };
+        assert_eq!(ask("1\n", 1).0, Some(0));
+        assert_eq!(ask("2\n", 0).0, Some(1));
+        assert_eq!(ask("\n", 1).0, Some(1));
+        let (_, shown) = ask("\n", 1);
+        assert!(
+            shown.starts_with("\u{7}Allow it?\n1. Yes\n2. No\n"),
+            "{shown:?}"
+        );
+        assert!(shown.contains("press Enter for 2."));
+    }
+
+    /// An approval asked with a bare `dialoguer::Confirm` skips the bell and the
+    /// numbered answer, so the person using a screen reader gets the one prompt
+    /// they cannot hear or answer by digit.
+    #[test]
+    fn no_approval_prompt_bypasses_the_screen_reader_aware_confirm() {
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let mut stack = vec![
+            src.join("features").join("exec").join("tools"),
+            src.join("agent"),
+            src.join("mcp"),
+            src.join("models"),
+        ];
+        let mut offenders = Vec::new();
+        while let Some(dir) = stack.pop() {
+            for entry in std::fs::read_dir(&dir).expect("read source dir").flatten() {
+                let path = entry.path();
+                if path.is_dir() {
+                    stack.push(path);
+                    continue;
+                }
+                if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                let text = std::fs::read_to_string(&path).expect("read source");
+                if text.contains("Confirm::new()") {
+                    offenders.push(
+                        path.strip_prefix(&src)
+                            .unwrap_or(&path)
+                            .display()
+                            .to_string(),
+                    );
+                }
+            }
+        }
+        assert!(
+            offenders.is_empty(),
+            "approval prompts built on dialoguer::Confirm directly: {offenders:?}. \
+             Use `output::confirm`."
+        );
     }
 
     #[test]

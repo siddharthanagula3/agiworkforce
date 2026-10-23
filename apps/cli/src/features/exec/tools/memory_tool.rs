@@ -50,12 +50,7 @@ async fn confirmed(
     if let Some(decision) = request_approval(approval_callback, request).await {
         return approval_allows(decision);
     }
-    crate::interactive::can_prompt()
-        && dialoguer::Confirm::new()
-            .with_prompt(title)
-            .default(false)
-            .interact()
-            .unwrap_or(false)
+    crate::interactive::can_prompt() && crate::output::confirm(title, false)
 }
 
 pub(super) async fn execute_memory(

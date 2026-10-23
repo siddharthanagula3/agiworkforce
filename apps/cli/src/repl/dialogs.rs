@@ -1,5 +1,5 @@
 use colored::Colorize;
-use dialoguer::{Input, Password, Select};
+use dialoguer::{Input, Password};
 
 use crate::config::CliConfig;
 use crate::output;
@@ -23,21 +23,9 @@ pub(super) fn handle_setup(config: &mut CliConfig) {
         "lmstudio",
     ];
 
-    let selection = Select::new()
-        .with_prompt("Select provider to configure")
-        .items(&providers)
-        .interact_opt();
-
-    let idx = match selection {
-        Ok(Some(idx)) => idx,
-        Ok(None) => {
-            output::print_info("Setup cancelled.");
-            return;
-        }
-        Err(e) => {
-            output::print_error(&format!("Selection error: {}", e));
-            return;
-        }
+    let Some(idx) = output::choose_option("Select provider to configure", &providers, 0) else {
+        output::print_info("Setup cancelled.");
+        return;
     };
 
     let selected_provider = providers[idx];

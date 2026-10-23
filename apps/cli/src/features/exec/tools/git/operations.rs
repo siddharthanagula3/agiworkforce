@@ -10,7 +10,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use async_trait::async_trait;
-use dialoguer::Confirm;
 use serde_json::{json, Value};
 
 use super::super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
@@ -70,12 +69,7 @@ impl SurfaceApprover<'_> {
             prompt.push('\n');
             prompt.push_str(line);
         }
-        if Confirm::new()
-            .with_prompt(prompt)
-            .default(false)
-            .interact()
-            .unwrap_or(false)
-        {
+        if crate::output::confirm(prompt, false) {
             ApprovalDecision::AllowOnce
         } else {
             ApprovalDecision::Deny

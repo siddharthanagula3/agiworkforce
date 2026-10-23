@@ -4,7 +4,6 @@ use std::path::{Path, PathBuf};
 
 use anyhow::Result;
 use colored::Colorize;
-use dialoguer::Confirm;
 use tokio::io::AsyncReadExt;
 
 use crate::permissions::FilePermissionOperation;
@@ -843,11 +842,7 @@ pub(super) async fn execute_write_file(
                         );
                     }
 
-                    let confirmed = Confirm::new()
-                        .with_prompt("Allow this file write?")
-                        .default(true)
-                        .interact()
-                        .unwrap_or(false);
+                    let confirmed = crate::output::confirm("Allow this file write?", true);
 
                     if !confirmed {
                         return Ok(ToolResult {
@@ -1111,11 +1106,7 @@ pub(super) async fn execute_edit_file(
                         ts::addition(sanitize_terminal_text(&new_preview))
                     );
 
-                    let confirmed = Confirm::new()
-                        .with_prompt("Allow this edit?")
-                        .default(true)
-                        .interact()
-                        .unwrap_or(false);
+                    let confirmed = crate::output::confirm("Allow this edit?", true);
 
                     if !confirmed {
                         return Ok(ToolResult {
@@ -1235,11 +1226,7 @@ pub(super) async fn execute_apply_patch(
                     if stdin_is_noninteractive() {
                         abort_noninteractive_auto_deny("apply_patch", "Applying this patch");
                     }
-                    Confirm::new()
-                        .with_prompt("Apply this patch?")
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false)
+                    crate::output::confirm("Apply this patch?", false)
                 }
             }
         };
@@ -1446,11 +1433,7 @@ pub(super) async fn execute_multiedit(
                     );
                     print_diff_preview(&diff);
 
-                    let confirmed = Confirm::new()
-                        .with_prompt("Allow these edits?")
-                        .default(true)
-                        .interact()
-                        .unwrap_or(false);
+                    let confirmed = crate::output::confirm("Allow these edits?", true);
 
                     if !confirmed {
                         return Ok(ToolResult {
