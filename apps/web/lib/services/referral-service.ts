@@ -21,6 +21,7 @@ import {
   type ReferralStatus,
 } from '@/lib/services/referral-program';
 import { isDisposableEmail, normalizeEmailIdentity } from '@/lib/services/referral-signals';
+import { grantReferralResetsToReferrer } from '@/lib/services/usage-limit-promotion-service';
 
 const DAY_MS = 86_400_000;
 const HOUR_MS = 3_600_000;
@@ -470,6 +471,22 @@ export async function grantDueReferralRewards(
       if (outcome === 'skipped') continue;
       summary.processed += 1;
       summary[outcome] += 1;
+      if (outcome === 'rewarded') {
+        try {
+          const [rewarded] = await db.query<{ referrer_id: string }>(
+            `select referrer_id from public.referrals where id = $1 and status = 'rewarded'`,
+            [id],
+          );
+          if (rewarded) {
+            await grantReferralResetsToReferrer(db, {
+              referrerId: rewarded.referrer_id,
+              referralId: id,
+            });
+          }
+        } catch (error) {
+          logger.error({ error, referralId: id }, 'Referral resets could not be granted');
+        }
+      }
     } catch (error) {
       summary.failed += 1;
       logger.error({ error, referralId: id }, 'Referral reward could not be settled');

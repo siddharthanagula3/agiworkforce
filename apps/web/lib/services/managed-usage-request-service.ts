@@ -48,6 +48,7 @@ import {
 } from '@/lib/server/plan-limit-alternative';
 import { currentScheduleRun } from '@/lib/schedules/schedule-run-scope';
 import { attemptErrorClass, type GenerationAttempt } from '@/lib/services/generation-attempt';
+import { resolvePromotionalCaps } from '@/lib/services/usage-limit-promotion-service';
 
 export const MANAGED_CHAT_CONTRACT_VERSION = '2026-07-15' as const;
 
@@ -733,10 +734,22 @@ export async function reserveManagedUsageRequest(
   const idempotencyKey = parseManagedUsageIdempotencyKey(input.idempotencyKey);
   const leaseToken = input.leaseToken ?? randomUUID();
   const allowance = await resolveReservationAllowance(input.db, input.userId, input.planTier);
-  const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
-  const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
-  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);
   const artifactLimits = artifactSubjectKey ? getArtifactRuntimeUsageLimits(allowance) : null;
+  const caps =
+    input.funding === 'extra_usage'
+      ? null
+      : await resolvePromotionalCaps({
+          userId: input.userId,
+          planTier: input.planTier,
+          workload: input.attribution?.workload ?? null,
+          estimateMicrousd: resolveEstimatedMicrousd(input),
+          isFlagship: input.isFlagship,
+          caps: {
+            session: getPlanSessionUsageCapMicrousd(allowance),
+            weekly: getPlanWeeklyUsageCapMicrousd(allowance),
+            flagshipWeekly: getPlanFlagshipWeeklyUsageCapMicrousd(allowance),
+          },
+        });
   const row =
     artifactSubjectKey && artifactLimits
       ? await queryOne(
@@ -755,9 +768,9 @@ export async function reserveManagedUsageRequest(
             resolveEstimatedMicrousd(input),
             leaseToken,
             input.leaseSeconds ?? 900,
-            sessionCapMicrousd,
-            weeklyCapMicrousd,
-            flagshipWeeklyCapMicrousd,
+            caps?.session ?? null,
+            caps?.weekly ?? null,
+            caps?.flagshipWeekly ?? null,
             input.isFlagship,
             artifactSubjectKey,
             ROLLING_SESSION_WINDOW_HOURS,
@@ -799,9 +812,9 @@ export async function reserveManagedUsageRequest(
               resolveEstimatedMicrousd(input),
               leaseToken,
               input.leaseSeconds ?? 900,
-              sessionCapMicrousd,
-              weeklyCapMicrousd,
-              flagshipWeeklyCapMicrousd,
+              caps?.session ?? null,
+              caps?.weekly ?? null,
+              caps?.flagshipWeekly ?? null,
               input.isFlagship,
             ],
           );
@@ -901,9 +914,18 @@ export async function reserveManagedUsageProviderStep(
     reservation.userId,
     input.planTier,
   );
-  const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
-  const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
-  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);
+  const caps = await resolvePromotionalCaps({
+    userId: reservation.userId,
+    planTier: input.planTier,
+    workload: reservation.attribution?.workload ?? null,
+    estimateMicrousd: stepMicrousd,
+    isFlagship: input.isFlagship,
+    caps: {
+      session: getPlanSessionUsageCapMicrousd(allowance),
+      weekly: getPlanWeeklyUsageCapMicrousd(allowance),
+      flagshipWeekly: getPlanFlagshipWeeklyUsageCapMicrousd(allowance),
+    },
+  });
   const stepParams = [
     reservation.userId,
     reservation.idempotencyKey,
@@ -911,9 +933,9 @@ export async function reserveManagedUsageProviderStep(
     reservation.leaseToken,
     input.operationKey,
     stepMicrousd,
-    sessionCapMicrousd,
-    weeklyCapMicrousd,
-    flagshipWeeklyCapMicrousd,
+    caps.session,
+    caps.weekly,
+    caps.flagshipWeekly,
     input.isFlagship,
   ];
   const row = reservation.artifactSubjectKey

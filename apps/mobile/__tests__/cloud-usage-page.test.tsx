@@ -3,7 +3,7 @@ import React from 'react';
 import { managedUsageBucketLabel } from '@agiworkforce/types';
 import { lightColors } from '../src/ui/theme/tokens';
 import { render, fireEvent, waitFor } from '@testing-library/react-native';
-import { StyleSheet } from 'react-native';
+import { Alert, StyleSheet } from 'react-native';
 
 const mockPush = jest.fn();
 const mockAuthState = {
@@ -81,7 +81,9 @@ jest.mock('@/src/features/settings/common', () => {
 });
 
 const mockFetchUsageSnapshot = jest.fn();
+const mockApplyLimitReset = jest.fn();
 jest.mock('@/services/usage', () => ({
+  applyLimitReset: (...args: unknown[]) => mockApplyLimitReset(...args),
   fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
   fetchUsageAllowances: () => new Promise(() => undefined),
   fetchUsageHistory: () => new Promise(() => undefined),
@@ -470,5 +472,84 @@ describe('Cloud Usage screen, signed-out gate', () => {
       pathname: '/(auth)/login',
       params: { postAuthIntent: 'cloud-usage' },
     });
+  });
+});
+
+describe('Cloud Usage screen, resets and limit uplifts', () => {
+  const GRANT = '6f1c2a54-1b8a-4c3e-9d0f-2a7b8c9d0e1f';
+
+  function promotions(over: Record<string, unknown> = {}) {
+    return {
+      resets: {
+        available: 1,
+        grants: [{ grant_id: GRANT, expires_at: '2026-11-20T00:00:00.000Z' }],
+        can_apply: true,
+        last_applied_at: null,
+        ...over,
+      },
+      uplifts: [
+        {
+          promotion_id: 'code-week',
+          percent: 50,
+          windows: ['weekly'],
+          workloads: ['code'],
+          ends_at: '2026-10-31T12:00:00.000Z',
+        },
+      ],
+    };
+  }
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.assign(mockAuthState, {
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'user-a',
+    });
+    mockAccountOwner = 'user-a';
+    mockAccountEpoch = 1;
+    useCloudUsageStore.getState().clear();
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+  });
+
+  it('shows no resets card while promotions are switched off', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(snap({ limitPromotions: null }));
+    const { findByText, queryByText } = render(<CloudUsageScreen />);
+    await findByText(/% used/);
+    expect(queryByText('Resets')).toBeNull();
+  });
+
+  it('uses a reset only after the confirmation and reloads usage', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(snap({ limitPromotions: promotions() }));
+    mockApplyLimitReset.mockResolvedValue(undefined);
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => undefined);
+    const { findByText, getByText, getByTestId } = render(<CloudUsageScreen />);
+
+    expect(await findByText('1 reset available')).toBeTruthy();
+    expect(getByTestId('usage-uplift').props.children).toMatch(
+      /^Weekly limit \+50% for AGI Code until /,
+    );
+    fireEvent.press(getByText('Use reset'));
+    expect(mockApplyLimitReset).not.toHaveBeenCalled();
+    expect(alert).toHaveBeenCalledWith(
+      'Use your reset?',
+      expect.stringMatching(/cannot be undone/),
+      expect.any(Array),
+    );
+
+    const buttons = alert.mock.calls[0]![2] as { text: string; onPress?: () => void }[];
+    buttons.find((button) => button.text === 'Use reset')!.onPress!();
+    await waitFor(() => expect(mockApplyLimitReset).toHaveBeenCalledWith(GRANT));
+    await waitFor(() => expect(mockFetchUsageSnapshot).toHaveBeenCalledTimes(2));
+    alert.mockRestore();
+  });
+
+  it('says there is no reset and offers nothing to press', async () => {
+    mockFetchUsageSnapshot.mockResolvedValue(
+      snap({ limitPromotions: promotions({ available: 0, grants: [], can_apply: false }) }),
+    );
+    const { findByText, queryByText } = render(<CloudUsageScreen />);
+    expect(await findByText('No resets right now')).toBeTruthy();
+    expect(queryByText('Use reset')).toBeNull();
   });
 });

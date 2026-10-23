@@ -27,10 +27,12 @@ import {
 import { ROLLOUT_FLAG_PREFIX, parseRolloutRingFlagKey } from './rollout-rings';
 import { ROUTING_FLAG_KEYS, ROUTING_FLAG_PREFIX, canaryCohortFlagKey } from './routing-flags';
 import { STORE_TEST_PURCHASES_FLAG_KEY } from './store-test-purchases';
+import { USAGE_PROMOTIONS_FLAG_KEY } from './usage-promotions';
 
 export const FLAG_NAMESPACE_IDS = [
   'billing_store_test_purchases',
   'billing_upgrades',
+  'billing_usage_promotions',
   'capability',
   'decision_kill',
   'decision',
@@ -115,6 +117,15 @@ const NAMESPACE_SHAPES: readonly FlagNamespaceShape[] = z.array(FlagNamespaceSch
     defaultVariant: null,
     killSwitch: true,
     keys: [BILLING_UPGRADES_OPEN_FLAG_KEY],
+  },
+  {
+    id: 'billing_usage_promotions',
+    prefix: USAGE_PROMOTIONS_FLAG_KEY,
+    reader: 'lib/feature-flags/usage-promotions (usagePromotionsOn)',
+    variants: [...GATE_VARIANTS],
+    defaultVariant: FLAG_OFF_VARIANT,
+    killSwitch: true,
+    keys: [USAGE_PROMOTIONS_FLAG_KEY],
   },
   {
     id: 'capability',
@@ -205,6 +216,7 @@ const NAMESPACE_SHAPES: readonly FlagNamespaceShape[] = z.array(FlagNamespaceSch
 const OPEN_KEY_TESTS: Readonly<Record<FlagNamespaceId, (key: string) => boolean>> = {
   billing_store_test_purchases: () => false,
   billing_upgrades: () => false,
+  billing_usage_promotions: () => false,
   capability: () => false,
   decision_kill: () => false,
   decision: isDecisionFlagKey,

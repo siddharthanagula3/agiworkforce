@@ -257,6 +257,14 @@ const bonusCreditGrantExportSchema = z.object({
   created_at: timestampSchema,
 });
 
+const usageLimitPromotionGrantExportSchema = z.object({
+  id: z.string(),
+  promotion_id: z.string(),
+  granted_at: timestampSchema,
+  expires_at: timestampSchema,
+  applied_at: nullableTimestampSchema,
+});
+
 const cloudWaitlistExportSchema = z.object({
   id: z.string(),
   email: z.string(),
@@ -1673,6 +1681,15 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
           where user_id = $1
           order by created_at asc`,
     schema: bonusCreditGrantExportSchema,
+  },
+  {
+    section: 'usage_limit_promotion_grants',
+    table: 'usage_limit_promotion_grants',
+    sql: `select id, promotion_id, granted_at, expires_at, applied_at
+          from usage_limit_promotion_grants
+          where user_id = $1
+          order by granted_at asc`,
+    schema: usageLimitPromotionGrantExportSchema,
   },
   {
     section: 'published_app_saved_data',

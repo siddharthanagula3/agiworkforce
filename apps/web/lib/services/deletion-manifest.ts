@@ -230,6 +230,7 @@ const OPERATIONAL_RECORD = [
   'support_agent_presence',
   'support_ticket_escalations',
   'token_credits',
+  'usage_limit_promotion_grants',
   'user_agent_access',
   'user_connectors',
   'user_custom_connectors',

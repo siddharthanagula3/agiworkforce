@@ -296,6 +296,10 @@
     {
       "path": "apps/web/lib/user-connector-tools.ts",
       "reason": "three statements stay on the schema owner: the github_installations read, whose table's row-level security policy now exists as draft migration 0171 (NOT YET APPLIED in production) and can be scoped once it is applied, and the two organization shared connector reads, which join a connector row owned by another member; every caller-owned read runs on a claimed scope"
+    },
+    {
+      "path": "apps/web/lib/services/usage-limit-promotion-service.ts",
+      "reason": "usage-limit promotions write their own tables, which app_rls cannot write, on the service connection; every statement over credit_transactions and usage_limit_promotion_grants carries the account's user_id"
     }
   ]
 }

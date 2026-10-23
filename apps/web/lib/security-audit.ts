@@ -356,6 +356,8 @@ export type AuditEventType =
   | 'background_job_retried'
   | 'feature_flag_changed'
   | 'feature_flag_override_changed'
+  | 'usage_promotion_changed'
+  | 'usage_limit_reset_applied'
   /**
    * The identity events a user is notified about. They are distinct from the
    * credential they changed: a rotated password and a replaced passkey are not
@@ -909,6 +911,9 @@ function inferResourceType(eventType: AuditEventType): string {
     case 'feature_flag_changed':
     case 'feature_flag_override_changed':
       return 'feature_flag';
+    case 'usage_promotion_changed':
+    case 'usage_limit_reset_applied':
+      return 'usage_promotion';
     case 'schedule_missed_execution':
       return 'scheduled_task';
     case 'event_trigger_created':

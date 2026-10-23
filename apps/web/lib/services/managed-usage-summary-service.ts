@@ -4,6 +4,7 @@ import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import {
   creditsFromMicrousd,
   isFreeBillingPlanTier,
+  upliftedCap,
   type ManagedUsageBonusCredits,
   type ManagedUsageCredits,
   type ManagedUsagePurchaseExpiry,
@@ -15,10 +16,14 @@ import { creditWindow, resolvePlanCreditAllowance } from '@/lib/billing/usage-cr
 import { logger } from '@/lib/logger';
 import {
   getPlanFlagshipWeeklyUsageBudgetMicrousd,
+  getPlanFlagshipWeeklyUsageCapMicrousd,
   getPlanSessionUsageBudgetMicrousd,
+  getPlanSessionUsageCapMicrousd,
+  getPlanWeeklyUsageCapMicrousd,
   getPlanWeeklyUsagePaidBudgetMicrousd,
   toPublicUsagePercentage,
 } from '@/lib/server/managed-usage-policy';
+import { readSummaryPromotions } from '@/lib/services/usage-limit-promotion-service';
 import { getRollingUsage } from '@/lib/server/rolling-usage';
 import {
   ROLLING_SESSION_WINDOW_HOURS,
@@ -86,11 +91,27 @@ export async function getManagedUsageSummary(
     catalogVersion: subscription?.plan_catalog_version ?? null,
     revenueContext: revenueContextOfSubscription(subscription),
   };
-  const sessionCapMicrousd = getPlanSessionUsageBudgetMicrousd(allowanceSubject);
-  const weeklyCapMicrousd = getPlanWeeklyUsagePaidBudgetMicrousd(allowanceSubject);
-  const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageBudgetMicrousd(allowanceSubject);
+  const promotions = isFreePlan
+    ? null
+    : await readSummaryPromotions({
+        userId,
+        planTier,
+        caps: {
+          session: getPlanSessionUsageCapMicrousd(allowanceSubject),
+          weekly: getPlanWeeklyUsageCapMicrousd(allowanceSubject),
+          flagshipWeekly: getPlanFlagshipWeeklyUsageCapMicrousd(allowanceSubject),
+        },
+      });
+  const sessionUplift = promotions?.upliftPercent.session ?? 0;
+  const weeklyUplift = promotions?.upliftPercent.weekly ?? 0;
+  const sessionCapMicrousd =
+    upliftedCap(getPlanSessionUsageBudgetMicrousd(allowanceSubject), sessionUplift) ?? 0;
+  const weeklyCapMicrousd =
+    upliftedCap(getPlanWeeklyUsagePaidBudgetMicrousd(allowanceSubject), weeklyUplift) ?? 0;
+  const flagshipWeeklyCapMicrousd =
+    upliftedCap(getPlanFlagshipWeeklyUsageBudgetMicrousd(allowanceSubject), weeklyUplift) ?? 0;
 
-  const [session, weekly, flagshipWeekly] =
+  const [rawSession, rawWeekly, rawFlagshipWeekly] =
     !isFreePlan && (sessionCapMicrousd > 0 || weeklyCapMicrousd > 0)
       ? await Promise.all([
           getRollingUsage(db, userId, ROLLING_SESSION_WINDOW_HOURS, false),
@@ -102,6 +123,13 @@ export async function getManagedUsageSummary(
           { usedMicrousd: 0, usedCents: 0, oldestAt: null },
           { usedMicrousd: 0, usedCents: 0, oldestAt: null },
         ];
+  const afterReset = (usage: typeof rawSession, refreshed: number) => ({
+    ...usage,
+    usedMicrousd: Math.max(0, usage.usedMicrousd - refreshed),
+  });
+  const session = afterReset(rawSession, promotions?.refreshed.session ?? 0);
+  const weekly = afterReset(rawWeekly, promotions?.refreshed.weekly ?? 0);
+  const flagshipWeekly = afterReset(rawFlagshipWeekly, promotions?.refreshed.flagshipWeekly ?? 0);
 
   const isUnallocated = !isFreePlan && creditsAllocated <= 0;
 
@@ -135,12 +163,12 @@ export async function getManagedUsageSummary(
               usageResetAt,
             ),
         weekly: creditWindow(
-          planAllowance.weekly,
+          upliftedCap(planAllowance.weekly, weeklyUplift) ?? planAllowance.weekly,
           creditsFromMicrousd(freeUsage?.weeklyUsedMicrousd ?? weekly.usedMicrousd),
           weeklyResetAt,
         ),
         five_hour: creditWindow(
-          planAllowance.fiveHour,
+          upliftedCap(planAllowance.fiveHour, sessionUplift) ?? planAllowance.fiveHour,
           creditsFromMicrousd(freeUsage?.fiveHourUsedMicrousd ?? session.usedMicrousd),
           sessionResetAt,
         ),
@@ -148,7 +176,8 @@ export async function getManagedUsageSummary(
           planAllowance.flagshipWeekly === null
             ? null
             : creditWindow(
-                planAllowance.flagshipWeekly,
+                upliftedCap(planAllowance.flagshipWeekly, weeklyUplift) ??
+                  planAllowance.flagshipWeekly,
                 creditsFromMicrousd(flagshipWeekly.usedMicrousd),
                 flagshipWeeklyResetAt,
               ),
@@ -196,5 +225,6 @@ export async function getManagedUsageSummary(
     overage_enabled: spendableCredits.overageEnabled,
     ...(isFreePlan ? {} : { usage_allocation: isUnallocated ? 'pending' : 'provisioned' }),
     ...(credits ? { credits } : {}),
+    ...(promotions ? { limit_promotions: promotions.state } : {}),
   };
 }

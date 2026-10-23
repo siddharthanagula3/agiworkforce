@@ -1,4 +1,8 @@
 import { isTeamSeatType, type TeamSeatType } from './billing-catalog';
+import {
+  parseUsageLimitPromotionState,
+  type UsageLimitPromotionState,
+} from './usage-limit-promotions';
 
 export interface ManagedUsageBalance {
   usage_percentage: number | null;
@@ -95,6 +99,8 @@ export interface ManagedUsageSummaryResponse {
    * to the percentages above rather than printing a zero allowance.
    */
   credits?: ManagedUsageCredits;
+  /** Absent while usage promotions are switched off, and on any server older than this field. */
+  limit_promotions?: UsageLimitPromotionState;
 }
 
 export function normalizeUsagePercentage(value: unknown): number {
@@ -211,6 +217,17 @@ function readManagedUsageCredits(value: unknown): ManagedUsageCredits {
   };
 }
 
+// An unreadable promotion block is dropped rather than thrown: it must not blank
+// the meters the rest of the summary carries.
+function readLimitPromotions(value: unknown): { limit_promotions?: UsageLimitPromotionState } {
+  if (value === undefined || value === null) return {};
+  try {
+    return { limit_promotions: parseUsageLimitPromotionState(value) };
+  } catch {
+    return {};
+  }
+}
+
 export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSummaryResponse {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     throw new TypeError('managed usage summary must be an object');
@@ -250,5 +267,6 @@ export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSu
     ...(record['credits'] === undefined || record['credits'] === null
       ? {}
       : { credits: readManagedUsageCredits(record['credits']) }),
+    ...readLimitPromotions(record['limit_promotions']),
   };
 }

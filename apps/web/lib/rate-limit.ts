@@ -483,6 +483,11 @@ export const rateLimitConfigs = {
     window: '1 m',
     failClosed: false,
   },
+  'usage-limit-reset-apply': {
+    limit: 10,
+    window: '1 m',
+    failClosed: true, // Spends a banked reset; refuse rather than run unmetered
+  },
   'plugin-installation-write': {
     limit: 20,
     window: '1 m',

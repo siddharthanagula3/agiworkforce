@@ -19,6 +19,7 @@ function snapshot(planTier: string): UsageSnapshot {
     credits: {
       five_hour: { allowance: 2, used: 2, remaining: 0 },
     } as UsageSnapshot['credits'],
+    limitPromotions: null,
   };
 }
 

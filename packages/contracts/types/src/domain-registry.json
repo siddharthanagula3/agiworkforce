@@ -181,7 +181,9 @@
         "organization_spend_limits",
         "personal_spend_limits",
         "processed_stripe_events",
-        "token_credits"
+        "token_credits",
+        "usage_limit_promotion_grants",
+        "usage_limit_promotions"
       ]
     },
     {

@@ -128,6 +128,7 @@ export * from './search-provider';
 export * from './subscription-entitlement';
 
 export * from './managed-usage-balance';
+export * from './usage-limit-promotions';
 export * from './account-usage-client';
 export * from './account-usage-wire';
 

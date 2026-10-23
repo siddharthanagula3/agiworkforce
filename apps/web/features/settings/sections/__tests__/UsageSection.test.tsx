@@ -165,6 +165,7 @@ interface UsageApi {
   spendLimit?: () => Answer;
   spendLimitWrite?: (write: Write) => Answer;
   autoReload?: () => Answer;
+  resetWrite?: (write: Write & { headers: Record<string, string> }) => Answer;
 }
 
 const writes: Write[] = [];
@@ -178,6 +179,16 @@ function stubUsageApi(api: UsageApi): string[] {
     const url = String(input);
     const method = init?.method ?? 'GET';
     const path = url.split('?')[0];
+    if (method === 'POST' && path === '/api/usage/limit-resets' && api.resetWrite) {
+      const write = {
+        method,
+        body: typeof init?.body === 'string' ? JSON.parse(init.body) : undefined,
+        headers: (init?.headers ?? {}) as Record<string, string>,
+      };
+      writes.push({ method: write.method, body: write.body });
+      const { ok, body } = api.resetWrite(write);
+      return { ok, json: async () => body } as Response;
+    }
     if (method !== 'GET') {
       if (path !== '/api/settings/spend-limit' || !api.spendLimitWrite) {
         throw new Error(`UsageSection sent an unexpected ${method} to ${url}`);
@@ -808,4 +819,166 @@ describe('UsageSection monthly spend limit', () => {
     await screen.findByTestId('usage-spend-limit-status');
     return spendCard();
   }
+});
+
+describe('UsageSection resets and limit uplifts', () => {
+  const GRANT = '6f1c2a54-1b8a-4c3e-9d0f-2a7b8c9d0e1f';
+
+  function promotions(over: Record<string, unknown> = {}) {
+    return {
+      resets: {
+        available: 1,
+        grants: [{ grant_id: GRANT, expires_at: inDays(20) }],
+        can_apply: true,
+        last_applied_at: null,
+        ...over,
+      },
+      uplifts: [],
+    };
+  }
+
+  function withPromotions(state: unknown) {
+    return { ...proSummary(), limit_promotions: state };
+  }
+
+  async function resetsCard() {
+    const heading = await screen.findByRole('heading', { name: 'Resets' });
+    return heading.closest('section') as HTMLElement;
+  }
+
+  it('shows no resets card while promotions are switched off', async () => {
+    stubUsageApi({ summary: () => answer(proSummary()), limits: () => answer(QUIET_MONTH) });
+    renderSection();
+    await screen.findByRole('heading', { name: 'Plan usage limits' });
+    expect(screen.queryByRole('heading', { name: 'Resets' })).toBeNull();
+    expect(screen.queryByTestId('usage-uplift')).toBeNull();
+  });
+
+  it('says when there is no reset and offers nothing to press', async () => {
+    stubUsageApi({
+      summary: () =>
+        answer(withPromotions(promotions({ available: 0, grants: [], can_apply: false }))),
+      limits: () => answer(QUIET_MONTH),
+    });
+    renderSection();
+    const card = await resetsCard();
+    expect(within(card).getByTestId('usage-resets-status').textContent).toBe('No resets right now');
+    expect(
+      within(card).getByText(/When you get one, it shows here with its expiry date/),
+    ).toBeTruthy();
+    expect(within(card).queryByRole('button', { name: 'Use reset' })).toBeNull();
+  });
+
+  it('uses a reset only after the confirmation, once, with an idempotency key', async () => {
+    let summary = withPromotions(promotions());
+    stubUsageApi({
+      summary: () => answer(summary),
+      limits: () => answer(QUIET_MONTH),
+      resetWrite: (write) => {
+        expect(write.headers['idempotency-key']).toMatch(/^agi\.usage\.reset\./);
+        summary = withPromotions(promotions({ available: 0, grants: [], can_apply: false }));
+        return answer({ status: 'applied', grant_id: GRANT, applied_at: inDays(0) });
+      },
+    });
+    renderSection();
+    const card = await resetsCard();
+    expect(within(card).getByTestId('usage-resets-status').textContent).toBe('1 reset available');
+
+    fireEvent.click(within(card).getByRole('button', { name: 'Use reset' }));
+    const dialog = await screen.findByRole('alertdialog');
+    expect(within(dialog).getByText('Use your reset?')).toBeTruthy();
+    expect(within(dialog).getByText(/cannot be undone/)).toBeTruthy();
+    expect(writes).toEqual([]);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Use reset' }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('usage-resets-status').textContent).toBe('No resets right now'),
+    );
+    expect(writes).toEqual([{ method: 'POST', body: { grantId: GRANT } }]);
+  });
+
+  it('keeps the reset when the confirmation is declined', async () => {
+    stubUsageApi({
+      summary: () => answer(withPromotions(promotions())),
+      limits: () => answer(QUIET_MONTH),
+      resetWrite: () => answer({}),
+    });
+    renderSection();
+    fireEvent.click(within(await resetsCard()).getByRole('button', { name: 'Use reset' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Cancel' }),
+    );
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull());
+    expect(writes).toEqual([]);
+  });
+
+  it('holds the reset until a limit is close', async () => {
+    stubUsageApi({
+      summary: () => answer(withPromotions(promotions({ can_apply: false }))),
+      limits: () => answer(QUIET_MONTH),
+    });
+    renderSection();
+    const card = await resetsCard();
+    const button = within(card).getByRole('button', { name: 'Use reset' }) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+    expect(within(card).getByText(/Use it once you are close to a limit/)).toBeTruthy();
+  });
+
+  it('says why the server refused the reset', async () => {
+    stubUsageApi({
+      summary: () => answer(withPromotions(promotions())),
+      limits: () => answer(QUIET_MONTH),
+      resetWrite: () => ({
+        ok: false,
+        body: { error: { message: 'Resets are not available right now. Try again later.' } },
+      }),
+    });
+    renderSection();
+    fireEvent.click(within(await resetsCard()).getByRole('button', { name: 'Use reset' }));
+    fireEvent.click(
+      within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Use reset' }),
+    );
+    expect(
+      await within(await resetsCard()).findByText(
+        'Resets are not available right now. Try again later.',
+      ),
+    ).toBeTruthy();
+    expect(writes).toHaveLength(1);
+  });
+
+  it('states a limit uplift with its workload and end date', async () => {
+    stubUsageApi({
+      summary: () =>
+        answer(
+          withPromotions({
+            ...promotions(),
+            uplifts: [
+              {
+                promotion_id: 'code-week',
+                percent: 50,
+                windows: ['weekly'],
+                workloads: ['code'],
+                ends_at: '2026-10-31T12:00:00.000Z',
+              },
+            ],
+          }),
+        ),
+      limits: () => answer(QUIET_MONTH),
+    });
+    renderSection();
+    expect((await screen.findByTestId('usage-uplift')).textContent).toMatch(
+      /^Weekly limit \+50% for AGI Code until /,
+    );
+  });
+
+  it('shows a free account neither resets nor uplifts', async () => {
+    stubUsageApi({
+      summary: () => answer({ ...freeSummary(), limit_promotions: promotions() }),
+      limits: () => answer(monthlyLimits()),
+    });
+    renderSection();
+    await screen.findByRole('heading', { name: 'Upgrade for higher capacity' });
+    expect(screen.queryByRole('heading', { name: 'Resets' })).toBeNull();
+    expect(screen.queryByTestId('usage-uplift')).toBeNull();
+  });
 });

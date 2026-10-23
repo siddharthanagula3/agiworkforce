@@ -1,3 +1,5 @@
+import * as Crypto from 'expo-crypto';
+import { IDEMPOTENCY_KEY_HEADER } from '@agiworkforce/cloud-contracts';
 import { api } from './api';
 import {
   parseAccountUsageHistoryResponse,
@@ -8,6 +10,7 @@ import {
   type AccountUsageHistoryResponse,
   type ManagedUsageCredits,
   type ManagedUsageSummaryResponse,
+  type UsageLimitPromotionState,
 } from '@agiworkforce/types';
 
 export interface UsageSnapshot {
@@ -26,6 +29,7 @@ export interface UsageSnapshot {
   flagshipWeeklyResetAt: string | null;
   credits: ManagedUsageCredits | null;
   usageAllocation?: 'provisioned' | 'pending';
+  limitPromotions: UsageLimitPromotionState | null;
 }
 
 function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
@@ -44,6 +48,7 @@ function project(summary: ManagedUsageSummaryResponse): UsageSnapshot {
     flagshipWeeklyUsagePercentage: summary.flagship_weekly_usage_percentage,
     flagshipWeeklyResetAt: summary.flagship_weekly_reset_at,
     credits: summary.credits ?? null,
+    limitPromotions: summary.limit_promotions ?? null,
     ...(summary.usage_allocation ? { usageAllocation: summary.usage_allocation } : {}),
   };
 }
@@ -67,4 +72,12 @@ export async function fetchUsageAllowances(): Promise<AccountUsageLimitsResponse
   const allowances = parseAccountUsageLimitsResponse(await api.get<unknown>('/api/usage/limits'));
   if (!allowances) throw new Error('The monthly allowances could not be read.');
   return allowances;
+}
+
+export async function applyLimitReset(grantId: string): Promise<void> {
+  await api.post<unknown>(
+    '/api/usage/limit-resets',
+    { grantId },
+    { headers: { [IDEMPOTENCY_KEY_HEADER]: `agi.usage.reset.${Crypto.randomUUID()}` } },
+  );
 }

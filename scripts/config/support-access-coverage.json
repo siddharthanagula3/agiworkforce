@@ -128,6 +128,10 @@
       "serves": "platform_only",
       "reason": "The platform's own switch for whether paid upgrades are open, with the audit row naming the operator who last changed it; it reads and writes no customer data."
     },
+    "apps/web/app/api/admin/usage-promotions/route.ts": {
+      "serves": "platform_only",
+      "reason": "Usage-limit promotion settings and how much of each ceiling is committed. Platform configuration, no tenant row is read."
+    },
     "apps/web/app/api/admin/waitlist/export/route.ts": {
       "serves": "submitted_to_platform",
       "reason": "The public waitlist as a file: each address was submitted by its owner through a waitlist form so the platform could contact them."

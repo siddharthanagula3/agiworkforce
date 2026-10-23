@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState, type CSSProperties, type FormEvent } from 'react';
 import { RefreshCw } from 'lucide-react';
+import { IDEMPOTENCY_KEY_HEADER } from '@agiworkforce/cloud-contracts';
 import {
   Progress,
   SegmentedControl,
@@ -15,6 +16,8 @@ import {
   formatCreditWindowUsage,
   formatCredits,
   formatPlanCreditAllowanceLine,
+  formatResetsAvailable,
+  formatUpliftLine,
   formatUsageRemaining,
   formatUsageResetIn,
   getBillingPlanPricing,
@@ -33,6 +36,7 @@ import {
   type ManagedUsageCreditWindow,
   type ManagedUsageSummaryResponse,
   type TierUnitUsage,
+  type UsageLimitPromotionState,
 } from '@agiworkforce/types';
 import type { PersonalSpendLimitResponse } from '@/app/api/settings/spend-limit/route';
 import { AutoReloadSettingsSchema } from '@/features/billing/lib/billing-account-types';
@@ -60,6 +64,8 @@ const SPEND_LIMIT_URL = '/api/settings/spend-limit';
 const SPEND_LIMIT_FAILURE = 'Could not load your monthly spend limit.';
 const AUTO_RELOAD_URL = '/api/billing/auto-reload';
 const AUTO_RELOAD_FAILURE = 'Could not load auto-reload.';
+const LIMIT_RESETS_URL = '/api/usage/limit-resets';
+const LIMIT_RESET_FAILURE = 'Your reset was not used. Try again.';
 
 const CARD: CSSProperties = {
   border: '1px solid var(--settings-border)',
@@ -425,6 +431,104 @@ function CreditBalancesCard({ credits }: { credits: AccountCredits }) {
         <BalanceRow label="Bonus credits" value={bonus.value} detail={bonus.detail} />
         <BalanceRow label="Purchased credits" value={purchased.value} detail={purchased.detail} />
       </dl>
+    </section>
+  );
+}
+
+function LimitResetsCard({
+  resets,
+  onApplied,
+}: {
+  resets: UsageLimitPromotionState['resets'];
+  onApplied: () => void;
+}) {
+  const { confirm, dialog: confirmDialog } = useConfirmAction();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const next = resets.grants[0] ?? null;
+
+  const apply = async (grantId: string) => {
+    setPending(true);
+    setError(null);
+    try {
+      const response = await fetch(LIMIT_RESETS_URL, {
+        method: 'POST',
+        credentials: 'include',
+        headers: await addCsrfHeaders({
+          'Content-Type': 'application/json',
+          [IDEMPOTENCY_KEY_HEADER]: `agi.usage.reset.${crypto.randomUUID()}`,
+        }),
+        body: JSON.stringify({ grantId }),
+      });
+      const payload: unknown = await response.json().catch(() => null);
+      if (!response.ok) {
+        const reason =
+          isRecord(payload) && isRecord(payload['error']) ? payload['error']['message'] : null;
+        throw new Error(typeof reason === 'string' ? reason : LIMIT_RESET_FAILURE);
+      }
+      onApplied();
+    } catch (applyError) {
+      setError(toUserMessage(applyError, LIMIT_RESET_FAILURE));
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const confirmApply = () => {
+    if (!next) return;
+    confirm({
+      title: 'Use your reset?',
+      description:
+        'Your 5-hour and weekly limits go back to full now. This uses one reset and cannot be undone.',
+      confirmLabel: 'Use reset',
+      onConfirm: () => apply(next.grant_id),
+    });
+  };
+
+  return (
+    <section aria-labelledby="usage-resets-heading" style={CARD}>
+      <div style={CARD_HEADER}>
+        <div style={{ ...ROW, alignItems: 'center' }}>
+          <h2 id="usage-resets-heading" style={CARD_TITLE}>
+            Resets
+          </h2>
+          {next && (
+            <button
+              type="button"
+              onClick={confirmApply}
+              disabled={pending || !resets.can_apply}
+              className={`${QUIET_BUTTON_CLASS} rounded-full`}
+              style={{ padding: '0 var(--space-3)' }}
+            >
+              {pending ? 'Using reset…' : 'Use reset'}
+            </button>
+          )}
+        </div>
+        <p style={CARD_NOTE}>A reset brings your 5-hour and weekly limits back to full.</p>
+      </div>
+      <div style={CARD_BODY}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-1)' }}>
+          <p
+            data-testid="usage-resets-status"
+            style={{ ...DETAIL, color: 'var(--text-1)', margin: 0 }}
+          >
+            {formatResetsAvailable(resets.available)}
+          </p>
+          <p style={{ ...DETAIL, margin: 0 }}>
+            {next
+              ? resets.can_apply
+                ? `Expires ${formatAbsolute(next.expires_at)}.`
+                : `Use it once you are close to a limit. Expires ${formatAbsolute(next.expires_at)}.`
+              : 'When you get one, it shows here with its expiry date.'}
+          </p>
+          {error && (
+            <p role="alert" style={{ ...CRITICAL_DETAIL, margin: 0 }}>
+              {error}
+            </p>
+          )}
+        </div>
+      </div>
+      {confirmDialog}
     </section>
   );
 }
@@ -1113,6 +1217,7 @@ export function UsageSection() {
   );
 
   const credits = usage?.credits ?? null;
+  const limitPromotions = usage?.limit_promotions ?? null;
   const isFreePlan = usage ? isFreeBillingPlanTier(usage.plan_tier) : false;
   const contractPriced = usage ? isContractPricedPlan(usage.plan_tier) : false;
   const showFlagship = credits ? credits.flagship_weekly !== null : true;
@@ -1232,6 +1337,15 @@ export function UsageSection() {
                   {statusLine}
                 </p>
               )}
+              {limitPromotions?.uplifts.map((uplift) => (
+                <p
+                  key={uplift.promotion_id}
+                  data-testid="usage-uplift"
+                  style={{ ...DETAIL, margin: 0 }}
+                >
+                  {formatUpliftLine(uplift, formatAbsolute(uplift.ends_at))}
+                </p>
+              ))}
               <UsageBar
                 unknown={usageUnknown}
                 label={managedUsageBucketLabel('session')}
@@ -1314,6 +1428,10 @@ export function UsageSection() {
           </div>
         )}
       </section>
+
+      {limitPromotions && !contractPriced && !isFreePlan && (
+        <LimitResetsCard resets={limitPromotions.resets} onApplied={() => void refresh()} />
+      )}
 
       {credits && !contractPriced && !isFreePlan && <CreditBalancesCard credits={credits} />}
 

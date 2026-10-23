@@ -330,6 +330,26 @@
       "file": "apps/web/lib/triggers/trigger-service.ts",
       "migration": 387,
       "reason": "Reads and writes the event_triggers.signing_salt column that 0387 adds, for regenerating a connector trigger secret and verifying its deliveries. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0387 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/usage-limit-promotion-service.ts",
+      "migration": 390,
+      "reason": "Reads and writes usage_limit_promotions and usage_limit_promotion_grants that 0390 adds, only after the billing.usage_promotions flag reads on. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0390 is applied."
+    },
+    {
+      "file": "apps/web/lib/server/account-erasure.ts",
+      "migration": 390,
+      "reason": "Erases the usage_limit_promotion_grants table that 0390 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0390 is applied."
+    },
+    {
+      "file": "apps/web/lib/services/deletion-manifest.ts",
+      "migration": 390,
+      "reason": "Classifies the usage_limit_promotion_grants table that 0390 adds in the retention matrix. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0390 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 390,
+      "reason": "Exports usage_limit_promotion_grants that 0390 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0390 is applied."
     }
   ]
 }

@@ -4,6 +4,8 @@ import {
   formatCreditWindowUsage,
   formatCredits,
   formatPlanCreditAllowanceLine,
+  formatResetsAvailable,
+  formatUpliftLine,
   formatUsageResetIn,
   getModelMetadataById,
   getUsageUrgency,
@@ -15,8 +17,9 @@ import {
   type AccountUsageHistoryResponse,
   type ManagedUsageCreditWindow,
   type ManagedUsageCredits,
+  type UsageLimitPromotionState,
 } from '@agiworkforce/types';
-import { View, ActivityIndicator } from 'react-native';
+import { View, ActivityIndicator, Alert } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
 import { BarChart3, Coins, RefreshCw } from 'lucide-react-native';
@@ -33,7 +36,8 @@ import {
 } from '@/src/features/settings/common';
 import { useCloudUsageStore } from './store';
 import { useStoreTopUps } from './useStoreTopUps';
-import { fetchUsageAllowances, fetchUsageHistory } from '@/services/usage';
+import { ApiHttpError } from '@/services/apiErrors';
+import { applyLimitReset, fetchUsageAllowances, fetchUsageHistory } from '@/services/usage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { getBillingPlanPricing, isFreeBillingPlanTier } from '@agiworkforce/types';
 import { formatBytes } from '@agiworkforce/utils/format';
@@ -359,6 +363,92 @@ function CreditBalancesCard({ credits }: { credits: ManagedUsageCredits }) {
       />
       {bonus ? <DetailRow label="Bonus credits" value={bonus.value} detail={bonus.detail} /> : null}
       <DetailRow label="Purchased credits" value={purchased.value} detail={purchased.detail} />
+    </SectionCard>
+  );
+}
+
+function LimitResetsCard({
+  resets,
+  onApplied,
+}: {
+  resets: UsageLimitPromotionState['resets'];
+  onApplied: () => void;
+}) {
+  const colors = useThemeColors();
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const next = resets.grants[0] ?? null;
+
+  const apply = async (grantId: string) => {
+    setPending(true);
+    setError(null);
+    try {
+      await applyLimitReset(grantId);
+      onApplied();
+    } catch (applyError) {
+      setError(
+        applyError instanceof ApiHttpError && applyError.status === 409
+          ? 'This reset cannot be used right now. Use it once you are close to a limit.'
+          : 'Your reset was not used. Try again.',
+      );
+    } finally {
+      setPending(false);
+    }
+  };
+
+  const confirmApply = () => {
+    if (!next) return;
+    Alert.alert(
+      'Use your reset?',
+      'Your 5-hour and weekly limits go back to full now. This uses one reset and cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Use reset', onPress: () => void apply(next.grant_id) },
+      ],
+    );
+  };
+
+  const detail = next
+    ? resets.can_apply
+      ? `Expires ${formatLongDate(next.expires_at)}.`
+      : `Use it once you are close to a limit. Expires ${formatLongDate(next.expires_at)}.`
+    : 'When you get one, it shows here with its expiry date.';
+
+  return (
+    <SectionCard title="Resets" note="A reset brings your 5-hour and weekly limits back to full.">
+      <DetailRow label={formatResetsAvailable(resets.available)} value="" detail={detail} />
+      {next ? (
+        <Pressable
+          onPress={confirmApply}
+          disabled={pending || !resets.can_apply}
+          accessibilityRole="button"
+          accessibilityState={{ disabled: pending || !resets.can_apply }}
+          style={{
+            minHeight: 44,
+            justifyContent: 'center',
+            alignSelf: 'flex-start',
+            paddingHorizontal: 16,
+            borderRadius: 999,
+            borderWidth: 1,
+            borderColor: colors.border,
+            opacity: pending || !resets.can_apply ? 0.5 : 1,
+          }}
+        >
+          <Text
+            style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '600' }}
+          >
+            {pending ? 'Using reset…' : 'Use reset'}
+          </Text>
+        </Pressable>
+      ) : null}
+      {error ? (
+        <Text
+          accessibilityRole="alert"
+          style={{ color: colors.textSecondary, fontSize: typeScale.footnote }}
+        >
+          {error}
+        </Text>
+      ) : null}
     </SectionCard>
   );
 }
@@ -746,6 +836,19 @@ export default function CloudUsageScreen() {
 
           {snapshot && (
             <>
+              {snapshot.limitPromotions?.uplifts.map((uplift) => (
+                <Text
+                  key={uplift.promotion_id}
+                  testID="usage-uplift"
+                  style={{
+                    color: colors.textSecondary,
+                    fontSize: typeScale.footnote,
+                    marginBottom: 12,
+                  }}
+                >
+                  {formatUpliftLine(uplift, formatLongDate(uplift.ends_at))}
+                </Text>
+              ))}
               {/* Current session, rolling 5h window, layers on top of the
                   monthly budget (founder decision, 2026-07-05). Percentage-only
                   contract: a null reset means the window is inactive for this
@@ -934,6 +1037,12 @@ export default function CloudUsageScreen() {
                 </View>
               </View>
 
+              {snapshot.limitPromotions ? (
+                <LimitResetsCard
+                  resets={snapshot.limitPromotions.resets}
+                  onApplied={() => void load()}
+                />
+              ) : null}
               {snapshot.credits ? <CreditBalancesCard credits={snapshot.credits} /> : null}
               {storeSellsTopUps ? (
                 <SettingsGroup>
