@@ -54,6 +54,17 @@ type ScanModule15 = typeof import('@/lib/server/free-pools');
 type ScanModule16 = typeof import('@/lib/server/free-quota-catalogue-cache');
 type ScanModule17 = typeof import('@/lib/feature-flags/flag-evaluation-service');
 
+const GENERATED_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
+const GENERATED_MP4 = Buffer.concat([
+  Buffer.from('00000014667479706d703432000000006d703432', 'hex'),
+  Buffer.from('00000010', 'hex'),
+  Buffer.from('mdat', 'latin1'),
+  Buffer.alloc(8),
+]);
+
 const mocks = vi.hoisted(() => ({
   store: null as unknown as MemoryKeyValueStore,
   query: vi.fn(),
@@ -311,7 +322,7 @@ beforeEach(async () => {
   mocks.flags.mockResolvedValue({});
   mocks.egress.mockResolvedValue(null);
   mocks.download.mockResolvedValue({
-    data: Buffer.from('generated-image'),
+    data: GENERATED_PNG,
     contentType: 'image/png',
   });
   mocks.moderateMedia.mockResolvedValue({
@@ -743,7 +754,7 @@ describe('Qwen free quota turns on the Free plan', () => {
     mocks.plan.mockResolvedValue('max_15x');
     mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
     mocks.download.mockResolvedValue({
-      data: Buffer.from('generated-video'),
+      data: GENERATED_MP4,
       contentType: 'video/mp4',
     });
 
@@ -1364,7 +1375,10 @@ describe('free quota image and video by plan', () => {
 
   function generates(mimeType: string) {
     mocks.media.mockResolvedValue({ status: 'succeeded', artifactUrl: PROVIDER_ARTIFACT_URL });
-    mocks.download.mockResolvedValue({ data: Buffer.from('generated'), contentType: mimeType });
+    mocks.download.mockResolvedValue({
+      data: mimeType.startsWith('video/') ? GENERATED_MP4 : GENERATED_PNG,
+      contentType: mimeType,
+    });
   }
 
   it('ships no limited free media offer in the pool configuration', () => {

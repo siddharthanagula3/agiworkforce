@@ -31,6 +31,7 @@ import {
 } from '@/test/free-quota-fixtures';
 import { StatementScanPostgres } from '@/lib/services/__tests__/statement-scan-postgres';
 import { composeStudyInstruction } from '@/features/study/lib/study-session';
+type ModelRegistryModule = typeof import('@agiworkforce/model-registry');
 type ScanModule0 = typeof import('next/server');
 type ScanModule1 = typeof import('@/lib/server/key-value');
 type ScanModule2 = typeof import('@/lib/services/entitlement-resolution');
@@ -61,7 +62,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@agiworkforce/model-registry')>();
+  const actual = await importOriginal<ModelRegistryModule>();
   return {
     ...actual,
     providerKeepsInputsOutOfTraining: (providerId: string) =>
