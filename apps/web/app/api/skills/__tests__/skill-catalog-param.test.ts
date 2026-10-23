@@ -27,19 +27,19 @@ const {
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: mockRateLimit,
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ApiAuthModule>()),
   getClerkAuthUser: mockAuthUser,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: vi.fn().mockReturnValue({}),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: mockUserScopedDb,
 }));
 vi.mock('@/lib/services/workspace-plugin-access', async () => {
@@ -50,11 +50,11 @@ vi.mock('@/lib/services/workspace-plugin-access', async () => {
   };
 });
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/services/plugin-installation-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/plugin-installation-service')>()),
+  ...(await importOriginal<PluginInstallationServiceModule>()),
   listEnabledPluginIds: mockListEnabledPluginIds,
 }));
 vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
@@ -66,11 +66,11 @@ vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
   filterSkillsByInstallOverrides: vi.fn(),
 }));
 vi.mock('@/lib/services/skill-install-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/skill-install-service')>()),
+  ...(await importOriginal<SkillInstallServiceModule>()),
   resolveInstalledManagedSkills: mockResolveInstalled,
 }));
 vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/user-skill-service')>()),
+  ...(await importOriginal<UserSkillServiceModule>()),
   findUserSkillWithFiles: vi.fn(async () => null),
   findUserSkillByName: vi.fn(async () => null),
   listUserSkillsAsManagedSkills: vi.fn(async () => []),
@@ -80,7 +80,7 @@ vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
   toUserSkillSummary: vi.fn(),
 }));
 vi.mock('@/lib/services/user-skill-authoring', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/user-skill-authoring')>()),
+  ...(await importOriginal<UserSkillAuthoringModule>()),
   userSkillAuthoringEnabled: mockAuthoringEnabled,
   requireUserSkillAuthoring: vi.fn(),
   USER_SKILL_AUTHORING_ENV_VAR: 'AGI_USER_SKILL_AUTHORING',
@@ -89,14 +89,24 @@ vi.mock('@/features/skills/server/skill-install-totals', () => ({
   readSkillInstallTotals: mockInstallTotals,
 }));
 vi.mock('@/features/plugins/server/directory/installed-skills', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/features/plugins/server/directory/installed-skills')
-  >()),
+  ...(await importOriginal<InstalledSkillsModule>()),
   findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
 }));
 
 import { GET } from '../route';
+
+type InstalledSkillsModule = typeof import('@/features/plugins/server/directory/installed-skills');
+
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type CsrfModule = typeof import('@/lib/csrf');
+type PluginInstallationServiceModule = typeof import('@/lib/services/plugin-installation-service');
+type SkillInstallServiceModule = typeof import('@/lib/services/skill-install-service');
+type UserSkillServiceModule = typeof import('@/lib/services/user-skill-service');
+type UserSkillAuthoringModule = typeof import('@/lib/services/user-skill-authoring');
 
 function skill(name: string) {
   return {

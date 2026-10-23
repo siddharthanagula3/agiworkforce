@@ -22,16 +22,16 @@ vi.mock('node:dns/promises', () => ({
 }));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('./tool-loop-anthropic', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./tool-loop-anthropic')>()),
+  ...(await importOriginal<ToolLoopAnthropicModule>()),
   buildToolLoopStream: vi.fn(),
   buildServingRouteId: vi.fn(),
 }));
 vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
+  ...(await importOriginal<LlmCostCalculatorModule>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),
@@ -77,6 +77,10 @@ import { CHAT_SYSTEM_PROMPT_ID } from '@/lib/prompts/chat-system-prompt';
 import { buildCapabilityPreamble, servingModelFor } from './capability-preamble';
 import { buildFailoverAttemptView } from './managed-failover';
 import type { ProcessedRequest } from './request-processor';
+
+type LoggerModule = typeof import('@/lib/logger');
+type ToolLoopAnthropicModule = typeof import('./tool-loop-anthropic');
+type LlmCostCalculatorModule = typeof import('@/lib/services/llm-cost-calculator');
 
 // buildToolLoopStream(provider, processed, stepRequest, responseModel) -- the
 // per-step llmRequest is argument index 2.

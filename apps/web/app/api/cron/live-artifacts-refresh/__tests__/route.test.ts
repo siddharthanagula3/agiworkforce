@@ -10,23 +10,28 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/cron-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/cron-auth')>()),
+  ...(await importOriginal<CronAuthModule>()),
   verifyCronRequest: mocks.verifyCronRequest,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: () => mocks.db,
 }));
 vi.mock('../refresh-live-artifacts', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../refresh-live-artifacts')>()),
+  ...(await importOriginal<RefreshLiveArtifactsModule>()),
   refreshLiveArtifacts: mocks.refreshLiveArtifacts,
 }));
 
 import { GET } from '../route';
+
+type LoggerModule = typeof import('@/lib/logger');
+type CronAuthModule = typeof import('@/lib/server/cron-auth');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type RefreshLiveArtifactsModule = typeof import('../refresh-live-artifacts');
 
 function call() {
   return GET(new NextRequest('http://localhost/api/cron/live-artifacts-refresh'));

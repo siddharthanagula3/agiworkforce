@@ -1,5 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type PushNotificationServiceModule = typeof import('@/lib/services/push-notification-service');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type LoggerModule = typeof import('@/lib/logger');
+
 const mocks = vi.hoisted(() => ({
   sendPushToUser: vi.fn(),
   query: vi.fn(),
@@ -8,11 +12,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/services/push-notification-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/push-notification-service')>()),
+  ...(await importOriginal<PushNotificationServiceModule>()),
   sendPushToUser: mocks.sendPushToUser,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: () => ({ transaction: vi.fn() }),
 }));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
@@ -22,7 +26,7 @@ vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   },
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 

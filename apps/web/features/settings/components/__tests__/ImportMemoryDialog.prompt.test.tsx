@@ -7,11 +7,13 @@ vi.mock('@/lib/client/csrf', () => ({
   addCsrfHeaders: vi.fn(async (headers: Record<string, string>) => headers),
 }));
 vi.mock('@shared/utils/browser-utils', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@shared/utils/browser-utils')>()),
+  ...(await importOriginal<BrowserUtilsModule>()),
   safeClipboard: clipboard,
 }));
 
 import { ImportMemoryDialog } from '../ImportMemoryDialog';
+
+type BrowserUtilsModule = typeof import('@shared/utils/browser-utils');
 
 beforeEach(() => {
   clipboard.writeText.mockReset();

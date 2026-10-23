@@ -6,8 +6,10 @@ import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { __resetStartupWorkForTests } from '../core/startupWork';
 import { runCliVersion } from '../platform/remoteEnvironment';
 
+type RemoteEnvironmentModule = typeof import('../platform/remoteEnvironment');
+
 vi.mock('../platform/remoteEnvironment', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../platform/remoteEnvironment')>()),
+  ...(await importOriginal<RemoteEnvironmentModule>()),
   runCliVersion: vi.fn(),
 }));
 

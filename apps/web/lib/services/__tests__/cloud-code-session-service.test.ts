@@ -4,23 +4,23 @@ type ScanModule1 = typeof import('@/lib/e2b/templates');
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 vi.mock('@/lib/e2b/runtime', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/e2b/runtime')>()),
+  ...(await importOriginal<RuntimeModule>()),
   getE2BExecutor: vi.fn(),
   killE2BSession: vi.fn(),
 }));
 vi.mock('@/lib/e2b/egress-host-resolution', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/e2b/egress-host-resolution')>()),
+  ...(await importOriginal<EgressHostResolutionModule>()),
   assertExtraEgressHostsResolveSafely: vi.fn(async () => undefined),
 }));
 const { managedCloudCodeSessionScope } = vi.hoisted(() => ({
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
 }));
 vi.mock('@/lib/e2b/session-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/e2b/session-store')>()),
+  ...(await importOriginal<SessionStoreModule>()),
   managedCloudCodeSessionScope,
   CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
   deleteE2BSession: vi.fn(),
@@ -47,7 +47,7 @@ vi.mock('@/lib/github-app', async (importOriginal) => {
   };
 });
 vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
+  ...(await importOriginal<UserConnectorToolsModule>()),
   getUserGithubInstallations: vi.fn(async () => []),
 }));
 vi.mock('@/lib/e2b/templates', async (importOriginal) => {
@@ -85,6 +85,12 @@ import {
   validateCreateCloudCodeSession,
   type CloudCodeOwner,
 } from '@/lib/services/cloud-code-session-service';
+
+type LoggerModule = typeof import('@/lib/logger');
+type RuntimeModule = typeof import('@/lib/e2b/runtime');
+type EgressHostResolutionModule = typeof import('@/lib/e2b/egress-host-resolution');
+type SessionStoreModule = typeof import('@/lib/e2b/session-store');
+type UserConnectorToolsModule = typeof import('@/lib/user-connector-tools');
 
 const PLAN_TIER = 'basic';
 const MAX_SESSIONS = getPlanMaxSandboxes(PLAN_TIER);

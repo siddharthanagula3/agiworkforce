@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type LoggerModule = typeof import('@/lib/logger');
+
 type AuditModule = typeof import('@/lib/security-audit');
 
 const mocks = vi.hoisted(() => ({
@@ -12,15 +17,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: async () => ({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
     userId: 'owner-1',
@@ -32,7 +37,7 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
   recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 

@@ -1,6 +1,13 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type ConnectorCapabilityModule = typeof import('@/lib/connectors/connector-capability');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type OauthAccessModule = typeof import('@/lib/connectors/oauth-access');
+
 const mocks = vi.hoisted(() => ({
   access: vi.fn(),
   credentialedFetch: vi.fn(),
@@ -8,27 +15,27 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: async () => null,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: async () => null,
 }));
 vi.mock('@/lib/connectors/connector-capability', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/connector-capability')>()),
+  ...(await importOriginal<ConnectorCapabilityModule>()),
   assertConnectorsReleased: () => undefined,
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: async () => ({ db: { query: vi.fn() }, userId: 'user-1', organizationId: null }),
 }));
 vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/oauth-access')>()),
+  ...(await importOriginal<OauthAccessModule>()),
   connectorUnreachableMessage: (name: string) => `${name} is unreachable`,
   resolveConnectorAccessToken: () => mocks.access(),
 }));

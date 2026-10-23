@@ -24,16 +24,16 @@ vi.mock('node:dns/promises', () => ({
 }));
 
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('./tool-loop-anthropic', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('./tool-loop-anthropic')>()),
+  ...(await importOriginal<ToolLoopAnthropicModule>()),
   buildToolLoopStream: vi.fn(),
   buildServingRouteId: vi.fn(),
 }));
 vi.mock('@/lib/services/credit-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/credit-service')>()),
+  ...(await importOriginal<CreditServiceModule>()),
   MICROUSD_PER_LEDGER_CENT: 10_000,
   microusdFromLedgerCents: (cents: number) => Math.round(cents) * 10_000,
   ledgerCentsFromMicrousd: (microusd: number) => Math.floor((microusd + 5_000) / 10_000),
@@ -45,7 +45,7 @@ vi.mock('@/lib/services/credit-service', async (importOriginal) => ({
   CreditSettlementUnavailableError: class extends Error {},
 }));
 vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
+  ...(await importOriginal<LlmCostCalculatorModule>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),
@@ -68,6 +68,11 @@ import { urlFetchToolDef } from '@/lib/url-fetch/url-fetch-tool';
 import { webSearchToolDef, WEB_SEARCH_MAX_CALLS_PER_TURN } from '@/lib/web-search/web-search-tool';
 import { requireProviderDefaultModel } from '@agiworkforce/types';
 import type { ProcessedRequest } from './request-processor';
+
+type LoggerModule = typeof import('@/lib/logger');
+type ToolLoopAnthropicModule = typeof import('./tool-loop-anthropic');
+type CreditServiceModule = typeof import('@/lib/services/credit-service');
+type LlmCostCalculatorModule = typeof import('@/lib/services/llm-cost-calculator');
 
 const streamRequestMock = vi.mocked(buildToolLoopStream);
 const SKIP_APPROVALS = { toolApprovalPolicy: 'autonomous' } as const;

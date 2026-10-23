@@ -11,11 +11,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: mocks.rateLimit,
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
     userId: 'user-1',
@@ -23,16 +23,21 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/cors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cors')>()),
+  ...(await importOriginal<CorsModule>()),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
 import { GET } from '../export/route';
+
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type CorsModule = typeof import('@/lib/cors');
+type LoggerModule = typeof import('@/lib/logger');
 
 function row(index: number, overrides: Record<string, unknown> = {}) {
   return {

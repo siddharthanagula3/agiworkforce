@@ -10,19 +10,19 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: mocks.getNeonDb,
 }));
 vi.mock('@/lib/triggers/trigger-ingest', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/triggers/trigger-ingest')>()),
+  ...(await importOriginal<TriggerIngestModule>()),
   ingestTriggerEvent: mocks.ingestTriggerEvent,
 }));
 
@@ -32,6 +32,11 @@ import {
   connectorTriggerSecret,
 } from '@/lib/triggers/trigger-signatures';
 import { POST } from './route';
+
+type LoggerModule = typeof import('@/lib/logger');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type TriggerIngestModule = typeof import('@/lib/triggers/trigger-ingest');
 
 const TRIGGER_ID = '11111111-1111-4111-8111-111111111111';
 

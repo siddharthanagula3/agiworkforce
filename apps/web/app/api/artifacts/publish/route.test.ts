@@ -1,5 +1,14 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
+
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type CorsModule = typeof import('@/lib/cors');
+type LoggerModule = typeof import('@/lib/logger');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
+
 type ScanModule0 = typeof import('@/lib/server/neon-db');
 type ScanModule1 = typeof import('@/lib/services/organization-policy-gate');
 
@@ -30,15 +39,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: (...a: unknown[]) => mocks.scopedDb(...a),
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
@@ -49,16 +58,16 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
   };
 });
 vi.mock('@/lib/cors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cors')>()),
+  ...(await importOriginal<CorsModule>()),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
@@ -69,7 +78,7 @@ vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
 }));
 
 vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
+  ...(await importOriginal<OrgEntitlementsModule>()),
   organizationCanShareArtifacts: (...a: unknown[]) => mocks.canShareArtifacts(...a),
 }));
 

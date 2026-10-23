@@ -105,7 +105,7 @@ vi.mock('@shared/stores/thinking-store', () => ({
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/ui')>()),
+  ...(await importOriginal<UiModule>()),
   useConfirmAction: () => ({ confirm: () => undefined, dialog: null }),
   useMenuKeyboard: () => undefined,
   useUiTranslation: () => ({ t: (key: string, fallback?: string) => fallback ?? key }),
@@ -143,6 +143,8 @@ vi.mock('@shared/components/agi/AgiMark', () => ({
 }));
 
 import { ComposerFooter } from '../ComposerFooter';
+
+type UiModule = typeof import('@agiworkforce/ui');
 
 function lockedSlot(): HTMLElement {
   return screen.getByRole('button', { name: new RegExp(`${LOCKED_MODEL_NAME}|Auto \\(free\\)`) });

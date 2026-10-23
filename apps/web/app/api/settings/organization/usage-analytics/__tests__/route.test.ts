@@ -19,27 +19,32 @@ const { mockQuery, mockGetUserScopedDb, mockRequireTeamAdminAccess, mockActivity
 );
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: mockGetUserScopedDb,
 }));
 vi.mock('@/lib/services/organization-activity-service', () => ({
   readOrganizationActivityDays: (...args: unknown[]) => mockActivity(...args),
 }));
 vi.mock('@/app/api/settings/team/team-admin-access', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/app/api/settings/team/team-admin-access')>()),
+  ...(await importOriginal<TeamAdminAccessModule>()),
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
 
 import { GET } from '../route';
 import type { OrganizationUsageResponse } from '../route';
+
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type TeamAdminAccessModule = typeof import('@/app/api/settings/team/team-admin-access');
 
 const ORG = '11111111-1111-4111-8111-111111111111';
 

@@ -63,7 +63,7 @@ vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: mocks.assertAccountActive,
 }));
 vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/artifact-runtime-service')>()),
+  ...(await importOriginal<ArtifactRuntimeServiceModule>()),
   ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
   buildArtifactConnectorPlan: vi.fn(),
   completeArtifactPrompt: vi.fn(),
@@ -76,7 +76,7 @@ vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
   listArtifactStorageKeys: mocks.listArtifactStorageKeys,
 }));
 vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/published-artifact-service')>()),
+  ...(await importOriginal<PublishedArtifactServiceModule>()),
   MAX_CONTENT_CHARS: 1_000_000,
   MAX_PUBLISHED_PER_USER: vi.fn(),
   PUBLISHABLE_KINDS: vi.fn(),
@@ -104,6 +104,9 @@ vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => (
 
 import { createError } from '@/lib/errors';
 import { POST } from '../route';
+
+type ArtifactRuntimeServiceModule = typeof import('@/lib/services/artifact-runtime-service');
+type PublishedArtifactServiceModule = typeof import('@/lib/services/published-artifact-service');
 
 const TOKEN = 'Abcdefghijklmnopqrstuv_1';
 const ARTIFACT = { token: TOKEN, ownerId: 'owner-9' };

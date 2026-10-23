@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
@@ -29,7 +29,7 @@ vi.mock('@agiworkforce/routing', async (importOriginal) => ({
   resolveAutoRoute: mocks.resolveAutoRoute,
 }));
 vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
+  ...(await importOriginal<SideCallTrainingPolicyModule>()),
   sideCallRoutingRequest: mocks.routingRequest,
   sideCallProviderAllowed: mocks.providerAllowed,
 }));
@@ -49,9 +49,7 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   toGenericUpstreamError: vi.fn(),
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-providers', async (importOriginal) => ({
-  ...(await importOriginal<
-    typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-providers')
-  >()),
+  ...(await importOriginal<AdapterProvidersModule>()),
   resolveWireMode: () => 'chat',
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({
@@ -64,6 +62,12 @@ import {
   SecurityScanNoRouteError,
   resolveSecurityScanModel,
 } from '../model';
+
+type AdapterProvidersModule =
+  typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-providers');
+
+type LoggerModule = typeof import('@/lib/logger');
+type SideCallTrainingPolicyModule = typeof import('@/lib/server/side-call-training-policy');
 
 const INPUT = {
   db: {} as never,

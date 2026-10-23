@@ -1,5 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
+
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type CorsModule = typeof import('@/lib/cors');
+
 type ScanModule0 = typeof import('@/lib/services/tier-unit-quota-service');
 
 const WINDOW = '2026-10-02T08:00:00.000Z/2026-10-02T09:00:00.000Z';
@@ -11,7 +18,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: vi.fn(async () => ({
     db: { query: mocks.query },
     userId: 'user-1',
@@ -19,19 +26,19 @@ vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
   })),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/cors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cors')>()),
+  ...(await importOriginal<CorsModule>()),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));

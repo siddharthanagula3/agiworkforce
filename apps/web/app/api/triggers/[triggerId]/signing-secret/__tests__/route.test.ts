@@ -13,23 +13,23 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: () => mocks.serviceDb,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: mocks.recordAuditEvent,
 }));
 
@@ -38,6 +38,12 @@ import {
   connectorTriggerSecret,
 } from '@/lib/triggers/trigger-signatures';
 import { POST } from '../route';
+
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CsrfModule = typeof import('@/lib/csrf');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
 
 const TRIGGER_ID = '77777777-7777-4777-8777-777777777777';
 

@@ -1,6 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 
+type UsageResetReminderPreferenceModule =
+  typeof import('@/lib/workflows/usage-reset-reminder-preference');
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type CorsModule = typeof import('@/lib/cors');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type KeyValueModule = typeof import('@/lib/server/key-value');
+type LoggerModule = typeof import('@/lib/logger');
+
 const mocks = vi.hoisted(() => ({
   start: vi.fn(),
   claimed: new Set<string>(),
@@ -13,28 +22,28 @@ vi.mock('@/lib/workflows/usage-reset-reminder-workflow', () => ({
   usageResetReminderWorkflow: vi.fn(),
 }));
 vi.mock('@/lib/workflows/usage-reset-reminder-preference', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/workflows/usage-reset-reminder-preference')>()),
+  ...(await importOriginal<UsageResetReminderPreferenceModule>()),
   usageResetReminderEnabled: vi.fn(async () => mocks.enabled),
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: vi.fn(async () => null),
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn(async () => null),
 }));
 vi.mock('@/lib/cors', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/cors')>()),
+  ...(await importOriginal<CorsModule>()),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: vi.fn(async () => ({ db: {}, userId: 'user-1', organizationId: null })),
 }));
 vi.mock('@/lib/server/key-value', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/key-value')>()),
+  ...(await importOriginal<KeyValueModule>()),
   getKeyValueStore: () => ({
     set: vi.fn(async (key: string, _value: unknown, options?: { onlyIfAbsent?: boolean }) => {
       if (options?.onlyIfAbsent && mocks.claimed.has(key)) return false;
@@ -45,7 +54,7 @@ vi.mock('@/lib/server/key-value', async (importOriginal) => ({
   }),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 

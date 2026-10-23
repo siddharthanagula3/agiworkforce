@@ -11,11 +11,13 @@ const store = vi.hoisted(() => ({
 }));
 
 vi.mock('@agiworkforce/unified-chat', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@agiworkforce/unified-chat')>()),
+  ...(await importOriginal<UnifiedChatModule>()),
   useMemoryStore: (selector: (state: typeof store) => unknown) => selector(store),
 }));
 
 import { ProjectMemoryPanel } from '../ProjectMemoryPanel';
+
+type UnifiedChatModule = typeof import('@agiworkforce/unified-chat');
 
 beforeEach(() => {
   vi.clearAllMocks();

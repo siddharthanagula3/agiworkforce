@@ -12,15 +12,15 @@ const { mockGetUserScopedDb, mockQuery, mockCsrf, mockAudit } = vi.hoisted(() =>
 }));
 
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: vi.fn().mockResolvedValue(null),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: mockGetUserScopedDb,
 }));
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: mockCsrf,
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
@@ -29,6 +29,10 @@ vi.mock('@/lib/security-audit', async (importOriginal) => ({
 }));
 
 import { GET, PUT } from '../route';
+
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type CsrfModule = typeof import('@/lib/csrf');
 
 const URL_PATH = 'http://localhost:3000/api/connectors/account-state';
 

@@ -88,7 +88,7 @@ vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: mocks.assertAccountActive,
 }));
 vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/artifact-runtime-service')>()),
+  ...(await importOriginal<ArtifactRuntimeServiceModule>()),
   deleteArtifactStorageValue: vi.fn(),
   describeArtifactConnectors: vi.fn(),
   listArtifactStorageKeys: vi.fn(),
@@ -102,7 +102,7 @@ vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
   completeArtifactPrompt: mocks.completeArtifactPrompt,
 }));
 vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/published-artifact-service')>()),
+  ...(await importOriginal<PublishedArtifactServiceModule>()),
   MAX_CONTENT_CHARS: 1_000_000,
   MAX_PUBLISHED_PER_USER: vi.fn(),
   PUBLISHABLE_KINDS: vi.fn(),
@@ -131,7 +131,7 @@ vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => (
   publishedArtifactAllowsConnectors: mocks.allowsConnectors,
 }));
 vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
+  ...(await importOriginal<OrganizationPolicyGateModule>()),
   diagnoseMemberPolicy: vi.fn(),
   readOrganizationIpAllowList: vi.fn(),
   resolveEffectiveWorkspaceControls: vi.fn(),
@@ -183,7 +183,7 @@ vi.mock('@/lib/services/managed-content-safety-service', () => ({
   enforceManagedContentSafetyPreference: mocks.enforceManagedContentSafetyPreference,
 }));
 vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
+  ...(await importOriginal<ManagedUsageRequestServiceModule>()),
   MANAGED_CHAT_CONTRACT_VERSION: vi.fn(),
   TOP_UP_HREF: '/settings/billing',
   UPGRADE_HREF: '/pricing',
@@ -233,6 +233,12 @@ import { createError } from '@/lib/errors';
 import { ArtifactRuntimeRouteUnavailableError } from '@/lib/services/artifact-runtime-service';
 import { ManagedUsageRequestError } from '@/lib/services/managed-usage-request-service';
 import { POST } from '../route';
+
+type ArtifactRuntimeServiceModule = typeof import('@/lib/services/artifact-runtime-service');
+type PublishedArtifactServiceModule = typeof import('@/lib/services/published-artifact-service');
+type OrganizationPolicyGateModule = typeof import('@/lib/services/organization-policy-gate');
+type ManagedUsageRequestServiceModule =
+  typeof import('@/lib/services/managed-usage-request-service');
 
 type TypesModule = typeof import('@agiworkforce/types');
 

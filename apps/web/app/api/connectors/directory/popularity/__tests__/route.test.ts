@@ -9,23 +9,23 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: (...args: unknown[]) => mocks.withRateLimit(...args),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  ...(await importOriginal<NeonDbModule>()),
   getNeonDb: () => ({ query: mocks.query }),
 }));
 vi.mock('@/lib/connectors/catalog', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/catalog')>()),
+  ...(await importOriginal<CatalogModule>()),
   isKnownConnectorId: (id: string) => ['gmail', 'google-drive', 'slack'].includes(id),
 }));
 vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/mcp-directory-targets')>()),
+  ...(await importOriginal<McpDirectoryTargetsModule>()),
   resolveDirectoryTarget: (id: string) => mocks.resolveDirectoryTarget(id),
 }));
 
@@ -36,6 +36,12 @@ import {
   resetConnectorPopularityCache,
 } from '../ranking';
 import { logger } from '@/lib/logger';
+
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type LoggerModule = typeof import('@/lib/logger');
+type NeonDbModule = typeof import('@/lib/server/neon-db');
+type CatalogModule = typeof import('@/lib/connectors/catalog');
+type McpDirectoryTargetsModule = typeof import('@/lib/connectors/mcp-directory-targets');
 
 function request(): NextRequest {
   return new NextRequest('http://localhost:3000/api/connectors/directory/popularity');

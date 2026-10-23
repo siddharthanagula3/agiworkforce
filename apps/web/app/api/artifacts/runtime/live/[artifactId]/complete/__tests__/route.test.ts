@@ -17,28 +17,28 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@/lib/csrf', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  ...(await importOriginal<CsrfModule>()),
   requireCsrfToken: mocks.requireCsrfToken,
 }));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: mocks.withRateLimit,
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: mocks.getUserScopedDb,
 }));
 vi.mock('@/lib/api-auth', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  ...(await importOriginal<ApiAuthModule>()),
   assertAccountActive: mocks.assertAccountActive,
   getClerkAuthUser: vi.fn(),
 }));
 vi.mock('@/lib/connectors/google-user-data', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/connectors/google-user-data')>()),
+  ...(await importOriginal<GoogleUserDataModule>()),
   conversationHoldsGoogleUserData: mocks.conversationHoldsGoogleUserData,
 }));
 vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/artifact-runtime-service')>()),
+  ...(await importOriginal<ArtifactRuntimeServiceModule>()),
   ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
   buildArtifactConnectorPlan: vi.fn(),
   completeArtifactPrompt: vi.fn(),
@@ -56,6 +56,13 @@ vi.mock('@/app/api/artifacts/runtime/artifact-completion', async (importOriginal
 }));
 
 import { POST } from '../route';
+
+type CsrfModule = typeof import('@/lib/csrf');
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type ApiAuthModule = typeof import('@/lib/api-auth');
+type GoogleUserDataModule = typeof import('@/lib/connectors/google-user-data');
+type ArtifactRuntimeServiceModule = typeof import('@/lib/services/artifact-runtime-service');
 
 const ARTIFACT_ID = 'c0ffee00-0000-4000-8000-000000000001';
 const OWNED = {

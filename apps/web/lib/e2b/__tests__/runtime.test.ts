@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { getPlanMaxSandboxes, getPlanSandboxTtlMs } from '@agiworkforce/types';
+
+type LoggerModule = typeof import('@/lib/logger');
+type GateModule = typeof import('../gate');
+type ComputeMeteringModule = typeof import('../compute-metering');
+type EffectiveSubscriptionServiceModule =
+  typeof import('@/lib/services/effective-subscription-service');
+type ProviderAdapterServiceModule = typeof import('@/lib/services/provider-adapter-service');
+type SessionStoreModule = typeof import('../session-store');
+type ProviderProxyAccessCacheModule = typeof import('../provider-proxy-access-cache');
+
 type ScanModule0 = typeof import('../templates');
 
 process.env['CSRF_SECRET'] ||= 'a'.repeat(40);
@@ -7,11 +17,11 @@ process.env['NEXT_PUBLIC_APP_URL'] ||= 'https://app.agiworkforce.test';
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
 }));
 vi.mock('../gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../gate')>()),
+  ...(await importOriginal<GateModule>()),
   e2bExecutionEnabled: vi.fn(() => true),
 }));
 
@@ -46,7 +56,7 @@ const reserveSandboxComputeInterval = vi.fn(async (input: unknown) => ({
 const releaseSandboxComputeReservation = vi.fn(async (_input: unknown) => {});
 const markSandboxComputeStarted = vi.fn(async (_input: unknown) => {});
 vi.mock('../compute-metering', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../compute-metering')>()),
+  ...(await importOriginal<ComputeMeteringModule>()),
   markSandboxComputeStarted: (input: unknown) => markSandboxComputeStarted(input),
   meterSandboxComputeInterval: (interval: unknown) => meterSandboxComputeInterval(interval),
   sandboxComputeIsPriceable: () => sandboxComputeIsPriceable(),
@@ -60,7 +70,7 @@ const resolveEffectiveSubscription = vi.fn(
   async (_db: unknown, _userId: string) => ({ plan_tier: 'pro' }) as unknown,
 );
 vi.mock('@/lib/services/effective-subscription-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/effective-subscription-service')>()),
+  ...(await importOriginal<EffectiveSubscriptionServiceModule>()),
   resolveEffectiveSubscription: (db: unknown, userId: string) =>
     resolveEffectiveSubscription(db, userId),
 }));
@@ -69,7 +79,7 @@ const buildServerProviderAdapter = vi.fn((providerId: string): { config: { apiKe
   throw new Error(`no managed key configured for ${providerId}`);
 });
 vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/services/provider-adapter-service')>()),
+  ...(await importOriginal<ProviderAdapterServiceModule>()),
   buildServerProviderAdapter: (providerId: string) => buildServerProviderAdapter(providerId),
 }));
 
@@ -122,7 +132,7 @@ interface TestSession {
 
 const sessions = new Map<string, TestSession>();
 vi.mock('../session-store', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../session-store')>()),
+  ...(await importOriginal<SessionStoreModule>()),
   CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
   getE2BSession: vi.fn(async (value: TestScope) => sessions.get(scopeKey(value)) ?? null),
   saveE2BSession: vi.fn(async (value: TestScope, session: unknown) => {
@@ -242,7 +252,7 @@ vi.mock('@e2b/code-interpreter', () => ({
 
 const invalidateCachedProviderProxyAccess = vi.fn(async (_sessionId: string) => {});
 vi.mock('../provider-proxy-access-cache', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../provider-proxy-access-cache')>()),
+  ...(await importOriginal<ProviderProxyAccessCacheModule>()),
   invalidateCachedProviderProxyAccess: (sessionId: string) =>
     invalidateCachedProviderProxyAccess(sessionId),
 }));

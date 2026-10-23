@@ -10,23 +10,27 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: mocks.audit,
 }));
 vi.mock('@/features/security-scan/server/route-access', () => ({
   securityScanRouteContext: mocks.routeContext,
 }));
 vi.mock('@/features/security-scan/server/service', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/features/security-scan/server/service')>()),
+  ...(await importOriginal<ServiceModule>()),
   runSecurityScan: mocks.runScan,
   readSecurityScanState: mocks.readState,
 }));
 
 import { GET, POST } from './route';
+
+type LoggerModule = typeof import('@/lib/logger');
+type SecurityAuditModule = typeof import('@/lib/security-audit');
+type ServiceModule = typeof import('@/features/security-scan/server/service');
 
 const SESSION_ID = '11111111-1111-4111-8111-111111111111';
 const params = { params: Promise.resolve({ sessionId: SESSION_ID }) };

@@ -3,6 +3,11 @@ import { NextRequest } from 'next/server';
 import { createError } from '@/lib/errors';
 import { encodeKeysetCursor } from '@/lib/identity/pagination';
 
+type RateLimitModule = typeof import('@/lib/rate-limit');
+type RlsDbModule = typeof import('@/lib/server/rls-db');
+type IdentityModule = typeof import('@/lib/server/identity');
+type LoggerModule = typeof import('@/lib/logger');
+
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
   getUser: vi.fn(),
@@ -16,20 +21,20 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('server-only', () => ({}));
 vi.mock('@/lib/rate-limit', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  ...(await importOriginal<RateLimitModule>()),
   withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a),
 }));
 vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  ...(await importOriginal<RlsDbModule>()),
   getUserScopedDb: (...a: unknown[]) => mocks.scopedDb(...a),
 }));
 vi.mock('@/lib/server/identity', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/server/identity')>()),
+  ...(await importOriginal<IdentityModule>()),
   getIdentityProvider: () => ({ getUser: (...a: unknown[]) => mocks.getUser(...a) }),
   getRequestIdentity: vi.fn(async () => ({ subject: null })),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  ...(await importOriginal<LoggerModule>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
