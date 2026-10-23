@@ -131,7 +131,6 @@
     "settings/organization/shared/connectors/[connectorId]",
     "settings/organization/shared/conversations/[sharedSessionId]",
     "settings/organization/shared/projects/[projectId]",
-    "settings/organization/usage-analytics",
     "settings/organization/usage-analytics/export",
     "settings/password",
     "settings/preferences",
