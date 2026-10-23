@@ -93,14 +93,14 @@ export function ArticleFeedback({ articleId, articleTitle, path }: ArticleFeedba
     }
   }
 
-  const failed = ratingState === 'failed' || commentState === 'failed';
-  const statusMessage = failed
-    ? SEND_FAILED
-    : commentState === 'sent'
+  const errorMessage = ratingState === 'failed' || commentState === 'failed' ? SEND_FAILED : null;
+  const statusMessage =
+    errorMessage ??
+    (commentState === 'sent'
       ? 'Thanks, your feedback was sent.'
       : voted
         ? 'Thanks for the feedback.'
-        : '';
+        : '');
 
   return (
     <section className="dx-feedback" aria-labelledby={headingId}>
@@ -152,7 +152,7 @@ export function ArticleFeedback({ articleId, articleTitle, path }: ArticleFeedba
         </form>
       ) : null}
       {statusMessage ? (
-        <p className="dx-feedback-status" role={failed ? 'alert' : 'status'}>
+        <p className="dx-feedback-status" role={errorMessage ? 'alert' : 'status'}>
           {statusMessage}
         </p>
       ) : null}
