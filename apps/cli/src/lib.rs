@@ -436,6 +436,14 @@ pub struct Cli {
     #[arg(long = "plain", global = true)]
     plain: bool,
 
+    /// Screen reader mode: plain output in the line-based REPL, every line
+    /// labelled `you:` or `agi:`, numbered menus answered by typing the number,
+    /// and a bell when input is needed. Also enabled by setting
+    /// AGI_SCREEN_READER in the environment or `ui.screen_reader = true` in
+    /// config.toml.
+    #[arg(long = "screen-reader", global = true)]
+    screen_reader: bool,
+
     /// Resume a session at a specific event/turn marker.
     #[arg(long = "resume-session-at", value_name = "MARKER")]
     resume_session_at: Option<String>,
@@ -2239,7 +2247,7 @@ enum MarketplaceSubcommand {
     /// Add a publisher's marketplace (a public GitHub repository with a marketplace manifest)
     /// to your account, so its plugins show up on every surface.
     Add {
-        /// GitHub repository URL of the marketplace.
+        /// GitHub repository of the marketplace, as owner/repo or a URL.
         repository_url: String,
         /// Branch or tag to read the manifest from.
         #[arg(long = "ref")]
@@ -2571,6 +2579,50 @@ async fn pick_code_session(client: &cloud::CloudClient) -> Result<String> {
     Ok(choice.id.clone())
 }
 
+/// A marketplace named as `owner/repo` is the GitHub repository of that name;
+/// anything else, a full URL included, is passed on unchanged.
+pub(crate) fn marketplace_repository_url(reference: &str) -> String {
+    let reference = reference.trim();
+    let is_slug = reference
+        .split_once('/')
+        .is_some_and(|(owner, repository)| {
+            let valid = |part: &str| {
+                !matches!(part, "" | "." | "..")
+                    && part
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | '.'))
+            };
+            valid(owner) && valid(repository)
+        });
+    if is_slug {
+        format!("https://github.com/{reference}")
+    } else {
+        reference.to_string()
+    }
+}
+
+pub(crate) async fn add_marketplace(
+    repository: &str,
+    git_ref: Option<&str>,
+    name: Option<&str>,
+) -> Result<String> {
+    let client = cloud::CloudClient::connect(account_privacy_mode())
+        .map_err(|error| anyhow::anyhow!("{error}"))?;
+    let source = cloud::marketplaces::add(
+        &client,
+        &marketplace_repository_url(repository),
+        git_ref,
+        name,
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
+    Ok(format!(
+        "Added {} to your account ({} plugins).",
+        terminal_text::sanitize_terminal_text(&source.name),
+        source.entry_count
+    ))
+}
+
 /// A marketplace plugin on the account, named `plugin@marketplace`.
 async fn marketplace_entry(
     reference: &str,
@@ -2599,7 +2651,7 @@ async fn marketplace_entry(
         .find(|candidate| cloud::marketplaces::source_matches(candidate, marketplace_name))
         .ok_or_else(|| {
             anyhow::anyhow!(
-                "No marketplace named {} on your account. Add it with `agi marketplace add <github url>`.",
+                "No marketplace named {} on your account. Add it with `agi marketplace add <owner/repo>`.",
                 terminal_text::sanitize_terminal_text(marketplace_name)
             )
         })?;
@@ -5547,7 +5599,15 @@ pub async fn run_main() -> Result<()> {
     // Plain mode has to be in force before anything prints, including the
     // banner and any spinner a subcommand starts, so it is published here
     // rather than resolved per call site.
-    output::set_plain_output(cli.plain || output::plain_output_requested_by_environment());
+    let screen_reader = cli.screen_reader
+        || output::screen_reader_requested_by_environment()
+        || config::CliConfig::load()
+            .ok()
+            .and_then(|config| config.ui.screen_reader)
+            .unwrap_or(false);
+    output::set_plain_output(
+        cli.plain || output::plain_output_requested_by_environment() || screen_reader,
+    );
     if !voice_languages::set_default_language(&cli.voice_lang) {
         output::print_warn(&format!(
             "--voice-lang {} is not a supported language, so /voice and /dictate use {}.",
@@ -5566,6 +5626,7 @@ pub async fn run_main() -> Result<()> {
     }
 
     let interactive = cli.prompt.is_none() && cli.command.is_none() && !cli.stdin;
+    output::set_screen_reader(screen_reader && interactive);
     let session_worktree = match cli.worktree.as_deref() {
         Some(requested) => Some(enter_session_worktree(requested).await?),
         None => None,
@@ -7135,20 +7196,10 @@ async fn run_cli(cli: Cli) -> Result<()> {
                         git_ref,
                         name,
                     } => {
-                        let client = cloud::CloudClient::connect(account_privacy_mode())
-                            .map_err(|error| anyhow::anyhow!("{error}"))?;
-                        let source = cloud::marketplaces::add(
-                            &client,
-                            repository_url,
-                            git_ref.as_deref(),
-                            name.as_deref(),
-                        )
-                        .await
-                        .map_err(|error| anyhow::anyhow!("{error}"))?;
                         println!(
-                            "Added {} to your account ({} plugins).",
-                            terminal_text::sanitize_terminal_text(&source.name),
-                            source.entry_count
+                            "{}",
+                            add_marketplace(repository_url, git_ref.as_deref(), name.as_deref())
+                                .await?
                         );
                         Ok(())
                     }
@@ -9061,6 +9112,70 @@ mod tests {
                 .is_err(),
             "a missing directory must fail loudly rather than run against the cwd"
         );
+    }
+
+    #[test]
+    fn marketplace_add_expands_an_owner_repo_slug_and_leaves_urls_alone() {
+        assert_eq!(
+            marketplace_repository_url("acme-co/plugin.market_1"),
+            "https://github.com/acme-co/plugin.market_1"
+        );
+        assert_eq!(
+            marketplace_repository_url("  acme/tools  "),
+            "https://github.com/acme/tools"
+        );
+        for untouched in [
+            "https://github.com/acme/tools",
+            "git@github.com:acme/tools.git",
+            "acme",
+            "acme/tools/extra",
+            "../tools",
+            "acme/..",
+            "acme/",
+            "/tools",
+            "ac me/tools",
+        ] {
+            assert_eq!(marketplace_repository_url(untouched), untouched);
+        }
+    }
+
+    #[test]
+    fn screen_reader_mode_has_a_launch_flag_before_or_after_a_subcommand() {
+        assert!(
+            !Cli::try_parse_from(["agi"])
+                .expect("bare agi")
+                .screen_reader
+        );
+        assert!(
+            Cli::try_parse_from(["agi", "--screen-reader"])
+                .expect("flag alone")
+                .screen_reader
+        );
+        assert!(
+            Cli::try_parse_from(["agi", "doctor", "--screen-reader"])
+                .expect("flag after a subcommand")
+                .screen_reader
+        );
+    }
+
+    #[test]
+    fn marketplace_add_parses_an_owner_repo_slug() {
+        let cli = Cli::try_parse_from(["agi", "marketplace", "add", "acme/tools", "--ref", "v2"])
+            .expect("marketplace add parses a slug");
+        match cli.command {
+            Some(Command::Marketplace {
+                action:
+                    MarketplaceSubcommand::Add {
+                        repository_url,
+                        git_ref,
+                        ..
+                    },
+            }) => {
+                assert_eq!(repository_url, "acme/tools");
+                assert_eq!(git_ref.as_deref(), Some("v2"));
+            }
+            other => panic!("expected marketplace add, got {other:?}"),
+        }
     }
 
     #[test]

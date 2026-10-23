@@ -64,6 +64,8 @@ pub(crate) fn shared_runtime_command_names() -> &'static [&'static str] {
         "extra-usage",
         "pricing",
         "remote-env",
+        "remote-control",
+        "rc",
         "add-dir",
         "remove-dir",
         "files",
@@ -293,6 +295,7 @@ pub fn handle_shared_command(
         }
         "/tag" => ParityCommandResult::SystemMessage(handle_tag(session, arg)),
         "/vim" => ParityCommandResult::SystemMessage(render_vim(arg)),
+        "/remote-control" | "/rc" => ParityCommandResult::SystemMessage(render_remote_control()),
         "/recap" => ParityCommandResult::Prompt(recap_prompt(arg)),
         "/security-review" => ParityCommandResult::Prompt(security_review_prompt(arg)),
         "/auto-mode-setup" => ParityCommandResult::SystemMessage(auto_mode_setup(session, arg)),
@@ -1751,6 +1754,12 @@ pub fn render_mobile() -> String {
     )
 }
 
+/// The line-based REPL cannot hand its session to the phone: the relay needs
+/// the full-screen interface's input queue, which `/remote-control` opens there.
+pub fn render_remote_control() -> String {
+    "Remote Control hands this session to AGI Mobile from the full-screen interface: start `agi` without --plain or --no-tui and run /remote-control there. To let AGI Mobile start and follow sessions in this folder instead, run `agi remote-control` in another terminal.".to_string()
+}
+
 pub fn render_doctor(session: &AgentSession) -> String {
     let (config, config_note) = match crate::config::CliConfig::load_merged() {
         Ok(config) => (config, None),
@@ -1860,11 +1869,19 @@ pub fn recap_prompt(arg: &str) -> String {
     )
 }
 
+pub const SECURITY_REVIEW_QUESTION: &str = "What should the security review cover?";
+
+pub const SECURITY_REVIEW_SCOPES: [(&str, &str); 2] = [
+    ("Changed files only", "--changes"),
+    ("Whole repository", "--repo"),
+];
+
 pub fn security_review_prompt(arg: &str) -> String {
-    let scope = if arg.trim().is_empty() {
-        "the current repository and uncommitted changes"
-    } else {
-        arg.trim()
+    let scope = match arg.trim() {
+        "" => "the current repository and uncommitted changes",
+        "--changes" => "only the files with uncommitted changes, staged and unstaged (git status and git diff HEAD), reading an unchanged file only to follow a call from a changed one",
+        "--repo" => "the whole repository: every tracked source file, not only recent changes",
+        scope => scope,
     };
     format!(
         "Run a security-focused review of {scope}. Inspect the relevant code and git diff. Prioritize exploitable bugs, unsafe command/file handling, secret/PII exposure, network trust boundaries, prompt injection/tool poisoning/RAG poisoning, insecure output handling, excessive agency, auth/BOLA/IDOR/tenant isolation bypasses, webhook signature/idempotency gaps, unsafe API consumption, and platform-specific permission overreach. Return findings first with file/line references."
@@ -2976,6 +2993,26 @@ mod tests {
     }
 
     #[test]
+    fn security_review_scopes_name_changed_files_or_the_whole_repository() {
+        assert_eq!(SECURITY_REVIEW_SCOPES[0].1, "--changes");
+        assert_eq!(SECURITY_REVIEW_SCOPES[1].1, "--repo");
+
+        let changes = security_review_prompt(SECURITY_REVIEW_SCOPES[0].1);
+        assert!(
+            changes.contains("only the files with uncommitted changes"),
+            "{changes}"
+        );
+        assert!(!changes.contains("--changes"), "{changes}");
+
+        let repository = security_review_prompt(SECURITY_REVIEW_SCOPES[1].1);
+        assert!(repository.contains("the whole repository"), "{repository}");
+        assert!(!repository.contains("--repo"), "{repository}");
+
+        let unscoped = security_review_prompt("");
+        assert!(unscoped.contains("the current repository and uncommitted changes"));
+    }
+
+    #[test]
     fn shared_command_mutates_session_for_tag() {
         let mut session = test_session();
 
@@ -2995,19 +3032,20 @@ mod tests {
     }
 
     #[test]
-    fn remote_control_is_not_exposed_without_a_real_transport() {
-        let mut session = test_session();
+    fn remote_control_is_routed_and_points_the_line_repl_at_the_full_screen_interface() {
+        assert!(shared_runtime_command_names().contains(&"remote-control"));
+        assert!(shared_runtime_command_names().contains(&"rc"));
 
-        assert!(!shared_runtime_command_names().contains(&"remote-control"));
-        assert!(!shared_runtime_command_names().contains(&"rc"));
-        assert_eq!(
-            handle_shared_command("/remote-control", "", &mut session),
-            ParityCommandResult::NotHandled
-        );
-        assert_eq!(
-            handle_shared_command("/rc", "", &mut session),
-            ParityCommandResult::NotHandled
-        );
+        for command in ["/remote-control", "/rc"] {
+            let mut session = test_session();
+            let ParityCommandResult::SystemMessage(message) =
+                handle_shared_command(command, "", &mut session)
+            else {
+                panic!("{command} must answer with a message");
+            };
+            assert!(message.contains("/remote-control"), "{message}");
+            assert!(message.contains("agi remote-control"), "{message}");
+        }
     }
 
     #[test]

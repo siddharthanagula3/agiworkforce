@@ -257,7 +257,15 @@ pub async fn run_repl(
                 }
 
                 if input.starts_with('/') {
-                    let result = handle_slash_command(input, &mut session, config).await;
+                    if let Some(request) = agent_request(input) {
+                        create_described_agent(&request, &session, config).await;
+                        continue;
+                    }
+                    let Some(command) = with_security_review_scope(input) else {
+                        output::print_info("Security review cancelled.");
+                        continue;
+                    };
+                    let result = handle_slash_command(&command, &mut session, config).await;
                     match result {
                         SlashResult::Exit => break,
                         SlashResult::Login(provider) => {
@@ -329,7 +337,19 @@ pub async fn run_repl(
                         },
                         SlashResult::Marketplace(subcmd) => {
                             let home = crate::config::CliConfig::config_dir();
-                            match (subcmd.as_str(), home) {
+                            let subcmd = subcmd.strip_prefix("marketplace ").unwrap_or(&subcmd);
+                            match (subcmd, home) {
+                                (sub, Ok(_home)) if sub.starts_with("add ") => {
+                                    let repository = sub.strip_prefix("add ").unwrap_or_default();
+                                    match crate::add_marketplace(repository.trim(), None, None)
+                                        .await
+                                    {
+                                        Ok(added) => eprintln!("{added}"),
+                                        Err(error) => output::print_error(&format!(
+                                            "Adding the marketplace failed: {error:#}"
+                                        )),
+                                    }
+                                }
                                 (sub, Ok(_home)) if sub.starts_with("search ") => {
                                     let query = sub.strip_prefix("search ").unwrap_or_default();
                                     let privacy = crate::account_privacy_mode();
@@ -393,7 +413,7 @@ pub async fn run_repl(
                                 }
                                 _ => {
                                     output::print_info(
-                                        "Usage: /marketplace search <query> | /marketplace recommend | /marketplace list",
+                                        "Usage: /marketplace add <owner/repo> | /marketplace search <query> | /marketplace recommend | /marketplace list",
                                     );
                                 }
                             }
@@ -716,6 +736,49 @@ pub async fn run_repl(
     Ok(())
 }
 
+fn agent_request(input: &str) -> Option<crate::agents::AgentRequest> {
+    let (command, argument) = input.split_once(char::is_whitespace)?;
+    matches!(command, "/agents" | "/agent")
+        .then(|| crate::agents::AgentRequest::parse(argument))
+        .flatten()
+}
+
+async fn create_described_agent(
+    request: &crate::agents::AgentRequest,
+    session: &AgentSession,
+    config: &CliConfig,
+) {
+    let source = match crate::agents::DraftSource::from_session(session) {
+        Ok(source) => source,
+        Err(refusal) => {
+            output::print_block(&refusal);
+            return;
+        }
+    };
+    let spinner = output::create_spinner(crate::agents::GENERATING_AGENT_CONFIGURATION);
+    let message = request.create(&source, config).await;
+    spinner.finish_and_clear();
+    output::print_block(&message);
+}
+
+/// A bare `/security-review` at a terminal asks what to cover first; with a
+/// scope already given, or with no one to ask, it runs as typed. `None` means
+/// the question was cancelled.
+fn with_security_review_scope(input: &str) -> Option<String> {
+    if input != "/security-review" || !crate::interactive::can_prompt() {
+        return Some(input.to_string());
+    }
+    let labels: Vec<&str> = crate::claude_parity::SECURITY_REVIEW_SCOPES
+        .iter()
+        .map(|(label, _)| *label)
+        .collect();
+    let picked = output::choose_option(crate::claude_parity::SECURITY_REVIEW_QUESTION, &labels, 0)?;
+    Some(format!(
+        "{input} {}",
+        crate::claude_parity::SECURITY_REVIEW_SCOPES[picked].1
+    ))
+}
+
 async fn run_prompt_turn(session: &mut AgentSession, config: &CliConfig, full_input: String) {
     match session.reload_if_changed_on_disk() {
         Ok(true) => output::print_info(
@@ -998,5 +1061,33 @@ mod line_editor_tests {
         let config = line_editor_config(EditMode::Vi);
         assert!(!config.auto_add_history());
         assert_eq!(config.edit_mode(), EditMode::Vi);
+    }
+}
+
+#[cfg(test)]
+mod slash_routing_tests {
+    use super::with_security_review_scope;
+
+    #[test]
+    fn only_a_described_agent_is_drafted_by_the_model() {
+        use super::agent_request;
+        assert!(agent_request("/agents create reviews pull requests").is_some());
+        assert!(agent_request("/agent new tidy the changelog --global").is_some());
+        assert!(agent_request("/agents create reviewer").is_none());
+        assert!(agent_request("/agents show two words").is_none());
+        assert!(agent_request("/agents").is_none());
+        assert!(agent_request("/model create two words").is_none());
+    }
+
+    #[test]
+    fn a_scope_already_given_and_other_commands_run_as_typed() {
+        for typed in [
+            "/security-review src/auth",
+            "/security-review --repo",
+            "/review",
+            "/security-reviews",
+        ] {
+            assert_eq!(with_security_review_scope(typed).as_deref(), Some(typed));
+        }
     }
 }

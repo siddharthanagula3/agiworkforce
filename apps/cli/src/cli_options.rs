@@ -1,8 +1,7 @@
 //! Normalized global CLI option contract.
 //!
 //! Entrypoint flags are normalized into one options object before launching the
-//! implemented print, interactive, or SDK paths. Remote control is intentionally
-//! absent until AGI has a real authenticated host/relay transport.
+//! implemented print, interactive, or SDK paths.
 
 use clap::ValueEnum;
 use serde::{Deserialize, Serialize};

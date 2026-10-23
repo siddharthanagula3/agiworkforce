@@ -115,6 +115,11 @@ pub struct UiConfig {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bell_on_finish: Option<bool>,
 
+    /// Screen reader mode: the line-based REPL with labelled `you:` and `agi:` lines,
+    /// plain output, numbered menus answered by a digit and a bell when input is needed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen_reader: Option<bool>,
+
     /// Line-editing mode for the classic REPL: `emacs` or `vi`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub edit_mode: Option<String>,
@@ -786,6 +791,9 @@ impl CliConfig {
         if other.ui.bell_on_finish.is_some() {
             self.ui.bell_on_finish = other.ui.bell_on_finish;
         }
+        if other.ui.screen_reader.is_some() {
+            self.ui.screen_reader = other.ui.screen_reader;
+        }
         for (action, binding) in &other.ui.keybindings {
             self.ui.keybindings.insert(action.clone(), binding.clone());
         }
@@ -1036,6 +1044,9 @@ impl CliConfig {
         if let Some(bell) = self.ui.bell_on_finish {
             out.push_str(&format!("Bell when a long turn finishes: {}\n", bell));
         }
+        if let Some(screen_reader) = self.ui.screen_reader {
+            out.push_str(&format!("Screen reader mode: {}\n", screen_reader));
+        }
         if !self.ui.keybindings.is_empty() {
             out.push_str("Keybindings:\n");
             for (action, binding) in &self.ui.keybindings {
@@ -1144,6 +1155,9 @@ impl CliConfig {
             }
             "bell" | "ui.bell" | "ui.bell_on_finish" => {
                 self.ui.bell_on_finish.map(|bell| bell.to_string())
+            }
+            "screen-reader" | "ui.screen-reader" | "ui.screen_reader" => {
+                self.ui.screen_reader.map(|enabled| enabled.to_string())
             }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 Some(self.telemetry.crash_reports.to_string())
@@ -1260,6 +1274,14 @@ impl CliConfig {
                         .context("bell must be true or false")?,
                 );
             }
+            "screen-reader" | "ui.screen-reader" | "ui.screen_reader" => {
+                self.ui.screen_reader = Some(
+                    value
+                        .trim()
+                        .parse::<bool>()
+                        .context("screen-reader must be true or false")?,
+                );
+            }
             "crash-reports" | "telemetry.crash-reports" | "telemetry.crash_reports" => {
                 self.telemetry.crash_reports = value
                     .trim()
@@ -1283,7 +1305,7 @@ impl CliConfig {
                     self.ui.keybindings = candidate;
                 } else {
                     bail!(
-                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, theme, reduced-motion, crash-reports, product-analytics, and ui.keybindings.<action>",
+                        "Unknown config key: '{}'. Valid keys include model, provider, max-tokens, temperature, stream, fallback-model, fallback-chain, fast-model, output-style, privacy-mode, edit-mode, theme, reduced-motion, screen-reader, crash-reports, product-analytics, and ui.keybindings.<action>",
                         key
                     );
                 }
@@ -1298,7 +1320,7 @@ impl CliConfig {
     /// - `AGIWORKFORCE_MODEL` -> `default.model`
     /// - `AGIWORKFORCE_PROVIDER` -> `default.provider`
     /// - `AGIWORKFORCE_MAX_TOKENS` -> `default.max_tokens`
-    /// - `AGIWORKFORCE_API_BASE` and `AGI_PLAIN`, which take effect where they
+    /// - `AGIWORKFORCE_API_BASE`, `AGI_PLAIN` and `AGI_SCREEN_READER`, which take effect where they
     ///   are read and are recorded here so `/config` shows them
     pub fn merge_env_overrides(&mut self) {
         if let Ok(model) = std::env::var("AGIWORKFORCE_MODEL") {
@@ -1333,6 +1355,11 @@ impl CliConfig {
         }
         if crate::output::plain_output_requested_by_environment() {
             self.source.env_overrides.push("AGI_PLAIN".to_string());
+        }
+        if crate::output::screen_reader_requested_by_environment() {
+            self.source
+                .env_overrides
+                .push("AGI_SCREEN_READER".to_string());
         }
     }
 }
@@ -1462,6 +1489,35 @@ mod tests {
             .unwrap();
         assert!(set.default.model_chosen);
     }
+
+    #[test]
+    fn screen_reader_mode_is_a_ui_key_that_reads_writes_and_merges() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("config.toml");
+        std::fs::write(&path, "[ui]\nscreen_reader = true\n").unwrap();
+        let loaded = CliConfig::load_from(&path).unwrap();
+        assert_eq!(loaded.ui.screen_reader, Some(true));
+        assert_eq!(
+            loaded.get_value("ui.screen_reader").as_deref(),
+            Some("true")
+        );
+        assert!(loaded
+            .written_toml()
+            .unwrap()
+            .contains("screen_reader = true"));
+
+        let mut config = CliConfig::default();
+        assert_eq!(config.ui.screen_reader, None);
+        assert!(!config.written_toml().unwrap().contains("screen_reader"));
+        config.set_value("screen-reader", "true").unwrap();
+        assert_eq!(config.ui.screen_reader, Some(true));
+        assert!(config.set_value("ui.screen_reader", "yes please").is_err());
+
+        let mut base = CliConfig::default();
+        base.merge_from(&loaded);
+        assert_eq!(base.ui.screen_reader, Some(true));
+    }
+
     use std::sync::Mutex;
 
     /// Tests that mutate process environment variables must hold this mutex.

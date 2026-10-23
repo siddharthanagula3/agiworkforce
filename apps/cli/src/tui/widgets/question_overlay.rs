@@ -12,6 +12,15 @@ use crate::tui::terminal_palette::{ui_accent, ui_muted, ui_on_light, ui_surface_
 const OWN_ANSWER: &str = "Type your own answer";
 const MAX_BOX_WIDTH: u16 = 82;
 
+const AGENT_QUESTION_TITLE: &str = "Question from the agent";
+
+/// A question whose answer completes a slash command: the picked option's
+/// argument, or the typed text, is appended to `command` and the command runs.
+struct CommandAnswer {
+    command: String,
+    arguments: Vec<String>,
+}
+
 pub struct QuestionOverlayState {
     pub question: String,
     pub options: Vec<String>,
@@ -19,6 +28,8 @@ pub struct QuestionOverlayState {
     pub typed: String,
     pub answer: Option<String>,
     pub dismissed: bool,
+    title: String,
+    completes: Option<CommandAnswer>,
 }
 
 impl QuestionOverlayState {
@@ -33,7 +44,44 @@ impl QuestionOverlayState {
             typed: String::new(),
             answer: None,
             dismissed: false,
+            title: AGENT_QUESTION_TITLE.to_string(),
+            completes: None,
         }
+    }
+
+    /// Ask `question` before running `/command`; each choice pairs the label
+    /// shown with the argument the command receives.
+    pub fn for_command(
+        command: &str,
+        title: &str,
+        question: &str,
+        choices: &[(&str, &str)],
+    ) -> Self {
+        let labels: Vec<String> = choices
+            .iter()
+            .map(|(label, _)| (*label).to_string())
+            .collect();
+        let mut state = Self::new(question, &labels);
+        state.title = sanitize_terminal_text(title).into_owned();
+        state.completes = Some(CommandAnswer {
+            command: command.trim_start_matches('/').to_string(),
+            arguments: choices
+                .iter()
+                .map(|(_, argument)| (*argument).to_string())
+                .collect(),
+        });
+        state
+    }
+
+    fn answered(&mut self, row: usize, text: String) -> ViewAction {
+        let Some(completes) = &self.completes else {
+            self.answer = Some(text);
+            return ViewAction::Submit(row);
+        };
+        let argument = completes.arguments.get(row).cloned().unwrap_or(text);
+        let tag = format!("slash:{} {argument}", completes.command);
+        self.answer = Some(argument);
+        ViewAction::SideAction(tag)
     }
 
     fn own_row(&self) -> usize {
@@ -103,7 +151,7 @@ impl QuestionOverlayState {
         frame.render_widget(Clear, box_area);
 
         let block = Block::default()
-            .title(" Question from the agent ")
+            .title(format!(" {} ", self.title))
             .borders(Borders::ALL)
             .border_style(Style::default().fg(ui_accent()))
             .style(Style::default().bg(ui_surface_elevated()));
@@ -184,15 +232,14 @@ impl InteractiveView for QuestionOverlayState {
                 }
             }
             KeyAction::Enter if own => {
-                let typed = self.typed.trim();
+                let typed = self.typed.trim().to_string();
                 if !typed.is_empty() {
-                    self.answer = Some(typed.to_string());
-                    return ViewAction::Submit(self.cursor);
+                    return self.answered(self.cursor, typed);
                 }
             }
             KeyAction::Enter => {
-                self.answer = self.options.get(self.cursor).cloned();
-                return ViewAction::Submit(self.cursor);
+                let chosen = self.options.get(self.cursor).cloned().unwrap_or_default();
+                return self.answered(self.cursor, chosen);
             }
             KeyAction::Backspace if own => {
                 self.typed.pop();
@@ -208,8 +255,8 @@ impl InteractiveView for QuestionOverlayState {
                 let picked = digit.to_digit(10).unwrap_or(0) as usize;
                 if picked >= 1 && picked <= self.options.len() {
                     self.cursor = picked - 1;
-                    self.answer = self.options.get(self.cursor).cloned();
-                    return ViewAction::Submit(self.cursor);
+                    let chosen = self.options.get(self.cursor).cloned().unwrap_or_default();
+                    return self.answered(self.cursor, chosen);
                 }
                 if picked == self.own_row() + 1 {
                     self.cursor = self.own_row();
@@ -225,6 +272,90 @@ impl InteractiveView for QuestionOverlayState {
     }
 
     fn title(&self) -> Option<&str> {
-        Some("Question from the agent")
+        Some(&self.title)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const SCOPES: [(&str, &str); 2] = [
+        ("Changed files", "--changes"),
+        ("Whole repository", "--repo"),
+    ];
+
+    fn scope_question() -> QuestionOverlayState {
+        QuestionOverlayState::for_command(
+            "/security-review",
+            "Security review scope",
+            "Cover what?",
+            &SCOPES,
+        )
+    }
+
+    #[test]
+    fn an_agent_question_still_submits_the_option_it_was_given() {
+        let mut overlay =
+            QuestionOverlayState::new("Which one?", &["alpha".to_string(), "beta".to_string()]);
+        assert_eq!(overlay.title(), Some("Question from the agent"));
+
+        assert_eq!(overlay.handle_key(KeyAction::Down), ViewAction::Continue);
+        assert_eq!(overlay.handle_key(KeyAction::Enter), ViewAction::Submit(1));
+        assert_eq!(overlay.answer.as_deref(), Some("beta"));
+
+        let mut by_digit = QuestionOverlayState::new("Which one?", &["alpha".to_string()]);
+        assert_eq!(
+            by_digit.handle_key(KeyAction::Char('1')),
+            ViewAction::Submit(0)
+        );
+        assert_eq!(by_digit.answer.as_deref(), Some("alpha"));
+    }
+
+    #[test]
+    fn a_command_question_runs_the_command_with_the_picked_argument() {
+        let mut overlay = scope_question();
+        assert_eq!(overlay.title(), Some("Security review scope"));
+        assert_eq!(
+            overlay.handle_key(KeyAction::Enter),
+            ViewAction::SideAction("slash:security-review --changes".to_string()),
+            "the first option is the default"
+        );
+
+        let mut by_digit = scope_question();
+        assert_eq!(
+            by_digit.handle_key(KeyAction::Char('2')),
+            ViewAction::SideAction("slash:security-review --repo".to_string())
+        );
+
+        let mut by_arrow = scope_question();
+        by_arrow.handle_key(KeyAction::Down);
+        assert_eq!(
+            by_arrow.handle_key(KeyAction::Enter),
+            ViewAction::SideAction("slash:security-review --repo".to_string())
+        );
+    }
+
+    #[test]
+    fn a_command_question_passes_typed_text_through_and_skips_on_escape() {
+        let mut typed = scope_question();
+        typed.handle_key(KeyAction::Char('3'));
+        assert!(typed.on_own_row());
+        for character in "src/auth".chars() {
+            typed.handle_key(KeyAction::Char(character));
+        }
+        assert_eq!(
+            typed.handle_key(KeyAction::Enter),
+            ViewAction::SideAction("slash:security-review src/auth".to_string())
+        );
+
+        let mut empty = scope_question();
+        empty.handle_key(KeyAction::Char('3'));
+        assert_eq!(empty.handle_key(KeyAction::Enter), ViewAction::Continue);
+
+        let mut skipped = scope_question();
+        assert_eq!(skipped.handle_key(KeyAction::Esc), ViewAction::Close);
+        assert!(skipped.dismissed);
+        assert_eq!(skipped.answer, None);
     }
 }

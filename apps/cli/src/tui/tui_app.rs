@@ -5021,6 +5021,7 @@ enum SlashResult {
     RunAttachUrl(String),
     RunPersonalize(String),
     RunBtw(String),
+    RunAgentDraft(crate::agents::AgentRequest),
     RunRemoteControl(String),
     RunFeedback(crate::cloud::feedback::FeedbackKind, String),
 }
@@ -5638,6 +5639,8 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 // Open interactive agent picker overlay
                 app.agent_picker.open();
                 SlashResult::SystemMessage(String::new())
+            } else if let Some(request) = crate::agents::AgentRequest::parse(arg) {
+                SlashResult::RunAgentDraft(request)
             } else if is_management_subcommand {
                 SlashResult::SystemMessage(crate::agents::render_agents_command(arg))
             } else {
@@ -5931,6 +5934,18 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 format!("Please review the code related to: {arg}. Look for bugs, security issues, and improvements.")
             };
             SlashResult::SendPrompt(review_prompt)
+        }
+
+        "/security-review" if arg.is_empty() => {
+            app.open_overlay(Box::new(
+                crate::tui::widgets::question_overlay::QuestionOverlayState::for_command(
+                    "security-review",
+                    "Security review scope",
+                    crate::claude_parity::SECURITY_REVIEW_QUESTION,
+                    &crate::claude_parity::SECURITY_REVIEW_SCOPES,
+                ),
+            ));
+            SlashResult::SystemMessage(String::new())
         }
 
         "/effort" | "/e" => {
@@ -7026,6 +7041,26 @@ async fn run_event_loop(
                                         text: format!("/btw {error:#}"),
                                     }),
                                 }
+                            }
+                            SlashResult::RunAgentDraft(request) => {
+                                let text =
+                                    match crate::agents::DraftSource::from_session(&app.session) {
+                                        Ok(source) => {
+                                            let config = app.config.clone();
+                                            let answers = app.side_answers.0.clone();
+                                            tokio::spawn(async move {
+                                                let _ = answers
+                                                    .send(request.create(&source, &config).await);
+                                            });
+                                            crate::agents::GENERATING_AGENT_CONFIGURATION
+                                                .to_string()
+                                        }
+                                        Err(refusal) => refusal,
+                                    };
+                                app.chat_messages.push(ChatMessage {
+                                    role: ChatRole::System,
+                                    text,
+                                });
                             }
                             SlashResult::RunPersonalize(argument) => {
                                 let text = match crate::cloud::personalization::run(&argument).await
@@ -9733,6 +9768,52 @@ mod tests {
             matches!(action, InputAction::SendMessage(ref text) if text == "/help"),
             "one Enter must submit, got {action:?}"
         );
+        assert!(app.active_overlay.is_none());
+    }
+
+    #[test]
+    fn security_review_asks_for_its_scope_before_it_runs() {
+        use crossterm::event::KeyCode;
+
+        let mut app = minimal_app();
+        assert!(matches!(
+            handle_slash("/security-review", &mut app),
+            SlashResult::SystemMessage(ref text) if text.is_empty()
+        ));
+        assert!(app.active_overlay.is_some(), "the scope question opens");
+
+        app.dispatch_key_to_overlay(make_key(KeyCode::Down));
+        let consumed = app.dispatch_key_to_overlay(make_key(KeyCode::Enter));
+        assert!(
+            matches!(consumed, Some(InputAction::SendMessage(ref text)) if text == "/security-review --repo"),
+            "the picked scope runs the command, got {consumed:?}"
+        );
+        assert!(app.active_overlay.is_none());
+    }
+
+    #[test]
+    fn a_described_agent_is_drafted_and_a_bare_create_asks_for_the_description() {
+        let mut app = minimal_app();
+        assert!(matches!(
+            handle_slash(
+                "/agents create reviews pull requests for risky changes",
+                &mut app
+            ),
+            SlashResult::RunAgentDraft(_)
+        ));
+        assert!(matches!(
+            handle_slash("/agents create", &mut app),
+            SlashResult::SystemMessage(ref text) if text.contains("Describe what this agent should do")
+        ));
+    }
+
+    #[test]
+    fn security_review_with_a_scope_given_runs_without_asking() {
+        let mut app = minimal_app();
+        assert!(matches!(
+            handle_slash("/security-review src/auth", &mut app),
+            SlashResult::SendPrompt(ref prompt) if prompt.contains("src/auth")
+        ));
         assert!(app.active_overlay.is_none());
     }
 

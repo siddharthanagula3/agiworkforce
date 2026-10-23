@@ -58,6 +58,31 @@ pub fn plain_output_requested_by_environment() -> bool {
     env::var("AGI_PLAIN").is_ok_and(|value| !value.is_empty())
 }
 
+/// Whether this run is in screen reader mode: plain output, plus a label on
+/// every line of the transcript so a listener can tell who is speaking, numbered
+/// menus answered by typing the number, and a bell when the terminal waits for
+/// the user. Only the line-based REPL turns it on; scripted modes keep their
+/// stdout free of labels.
+static SCREEN_READER: AtomicBool = AtomicBool::new(false);
+
+const USER_LABEL: &str = "you: ";
+const ASSISTANT_LABEL: &str = "agi: ";
+const BELL: char = '\u{7}';
+
+pub fn set_screen_reader(enabled: bool) {
+    SCREEN_READER.store(enabled, Ordering::Relaxed);
+}
+
+pub fn screen_reader() -> bool {
+    SCREEN_READER.load(Ordering::Relaxed)
+}
+
+/// Whether the environment asks for screen reader mode on its own. It follows
+/// `AGI_PLAIN`: any non-empty value means yes.
+pub fn screen_reader_requested_by_environment() -> bool {
+    env::var("AGI_SCREEN_READER").is_ok_and(|value| !value.is_empty())
+}
+
 /// Detect the terminal's color capability from environment variables.
 ///
 /// Checks (in order):
@@ -248,9 +273,88 @@ fn announced_once(message: &str) -> ProgressBar {
 // Message formatting
 // ---------------------------------------------------------------------------
 
+fn user_prompt_text() -> String {
+    if screen_reader() {
+        format!("{BELL}{USER_LABEL}")
+    } else {
+        ts::prompt("> ").to_string()
+    }
+}
+
 /// Format and print a user prompt line.
 pub fn print_user_prompt() {
-    eprint!("{}", ts::prompt("> "));
+    eprint!("{}", user_prompt_text());
+}
+
+/// Put the assistant label on every line of `text` that opens a line, given
+/// whether the previous write left a line open. Blank lines stay blank.
+fn label_assistant_lines(text: &str, mut line_open: bool) -> String {
+    let mut labelled = String::with_capacity(text.len() + ASSISTANT_LABEL.len());
+    for segment in text.split_inclusive('\n') {
+        if !line_open && segment != "\n" {
+            labelled.push_str(ASSISTANT_LABEL);
+        }
+        labelled.push_str(segment);
+        line_open = !segment.ends_with('\n');
+    }
+    labelled
+}
+
+fn read_numbered_choice(
+    input: &mut impl std::io::BufRead,
+    output: &mut impl std::io::Write,
+    prompt: &str,
+    items: &[&str],
+    default: usize,
+) -> std::io::Result<Option<usize>> {
+    writeln!(output, "{BELL}{}", sanitize_terminal_text(prompt))?;
+    for (index, item) in items.iter().enumerate() {
+        writeln!(output, "{}. {}", index + 1, sanitize_terminal_text(item))?;
+    }
+    let range = format!("a number from 1 to {}", items.len());
+    writeln!(output, "Type {range}, or press Enter for {}.", default + 1)?;
+    loop {
+        let mut line = String::new();
+        if input.read_line(&mut line)? == 0 {
+            return Ok(None);
+        }
+        let answer = line.trim();
+        if answer.is_empty() {
+            return Ok(Some(default));
+        }
+        match answer.parse::<usize>() {
+            Ok(number) if (1..=items.len()).contains(&number) => return Ok(Some(number - 1)),
+            _ => writeln!(output, "Type {range}.")?,
+        }
+    }
+}
+
+/// Ask the user to pick one of `items`. In screen reader mode the options are
+/// numbered lines answered by typing the number; otherwise it is the arrow-key
+/// menu. `None` means the question was cancelled or could not be asked.
+pub fn choose_option(prompt: &str, items: &[&str], default: usize) -> Option<usize> {
+    if items.is_empty() {
+        return None;
+    }
+    let default = default.min(items.len() - 1);
+    if screen_reader() {
+        return read_numbered_choice(
+            &mut std::io::stdin().lock(),
+            &mut std::io::stderr(),
+            prompt,
+            items,
+            default,
+        )
+        .ok()
+        .flatten();
+    }
+    dialoguer::Select::new()
+        .with_prompt(prompt)
+        .items(items)
+        .default(default)
+        .interact_opt()
+        .ok()
+        .flatten()
 }
 
 /// The response is the only thing on stdout; every message below goes to
@@ -316,6 +420,13 @@ fn record_assistant_output(text: &str) {
 /// The one gate between assistant text and a file descriptor.
 fn write_response_text(text: &str) {
     use std::io::Write;
+    let labelled;
+    let text = if screen_reader() {
+        labelled = label_assistant_lines(text, ASSISTANT_LINE_OPEN.load(Ordering::Relaxed));
+        labelled.as_str()
+    } else {
+        text
+    };
     if stdout_is_protocol() {
         let mut stderr = std::io::stderr();
         let _ = stderr.write_all(text.as_bytes());
@@ -1206,6 +1317,88 @@ mod tests {
             Some(v) => env::set_var("COLORTERM", v),
             None => env::remove_var("COLORTERM"),
         }
+    }
+
+    // -- screen reader mode ------------------------------------------------
+
+    #[test]
+    fn screen_reader_labels_open_every_assistant_line_but_not_blank_ones_or_continuations() {
+        assert_eq!(
+            label_assistant_lines("one\n\ntwo\nthree", false),
+            "agi: one\n\nagi: two\nagi: three"
+        );
+        assert_eq!(
+            label_assistant_lines("rest of the line\nnext", true),
+            "rest of the line\nagi: next"
+        );
+        assert_eq!(label_assistant_lines("", false), "");
+    }
+
+    #[test]
+    fn the_prompt_is_a_you_label_with_a_bell_only_in_screen_reader_mode() {
+        let _guard = print_state_test_lock();
+        set_screen_reader(false);
+        assert!(!user_prompt_text().contains("you:"));
+        assert!(!user_prompt_text().contains('\u{7}'));
+
+        set_screen_reader(true);
+        let prompt = user_prompt_text();
+        set_screen_reader(false);
+        assert_eq!(prompt, "\u{7}you: ");
+    }
+
+    #[test]
+    fn the_environment_can_ask_for_screen_reader_mode_on_its_own() {
+        let _guard = env_test_lock();
+        let previous = env::var("AGI_SCREEN_READER").ok();
+
+        env::remove_var("AGI_SCREEN_READER");
+        assert!(!screen_reader_requested_by_environment());
+        env::set_var("AGI_SCREEN_READER", "");
+        assert!(!screen_reader_requested_by_environment());
+        env::set_var("AGI_SCREEN_READER", "1");
+        assert!(screen_reader_requested_by_environment());
+
+        match previous {
+            Some(value) => env::set_var("AGI_SCREEN_READER", value),
+            None => env::remove_var("AGI_SCREEN_READER"),
+        }
+    }
+
+    fn ask(answers: &str, default: usize) -> (Option<usize>, String) {
+        let mut shown = Vec::new();
+        let picked = read_numbered_choice(
+            &mut std::io::Cursor::new(answers.as_bytes()),
+            &mut shown,
+            "Scope?",
+            &["Changed files", "Whole repository", "Something else"],
+            default,
+        )
+        .expect("read the answer");
+        (picked, String::from_utf8(shown).expect("utf-8 prompt"))
+    }
+
+    #[test]
+    fn a_numbered_menu_lists_the_options_rings_the_bell_and_takes_a_digit() {
+        let (picked, shown) = ask("2\n", 0);
+        assert_eq!(picked, Some(1));
+        assert!(shown.starts_with("\u{7}Scope?\n"), "{shown:?}");
+        assert!(shown.contains("1. Changed files\n2. Whole repository\n3. Something else\n"));
+        assert!(shown.contains("Type a number from 1 to 3, or press Enter for 1."));
+    }
+
+    #[test]
+    fn a_numbered_menu_answers_the_default_on_enter_and_asks_again_on_a_bad_answer() {
+        assert_eq!(ask("\n", 2).0, Some(2));
+
+        let (picked, shown) = ask("0\nfour\n4\n3\n", 0);
+        assert_eq!(picked, Some(2));
+        assert_eq!(shown.matches("Type a number from 1 to 3.\n").count(), 3);
+    }
+
+    #[test]
+    fn a_numbered_menu_with_no_input_left_is_cancelled() {
+        assert_eq!(ask("", 0).0, None);
     }
 
     #[test]
