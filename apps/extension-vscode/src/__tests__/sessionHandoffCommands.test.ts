@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as vscode from 'vscode';
 
 import { setupCommands } from '../core/commandSetup';
+import { Config } from '../platform/config';
 import { __resetSubsystemHealthForTests } from '../core/subsystemHealth';
 import { __resetStartupWorkForTests } from '../core/startupWork';
 
@@ -222,6 +223,23 @@ describe('reviewing the open file', () => {
     expect(
       vi.mocked(vscode.window.showInformationMessage).mock.calls.map(([text]) => String(text)),
     ).toContainEqual(expect.stringContaining('2'));
+  });
+
+  it('reviews at the session effort unless a level is passed', async () => {
+    vi.spyOn(Config, 'agentEffort').mockReturnValue('high');
+    vscode.window.activeTextEditor = {
+      document: { uri: vscode.Uri.file('/repo/src/app.ts') },
+      selection: new vscode.Selection(0, 0, 0, 0),
+    } as unknown as vscode.TextEditor;
+
+    await handlers.get('agi-workforce.codeReview')?.();
+    expect(reviewCode.mock.calls.at(-1)?.[3]).toBe('high');
+
+    await handlers.get('agi-workforce.codeReview')?.('xhigh');
+    expect(reviewCode.mock.calls.at(-1)?.[3]).toBe('xhigh');
+
+    await handlers.get('agi-workforce.codeReview')?.('extreme');
+    expect(reviewCode.mock.calls.at(-1)?.[3]).toBe('high');
   });
 
   it('says the review found nothing rather than staying silent', async () => {

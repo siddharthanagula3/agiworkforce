@@ -5926,13 +5926,13 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         // ── Review ──
         "/review" => {
-            // Trigger code review by sending a review prompt to the LLM
-            let review_prompt = if arg.is_empty() {
-                "Please review my current code changes. Run `git diff` to see what changed, then analyze for bugs, security issues, and improvements.".to_string()
-            } else {
-                format!("Please review the code related to: {arg}. Look for bugs, security issues, and improvements.")
-            };
-            SlashResult::SendPrompt(review_prompt)
+            app.session.effort = Some(app.effort);
+            match crate::claude_parity::handle_shared_command("/review", arg, &mut app.session) {
+                crate::claude_parity::ParityCommandResult::Prompt(prompt) => {
+                    SlashResult::SendPrompt(prompt)
+                }
+                _ => SlashResult::SendAsPrompt,
+            }
         }
 
         "/security-review" if arg.is_empty() => {
@@ -5953,13 +5953,11 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 app.effort_picker.open(app.effort);
                 SlashResult::SystemMessage(String::new()) // picker handles confirmation
             } else {
-                // Direct-set: /effort low|medium|high|max
                 let new_effort = match arg.to_lowercase().as_str() {
-                    "low" | "l" => Some(crate::design_system::Effort::Low),
-                    "medium" | "med" | "m" => Some(crate::design_system::Effort::Medium),
-                    "high" | "h" => Some(crate::design_system::Effort::High),
-                    "max" => Some(crate::design_system::Effort::Max),
-                    _ => None,
+                    "l" => Some(crate::design_system::Effort::Low),
+                    "med" | "m" => Some(crate::design_system::Effort::Medium),
+                    "h" => Some(crate::design_system::Effort::High),
+                    other => crate::design_system::Effort::from_config_value(other),
                 };
                 match new_effort {
                     Some(e) => {
@@ -5983,7 +5981,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                         ))
                     }
                     None => SlashResult::SystemMessage(format!(
-                        "Unknown effort level '{arg}'. Use: low | medium | high | max"
+                        "Unknown effort level '{arg}'. Use: {}",
+                        crate::design_system::Effort::ALL
+                            .iter()
+                            .map(|effort| effort.wire_value())
+                            .collect::<Vec<_>>()
+                            .join(" | ")
                     )),
                 }
             }
@@ -8967,6 +8970,53 @@ mod tests {
             "{reached:?}"
         );
         assert!(!reached.contains(&InteractionMode::FullAuto), "{reached:?}");
+    }
+
+    #[test]
+    fn review_uses_the_tui_effort_and_a_leading_level_overrides_it() {
+        let mut app = minimal_app();
+        app.effort = crate::design_system::Effort::Low;
+        let quick = match handle_slash("/review", &mut app) {
+            SlashResult::SendPrompt(prompt) => prompt,
+            _ => panic!("/review should send a prompt"),
+        };
+        app.effort = crate::design_system::Effort::Xhigh;
+        let thorough = match handle_slash("/review", &mut app) {
+            SlashResult::SendPrompt(prompt) => prompt,
+            _ => panic!("/review should send a prompt"),
+        };
+        assert_ne!(quick, thorough);
+        assert!(quick.contains("one quick pass"), "{quick}");
+        assert!(thorough.contains("second pass"), "{thorough}");
+
+        match handle_slash("/review low src/lib.rs", &mut app) {
+            SlashResult::SendPrompt(prompt) => {
+                assert!(prompt.contains("one quick pass"), "{prompt}");
+                assert!(prompt.contains("src/lib.rs"), "{prompt}");
+            }
+            _ => panic!("/review with a level should send a prompt"),
+        }
+    }
+
+    #[test]
+    fn effort_slash_takes_every_ladder_level_and_lists_them_when_unknown() {
+        let tmp = tempfile::tempdir().unwrap();
+        let mut app = minimal_app();
+        app.config.source.project_path = Some(tmp.path().join(".agiworkforce").join("config.toml"));
+        for effort in crate::design_system::Effort::ALL {
+            let result = handle_slash(&format!("/effort {}", effort.wire_value()), &mut app);
+            assert!(matches!(result, SlashResult::SystemMessage(_)));
+            assert_eq!(app.effort, *effort);
+        }
+        match handle_slash("/effort extreme", &mut app) {
+            SlashResult::SystemMessage(text) => {
+                assert!(
+                    text.contains("none | minimal | low | medium | high | xhigh | max"),
+                    "{text}"
+                );
+            }
+            _ => panic!("/effort extreme should explain itself"),
+        }
     }
 
     /// Regression: `/voice` in the TUI printed "Voice mode requires the REPL

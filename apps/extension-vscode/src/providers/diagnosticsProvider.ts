@@ -9,8 +9,10 @@ import {
   type CodeRange,
   type CodeSelection,
 } from '@agiworkforce/ide-runtime';
+import type { DeveloperReasoningEffort } from '@agiworkforce/local-runtime-contract';
 import { describeOutboundRefusal } from '../core/outboundContentGuard';
 import { chatCompletion, type LlmChatMessage } from '../utils/api';
+import { reviewDepthInstruction } from './reviewEffort';
 
 export function toCodeSelection(editor: vscode.TextEditor): CodeSelection {
   const selection = editor.selection;
@@ -112,6 +114,7 @@ export class AgiDiagnosticsProvider
     editor: vscode.TextEditor,
     secrets: vscode.SecretStorage,
     cancellationToken: vscode.CancellationToken,
+    effort: DeveloperReasoningEffort,
   ): Promise<ReviewResult> {
     const refusal = describeOutboundRefusal(editor.document);
     if (refusal !== null) {
@@ -124,9 +127,10 @@ export class AgiDiagnosticsProvider
     }
 
     const prompt = buildCodeReviewPrompt(selection);
+    const depth = reviewDepthInstruction(effort);
     const messages: LlmChatMessage[] = [
       { role: 'system', content: prompt.system },
-      { role: 'user', content: prompt.user },
+      { role: 'user', content: depth === '' ? prompt.user : `${prompt.user}\n\n${depth}` },
     ];
 
     const response = await chatCompletion(secrets, messages, cancellationToken);

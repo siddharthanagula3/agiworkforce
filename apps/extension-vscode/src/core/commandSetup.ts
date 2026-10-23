@@ -15,6 +15,7 @@ import {
   runCliVersion,
 } from '../platform/remoteEnvironment';
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
+import { resolveReviewEffort } from '../providers/reviewEffort';
 import { DiffDecorationProvider, type DiffSession } from '../providers/diffDecorationProvider';
 import {
   ConversationTreeProvider,
@@ -1101,12 +1102,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await runInlineCommand(context, 'docs', targetRange);
     }),
 
-    register('agi-workforce.codeReview', async () => {
+    register('agi-workforce.codeReview', async (requestedEffort?: unknown) => {
       const editor = vscode.window.activeTextEditor;
       if (editor === undefined) {
         vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: No active editor.`);
         return;
       }
+      const effort = resolveReviewEffort(requestedEffort, Config.agentEffort());
 
       const failure = await vscode.window.withProgress(
         {
@@ -1123,6 +1125,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
               editor,
               context.secrets,
               cancelSource.token,
+              effort,
             );
             cancelSource.dispose();
 
@@ -1145,7 +1148,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
       await showCloudUtilityErrorActions(failure, {
         title: `${PRODUCT_NAMES.code}: Code review failed`,
-        retry: () => vscode.commands.executeCommand('agi-workforce.codeReview'),
+        retry: () => vscode.commands.executeCommand('agi-workforce.codeReview', effort),
         secrets: context.secrets,
       });
     }),

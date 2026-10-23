@@ -1,6 +1,6 @@
 # CLI Command Surface
 
-Last reviewed: 2026-05-19.
+Last reviewed: 2026-10-22.
 
 This document records the AGI Workforce CLI command/help surface from existing source files. It is a drift artifact, not a product spec. If behavior changes, update the source first, then update this document and the focused drift tests.
 
@@ -27,6 +27,7 @@ Top-level subcommands currently declared in `apps/cli/src/lib.rs`:
 | `sandbox`     |     - | Run commands inside a sandbox.      |
 | `mcp-server`  |     - | Run as an MCP stdio server.         |
 | `app-server`  |     - | Run app server for IDE integration. |
+| `acp`         |     - | Serve the Agent Client Protocol.    |
 | `resume`      |     - | Continue a previous session.        |
 | `fork`        |     - | Fork a previous session.            |
 | `session`     |     - | Inspect or branch sessions.         |

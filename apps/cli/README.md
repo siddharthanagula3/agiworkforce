@@ -251,6 +251,9 @@ load automatically in later sessions for that repo.
 /clear          Clear conversation, keep system prompt
 /attach <path>  Stage an image on the next message (`list`, `remove [n|all]`)
 /hooks          List hooks; `add <event> <command>`, `remove <event> <index>`
+/effort <level> Set reasoning effort (none, minimal, low, medium, high, xhigh, max)
+/review [level] [scope]
+                Review your changes; a level sets the depth, otherwise the session effort does
 /exit           Quit
 ```
 
@@ -303,7 +306,7 @@ agi help
 ```
 
 Lists subcommands including `exec`, `review`, `apply`, `sandbox`, `mcp-server`,
-`app-server`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
+`app-server`, `acp`, `resume`, `fork`, `session`, `history`, `login`, `logout`,
 `auth-status`, `doctor`, `init`, `onboarding`, `features`, `execpolicy`,
 `models`, `usage`, `plans`, `plugin`, `sync`, `marketplace`, `hooks`, and `ecosystem`. Managed-cloud
 models use the normal model/session path after the explicit privacy handoff;
@@ -328,6 +331,26 @@ agi mcp logout <name>              # forget its stored token
 agi hooks list
 agi hooks add PreToolUse "echo before every tool"
 agi hooks remove PreToolUse 1
+```
+
+### Zed and JetBrains (agent client protocol)
+
+`agi acp` serves the Agent Client Protocol on stdio. The editor starts the
+process in the project folder and talks to it over stdin and stdout; nothing
+listens on the network and approvals appear in the editor. The folder must
+already be trusted, so run `agi` there once.
+
+Zed: add the agent to `settings.json`, then pick it in the Agent Panel.
+
+```json
+"agent_servers": { "AGI": { "type": "custom", "command": "agi", "args": ["acp"], "env": {} } }
+```
+
+JetBrains IDEs: in AI Chat choose Add Custom Agent, then add the agent to
+`~/.jetbrains/acp.json` with the full path to `agi`.
+
+```json
+"agent_servers": { "AGI": { "command": "/full/path/to/agi", "args": ["acp"], "env": {} } }
 ```
 
 ## Architecture
