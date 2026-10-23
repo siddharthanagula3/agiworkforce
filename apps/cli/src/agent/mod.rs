@@ -157,6 +157,82 @@ impl SdkStreamContext {
     }
 }
 
+/// The parts of a session's system prompt that do not depend on its trust
+/// boundary.
+#[derive(Debug)]
+struct SystemPromptParts {
+    sys_context: SystemContext,
+    custom_system_prompt: Option<String>,
+    instructions: Option<String>,
+    memory_context: String,
+    skills_content: String,
+    rules_context: String,
+}
+
+impl SystemPromptParts {
+    /// The system message for a session in `privacy_mode`, carrying only the
+    /// memory that boundary may receive.
+    fn compose(
+        &self,
+        privacy_mode: PrivacyMode,
+        memory_enabled: bool,
+        memory_nonce: &str,
+        home: Option<&Path>,
+    ) -> Message {
+        let memory_home = home.filter(|_| memory_enabled);
+        let persistent_memory = memory_home
+            .map(|home| {
+                crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
+                    home,
+                    privacy_mode,
+                    memory_nonce,
+                )
+            })
+            .unwrap_or_default();
+        let account_memory = memory_home
+            .map(|home| {
+                crate::cloud::account_memory_context_for(
+                    privacy_mode,
+                    home,
+                    linked_cloud_project().as_deref(),
+                )
+            })
+            .unwrap_or_default();
+        let project_instructions = home
+            .map(|home| {
+                crate::cloud::project_instructions_context(
+                    privacy_mode,
+                    home,
+                    linked_cloud_project().as_deref(),
+                )
+            })
+            .unwrap_or_default();
+
+        let combined_memory = [
+            self.memory_context.as_str(),
+            persistent_memory.as_str(),
+            account_memory.as_str(),
+            project_instructions.as_str(),
+        ]
+        .into_iter()
+        .filter(|block| !block.trim().is_empty())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+        Message::text(
+            "system",
+            prompt::build_system_prompt(
+                &self.sys_context,
+                self.custom_system_prompt.as_deref(),
+                self.instructions.as_deref(),
+                &self.skills_content,
+                &combined_memory,
+                &self.rules_context,
+            ),
+        )
+    }
+}
+
 /// Tracks the state of an agent conversation session.
 #[derive(Debug)]
 pub struct AgentSession {
@@ -269,6 +345,9 @@ pub struct AgentSession {
     /// Marks this session's memory origin tags; see
     /// [`crate::memory_pipeline::origin_memory_tag`].
     memory_nonce: String,
+    /// What the system prompt is built from apart from its trust-boundary
+    /// memory, kept so a fresh session can rebuild it for another boundary.
+    system_prompt_parts: SystemPromptParts,
     pub(crate) managed_session: Option<ManagedSession>,
     pub(crate) managed_session_path: Option<PathBuf>,
     pub(crate) loaded_fingerprint: Option<crate::runtime::session::SessionFingerprint>,
@@ -648,17 +727,6 @@ impl AgentSession {
                 .unwrap_or(true);
         let privacy_mode = provider_privacy_mode(&provider);
         let memory_nonce = uuid::Uuid::new_v4().simple().to_string();
-        let persistent_memory = crate::config::CliConfig::config_dir()
-            .ok()
-            .filter(|_| memory_enabled)
-            .map(|home| {
-                crate::memory_pipeline::MemoryPipeline::load_persistent_memory(
-                    &home,
-                    privacy_mode,
-                    &memory_nonce,
-                )
-            })
-            .unwrap_or_default();
 
         let discovered = skills::discover_skills();
         let skills_content = skills::format_skill_catalog_for_prompt(&discovered);
@@ -674,50 +742,19 @@ impl AgentSession {
             .map(|rule| rule.source.clone())
             .collect();
 
-        let account_memory = crate::config::CliConfig::config_dir()
-            .ok()
-            .filter(|_| memory_enabled)
-            .map(|home| {
-                crate::cloud::account_memory_context_for(
-                    privacy_mode,
-                    &home,
-                    linked_cloud_project().as_deref(),
-                )
-            })
-            .unwrap_or_default();
-
-        let project_instructions = crate::config::CliConfig::config_dir()
-            .ok()
-            .map(|home| {
-                crate::cloud::project_instructions_context(
-                    privacy_mode,
-                    &home,
-                    linked_cloud_project().as_deref(),
-                )
-            })
-            .unwrap_or_default();
-
-        let combined_memory = [
+        let system_prompt_parts = SystemPromptParts {
+            sys_context: sys_context.clone(),
+            custom_system_prompt: custom_system_prompt.map(str::to_string),
+            instructions,
             memory_context,
-            persistent_memory,
-            account_memory,
-            project_instructions,
-        ]
-        .into_iter()
-        .filter(|block| !block.trim().is_empty())
-        .collect::<Vec<_>>()
-        .join("\n");
-
-        let system_message = Message::text(
-            "system",
-            prompt::build_system_prompt(
-                sys_context,
-                custom_system_prompt,
-                instructions.as_deref(),
-                &skills_content,
-                &combined_memory,
-                &rules_context,
-            ),
+            skills_content,
+            rules_context,
+        };
+        let system_message = system_prompt_parts.compose(
+            privacy_mode,
+            memory_enabled,
+            &memory_nonce,
+            crate::config::CliConfig::config_dir().ok().as_deref(),
         );
 
         Self {
@@ -793,6 +830,7 @@ impl AgentSession {
             memory_extracted_through: 0,
             memory_extracted_at: std::time::Instant::now(),
             memory_nonce,
+            system_prompt_parts,
             managed_session: None,
             managed_session_path: None,
             loaded_fingerprint: None,
@@ -1105,17 +1143,17 @@ impl AgentSession {
                 self.privacy_mode.label()
             );
         }
-        if let Some(origin) = self.memory_from_outside(PrivacyMode::Managed) {
-            anyhow::bail!(
-                "This session's instructions include memory from sessions in {} mode, which never reaches Managed Cloud; start a new Managed session instead",
-                origin.trust_word()
-            );
-        }
         if !crate::models::gateway_models::cached_model_is_available(model) {
             return Err(crate::errors::CliError::ModelUnavailable {
                 model: model.to_string(),
             }
             .into());
+        }
+        if !already_managed {
+            self.rebuild_system_message_for(
+                PrivacyMode::Managed,
+                CliConfig::config_dir().ok().as_deref(),
+            );
         }
         self.model = model.to_string();
         self.provider = models::Provider::ManagedCloud;
@@ -1578,6 +1616,27 @@ impl AgentSession {
             destination: pending.destination,
             provider: pending.destination_provider,
         }))
+    }
+
+    /// Rebuild the system prompt with the memory a session in `privacy_mode`
+    /// may carry, read from `home`. Only for a session with no transcript yet.
+    pub(crate) fn rebuild_system_message_for(
+        &mut self,
+        privacy_mode: PrivacyMode,
+        home: Option<&Path>,
+    ) {
+        let message = self.system_prompt_parts.compose(
+            privacy_mode,
+            self.memory_enabled,
+            &self.memory_nonce,
+            home,
+        );
+        match self.messages.first_mut() {
+            Some(first) if first.role == "system" => *first = message,
+            _ => self.messages.insert(0, message),
+        }
+        let style = self.output_style.clone();
+        self.apply_output_style(&style);
     }
 
     /// The first trust boundary, other than `boundary`, whose memory a system
@@ -3737,34 +3796,53 @@ mod tests {
     }
 
     #[test]
-    fn a_fresh_session_carrying_another_boundary_s_memory_cannot_move_to_managed_cloud() {
+    fn a_fresh_session_carrying_local_memory_is_not_refused_on_its_way_to_managed() {
         let mut local = AgentSession::new("fixture-local-model:latest", &test_context(), None);
         let prompt = system_prompt_with_memory_for(&local, PrivacyMode::Local);
         local.messages[0] = prompt;
-        let error = local
-            .switch_managed_model("not-even-consulted")
-            .expect_err("Local-origin memory must not enter Managed Cloud");
-        assert!(
-            error
-                .to_string()
-                .contains("memory from sessions in Local mode"),
-            "{error}"
-        );
-        assert_eq!(local.privacy_mode, PrivacyMode::Local);
 
-        let mut byok = byok_session();
-        let prompt = system_prompt_with_memory_for(&byok, PrivacyMode::Byok);
-        byok.messages[0] = prompt;
-        let error = byok
-            .switch_managed_model("not-even-consulted")
-            .expect_err("BYOK-origin memory must not enter Managed Cloud");
+        let error = local
+            .switch_managed_model("fixture-model-absent-from-the-gateway")
+            .expect_err("the fixture model is not in the gateway catalog");
+
+        assert!(
+            !error.to_string().contains("include memory from"),
+            "a fresh session must be rebuilt for Managed, not refused: {error}"
+        );
         assert!(
             error
-                .to_string()
-                .contains("memory from sessions in Your key mode"),
+                .downcast_ref::<crate::errors::CliError>()
+                .is_some_and(|error| matches!(
+                    error,
+                    crate::errors::CliError::ModelUnavailable { .. }
+                )),
             "{error}"
         );
-        assert_eq!(byok.privacy_mode, PrivacyMode::Byok);
+    }
+
+    #[test]
+    fn a_fresh_session_rebuilt_for_managed_carries_only_managed_memory() {
+        let home = tempfile::tempdir().expect("memory home");
+        let memories = home.path().join("memories");
+        std::fs::create_dir_all(&memories).expect("memories dir");
+        std::fs::write(memories.join("raw_memories.md"), "- local secret plan").expect("local");
+        std::fs::write(memories.join("byok_memories.md"), "- byok fact").expect("byok");
+        std::fs::write(memories.join("managed_memories.md"), "- managed fact").expect("managed");
+        let mut session = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        session.memory_enabled = true;
+
+        session.rebuild_system_message_for(PrivacyMode::Local, Some(home.path()));
+        let local = session.messages[0].text_content();
+        assert!(local.contains("local secret plan"), "{local}");
+        assert!(session.memory_from_outside(PrivacyMode::Managed).is_some());
+
+        session.rebuild_system_message_for(PrivacyMode::Managed, Some(home.path()));
+        let managed = session.messages[0].text_content();
+        assert!(managed.contains("managed fact"), "{managed}");
+        assert!(!managed.contains("local secret plan"), "{managed}");
+        assert!(!managed.contains("byok fact"), "{managed}");
+        assert_eq!(session.memory_from_outside(PrivacyMode::Managed), None);
+        assert_eq!(session.messages.len(), 1);
     }
 
     #[test]
