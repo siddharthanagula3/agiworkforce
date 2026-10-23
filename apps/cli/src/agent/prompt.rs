@@ -3,7 +3,7 @@ use agiworkforce_protocol::developer_session::FileChangeNotice;
 
 use crate::compaction;
 use crate::context::SystemContext;
-use crate::memory::{self, MemoryManager};
+use crate::memory;
 use crate::models::Message;
 use crate::skills;
 
@@ -400,10 +400,7 @@ pub fn assemble_system_prompt(
         instructions: std::env::current_dir()
             .ok()
             .and_then(|cwd| compaction::load_instructions(&cwd)),
-        memory_context: std::env::current_dir()
-            .ok()
-            .map(|cwd| MemoryManager::new(&cwd).get_context_prompt())
-            .unwrap_or_default(),
+        memory_cwd: std::env::current_dir().ok(),
         skills_content: skills::format_skill_catalog_for_prompt(&skills::discover_skills()),
         rules_context: memory::always_on_rules_context(
             &std::env::current_dir()

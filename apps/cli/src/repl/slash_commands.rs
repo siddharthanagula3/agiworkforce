@@ -518,7 +518,7 @@ pub(super) async fn handle_slash_command(
             }
         }
         "/memory" | "/mem" => {
-            registry::handle_memory(arg);
+            registry::handle_memory(arg, session.privacy_mode);
         }
         "/init" => {
             registry::handle_init_project();

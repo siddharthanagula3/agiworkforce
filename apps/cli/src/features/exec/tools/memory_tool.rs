@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use anyhow::Result;
 
 use super::{approval_allows, request_approval, ApprovalCallback, ToolResult};
+use crate::agent::PrivacyMode;
 use crate::memory::{MemoryManager, MemoryTier};
 use crate::tui::approval_broker::{ApprovalRequest, ApprovalRequestKind};
 
@@ -55,11 +56,12 @@ async fn confirmed(
 
 pub(super) async fn execute_memory(
     args: &HashMap<String, String>,
+    privacy_mode: PrivacyMode,
     require_confirmation: bool,
     approval_callback: Option<&ApprovalCallback>,
 ) -> Result<ToolResult> {
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let manager = MemoryManager::new(&cwd);
+    let manager = MemoryManager::new(&cwd, privacy_mode);
     let content = args
         .get("content")
         .map(|content| content.trim())
@@ -157,5 +159,132 @@ pub(super) async fn execute_memory(
             ))
         }
         _ => Ok(result(false, "action must be remember, recall or forget")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::memory::global_instructions_file;
+
+    const BOUNDARIES: [PrivacyMode; 3] =
+        [PrivacyMode::Local, PrivacyMode::Byok, PrivacyMode::Managed];
+
+    fn call(
+        home: &std::path::Path,
+        privacy_mode: PrivacyMode,
+        action: &str,
+        content: Option<&str>,
+    ) -> ToolResult {
+        let mut args = HashMap::from([("action".to_string(), action.to_string())]);
+        if let Some(content) = content {
+            args.insert("content".to_string(), content.to_string());
+        }
+        crate::compaction::with_config_home(home, || {
+            tokio::runtime::Builder::new_current_thread()
+                .build()
+                .expect("runtime")
+                .block_on(execute_memory(&args, privacy_mode, false, None))
+                .expect("memory tool")
+        })
+    }
+
+    #[test]
+    fn remember_writes_the_file_of_the_sessions_own_boundary() {
+        for boundary in BOUNDARIES {
+            let home = tempfile::tempdir().unwrap();
+            let remembered = call(home.path(), boundary, "remember", Some("use tabs"));
+            assert!(remembered.success, "{}", remembered.output);
+            for other in BOUNDARIES {
+                let file = home.path().join(global_instructions_file(other));
+                assert_eq!(
+                    file.is_file(),
+                    other == boundary,
+                    "{} memory landed in the {} file",
+                    boundary.label(),
+                    other.label()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_instruction_remembered_in_one_boundary_is_not_recalled_in_another() {
+        let home = tempfile::tempdir().unwrap();
+        for boundary in BOUNDARIES {
+            let remembered = call(
+                home.path(),
+                boundary,
+                "remember",
+                Some(&format!("only for {}", boundary.label())),
+            );
+            assert!(remembered.success, "{}", remembered.output);
+        }
+        for boundary in BOUNDARIES {
+            let recalled = call(home.path(), boundary, "recall", None);
+            assert!(recalled.success, "{}", recalled.output);
+            assert!(
+                recalled
+                    .output
+                    .contains(&format!("only for {}", boundary.label())),
+                "{}",
+                recalled.output
+            );
+            for other in BOUNDARIES.into_iter().filter(|other| *other != boundary) {
+                assert!(
+                    !recalled
+                        .output
+                        .contains(&format!("only for {}", other.label())),
+                    "{} instruction reached a {} session: {}",
+                    other.label(),
+                    boundary.label(),
+                    recalled.output
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn instructions_saved_before_the_split_are_not_recalled_outside_local() {
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(home.path().join("CLAUDE.md"), "- saved before the split\n").unwrap();
+        for boundary in [PrivacyMode::Byok, PrivacyMode::Managed] {
+            let recalled = call(home.path(), boundary, "recall", None);
+            assert!(
+                !recalled.output.contains("saved before the split"),
+                "{}",
+                recalled.output
+            );
+        }
+        let recalled = call(home.path(), PrivacyMode::Local, "recall", None);
+        assert!(
+            recalled.output.contains("saved before the split"),
+            "{}",
+            recalled.output
+        );
+    }
+
+    #[test]
+    fn forget_removes_only_from_the_sessions_own_boundary() {
+        let home = tempfile::tempdir().unwrap();
+        for boundary in [PrivacyMode::Local, PrivacyMode::Byok] {
+            call(home.path(), boundary, "remember", Some("shared wording"));
+        }
+        let forgotten = call(
+            home.path(),
+            PrivacyMode::Byok,
+            "forget",
+            Some("shared wording"),
+        );
+        assert!(forgotten.success, "{}", forgotten.output);
+        let local = std::fs::read_to_string(home.path().join("CLAUDE.md")).unwrap();
+        assert!(local.contains("shared wording"), "{local}");
+        let refused = call(
+            home.path(),
+            PrivacyMode::Managed,
+            "forget",
+            Some("shared wording"),
+        );
+        assert!(!refused.success, "{}", refused.output);
     }
 }

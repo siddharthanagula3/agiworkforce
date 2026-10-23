@@ -897,7 +897,7 @@
           "ordinal": 1,
           "heading": "Repository memory",
           "headingPath": "Custom instructions for the CLI and VS Code › Repository memory",
-          "text": "Notes the agent should keep for a repository are saved in `CLAUDE.md` at the\nrepository root. In VS Code, run **Remember for This Repository** to add one;\nit tells you which file it saved to. Notes for every repository go in\n`~/.agiworkforce/CLAUDE.md`. Each note can be up to 4,000 characters."
+          "text": "Notes the agent should keep for a repository are saved in `CLAUDE.md` at the\nrepository root. In VS Code, run **Remember for This Repository** to add one;\nit tells you which file it saved to. Notes for every repository go in\n`~/.agiworkforce/CLAUDE.md` in Local mode, `CLAUDE.byok.md` in BYOK mode and\n`CLAUDE.managed.md` in Managed mode, so a note saved in one mode never reaches\nanother. Each note can be up to 4,000 characters."
         },
         {
           "id": "custom-instructions#2",

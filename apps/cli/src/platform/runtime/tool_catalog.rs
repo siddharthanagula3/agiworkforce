@@ -777,7 +777,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         def(
             "memory",
             "Remember a durable fact or preference the user wants kept across sessions, recall what is remembered, or forget a remembered line. Saves ask the user first unless approvals are skipped.",
-            serde_json::json!({"type":"object","properties":{"action":{"type":"string","enum":["remember","recall","forget"],"description":"remember saves content, recall returns every remembered line, forget removes the matching line"},"content":{"type":"string","description":"The fact to remember, or the exact remembered text to forget"},"scope":{"type":"string","enum":["user","project"],"description":"user memory follows the user everywhere (default); project memory stays with this repository"}},"required":["action"]}),
+            serde_json::json!({"type":"object","properties":{"action":{"type":"string","enum":["remember","recall","forget"],"description":"remember saves content, recall returns every remembered line, forget removes the matching line"},"content":{"type":"string","description":"The fact to remember, or the exact remembered text to forget"},"scope":{"type":"string","enum":["user","project"],"description":"user memory follows the user across projects but only in the current mode: Local, BYOK and Managed each keep their own (default); project memory stays with this repository"}},"required":["action"]}),
         ).with_size_cap(20_000).deferred(),
         def(
             "read_many_files",

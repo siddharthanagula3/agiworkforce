@@ -178,7 +178,7 @@ struct SystemPromptParts {
     sys_context: SystemContext,
     custom_system_prompt: Option<String>,
     instructions: Option<String>,
-    memory_context: String,
+    memory_cwd: Option<std::path::PathBuf>,
     skills_content: String,
     rules_context: String,
 }
@@ -222,8 +222,14 @@ impl SystemPromptParts {
             })
             .unwrap_or_default();
 
+        let memory_context = self
+            .memory_cwd
+            .as_deref()
+            .map(|cwd| MemoryManager::new(cwd, privacy_mode).get_context_prompt())
+            .unwrap_or_default();
+
         let combined_memory = [
-            self.memory_context.as_str(),
+            memory_context.as_str(),
             persistent_memory.as_str(),
             account_memory.as_str(),
             project_instructions.as_str(),
@@ -713,19 +719,12 @@ impl AgentSession {
             .ok()
             .and_then(|cwd| compaction::load_instructions(&cwd));
 
-        let memory_context = std::env::current_dir()
-            .ok()
-            .map(|cwd| {
-                let mgr = MemoryManager::new(&cwd);
-                let entries = mgr.load_all();
-                if !entries.is_empty() {
-                    for entry in &entries {
-                        eprintln!("  {} memory: {}", entry.source, entry.file_path.display());
-                    }
-                }
-                mgr.get_context_prompt()
-            })
-            .unwrap_or_default();
+        let memory_cwd = std::env::current_dir().ok();
+        if let Some(cwd) = memory_cwd.as_deref() {
+            for entry in MemoryManager::new(cwd, provider_privacy_mode(&provider)).load_all() {
+                eprintln!("  {} memory: {}", entry.source, entry.file_path.display());
+            }
+        }
 
         let session_id = uuid::Uuid::new_v4().to_string();
         if let Ok(home) = crate::config::CliConfig::config_dir() {
@@ -755,7 +754,7 @@ impl AgentSession {
             sys_context: sys_context.clone(),
             custom_system_prompt: custom_system_prompt.map(str::to_string),
             instructions,
-            memory_context,
+            memory_cwd,
             skills_content,
             rules_context,
         };
@@ -3761,6 +3760,34 @@ mod tests {
         );
         assert_eq!(session.privacy_mode, PrivacyMode::Managed);
         session
+    }
+
+    #[test]
+    fn each_boundary_s_system_prompt_carries_only_its_own_global_instructions() {
+        let home = tempfile::tempdir().expect("config home");
+        for boundary in [PrivacyMode::Local, PrivacyMode::Byok, PrivacyMode::Managed] {
+            std::fs::write(
+                home.path()
+                    .join(crate::memory::global_instructions_file(boundary)),
+                format!("global rule for {}", boundary.label()),
+            )
+            .expect("global instructions");
+        }
+        crate::compaction::with_config_home(home.path(), || {
+            let mut session = byok_session();
+            for boundary in [PrivacyMode::Local, PrivacyMode::Byok, PrivacyMode::Managed] {
+                session.rebuild_system_message_for(boundary, Some(home.path()));
+                let prompt = session.messages[0].text_content();
+                for other in [PrivacyMode::Local, PrivacyMode::Byok, PrivacyMode::Managed] {
+                    assert_eq!(
+                        prompt.contains(&format!("global rule for {}", other.label())),
+                        other == boundary,
+                        "a {} prompt: {prompt}",
+                        boundary.label()
+                    );
+                }
+            }
+        });
     }
 
     #[test]

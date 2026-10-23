@@ -1,6 +1,6 @@
 use colored::Colorize;
 
-use crate::agent::AgentSession;
+use crate::agent::{AgentSession, PrivacyMode};
 use crate::config::CliConfig;
 use crate::conversations;
 use crate::markdown::MarkdownRenderer;
@@ -1834,9 +1834,13 @@ pub enum EditorAvailability {
 /// The listing comes back as text rather than going to the terminal because
 /// the TUI has taken the screen over: it used to answer "Memory shown above."
 /// with nothing above it.
-pub fn memory_for_display(arg: &str, editor: EditorAvailability) -> CommandOutcome {
+pub fn memory_for_display(
+    arg: &str,
+    editor: EditorAvailability,
+    privacy_mode: PrivacyMode,
+) -> CommandOutcome {
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let mgr = MemoryManager::new(&cwd);
+    let mgr = MemoryManager::new(&cwd, privacy_mode);
 
     let sub_parts: Vec<&str> = arg.splitn(2, ' ').collect();
     let sub_cmd = sub_parts[0];
@@ -1975,17 +1979,22 @@ pub fn memory_for_display(arg: &str, editor: EditorAvailability) -> CommandOutco
     }
 }
 
-pub fn handle_memory(arg: &str) {
-    memory_for_display(arg, EditorAvailability::Available).print();
+pub fn handle_memory(arg: &str, privacy_mode: PrivacyMode) {
+    memory_for_display(arg, EditorAvailability::Available, privacy_mode).print();
 }
 
 #[cfg(test)]
 mod memory_tests {
     use super::{memory_for_display, CommandOutcome, EditorAvailability};
+    use crate::agent::PrivacyMode;
 
     #[test]
     fn rejects_an_unknown_subcommand_instead_of_claiming_it_showed_memory() {
-        match memory_for_display("wat", EditorAvailability::TerminalOwnedByUi) {
+        match memory_for_display(
+            "wat",
+            EditorAvailability::TerminalOwnedByUi,
+            PrivacyMode::Local,
+        ) {
             CommandOutcome::Warn(message) => assert!(message.starts_with("Usage:"), "{message}"),
             other => panic!("an unknown subcommand shows nothing: {other:?}"),
         }
@@ -1993,7 +2002,11 @@ mod memory_tests {
 
     #[test]
     fn rejects_an_add_with_no_text() {
-        match memory_for_display("add", EditorAvailability::TerminalOwnedByUi) {
+        match memory_for_display(
+            "add",
+            EditorAvailability::TerminalOwnedByUi,
+            PrivacyMode::Local,
+        ) {
             CommandOutcome::Warn(message) => assert!(message.starts_with("Usage:"), "{message}"),
             other => panic!("there is nothing to append: {other:?}"),
         }
@@ -2001,7 +2014,11 @@ mod memory_tests {
 
     #[test]
     fn refuses_to_run_the_editor_under_a_full_screen_caller() {
-        match memory_for_display("edit project", EditorAvailability::TerminalOwnedByUi) {
+        match memory_for_display(
+            "edit project",
+            EditorAvailability::TerminalOwnedByUi,
+            PrivacyMode::Local,
+        ) {
             CommandOutcome::Error(message) => {
                 assert!(message.contains("$EDITOR"), "{message}");
                 assert!(message.contains("/memory add"), "{message}");
@@ -2014,7 +2031,11 @@ mod memory_tests {
     fn returns_the_listing_itself_so_a_full_screen_caller_can_show_it() {
         // "Memory shown above." was printed over a screen the TUI owned, with
         // the listing on a stream the user could not see.
-        let outcome = memory_for_display("", EditorAvailability::TerminalOwnedByUi);
+        let outcome = memory_for_display(
+            "",
+            EditorAvailability::TerminalOwnedByUi,
+            PrivacyMode::Local,
+        );
         match &outcome {
             CommandOutcome::Block(block) => {
                 assert!(block.contains("Memory Hierarchy:"), "{block}")

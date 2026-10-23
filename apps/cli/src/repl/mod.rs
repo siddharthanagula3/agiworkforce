@@ -244,7 +244,7 @@ pub async fn run_repl(
                 let _ = editor.add_history_entry(input);
 
                 if input.starts_with("# ") || input == "#" {
-                    handle_memory_prefix(input);
+                    handle_memory_prefix(input, session.privacy_mode);
                     continue;
                 }
 
@@ -1008,7 +1008,7 @@ fn format_advisor_tool_output(raw: &str) -> String {
     }
 }
 
-fn handle_memory_prefix(input: &str) {
+fn handle_memory_prefix(input: &str, privacy_mode: crate::agent::PrivacyMode) {
     let text = input
         .strip_prefix("# ")
         .unwrap_or(input.strip_prefix('#').unwrap_or(""));
@@ -1018,7 +1018,7 @@ fn handle_memory_prefix(input: &str) {
     }
 
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    let mgr = MemoryManager::new(&cwd);
+    let mgr = MemoryManager::new(&cwd, privacy_mode);
 
     match mgr.save(&MemoryTier::Project, text) {
         Ok(path) => {

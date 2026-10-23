@@ -1564,6 +1564,7 @@ pub fn local_server_status(probe: &LocalProviderProbe) -> Option<LocalServerStat
 
 pub fn add_memory(
     workspace_root: &Path,
+    boundary: crate::agent::PrivacyMode,
     params: MemoryAddParams,
 ) -> Result<MemoryAddResponse, DeveloperSessionHostError> {
     let text = params.text.trim();
@@ -1581,7 +1582,7 @@ pub fn add_memory(
         MemoryScope::Project => MemoryTier::Project,
         MemoryScope::Local => MemoryTier::Local,
     };
-    let path = MemoryManager::new(workspace_root)
+    let path = MemoryManager::new(workspace_root, boundary)
         .save(&tier, text)
         .map_err(invalid)?;
     Ok(MemoryAddResponse {

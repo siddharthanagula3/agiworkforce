@@ -1370,7 +1370,8 @@ fn output_style_overview(session: &AgentSession) -> String {
             .unwrap_or("built-in")
     ));
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-    for (tier, path, exists) in crate::memory::MemoryManager::new(&cwd).list() {
+    for (tier, path, exists) in crate::memory::MemoryManager::new(&cwd, session.privacy_mode).list()
+    {
         if exists {
             lines.push(format!("  Instructions   {tier}: {}", path.display()));
         }

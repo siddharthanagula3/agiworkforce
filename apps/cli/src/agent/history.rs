@@ -31,7 +31,9 @@ impl AgentSession {
             system_chars / 4
         ));
         let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
-        for (tier, path, exists) in crate::memory::MemoryManager::new(&cwd).list() {
+        for (tier, path, exists) in
+            crate::memory::MemoryManager::new(&cwd, self.privacy_mode).list()
+        {
             if exists {
                 lines.push(format!("  Instructions       {tier}: {}", path.display()));
             }

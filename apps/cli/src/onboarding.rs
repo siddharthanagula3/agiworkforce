@@ -1017,7 +1017,7 @@ pub async fn run_onboarding() -> Result<bool> {
         "\n  {} {}",
         ts::accent_header("Memory"),
         ts::muted(
-            "Lasting instructions live in ~/.agiworkforce/CLAUDE.md and a project's AGENTS.md or CLAUDE.md. Ask the agent to remember something and it saves it there; /memory shows what every session loads."
+            "Lasting instructions live in ~/.agiworkforce (one file per mode: Local, BYOK and Managed) and a project's AGENTS.md or CLAUDE.md. Ask the agent to remember something and it saves it there; /memory shows what this session loads."
         )
     );
     let bell = crate::output::confirm("  Ring the terminal bell when a long turn finishes?", false);

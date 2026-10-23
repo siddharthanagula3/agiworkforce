@@ -4933,10 +4933,12 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<MemoryAddResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         let workspace_root = self.workspace_root.clone();
-        let added =
-            tokio::task::spawn_blocking(move || surfaces::add_memory(&workspace_root, params))
-                .await
-                .map_err(internal_error)??;
+        let boundary = self.config.account_privacy_mode();
+        let added = tokio::task::spawn_blocking(move || {
+            surfaces::add_memory(&workspace_root, boundary, params)
+        })
+        .await
+        .map_err(internal_error)??;
         self.emit(
             "memory/added",
             serde_json::json!({ "scope": added.scope, "path": added.path }),

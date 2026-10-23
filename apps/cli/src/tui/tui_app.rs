@@ -5830,8 +5830,12 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
 
         // ── Memory ──
         "/memory" | "/mem" => SlashResult::SystemMessage(
-            crate::repl::memory_for_display(arg, crate::repl::EditorAvailability::TerminalOwnedByUi)
-                .plain_message(),
+            crate::repl::memory_for_display(
+                arg,
+                crate::repl::EditorAvailability::TerminalOwnedByUi,
+                app.session.privacy_mode,
+            )
+            .plain_message(),
         ),
 
         // ── Voice ──

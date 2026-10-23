@@ -5116,13 +5116,23 @@
       "doc": "custom-instructions",
       "section": "Repository memory",
       "kind": "prose",
-      "sentence": "Notes for every repository go in `~/.agiworkforce/CLAUDE.md`.",
+      "sentence": "Notes for every repository go in `~/.agiworkforce/CLAUDE.md` in Local mode, `CLAUDE.byok.md` in BYOK mode and `CLAUDE.managed.md` in Managed mode, so a note saved in one mode never reaches another.",
       "implementation": ["apps/cli/src/memory.rs"],
       "proof": [
         {
           "kind": "copy",
           "file": "apps/cli/src/memory.rs",
-          "text": "/// `~/.agiworkforce/CLAUDE.md`, user-wide defaults."
+          "text": "PrivacyMode::Byok => \"CLAUDE.byok.md\","
+        },
+        {
+          "kind": "copy",
+          "file": "apps/cli/src/memory.rs",
+          "text": "PrivacyMode::Managed => \"CLAUDE.managed.md\","
+        },
+        {
+          "kind": "test",
+          "file": "apps/cli/src/memory.rs",
+          "name": "an_instruction_saved_in_one_boundary_reaches_no_other"
         }
       ]
     },

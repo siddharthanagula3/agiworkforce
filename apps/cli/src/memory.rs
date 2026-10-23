@@ -5,6 +5,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 use serde::{Deserialize, Serialize};
 
+use crate::agent::PrivacyMode;
+
 /// Guards the one-time legacy global-memory migration notice so it prints at
 /// most once per process even if `MemoryManager::new` is called repeatedly
 /// (e.g. once per turn to pick up on-disk edits).
@@ -22,7 +24,8 @@ static LEGACY_GLOBAL_MEMORY_MIGRATION_WARNED: AtomicBool = AtomicBool::new(false
 /// last.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub enum MemoryTier {
-    /// `~/.agiworkforce/CLAUDE.md`, user-wide defaults.
+    /// The user-wide instructions file of the session's trust boundary, see
+    /// [`global_instructions_file`].
     Global,
     /// `<project_root>/CLAUDE.md`, project-level instructions.
     Project,
@@ -38,6 +41,17 @@ impl fmt::Display for MemoryTier {
             MemoryTier::Project => write!(f, "Project"),
             MemoryTier::Local => write!(f, "Local"),
         }
+    }
+}
+
+/// The user-wide instructions file for one trust boundary, inside the config
+/// directory. The Local file keeps its historical name, so instructions saved
+/// before the split count as Local and never reach a BYOK or Managed session.
+pub fn global_instructions_file(boundary: PrivacyMode) -> &'static str {
+    match boundary {
+        PrivacyMode::Local => "CLAUDE.md",
+        PrivacyMode::Byok => "CLAUDE.byok.md",
+        PrivacyMode::Managed => "CLAUDE.managed.md",
     }
 }
 
@@ -58,15 +72,18 @@ pub struct MemoryEntry {
 // ---------------------------------------------------------------------------
 
 /// Discovers and loads hierarchical memory files (CLAUDE.md) from three tiers.
+/// The Global tier is the file of one trust boundary: a session never reads or
+/// writes another boundary's user-wide instructions.
 pub struct MemoryManager {
-    /// `~/.agiworkforce/CLAUDE.md`
+    /// The boundary's file in the config directory, see
+    /// [`global_instructions_file`].
     global_path: PathBuf,
     /// `~/.agi/CLAUDE.md`, undocumented legacy location used by older
-    /// builds. Read-only fallback: if `global_path` has no content, we read
-    /// from here instead of silently ignoring pre-existing user memory. We
-    /// never write to or delete this file; `agi migrate` (see
+    /// builds, and a Local-only fallback: if `global_path` has no content, we
+    /// read from here instead of silently ignoring pre-existing user memory.
+    /// We never write to or delete this file; `agi migrate` (see
     /// `ecosystem.rs`) is the explicit, user-initiated way to move it.
-    legacy_global_path: PathBuf,
+    legacy_global_path: Option<PathBuf>,
     /// `<project_root>/CLAUDE.md` (None when no project root found)
     project_path: Option<PathBuf>,
     /// `<cwd>/CLAUDE.md` when cwd != project root (None otherwise)
@@ -76,20 +93,26 @@ pub struct MemoryManager {
 impl MemoryManager {
     /// Create a new `MemoryManager` by discovering memory files at each tier.
     ///
-    /// - **Global**: `~/.agiworkforce/CLAUDE.md` (falls back to reading the
-    ///   legacy `~/.agi/CLAUDE.md` if the documented path has no content).
+    /// - **Global**: the file for `boundary` in `~/.agiworkforce/` (Local
+    ///   falls back to reading the legacy `~/.agi/CLAUDE.md` if the documented
+    ///   path has no content).
     /// - **Project**: Walk up from `cwd` to find a project root (`.git`,
     ///   `Cargo.toml`, `package.json`, etc.) and use `<root>/CLAUDE.md`.
     /// - **Local**: `<cwd>/CLAUDE.md` only when cwd differs from the project
     ///   root (avoids double-loading).
-    pub fn new(cwd: &Path) -> Self {
+    pub fn new(cwd: &Path, boundary: PrivacyMode) -> Self {
         let home_dir = dirs::home_dir()
             .or_else(|| std::env::var("HOME").ok().map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from("."));
-        let global_path = crate::config::CliConfig::config_dir()
-            .unwrap_or_else(|_| home_dir.join(".agiworkforce"))
-            .join("CLAUDE.md");
-        let legacy_global_path = home_dir.join(".agi").join("CLAUDE.md");
+        let config_dir =
+            crate::compaction::config_home().unwrap_or_else(|| home_dir.join(".agiworkforce"));
+        Self::in_dirs(cwd, boundary, &config_dir, &home_dir)
+    }
+
+    fn in_dirs(cwd: &Path, boundary: PrivacyMode, config_dir: &Path, home_dir: &Path) -> Self {
+        let global_path = config_dir.join(global_instructions_file(boundary));
+        let legacy_global_path =
+            (boundary == PrivacyMode::Local).then(|| home_dir.join(".agi").join("CLAUDE.md"));
 
         // Project, reuse the existing project-root discovery
         let project_root = find_git_root(cwd);
@@ -141,7 +164,11 @@ impl MemoryManager {
                 source: MemoryTier::Global,
                 file_path: self.global_path.clone(),
             });
-        } else if let Some(content) = read_if_exists(&self.legacy_global_path) {
+        } else if let Some((legacy, content)) = self
+            .legacy_global_path
+            .as_ref()
+            .and_then(|legacy| Some((legacy, read_if_exists(legacy)?)))
+        {
             // Read-only fallback: older builds wrote global memory to the
             // undocumented `~/.agi/CLAUDE.md`. Keep loading it so existing
             // user memory isn't silently dropped, but never write to or
@@ -153,14 +180,14 @@ impl MemoryManager {
                 eprintln!(
                     "[memory] Loaded global memory from legacy path {}, this location is undocumented and deprecated. \
 Move the file to {} (or run `agi migrate`) to keep using it going forward.",
-                    self.legacy_global_path.display(),
+                    legacy.display(),
                     self.global_path.display()
                 );
             }
             entries.push(MemoryEntry {
                 content,
                 source: MemoryTier::Global,
-                file_path: self.legacy_global_path.clone(),
+                file_path: legacy.clone(),
             });
         }
 
@@ -260,8 +287,12 @@ Move the file to {} (or run `agi migrate`) to keep using it going forward.",
         // memory is missing when it's actually loaded from the legacy file.
         let global_entry = if self.global_path.exists() {
             (MemoryTier::Global, self.global_path.clone(), true)
-        } else if self.legacy_global_path.exists() {
-            (MemoryTier::Global, self.legacy_global_path.clone(), true)
+        } else if let Some(legacy) = self
+            .legacy_global_path
+            .as_ref()
+            .filter(|path| path.exists())
+        {
+            (MemoryTier::Global, legacy.clone(), true)
         } else {
             (MemoryTier::Global, self.global_path.clone(), false)
         };
@@ -913,7 +944,7 @@ mod tests {
     #[test]
     fn test_memory_manager_load_all_empty() {
         let (_d, path) = tmp_dir();
-        let mgr = MemoryManager::new(&path);
+        let mgr = MemoryManager::new(&path, PrivacyMode::Local);
         let entries = mgr.load_all();
         // No CLAUDE.md files in temp dir, global may or may not exist
         // Just verify it doesn't panic
@@ -925,7 +956,7 @@ mod tests {
     #[test]
     fn test_memory_manager_list() {
         let (_d, path) = tmp_dir();
-        let mgr = MemoryManager::new(&path);
+        let mgr = MemoryManager::new(&path, PrivacyMode::Local);
         let list = mgr.list();
         assert_eq!(list.len(), 3); // always 3 tiers
         assert_eq!(list[0].0, MemoryTier::Global);
@@ -939,7 +970,7 @@ mod tests {
         // Create a .git marker so the dir is treated as project root
         fs::create_dir_all(path.join(".git")).unwrap();
 
-        let mgr = MemoryManager::new(&path);
+        let mgr = MemoryManager::new(&path, PrivacyMode::Local);
         let saved = mgr.save(&MemoryTier::Project, "test instruction");
         assert!(saved.is_ok());
 
@@ -955,7 +986,7 @@ mod tests {
     #[test]
     fn test_get_context_prompt_empty() {
         let (_d, path) = tmp_dir();
-        let mgr = MemoryManager::new(&path);
+        let mgr = MemoryManager::new(&path, PrivacyMode::Local);
         // Filter out global if it happens to exist on the test machine
         let prompt = mgr.get_context_prompt();
         // The prompt should be empty or contain content from user's real global
@@ -969,7 +1000,7 @@ mod tests {
         fs::create_dir_all(path.join(".git")).unwrap();
         fs::write(path.join("CLAUDE.md"), "# My Project\nBuild with cargo.").unwrap();
 
-        let mgr = MemoryManager::new(&path);
+        let mgr = MemoryManager::new(&path, PrivacyMode::Local);
         let prompt = mgr.get_context_prompt();
         assert!(prompt.contains("<memory-hierarchy>"));
         assert!(prompt.contains("## Project Memory"));
@@ -982,7 +1013,7 @@ mod tests {
         let (_d, path) = tmp_dir();
         let mgr = MemoryManager {
             global_path: path.join("subdir").join("deep").join("CLAUDE.md"),
-            legacy_global_path: path.join("legacy-unused").join("CLAUDE.md"),
+            legacy_global_path: None,
             project_path: None,
             local_path: None,
         };
@@ -1008,14 +1039,14 @@ mod tests {
         for (project, note) in [(&alpha, "Alpha ships weekly."), (&beta, "Beta is frozen.")] {
             fs::create_dir_all(project.join(".git")).unwrap();
             fs::write(project.join("CLAUDE.md"), note).unwrap();
-            let discovered = MemoryManager::new(project);
+            let discovered = MemoryManager::new(project, PrivacyMode::Local);
             assert!(
                 !discovered.global_path.starts_with(project),
                 "the user's preferences were looked for inside the project"
             );
             let manager = MemoryManager {
                 global_path: preferences.clone(),
-                legacy_global_path: home.join(".agi").join("CLAUDE.md"),
+                legacy_global_path: Some(home.join(".agi").join("CLAUDE.md")),
                 ..discovered
             };
             let prompt = manager.get_context_prompt();
@@ -1034,7 +1065,7 @@ mod tests {
         let (_d, path) = tmp_dir();
         fs::create_dir_all(path.join(".git")).unwrap();
 
-        let mgr = MemoryManager::new(&path);
+        let mgr = MemoryManager::new(&path, PrivacyMode::Local);
         // local_path should be None since cwd == project root
         assert!(mgr.local_path.is_none());
     }
@@ -1046,9 +1077,139 @@ mod tests {
         let subdir = path.join("src").join("lib");
         fs::create_dir_all(&subdir).unwrap();
 
-        let mgr = MemoryManager::new(&subdir);
+        let mgr = MemoryManager::new(&subdir, PrivacyMode::Local);
         // local_path should be set since cwd != project root
         assert!(mgr.local_path.is_some());
         assert!(mgr.local_path.as_ref().unwrap().ends_with("CLAUDE.md"));
+    }
+
+    fn write_boundary_instructions(config: &Path, boundary: PrivacyMode, text: &str) {
+        fs::create_dir_all(config).unwrap();
+        fs::write(config.join(global_instructions_file(boundary)), text).unwrap();
+    }
+
+    const BOUNDARIES: [PrivacyMode; 3] =
+        [PrivacyMode::Local, PrivacyMode::Byok, PrivacyMode::Managed];
+
+    #[test]
+    fn every_boundary_has_its_own_global_instructions_file() {
+        let names: HashSet<&str> = BOUNDARIES
+            .into_iter()
+            .map(global_instructions_file)
+            .collect();
+        assert_eq!(names.len(), 3);
+        assert_eq!(global_instructions_file(PrivacyMode::Local), "CLAUDE.md");
+    }
+
+    #[test]
+    fn a_session_reads_only_its_own_boundarys_global_instructions() {
+        let (_config_dir, config) = tmp_dir();
+        let (_home_dir, home) = tmp_dir();
+        let (_project_dir, project) = tmp_dir();
+        for boundary in BOUNDARIES {
+            write_boundary_instructions(
+                &config,
+                boundary,
+                &format!("rule for {}", boundary.label()),
+            );
+        }
+        for boundary in BOUNDARIES {
+            let prompt =
+                MemoryManager::in_dirs(&project, boundary, &config, &home).get_context_prompt();
+            assert!(
+                prompt.contains(&format!("rule for {}", boundary.label())),
+                "{prompt}"
+            );
+            for other in BOUNDARIES.into_iter().filter(|other| *other != boundary) {
+                assert!(
+                    !prompt.contains(&format!("rule for {}", other.label())),
+                    "{} instructions reached a {} session: {prompt}",
+                    other.label(),
+                    boundary.label()
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn an_instruction_saved_in_one_boundary_reaches_no_other() {
+        let (_config_dir, config) = tmp_dir();
+        let (_home_dir, home) = tmp_dir();
+        let (_project_dir, project) = tmp_dir();
+        for saved_in in BOUNDARIES {
+            let saved = MemoryManager::in_dirs(&project, saved_in, &config, &home)
+                .save(
+                    &MemoryTier::Global,
+                    &format!("- saved in {}", saved_in.label()),
+                )
+                .unwrap();
+            assert_eq!(saved, config.join(global_instructions_file(saved_in)));
+        }
+        for boundary in BOUNDARIES {
+            let entries = MemoryManager::in_dirs(&project, boundary, &config, &home).load_all();
+            let global: Vec<&MemoryEntry> = entries
+                .iter()
+                .filter(|entry| entry.source == MemoryTier::Global)
+                .collect();
+            assert_eq!(global.len(), 1);
+            assert_eq!(
+                global[0].content.trim(),
+                format!("- saved in {}", boundary.label())
+            );
+        }
+    }
+
+    #[test]
+    fn instructions_saved_before_the_split_count_as_local() {
+        let (_config_dir, config) = tmp_dir();
+        let (_home_dir, home) = tmp_dir();
+        let (_project_dir, project) = tmp_dir();
+        fs::write(config.join("CLAUDE.md"), "written before the split").unwrap();
+        let carries = |boundary| {
+            MemoryManager::in_dirs(&project, boundary, &config, &home)
+                .get_context_prompt()
+                .contains("written before the split")
+        };
+        assert!(carries(PrivacyMode::Local));
+        assert!(!carries(PrivacyMode::Byok));
+        assert!(!carries(PrivacyMode::Managed));
+    }
+
+    #[test]
+    fn the_legacy_global_file_is_local_only() {
+        let (_config_dir, config) = tmp_dir();
+        let (_home_dir, home) = tmp_dir();
+        let (_project_dir, project) = tmp_dir();
+        fs::create_dir_all(home.join(".agi")).unwrap();
+        fs::write(home.join(".agi").join("CLAUDE.md"), "legacy rule").unwrap();
+        let listed =
+            |boundary| MemoryManager::in_dirs(&project, boundary, &config, &home).list()[0].2;
+        for boundary in BOUNDARIES {
+            let prompt =
+                MemoryManager::in_dirs(&project, boundary, &config, &home).get_context_prompt();
+            assert_eq!(
+                prompt.contains("legacy rule"),
+                boundary == PrivacyMode::Local,
+                "{prompt}"
+            );
+            assert_eq!(listed(boundary), boundary == PrivacyMode::Local);
+        }
+    }
+
+    #[test]
+    fn a_boundarys_instructions_file_is_not_its_neighbours() {
+        let (_config_dir, config) = tmp_dir();
+        let (_home_dir, home) = tmp_dir();
+        let (_project_dir, project) = tmp_dir();
+        let paths: HashSet<PathBuf> = BOUNDARIES
+            .into_iter()
+            .map(|boundary| {
+                MemoryManager::in_dirs(&project, boundary, &config, &home)
+                    .path_for_tier(&MemoryTier::Global)
+                    .unwrap()
+                    .to_path_buf()
+            })
+            .collect();
+        assert_eq!(paths.len(), 3);
     }
 }

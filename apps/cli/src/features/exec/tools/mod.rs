@@ -1126,6 +1126,7 @@ async fn execute_tool_with_scoped_permissions(
         "memory" => {
             memory_tool::execute_memory(
                 &call.args,
+                opts.privacy_mode,
                 require_confirm,
                 opts.approval_callback.as_ref(),
             )

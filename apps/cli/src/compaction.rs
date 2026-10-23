@@ -204,7 +204,7 @@ pub(crate) fn with_config_home<T>(home: &Path, run: impl FnOnce() -> T) -> T {
     result
 }
 
-fn config_home() -> Option<PathBuf> {
+pub(crate) fn config_home() -> Option<PathBuf> {
     #[cfg(test)]
     if let Some(home) = TEST_CONFIG_HOME.with(|cell| cell.borrow().clone()) {
         return Some(home);

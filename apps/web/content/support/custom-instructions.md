@@ -29,7 +29,9 @@ Rules in `.agiworkforce/rules/*.md` in the repository and in
 Notes the agent should keep for a repository are saved in `CLAUDE.md` at the
 repository root. In VS Code, run **Remember for This Repository** to add one;
 it tells you which file it saved to. Notes for every repository go in
-`~/.agiworkforce/CLAUDE.md`. Each note can be up to 4,000 characters.
+`~/.agiworkforce/CLAUDE.md` in Local mode, `CLAUDE.byok.md` in BYOK mode and
+`CLAUDE.managed.md` in Managed mode, so a note saved in one mode never reaches
+another. Each note can be up to 4,000 characters.
 
 ## Instructions set in VS Code
 
