@@ -34,6 +34,9 @@ function inScope<T>(unit: object, work: () => Promise<T>): Promise<T> {
 const insideUnstableCache = <T>(work: () => Promise<T>) =>
   inScope({ type: 'unstable-cache', phase: 'render' }, work);
 
+const insideUseCache = <T>(work: () => Promise<T>) =>
+  inScope({ type: 'cache', phase: 'render' }, work);
+
 const insideRouteHandler = <T>(work: () => Promise<T>) =>
   inScope(
     {
@@ -89,7 +92,7 @@ describe('the Clerk adapter inside Next request scopes', () => {
 
   it('builds the account client again when a call from a cache scope could not build it', async () => {
     const provider = new ClerkIdentityProvider({ secretKey: SECRET });
-    await expect(insideUnstableCache(() => provider.getUser('user_1'))).rejects.toThrow();
+    await expect(insideUseCache(() => provider.getUser('user_1'))).rejects.toThrow();
 
     await expect(insideRouteHandler(() => provider.getUser('user_1'))).resolves.toMatchObject({
       id: 'user_1',
