@@ -51,24 +51,8 @@ export class VideoProviderOutputError extends Error {
   }
 }
 
-export function normalizeGoogleVideoOperationName(
-  value: string,
-  allowLegacyRawId = true,
-): string | null {
-  if (value.length < 1 || value.length > 512) return null;
-  if (allowLegacyRawId && isSafeGoogleResourceSegment(value)) {
-    return `operations/${value}`;
-  }
-  const segments = value.split('/');
-  if (
-    segments.length < 2 ||
-    segments.length > 8 ||
-    segments.at(-2) !== 'operations' ||
-    !segments.every(isSafeGoogleResourceSegment)
-  ) {
-    return null;
-  }
-  return segments.join('/');
+export function normalizeGoogleInteractionId(value: string): string | null {
+  return isSafeGoogleResourceSegment(value) ? value : null;
 }
 
 interface RunwayTaskStatusResponse {
@@ -80,24 +64,17 @@ interface RunwayTaskStatusResponse {
   failureCode?: string;
 }
 
-interface GoogleVideo {
+interface GoogleInteractionContent {
+  type?: string;
+  mime_type?: string;
+  data?: string;
   uri?: string;
-  bytesBase64Encoded?: string;
 }
 
-interface GoogleOperationResponse {
-  name?: string;
-  metadata?: {
-    state?: 'STATE_UNSPECIFIED' | 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED';
-    progress?: number;
-  };
-  done?: boolean;
-  error?: { code?: number; message?: string };
-  response?: {
-    generateVideoResponse?: { generatedSamples?: Array<{ video?: GoogleVideo }> };
-    generatedSamples?: Array<{ video?: GoogleVideo }>;
-    videos?: Array<{ video?: GoogleVideo }>;
-  };
+interface GoogleInteractionResponse {
+  id?: string;
+  status?: string;
+  steps?: Array<{ type?: string; content?: GoogleInteractionContent[] }>;
 }
 
 export type VideoProviderPollResult =
@@ -131,7 +108,7 @@ function retryAfterProjection(response: Response): { retryAfterSeconds?: number 
 }
 
 function providerErrorFromHttp(
-  provider: 'Google Veo' | 'Runway' | 'OpenRouter',
+  provider: 'Google' | 'Runway' | 'OpenRouter',
   response: Response,
 ): never {
   const { status } = response;
@@ -243,64 +220,65 @@ async function pollRunway(providerTaskId: string): Promise<VideoProviderPollResu
   }
 }
 
+function googleInteractionVideo(
+  result: GoogleInteractionResponse,
+): GoogleInteractionContent | undefined {
+  for (const step of result.steps ?? []) {
+    if (step?.type !== 'model_output' || !Array.isArray(step.content)) continue;
+    const video = step.content.find((content) => content?.type === 'video');
+    if (video) return video;
+  }
+  return undefined;
+}
+
 async function pollGoogle(providerTaskId: string): Promise<VideoProviderPollResult> {
   const apiKey = googleApiKey();
-  if (!apiKey) throw new VideoProviderOutputError('Google Veo is not configured.', true);
-  const operationName = normalizeGoogleVideoOperationName(providerTaskId);
-  if (!operationName) {
-    throw new VideoProviderOutputError('Google Veo returned an invalid operation identity.', false);
+  if (!apiKey) throw new VideoProviderOutputError('Google video is not configured.', true);
+  const interactionId = normalizeGoogleInteractionId(providerTaskId);
+  if (!interactionId) {
+    throw new VideoProviderOutputError('Google returned an invalid video task identity.', false);
   }
 
   let response: Response;
   try {
-    response = await fetch(providerApiUrl('google', operationName), {
+    response = await fetch(providerApiUrl('google', `interactions/${interactionId}`), {
       method: 'GET',
       headers: { 'x-goog-api-key': apiKey },
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(60_000),
     });
   } catch {
-    throw new VideoProviderOutputError('Google Veo status could not be verified.', true);
+    throw new VideoProviderOutputError('Google video status could not be verified.', true);
   }
-  if (!response.ok) providerErrorFromHttp('Google Veo', response);
+  if (!response.ok) providerErrorFromHttp('Google', response);
 
-  let result: GoogleOperationResponse;
+  let result: GoogleInteractionResponse;
   try {
-    result = (await response.json()) as GoogleOperationResponse;
+    result = (await response.json()) as GoogleInteractionResponse;
   } catch {
-    throw new VideoProviderOutputError('Google Veo returned an unreadable task state.', true);
+    throw new VideoProviderOutputError('Google returned an unreadable video task state.', true);
   }
-  if (
-    result.error ||
-    result.metadata?.state === 'FAILED' ||
-    result.metadata?.state === 'CANCELLED'
-  ) {
-    return {
-      status: 'failed',
-      error: 'Google Veo could not generate this video.',
-    };
-  }
-  if (!result.done && result.metadata?.state !== 'SUCCEEDED') {
-    return {
-      status: result.metadata?.state === 'PENDING' ? 'queued' : 'processing',
-      progress: boundedProgress(result.metadata?.progress),
-      ...retryAfterProjection(response),
-    };
+  switch (result.status) {
+    case 'in_progress':
+      return { status: 'processing', ...retryAfterProjection(response) };
+    case 'failed':
+    case 'cancelled':
+    case 'requires_action':
+      return { status: 'failed', error: 'Google could not generate this video.' };
+    case 'completed':
+      break;
+    default:
+      throw new VideoProviderOutputError('Google returned an unknown video task state.', true);
   }
 
-  const samples =
-    result.response?.generateVideoResponse?.generatedSamples ??
-    result.response?.generatedSamples ??
-    result.response?.videos ??
-    [];
-  const video = samples[0]?.video;
-  if (video?.uri) return { status: 'completed', output: { url: video.uri } };
-  if (video?.bytesBase64Encoded) {
-    return { status: 'completed', output: { base64: video.bytesBase64Encoded } };
+  const video = googleInteractionVideo(result);
+  if (video?.data) {
+    if (video.mime_type !== 'video/mp4') {
+      throw new VideoProviderOutputError('The provider result is not a supported video.', false);
+    }
+    return { status: 'completed', output: { base64: video.data } };
   }
-  throw new VideoProviderOutputError(
-    'Google Veo completed without returning a downloadable video.',
-    true,
-  );
+  if (video?.uri) return { status: 'completed', output: { url: video.uri } };
+  return { status: 'failed', error: 'Google could not generate this video.' };
 }
 
 async function pollOpenRouter(providerTaskId: string): Promise<VideoProviderPollResult> {
@@ -435,7 +413,7 @@ async function fetchProviderVideo(job: VideoGenerationJob, initialUrl: string): 
     const headers: Record<string, string> = {};
     if (job.provider === 'google' && googleVideoOutputHostDisposition(url.hostname) === 'api') {
       const apiKey = googleApiKey();
-      if (!apiKey) throw new VideoProviderOutputError('Google Veo is not configured.', true);
+      if (!apiKey) throw new VideoProviderOutputError('Google video is not configured.', true);
       headers['x-goog-api-key'] = apiKey;
     }
     let response: Response;
@@ -592,7 +570,7 @@ export async function downloadVideoProviderOutput(
 
   const response = await fetchProviderVideo(job, output.url);
   if (!response.ok)
-    providerErrorFromHttp(job.provider === 'google' ? 'Google Veo' : 'Runway', response);
+    providerErrorFromHttp(job.provider === 'google' ? 'Google' : 'Runway', response);
 
   const declaredLength = Number(response.headers.get('content-length'));
   if (Number.isFinite(declaredLength) && declaredLength > MAX_VIDEO_BYTES) {

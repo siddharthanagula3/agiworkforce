@@ -94,7 +94,7 @@ import {
   markClaimedVideoGenerationOutcomeUnknown,
   publicVideoJobStatus,
 } from '@/lib/services/video-job-reconciliation-service';
-import { normalizeGoogleVideoOperationName } from '@/lib/services/video-provider-output-service';
+import { normalizeGoogleInteractionId } from '@/lib/services/video-provider-output-service';
 import {
   ManagedUsageRequestError,
   createManagedUsageErrorBody,
@@ -188,7 +188,7 @@ class VideoProviderTaskAttachmentUnavailableError extends Error {
 }
 
 async function fetchProviderSubmission(
-  provider: 'Google Veo' | 'Runway',
+  provider: 'Google' | 'Runway',
   url: string,
   init: RequestInit,
 ): Promise<Response> {
@@ -207,7 +207,7 @@ function providerSubmissionWasAmbiguous(response: Response): boolean {
 }
 
 async function parseAcceptedProviderJson<T>(
-  provider: 'Google Veo' | 'Runway',
+  provider: 'Google' | 'Runway',
   response: Response,
 ): Promise<T> {
   try {
@@ -311,17 +311,9 @@ interface RunwayTaskResponse {
   failureCode?: string;
 }
 
-interface GoogleVeoResponse {
-  name: string;
-  metadata?: {
-    '@type': string;
-    state?: string;
-  };
-  done?: boolean;
-  error?: {
-    code: number;
-    message: string;
-  };
+interface GoogleInteractionCreateResponse {
+  id?: string;
+  status?: string;
 }
 
 function managedUsageErrorResponse(
@@ -351,7 +343,7 @@ function videoProviderConfigured(provider: VideoProvider): boolean {
 function requireVideoProviderConfigured(provider: VideoProvider): void {
   if (!videoProviderConfigured(provider)) {
     const label =
-      provider === 'google' ? 'Google Veo' : provider === 'openrouter' ? 'OpenRouter' : 'Runway';
+      provider === 'google' ? 'Google' : provider === 'openrouter' ? 'OpenRouter' : 'Runway';
     throw createError.serviceUnavailable(`${label} is not configured. Please contact support.`);
   }
 }
@@ -476,23 +468,14 @@ function validateProviderVideoRequest(
     if (generateAudio && !model.videoGeneration.supportsAudio) {
       throw createError.validation(`${model.name} does not support generated audio.`);
     }
+    if (!generateAudio && provider === 'google') {
+      throw createError.validation(`${model.name} generates audio with every video.`);
+    }
     return;
   }
 
-  if (provider !== 'google') return;
-
-  if (aspectRatio !== '16:9') {
-    throw createError.validation('This Google Veo route currently supports 16:9 output only.');
-  }
-  if (!generateAudio) {
-    throw createError.validation('This Google Veo route generates audio with every video.');
-  }
-
-  if (durationSecs !== 4 && durationSecs !== 6 && durationSecs !== 8) {
-    throw createError.validation('Google Veo duration_secs must be exactly 4, 6, or 8.');
-  }
-  if ((resolution === '1080p' || resolution === '4k') && durationSecs !== 8) {
-    throw createError.validation(`Google Veo ${resolution} output requires duration_secs to be 8.`);
+  if (provider === 'google') {
+    throw createError.serviceUnavailable(`${model.name} has no video generation contract.`);
   }
 }
 
@@ -602,54 +585,79 @@ async function generateWithRunway(
   };
 }
 
-async function generateWithGoogleVeo(
+const DATA_URL_PATTERN = /^data:(image\/(?:png|jpeg|webp));base64,([A-Za-z0-9+/]+={0,2})$/;
+
+function googleImagePart(dataUrl: string): { type: 'image'; data: string; mime_type: string } {
+  const match = DATA_URL_PATTERN.exec(dataUrl);
+  if (!match) throw createError.validation('An input image could not be read.');
+  return { type: 'image', data: match[2]!, mime_type: match[1]! };
+}
+
+function googleVideoInput(
   prompt: string,
-  durationSecs: 4 | 6 | 8,
+  inputImages: OpenRouterVideoInputImages | undefined,
+): {
+  input: string | Array<Record<string, string>>;
+  task?: 'image_to_video' | 'reference_to_video';
+} {
+  if (!inputImages) return { input: prompt };
+  const images =
+    inputImages.kind === 'first_frame'
+      ? [googleImagePart(inputImages.dataUrl)]
+      : inputImages.dataUrls.map(googleImagePart);
+  return {
+    input: [...images, { type: 'text', text: prompt }],
+    task: inputImages.kind === 'first_frame' ? 'image_to_video' : 'reference_to_video',
+  };
+}
+
+async function generateWithGoogle(
+  prompt: string,
+  durationSecs: number,
   resolution: VideoResolution,
+  aspectRatio: VideoAspectRatio,
   model: ModelMetadata,
+  inputImages: OpenRouterVideoInputImages | undefined,
 ): Promise<{ taskId: string }> {
   const apiKey = resolveServerProviderCredentials('google')?.apiKey;
   if (!apiKey) {
-    throw createError.serviceUnavailable('Google Veo API not configured');
+    throw createError.serviceUnavailable('Google video generation is not configured');
   }
 
-  const providerModelId = model.apiModelId ?? model.id;
-  const endpoint = providerApiUrl(
-    'google',
-    `models/${encodeURIComponent(providerModelId)}:predictLongRunning`,
-  );
-
-  const response = await fetchProviderSubmission('Google Veo', endpoint, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-goog-api-key': apiKey,
-    },
-    body: JSON.stringify({
-      instances: [
-        {
-          prompt,
-        },
-      ],
-      parameters: {
-        aspectRatio: '16:9',
-        durationSeconds: durationSecs,
-        resolution,
-        // This REST endpoint returns one video and rejects the SDK-only
-        // `numberOfVideos` and `enhancePrompt` options.
+  const { input, task } = googleVideoInput(prompt, inputImages);
+  const response = await fetchProviderSubmission(
+    'Google',
+    providerApiUrl('google', 'interactions'),
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-goog-api-key': apiKey,
       },
-    }),
-    signal: AbortSignal.timeout(30_000),
-  });
+      body: JSON.stringify({
+        model: model.apiModelId ?? model.id,
+        input,
+        response_format: {
+          type: 'video',
+          aspect_ratio: aspectRatio,
+          resolution,
+          duration: `${durationSecs}s`,
+        },
+        ...(task ? { generation_config: { video_config: { task } } } : {}),
+        background: true,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    },
+  );
 
   if (!response.ok) {
     if (providerSubmissionWasAmbiguous(response)) {
       throw new VideoProviderSubmissionOutcomeUnknownError(
-        `Google Veo returned ${response.status} after the generation request was sent.`,
+        `Google returned ${response.status} after the generation request was sent.`,
       );
     }
     const errorText = await response.text().catch(() => '');
-    logger.error({ status: response.status, error: errorText }, 'Google Veo API error');
+    logger.error({ status: response.status, error: errorText }, 'Google video API error');
 
     if (response.status === 401 || response.status === 403) {
       throw createError.serviceUnavailable('Video generation service authentication failed');
@@ -683,18 +691,20 @@ async function generateWithGoogleVeo(
     throw createError.internal('Failed to start video generation');
   }
 
-  const result = await parseAcceptedProviderJson<GoogleVeoResponse>('Google Veo', response);
+  const result = await parseAcceptedProviderJson<GoogleInteractionCreateResponse>(
+    'Google',
+    response,
+  );
 
-  if (!result.name || !normalizeGoogleVideoOperationName(result.name, false)) {
-    logger.error({ result }, 'Google Veo API returned no operation name');
+  const interactionId = result.id ? normalizeGoogleInteractionId(result.id) : null;
+  if (!interactionId) {
+    logger.error({ status: result.status }, 'Google video API returned no interaction id');
     throw new VideoProviderSubmissionOutcomeUnknownError(
-      'Google Veo accepted the generation but returned no usable operation identity.',
+      'Google accepted the generation but returned no usable task identity.',
     );
   }
 
-  return {
-    taskId: result.name,
-  };
+  return { taskId: interactionId };
 }
 
 async function generateWithOpenRouter(
@@ -1708,11 +1718,13 @@ async function submitVideoCandidate(
       const result = await generateWithRunway(prompt, billableDurationSecs, model);
       providerTaskId = result.taskId;
     } else if (provider === 'google') {
-      const result = await generateWithGoogleVeo(
+      const result = await generateWithGoogle(
         prompt,
-        billableDurationSecs as 4 | 6 | 8,
+        billableDurationSecs,
         resolution,
+        aspectRatio,
         model,
+        inputImages,
       );
       providerTaskId = result.taskId;
     } else {

@@ -290,13 +290,27 @@ const executableVideoModels = getModels({
   requireCapabilities: { videoGen: true },
 }).filter(isExecutableVideoModel);
 const IMAGE_INPUT_MODEL = executableVideoModels.find(
-  (model) => managedMediaVideoInputImageLimit(wireProvider(model), model) > 0,
+  (model) =>
+    wireProvider(model) === 'openrouter' &&
+    managedMediaVideoInputImageLimit(wireProvider(model), model) > 0,
 );
 if (!IMAGE_INPUT_MODEL)
   throw new Error('Catalog fixture is missing a video model that takes images.');
 const IMAGE_INPUT_LIMIT = managedMediaVideoInputImageLimit(
   wireProvider(IMAGE_INPUT_MODEL),
   IMAGE_INPUT_MODEL,
+);
+
+const GOOGLE_IMAGE_INPUT_MODEL = executableVideoModels.find(
+  (model) =>
+    wireProvider(model) === 'google' &&
+    managedMediaVideoInputImageLimit(wireProvider(model), model) > 0,
+);
+if (!GOOGLE_IMAGE_INPUT_MODEL)
+  throw new Error('Catalog fixture is missing a Google video model that takes images.');
+const GOOGLE_IMAGE_INPUT_LIMIT = managedMediaVideoInputImageLimit(
+  'google',
+  GOOGLE_IMAGE_INPUT_MODEL,
 );
 
 function makeAuthedRequest(body: unknown): NextRequest {
@@ -517,6 +531,70 @@ describe('POST /api/media/video/generate input images', () => {
       },
     ]);
     expect(submittedBody()).not.toHaveProperty('input_references');
+  });
+
+  it('sends reference images to Google as image parts before the prompt', async () => {
+    process.env['GOOGLE_API_KEY'] = 'google-test-secret';
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'v1_reference-task', status: 'in_progress' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+    const images = Array.from({ length: GOOGLE_IMAGE_INPUT_LIMIT }, () => ({
+      b64_json: ONE_PIXEL_PNG_B64,
+    }));
+
+    const response = await POST(
+      imageInputRequest({
+        model: GOOGLE_IMAGE_INPUT_MODEL!.id,
+        duration_secs: GOOGLE_IMAGE_INPUT_MODEL!.videoGeneration!.durationSecs[0],
+        generate_audio: true,
+        reference_images: images,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(submittedBody()).toMatchObject({
+      input: [
+        ...images.map(() => ({
+          type: 'image',
+          data: ONE_PIXEL_PNG_B64,
+          mime_type: 'image/png',
+        })),
+        { type: 'text', text: 'the four photos become one clip' },
+      ],
+      generation_config: { video_config: { task: 'reference_to_video' } },
+      background: true,
+    });
+  });
+
+  it('sends a first frame image to Google as the starting frame', async () => {
+    process.env['GOOGLE_API_KEY'] = 'google-test-secret';
+    mockFetch.mockResolvedValueOnce(
+      new Response(JSON.stringify({ id: 'v1_first-frame-task', status: 'in_progress' }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      }),
+    );
+
+    const response = await POST(
+      imageInputRequest({
+        model: GOOGLE_IMAGE_INPUT_MODEL!.id,
+        duration_secs: GOOGLE_IMAGE_INPUT_MODEL!.videoGeneration!.durationSecs[0],
+        generate_audio: true,
+        first_frame_image: { b64_json: ONE_PIXEL_PNG_B64 },
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(submittedBody()).toMatchObject({
+      input: [
+        { type: 'image', data: ONE_PIXEL_PNG_B64, mime_type: 'image/png' },
+        { type: 'text', text: 'the four photos become one clip' },
+      ],
+      generation_config: { video_config: { task: 'image_to_video' } },
+    });
   });
 
   it('refuses a first frame and reference images together before billing or egress', async () => {

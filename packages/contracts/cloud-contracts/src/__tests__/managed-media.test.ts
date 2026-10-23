@@ -205,7 +205,10 @@ describe('managed media cloud request contracts', () => {
         imageInput: { maxImagesPerRequest: 2 },
       }),
     ).toBe(2);
-    expect(managedMediaVideoInputImageLimit('google', imageVideoModel)).toBe(0);
+    expect(managedMediaVideoInputImageLimit('google', imageVideoModel)).toBe(
+      MANAGED_MEDIA_MAX_VIDEO_INPUT_IMAGES,
+    );
+    expect(managedMediaVideoInputImageLimit('runway', imageVideoModel)).toBe(0);
     expect(
       managedMediaVideoInputImageLimit('openrouter', { ...imageVideoModel, imageInput: undefined }),
     ).toBe(0);

@@ -8,7 +8,6 @@ import {
   downloadVideoProviderOutput,
   pollVideoProvider,
   requestRunwayVideoCancellation,
-  VideoProviderOutputError,
 } from './video-provider-output-service';
 
 const fetchMock = vi.fn();
@@ -26,7 +25,7 @@ function job(overrides: Partial<VideoGenerationJob> = {}): VideoGenerationJob {
     provider: 'google',
     model: 'synthetic-google-video-model',
     workflowRunId: 'wrun-video-1',
-    providerTaskId: 'operations/provider-task',
+    providerTaskId: 'v1_provider-task',
     prompt: 'a sunset',
     durationSecs: 6,
     resolution: '720p',
@@ -77,9 +76,9 @@ describe('video provider output service', () => {
     delete process.env['RUNWAY_API_KEY'];
   });
 
-  it('accepts the documented full Google operation name without path injection', async () => {
+  it('polls the Google interaction by id without path injection', async () => {
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ name: 'operations/provider-task', done: false }), {
+      new Response(JSON.stringify({ id: 'v1_provider-task', status: 'in_progress' }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -87,67 +86,66 @@ describe('video provider output service', () => {
 
     await expect(pollVideoProvider(job())).resolves.toMatchObject({ status: 'processing' });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://generativelanguage.googleapis.com/v1beta/operations/provider-task',
+      'https://generativelanguage.googleapis.com/v1beta/interactions/v1_provider-task',
       expect.objectContaining({
+        method: 'GET',
         headers: { 'x-goog-api-key': 'google-secret' },
       }),
     );
 
-    await expect(
-      pollVideoProvider(job({ providerTaskId: 'operations/ok/../../admin' })),
-    ).rejects.toBeInstanceOf(VideoProviderOutputError);
+    for (const providerTaskId of ['../admin', 'v1_ok/../../admin', 'operations/provider-task']) {
+      await expect(pollVideoProvider(job({ providerTaskId }))).rejects.toMatchObject({
+        retryable: false,
+      });
+    }
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
-  it('preserves a safe Google resource prefix ending in operations/id', async () => {
+  it('returns the inline video from the completed interaction model output', async () => {
+    const data = Buffer.from(mp4Bytes()).toString('base64');
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          name: 'models/synthetic-video-model/operations/provider-task',
-          done: false,
+          id: 'v1_provider-task',
+          status: 'completed',
+          steps: [
+            { type: 'user_input', content: [{ type: 'text', text: 'a sunset' }] },
+            { type: 'thought', content: [{ type: 'thought', text: 'planning' }] },
+            { type: 'model_output', content: [{ type: 'video', mime_type: 'video/mp4', data }] },
+          ],
         }),
         { status: 200, headers: { 'content-type': 'application/json' } },
       ),
     );
 
-    await expect(
-      pollVideoProvider(
-        job({ providerTaskId: 'models/synthetic-video-model/operations/provider-task' }),
-      ),
-    ).resolves.toMatchObject({ status: 'processing' });
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://generativelanguage.googleapis.com/v1beta/models/synthetic-video-model/operations/provider-task',
-      expect.anything(),
-    );
+    await expect(pollVideoProvider(job())).resolves.toEqual({
+      status: 'completed',
+      output: { base64: data },
+    });
   });
 
-  it('preserves the documented dotted Google model resource segment', async () => {
-    const operationName = 'models/fixture-video-model.preview/operations/fixture-provider-task';
+  it('fails a completed interaction that carries no video instead of polling it forever', async () => {
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ name: operationName, done: false }), {
-        status: 200,
-        headers: { 'content-type': 'application/json' },
-      }),
-    );
-
-    await expect(pollVideoProvider(job({ providerTaskId: operationName }))).resolves.toMatchObject({
-      status: 'processing',
-    });
-    expect(fetchMock).toHaveBeenCalledWith(
-      `https://generativelanguage.googleapis.com/v1beta/${operationName}`,
-      expect.anything(),
-    );
-
-    await expect(
-      pollVideoProvider(
-        job({ providerTaskId: 'models/fixture-video-model.preview/operations/../admin' }),
+      new Response(
+        JSON.stringify({
+          id: 'v1_provider-task',
+          status: 'completed',
+          steps: [{ type: 'model_output', content: [{ type: 'text', text: 'I cannot do that.' }] }],
+        }),
+        { status: 200, headers: { 'content-type': 'application/json' } },
       ),
-    ).rejects.toBeInstanceOf(VideoProviderOutputError);
+    );
+
+    await expect(pollVideoProvider(job())).resolves.toEqual({
+      status: 'failed',
+      error: 'Google could not generate this video.',
+    });
   });
 
   it('polls through the canonical validated GOOGLE_BASE_URL resolver', async () => {
     process.env['GOOGLE_BASE_URL'] = 'https://gateway.ai.cloudflare.com/v1/acct/gw/google/v1beta';
     fetchMock.mockResolvedValueOnce(
-      new Response(JSON.stringify({ name: 'operations/provider-task', done: false }), {
+      new Response(JSON.stringify({ id: 'v1_provider-task', status: 'in_progress' }), {
         status: 200,
         headers: { 'content-type': 'application/json' },
       }),
@@ -155,7 +153,7 @@ describe('video provider output service', () => {
 
     await expect(pollVideoProvider(job())).resolves.toMatchObject({ status: 'processing' });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://gateway.ai.cloudflare.com/v1/acct/gw/google/v1beta/operations/provider-task',
+      'https://gateway.ai.cloudflare.com/v1/acct/gw/google/v1beta/interactions/v1_provider-task',
       expect.objectContaining({ headers: { 'x-goog-api-key': 'google-secret' } }),
     );
   });
@@ -409,12 +407,12 @@ describe('video provider output service', () => {
     expect(JSON.stringify(result)).not.toContain('provider.example');
   });
 
-  it('never projects Google operation diagnostics or provider URLs to clients', async () => {
+  it('never projects Google interaction diagnostics or provider URLs to clients', async () => {
     fetchMock.mockResolvedValueOnce(
       new Response(
         JSON.stringify({
-          name: 'operations/provider-task',
-          done: true,
+          id: 'v1_provider-task',
+          status: 'failed',
           error: {
             code: 13,
             message: 'internal output https://storage.googleapis.com/private/result.mp4 failed',
@@ -428,7 +426,7 @@ describe('video provider output service', () => {
 
     expect(result).toEqual({
       status: 'failed',
-      error: 'Google Veo could not generate this video.',
+      error: 'Google could not generate this video.',
     });
     expect(JSON.stringify(result)).not.toContain('storage.googleapis.com');
   });

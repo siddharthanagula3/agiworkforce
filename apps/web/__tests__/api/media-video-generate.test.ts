@@ -271,7 +271,6 @@ import {
   isExecutableVideoModel,
   isModelLive,
   modelsCatalog,
-  resolveVideoGenerationOutputSize,
   type ModelMetadata,
 } from '@agiworkforce/types';
 import { MANAGED_COMPUTE_PRIVATE_BETA_ENV } from '@/lib/managed-compute-gate';
@@ -307,31 +306,25 @@ if (!RUNWAY_MODEL.apiModelId) {
 const RUNWAY_MODEL_ID = RUNWAY_MODEL.id;
 const RUNWAY_API_MODEL_ID = RUNWAY_MODEL.apiModelId;
 
-const googleDefaultId = getRoutingSlotModel('video_generation');
-const GOOGLE_DEFAULT_MODEL = requireCatalogVideoModel(
-  (model) => model.id === googleDefaultId,
-  'the Google video default',
-);
+const slotVideoModel = getModelMetadataById(getRoutingSlotModel('video_generation'));
+const GOOGLE_DEFAULT_MODEL =
+  slotVideoModel?.provider === 'google' && isExecutableVideoModel(slotVideoModel)
+    ? slotVideoModel
+    : requireCatalogVideoModel((model) => model.provider === 'google', 'a live Google video model');
 const GOOGLE_DEFAULT_MODEL_ID = GOOGLE_DEFAULT_MODEL.id;
-const GOOGLE_ECONOMY_MODEL = requireCatalogVideoModel(
-  (model) =>
-    model.provider === 'google' &&
-    model.id !== GOOGLE_DEFAULT_MODEL_ID &&
-    !resolveVideoGenerationOutputSize(model, '4k', '16:9') &&
-    (model.videoPerSecondCostByResolution?.['720p'] ?? Number.POSITIVE_INFINITY) <
-      (GOOGLE_DEFAULT_MODEL.videoPerSecondCostByResolution?.['720p'] ?? Number.POSITIVE_INFINITY),
-  'a lower-cost Google video model without 4k output',
-);
-const GOOGLE_ECONOMY_MODEL_ID = GOOGLE_ECONOMY_MODEL.id;
-const googleEconomyPricePerSecond =
-  GOOGLE_ECONOMY_MODEL.videoPerSecondCostByResolution?.['720p'] ??
-  GOOGLE_ECONOMY_MODEL.videoPerSecondCost;
-if (googleEconomyPricePerSecond == null) {
-  throw new Error('Catalog fixture is missing economy Google video pricing.');
+
+function googleCatalogCostCents(durationSecs: number, resolution = '720p'): number {
+  const perSecond =
+    GOOGLE_DEFAULT_MODEL.videoPerSecondCostByResolution?.[
+      resolution as keyof NonNullable<ModelMetadata['videoPerSecondCostByResolution']>
+    ];
+  if (perSecond == null) throw new Error(`Catalog fixture has no ${resolution} Google price.`);
+  return Math.ceil(Number((perSecond * durationSecs * 100).toFixed(8)));
 }
-const GOOGLE_ECONOMY_DEFAULT_COST_CENTS = Math.ceil(
-  Number((googleEconomyPricePerSecond * 4 * 100).toFixed(8)),
-);
+
+function googleInteractionAccepted(id: string) {
+  return { ok: true, json: async () => ({ id, status: 'in_progress' }) };
+}
 
 const NON_VIDEO_MODEL_ID = Object.values(modelsCatalog.models).find(
   (model) => model.modelType !== 'video' && isModelLive(model),
@@ -473,7 +466,7 @@ describe('POST /api/media/video/generate', () => {
 
     modelCatalogMocks.unpricedResolution = null;
     trainingMocks.optedOut = false;
-    trainingMocks.videoSlot = null;
+    trainingMocks.videoSlot = GOOGLE_DEFAULT_MODEL_ID;
     process.env[MANAGED_COMPUTE_PRIVATE_BETA_ENV] = '1';
     process.env['RUNWAY_API_KEY'] = 'test-runway-key';
     process.env['GOOGLE_API_KEY'] = 'test-google-key';
@@ -1435,10 +1428,7 @@ describe('POST /api/media/video/generate', () => {
     it('moves the default off a provider that may train to one that keeps inputs out of training', async () => {
       trainingMocks.optedOut = true;
       trainingMocks.videoSlot = RUNWAY_MODEL_ID;
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ name: 'operations/opted-out', done: false }),
-      });
+      mockFetch.mockResolvedValueOnce(googleInteractionAccepted('v1_opted-out'));
 
       const response = await POST(makeAuthedRequest({ prompt: 'a snowy mountain' }));
 
@@ -1610,10 +1600,7 @@ describe('POST /api/media/video/generate', () => {
 
     it('uses the canonical Google slot rather than silently falling back to Runway', async () => {
       process.env['GOOGLE_API_KEY'] = 'test-google-key';
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ name: 'operations/google-default-task', done: false }),
-      });
+      mockFetch.mockResolvedValueOnce(googleInteractionAccepted('v1_google-default-task'));
 
       const response = await POST(makeAuthedRequest({ prompt: 'a sunset' }));
       const data = await response.json();
@@ -1623,17 +1610,14 @@ describe('POST /api/media/video/generate', () => {
     });
   });
 
-  describe('Success, Google Veo provider', () => {
+  describe('Success, Google provider', () => {
     beforeEach(() => {
       delete process.env['RUNWAY_API_KEY'];
       process.env['GOOGLE_API_KEY'] = 'test-google-key';
     });
 
-    it('should return 200 with task_id when Google Veo operation is created', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ name: 'operations/12345678', done: false }),
-      });
+    it('starts a background interaction and reserves the catalog per-second price', async () => {
+      mockFetch.mockResolvedValueOnce(googleInteractionAccepted('v1_12345678'));
 
       const response = await POST(
         makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google' }),
@@ -1646,20 +1630,32 @@ describe('POST /api/media/video/generate', () => {
       expect(data.status).toBe('queued');
       expect(data.provider).toBe('google');
       expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ model: GOOGLE_DEFAULT_MODEL_ID, estimatedCostCents: 160 }),
+        expect.objectContaining({
+          model: GOOGLE_DEFAULT_MODEL_ID,
+          estimatedCostCents: googleCatalogCostCents(4),
+        }),
       );
-      const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(JSON.parse(String(googleRequest.body))).toMatchObject({
-        parameters: { durationSeconds: 4, resolution: '720p' },
+      const [url, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(url).toBe('https://generativelanguage.googleapis.com/v1beta/interactions');
+      expect(JSON.parse(String(googleRequest.body))).toEqual({
+        model: GOOGLE_DEFAULT_MODEL.apiModelId ?? GOOGLE_DEFAULT_MODEL_ID,
+        input: 'a snowy mountain',
+        response_format: {
+          type: 'video',
+          aspect_ratio: '16:9',
+          resolution: '720p',
+          duration: '4s',
+        },
+        background: true,
       });
+      expect(durableJobMocks.recordProviderTask).toHaveBeenCalledWith(
+        expect.objectContaining({ providerTaskId: 'v1_12345678' }),
+      );
     });
 
     it('submits through the canonical validated Google API root override', async () => {
       process.env['GOOGLE_BASE_URL'] = 'https://generativelanguage.googleapis.com/regional/v1beta';
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ name: 'operations/override-task', done: false }),
-      });
+      mockFetch.mockResolvedValueOnce(googleInteractionAccepted('v1_override-task'));
 
       const response = await POST(
         makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google' }),
@@ -1667,19 +1663,39 @@ describe('POST /api/media/video/generate', () => {
 
       expect(response.status).toBe(200);
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.stringMatching(
-          /^https:\/\/generativelanguage\.googleapis\.com\/regional\/v1beta\/models\/[^/]+:predictLongRunning$/u,
-        ),
+        'https://generativelanguage.googleapis.com/regional/v1beta/interactions',
         expect.any(Object),
       );
     });
 
-    it('rejects a higher-resolution Google tuple instead of silently extending its duration', async () => {
+    it('sends a portrait catalog tuple with its duration', async () => {
+      mockFetch.mockResolvedValueOnce(googleInteractionAccepted('v1_portrait-task'));
+
       const response = await POST(
         makeAuthedRequest({
           prompt: 'a cinematic mountain',
           provider: 'google',
-          duration_secs: 4,
+          duration_secs: 10,
+          aspect_ratio: '9:16',
+        }),
+      );
+
+      expect(response.status).toBe(200);
+      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
+        expect.objectContaining({ estimatedCostCents: googleCatalogCostCents(10) }),
+      );
+      const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
+      expect(JSON.parse(String(googleRequest.body))).toMatchObject({
+        response_format: { aspect_ratio: '9:16', resolution: '720p', duration: '10s' },
+      });
+    });
+
+    it('rejects a resolution absent from the catalog tuple before billing or egress', async () => {
+      const response = await POST(
+        makeAuthedRequest({
+          prompt: 'a cinematic mountain',
+          provider: 'google',
+          duration_secs: 8,
           resolution: '4k',
         }),
       );
@@ -1690,40 +1706,15 @@ describe('POST /api/media/video/generate', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('reserves catalog pricing for an explicit valid 8-second 4k Veo request', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ name: 'operations/4k-task', done: false }),
-      });
-
-      const response = await POST(
-        makeAuthedRequest({
-          prompt: 'a cinematic mountain',
-          provider: 'google',
-          duration_secs: 8,
-          resolution: '4k',
-        }),
-      );
-
-      expect(response.status).toBe(200);
-      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({ model: GOOGLE_DEFAULT_MODEL_ID, estimatedCostCents: 480 }),
-      );
-      const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(JSON.parse(String(googleRequest.body))).toMatchObject({
-        parameters: { durationSeconds: 8, resolution: '4k' },
-      });
-    });
-
     it('refuses a resolution the model publishes no price for instead of billing the cheapest', async () => {
-      modelCatalogMocks.unpricedResolution = '4k';
+      modelCatalogMocks.unpricedResolution = '720p';
 
       const response = await POST(
         makeAuthedRequest({
           prompt: 'a cinematic mountain',
           provider: 'google',
           duration_secs: 8,
-          resolution: '4k',
+          resolution: '720p',
         }),
       );
 
@@ -1736,9 +1727,9 @@ describe('POST /api/media/video/generate', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('rejects a non-native Google duration before reservation or provider egress', async () => {
+    it('rejects a duration the catalog does not list before reservation or provider egress', async () => {
       const response = await POST(
-        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google', duration_secs: 5 }),
+        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google', duration_secs: 2 }),
       );
 
       expect(response.status).toBe(400);
@@ -1747,48 +1738,31 @@ describe('POST /api/media/video/generate', () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('rejects 4k on Veo Lite using the selected model pricing capabilities', async () => {
+    it('refuses silent video because the model adds audio to every clip', async () => {
       const response = await POST(
         makeAuthedRequest({
           prompt: 'a snowy mountain',
           provider: 'google',
-          model: GOOGLE_ECONOMY_MODEL_ID,
-          duration_secs: 8,
-          resolution: '4k',
+          generate_audio: false,
         }),
       );
 
       expect(response.status).toBe(400);
       expect(managedUsageMocks.reserve).not.toHaveBeenCalled();
-      expect(durableJobMocks.create).not.toHaveBeenCalled();
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it('uses the valid four-second default and Lite catalog price without mutation', async () => {
-      mockFetch.mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ name: 'operations/lite-task', done: false }),
-      });
+    it('marks an accepted Google response without an interaction id outcome unknown', async () => {
+      mockFetch.mockResolvedValueOnce({ ok: true, json: async () => ({ status: 'in_progress' }) });
 
       const response = await POST(
-        makeAuthedRequest({
-          prompt: 'a snowy mountain',
-          provider: 'google',
-          model: GOOGLE_ECONOMY_MODEL_ID,
-        }),
+        makeAuthedRequest({ prompt: 'a snowy mountain', provider: 'google' }),
       );
 
-      expect(response.status).toBe(200);
-      expect(managedUsageMocks.reserve).toHaveBeenCalledWith(
-        expect.objectContaining({
-          model: GOOGLE_ECONOMY_MODEL_ID,
-          estimatedCostCents: GOOGLE_ECONOMY_DEFAULT_COST_CENTS,
-        }),
-      );
-      const [, googleRequest] = mockFetch.mock.calls[0] as [string, RequestInit];
-      expect(JSON.parse(String(googleRequest.body))).toMatchObject({
-        parameters: { durationSeconds: 4, resolution: '720p' },
-      });
+      expect(response.status).toBe(503);
+      expect((await response.json()).error.code).toBe('SERVICE_UNAVAILABLE');
+      expect(durableJobMocks.markUnknown).toHaveBeenCalledTimes(1);
+      expect(durableJobMocks.recordProviderTask).not.toHaveBeenCalled();
     });
 
     it('rejects a requested model whose catalog provider contradicts the provider field', async () => {
@@ -1893,7 +1867,7 @@ describe('POST /api/media/video/generate', () => {
       expect(durableJobMocks.markUnknown).toHaveBeenCalledTimes(1);
     });
 
-    it('should return 503 when Google Veo returns 401', async () => {
+    it('should return 503 when Google returns 401', async () => {
       process.env['GOOGLE_API_KEY'] = 'test-google-key';
       delete process.env['RUNWAY_API_KEY'];
 
@@ -1910,7 +1884,7 @@ describe('POST /api/media/video/generate', () => {
       expect(response.status).toBe(503);
     });
 
-    it('should return 400 when Google Veo flags prompt as unsafe', async () => {
+    it('should return 400 when Google flags prompt as unsafe', async () => {
       process.env['GOOGLE_API_KEY'] = 'test-google-key';
       delete process.env['RUNWAY_API_KEY'];
 

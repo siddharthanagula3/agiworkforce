@@ -165,7 +165,7 @@ export const MANAGED_MEDIA_MAX_VIDEO_INPUT_IMAGES = 4;
  * `MANAGED_MEDIA_IMAGE_EDIT_APIS`, this names a request format the server
  * speaks; the catalog entry decides whether a model on it takes images.
  */
-export const MANAGED_MEDIA_VIDEO_IMAGE_INPUT_PROVIDERS = ['openrouter'] as const;
+export const MANAGED_MEDIA_VIDEO_IMAGE_INPUT_PROVIDERS = ['google', 'openrouter'] as const;
 
 export interface ManagedMediaVideoImageInputModel {
   modelType?: string;
