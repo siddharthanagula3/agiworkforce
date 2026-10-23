@@ -23,7 +23,10 @@ import {
   readRunnableArtifact,
   writeArtifactStorageValue,
 } from '@/lib/services/artifact-runtime-service';
-import { PUBLISHED_TOKEN_REGEX } from '@/lib/services/published-artifact-service';
+import {
+  PUBLISHED_TOKEN_REGEX,
+  publishedArtifactUsesConnectors,
+} from '@/lib/services/published-artifact-service';
 
 export const runtime = 'nodejs';
 
@@ -84,6 +87,19 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
           413,
           'storage_value_too_large',
           `A saved value can be up to ${megabytes(ARTIFACT_STORAGE_VALUE_LIMIT_BYTES)}.`,
+        );
+      }
+      // Shared data is readable by the publisher, so an app that reads the
+      // viewer's connected apps could carry their contents out through it.
+      if (
+        body.shared &&
+        artifact.ownerUserId !== scoped.userId &&
+        (await publishedArtifactUsesConnectors(scoped.db, artifact.publishedArtifactId))
+      ) {
+        return refusal(
+          403,
+          'shared_storage_with_connectors',
+          'This app uses connected apps, so it cannot save data that other people can read.',
         );
       }
       const outcome = await writeArtifactStorageValue(scoped.db, {

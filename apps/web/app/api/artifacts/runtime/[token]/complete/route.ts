@@ -13,7 +13,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { readRunnableArtifact } from '@/lib/services/artifact-runtime-service';
 import { publishedArtifactSourceHoldsGoogleUserData } from '@/lib/connectors/google-user-data-runs';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { PUBLISHED_TOKEN_REGEX } from '@/lib/services/published-artifact-service';
+import {
+  PUBLISHED_TOKEN_REGEX,
+  publishedArtifactUsesConnectors,
+} from '@/lib/services/published-artifact-service';
 import {
   artifactRuntimeRefusal,
   respondToArtifactCompletion,
@@ -52,6 +55,19 @@ async function handlePost(request: NextRequest, context: RouteContext): Promise<
 
   const artifact = await readRunnableArtifact(scoped.db, token);
   if (!artifact) return artifactRuntimeRefusal(404, 'artifact_not_found', UNAVAILABLE_MESSAGE);
+  // Only an app its publisher bound to connected apps may read a viewer's, so
+  // the shared-data refusal for such apps cannot be sidestepped.
+  if (
+    parsed.data.connectors.length > 0 &&
+    artifact.ownerUserId !== scoped.userId &&
+    !(await publishedArtifactUsesConnectors(scoped.db, artifact.publishedArtifactId))
+  ) {
+    return artifactRuntimeRefusal(
+      403,
+      'connectors_not_declared',
+      'This app was not published with connected apps, so it cannot use yours.',
+    );
+  }
 
   // The source chat belongs to the app's owner, not the viewer, so it is read
   // on the service connection.

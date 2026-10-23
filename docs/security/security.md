@@ -1187,11 +1187,16 @@ extension refuse every runtime request (RT-2). One renderer serves every
 surface, so absence cannot be structural. Tests instead pin that the srcDoc
 fallback carries no bridge, and that a request from a signed-out visitor, or
 from a page with the switch off, never reaches the server (RT-3).
-Remembered consent is bound to the exact published code. Each app's calls and
-spend are attributed to it and capped per viewer under the reservation lock by
-migration 0390 (RT-4). Every call takes a concurrent-turn slot that refuses on
-any limiter outage (RT-5a). An app's prompt also counts as untrusted content,
-so a tool that could send data out never runs unattended beside a private
-source. The whole bridge stays behind `AGI_ARTIFACT_AI_ENABLED`, off by default.
+Remembered consent is bound to the exact published code, and nothing is
+remembered without it. Each app's calls and spend are attributed to it and
+capped per viewer under the reservation lock by migration 0391, at the first
+reservation and at every later provider step (RT-4). On a plan with a
+concurrency ceiling, every call takes a turn slot that refuses on any limiter
+outage; a plan without one has no slot to take, and the per-app caps bound it
+(RT-5a). An app's prompt also counts as untrusted content, so a tool that could
+send data out never runs unattended beside a private source. A viewer of an app
+its publisher bound to connected apps cannot write data the publisher and other
+viewers read, and an app not so bound cannot use a viewer's connected apps.
+The whole bridge stays behind `AGI_ARTIFACT_AI_ENABLED`, off by default.
 This is not a passing verdict: the switch stays off until the independent
 review signs off.

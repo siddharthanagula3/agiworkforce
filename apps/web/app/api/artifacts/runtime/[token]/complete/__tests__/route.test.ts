@@ -30,6 +30,7 @@ const mocks = vi.hoisted(() => ({
   buildModelPolicyGateResponse: vi.fn(),
   buildProviderEgressGateResponse: vi.fn(),
   allowsConnectors: vi.fn(),
+  usesConnectors: vi.fn(),
   acquireTurnSlot: vi.fn(),
   releaseTurnSlot: vi.fn(),
   db: { query: vi.fn() },
@@ -131,6 +132,7 @@ vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => (
   CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE:
     'This artifact uses connected apps, which are not available on publicly shared artifacts.',
   publishedArtifactAllowsConnectors: mocks.allowsConnectors,
+  publishedArtifactUsesConnectors: mocks.usesConnectors,
 }));
 vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
   ...(await importOriginal<OrganizationPolicyGateModule>()),
@@ -297,6 +299,7 @@ beforeEach(() => {
   mocks.buildArtifactConnectorPlan.mockResolvedValue({ unusable: [] });
   mocks.completeArtifactPrompt.mockResolvedValue('A short summary');
   mocks.allowsConnectors.mockResolvedValue(true);
+  mocks.usesConnectors.mockResolvedValue(true);
 });
 
 afterEach(() => {
@@ -373,6 +376,28 @@ describe('POST /api/artifacts/runtime/[token]/complete concurrency', () => {
     expect(response.status).toBe(429);
     expect(await errorCode(response)).toBe('artifact_runtime_limit_reached');
     expect(mocks.releaseTurnSlot).toHaveBeenCalledOnce();
+  });
+});
+
+describe('POST /api/artifacts/runtime/[token]/complete with connected apps the publisher never bound', () => {
+  it('refuses a viewer’s connected apps before any gate or billing', async () => {
+    mocks.usesConnectors.mockResolvedValue(false);
+
+    const response = await call({ prompt: 'Summarize', connectors: ['linear'] });
+
+    expect(response.status).toBe(403);
+    expect(await errorCode(response)).toBe('connectors_not_declared');
+    expect(mocks.usesConnectors).toHaveBeenCalledWith(mocks.db, ARTIFACT.publishedArtifactId);
+    expect(mocks.completeArtifactPrompt).not.toHaveBeenCalled();
+  });
+
+  it('still answers a request that names no connected apps', async () => {
+    mocks.usesConnectors.mockResolvedValue(false);
+
+    const response = await call({ prompt: 'Summarize' });
+
+    expect(response.status).toBe(200);
+    expect(mocks.usesConnectors).not.toHaveBeenCalled();
   });
 });
 

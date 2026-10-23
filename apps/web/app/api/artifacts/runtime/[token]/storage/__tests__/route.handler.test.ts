@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
   writeArtifactStorageValue: vi.fn(),
   deleteArtifactStorageValue: vi.fn(),
   listArtifactStorageKeys: vi.fn(),
+  usesConnectors: vi.fn(),
   db: { query: vi.fn() },
 }));
 
@@ -100,6 +101,7 @@ vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => (
   unpublishArtifactRecord: vi.fn(),
   unpublishArtifactsForConversations: vi.fn(),
   PUBLISHED_TOKEN_REGEX: /^[A-Za-z0-9_-]{24}$/,
+  publishedArtifactUsesConnectors: mocks.usesConnectors,
 }));
 
 import { createError } from '@/lib/errors';
@@ -109,7 +111,7 @@ type ArtifactRuntimeServiceModule = typeof import('@/lib/services/artifact-runti
 type PublishedArtifactServiceModule = typeof import('@/lib/services/published-artifact-service');
 
 const TOKEN = 'Abcdefghijklmnopqrstuv_1';
-const ARTIFACT = { token: TOKEN, ownerId: 'owner-9' };
+const ARTIFACT = { ownerUserId: 'owner-9', publishedArtifactId: 'published-1' };
 
 function call(body: unknown, token = TOKEN) {
   return POST(
@@ -133,6 +135,45 @@ beforeEach(() => {
   mocks.writeArtifactStorageValue.mockResolvedValue('saved');
   mocks.deleteArtifactStorageValue.mockResolvedValue(true);
   mocks.listArtifactStorageKeys.mockResolvedValue(['score', 'streak']);
+  mocks.usesConnectors.mockResolvedValue(false);
+});
+
+describe('POST /api/artifacts/runtime/[token]/storage from an app that reads connected apps', () => {
+  it('refuses a viewer’s write to data the publisher can read, without writing', async () => {
+    mocks.usesConnectors.mockResolvedValue(true);
+
+    const response = await call({ op: 'set', key: 'inbox', value: 'private', shared: true });
+
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+      'shared_storage_with_connectors',
+    );
+    expect(mocks.usesConnectors).toHaveBeenCalledWith(mocks.db, 'published-1');
+    expect(mocks.writeArtifactStorageValue).not.toHaveBeenCalled();
+  });
+
+  it('still saves the viewer’s own data, which only they can read', async () => {
+    mocks.usesConnectors.mockResolvedValue(true);
+
+    const response = await call({ op: 'set', key: 'inbox', value: 'private', shared: false });
+
+    expect(response.status).toBe(200);
+    expect(mocks.writeArtifactStorageValue).toHaveBeenCalledOnce();
+  });
+
+  it('lets the publisher write shared data in their own app', async () => {
+    mocks.usesConnectors.mockResolvedValue(true);
+    mocks.getUserScopedDb.mockResolvedValue({
+      db: mocks.db,
+      userId: 'owner-9',
+      organizationId: null,
+    });
+
+    const response = await call({ op: 'set', key: 'board', value: 'mine', shared: true });
+
+    expect(response.status).toBe(200);
+    expect(mocks.writeArtifactStorageValue).toHaveBeenCalledOnce();
+  });
 });
 
 describe('POST /api/artifacts/runtime/[token]/storage', () => {

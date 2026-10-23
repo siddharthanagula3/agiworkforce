@@ -469,6 +469,17 @@ export async function publishedArtifactAllowsConnectors(
   return row?.allowed === true;
 }
 
+export async function publishedArtifactUsesConnectors(
+  db: DatabaseAdapter,
+  publishedArtifactId: string,
+): Promise<boolean> {
+  const [row] = await db.query<{ uses: boolean | null }>(
+    `select public.app_published_artifact_uses_connectors($1::uuid) as uses`,
+    [publishedArtifactId],
+  );
+  return row?.uses === true;
+}
+
 /**
  * Move one of the caller's own published artifacts between audiences.
  *

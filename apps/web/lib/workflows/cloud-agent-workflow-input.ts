@@ -207,6 +207,10 @@ const ManagedBillingSchema = z
       })
       .strict()
       .optional(),
+    artifactSubjectKey: z
+      .string()
+      .regex(/^(published|owned):[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/)
+      .optional(),
   })
   .strict();
 

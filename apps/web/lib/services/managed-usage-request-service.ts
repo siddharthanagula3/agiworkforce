@@ -143,6 +143,8 @@ export interface ManagedUsageRequestReservation {
   attribution?: UsageAttribution;
   /** The plan limit was reached and this request is paid for from usage credits. */
   fundedByUsageCredits?: boolean;
+  /** The app whose page made this call, as recorded on the row; every provider step rechecks its cap. */
+  artifactSubjectKey?: string;
 }
 
 /**
@@ -758,7 +760,7 @@ export async function reserveManagedUsageRequest(
             flagshipWeeklyCapMicrousd,
             input.isFlagship,
             artifactSubjectKey,
-            artifactLimits.windowHours,
+            ROLLING_SESSION_WINDOW_HOURS,
             artifactLimits.maxCalls,
             artifactLimits.capMicrousd,
           ],
@@ -846,6 +848,7 @@ export async function reserveManagedUsageRequest(
       (await reservedOnUsageCredits(input.db, input.userId, idempotencyKey)),
     ...(input.quotaFeature ? { quotaFeature: input.quotaFeature } : {}),
     ...(input.attribution ? { attribution: input.attribution } : {}),
+    ...(artifactSubjectKey ? { artifactSubjectKey } : {}),
   };
 }
 
@@ -901,25 +904,41 @@ export async function reserveManagedUsageProviderStep(
   const sessionCapMicrousd = getPlanSessionUsageCapMicrousd(allowance);
   const weeklyCapMicrousd = getPlanWeeklyUsageCapMicrousd(allowance);
   const flagshipWeeklyCapMicrousd = getPlanFlagshipWeeklyUsageCapMicrousd(allowance);
-  const row = await queryOne(
-    reservation.db,
-    `select * from public.extend_managed_usage_request_provider_step_microusd(
-      $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
-      $7::bigint, $8::bigint, $9::bigint, $10::boolean
-    )`,
-    [
-      reservation.userId,
-      reservation.idempotencyKey,
-      reservation.requestHash,
-      reservation.leaseToken,
-      input.operationKey,
-      stepMicrousd,
-      sessionCapMicrousd,
-      weeklyCapMicrousd,
-      flagshipWeeklyCapMicrousd,
-      input.isFlagship,
-    ],
-  );
+  const stepParams = [
+    reservation.userId,
+    reservation.idempotencyKey,
+    reservation.requestHash,
+    reservation.leaseToken,
+    input.operationKey,
+    stepMicrousd,
+    sessionCapMicrousd,
+    weeklyCapMicrousd,
+    flagshipWeeklyCapMicrousd,
+    input.isFlagship,
+  ];
+  const row = reservation.artifactSubjectKey
+    ? await queryOne(
+        reservation.db,
+        `select * from public.extend_artifact_runtime_usage_provider_step_microusd(
+          $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
+          $7::bigint, $8::bigint, $9::bigint, $10::boolean,
+          $11::text, $12::integer, $13::bigint
+        )`,
+        [
+          ...stepParams,
+          reservation.artifactSubjectKey,
+          ROLLING_SESSION_WINDOW_HOURS,
+          getArtifactRuntimeUsageLimits(allowance).capMicrousd,
+        ],
+      )
+    : await queryOne(
+        reservation.db,
+        `select * from public.extend_managed_usage_request_provider_step_microusd(
+          $1::text, $2::text, $3::text, $4::text, $5::text, $6::bigint,
+          $7::bigint, $8::bigint, $9::bigint, $10::boolean
+        )`,
+        stepParams,
+      );
 
   const decision = typeof row['extension_decision'] === 'string' ? row['extension_decision'] : '';
   if (decision !== 'covered' && decision !== 'extended' && decision !== 'already_extended') {

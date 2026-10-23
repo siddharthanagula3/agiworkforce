@@ -140,6 +140,7 @@ describe('cloud agent workflow input', () => {
       routeId: 'openai/fixture-model',
       fundedByUsageCredits: true,
       attribution: { workload: 'research', projectId: 'project-1', sessionId: 'conversation-1' },
+      artifactSubjectKey: 'published:6f1c2a7e-0b1d-4c3e-9a8f-1234567890ab',
     };
     const { kind: _kind, ...reservation } = full;
     processed.managedUsage = { ...processed.managedUsage!, ...reservation };

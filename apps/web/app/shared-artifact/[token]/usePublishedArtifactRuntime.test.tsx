@@ -244,3 +244,32 @@ describe('remembered AI consent across republished code', () => {
     expect(mocks.call).not.toHaveBeenCalled();
   });
 });
+
+describe('AI consent without the code to fingerprint', () => {
+  it('remembers nothing and asks again on the next visit', async () => {
+    const first = renderHook(() => usePublishedArtifactRuntime('artifact-a', undefined, true));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    let pending!: Promise<unknown>;
+    act(() => {
+      pending = first.result.current.host!.handle({ op: 'complete', prompt: 'hi', connectors: [] });
+    });
+    await waitFor(() => expect(first.result.current.askingForAi).not.toBeNull());
+    act(() => first.result.current.answerAiRequest({ allowed: true, allowedTools: [] }));
+    await pending;
+    first.unmount();
+
+    expect(Object.keys(localStorage).filter((key) => key.includes('artifact-a'))).toEqual([]);
+    const second = renderHook(() => usePublishedArtifactRuntime('artifact-a', undefined, true));
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    act(() => {
+      void second.result.current
+        .host!.handle({ op: 'complete', prompt: 'again', connectors: [] })
+        .catch(() => undefined);
+    });
+    await waitFor(() => expect(second.result.current.askingForAi).not.toBeNull());
+  });
+});

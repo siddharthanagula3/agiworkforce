@@ -2,7 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
-const MIGRATION = '0390_artifact_runtime_usage_cap.sql';
+const MIGRATION = '0391_artifact_runtime_usage_cap.sql';
 
 const migration = fs.readFileSync(path.resolve(import.meta.dirname, MIGRATION), 'utf8');
 const reversal = fs.readFileSync(
@@ -43,7 +43,9 @@ describe('artifact runtime usage cap migration', () => {
     expect(count).toBeGreaterThan(lock);
     expect(delegate).toBeGreaterThan(count);
     expect(body).toContain("'ARTIFACT_RUNTIME_LIMIT_REACHED'");
-    expect(body).toContain('v_calls >= p_artifact_max_calls');
+    expect(body).toContain(
+      '(p_artifact_max_calls is not null and v_calls >= p_artifact_max_calls)',
+    );
     expect(body).toContain('v_spent + p_estimated_cost_microusd > p_artifact_cap_microusd');
   });
 
@@ -56,6 +58,31 @@ describe('artifact runtime usage cap migration', () => {
     const body = functionBody();
     expect(body.indexOf('request_row.idempotency_key = p_idempotency_key')).toBeLessThan(
       body.indexOf('v_calls >= p_artifact_max_calls'),
+    );
+  });
+
+  it('applies the app spend ceiling to every new provider step before the plan ceilings', () => {
+    const start = migration.indexOf(
+      'create or replace function public.extend_artifact_runtime_usage_provider_step_microusd(',
+    );
+    expect(start).toBeGreaterThan(-1);
+    const body = migration.slice(start, migration.indexOf('$$;', start));
+    const lock = body.indexOf("hashtextextended('managed-usage:' || p_user_id, 0)");
+    const cap = body.indexOf('v_spent + p_estimated_cost_microusd > p_artifact_cap_microusd');
+    const delegate = body.indexOf('extend_managed_usage_request_provider_step_microusd(');
+    expect(lock).toBeGreaterThan(-1);
+    expect(cap).toBeGreaterThan(lock);
+    expect(delegate).toBeGreaterThan(cap);
+    expect(body).toContain('v_request.artifact_subject is distinct from p_artifact_subject');
+  });
+
+  it('answers whether a publication reads connected apps without exposing the binding', () => {
+    expect(migration).toContain(
+      'create or replace function public.app_published_artifact_uses_connectors(',
+    );
+    expect(migration).toContain('and public.app_can_run_published_artifact(a.id)');
+    expect(reversal).toContain(
+      'drop function if exists public.app_published_artifact_uses_connectors(uuid)',
     );
   });
 
@@ -76,6 +103,6 @@ describe('artifact runtime usage cap migration', () => {
       'drop index if exists public.idx_managed_usage_requests_artifact_subject',
     );
     expect(reversal).toContain('drop column if exists artifact_subject');
-    expect(reversal).toContain("where filename = '0390_artifact_runtime_usage_cap.sql'");
+    expect(reversal).toContain("where filename = '0391_artifact_runtime_usage_cap.sql'");
   });
 });

@@ -1,10 +1,12 @@
 import 'server-only';
 
 import {
+  ARTIFACT_RUNTIME_SHARE_OF_FIVE_HOUR_BUDGET,
   CREDITS_PER_CENT,
   FLAGSHIP_OF_WEEKLY_BUDGET_RATIO,
   MICROUSD_PER_CREDIT,
   effectiveManagedUsageLimit,
+  getPlanMaxArtifactAiCallsPerApp,
   isFreeBillingPlanTier,
   managedUsageLimitsForCatalogVersion,
   type BillingInterval,
@@ -178,32 +180,24 @@ export function getPlanFlagshipWeeklyUsageCapMicrousd(
 }
 
 export interface ArtifactRuntimeUsageLimits {
-  windowHours: number;
-  maxCalls: number;
+  maxCalls: number | null;
   capMicrousd: ManagedUsageCapMicrousd;
 }
 
 /**
- * What one app may spend of the person using it, per app, inside the rolling
- * five-hour window: a call count, and a share of the plan's five-hour budget
- * so a single app can never empty the person's whole allowance.
+ * What one app may use of the person running it inside the rolling five-hour
+ * window: the plan's call count per app, and a share of the plan's five-hour
+ * budget so a single app can never empty the person's whole allowance.
  */
-export const ARTIFACT_RUNTIME_USAGE_POLICY = {
-  windowHours: 5,
-  maxCalls: 200,
-  shareOfSessionBudget: 0.25,
-} as const;
-
 export function getArtifactRuntimeUsageLimits(
   plan: PlanAllowanceSubject,
 ): ArtifactRuntimeUsageLimits {
   const sessionBudget = getPlanSessionUsageBudgetMicrousd(plan);
   return {
-    windowHours: ARTIFACT_RUNTIME_USAGE_POLICY.windowHours,
-    maxCalls: ARTIFACT_RUNTIME_USAGE_POLICY.maxCalls,
+    maxCalls: getPlanMaxArtifactAiCallsPerApp(subjectTier(plan)),
     capMicrousd:
       sessionBudget > 0
-        ? Math.floor(sessionBudget * ARTIFACT_RUNTIME_USAGE_POLICY.shareOfSessionBudget)
+        ? Math.floor(sessionBudget * ARTIFACT_RUNTIME_SHARE_OF_FIVE_HOUR_BUDGET)
         : null,
   };
 }

@@ -522,6 +522,7 @@ export interface BillingPlanProductLimits {
   knowledgeStorageBytes: BillingPlanLimit;
   monthlyDownloadBytes: BillingPlanLimit;
   maxConcurrentTurns: BillingPlanLimit;
+  maxArtifactAiCallsPerApp: BillingPlanLimit;
   maxSandboxes: BillingPlanLimit;
   sandboxTtlMs: number;
   maxConnectorTools: BillingPlanLimit;
@@ -542,6 +543,7 @@ const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.max.monthlyPriceUsd),
   customMcpServers: 'unlimited',
   maxConcurrentTurns: 8,
+  maxArtifactAiCallsPerApp: 400,
   maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
   sandboxTtlMs: 30 * MINUTE_MS,
   maxConnectorTools: 300,
@@ -561,6 +563,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     monthlyDownloadBytes: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 'unlimited',
+    maxArtifactAiCallsPerApp: 'unlimited',
     maxSandboxes: 0,
     sandboxTtlMs: 0,
     maxConnectorTools: 'unlimited',
@@ -576,6 +579,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     monthlyDownloadBytes: 'unlimited',
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 'unlimited',
+    maxArtifactAiCallsPerApp: 'unlimited',
     maxSandboxes: 0,
     sandboxTtlMs: 0,
     maxConnectorTools: 'unlimited',
@@ -591,6 +595,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     monthlyDownloadBytes: FREE_DAILY_CAPS.egressBytes * DAYS_IN_LONGEST_MONTH,
     customMcpServers: 0,
     maxConcurrentTurns: 1,
+    maxArtifactAiCallsPerApp: 50,
     maxSandboxes: 1,
     sandboxTtlMs: 10 * MINUTE_MS,
     maxConnectorTools: 0,
@@ -606,6 +611,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.basic.monthlyPriceUsd),
     customMcpServers: 5,
     maxConcurrentTurns: 2,
+    maxArtifactAiCallsPerApp: 100,
     maxSandboxes: 2,
     sandboxTtlMs: 10 * MINUTE_MS,
     maxConnectorTools: 50,
@@ -621,6 +627,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.pro.monthlyPriceUsd),
     customMcpServers: 25,
     maxConcurrentTurns: 4,
+    maxArtifactAiCallsPerApp: 200,
     maxSandboxes: 5,
     sandboxTtlMs: 20 * MINUTE_MS,
     maxConnectorTools: 150,
@@ -637,6 +644,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.max_15x.monthlyPriceUsd),
     customMcpServers: 'unlimited',
     maxConcurrentTurns: 12,
+    maxArtifactAiCallsPerApp: 600,
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
     sandboxTtlMs: 60 * MINUTE_MS,
     maxConnectorTools: 500,
@@ -652,6 +660,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     monthlyDownloadBytes: downloadCapBytes(BILLING_PLAN_PRICING.team.monthlyPriceUsd),
     customMcpServers: 25,
     maxConcurrentTurns: 4,
+    maxArtifactAiCallsPerApp: 200,
     maxSandboxes: 5,
     sandboxTtlMs: 20 * MINUTE_MS,
     maxConnectorTools: 150,
@@ -672,6 +681,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     monthlyDownloadBytes: 'custom',
     customMcpServers: 'custom',
     maxConcurrentTurns: 'custom',
+    maxArtifactAiCallsPerApp: 'custom',
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
     sandboxTtlMs: 60 * MINUTE_MS,
     maxConnectorTools: 'custom',
@@ -725,6 +735,11 @@ export function toEnforceableBillingPlanLimit(limit: BillingPlanLimit | undefine
 
 export function getPlanMaxConcurrentTurns(plan: string | null | undefined): number | null {
   return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxConcurrentTurns);
+}
+
+/** AI calls one app may make for one person inside the rolling five-hour window; null is unlimited. */
+export function getPlanMaxArtifactAiCallsPerApp(plan: string | null | undefined): number | null {
+  return toEnforceableBillingPlanLimit(getBillingPlanProductLimits(plan)?.maxArtifactAiCallsPerApp);
 }
 
 export function getPlanMaxSandboxes(plan: string | null | undefined): number {

@@ -81,12 +81,13 @@ function forgetConsent(scope: string, key: string): void {
 
 // Consent is kept per exact revision: republishing new code under the same
 // link must ask again rather than inherit what the earlier code was allowed.
+// Without the code to fingerprint, nothing is remembered and every call asks.
 function useRevisionDigest(revision: string | undefined): string | null {
-  const source = revision ?? '';
   const [digest, setDigest] = useState<{ source: string; value: string } | null>(null);
   useEffect(() => {
     const subtle = globalThis.crypto?.subtle;
-    if (!subtle) return undefined;
+    if (revision === undefined || !subtle) return undefined;
+    const source = revision;
     let current = true;
     void subtle.digest('SHA-256', new TextEncoder().encode(source)).then(
       (buffer) => {
@@ -101,8 +102,8 @@ function useRevisionDigest(revision: string | undefined): string | null {
     return () => {
       current = false;
     };
-  }, [source]);
-  return digest?.source === source ? digest.value : null;
+  }, [revision]);
+  return revision !== undefined && digest?.source === revision ? digest.value : null;
 }
 
 export interface PublishedArtifactRuntime {

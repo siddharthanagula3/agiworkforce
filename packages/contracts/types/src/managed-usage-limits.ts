@@ -26,6 +26,8 @@ const NO_MANAGED_USAGE: ManagedUsageLimit = {
 
 export const FLAGSHIP_OF_WEEKLY_BUDGET_RATIO = 0.3;
 
+export const ARTIFACT_RUNTIME_SHARE_OF_FIVE_HOUR_BUDGET = 0.25;
+
 export const MANAGED_USAGE_LIMITS: Readonly<Record<BillingPlanTier, ManagedUsageLimit>> =
   Object.freeze({
     'local-only': NO_MANAGED_USAGE,

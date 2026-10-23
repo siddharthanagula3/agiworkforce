@@ -5,10 +5,15 @@ vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 
-const { ManagedUsageRequestError, artifactUsageSubjectKey, reserveManagedUsageRequest } =
-  await import('../managed-usage-request-service');
 const {
-  ARTIFACT_RUNTIME_USAGE_POLICY,
+  ManagedUsageRequestError,
+  artifactUsageSubjectKey,
+  reserveManagedUsageProviderStep,
+  reserveManagedUsageRequest,
+} = await import('../managed-usage-request-service');
+const { ARTIFACT_RUNTIME_SHARE_OF_FIVE_HOUR_BUDGET, getPlanMaxArtifactAiCallsPerApp } =
+  await import('@agiworkforce/types');
+const {
   getArtifactRuntimeUsageLimits,
   getPlanSessionUsageBudgetMicrousd,
   getPlanSessionUsageCapMicrousd,
@@ -69,7 +74,7 @@ describe('reserveManagedUsageRequest for a call an app made', () => {
     const limits = getArtifactRuntimeUsageLimits({ tier: 'pro', catalogVersion: null });
     expect(params.slice(12)).toEqual([
       `published:${PUBLISHED_ID}`,
-      limits.windowHours,
+      5,
       limits.maxCalls,
       limits.capMicrousd,
     ]);
@@ -148,19 +153,132 @@ describe('getArtifactRuntimeUsageLimits', () => {
 
     expect(limits.capMicrousd).toBe(
       Math.floor(
-        getPlanSessionUsageBudgetMicrousd(plan) *
-          ARTIFACT_RUNTIME_USAGE_POLICY.shareOfSessionBudget,
+        getPlanSessionUsageBudgetMicrousd(plan) * ARTIFACT_RUNTIME_SHARE_OF_FIVE_HOUR_BUDGET,
       ),
     );
     expect(limits.capMicrousd).toBeGreaterThan(0);
     expect(sessionCap).not.toBeNull();
     expect(limits.capMicrousd!).toBeLessThan(sessionCap!);
-    expect(limits.maxCalls).toBe(ARTIFACT_RUNTIME_USAGE_POLICY.maxCalls);
+    expect(limits.maxCalls).toBe(getPlanMaxArtifactAiCallsPerApp('pro'));
+    expect(limits.maxCalls).toBeGreaterThan(0);
+  });
+
+  it('reads the call count from the plan catalog, where a tier can be unlimited', () => {
+    expect(
+      getArtifactRuntimeUsageLimits({ tier: 'enterprise', catalogVersion: null }).maxCalls,
+    ).toBe(null);
+    expect(getArtifactRuntimeUsageLimits({ tier: 'free', catalogVersion: null }).maxCalls).toBe(
+      getPlanMaxArtifactAiCallsPerApp('free'),
+    );
   });
 
   it('adds no spend ceiling of its own where the plan has no five-hour budget', () => {
     expect(getArtifactRuntimeUsageLimits({ tier: 'free', catalogVersion: null }).capMicrousd).toBe(
       null,
     );
+  });
+});
+
+describe('reserveManagedUsageProviderStep for an app’s run', () => {
+  function stepDb(decision: string) {
+    const query = vi.fn(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes('reserve_artifact_runtime_usage_microusd')) {
+        return [
+          {
+            reservation_decision: 'acquired',
+            request_status: 'reserved',
+            lease_token: 'lease-1',
+            estimated_cost_microusd: 5_000_000,
+          },
+        ];
+      }
+      if (text.includes('_provider_step_microusd(')) {
+        return [
+          {
+            extension_decision: decision,
+            request_status: 'provider_started',
+            estimated_cost_microusd: 10_000_000,
+          },
+        ];
+      }
+      return [];
+    });
+    return { db: { query, execute: vi.fn(async () => undefined) } as never, query };
+  }
+
+  function stepSql(query: ReturnType<typeof vi.fn>): [string, unknown[]] {
+    return query.mock.calls.find(([sql]) => String(sql).includes('_provider_step_microusd(')) as [
+      string,
+      unknown[],
+    ];
+  }
+
+  it('rechecks the app’s ceiling on every later provider step', async () => {
+    const { db, query } = stepDb('extended');
+    const reserved = await reserveManagedUsageRequest(reservation(db));
+
+    await reserveManagedUsageProviderStep({
+      reservation: reserved,
+      operationKey: 'provider:2',
+      estimatedCostMicrousd: 5_000_000,
+      planTier: 'pro',
+      isFlagship: false,
+    });
+
+    const [sql, params] = stepSql(query);
+    expect(sql).toContain('extend_artifact_runtime_usage_provider_step_microusd');
+    expect(params.slice(10)).toEqual([
+      `published:${PUBLISHED_ID}`,
+      5,
+      getArtifactRuntimeUsageLimits({ tier: 'pro', catalogVersion: null }).capMicrousd,
+    ]);
+  });
+
+  it('stops the run with the app ceiling refusal when a step would pass it', async () => {
+    const { db } = stepDb('artifact_limit');
+    const reserved = await reserveManagedUsageRequest(reservation(db));
+
+    await expect(
+      reserveManagedUsageProviderStep({
+        reservation: reserved,
+        operationKey: 'provider:3',
+        estimatedCostMicrousd: 5_000_000,
+        planTier: 'pro',
+        isFlagship: false,
+      }),
+    ).rejects.toMatchObject({ status: 429, code: 'artifact_runtime_limit_reached' });
+  });
+
+  it('leaves a chat turn on the plan-only step extension', async () => {
+    const query = vi.fn(async (sql: string) =>
+      String(sql).includes('extend_managed_usage_request_provider_step_microusd')
+        ? [
+            {
+              extension_decision: 'extended',
+              request_status: 'provider_started',
+              estimated_cost_microusd: 10_000_000,
+            },
+          ]
+        : [],
+    );
+
+    await reserveManagedUsageProviderStep({
+      reservation: {
+        db: { query, execute: vi.fn() } as never,
+        userId: 'viewer-1',
+        idempotencyKey: 'chat-00000001',
+        requestHash: 'hash-1',
+        leaseToken: 'lease-1',
+        estimatedCostCents: 1,
+      },
+      operationKey: 'provider:2',
+      estimatedCostMicrousd: 5_000_000,
+      planTier: 'pro',
+      isFlagship: false,
+    });
+
+    const [sql] = stepSql(query);
+    expect(sql).not.toContain('extend_artifact_runtime_usage_provider_step_microusd');
   });
 });
