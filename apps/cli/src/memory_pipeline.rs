@@ -282,19 +282,19 @@ impl MemoryPipeline {
     ///
     /// If the LLM call fails or times out, falls back to saving raw message
     /// content as the summary.
-    /// `origin` is the source session's privacy mode and is recorded on the
-    /// summary. A Local origin summarizes on the device (deterministic
-    /// fallback, no network): Local-session content never reaches a cloud
-    /// summarizer.
+    /// `route` is the source session's own off-device route
+    /// ([`crate::subagent::InheritedRoute::off_device`]). With one, the summary
+    /// is extracted through it and labelled with its trust boundary. Without
+    /// one, it is summarized on the device (deterministic fallback, no
+    /// network) and labelled Local.
     pub async fn extract_session_summary(
         home: &Path,
         session_id: &str,
         messages: &[Message],
         config: &CliConfig,
-        provider: &Provider,
-        model: &str,
-        origin: PrivacyMode,
+        route: Option<&crate::subagent::InheritedRoute>,
     ) -> Result<()> {
+        let origin = route.map_or(PrivacyMode::Local, |route| route.privacy_mode);
         let summaries_dir = home.join("memories").join("session_summaries");
         fs::create_dir_all(&summaries_dir)?;
 
@@ -313,18 +313,10 @@ impl MemoryPipeline {
 
         let timestamp = chrono::Utc::now().to_rfc3339();
 
-        // Privacy boundary (locked invariant): a Local session's content must never
-        // be sent off-device. Summarize on-device with the deterministic fallback
-        // instead of routing recent_text to the (possibly cloud) fast model.
-        let (summary_body, model_label) = if origin == PrivacyMode::Local {
-            (
-                build_raw_summary(&recent_text),
-                "on-device fallback (local privacy: no network)".to_string(),
-            )
-        } else {
+        let (summary_body, model_label) = if let Some(route) = route {
             let extraction = tokio::time::timeout(
                 std::time::Duration::from_secs(LLM_TIMEOUT_SECS),
-                Self::call_extraction_llm(&recent_text, provider, model, config),
+                Self::call_extraction_llm(&recent_text, &route.provider, &route.model, config),
             )
             .await;
 
@@ -335,7 +327,12 @@ impl MemoryPipeline {
                     build_raw_summary(&recent_text)
                 }
             };
-            (body, model.to_string())
+            (body, route.model.clone())
+        } else {
+            (
+                build_raw_summary(&recent_text),
+                "on-device fallback (local privacy: no network)".to_string(),
+            )
         };
 
         // Write with metadata header
@@ -959,9 +956,7 @@ mod tests {
             "safe-session-id",
             &messages,
             &config,
-            &Provider::Anthropic,
-            "unused-local-model",
-            PrivacyMode::Local,
+            None,
         )
         .await
         .expect("local extraction");
@@ -1142,9 +1137,7 @@ mod tests {
             "local-session",
             &messages,
             &CliConfig::default(),
-            &Provider::Ollama(models::OllamaMode::Local),
-            "fixture-local-model:latest",
-            PrivacyMode::Local,
+            None,
         )
         .await
         .unwrap();
@@ -1431,17 +1424,9 @@ mod tests {
         ];
         let config = CliConfig::default();
 
-        MemoryPipeline::extract_session_summary(
-            home,
-            "sess-local",
-            &messages,
-            &config,
-            &Provider::Anthropic,
-            "unused-local-model",
-            PrivacyMode::Local,
-        )
-        .await
-        .unwrap();
+        MemoryPipeline::extract_session_summary(home, "sess-local", &messages, &config, None)
+            .await
+            .unwrap();
 
         let path = home
             .join("memories")

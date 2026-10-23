@@ -2432,8 +2432,8 @@ impl AgentSession {
         self.managed_session.as_ref().map(|s| s.session_id.as_str())
     }
 
-    /// Persist the session-end memory summary using the active model/provider
-    /// boundary. Local sessions always take the deterministic on-device path.
+    /// Persist the session-end memory summary through the session's own
+    /// off-device route when it has one, and on the device otherwise.
     pub async fn finalize_memory(&self, config: &CliConfig) -> Result<()> {
         let unextracted = &self.messages[self.memory_extracted_through.min(self.messages.len())..];
         if !self.memory_enabled || !unextracted.iter().any(|message| message.role != "system") {
@@ -2445,9 +2445,7 @@ impl AgentSession {
             &self.runtime_session_id,
             unextracted,
             config,
-            &self.provider,
-            &self.model,
-            self.privacy_mode,
+            subagent::InheritedRoute::off_device(self).as_ref(),
         )
         .await
     }

@@ -1610,12 +1610,14 @@ message -- revise and call `update_plan` again.\n\n",
         self.memory_extracted_at = std::time::Instant::now();
         let home = home.to_path_buf();
         let config = config.clone();
-        let provider = self.provider.clone();
-        let model = self.model.clone();
-        let origin = self.privacy_mode;
+        let route = crate::subagent::InheritedRoute::off_device(self);
         let task = tokio::spawn(async move {
             if let Err(error) = crate::memory_pipeline::MemoryPipeline::extract_session_summary(
-                &home, &window_id, &window, &config, &provider, &model, origin,
+                &home,
+                &window_id,
+                &window,
+                &config,
+                route.as_ref(),
             )
             .await
             {
@@ -5313,6 +5315,48 @@ mod tests {
             "a Local transcript reached a BYOK route during /compact"
         );
         assert!(result.compacted, "compaction still runs on the device");
+    }
+
+    #[tokio::test]
+    async fn memory_extraction_stays_on_the_device_when_the_route_leaves_the_session_boundary() {
+        let (provider, hits) = recorded_keyed_route().await;
+        let home = tempfile::tempdir().expect("memory home");
+        let mut session = AgentSession::new_with_provider(
+            crate::model_catalog::default_model(),
+            &crate::context::gather_system_context(),
+            None,
+            crate::models::Provider::ManagedCloud,
+        );
+        assert_eq!(session.privacy_mode, super::super::PrivacyMode::Managed);
+        session.provider = provider;
+        session.model = "fixture-remote-model".to_string();
+        session
+            .messages
+            .push(Message::text("user", "I always prefer small commits."));
+        session
+            .messages
+            .push(Message::text("assistant", "Noted, small commits it is."));
+        session.memory_extracted_at = std::time::Instant::now()
+            .checked_sub(crate::memory_pipeline::MEMORY_WINDOW_INTERVAL * 2)
+            .expect("an instant in the past");
+
+        session.extract_memory_window(home.path(), &CliConfig::default());
+        for task in session.take_memory_consolidation_tasks() {
+            task.await.expect("extraction task");
+        }
+
+        assert_eq!(
+            hits.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "session content reached a route outside the session's boundary"
+        );
+        let summaries = home.path().join("memories").join("session_summaries");
+        let written = std::fs::read_dir(&summaries)
+            .expect("summary dir")
+            .map(|entry| std::fs::read_to_string(entry.expect("entry").path()).expect("summary"))
+            .collect::<Vec<_>>();
+        assert_eq!(written.len(), 1);
+        assert!(written[0].contains("origin: local"), "{}", written[0]);
     }
 
     fn fixture_config(base_url: &str) -> CliConfig {
