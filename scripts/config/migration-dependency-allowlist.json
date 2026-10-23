@@ -350,6 +350,11 @@
       "file": "apps/web/app/api/user/export/route.ts",
       "migration": 390,
       "reason": "Exports usage_limit_promotion_grants that 0390 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0390 is applied."
+    },
+    {
+      "file": "apps/web/app/api/stripe-webhook/lib/referral-events.ts",
+      "migration": 390,
+      "reason": "Deletes the unapplied usage_limit_promotion_grants rows of a clawed-back referral, a table that 0390 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0390 is applied."
     }
   ]
 }
