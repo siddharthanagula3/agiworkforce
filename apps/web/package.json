@@ -122,7 +122,7 @@
     "country-to-currency": "3.0.1",
     "date-fns": "^4.4.0",
     "docx": "^9.7.2",
-    "dompurify": "^3.4.16",
+    "dompurify": "^3.4.17",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^13.4.4",
     "google-auth-library": "11.1.0",
