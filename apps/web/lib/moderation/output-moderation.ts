@@ -2,6 +2,7 @@ import 'server-only';
 
 import type { ProviderMessage, StreamChunk } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
+import { sideCallProviderAllowed } from '@/lib/server/side-call-training-policy';
 import { buildServerProviderAdapter } from '@/lib/services/provider-adapter-service';
 import { matchDenylistedSha256, sha256Hex, sha256HexFromFile } from './hash-denylist';
 import { inspectImageBytes, type ImageStructureRejection } from './image-structure';
@@ -187,6 +188,7 @@ async function classifyGeneratedImage(
 
   const model = resolveOutputClassifierModel();
   if (!model) return null;
+  if (!(await sideCallProviderAllowed(null, input.userId, model.providerId))) return null;
 
   const mediaType = input.mimeType ?? 'image/png';
   const messages: ProviderMessage[] = [

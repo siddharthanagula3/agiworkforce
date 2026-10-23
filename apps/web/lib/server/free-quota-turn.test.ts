@@ -18,6 +18,10 @@ import {
   readProjectSourcesHeaderValue,
 } from '@/lib/chat-project-sources';
 import { logger } from '@/lib/logger';
+import {
+  MODEL_MAY_TRAIN_MESSAGE,
+  PROVIDER_TRAINING_OPT_OUT_KEY,
+} from '@/lib/server/provider-training-opt-out';
 import { loadFreePools, type LimitedMediaOffer } from '@/lib/server/free-pools';
 import { loadFreeQuotaPolicy } from '@/lib/server/free-quota-catalogue';
 import type { UserScopedDb } from '@/lib/server/rls-db';
@@ -55,8 +59,17 @@ const mocks = vi.hoisted(() => ({
   after: vi.fn(),
   consent: vi.fn(),
   limitedOffer: undefined as LimitedMediaOffer | undefined,
+  keepsOutOfTraining: vi.fn<(providerId: string) => boolean | null>(() => null),
 }));
 
+vi.mock('@agiworkforce/model-registry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@agiworkforce/model-registry')>();
+  return {
+    ...actual,
+    providerKeepsInputsOutOfTraining: (providerId: string) =>
+      mocks.keepsOutOfTraining(providerId) ?? actual.providerKeepsInputsOutOfTraining(providerId),
+  };
+});
 vi.mock('@/lib/server/named-provider-consent', () => ({
   loadNamedProviderConsent: mocks.consent,
 }));
@@ -309,6 +322,7 @@ beforeEach(async () => {
     file: { id: MEDIA_ASSET_ID, uri: `/api/files/${MEDIA_ASSET_ID}` },
   });
   mocks.limitedOffer = OFFER;
+  mocks.keepsOutOfTraining.mockReset().mockReturnValue(null);
   await writeQuotaAttestation(mocks.store, {
     sourceUrl: 'https://home.qwencloud.com/benefits',
     checkedAtMs: Date.now() - 60_000,
@@ -321,6 +335,53 @@ beforeEach(async () => {
 afterEach(() => {
   vi.useRealTimers();
   vi.unstubAllEnvs();
+});
+
+describe('a free model when the user keeps chats out of training', () => {
+  function optedOut(value: boolean | 'unreadable') {
+    mocks.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from public.user_settings')) {
+        if (value === 'unreadable') throw new Error('settings unreadable');
+        return [{ opted_out: value }];
+      }
+      return [{ id: 'conversation', data_region: null }];
+    });
+  }
+
+  it.each([true, 'unreadable'] as const)(
+    'refuses an offering whose provider may train before any provider request (setting %s)',
+    async (value) => {
+      mocks.keepsOutOfTraining.mockReturnValue(false);
+      optedOut(value);
+
+      const response = await send(chatModel, 'turn-no-training-refused');
+
+      expect(response.status).toBe(403);
+      const body = (await response.json()) as { error: { code: string; message: string } };
+      expect(body.error.code).toBe('model_may_train');
+      expect(body.error.message).toBe(MODEL_MAY_TRAIN_MESSAGE);
+      expect(mocks.stream).not.toHaveBeenCalled();
+      expect(mocks.media).not.toHaveBeenCalled();
+      expect(await meterReads(chatModel)).toBe(0);
+    },
+  );
+
+  it('does not read the setting for an offering whose provider keeps inputs out of training', async () => {
+    mocks.keepsOutOfTraining.mockReturnValue(true);
+    optedOut(true);
+    mocks.stream.mockResolvedValue(sse('[DONE]'));
+
+    const response = await send(chatModel, 'turn-no-training-allowed');
+
+    expect(response.status).not.toBe(403);
+    expect(mocks.stream).toHaveBeenCalled();
+
+    expect(
+      mocks.query.mock.calls.some(([, params]) =>
+        (params as unknown[] | undefined)?.includes(PROVIDER_TRAINING_OPT_OUT_KEY),
+      ),
+    ).toBe(false);
+  });
 });
 
 describe('what a free video takes from its allowance', () => {

@@ -18,6 +18,9 @@ export const MODEL_MAY_TRAIN_MESSAGE =
 export const NO_TRAINING_MEDIA_MODEL_MESSAGE =
   'No model for this keeps what you send out of training right now. To use one that may, turn off Only use models that do not train on your chats in Settings > Privacy.';
 
+export const NO_TRAINING_VOICE_MESSAGE =
+  'Voice uses a model whose provider may train on what you send. To use voice, turn off Only use models that do not train on your chats in Settings > Privacy.';
+
 export async function readProviderTrainingOptOut(
   db: Pick<DatabaseAdapter, 'query'>,
   userId: string,

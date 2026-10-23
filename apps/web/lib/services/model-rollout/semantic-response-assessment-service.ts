@@ -1,7 +1,7 @@
 import 'server-only';
 
 import type { KeyValueStore } from '@agiworkforce/key-value';
-import { modelRegistry } from '@agiworkforce/model-registry';
+import { modelRegistry, providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import {
   createVercelGatewayEvaluator,
   type EvaluationAnswer,
@@ -70,6 +70,7 @@ export interface SemanticResponseAssessmentInput {
   hasMedia: boolean;
   initialBudget: ResponseBudgetPlan | null;
   zeroDataRetentionOnly: boolean;
+  noTrainingOnly: boolean;
   residencyRegion: string | null;
   workspaceModelPolicy: ModelAccessPolicy | null;
   enableResponseAssessment?: boolean;
@@ -137,6 +138,9 @@ export function semanticResponseAssessmentSkipReason(
   if (input.initialBudget?.source !== 'default') return 'deterministic_budget';
   if (input.zeroDataRetentionOnly && !CONFIG.zeroDataRetentionVerified) {
     return 'zero_data_retention_unverified';
+  }
+  if (input.noTrainingOnly && !providerKeepsInputsOutOfTraining(CONFIG.transportProvider)) {
+    return 'training_policy_unverified';
   }
   if (
     input.residencyRegion !== null &&

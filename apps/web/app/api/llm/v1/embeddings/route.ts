@@ -22,6 +22,8 @@ import { createError } from '@/lib/errors';
 import { logger } from '@/lib/logger';
 import { getCorsHeaders, getSecurityHeaders, handleCorsPreflightRequest } from '@/lib/cors';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { MODEL_MAY_TRAIN_MESSAGE } from '@/lib/server/provider-training-opt-out';
+import { sideCallProviderAllowed } from '@/lib/server/side-call-training-policy';
 import { embedTextsWithGoogle, GoogleEmbeddingError } from '@/lib/server/google-embeddings';
 import { estimateEmbeddingCostMicrousd } from '@/lib/services/retrieval-embedding-service';
 import { requireCurrentUserId } from '@/lib/server/neon-chat';
@@ -164,6 +166,19 @@ async function handleEmbeddings(request: NextRequest): Promise<Response> {
     { ...getCorsHeaders(request), ...getSecurityHeaders() },
   );
   if (modelPolicyResponse) return modelPolicyResponse;
+
+  if (!(await sideCallProviderAllowed(null, userId, String(model.provider)))) {
+    return NextResponse.json(
+      {
+        error: {
+          message: MODEL_MAY_TRAIN_MESSAGE,
+          type: 'invalid_request_error',
+          code: 'model_may_train',
+        },
+      },
+      { status: 403, headers: { ...getCorsHeaders(request), ...getSecurityHeaders() } },
+    );
+  }
 
   const estimatedTokens = estimateTokens(inputs);
 

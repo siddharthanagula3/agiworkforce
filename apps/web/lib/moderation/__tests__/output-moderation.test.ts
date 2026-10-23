@@ -4,17 +4,27 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const { streamMock, metadataMock, hasKeyMock, loggerMock } = vi.hoisted(() => ({
-  streamMock: vi.fn(),
-  metadataMock: vi.fn(),
-  hasKeyMock: vi.fn(),
-  loggerMock: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
-}));
+const { streamMock, metadataMock, hasKeyMock, loggerMock, providerAllowedMock } = vi.hoisted(
+  () => ({
+    providerAllowedMock: vi.fn(),
+    streamMock: vi.fn(),
+    metadataMock: vi.fn(),
+    hasKeyMock: vi.fn(),
+    loggerMock: { warn: vi.fn(), error: vi.fn(), info: vi.fn() },
+  }),
+);
 
 vi.mock('@/lib/logger', () => ({ logger: loggerMock }));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: () => ({ stream: streamMock }),
   hasServerProviderKey: (...args: unknown[]) => hasKeyMock(...args),
+  listAvailableManagedProviderIds: () => new Set<string>(),
+}));
+vi.mock('@/lib/server/side-call-training-policy', () => ({
+  sideCallProviderAllowed: (...args: unknown[]) => providerAllowedMock(...args),
+  sideCallTrainingOptOut: vi.fn(),
+  sideCallRoutingRequest: vi.fn(),
+  noTrainingProviderIds: vi.fn(),
 }));
 vi.mock('@agiworkforce/provider-protocol', () => ({
   toProviderApiModelId: (id: string) => id,
@@ -52,6 +62,7 @@ beforeEach(() => {
   streamMock.mockReset();
   metadataMock.mockReset();
   hasKeyMock.mockReset().mockReturnValue(true);
+  providerAllowedMock.mockReset().mockResolvedValue(true);
   loggerMock.error.mockReset();
   loggerMock.warn.mockReset();
 });
@@ -118,6 +129,28 @@ describe('moderateGeneratedMedia', () => {
     if (verdict.allowed) throw new Error('expected a refusal');
     expect(verdict.reason).toBe('output_classifier');
     expect(verdict.categories).toEqual(['likeness']);
+  });
+
+  it('sends nothing to a classifier whose provider the user keeps their content away from', async () => {
+    process.env['MEDIA_OUTPUT_MODERATION_MODEL'] = 'vision-classifier';
+    metadataMock.mockReturnValue({
+      id: 'vision-classifier',
+      provider: 'openai',
+      inputModalities: ['text', 'image'],
+    });
+    providerAllowedMock.mockResolvedValue(false);
+
+    const verdict = await moderateGeneratedMedia({
+      userId: 'user_1',
+      media: 'image',
+      operation: 'edit',
+      bytes: PNG_1X1,
+      mimeType: 'image/png',
+    });
+
+    expect(providerAllowedMock).toHaveBeenCalledWith(null, 'user_1', 'openai');
+    expect(streamMock).not.toHaveBeenCalled();
+    expect(verdict.allowed).toBe(true);
   });
 
   it('ignores a configured classifier model that cannot read images', async () => {

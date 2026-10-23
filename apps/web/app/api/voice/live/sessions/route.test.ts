@@ -7,6 +7,7 @@ import {
   resolveLiveVoiceDelegationTools,
 } from '@/lib/voice/live-voice-tools';
 import { WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_POLICY } from '@shared/types/toolApprovalPolicy';
+import { NO_TRAINING_VOICE_MESSAGE } from '@/lib/server/provider-training-opt-out';
 type ScanModule0 = typeof import('@/lib/server/provider-training-opt-out');
 type ScanModule1 = typeof import('@/lib/services/entitlement-resolution');
 type ScanModule2 = typeof import('./lib/voice-session-budget');
@@ -646,6 +647,62 @@ describe('POST /api/voice/live/sessions', () => {
     expect(response.status).toBe(503);
     expect(await errorCode(response)).toBe('billing_unavailable');
     expect(mocks.fetch).not.toHaveBeenCalled();
+  });
+
+  describe('with Only use models that do not train on your chats', () => {
+    function optOutDb(optedOut: boolean | 'unreadable') {
+      const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+        if (sql.includes('to_regclass')) return [{ ready: true }];
+        if (sql.includes('from public.user_settings')) {
+          if (optedOut === 'unreadable') throw new Error('settings unreadable');
+          return [{ opted_out: optedOut }];
+        }
+        if (sql.includes('insert into public.voice_sessions')) return [{ id: 'vs_1' }];
+        return [];
+      });
+      mocks.userScopedDb.mockResolvedValue({
+        db: { query },
+        userId: 'user-1',
+        organizationId: null,
+      });
+    }
+
+    it.each([true, 'unreadable'] as const)(
+      'refuses a voice model that may train and reserves nothing (setting %s)',
+      async (optedOut) => {
+        mocks.keepsOutOfTraining.mockImplementation((modelId) => modelId !== BACKEND_MODEL.id);
+        optOutDb(optedOut);
+
+        const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+        expect(response.status).toBe(403);
+        const body = (await response.json()) as { error?: { code?: string; message?: string } };
+        expect(body.error?.code).toBe('model_may_train');
+        expect(body.error?.message).toBe(NO_TRAINING_VOICE_MESSAGE);
+        expect(mocks.reserve).not.toHaveBeenCalled();
+        expect(mocks.fetch).not.toHaveBeenCalled();
+      },
+    );
+
+    it('starts when both voice models keep inputs out of training', async () => {
+      mocks.keepsOutOfTraining.mockReturnValue(true);
+      optOutDb(true);
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).not.toBe(403);
+      expect(mocks.reserve).toHaveBeenCalled();
+    });
+
+    it('starts a voice model that may train when the setting is off', async () => {
+      mocks.keepsOutOfTraining.mockReturnValue(false);
+      optOutDb(false);
+
+      const response = await POST(request({ sdp: OFFER, conversationId: CONVERSATION_ID }));
+
+      expect(response.status).not.toBe(403);
+      expect(mocks.reserve).toHaveBeenCalled();
+    });
   });
 
   describe('in a chat that holds Google user data', () => {

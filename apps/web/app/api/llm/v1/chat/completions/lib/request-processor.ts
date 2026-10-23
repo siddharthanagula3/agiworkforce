@@ -4428,6 +4428,7 @@ async function processAdmittedRequest(
       hasMedia: (routingAttachments?.length ?? 0) > 0,
       initialBudget: initialResponseBudget,
       zeroDataRetentionOnly,
+      noTrainingOnly: trainingOptOut,
       residencyRegion,
       workspaceModelPolicy,
       enableResponseAssessment: rolloutInputs.enableResponseAssessment,

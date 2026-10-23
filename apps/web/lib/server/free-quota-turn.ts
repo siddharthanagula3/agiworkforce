@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { MEMORY_COMMAND_KINDS } from '@agiworkforce/agent-core';
 import { isNamedProviderConsentCurrent, type NamedProviderConsent } from '@agiworkforce/compliance';
 import type { KeyValueStore } from '@agiworkforce/key-value';
+import { providerKeepsInputsOutOfTraining } from '@agiworkforce/model-registry';
 import { stripSystemPromptCacheBoundary } from '@agiworkforce/provider-protocol';
 import { runQwenQuotaProbe, streamQwenQuotaChat } from '@agiworkforce/providers-factory';
 import {
@@ -29,6 +30,8 @@ import {
 } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { persistFreeOfferingUser } from '@/lib/server/persist-free-offering-user';
+import { MODEL_MAY_TRAIN_MESSAGE } from '@/lib/server/provider-training-opt-out';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import { resolveFreeOfferingPersonalContext } from '@/lib/services/turn-context-service';
 import { freeQuotaSystemMessages } from '@/lib/server/free-quota-system-messages';
 import { readActiveStudyInstruction } from '@/features/study/server/study-session-store';
@@ -718,6 +721,12 @@ export async function serveFreeQuotaTurn(
   const resolved = decisions?.offerings[0];
   if (!resolved) return refuse('unavailable', baseCopy);
   const { entry, offering, decision } = resolved;
+  if (
+    !providerKeepsInputsOutOfTraining(offering.provider) &&
+    (await sideCallTrainingOptOut(scoped.db, scoped.userId))
+  ) {
+    return policyRefusal(MODEL_MAY_TRAIN_MESSAGE, 'model_may_train', 403);
+  }
   const admission = freeQuotaPlanAdmission(planTier, offering.category, limitedMediaOffer);
   if (!admission) return refuse('plan', baseCopy);
   const latestUserIndex = body.messages.findLastIndex((message) => message.role === 'user');

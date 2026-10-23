@@ -36,7 +36,11 @@ import {
   GOOGLE_USER_DATA_VOICE_MESSAGE,
   storedConversationCarriesGoogleUserData,
 } from '@/lib/connectors/google-user-data';
-import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
+import {
+  modelKeepsInputsOutOfTraining,
+  NO_TRAINING_VOICE_MESSAGE,
+} from '@/lib/server/provider-training-opt-out';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import { isManagedProviderId, providerApiUrl } from '@/lib/server/provider-endpoints';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { resolveEntitlementBundle } from '@/lib/services/entitlement-resolution';
@@ -304,19 +308,22 @@ async function handleCreateLiveSession(request: NextRequest) {
       throw new Error(`The live voice backend for plan ${planTier} is not a live model`);
     }
     backendModel = resolvedBackend;
-    if (
-      !(
-        modelKeepsInputsOutOfTraining(liveModel.id) &&
-        modelKeepsInputsOutOfTraining(backendModel.id)
-      ) &&
-      (await storedConversationCarriesGoogleUserData(
-        scoped.db,
-        userId,
-        scoped.organizationId,
-        conversationId,
-      ))
-    ) {
-      return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
+    if (!(
+      modelKeepsInputsOutOfTraining(liveModel.id) && modelKeepsInputsOutOfTraining(backendModel.id)
+    )) {
+      if (await sideCallTrainingOptOut(scoped.db, userId)) {
+        return voiceJsonError(request, 403, 'model_may_train', NO_TRAINING_VOICE_MESSAGE);
+      }
+      if (
+        await storedConversationCarriesGoogleUserData(
+          scoped.db,
+          userId,
+          scoped.organizationId,
+          conversationId,
+        )
+      ) {
+        return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
+      }
     }
     reasoning = resolveLiveVoiceReasoning({
       backendModelId: backendModel.id,

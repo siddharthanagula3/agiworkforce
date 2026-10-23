@@ -40,6 +40,7 @@ function input(
     hasMedia: false,
     initialBudget: DEFAULT_BUDGET,
     zeroDataRetentionOnly: false,
+    noTrainingOnly: false,
     residencyRegion: null,
     workspaceModelPolicy: null,
     enableResponseAssessment: true,
@@ -124,6 +125,7 @@ describe('semantic response assessment eligibility', () => {
     ['free_plan', { isFreePlan: true }],
     ['media_turn', { hasMedia: true }],
     ['zero_data_retention_unverified', { zeroDataRetentionOnly: true }],
+    ['training_policy_unverified', { noTrainingOnly: true }],
     ['residency_unverified', { residencyRegion: 'eu' }],
     ['deterministic_budget', { initialBudget: { ...DEFAULT_BUDGET, source: 'explicit' as const } }],
   ])('skips %s', (reason, overrides) => {
@@ -137,6 +139,17 @@ describe('semantic response assessment eligibility', () => {
 });
 
 describe('semantic response assessment execution', () => {
+  it('sends nothing to a transport that may train when the user keeps chats out of training', async () => {
+    const evaluate = vi.fn(async () => providerResult());
+    const outcome = await assessSemanticResponseBudget(
+      input({ noTrainingOnly: true }),
+      dependencies(evaluate),
+    );
+    expect(outcome.assessment).toBeNull();
+    expect(outcome.trace.reason).toBe('training_policy_unverified');
+    expect(evaluate).not.toHaveBeenCalled();
+  });
+
   it('applies a confident active assessment and records exact cost', async () => {
     const deps = dependencies();
     const outcome = await assessSemanticResponseBudget(input(), deps);

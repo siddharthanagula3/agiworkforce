@@ -2,6 +2,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest, NextResponse } from 'next/server';
 import { getRoutingSlotModel } from '@agiworkforce/types';
+import { NO_TRAINING_VOICE_MESSAGE } from '@/lib/server/provider-training-opt-out';
 type ScanModule0 = typeof import('@/lib/server/provider-training-opt-out');
 type ScanModule1 = typeof import('@/lib/csrf');
 type ScanModule2 = typeof import('@/lib/rate-limit');
@@ -397,5 +398,43 @@ describe('a session whose chat now holds Google user data', () => {
     expect(response.status).toBe(403);
     expect((await errorBody(response))['code']).toBe('model_may_train');
     expect(mocks.reserveStep).not.toHaveBeenCalled();
+  });
+});
+
+describe('with Only use models that do not train on your chats', () => {
+  function settings(optedOut: boolean | 'unreadable') {
+    db.query.mockImplementation(async (sql: string) => {
+      if (sql.includes('from public.user_settings')) {
+        if (optedOut === 'unreadable') throw new Error('settings unreadable');
+        return [{ opted_out: optedOut }];
+      }
+      return [];
+    });
+  }
+
+  it.each([true, 'unreadable'] as const)(
+    'does not extend a session whose voice model may train (setting %s)',
+    async (optedOut) => {
+      mocks.keepsOutOfTraining.mockReturnValue(false);
+      settings(optedOut);
+
+      const response = await extend({ block: 2 });
+
+      expect(response.status).toBe(403);
+      const error = await errorBody(response);
+      expect(error['code']).toBe('model_may_train');
+      expect(error['message']).toBe(NO_TRAINING_VOICE_MESSAGE);
+      expect(mocks.reserveStep).not.toHaveBeenCalled();
+    },
+  );
+
+  it('extends a session whose voice models keep inputs out of training', async () => {
+    mocks.keepsOutOfTraining.mockReturnValue(true);
+    settings(true);
+
+    const response = await extend({ block: 2 });
+
+    expect(response.status).toBe(200);
+    expect(mocks.reserveStep).toHaveBeenCalled();
   });
 });

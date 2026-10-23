@@ -7,7 +7,11 @@ import {
   GOOGLE_USER_DATA_VOICE_MESSAGE,
   storedConversationCarriesGoogleUserData,
 } from '@/lib/connectors/google-user-data';
-import { modelKeepsInputsOutOfTraining } from '@/lib/server/provider-training-opt-out';
+import {
+  modelKeepsInputsOutOfTraining,
+  NO_TRAINING_VOICE_MESSAGE,
+} from '@/lib/server/provider-training-opt-out';
+import { sideCallTrainingOptOut } from '@/lib/server/side-call-training-policy';
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
 import { getClerkAuthUser } from '@/lib/api-auth';
@@ -186,18 +190,22 @@ async function handleExtendLiveSession(
   }
   const planTier = entitlement.plan;
   const backendModelId = getVoiceLiveBackendModel(planTier);
-  if (
-    !(
-      modelKeepsInputsOutOfTraining(record.modelId) && modelKeepsInputsOutOfTraining(backendModelId)
-    ) &&
-    (await storedConversationCarriesGoogleUserData(
-      scoped.db,
-      userId,
-      scoped.organizationId,
-      record.conversationId,
-    ))
-  ) {
-    return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
+  if (!(
+    modelKeepsInputsOutOfTraining(record.modelId) && modelKeepsInputsOutOfTraining(backendModelId)
+  )) {
+    if (await sideCallTrainingOptOut(scoped.db, userId)) {
+      return voiceJsonError(request, 403, 'model_may_train', NO_TRAINING_VOICE_MESSAGE);
+    }
+    if (
+      await storedConversationCarriesGoogleUserData(
+        scoped.db,
+        userId,
+        scoped.organizationId,
+        record.conversationId,
+      )
+    ) {
+      return voiceJsonError(request, 403, 'model_may_train', GOOGLE_USER_DATA_VOICE_MESSAGE);
+    }
   }
 
   let freeSession: FreeVoiceSessionState | null;

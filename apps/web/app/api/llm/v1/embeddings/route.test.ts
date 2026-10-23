@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { requireProviderDefaultModel, type PricedModel } from '@agiworkforce/types';
+import { MODEL_MAY_TRAIN_MESSAGE } from '@/lib/server/provider-training-opt-out';
 type ScanModule0 = typeof import('@/lib/server/neon-db');
 
 const CHAT_MODEL = requireProviderDefaultModel('anthropic');
@@ -11,9 +12,14 @@ const mocks = vi.hoisted(() => ({
   finalize: vi.fn(async () => ({})),
   getSubscription: vi.fn(async () => ({ plan_tier: 'pro', status: 'active' })),
   fetch: vi.fn(),
+  providerAllowed: vi.fn(async (..._args: unknown[]) => true),
 }));
 
 vi.mock('server-only', () => ({}));
+vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
+  sideCallProviderAllowed: (...args: unknown[]) => mocks.providerAllowed(...args),
+}));
 vi.mock('@/lib/server/neon-chat', () => ({
   requireCurrentUserId: () => mocks.requireUser(),
 }));
@@ -89,6 +95,7 @@ beforeEach(() => {
   process.env['GOOGLE_API_KEY'] = 'test-key';
   mocks.reserve.mockResolvedValue({ reservationId: 'reservation-1' } as never);
   mocks.getSubscription.mockResolvedValue({ plan_tier: 'pro', status: 'active' } as never);
+  mocks.providerAllowed.mockResolvedValue(true);
   vi.stubGlobal('fetch', mocks.fetch);
 });
 
@@ -108,6 +115,22 @@ describe('POST /api/llm/v1/embeddings, managed compute kill switch', () => {
     } finally {
       vi.unstubAllEnvs();
     }
+  });
+});
+
+describe('POST /api/llm/v1/embeddings, Only use models that do not train on your chats', () => {
+  it('refuses before reserving or calling a provider the user keeps their content away from', async () => {
+    mocks.providerAllowed.mockResolvedValue(false);
+
+    const response = await POST(post({ input: ['first'] }));
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('model_may_train');
+    expect(body.error.message).toBe(MODEL_MAY_TRAIN_MESSAGE);
+    expect(mocks.providerAllowed).toHaveBeenCalledWith(null, 'user-1', expect.any(String));
+    expect(mocks.reserve).not.toHaveBeenCalled();
+    expect(providerCalls()).toHaveLength(0);
   });
 });
 
