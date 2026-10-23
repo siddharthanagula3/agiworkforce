@@ -122,6 +122,14 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libasound2-dev libudev-dev pkg-config
 
+      - name: Install Node for the notices check
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Require current CLI open-source notices
+        run: node apps/cli/scripts/generate-third-party-notices.mjs --check
+
       - name: Check Rust formatting
         run: cargo fmt --all -- --check
 

@@ -598,6 +598,9 @@ jobs:
       - name: Verify Rust toolchain
         run: rustup show active-toolchain && rustc --version && cargo --version
 
+      - name: CLI open-source notices are current
+        run: node apps/cli/scripts/generate-third-party-notices.mjs --check
+
       - name: Rust formatting gate
         run: cargo fmt --all -- --check
 

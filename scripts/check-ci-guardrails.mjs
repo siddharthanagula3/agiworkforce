@@ -371,6 +371,14 @@ requireIncludes('.github/workflows/release-cli.yml', 'name: Validate CLI source'
 requireIncludes('.github/workflows/release-cli.yml', 'cargo fmt --all -- --check');
 requireIncludes(
   '.github/workflows/release-cli.yml',
+  'node apps/cli/scripts/generate-third-party-notices.mjs --check',
+);
+requireIncludes(
+  '.github/workflows/ci.yml',
+  'node apps/cli/scripts/generate-third-party-notices.mjs --check',
+);
+requireIncludes(
+  '.github/workflows/release-cli.yml',
   'cargo clippy --locked -p agiworkforce-cli --lib -- -D warnings',
 );
 requireIncludes('.github/workflows/release-cli.yml', 'cargo test --locked -p agiworkforce-cli');
