@@ -17,7 +17,7 @@ const FLOORED_COMPONENTS = [
 
 const SUB_FLOOR_TOKEN_CLASSES = new Set(['text-2xs', 'text-xs', 'text-caption', 'text-metadata']);
 
-function toPx(value: number, unit: string): number {
+function toPx(value: number, unit: string | undefined): number {
   return unit === 'px' ? value : value * ROOT_FONT_PX;
 }
 
