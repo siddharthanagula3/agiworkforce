@@ -67,9 +67,10 @@
       "id": "10099",
       "scanner": "zap",
       "owner": "@siddharthanagula3",
-      "expires": "2027-03-31",
-      "locations": ["http://127.0.0.1:3000/api-docs", "http://127.0.0.1:3000/gallery/"],
-      "reason": "Public code samples, not server source. /api-docs renders the SDK examples in apps/web/content/api-docs/code-samples.json (the evidence is their 'for chunk in stream:'), and /gallery/<id> renders the fixed examples in apps/web/app/gallery/inspiration.ts (python-data-pipeline, sql-user-accounts-schema). Both pages exist to show code. Scoped to those two paths, so the same alert on any other URL still fails."
+      "expires": "2026-11-22",
+      "locations": ["http://127.0.0.1:3000/api-docs", "http://127.0.0.1:3000/gallery"],
+      "reason": "Re-triaged 2026-10-23: these are public code samples, not server source. /api-docs renders the SDK examples in apps/web/content/api-docs/code-samples.json (evidence 'for chunk in stream:'). /gallery/<id> renders the curated examples in apps/web/app/gallery/inspiration.ts (python-data-pipeline, sql-user-accounts-schema), and the /gallery index shows the same samples as card thumbnails (excerptMarkup in apps/web/app/gallery/GalleryClient.tsx, first 1,200 characters). The scope moved from /gallery/ to /gallery because the 2026-10-23 crawl also flagged the index, so it now covers the index and the pages below it. \"evidence\" pins the entry to the three sample lines ZAP has reported, so other code disclosed on these paths, and the same alert on any other path, still fails.",
+      "evidence": ["for chunk in stream:", "for r in records:", "CREATE TABLE accounts ("]
     },
     {
       "id": "10202",
