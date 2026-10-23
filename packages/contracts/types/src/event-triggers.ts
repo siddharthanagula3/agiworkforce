@@ -3,8 +3,8 @@
  *
  * Types for the event-triggered agents system. Defines the contract for
  * automated agent execution driven by external events, cron schedules,
- * inbound webhooks, Slack messages, GitHub events, Linear updates, and
- * local file-system changes.
+ * inbound webhooks, Slack messages, GitHub events, and local file-system
+ * changes.
  *
  * All surfaces (desktop, web, mobile, CLI) can read trigger definitions
  * and execution history. The desktop app is the primary execution engine.
@@ -13,7 +13,7 @@
  * @packageDocumentation
  */
 
-export type TriggerType = 'cron' | 'webhook' | 'slack' | 'github' | 'linear' | 'file_watcher';
+export type TriggerType = 'cron' | 'webhook' | 'slack' | 'github' | 'file_watcher';
 
 /**
  * Cron-based recurring trigger.
@@ -105,26 +105,6 @@ export interface GitHubTriggerConfig {
 }
 
 /**
- * Linear issue-tracker event trigger.
- *
- * @example
- * ```typescript
- * const config: LinearTriggerConfig = {
- *   type: 'linear',
- *   teamId: 'TEAM_abc',
- *   events: ['Issue.created', 'Issue.statusChanged'],
- * };
- * ```
- */
-export interface LinearTriggerConfig {
-  type: 'linear';
-
-  teamId: string;
-
-  events: string[];
-}
-
-/**
  * Local file-system watcher trigger.
  *
  * Uses the operating system's native file-watch API to detect changes
@@ -155,7 +135,6 @@ export type TriggerConfig =
   | WebhookTriggerConfig
   | SlackTriggerConfig
   | GitHubTriggerConfig
-  | LinearTriggerConfig
   | FileWatcherTriggerConfig;
 
 export interface TriggerAction {
