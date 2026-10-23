@@ -61,7 +61,7 @@ fn write_default_config(home: &Path) -> Result<()> {
 # [ui.keybindings]
 # open_palette = "ctrl+p"
 # quit = "ctrl+q"
-# Actions: quit, cycle_mode, redraw, clear_chat, clear_input, open_palette
+# Actions: quit, cycle_mode, cycle_model, redraw, clear_chat, clear_input, open_palette
 #
 # [default]
 # temperature = 0.7
@@ -275,4 +275,28 @@ fn write_builtin_skills(home: &Path) -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::keybindings::KeybindingAction;
+
+    #[test]
+    fn the_config_template_lists_every_rebindable_action() {
+        let home = tempfile::tempdir().expect("temp home");
+        write_default_config(home.path()).expect("write config");
+        let written = fs::read_to_string(home.path().join("config.toml")).expect("read config");
+        let actions_line = written
+            .lines()
+            .find(|line| line.starts_with("# Actions:"))
+            .expect("the template names the actions");
+        for action in KeybindingAction::ALL {
+            assert!(
+                actions_line.contains(action.config_key()),
+                "{} is missing from: {actions_line}",
+                action.config_key()
+            );
+        }
+    }
 }

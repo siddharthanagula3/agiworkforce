@@ -666,6 +666,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "auto-mode-setup",
+            "Review this repository for auto mode and approve its suggestions one at a time",
+            true,
+            true,
+            vec![],
+        ),
+        RegistryCommand::builtin_slash(
             "privacy-settings",
             "Show or update privacy settings",
             true,
@@ -931,6 +938,7 @@ mod tests {
             "continue-with-byok",
             "continue-with-cloud",
             "rate-limit-options",
+            "auto-mode-setup",
             "security-review",
             "stats",
             "statusline",

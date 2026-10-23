@@ -288,7 +288,7 @@ mod tests {
     fn cli_uses_shared_builtin_registry() {
         let commands = builtin_slash_registry_commands();
 
-        assert_eq!(commands.len(), 102);
+        assert_eq!(commands.len(), 103);
         assert_eq!(commands[0].name, "model");
         assert_eq!(
             commands
@@ -516,6 +516,7 @@ mod tests {
             "continue-with-byok",
             "continue-with-cloud",
             "rate-limit-options",
+            "auto-mode-setup",
             "security-review",
             "stats",
             "statusline",

@@ -84,6 +84,7 @@
 /passes
 /pr-comments
 /autofix-pr
+/auto-mode-setup
 /privacy-settings
 /privacy-mode [trust-boundary]
 /continue-with-byok [fork-byok, byok]

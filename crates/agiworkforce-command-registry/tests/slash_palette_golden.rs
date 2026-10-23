@@ -52,8 +52,8 @@ fn slash_palette_matches_golden() {
 fn slash_palette_has_90_commands() {
     let count = builtin_slash_registry_commands().len();
     assert_eq!(
-        count, 102,
-        "Expected 102 implemented built-in slash commands after removing unimplemented placeholders; got {count}"
+        count, 103,
+        "Expected 103 implemented built-in slash commands after removing unimplemented placeholders; got {count}"
     );
 }
 

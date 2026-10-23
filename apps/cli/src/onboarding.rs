@@ -773,12 +773,14 @@ fn print_safety_notes() {
     eprintln!();
 }
 
+const PERMISSION_MODE_CHOICES: [&str; 3] = [
+    "Ask            Ask before every file edit and command (safest, recommended)",
+    "Auto           File edits and safe commands run, unknown and dangerous ones ask",
+    "Plan first     Read-only until you approve a plan",
+];
+
 fn select_permission_mode() -> Result<PermissionMode> {
-    let choices = &[
-        "Ask            Ask before every file edit and command (safest, recommended)",
-        "Accept edits   File edits run without asking, commands still ask",
-        "Plan first     Read-only until you approve a plan",
-    ];
+    let choices = &PERMISSION_MODE_CHOICES;
 
     eprintln!(
         "  {}\n",
@@ -1194,6 +1196,15 @@ mod tests {
         assert!(note.contains("credits per 1M tokens"), "{note}");
         assert!(note.ends_with("(input / output)"), "{note}");
         assert!(!note.contains('$'), "{note}");
+    }
+
+    #[test]
+    fn the_second_permission_choice_describes_the_auto_posture() {
+        let auto = PERMISSION_MODE_CHOICES[1];
+        assert!(auto.starts_with("Auto"), "{auto}");
+        assert!(auto.contains("safe commands run"), "{auto}");
+        assert!(auto.contains("unknown and dangerous ones ask"), "{auto}");
+        assert!(!auto.contains("commands still ask"), "{auto}");
     }
 
     #[test]
