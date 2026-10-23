@@ -499,6 +499,11 @@ pub struct ManagedSession {
     /// Sync updates these rows; new ids would duplicate the account's history.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub hosted_message_ids: Vec<String>,
+    /// The nonce this session's memory origin tags carry in its stored system
+    /// prompt, so a resumed session still recognizes them. Absent on files
+    /// written before tags carried one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub memory_nonce: Option<String>,
 }
 
 /// Every message shown up to the latest compaction, in its original wording.
@@ -812,6 +817,8 @@ struct ManagedSessionJsonlHeader {
     transcript: Option<ManagedSessionTranscript>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     hosted_message_ids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    memory_nonce: Option<String>,
 }
 
 /// A reader that predates `TranscriptMessage` skips it as unreadable and
@@ -860,6 +867,7 @@ impl ManagedSession {
             code: None,
             transcript: None,
             hosted_message_ids: Vec::new(),
+            memory_nonce: None,
         }
     }
 
@@ -958,6 +966,7 @@ impl ManagedSession {
             code: None,
             transcript: None,
             hosted_message_ids: Vec::new(),
+            memory_nonce: None,
         }
     }
 
@@ -1671,6 +1680,7 @@ impl ManagedSession {
                         code: record.code,
                         transcript: record.transcript,
                         hosted_message_ids: record.hosted_message_ids,
+                        memory_nonce: record.memory_nonce,
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -1902,6 +1912,7 @@ impl ManagedSession {
                 earlier: transcript.earlier.clone(),
             }),
             hosted_message_ids: self.hosted_message_ids.clone(),
+            memory_nonce: self.memory_nonce.clone(),
         }));
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
@@ -2131,6 +2142,7 @@ mod tests {
             code: None,
             transcript: None,
             hosted_message_ids: Vec::new(),
+            memory_nonce: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -2188,6 +2200,7 @@ mod tests {
             code: None,
             transcript: None,
             hosted_message_ids: Vec::new(),
+            memory_nonce: None,
         };
 
         session.save_to_path(&path).unwrap();

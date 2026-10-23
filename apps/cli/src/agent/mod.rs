@@ -359,6 +359,9 @@ pub struct AgentSession {
     /// Marks this session's memory origin tags; see
     /// [`crate::memory_pipeline::origin_memory_tag`].
     memory_nonce: String,
+    /// Nonces this session carried before adopting a stored one, so tags in a
+    /// prompt it built earlier stay recognized.
+    retired_memory_nonces: Vec<String>,
     /// What the system prompt is built from apart from its trust-boundary
     /// memory, kept so a fresh session can rebuild it for another boundary.
     system_prompt_parts: SystemPromptParts,
@@ -836,6 +839,7 @@ impl AgentSession {
             memory_extracted_through: 0,
             memory_extracted_at: std::time::Instant::now(),
             memory_nonce,
+            retired_memory_nonces: Vec::new(),
             system_prompt_parts,
             managed_session: None,
             managed_session_path: None,
@@ -1668,8 +1672,10 @@ impl AgentSession {
             .into_iter()
             .filter(|origin| *origin != boundary)
             .find(|origin| {
-                let tag = crate::memory_pipeline::origin_memory_tag(*origin, &self.memory_nonce);
-                system_text.iter().any(|text| text.contains(&tag))
+                std::iter::once(&self.memory_nonce)
+                    .chain(&self.retired_memory_nonces)
+                    .map(|nonce| crate::memory_pipeline::origin_memory_tag(*origin, nonce))
+                    .any(|tag| system_text.iter().any(|text| text.contains(&tag)))
             })
     }
 
@@ -1875,6 +1881,7 @@ impl AgentSession {
         );
         managed_session.model = Some(self.model.clone());
         managed_session.routing_authority = Some(self.current_routing_authority());
+        managed_session.memory_nonce = Some(self.memory_nonce.clone());
         managed_session.workspace_root = self.workspace_root();
         managed_session.created_by = Some("cli".to_string());
         let path = store.save(&managed_session)?;
@@ -1948,6 +1955,14 @@ impl AgentSession {
             self.fallback_chain = Some(crate::routing::fallback::FallbackChain::parse(
                 &ids.join(","),
             ));
+        }
+        if let Some(stored) = managed_session
+            .memory_nonce
+            .as_ref()
+            .filter(|stored| **stored != self.memory_nonce)
+        {
+            let built = std::mem::replace(&mut self.memory_nonce, stored.clone());
+            self.retired_memory_nonces.push(built);
         }
         self.runtime_session_id = managed_session.session_id.clone();
         self.json_session_id = managed_session.session_id.clone();
@@ -2408,6 +2423,7 @@ impl AgentSession {
             privacy_mode: self.privacy_mode,
             provider: models::provider_persistence_name(&self.provider),
         });
+        managed_session.memory_nonce = Some(self.memory_nonce.clone());
         managed_session.workspace_root = managed_session.workspace_root.clone().or(workspace_root);
         if managed_session.created_by.is_none() {
             managed_session.created_by = Some("cli".to_string());
@@ -3897,6 +3913,77 @@ mod tests {
 
         assert_eq!(session.privacy_mode, PrivacyMode::Local);
         assert!(session.validate_privacy_boundary().is_err());
+    }
+
+    #[test]
+    fn a_resumed_byok_session_carrying_local_memory_is_still_refused() {
+        let store_dir = tempfile::tempdir().expect("session store");
+        let store = crate::runtime::session_control::ManagedSessionStore::new(
+            store_dir.path().to_path_buf(),
+        );
+        let memory_home = tempfile::tempdir().expect("memory home");
+        let memories = memory_home.path().join("memories");
+        std::fs::create_dir_all(&memories).expect("memories dir");
+        std::fs::write(memories.join("raw_memories.md"), "- local secret plan").expect("local");
+
+        let mut source =
+            ManagedSession::with_messages("resumed-boundary", chrono::Utc::now(), Vec::new());
+        source.model = Some("fixture-hosted-model:tag".to_string());
+        source.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Byok,
+            provider: "ollama-cloud".to_string(),
+        });
+        let path = store.save(&source).expect("save source");
+
+        let mut original = byok_session();
+        original.set_session_persistence(true);
+        original
+            .adopt_managed_session(source, path.clone())
+            .expect("adopt");
+        original.memory_enabled = true;
+        original.rebuild_system_message_for(PrivacyMode::Local, Some(memory_home.path()));
+        assert!(original.validate_privacy_boundary().is_err());
+        original.persist_managed_session().expect("persist");
+
+        let mut resumed = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        resumed.memory_enabled = true;
+        resumed
+            .load_managed_conversation(ManagedSession::load_from_path(&path).expect("load"), path)
+            .expect("resume");
+
+        assert_eq!(resumed.privacy_mode, PrivacyMode::Byok);
+        assert!(resumed.messages[0]
+            .text_content()
+            .contains("local secret plan"));
+        let error = resumed
+            .validate_privacy_boundary()
+            .expect_err("a resumed BYOK session must not send Local-origin memory");
+        assert!(error.to_string().contains("include memory from"), "{error}");
+    }
+
+    #[test]
+    fn a_session_saved_before_nonces_keeps_the_resuming_session_s_own_nonce() {
+        let store_dir = tempfile::tempdir().expect("session store");
+        let store = crate::runtime::session_control::ManagedSessionStore::new(
+            store_dir.path().to_path_buf(),
+        );
+        let mut legacy =
+            ManagedSession::with_messages("legacy-session", chrono::Utc::now(), Vec::new());
+        legacy.model = Some("fixture-local-model:latest".to_string());
+        legacy.routing_authority = Some(ManagedSessionRoutingAuthority {
+            privacy_mode: PrivacyMode::Local,
+            provider: "ollama".to_string(),
+        });
+        let path = store.save(&legacy).expect("save legacy");
+        let mut resumed = AgentSession::new("fixture-local-model:latest", &test_context(), None);
+        let built = resumed.memory_nonce.clone();
+
+        resumed
+            .load_managed_conversation(ManagedSession::load_from_path(&path).expect("load"), path)
+            .expect("resume");
+
+        assert_eq!(resumed.memory_nonce, built);
+        assert!(resumed.retired_memory_nonces.is_empty());
     }
 
     #[test]

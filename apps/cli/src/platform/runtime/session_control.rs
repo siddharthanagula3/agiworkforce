@@ -754,6 +754,7 @@ mod tests {
             code: None,
             transcript: None,
             hosted_message_ids: Vec::new(),
+            memory_nonce: None,
         };
         let first_path = super::save_session_in(base, &first).unwrap();
         assert!(first_path.starts_with(&store_dir));
@@ -791,6 +792,7 @@ mod tests {
             code: None,
             transcript: None,
             hosted_message_ids: Vec::new(),
+            memory_nonce: None,
         };
         let second_path = super::save_session_in(base, &second).unwrap();
         assert!(second_path.starts_with(&store_dir));
