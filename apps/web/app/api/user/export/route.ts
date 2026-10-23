@@ -1490,6 +1490,7 @@ const userAgentExportSchema = z.object({
   image_generation: z.boolean(),
   connector_ids: z.array(z.string()).nullable(),
   skill_names: z.array(z.string()).nullable(),
+  effort: z.string().nullable(),
   allowed_web_domains: z.array(z.string()),
   blocked_web_domains: z.array(z.string()),
   daily_turn_limit: z.number().int().nullable(),
@@ -2211,7 +2212,7 @@ const ADDITIONAL_EXPORT_SECTIONS: ReadonlyArray<{
     table: 'user_agents',
     sql: `select id, organization_id, name, description, icon, accent_color, instructions,
                  output_examples, conversation_starters, model, web_search, code_execution,
-                 image_generation, connector_ids, skill_names, allowed_web_domains,
+                 image_generation, connector_ids, skill_names, effort, allowed_web_domains,
                  blocked_web_domains, daily_turn_limit, status, visibility, published_version,
                  paused_at, retired_at, created_at, updated_at
           from user_agents

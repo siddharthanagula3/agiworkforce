@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { microusdFromCredits } from '@agiworkforce/types';
+import {
+  getModelEffortOptions,
+  getSelectableModels,
+  microusdFromCredits,
+} from '@agiworkforce/types';
 
 const readAgentRow = vi.fn();
 const countAgentTurnsToday = vi.fn();
@@ -21,6 +25,7 @@ import {
   agentAllowsImageGeneration,
   agentAllowsSkill,
   agentConnectorSelection,
+  agentEffortFor,
   agentModelFor,
   agentSystemPrompt,
   applyAgentTurnConfig,
@@ -178,6 +183,84 @@ describe('applyAgentTurnConfig', () => {
       code_execution: true,
     });
     expect(agentModelFor(undefined, { model: null })).toBeUndefined();
+  });
+});
+
+function catalogModel(match: (efforts: readonly string[]) => boolean): string {
+  const model = getSelectableModels().find((candidate) =>
+    match(getModelEffortOptions(candidate.id)),
+  );
+  if (!model) throw new Error('The catalog has no model for this case');
+  return model.id;
+}
+
+describe('agent reasoning effort', () => {
+  const maxModel = catalogModel((efforts) => efforts.includes('max') && efforts.includes('low'));
+  const noXhighModel = catalogModel(
+    (efforts) => efforts.includes('high') && !efforts.includes('xhigh') && !efforts.includes('max'),
+  );
+  const noEffortModel = catalogModel((efforts) => efforts.length === 0);
+
+  const turn = (effort: 'low' | 'max' | 'xhigh' | null) => ({
+    agentId: AGENT_ID,
+    config: agentConfig({ effort }),
+    files: [],
+  });
+
+  it('gives two agents in one account their own levels when the chat leaves reasoning off', () => {
+    const triage = {
+      model: maxModel,
+      thinking_mode: false,
+      messages: [{ role: 'user' as const, content: 'sort these' }],
+    };
+    const coder = { ...triage, messages: [{ role: 'user' as const, content: 'fix this' }] };
+    applyAgentTurnConfig(triage as Parameters<typeof applyAgentTurnConfig>[0], turn('low'));
+    applyAgentTurnConfig(coder as Parameters<typeof applyAgentTurnConfig>[0], turn('max'));
+    expect(triage).toMatchObject({ effort: 'low', thinking_mode: true });
+    expect(coder).toMatchObject({ effort: 'max', thinking_mode: true });
+  });
+
+  it('uses the agent level over a level sent while reasoning is off', () => {
+    expect(
+      agentEffortFor(
+        { model: maxModel, effort: 'medium', thinking_mode: false },
+        { effort: 'max' },
+      ),
+    ).toBe('max');
+  });
+
+  it('keeps a level the person picked with reasoning on, or from an API call', () => {
+    expect(
+      agentEffortFor({ model: maxModel, effort: 'high', thinking_mode: true }, { effort: 'max' }),
+    ).toBeNull();
+    expect(agentEffortFor({ model: maxModel, effort: 'high' }, { effort: 'max' })).toBeNull();
+    const request = { model: maxModel, effort: 'high', thinking_mode: true, messages: [] };
+    applyAgentTurnConfig(request as Parameters<typeof applyAgentTurnConfig>[0], turn('low'));
+    expect(request.effort).toBe('high');
+  });
+
+  it('never raises the effort of a turn that turned thinking off explicitly', () => {
+    expect(
+      agentEffortFor(
+        { model: maxModel, effort: 'low', thinking: { type: 'disabled' }, thinking_mode: false },
+        { effort: 'max' },
+      ),
+    ).toBeNull();
+  });
+
+  it('maps the level onto what the turn model takes and skips a model without levels', () => {
+    expect(agentEffortFor({ model: noXhighModel }, { effort: 'max' })).toBe('high');
+    expect(agentEffortFor({ model: noEffortModel }, { effort: 'max' })).toBeNull();
+    expect(agentEffortFor({ model: 'not-a-catalog-model' }, { effort: 'max' })).toBeNull();
+    expect(agentEffortFor({ model: 'auto' }, { effort: 'xhigh' })).toBe('xhigh');
+    expect(agentEffortFor({ model: maxModel }, { effort: null })).toBeNull();
+  });
+
+  it('leaves the request alone when the agent sets no level', () => {
+    const request = { model: maxModel, thinking_mode: false, messages: [] };
+    applyAgentTurnConfig(request as Parameters<typeof applyAgentTurnConfig>[0], turn(null));
+    expect(request).not.toHaveProperty('effort');
+    expect(request.thinking_mode).toBe(false);
   });
 });
 

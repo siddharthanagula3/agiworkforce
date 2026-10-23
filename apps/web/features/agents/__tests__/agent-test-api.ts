@@ -19,6 +19,7 @@ export function managedAgent(patch: Partial<ManagedCloudAgent> = {}): ManagedClo
     imageGeneration: true,
     connectorIds: null,
     skillNames: null,
+    effort: null,
     allowedWebDomains: [],
     blockedWebDomains: [],
     dailyTurnLimit: null,

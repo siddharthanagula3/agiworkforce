@@ -1,9 +1,16 @@
 import { z } from 'zod';
+import {
+  getModelEffortOptions,
+  getModelMetadataById,
+  isAutoModeModelId,
+  type Effort,
+} from '@agiworkforce/types';
 
 export const MANAGED_CLOUD_AGENTS_PATH = '/api/custom-agents';
 
 export const AGENT_STATUSES = ['active', 'paused', 'retired'] as const;
 export const AGENT_VISIBILITIES = ['private', 'people', 'workspace'] as const;
+export const AGENT_EFFORTS = ['low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 export const AGENT_NAME_MAX_CHARS = 80;
 export const AGENT_DESCRIPTION_MAX_CHARS = 300;
@@ -31,6 +38,53 @@ export type AgentStatus = z.infer<typeof AgentStatusSchema>;
 export const AgentVisibilitySchema = z.enum(AGENT_VISIBILITIES);
 export type AgentVisibility = z.infer<typeof AgentVisibilitySchema>;
 
+export const AgentEffortSchema = z.enum(AGENT_EFFORTS);
+export type AgentEffort = z.infer<typeof AgentEffortSchema>;
+
+const EFFORT_RANK: readonly Effort[] = ['none', 'minimal', ...AGENT_EFFORTS];
+
+function nearestEffort<T extends Effort>(effort: Effort, levels: readonly T[]): T | null {
+  const wanted = EFFORT_RANK.indexOf(effort);
+  let best: T | null = null;
+  for (const level of levels) {
+    if (
+      best === null ||
+      Math.abs(EFFORT_RANK.indexOf(level) - wanted) < Math.abs(EFFORT_RANK.indexOf(best) - wanted)
+    ) {
+      best = level;
+    }
+  }
+  return best;
+}
+
+function choosesModelPerChat(model: string | null | undefined): boolean {
+  const selection = model?.trim();
+  return !selection || isAutoModeModelId(selection);
+}
+
+export function agentEffortLevels(model: string | null | undefined): readonly AgentEffort[] {
+  if (choosesModelPerChat(model)) return AGENT_EFFORTS;
+  const offered = getModelEffortOptions(model);
+  return AGENT_EFFORTS.filter((effort) => offered.includes(effort));
+}
+
+export function agentEffortForModel(
+  effort: AgentEffort | null,
+  model: string | null | undefined,
+): AgentEffort | null {
+  return effort ? nearestEffort(effort, agentEffortLevels(model)) : null;
+}
+
+export function agentTurnEffort(
+  effort: AgentEffort | null,
+  model: string | null | undefined,
+): Effort | null {
+  if (!effort) return null;
+  if (choosesModelPerChat(model)) return effort;
+  if (!getModelMetadataById(model)) return null;
+  return nearestEffort(effort, getModelEffortOptions(model));
+}
+
 export const AgentConfigSchema = z.object({
   name: z.string().trim().min(1).max(AGENT_NAME_MAX_CHARS),
   description: z.string().trim().max(AGENT_DESCRIPTION_MAX_CHARS),
@@ -42,6 +96,7 @@ export const AgentConfigSchema = z.object({
     .array(z.string().trim().min(1).max(AGENT_STARTER_MAX_CHARS))
     .max(AGENT_STARTERS_MAX),
   model: z.string().trim().min(1).max(200).nullable(),
+  effort: AgentEffortSchema.nullable().default(null),
   webSearch: z.boolean(),
   codeExecution: z.boolean(),
   imageGeneration: z.boolean(),

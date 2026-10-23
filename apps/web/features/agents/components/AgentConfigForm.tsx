@@ -25,10 +25,17 @@ import {
   AGENT_STARTERS_MAX,
   AGENT_STARTER_MAX_CHARS,
   AGENT_WEB_DOMAINS_MAX,
+  AgentEffortSchema,
+  agentEffortForModel,
+  agentEffortLevels,
   normalizeWebDomain,
   type AgentConfig,
 } from '@agiworkforce/cloud-contracts';
-import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  EFFORT_LABEL,
+  connectorsReleased,
+} from '@agiworkforce/types';
 
 import type { ScheduleModelOption } from '@/lib/schedules/schedule-models';
 
@@ -45,10 +52,11 @@ export interface AgentChoiceList {
 }
 
 const AUTO_MODEL_VALUE = '';
+const CHAT_EFFORT_VALUE = '';
 const FIELD_GAP = 'flex flex-col gap-1.5';
 const SECTION = 'flex flex-col gap-4 rounded-xl border border-border bg-card p-4 sm:p-5';
 const HEADING = 'text-sm font-medium text-foreground';
-const HELP = 'text-xs text-muted-foreground';
+const HELP = 'text-sm text-muted-foreground';
 
 function SelectionField({
   legend,
@@ -343,6 +351,11 @@ export function AgentConfigForm({
     [draft.conversationStarters],
   );
 
+  const effortLevels = agentEffortLevels(draft.model);
+
+  const setModel = (model: string | null) =>
+    onChange({ model, effort: agentEffortForModel(draft.effort, model) });
+
   const setStarter = (index: number, value: string) => {
     const next = [...starters];
     next[index] = value.slice(0, AGENT_STARTER_MAX_CHARS);
@@ -490,7 +503,7 @@ export function AgentConfigForm({
             value={draft.model ?? AUTO_MODEL_VALUE}
             disabled={disabled}
             aria-describedby={`${id}-model-help`}
-            onChange={(event) => onChange({ model: event.target.value || null })}
+            onChange={(event) => setModel(event.target.value || null)}
             className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground pointer-coarse:min-h-11"
           >
             <option value={AUTO_MODEL_VALUE}>Whatever the chat uses</option>
@@ -504,6 +517,32 @@ export function AgentConfigForm({
             Used when a chat with this agent is on Auto. A model picked in the chat still wins.
           </p>
         </div>
+        {effortLevels.length > 0 ? (
+          <div className={FIELD_GAP}>
+            <Label htmlFor={`${id}-effort-select`}>Reasoning effort</Label>
+            <select
+              id={`${id}-effort-select`}
+              value={draft.effort ?? CHAT_EFFORT_VALUE}
+              disabled={disabled}
+              aria-describedby={`${id}-effort-help`}
+              onChange={(event) => {
+                const parsed = AgentEffortSchema.safeParse(event.target.value);
+                onChange({ effort: parsed.success ? parsed.data : null });
+              }}
+              className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground pointer-coarse:min-h-11"
+            >
+              <option value={CHAT_EFFORT_VALUE}>Whatever the chat uses</option>
+              {effortLevels.map((effort) => (
+                <option key={effort} value={effort}>
+                  {EFFORT_LABEL[effort]}
+                </option>
+              ))}
+            </select>
+            <p id={`${id}-effort-help`} className={HELP}>
+              A level picked in the chat with reasoning on still wins.
+            </p>
+          </div>
+        ) : null}
         <CapabilitySwitch
           label="Web search"
           help="Search and read web pages."

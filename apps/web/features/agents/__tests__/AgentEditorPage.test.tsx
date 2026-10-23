@@ -22,6 +22,9 @@ vi.mock('@/shared/stores/web-auth-store', () => ({
     select({ subscription: { tier: 'pro' } }),
 }));
 
+import { EFFORT_LABEL, getModelEffortOptions, isAutoModeModelId } from '@agiworkforce/types';
+import { getScheduleModelOptions } from '@/lib/schedules/schedule-models';
+
 import { AgentEditorPage } from '../components/AgentEditorPage';
 import { fakeApi, managedAgent } from './agent-test-api';
 
@@ -203,6 +206,63 @@ describe('AgentEditorPage', () => {
     expect(vi.mocked(api.update).mock.calls[0]?.[1]).toMatchObject({
       allowedWebDomains: ['docs.example'],
       blockedWebDomains: ['ads.example'],
+    });
+  });
+
+  it('saves a reasoning effort for the agent from all five levels while the chat picks the model', async () => {
+    const api = fakeApi();
+    render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={api} />);
+    await screen.findByRole('heading', { name: 'Release notes writer' });
+    const effort = screen.getByRole('combobox', { name: 'Reasoning effort' });
+    expect(
+      within(effort)
+        .getAllByRole('option')
+        .map((option) => option.textContent),
+    ).toEqual([
+      'Whatever the chat uses',
+      EFFORT_LABEL.low,
+      EFFORT_LABEL.medium,
+      EFFORT_LABEL.high,
+      EFFORT_LABEL.xhigh,
+      EFFORT_LABEL.max,
+    ]);
+    await userEvent.selectOptions(effort, 'max');
+    await userEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(api.update).toHaveBeenCalled());
+    expect(vi.mocked(api.update).mock.calls[0]?.[1]).toMatchObject({ effort: 'max' });
+  });
+
+  it('offers only the levels a pinned model takes and hides effort for a model without any', async () => {
+    const options = getScheduleModelOptions('pro').filter((option) => !option.disabled);
+    const narrowed = options.find((option) => {
+      const efforts = getModelEffortOptions(option.value);
+      return efforts.includes('high') && !efforts.includes('xhigh') && !efforts.includes('max');
+    });
+    const plain = options.find(
+      (option) =>
+        getModelEffortOptions(option.value).length === 0 && !isAutoModeModelId(option.value),
+    );
+    expect(narrowed).toBeDefined();
+    expect(plain).toBeDefined();
+    const api = fakeApi();
+    render(<AgentEditorPage agentId="0190a000-0000-7000-8000-0000000000a1" api={api} />);
+    await screen.findByRole('heading', { name: 'Release notes writer' });
+    const model = screen.getByRole('combobox', { name: 'Preferred model' });
+    await userEvent.selectOptions(
+      screen.getByRole('combobox', { name: 'Reasoning effort' }),
+      'max',
+    );
+    await userEvent.selectOptions(model, narrowed!.value);
+    const effort = screen.getByRole('combobox', { name: 'Reasoning effort' });
+    expect(within(effort).queryByRole('option', { name: EFFORT_LABEL.max })).toBeNull();
+    expect(effort).toHaveValue('high');
+    await userEvent.selectOptions(model, plain!.value);
+    expect(screen.queryByRole('combobox', { name: 'Reasoning effort' })).toBeNull();
+    await userEvent.click(screen.getByRole('button', { name: 'Save draft' }));
+    await waitFor(() => expect(api.update).toHaveBeenCalled());
+    expect(vi.mocked(api.update).mock.calls[0]?.[1]).toMatchObject({
+      model: plain!.value,
+      effort: null,
     });
   });
 

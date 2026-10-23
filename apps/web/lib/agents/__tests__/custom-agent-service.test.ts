@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { getModelEffortOptions, getSelectableModels } from '@agiworkforce/types';
 
 import {
+  createAgent,
   effectiveAgentConfig,
   normalizeAgentWebDomains,
   updateAgentDraft,
@@ -130,5 +132,74 @@ describe('saving the website rules of an agent', () => {
       }),
     ).rejects.toThrow('docs.example cannot be both allowed and blocked.');
     expect(executed).toEqual([]);
+  });
+});
+
+describe('reasoning effort of an agent', () => {
+  const highestHigh = getSelectableModels().find((model) => {
+    const efforts = getModelEffortOptions(model.id);
+    return efforts.includes('high') && !efforts.includes('xhigh') && !efforts.includes('max');
+  });
+  const noEffort = getSelectableModels().find(
+    (model) => getModelEffortOptions(model.id).length === 0,
+  );
+
+  function recordingDb(row = agentRow()) {
+    const executed: Array<{ sql: string; params: unknown[] }> = [];
+    return {
+      executed,
+      db: {
+        query: async (sql: string, params: unknown[]) => {
+          executed.push({ sql, params });
+          return [row];
+        },
+        execute: async (sql: string, params: unknown[]) => {
+          executed.push({ sql, params });
+        },
+      } as never,
+    };
+  }
+
+  it('presents the level and reads a version published before effort existed as none', () => {
+    expect(toManagedCloudAgent(agentRow({}, { effort: 'xhigh' }), OWNER, null)?.effort).toBe(
+      'xhigh',
+    );
+    const { effort: _effort, ...older } = agentConfig();
+    const published = toManagedCloudAgent(
+      agentRow({ published_version: 1, published_config: older }),
+      OWNER,
+      null,
+    );
+    expect(published).toMatchObject({ effort: null, hasUnpublishedChanges: false });
+  });
+
+  it('writes the level the owner picks while the model is chosen per chat', async () => {
+    const { db, executed } = recordingDb();
+    await updateAgentDraft(db, OWNER, agentRow().id, { effort: 'max' });
+    const update = executed.find((call) => call.sql.startsWith('update public.user_agents'));
+    expect(update?.sql).toContain('effort = $2');
+    expect(update?.params).toEqual([agentRow().id, 'max', OWNER]);
+  });
+
+  it('moves the level to the nearest one a newly pinned model takes, or clears it', async () => {
+    expect(highestHigh).toBeDefined();
+    expect(noEffort).toBeDefined();
+    const pinned = recordingDb(agentRow({}, { effort: 'max' }));
+    await updateAgentDraft(pinned.db, OWNER, agentRow().id, { model: highestHigh!.id });
+    const update = pinned.executed.find((call) => call.sql.startsWith('update public.user_agents'));
+    expect(update?.params).toEqual([agentRow().id, highestHigh!.id, 'high', OWNER]);
+
+    const plain = recordingDb(agentRow({}, { effort: 'max' }));
+    await updateAgentDraft(plain.db, OWNER, agentRow().id, { model: noEffort!.id });
+    const cleared = plain.executed.find((call) => call.sql.startsWith('update public.user_agents'));
+    expect(cleared?.params).toEqual([agentRow().id, noEffort!.id, null, OWNER]);
+  });
+
+  it('stores the level on a new agent', async () => {
+    const { db, executed } = recordingDb();
+    await createAgent(db, OWNER, null, { name: 'Coder', effort: 'max' });
+    const insert = executed.find((call) => call.sql.includes('insert into public.user_agents'));
+    expect(insert?.sql).toContain('blocked_web_domains, effort');
+    expect(insert?.params.at(-1)).toBe('max');
   });
 });

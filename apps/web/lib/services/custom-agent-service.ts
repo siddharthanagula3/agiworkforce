@@ -7,10 +7,12 @@ import {
   AGENT_FILES_MAX,
   AGENT_USAGE_WINDOW_DAYS,
   AgentConfigSchema,
+  agentEffortForModel,
   normalizeWebDomain,
   type AgentActivityResponse,
   type AgentConfig,
   type AgentCreateRequest,
+  type AgentEffort,
   type AgentFile,
   type AgentStatus,
   type AgentUpdateRequest,
@@ -37,6 +39,7 @@ export const DEFAULT_AGENT_CONFIG: Omit<AgentConfig, 'name'> = {
   outputExamples: '',
   conversationStarters: [],
   model: null,
+  effort: null,
   webSearch: true,
   codeExecution: true,
   imageGeneration: true,
@@ -60,6 +63,7 @@ export interface AgentRow {
   output_examples: string;
   conversation_starters: string[];
   model: string | null;
+  effort: AgentEffort | null;
   web_search: boolean;
   code_execution: boolean;
   image_generation: boolean;
@@ -81,7 +85,7 @@ export interface AgentRow {
 
 const AGENT_COLUMNS = `a.id, a.user_id, a.organization_id, a.name, a.description, a.icon,
   a.accent_color, a.instructions, a.output_examples, a.conversation_starters, a.model,
-  a.web_search, a.code_execution, a.image_generation, a.connector_ids, a.skill_names,
+  a.effort, a.web_search, a.code_execution, a.image_generation, a.connector_ids, a.skill_names,
   a.allowed_web_domains, a.blocked_web_domains,
   a.daily_turn_limit, a.monthly_credit_limit, a.status, a.visibility, a.published_version, a.paused_at,
   a.retired_at, a.created_at, a.updated_at`;
@@ -106,6 +110,7 @@ export function agentConfigOf(row: AgentRow): AgentConfig {
     outputExamples: row.output_examples,
     conversationStarters: [...row.conversation_starters],
     model: row.model,
+    effort: row.effort,
     webSearch: row.web_search,
     codeExecution: row.code_execution,
     imageGeneration: row.image_generation,
@@ -190,7 +195,10 @@ export function normalizeAgentWebDomains(values: readonly string[]): string[] {
   return [...new Set(domains)].sort();
 }
 
-function normalizedConfig(patch: AgentUpdateRequest): AgentUpdateRequest {
+function normalizedConfig(
+  patch: AgentUpdateRequest,
+  current: Pick<AgentConfig, 'model' | 'effort'>,
+): AgentUpdateRequest {
   const allowed =
     patch.allowedWebDomains !== undefined
       ? normalizeAgentWebDomains(patch.allowedWebDomains)
@@ -203,11 +211,21 @@ function normalizedConfig(patch: AgentUpdateRequest): AgentUpdateRequest {
     const both = allowed.find((domain) => blocked.includes(domain));
     if (both) throw createError.validation(`${both} cannot be both allowed and blocked.`);
   }
+  const model = patch.model !== undefined ? validateAgentModel(patch.model) : undefined;
+  const effortChanges = patch.effort !== undefined || model !== undefined;
   return {
     ...patch,
     ...(allowed !== undefined ? { allowedWebDomains: allowed } : {}),
     ...(blocked !== undefined ? { blockedWebDomains: blocked } : {}),
-    ...(patch.model !== undefined ? { model: validateAgentModel(patch.model) } : {}),
+    ...(model !== undefined ? { model } : {}),
+    ...(effortChanges
+      ? {
+          effort: agentEffortForModel(
+            patch.effort !== undefined ? patch.effort : current.effort,
+            model !== undefined ? model : current.model,
+          ),
+        }
+      : {}),
     ...(patch.connectorIds !== undefined ? { connectorIds: uniqueSorted(patch.connectorIds) } : {}),
     ...(patch.skillNames !== undefined ? { skillNames: uniqueSorted(patch.skillNames) } : {}),
   };
@@ -222,6 +240,7 @@ const COLUMN_FOR: Record<keyof AgentConfig, string> = {
   outputExamples: 'output_examples',
   conversationStarters: 'conversation_starters',
   model: 'model',
+  effort: 'effort',
   webSearch: 'web_search',
   codeExecution: 'code_execution',
   imageGeneration: 'image_generation',
@@ -325,7 +344,7 @@ export async function createAgent(
 ): Promise<AgentRow> {
   const config: AgentConfig = {
     ...DEFAULT_AGENT_CONFIG,
-    ...normalizedConfig(input),
+    ...normalizedConfig(input, DEFAULT_AGENT_CONFIG),
     name: input.name,
   };
   const [row] = await db.query<{ id: string }>(
@@ -333,9 +352,9 @@ export async function createAgent(
        user_id, organization_id, name, description, icon, accent_color, instructions,
        output_examples, conversation_starters, model, web_search, code_execution,
        image_generation, connector_ids, skill_names, daily_turn_limit, monthly_credit_limit,
-       allowed_web_domains, blocked_web_domains
+       allowed_web_domains, blocked_web_domains, effort
      ) values ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9::text[], $10, $11, $12, $13,
-       $14::text[], $15::text[], $16, $17, $18::text[], $19::text[])
+       $14::text[], $15::text[], $16, $17, $18::text[], $19::text[], $20)
      returning id`,
     [
       userId,
@@ -357,6 +376,7 @@ export async function createAgent(
       config.monthlyCreditLimit,
       config.allowedWebDomains,
       config.blockedWebDomains,
+      config.effort,
     ],
   );
   if (!row) throw createError.internal('The agent could not be saved.');
@@ -371,7 +391,7 @@ export async function updateAgentDraft(
 ): Promise<AgentRow> {
   const current = await requireOwnedAgent(db, userId, agentId);
   assertEditable(current);
-  const normalized = normalizedConfig(patch);
+  const normalized = normalizedConfig(patch, agentConfigOf(current));
   const entries = (Object.keys(COLUMN_FOR) as (keyof AgentConfig)[]).filter(
     (key) => normalized[key] !== undefined,
   );

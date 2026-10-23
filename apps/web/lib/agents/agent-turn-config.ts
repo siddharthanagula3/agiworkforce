@@ -1,7 +1,7 @@
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
 import type { ChatCompletionRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
-import type { AgentConfig } from '@agiworkforce/cloud-contracts';
-import { isAutoModeModelId, microusdFromCredits } from '@agiworkforce/types';
+import { agentTurnEffort, type AgentConfig } from '@agiworkforce/cloud-contracts';
+import { isAutoModeModelId, microusdFromCredits, type Effort } from '@agiworkforce/types';
 
 import {
   countAgentTurnsToday,
@@ -181,16 +181,37 @@ export function agentModelFor(
   return !requested || isAutoModeModelId(requested) ? config.model : requestedModel;
 }
 
+export function agentEffortFor(
+  request: Pick<ChatCompletionRequest, 'model' | 'effort' | 'thinking' | 'thinking_mode'>,
+  config: Pick<AgentConfig, 'effort'>,
+): Effort | null {
+  if (!config.effort || request.thinking?.type === 'disabled') return null;
+  if (request.effort?.trim() && request.thinking_mode !== false) return null;
+  return agentTurnEffort(config.effort, request.model);
+}
+
 export function applyAgentTurnConfig(
   request: Pick<
     ChatCompletionRequest,
-    'model' | 'web_search' | 'web_fetch' | 'code_execution' | 'messages'
+    | 'model'
+    | 'effort'
+    | 'thinking'
+    | 'thinking_mode'
+    | 'web_search'
+    | 'web_fetch'
+    | 'code_execution'
+    | 'messages'
   >,
   turn: AgentTurnConfig,
 ): void {
   applyAgentToolPolicy(request, turn.config);
   const model = agentModelFor(request.model, turn.config);
   if (model) request.model = model;
+  const effort = agentEffortFor(request, turn.config);
+  if (effort) {
+    request.effort = effort;
+    if (request.thinking_mode === false) request.thinking_mode = true;
+  }
   request.messages.unshift({ role: 'system', content: agentSystemPrompt(turn) });
 }
 

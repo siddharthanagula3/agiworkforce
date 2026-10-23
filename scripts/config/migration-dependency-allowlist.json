@@ -107,6 +107,11 @@
       "reason": "Reads or writes the user_agents.allowed_web_domains, user_agents.blocked_web_domains columns that 0388 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0388 is applied."
     },
     {
+      "file": "apps/web/lib/services/custom-agent-service.ts",
+      "migration": 389,
+      "reason": "Reads or writes the user_agents.effort column that 0389 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0389 is applied."
+    },
+    {
       "file": "apps/web/lib/services/developer-prompt-service.ts",
       "migration": 371,
       "reason": "Reads or writes the developer_eval_cases, developer_eval_results, developer_eval_runs, developer_prompt_versions, developer_prompts tables that 0371 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0371 is applied."
@@ -300,6 +305,11 @@
       "file": "apps/web/app/api/user/export/route.ts",
       "migration": 388,
       "reason": "Exports the user_agents.allowed_web_domains, user_agents.blocked_web_domains columns that 0388 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0388 is applied."
+    },
+    {
+      "file": "apps/web/app/api/user/export/route.ts",
+      "migration": 389,
+      "reason": "Exports the user_agents.effort column that 0389 adds. deploy-production.yml runs pnpm db:migrate -- verify, which refuses to promote a commit while any migration is unapplied, so this code cannot serve production before 0389 is applied."
     },
     {
       "file": "apps/web/lib/services/cloud-code-session-service.ts",

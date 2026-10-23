@@ -74,6 +74,15 @@ describe('Claude Code subagent markdown', () => {
     expect(() => agentFromSubagentMarkdown('Just text')).toThrow(AgentMarkdownError);
   });
 
+  it('carries the reasoning effort both ways and ignores a level it does not know', () => {
+    const markdown = agentToSubagentMarkdown(agentConfig({ effort: 'xhigh' }));
+    expect(markdown).toContain('model: inherit\neffort: xhigh\n');
+    expect(agentFromSubagentMarkdown(markdown).effort).toBe('xhigh');
+    expect(agentToSubagentMarkdown(agentConfig())).not.toContain('effort:');
+    const unknown = agentFromSubagentMarkdown('---\nname: helper\neffort: turbo\n---\nHelp.');
+    expect(unknown).not.toHaveProperty('effort');
+  });
+
   it('builds a filesystem-safe slug', () => {
     expect(agentSlug('Café: Ops / Finance!')).toBe('cafe-ops-finance');
     expect(agentSlug('***')).toBe('agent');

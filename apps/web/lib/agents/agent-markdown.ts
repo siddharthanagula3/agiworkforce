@@ -3,6 +3,7 @@ import {
   AGENT_INSTRUCTIONS_MAX_CHARS,
   AGENT_NAME_MAX_CHARS,
   AGENT_OUTPUT_EXAMPLES_MAX_CHARS,
+  AgentEffortSchema,
   type AgentConfig,
   type AgentCreateRequest,
 } from '@agiworkforce/cloud-contracts';
@@ -54,6 +55,7 @@ export function agentToSubagentMarkdown(config: AgentConfig): string {
     `description: ${yamlString(config.description || config.name)}`,
     `model: ${model}`,
   ];
+  if (config.effort) lines.push(`effort: ${config.effort}`);
   const color = ACCENT_TO_SUBAGENT_COLOR[config.accentColor];
   if (color) lines.push(`color: ${color}`);
   if (config.skillNames && config.skillNames.length > 0) {
@@ -81,6 +83,11 @@ function importedModel(value: unknown): string | null {
   if (!model || model === INHERIT_MODEL) return null;
   if (isAutoModeModelId(model)) return model;
   return getModelMetadataById(model)?.id ?? null;
+}
+
+function importedEffort(value: unknown): AgentConfig['effort'] {
+  const parsed = AgentEffortSchema.safeParse(stringField(value)?.toLowerCase());
+  return parsed.success ? parsed.data : null;
 }
 
 function importedSkills(value: unknown): string[] | null {
@@ -114,6 +121,7 @@ export function agentFromSubagentMarkdown(markdown: string): AgentCreateRequest 
   }
   const [instructions = '', examples = ''] = parsed.body.split(OUTPUT_EXAMPLES_HEADING);
   const accent = SUBAGENT_COLOR_TO_ACCENT[stringField(parsed.data['color']) ?? ''];
+  const effort = importedEffort(parsed.data['effort']);
   return {
     name: name.slice(0, AGENT_NAME_MAX_CHARS),
     description: (stringField(parsed.data['description']) ?? '').slice(
@@ -125,5 +133,6 @@ export function agentFromSubagentMarkdown(markdown: string): AgentCreateRequest 
     model: importedModel(parsed.data['model']),
     skillNames: importedSkills(parsed.data['skills']),
     ...(accent ? { accentColor: accent } : {}),
+    ...(effort ? { effort } : {}),
   };
 }

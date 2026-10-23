@@ -13,6 +13,7 @@ export const NEW_AGENT_DRAFT: AgentConfig = {
   outputExamples: '',
   conversationStarters: [],
   model: null,
+  effort: null,
   webSearch: true,
   codeExecution: true,
   imageGeneration: true,
