@@ -4,4 +4,5 @@ expression: draw_header(80)
 ---
 ┌──────────────────────────────────────────────────────────────────────────────┐
 │ AGI CLI  v0.0.1  │ fixture-flagship (200K context) │ anthropic               │
+│ 0 awaiting input · 0 working · 0 completed            context ████░░░░░░ 42% │
 ├──────────────────────────────────────────────────────────────────────────────┤

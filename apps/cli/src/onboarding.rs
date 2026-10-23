@@ -61,6 +61,35 @@ fn local_pull_hint() -> String {
     }
 }
 
+/// The folder as the header and the welcome show it: `~` for the home folder
+/// and a `~/` path inside it.
+pub(crate) fn home_relative_path(cwd: &std::path::Path, home: Option<&std::path::Path>) -> String {
+    match home.and_then(|home| cwd.strip_prefix(home).ok()) {
+        Some(relative) if relative.as_os_str().is_empty() => "~".to_string(),
+        Some(relative) => format!("~{}{}", std::path::MAIN_SEPARATOR, relative.display()),
+        None => cwd.display().to_string(),
+    }
+}
+
+pub(crate) fn current_working_path() -> String {
+    std::env::current_dir()
+        .map(|cwd| home_relative_path(&cwd, dirs::home_dir().as_deref()))
+        .unwrap_or_default()
+}
+
+/// What turning fast mode on costs, in the credits every other cost line uses,
+/// from the catalog rate of the model it switched to. Nothing for a model that
+/// costs nothing to run or has no catalog rate.
+pub(crate) fn fast_mode_cost_note(model: &str) -> Option<String> {
+    let (input_usd, output_usd) = model_catalog::pricing(model);
+    (input_usd > 0.0 || output_usd > 0.0).then(|| {
+        format!(
+            "{} (input / output)",
+            crate::cost_ledger::format_credits_per_million_tokens(input_usd, output_usd)
+        )
+    })
+}
+
 fn print_welcome_banner() {
     let logo = r#"
      _    ____ ___     ____ _     ___
@@ -74,10 +103,18 @@ fn print_welcome_banner() {
     eprintln!(
         "  {} {}",
         ts::brand_header(format!("Welcome to {}", crate::PRODUCT_NAME)),
-        ts::muted(format!("v{}", env!("CARGO_PKG_VERSION"))),
+        ts::header(format!("v{}", env!("CARGO_PKG_VERSION"))),
     );
     eprintln!(
-        "  {}\n",
+        "  {}",
+        ts::muted(model_catalog::display_name(model_catalog::default_model()))
+    );
+    let working_path = current_working_path();
+    if !working_path.is_empty() {
+        eprintln!("  {}", ts::muted(working_path));
+    }
+    eprintln!(
+        "\n  {}\n",
         ts::muted("Multi-model AI agent in your terminal.")
     );
     eprintln!("  {}", ts::muted("What makes us different:"));
@@ -1118,5 +1155,49 @@ mod local_first_run_tests {
             AuthChoice::Local(p) => assert_eq!(p, "auto"),
             other => panic!("expected Local, got {other:?}"),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_working_path_abbreviates_the_home_directory() {
+        let home = std::path::Path::new("/home/dev");
+        assert_eq!(
+            home_relative_path(std::path::Path::new("/home/dev"), Some(home)),
+            "~"
+        );
+        assert_eq!(
+            home_relative_path(std::path::Path::new("/home/dev/code/app"), Some(home)),
+            format!("~{}code/app", std::path::MAIN_SEPARATOR)
+        );
+        assert_eq!(
+            home_relative_path(std::path::Path::new("/srv/app"), Some(home)),
+            "/srv/app"
+        );
+        assert_eq!(
+            home_relative_path(std::path::Path::new("/srv/app"), None),
+            "/srv/app"
+        );
+    }
+
+    #[test]
+    fn the_fast_mode_note_quotes_the_catalog_rate_in_credits() {
+        let model = model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| model.input_price_per_1m > 0.0)
+            .expect("the catalog prices at least one model");
+        let note = fast_mode_cost_note(&model.id).expect("a priced model has a note");
+        assert!(note.contains("credits per 1M tokens"), "{note}");
+        assert!(note.ends_with("(input / output)"), "{note}");
+        assert!(!note.contains('$'), "{note}");
+    }
+
+    #[test]
+    fn a_model_the_catalog_does_not_price_has_no_fast_mode_note() {
+        assert_eq!(fast_mode_cost_note("no-such-model-in-the-catalog"), None);
     }
 }

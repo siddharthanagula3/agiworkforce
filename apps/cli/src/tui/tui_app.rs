@@ -185,6 +185,7 @@ struct ToolCell {
     accent: Option<Color>,
     exit_code: Option<i32>,
     stderr: Option<String>,
+    edits: Vec<crate::diff_model::EditResult>,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -300,9 +301,23 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
             Style::default().fg(if code == 0 { ui_success() } else { ui_danger() }),
         ));
     }
+    let edited = cell.state == TranscriptCellState::Complete && !cell.edits.is_empty();
+    if edited {
+        let additions: usize = cell.edits.iter().map(|edit| edit.additions()).sum();
+        let deletions: usize = cell.edits.iter().map(|edit| edit.deletions()).sum();
+        spans.push(Span::styled(
+            format!("  +{additions}"),
+            Style::default().fg(ui_success()),
+        ));
+        spans.push(Span::styled(
+            format!(" -{deletions}"),
+            Style::default().fg(ui_danger()),
+        ));
+    }
     let mut lines = vec![Line::from(spans)];
     let expanded = EXPAND_TOOL_OUTPUT.load(std::sync::atomic::Ordering::Relaxed);
     match (&cell.full_output, &cell.output_preview) {
+        _ if edited => lines.extend(edit_result_lines(&cell.edits, expanded)),
         (Some(output), _) if expanded => {
             let total = output.lines().count();
             for line in output.lines().take(EXPANDED_TOOL_OUTPUT_LINES) {
@@ -349,6 +364,62 @@ fn tool_cell_lines(cell: &ToolCell, spinner_char: &str) -> Vec<Line<'static>> {
         if total > shown {
             lines.push(Line::from(Span::styled(
                 format!("           … {} more stderr lines", total - shown),
+                Style::default().fg(ui_muted()),
+            )));
+        }
+    }
+    lines
+}
+
+const EDIT_PREVIEW_LINES: usize = 12;
+
+/// The block under a finished edit: what was changed, how much, and the
+/// changed lines themselves, each on a full-width green or red band.
+fn edit_result_lines(
+    edits: &[crate::diff_model::EditResult],
+    expanded: bool,
+) -> Vec<Line<'static>> {
+    use crate::diff_model::DiffLine;
+    use crate::tui::terminal_palette::{ui_muted, ui_success};
+    use crate::tui::widgets::diff_review::diff_bands;
+
+    let bands = diff_bands();
+    let limit = if expanded {
+        EXPANDED_TOOL_OUTPUT_LINES
+    } else {
+        EDIT_PREVIEW_LINES
+    };
+    let mut lines = Vec::new();
+    for edit in edits {
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled("● ", Style::default().fg(ui_success())),
+            Span::styled(edit.header(), Style::default().add_modifier(Modifier::BOLD)),
+        ]));
+        lines.push(Line::from(vec![
+            Span::raw("    "),
+            Span::styled("└ ", Style::default().fg(ui_muted())),
+            Span::styled(edit.summary(), Style::default().fg(ui_muted())),
+        ]));
+        for line in edit.lines.iter().take(limit) {
+            let (added, text) = match line {
+                DiffLine::Added(text) => (true, text),
+                DiffLine::Removed(text) | DiffLine::Context(text) => (false, text),
+            };
+            let sign = if added { '+' } else { '-' };
+            let band = if added { bands.added } else { bands.removed };
+            let row = Line::from(Span::styled(
+                format!("      {sign} {}", text.replace('\t', "    ")),
+                bands.style_for(added),
+            ));
+            lines.push(match band {
+                Some(bg) => row.style(Style::default().bg(bg)),
+                None => row,
+            });
+        }
+        if edit.lines.len() > limit {
+            lines.push(Line::from(Span::styled(
+                format!("      … {} more changed lines", edit.lines.len() - limit),
                 Style::default().fg(ui_muted()),
             )));
         }
@@ -452,6 +523,8 @@ struct TuiApp {
     remote: Option<RemoteLink>,
     remote_prompts: Vec<String>,
     remote_label: Option<String>,
+    browser: Arc<std::sync::Mutex<crate::browser_bridge::BrowserAvailability>>,
+    start_panel: StartPanel,
 }
 
 struct RemoteLink {
@@ -574,6 +647,7 @@ impl TuiApp {
         }
 
         let keybindings = crate::keybindings::Keybindings::from_config(&config.ui.keybindings);
+        let start_panel = StartPanel::new(provider_access_mode(&session.provider));
 
         let effort = config
             .default
@@ -609,6 +683,7 @@ impl TuiApp {
                 show_cost: true,
                 show_branch: false,
                 show_mode: true,
+                show_context: false,
             },
             terminal_title_config,
             effort,
@@ -639,6 +714,10 @@ impl TuiApp {
             remote: None,
             remote_prompts: Vec::new(),
             remote_label: None,
+            browser: Arc::new(std::sync::Mutex::new(
+                crate::browser_bridge::BrowserAvailability::ShellNotRunning,
+            )),
+            start_panel,
         }
     }
 
@@ -911,11 +990,16 @@ impl TuiApp {
         }
     }
 
+    fn context_snapshot(&self) -> ContextSnapshot {
+        ContextSnapshot::of(
+            &self
+                .session
+                .context_usage(self.config.default.max_tokens as usize),
+        )
+    }
+
     fn context_percent(&self) -> u8 {
-        let usage = self
-            .session
-            .context_usage(self.config.default.max_tokens as usize);
-        (usage.fraction * 100.0).clamp(0.0, 100.0) as u8
+        self.context_snapshot().percent
     }
 
     pub fn open_overlay(
@@ -1687,7 +1771,7 @@ fn draw_app_frame(frame: &mut ratatui::Frame, app: &TuiApp) -> Rect {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),            // header
+            Constraint::Length(HEADER_ROWS),  // header
             Constraint::Min(5),               // chat area
             Constraint::Length(input_height), // input (grows with content)
             Constraint::Length(1),            // status bar
@@ -1777,10 +1861,10 @@ fn draw_turn_chrome_with(frame: &mut ratatui::Frame, ctx: &FrameCtx, hint: Strin
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3), // header
-            Constraint::Min(5),    // chat area
-            Constraint::Length(3), // composer (disabled during a turn)
-            Constraint::Length(1), // status bar
+            Constraint::Length(HEADER_ROWS), // header
+            Constraint::Min(5),              // chat area
+            Constraint::Length(3),           // composer (disabled during a turn)
+            Constraint::Length(1),           // status bar
         ])
         .split(area);
 
@@ -1863,7 +1947,8 @@ struct FrameCtx<'a> {
     total_input_tokens: u32,
     total_output_tokens: u32,
     turn_count: u32,
-    context_percent: u8,
+    context: ContextSnapshot,
+    chrome: FrameChrome<'a>,
     chat_messages: &'a [ChatMessage],
     tool_cells: &'a [ToolCell],
     is_loading: bool,
@@ -1890,6 +1975,155 @@ struct FrameCtx<'a> {
     quit_key: Option<&'a str>,
 }
 
+/// How full the context window is: the percentage the meters draw and the
+/// token figures behind it.
+#[derive(Clone, Copy)]
+struct ContextSnapshot {
+    percent: u8,
+    used_tokens: usize,
+    limit_tokens: usize,
+}
+
+impl ContextSnapshot {
+    fn of(usage: &crate::compaction::ContextUsage) -> Self {
+        Self {
+            percent: (usage.fraction * 100.0).clamp(0.0, 100.0) as u8,
+            used_tokens: usage.used_tokens,
+            limit_tokens: usage.limit_tokens,
+        }
+    }
+}
+
+/// What the start screen offers beyond the model: the account plan when the
+/// session is Managed, and the last sessions in this folder. The sessions are
+/// read on a background thread, since the store parses every saved session;
+/// `None` is "still reading".
+#[derive(Default)]
+struct StartPanel {
+    plan: Option<String>,
+    recent: Arc<std::sync::Mutex<Option<Vec<String>>>>,
+}
+
+const START_PANEL_RECENT_SESSIONS: usize = 3;
+
+impl StartPanel {
+    fn new(access_mode: crate::design_system::AccessMode) -> Self {
+        let plan = (access_mode == crate::design_system::AccessMode::Cloud)
+            .then(crate::tier_cache::read_tier_cache)
+            .flatten()
+            .map(|cached| cached.tier.label().to_string());
+        Self {
+            plan,
+            recent: Arc::default(),
+        }
+    }
+
+    /// A plain thread, not a runtime task: the runtime waits for its blocking
+    /// tasks at exit, and a slow store must not hold up quitting.
+    fn read_recent_sessions(&self) {
+        let slot = Arc::clone(&self.recent);
+        std::thread::spawn(move || {
+            let cwd = std::env::current_dir()
+                .map(|cwd| cwd.display().to_string())
+                .unwrap_or_default();
+            let rows = crate::sessions::open_db()
+                .and_then(|conn| crate::sessions::list_sessions(&conn, usize::MAX))
+                .map(|sessions| {
+                    recent_session_rows(&sessions, &cwd, chrono::Utc::now().timestamp_millis())
+                })
+                .unwrap_or_default();
+            if let Ok(mut recent) = slot.lock() {
+                *recent = Some(rows);
+            }
+        });
+    }
+}
+
+/// Rows for the start screen: the newest sessions that ran in `cwd`, each as
+/// how long ago it was last used and its title. Both clocks are milliseconds,
+/// the unit the session store records.
+fn recent_session_rows(
+    sessions: &[crate::sessions::SessionSummary],
+    cwd: &str,
+    now_millis: i64,
+) -> Vec<String> {
+    sessions
+        .iter()
+        .filter(|session| session.cwd == cwd && session.message_count > 0 && !session.archived)
+        .take(START_PANEL_RECENT_SESSIONS)
+        .map(|session| {
+            format!(
+                "{}  {}",
+                time_ago_label(now_millis.saturating_sub(session.updated_at) / 1_000),
+                truncate_cols(&sanitize_terminal_text(&session.display_title()), 48)
+            )
+        })
+        .collect()
+}
+
+fn time_ago_label(seconds: i64) -> String {
+    const MINUTE: i64 = 60;
+    const HOUR: i64 = 60 * MINUTE;
+    const DAY: i64 = 24 * HOUR;
+    match seconds {
+        s if s < MINUTE => "just now".to_string(),
+        s if s < HOUR => format!("{}m ago", s / MINUTE),
+        s if s < DAY => format!("{}h ago", s / HOUR),
+        s => format!("{}d ago", s / DAY),
+    }
+}
+
+/// The parts of a frame that come from beyond the session: whether a browser
+/// is paired, and the start screen's extras.
+struct FrameChrome<'a> {
+    browser: crate::browser_bridge::BrowserAvailability,
+    plan: Option<&'a str>,
+    recent: Option<Vec<String>>,
+    whats_new: Option<String>,
+}
+
+impl<'a> FrameChrome<'a> {
+    /// `start_screen` is true only while the start screen is the thing drawn,
+    /// the one place the plan, recent sessions and release summary appear.
+    fn new(
+        browser: &Arc<std::sync::Mutex<crate::browser_bridge::BrowserAvailability>>,
+        start: &'a StartPanel,
+        start_screen: bool,
+    ) -> Self {
+        Self {
+            browser: browser
+                .lock()
+                .map(|state| *state)
+                .unwrap_or(crate::browser_bridge::BrowserAvailability::ShellNotRunning),
+            plan: start.plan.as_deref(),
+            recent: if start_screen {
+                start.recent.lock().ok().and_then(|recent| recent.clone())
+            } else {
+                None
+            },
+            whats_new: if start_screen { whats_new_line() } else { None },
+        }
+    }
+}
+
+/// The running build's release summary, once the startup update check has
+/// fetched it. A summary for any other version is not about this build.
+fn whats_new_line() -> Option<String> {
+    whats_new_for(
+        crate::update_check::latest_known_release()?,
+        crate::update_check::running_version(),
+    )
+}
+
+fn whats_new_for(release: &crate::update_check::CliRelease, running: &str) -> Option<String> {
+    if release.version != running {
+        return None;
+    }
+    let summary = release.release_notes.as_ref()?.summary.as_deref()?;
+    let one_line = summary.split_whitespace().collect::<Vec<_>>().join(" ");
+    (!one_line.is_empty()).then(|| sanitize_terminal_text(&one_line).into_owned())
+}
+
 impl<'a> FrameCtx<'a> {
     fn from_app(app: &'a TuiApp) -> Self {
         FrameCtx {
@@ -1899,11 +2133,12 @@ impl<'a> FrameCtx<'a> {
             provider_name: &app.provider_name,
             git_branch: app.git_branch.as_deref(),
             context_window: model_context_window(&app.model_name),
-            working_path: current_working_path(),
+            working_path: crate::onboarding::current_working_path(),
             total_input_tokens: app.session.total_input_tokens,
             total_output_tokens: app.session.total_output_tokens,
             turn_count: app.session.turn_count,
-            context_percent: app.context_percent(),
+            context: app.context_snapshot(),
+            chrome: FrameChrome::new(&app.browser, &app.start_panel, app.chat_messages.is_empty()),
             chat_messages: &app.chat_messages,
             tool_cells: &app.tool_cells,
             is_loading: app.is_loading,
@@ -1953,20 +2188,6 @@ fn context_window_label(tokens: usize) -> String {
         format!("{}K context", tokens / THOUSAND)
     } else {
         format!("{tokens} context")
-    }
-}
-
-fn current_working_path() -> String {
-    std::env::current_dir()
-        .map(|cwd| header_working_path(&cwd, dirs::home_dir().as_deref()))
-        .unwrap_or_default()
-}
-
-fn header_working_path(cwd: &std::path::Path, home: Option<&std::path::Path>) -> String {
-    match home.and_then(|home| cwd.strip_prefix(home).ok()) {
-        Some(relative) if relative.as_os_str().is_empty() => "~".to_string(),
-        Some(relative) => format!("~{}{}", std::path::MAIN_SEPARATOR, relative.display()),
-        None => cwd.display().to_string(),
     }
 }
 
@@ -2029,17 +2250,124 @@ fn fitted_header_line(ctx: &FrameCtx, width: usize) -> Line<'static> {
         .unwrap_or_else(|| header_line(ctx, false, false))
 }
 
+/// What this turn's tool calls are doing, the way the header counts them. A
+/// call waiting on the user's approval is awaiting, not working.
+#[derive(Debug, PartialEq, Eq)]
+struct ActivityCounts {
+    awaiting: usize,
+    working: usize,
+    completed: usize,
+    failed: usize,
+}
+
+fn activity_counts(ctx: &FrameCtx) -> ActivityCounts {
+    use crate::tui::transcript_cell::TranscriptCellState;
+
+    let count = |state: TranscriptCellState| {
+        ctx.tool_cells
+            .iter()
+            .filter(|cell| cell.state == state)
+            .count()
+    };
+    let awaiting = usize::from(ctx.awaiting_approval);
+    let running = count(TranscriptCellState::Running);
+    let thinking = usize::from(ctx.is_loading && running == 0 && !ctx.awaiting_approval);
+    ActivityCounts {
+        awaiting,
+        working: running.saturating_sub(awaiting) + thinking,
+        completed: count(TranscriptCellState::Complete),
+        failed: count(TranscriptCellState::Failed),
+    }
+}
+
+/// The counts in full and, for a narrow row, in short.
+fn activity_counts_labels(counts: &ActivityCounts) -> [String; 2] {
+    let failed = if counts.failed > 0 {
+        format!(" · {} failed", counts.failed)
+    } else {
+        String::new()
+    };
+    [
+        format!(
+            " {} awaiting input · {} working · {} completed{failed}",
+            counts.awaiting, counts.working, counts.completed
+        ),
+        format!(
+            " {} awaiting · {} working · {} done{failed}",
+            counts.awaiting, counts.working, counts.completed
+        ),
+    ]
+}
+
+const HEADER_METER_CELLS: usize = 10;
+
+fn context_color(percent: u8) -> Color {
+    use crate::tui::terminal_palette::{ui_accent, ui_danger, ui_success};
+    if percent >= 85 {
+        ui_danger()
+    } else if percent >= 60 {
+        ui_accent()
+    } else {
+        ui_success()
+    }
+}
+
+fn context_meter_label(percent: u8) -> String {
+    let filled = (usize::from(percent) * HEADER_METER_CELLS / 100).min(HEADER_METER_CELLS);
+    format!(
+        "context {}{} {percent}% ",
+        "█".repeat(filled),
+        "░".repeat(HEADER_METER_CELLS - filled),
+    )
+}
+
+/// The header's second row: what the agent is doing on the left, how full the
+/// context window is on the right. The meter yields first when the row is
+/// narrow, then the counts are clipped; neither is ever dropped silently.
+fn header_status_line(ctx: &FrameCtx, width: usize) -> Line<'static> {
+    use crate::tui::terminal_palette::ui_muted;
+
+    let labels = activity_counts_labels(&activity_counts(ctx));
+    let meter = context_meter_label(ctx.context.percent);
+    let muted = Style::default().fg(ui_muted());
+    let mut spans = Vec::new();
+    let with_meter = labels
+        .iter()
+        .find(|label| display_width(label) + display_width(&meter) < width);
+    if let Some(label) = with_meter {
+        let gap = width - display_width(label) - display_width(&meter);
+        spans.push(Span::styled(label.clone(), muted));
+        spans.push(Span::raw(" ".repeat(gap)));
+        spans.push(Span::styled(
+            meter,
+            Style::default().fg(context_color(ctx.context.percent)),
+        ));
+    } else {
+        let label = labels
+            .iter()
+            .find(|label| display_width(label) <= width)
+            .unwrap_or(&labels[1]);
+        spans.push(Span::styled(truncate_cols(label, width), muted));
+    }
+    let mut line = Line::from(spans);
+    sanitize_terminal_line(&mut line);
+    line
+}
+
 fn render_header(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     use crate::tui::terminal_palette::ui_muted;
 
-    let header_text = fitted_header_line(ctx, area.width.saturating_sub(2) as usize);
+    let width = area.width.saturating_sub(2) as usize;
+    let header_text = vec![
+        fitted_header_line(ctx, width),
+        header_status_line(ctx, width),
+    ];
 
     // The header and the transcript are one continuous frame: the header owns
     // the top border, the transcript the sides, and the row between them is a
     // tee-junction divider, never a `└┘` that closes a box the content then
-    // carries on inside. Tokens, cost, context percentage and turns render
-    // once, in the footer status line; this block carries no title and the
-    // divider no label.
+    // carries on inside. Tokens, cost and turns render once, in the footer
+    // status line; this block carries no title and the divider no label.
     let block = Block::default()
         .borders(Borders::TOP | Borders::LEFT | Borders::RIGHT)
         .border_style(Style::default().fg(ui_muted()));
@@ -2070,6 +2398,7 @@ fn render_header_divider(frame: &mut ratatui::Frame, area: Rect) {
     frame.render_widget(Paragraph::new(line), row);
 }
 
+const HEADER_ROWS: u16 = 4;
 const WORKSPACE_PANE_MIN_WIDTH: u16 = 90;
 const WORKSPACE_PANE_MAX_LINES: usize = 2000;
 
@@ -2147,13 +2476,22 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             AccessMode::Byok => ("billed by your provider", ui_accent()),
             AccessMode::Cloud => ("AGI cloud subscription", ui_cloud()),
         };
-        let mode_label = format!("{} · {mode_tail}", ctx.access_mode.trust_word());
+        let mode_label = match ctx.chrome.plan {
+            Some(plan) => format!("{} · {plan} · {mode_tail}", ctx.access_mode.trust_word()),
+            None => format!("{} · {mode_tail}", ctx.access_mode.trust_word()),
+        };
 
         lines.push(Line::from(""));
-        lines.push(Line::from(Span::styled(
-            "  Welcome to AGI",
-            Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
-        )));
+        lines.push(Line::from(vec![
+            Span::styled(
+                "  Welcome to AGI",
+                Style::default().fg(ui_brand()).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!(" v{}", env!("CARGO_PKG_VERSION")),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+        ]));
         lines.push(Line::from(""));
         // Orient the user: which model are they on, reached via which mode.
         lines.push(Line::from(vec![
@@ -2165,8 +2503,56 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             Span::styled("   ◉ ", Style::default().fg(mode_color)),
             Span::styled(mode_label, Style::default().fg(mode_color)),
         ]));
+        if !ctx.working_path.is_empty() {
+            lines.push(Line::from(vec![
+                Span::styled("  Folder ", Style::default().fg(ui_muted())),
+                Span::styled(ctx.working_path.clone(), Style::default().fg(ui_muted())),
+            ]));
+        }
         lines.push(Line::from(Span::styled(
             "  Choose Local, Your key, or Managed with /model.",
+            Style::default().fg(ui_muted()),
+        )));
+        lines.push(Line::from(""));
+        if ctx.chrome.recent.is_some() {
+            lines.push(Line::from(Span::styled(
+                "  Recent activity",
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
+        }
+        match &ctx.chrome.recent {
+            None => {}
+            Some(rows) if rows.is_empty() => {
+                lines.push(Line::from(Span::styled(
+                    "    No recent activity",
+                    Style::default().fg(ui_muted()),
+                )));
+            }
+            Some(rows) => {
+                for row in rows {
+                    lines.push(Line::from(Span::styled(
+                        format!("    {row}"),
+                        Style::default().fg(ui_muted()),
+                    )));
+                }
+                lines.push(Line::from(Span::styled(
+                    "    /resume for more",
+                    Style::default().fg(ui_muted()),
+                )));
+            }
+        }
+        if let Some(summary) = &ctx.chrome.whats_new {
+            lines.push(Line::from(Span::styled(
+                "  What's new",
+                Style::default().add_modifier(Modifier::BOLD),
+            )));
+            lines.push(Line::from(Span::styled(
+                format!("    {summary}"),
+                Style::default().fg(ui_muted()),
+            )));
+        }
+        lines.push(Line::from(Span::styled(
+            "    /help for more",
             Style::default().fg(ui_muted()),
         )));
         lines.push(Line::from(""));
@@ -2715,6 +3101,38 @@ fn compact_token_counts_label(turns: u32, input: u32, output: u32) -> String {
     )
 }
 
+const BROWSER_STATE_REFRESH: Duration = Duration::from_secs(15);
+
+/// Keep the footer's browser state fresh without ever asking the desktop app
+/// from the render loop.
+fn spawn_browser_watch(
+    slot: Arc<std::sync::Mutex<crate::browser_bridge::BrowserAvailability>>,
+) -> tokio::task::JoinHandle<()> {
+    tokio::spawn(async move {
+        loop {
+            let state = crate::browser_bridge::browser_state().await;
+            if let Ok(mut current) = slot.lock() {
+                *current = state.availability;
+            }
+            tokio::time::sleep(BROWSER_STATE_REFRESH).await;
+        }
+    })
+}
+
+/// The footer's word on the browser, from the last pairing check. With no
+/// desktop app running there is nothing to report, and `/chrome` explains.
+fn browser_footer_label(
+    availability: crate::browser_bridge::BrowserAvailability,
+) -> Option<&'static str> {
+    use crate::browser_bridge::BrowserAvailability;
+    match availability {
+        BrowserAvailability::Paired => Some("browser paired · /chrome"),
+        BrowserAvailability::PairedNotAnswering => Some("browser not answering · /chrome"),
+        BrowserAvailability::NotPaired => Some("browser not paired · /chrome"),
+        BrowserAvailability::ShellNotRunning => None,
+    }
+}
+
 fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     use crate::tui::terminal_palette::{
         ui_accent, ui_cloud, ui_danger, ui_muted, ui_on_dark, ui_on_light, ui_status_bar_bg,
@@ -2763,14 +3181,8 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
 
     // Context-usage fill bar with escalating color (green → accent → red),
     // shortened then reduced to a bare percentage as the terminal narrows.
-    let ctx_pct = ctx.context_percent;
-    let ctx_color = if ctx_pct >= 85 {
-        ui_danger()
-    } else if ctx_pct >= 60 {
-        ui_accent()
-    } else {
-        ui_success()
-    };
+    let ctx_pct = ctx.context.percent;
+    let ctx_color = context_color(ctx_pct);
     let ctx_indicator = move |tier: usize| -> String {
         if tier >= 2 {
             return format!("{ctx_pct}%");
@@ -2942,8 +3354,21 @@ fn render_status_bar(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
             ));
         }
     }
+    if sl.show_context && ctx.context.limit_tokens > 0 {
+        optional.push(Span::styled(
+            format!(
+                "context:{}/{}",
+                crate::output::format_tokens(ctx.context.used_tokens as u32),
+                crate::output::format_tokens(ctx.context.limit_tokens as u32)
+            ),
+            Style::default().fg(ui_muted()),
+        ));
+    }
     for hint in hints(tier) {
         optional.push(Span::styled(hint, Style::default().fg(ui_muted())));
+    }
+    if let Some(label) = browser_footer_label(ctx.chrome.browser) {
+        optional.push(Span::styled(label, Style::default().fg(ui_muted())));
     }
     for opt in optional {
         let w = display_width(&opt.content) + 2;
@@ -3191,6 +3616,13 @@ fn handle_key_event(app: &mut TuiApp, key: KeyEvent) -> InputAction {
         .matches(crate::keybindings::KeybindingAction::CycleMode, key)
     {
         return InputAction::CycleMode;
+    }
+    if app
+        .keybindings
+        .matches(crate::keybindings::KeybindingAction::CycleModel, key)
+    {
+        cycle_model(app);
+        return InputAction::None;
     }
     if app
         .keybindings
@@ -4236,6 +4668,88 @@ fn handle_model_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     }
 }
 
+/// The model after `current` in `candidates`, wrapping, that `usable` accepts.
+/// `None` when no other model qualifies.
+fn next_cycle_model(
+    candidates: &[(String, crate::design_system::ProviderId)],
+    current: &str,
+    mut usable: impl FnMut(&str, crate::design_system::ProviderId) -> bool,
+) -> Option<(String, crate::design_system::ProviderId)> {
+    let start = candidates
+        .iter()
+        .position(|(id, _)| id == current)
+        .map_or(0, |position| position + 1);
+    (0..candidates.len())
+        .map(|offset| &candidates[(start + offset) % candidates.len()])
+        .find(|(id, provider)| id != current && usable(id, *provider))
+        .cloned()
+}
+
+/// Step to the next model of the picker's list that this session can run, in
+/// the same access mode (Local, Your key, Managed) as the current one. A model
+/// in another mode is a different trust boundary and stays a deliberate
+/// choice made in `/model`.
+fn cycle_model(app: &mut TuiApp) {
+    use super::widgets::model_picker::{ModelPickerState, PickerRow};
+
+    let boundary = provider_access_mode(&app.session.provider);
+    let mut picker = ModelPickerState::default();
+    picker.rebuild_rows(&available_picker_models());
+    let candidates: Vec<(String, crate::design_system::ProviderId)> = picker
+        .rows
+        .iter()
+        .filter_map(|row| match row {
+            PickerRow::ModelRow { provider_id, model }
+                if provider_id.access_mode() == boundary && !picker.is_locked(row) =>
+            {
+                Some((model.id.clone(), *provider_id))
+            }
+            _ => None,
+        })
+        .collect();
+
+    let account = crate::models::AccountRoute::load();
+    let config = &app.config;
+    let next = next_cycle_model(&candidates, &app.session.model, |model, _| {
+        match crate::models::decide_turn_route(config, &account, model, None) {
+            crate::models::TurnRoute::Runnable(provider) => {
+                provider_access_mode(&provider) == boundary
+            }
+            crate::models::TurnRoute::Blocked { .. } => false,
+        }
+    });
+    let Some((model_id, provider_id)) = next else {
+        app.status_notice = Some((
+            "no other model to cycle to · /model lists them all".to_string(),
+            Instant::now(),
+        ));
+        return;
+    };
+    let switched = if provider_id == crate::design_system::ProviderId::AGICloud {
+        app.session.switch_managed_model(&model_id)
+    } else {
+        app.session.switch_model(&model_id)
+    };
+    app.status_notice = Some((
+        match switched {
+            Ok(()) => format!("model: {}", crate::model_catalog::display_name(&model_id)),
+            Err(error) => format!(
+                "model switch failed: {}",
+                crate::errors::terminal_text(&error)
+            ),
+        },
+        Instant::now(),
+    ));
+    app.sync_stats();
+}
+
+fn fast_mode_on_status(model: &str) -> String {
+    match crate::onboarding::fast_mode_cost_note(model) {
+        Some(note) => format!("ON, using {model} for speed · {note}"),
+        None => format!("ON, using {model} for speed"),
+    }
+}
+
 fn handle_effort_picker_key(app: &mut TuiApp, key: KeyEvent) -> InputAction {
     use super::widgets::effort_picker::{handle_key, PickerAction};
 
@@ -4812,7 +5326,7 @@ fn handle_slash(input: &str, app: &mut TuiApp) -> SlashResult {
                 Ok(()) => {
                     app.sync_stats();
                     let status = if app.session.fast_mode {
-                        format!("ON, using {} for speed", app.session.model)
+                        fast_mode_on_status(&app.session.model)
                     } else {
                         format!("OFF, back to {}", app.session.model)
                     };
@@ -6013,6 +6527,8 @@ pub async fn run(
         }
     }
     app.mcp_elicitation_handler = mcp_elicitation_handler;
+    let browser_watch = spawn_browser_watch(Arc::clone(&app.browser));
+    app.start_panel.read_recent_sessions();
     app.wire_fallback_banner();
     // Populate the picker's Local section without blocking launch: probe Ollama
     // / LM Studio in the background (2.5s timeout) and cache the catalog-shaped
@@ -6040,6 +6556,7 @@ pub async fn run(
     app.emit_terminal_title();
 
     let result = run_event_loop(&mut terminal, &mut app, &mut mcp_attach_join).await;
+    browser_watch.abort();
 
     // Abort the background MCP attach if it never finished (e.g. OAuth still
     // pending) so it can't keep a browser-wait or connection alive after exit.
@@ -6782,6 +7299,7 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
             } else {
                 None
             };
+            let edits = crate::diff_model::proposed_edits(&name, &input);
             cells.push(ToolCell {
                 call_id,
                 name,
@@ -6793,6 +7311,7 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                 accent,
                 exit_code: None,
                 stderr: None,
+                edits,
             });
         }
         TuiAppEvent::ToolCompleted {
@@ -6813,6 +7332,11 @@ fn apply_tool_event(cells: &mut Vec<ToolCell>, ev: crate::tui::app_event::TuiApp
                 } else {
                     (None, output.as_str(), None)
                 };
+                if cell.state != TranscriptCellState::Complete
+                    || crate::diff_model::replaced_by_user_edit(output)
+                {
+                    cell.edits.clear();
+                }
                 cell.exit_code = exit_code;
                 cell.stderr = stderr
                     .map(|stderr| sanitize_terminal_text(stderr.trim_end()).into_owned())
@@ -7019,7 +7543,8 @@ async fn send_message_with_prompt(
     let turn_count = app.session.turn_count;
     let turn_input_tokens = app.session.total_input_tokens;
     let turn_output_tokens = app.session.total_output_tokens;
-    let turn_context_percent = app.context_percent();
+    let turn_context = app.context_snapshot();
+    let turn_context_percent = turn_context.percent;
     let turn_started = Instant::now();
     let turn_cost_str = crate::output::format_session_credits(app.session.cost_ledger.total_usd);
     let turn_notice = app.live_notice().map(str::to_string);
@@ -7058,11 +7583,12 @@ async fn send_message_with_prompt(
                             provider_name: &app.provider_name,
                             git_branch: app.git_branch.as_deref(),
                             context_window: model_context_window(&app.model_name),
-                            working_path: current_working_path(),
+                            working_path: crate::onboarding::current_working_path(),
                             total_input_tokens: turn_input_tokens,
                             total_output_tokens: turn_output_tokens,
                             turn_count,
-                            context_percent: turn_context_percent,
+                            context: turn_context,
+                            chrome: FrameChrome::new(&app.browser, &app.start_panel, false),
                             chat_messages: &app.chat_messages,
                             tool_cells: &tool_cells,
                             is_loading: app.is_loading,
@@ -7264,11 +7790,12 @@ async fn send_message_with_prompt(
                         provider_name: &app.provider_name,
                         git_branch: app.git_branch.as_deref(),
                         context_window: model_context_window(&app.model_name),
-                        working_path: current_working_path(),
+                        working_path: crate::onboarding::current_working_path(),
                         total_input_tokens: turn_input_tokens,
                         total_output_tokens: turn_output_tokens,
                         turn_count,
-                        context_percent: turn_context_percent,
+                        context: turn_context,
+                        chrome: FrameChrome::new(&app.browser, &app.start_panel, false),
                         chat_messages: &app.chat_messages,
                         tool_cells: &tool_cells,
                         is_loading: app.is_loading,
@@ -7488,6 +8015,15 @@ mod tests {
     use crate::command_registry::builtin_slash_registry_commands;
     use crate::tui::widgets::interactive::{InteractiveView, KeyAction, ViewAction};
 
+    fn quiet_chrome() -> FrameChrome<'static> {
+        FrameChrome {
+            browser: crate::browser_bridge::BrowserAvailability::ShellNotRunning,
+            plan: None,
+            recent: None,
+            whats_new: None,
+        }
+    }
+
     // Minimal stub view that tracks how many times handle_key was called.
     struct StubView {
         call_count: usize,
@@ -7593,6 +8129,7 @@ mod tests {
             accent: None,
             exit_code: None,
             stderr: None,
+            edits: Vec::new(),
         };
         let t = line0(&edit);
         assert!(
@@ -7612,6 +8149,7 @@ mod tests {
             accent: None,
             exit_code: None,
             stderr: None,
+            edits: Vec::new(),
         };
         assert!(
             line0(&cmd).contains("$ ls -la"),
@@ -7631,6 +8169,7 @@ mod tests {
             accent: None,
             exit_code: None,
             stderr: None,
+            edits: Vec::new(),
         };
         let f = line0(&fail);
         assert!(f.contains('✗') && f.contains('▤'), "got: {f}");
@@ -9666,7 +10205,12 @@ mod tests {
             total_input_tokens: 10,
             total_output_tokens: 5,
             turn_count: 1,
-            context_percent: 1,
+            context: ContextSnapshot {
+                percent: 1,
+                used_tokens: 0,
+                limit_tokens: 0,
+            },
+            chrome: quiet_chrome(),
             chat_messages: &chat_messages,
             tool_cells: &tool_cells,
             is_loading: true,
@@ -9749,7 +10293,12 @@ mod tests {
             total_input_tokens: 1_234,
             total_output_tokens: 567,
             turn_count: 3,
-            context_percent: 42,
+            context: ContextSnapshot {
+                percent: 42,
+                used_tokens: 0,
+                limit_tokens: 0,
+            },
+            chrome: quiet_chrome(),
             chat_messages,
             tool_cells,
             is_loading: false,
@@ -9775,9 +10324,9 @@ mod tests {
         let messages: Vec<ChatMessage> = Vec::new();
         let cells: Vec<ToolCell> = Vec::new();
         let ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
-        let mut terminal = Terminal::new(TestBackend::new(width, 3)).expect("terminal");
+        let mut terminal = Terminal::new(TestBackend::new(width, HEADER_ROWS)).expect("terminal");
         terminal
-            .draw(|frame| render_header(frame, Rect::new(0, 0, width, 3), &ctx))
+            .draw(|frame| render_header(frame, Rect::new(0, 0, width, HEADER_ROWS), &ctx))
             .expect("draw");
         buffer_rows(&terminal, width)
     }
@@ -9831,6 +10380,7 @@ mod tests {
             show_cost: true,
             show_branch: false,
             show_mode: true,
+            show_context: false,
         }
     }
 
@@ -9839,24 +10389,25 @@ mod tests {
         for width in [120u16, 80, 40] {
             let rendered = draw_header(width);
             let rows: Vec<&str> = rendered.lines().collect();
-            assert_eq!(rows.len(), 3, "header is three rows at {width}");
+            assert_eq!(rows.len(), 4, "header is four rows at {width}");
             assert!(
                 rows[0].starts_with('┌') && rows[0].ends_with('┐'),
                 "top border must open and close at {width}: {}",
                 rows[0]
             );
+            for content in &rows[1..3] {
+                assert!(
+                    content.starts_with('│') && content.ends_with('│'),
+                    "content rows must keep both borders at {width}: {content}"
+                );
+            }
             assert!(
-                rows[1].starts_with('│'),
-                "content row must keep its left border at {width}: {}",
-                rows[1]
-            );
-            assert!(
-                rows[2].starts_with('├') && rows[2].ends_with('┤'),
+                rows[3].starts_with('├') && rows[3].ends_with('┤'),
                 "the header/transcript divider must be a tee, not a closed box, at {width}: {}",
-                rows[2]
+                rows[3]
             );
             assert!(
-                !rows[2].contains('└') && !rows[2].contains('┘'),
+                !rows[3].contains('└') && !rows[3].contains('┘'),
                 "a `└┘` here closes a box the transcript then continues inside, at {width}"
             );
         }
@@ -9891,27 +10442,6 @@ mod tests {
         assert_eq!(context_window_label(1_048_576), "1M context");
         assert_eq!(context_window_label(2_500_000), "2.5M context");
         assert_eq!(context_window_label(512), "512 context");
-    }
-
-    #[test]
-    fn header_working_path_abbreviates_the_home_directory() {
-        let home = std::path::Path::new("/home/dev");
-        assert_eq!(
-            header_working_path(std::path::Path::new("/home/dev"), Some(home)),
-            "~"
-        );
-        assert_eq!(
-            header_working_path(std::path::Path::new("/home/dev/code/app"), Some(home)),
-            format!("~{}code/app", std::path::MAIN_SEPARATOR)
-        );
-        assert_eq!(
-            header_working_path(std::path::Path::new("/srv/app"), Some(home)),
-            "/srv/app"
-        );
-        assert_eq!(
-            header_working_path(std::path::Path::new("/srv/app"), None),
-            "/srv/app"
-        );
     }
 
     #[test]
@@ -10160,6 +10690,7 @@ mod tests {
             accent: None,
             exit_code: None,
             stderr: None,
+            edits: Vec::new(),
         }];
         let stream_buffer = format!("streaming {ESCAPE_PAYLOAD}tokens");
         let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
@@ -10174,7 +10705,12 @@ mod tests {
             total_input_tokens: 10,
             total_output_tokens: 5,
             turn_count: 1,
-            context_percent: 1,
+            context: ContextSnapshot {
+                percent: 1,
+                used_tokens: 0,
+                limit_tokens: 0,
+            },
+            chrome: quiet_chrome(),
             chat_messages: &chat_messages,
             tool_cells: &tool_cells,
             is_loading: true,
@@ -10230,7 +10766,12 @@ mod tests {
             total_input_tokens: 0,
             total_output_tokens: 0,
             turn_count: 0,
-            context_percent: 0,
+            context: ContextSnapshot {
+                percent: 0,
+                used_tokens: 0,
+                limit_tokens: 0,
+            },
+            chrome: quiet_chrome(),
             chat_messages: &chat_messages,
             tool_cells: &tool_cells,
             is_loading: false,
@@ -10446,6 +10987,7 @@ mod tests {
             show_cost: true,
             show_branch: true,
             show_mode: true,
+            show_context: false,
         };
         let ctx = FrameCtx {
             workspace_pane: None,
@@ -10458,7 +11000,12 @@ mod tests {
             total_input_tokens: 0,
             total_output_tokens: 0,
             turn_count: 0,
-            context_percent: 0,
+            context: ContextSnapshot {
+                percent: 0,
+                used_tokens: 0,
+                limit_tokens: 0,
+            },
+            chrome: quiet_chrome(),
             chat_messages: &chat_messages,
             tool_cells: &tool_cells,
             is_loading: true,
@@ -10546,5 +11093,546 @@ mod tests {
             rendered.contains("Falling back"),
             "the fallback banner must still be shown: {rendered:?}"
         );
+    }
+    fn tool_cell_in(state: crate::tui::transcript_cell::TranscriptCellState) -> ToolCell {
+        ToolCell {
+            call_id: "call".into(),
+            name: "read_file".into(),
+            summary: String::new(),
+            state,
+            output_preview: None,
+            timing: ToolTiming::default(),
+            full_output: None,
+            accent: None,
+            exit_code: None,
+            stderr: None,
+            edits: Vec::new(),
+        }
+    }
+
+    fn draw_header_for(ctx: &FrameCtx, width: u16) -> String {
+        let mut terminal = Terminal::new(ratatui::backend::TestBackend::new(width, HEADER_ROWS))
+            .expect("terminal");
+        terminal
+            .draw(|frame| render_header(frame, Rect::new(0, 0, width, HEADER_ROWS), ctx))
+            .expect("draw");
+        buffer_rows(&terminal, width)
+    }
+
+    fn draw_footer_for(ctx: &FrameCtx, width: u16) -> String {
+        let mut terminal =
+            Terminal::new(ratatui::backend::TestBackend::new(width, 1)).expect("terminal");
+        terminal
+            .draw(|frame| render_status_bar(frame, Rect::new(0, 0, width, 1), ctx))
+            .expect("draw");
+        buffer_rows(&terminal, width)
+    }
+
+    #[test]
+    fn the_header_counts_what_the_turn_is_doing() {
+        use crate::tui::transcript_cell::TranscriptCellState::{Complete, Failed, Running};
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells = vec![
+            tool_cell_in(Complete),
+            tool_cell_in(Complete),
+            tool_cell_in(Running),
+            tool_cell_in(Failed),
+        ];
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        assert_eq!(
+            activity_counts(&ctx),
+            ActivityCounts {
+                awaiting: 0,
+                working: 1,
+                completed: 2,
+                failed: 1
+            }
+        );
+
+        ctx.awaiting_approval = true;
+        assert_eq!(
+            activity_counts(&ctx),
+            ActivityCounts {
+                awaiting: 1,
+                working: 0,
+                completed: 2,
+                failed: 1
+            }
+        );
+        let header = draw_header_for(&ctx, 120);
+        assert!(
+            header.contains("1 awaiting input · 0 working · 2 completed · 1 failed"),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_turn_still_thinking_before_any_tool_call_counts_as_working() {
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.is_loading = true;
+        assert_eq!(activity_counts(&ctx).working, 1);
+        ctx.is_loading = false;
+        assert_eq!(activity_counts(&ctx).working, 0);
+    }
+
+    #[test]
+    fn the_header_shows_the_counts_left_and_the_context_meter_right() {
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        let header = draw_header_for(&ctx, 120);
+        let row = header.lines().nth(2).expect("the status row");
+        assert!(
+            row.contains("0 awaiting input · 0 working · 0 completed"),
+            "{header}"
+        );
+        assert!(
+            row.trim_end_matches('│').trim_end().ends_with("42%"),
+            "{header}"
+        );
+        assert!(row.contains("context ████"), "{header}");
+        assert!(
+            row.find("awaiting").unwrap() < row.find("context").unwrap(),
+            "{header}"
+        );
+    }
+
+    #[test]
+    fn a_narrow_header_shortens_the_counts_before_it_drops_the_meter() {
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        let sixty = draw_header_for(&ctx, 60);
+        assert!(sixty.contains("0 awaiting · 0 working · 0 done"), "{sixty}");
+        assert!(sixty.contains("42%"), "{sixty}");
+        for width in [60u16, 40, 20] {
+            for row in draw_header_for(&ctx, width).lines() {
+                assert!(display_width(row) <= width as usize, "{width}: {row}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_context_meter_fills_with_the_percentage() {
+        assert_eq!(context_meter_label(0), "context ░░░░░░░░░░ 0% ".to_string());
+        assert_eq!(
+            context_meter_label(50),
+            "context █████░░░░░ 50% ".to_string()
+        );
+        assert_eq!(
+            context_meter_label(100),
+            "context ██████████ 100% ".to_string()
+        );
+    }
+
+    #[test]
+    fn the_footer_reports_the_browser_pairing_from_the_last_check() {
+        use crate::browser_bridge::BrowserAvailability::{
+            NotPaired, Paired, PairedNotAnswering, ShellNotRunning,
+        };
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        for (state, expected) in [
+            (Paired, Some("browser paired · /chrome")),
+            (PairedNotAnswering, Some("browser not answering · /chrome")),
+            (NotPaired, Some("browser not paired · /chrome")),
+            (ShellNotRunning, None),
+        ] {
+            ctx.chrome.browser = state;
+            let footer = draw_footer_for(&ctx, 220);
+            match expected {
+                Some(text) => assert!(footer.contains(text), "{state:?}: {footer}"),
+                None => assert!(!footer.contains("browser"), "{state:?}: {footer}"),
+            }
+        }
+    }
+
+    #[test]
+    fn a_narrow_footer_drops_the_browser_label_before_any_indicator() {
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.chrome.browser = crate::browser_bridge::BrowserAvailability::Paired;
+        let footer = draw_footer_for(&ctx, 60);
+        assert!(!footer.contains("browser"), "{footer}");
+        assert!(footer.contains("T3") && footer.contains("42%"), "{footer}");
+    }
+
+    #[test]
+    fn the_context_item_shows_used_and_available_tokens_when_it_is_on() {
+        let mut statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.context = ContextSnapshot {
+            percent: 42,
+            used_tokens: 84_000,
+            limit_tokens: 200_000,
+        };
+        assert!(!draw_footer_for(&ctx, 220).contains("context:"));
+
+        statusline.show_context = true;
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.context = ContextSnapshot {
+            percent: 42,
+            used_tokens: 84_000,
+            limit_tokens: 200_000,
+        };
+        assert!(draw_footer_for(&ctx, 220).contains("context:84.0K/200.0K"));
+    }
+
+    fn picker_candidates(ids: &[&str]) -> Vec<(String, crate::design_system::ProviderId)> {
+        ids.iter()
+            .map(|id| (id.to_string(), crate::design_system::ProviderId::AGICloud))
+            .collect()
+    }
+
+    #[test]
+    fn cycling_steps_to_the_next_model_and_wraps() {
+        let models = picker_candidates(&["a", "b", "c"]);
+        let any = |_: &str, _| true;
+        assert_eq!(next_cycle_model(&models, "a", any).unwrap().0, "b");
+        assert_eq!(next_cycle_model(&models, "c", any).unwrap().0, "a");
+        assert_eq!(next_cycle_model(&models, "not-listed", any).unwrap().0, "a");
+    }
+
+    #[test]
+    fn cycling_skips_models_this_session_cannot_run() {
+        let models = picker_candidates(&["a", "b", "c"]);
+        let only_c = |id: &str, _| id == "c";
+        assert_eq!(next_cycle_model(&models, "a", only_c).unwrap().0, "c");
+        assert_eq!(next_cycle_model(&models, "c", only_c), None);
+        assert_eq!(next_cycle_model(&[], "a", |_: &str, _| true), None);
+    }
+
+    #[test]
+    fn the_cycle_key_switches_or_says_why_it_did_not() {
+        use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+        let mut app = minimal_app();
+        let action = handle_key_event(
+            &mut app,
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT),
+        );
+        assert!(matches!(action, InputAction::None));
+        let (notice, _) = app.status_notice.as_ref().expect("a notice");
+        assert!(
+            notice.starts_with("model: ")
+                || notice.starts_with("no other model")
+                || notice.starts_with("model switch failed"),
+            "{notice}"
+        );
+        assert!(app.input.is_empty());
+    }
+
+    fn edit_cell(
+        tool: &str,
+        input: serde_json::Value,
+        state: crate::tui::transcript_cell::TranscriptCellState,
+    ) -> ToolCell {
+        ToolCell {
+            name: tool.into(),
+            summary: "src/x.rs".into(),
+            edits: crate::diff_model::proposed_edits(tool, &input),
+            ..tool_cell_in(state)
+        }
+    }
+
+    fn cell_text(cell: &ToolCell) -> Vec<String> {
+        tool_cell_lines(cell, "⠋")
+            .iter()
+            .map(|line| {
+                line.spans
+                    .iter()
+                    .map(|span| span.content.as_ref())
+                    .collect()
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_finished_edit_shows_counts_header_summary_and_the_changed_lines() {
+        use crate::tui::transcript_cell::TranscriptCellState::Complete;
+        let cell = edit_cell(
+            "edit_file",
+            serde_json::json!({"path": "src/x.rs", "old_string": "a\nold", "new_string": "a\nnew\nmore"}),
+            Complete,
+        );
+        let rows = cell_text(&cell);
+        assert!(rows[0].ends_with("  +2 -1"), "{rows:?}");
+        assert_eq!(rows[1].trim(), "● Update(src/x.rs)");
+        assert_eq!(
+            rows[2].trim(),
+            "└ Updated src/x.rs with 2 additions and 1 removal"
+        );
+        assert_eq!(rows[3].trim(), "- old");
+        assert_eq!(rows[4].trim(), "+ new");
+        assert_eq!(rows[5].trim(), "+ more");
+    }
+
+    #[test]
+    fn an_edit_that_has_not_finished_shows_no_counts_yet() {
+        use crate::tui::transcript_cell::TranscriptCellState::Running;
+        let cell = edit_cell(
+            "edit_file",
+            serde_json::json!({"path": "src/x.rs", "old_string": "a", "new_string": "b"}),
+            Running,
+        );
+        let rows = cell_text(&cell);
+        assert_eq!(rows.len(), 1, "{rows:?}");
+        assert!(!rows[0].contains("+1"), "{rows:?}");
+    }
+
+    #[test]
+    fn a_long_edit_shows_a_window_of_lines_and_says_how_many_more() {
+        use crate::tui::transcript_cell::TranscriptCellState::Complete;
+        let new = (0..30)
+            .map(|n| format!("line {n}"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let cell = edit_cell(
+            "edit_file",
+            serde_json::json!({"path": "src/x.rs", "old_string": "x", "new_string": new}),
+            Complete,
+        );
+        let rows = cell_text(&cell);
+        let changed = rows
+            .iter()
+            .filter(|row| row.trim_start().starts_with(['+', '-']))
+            .count();
+        assert_eq!(changed, EDIT_PREVIEW_LINES);
+        assert!(
+            rows.last().unwrap().contains("… 19 more changed lines"),
+            "{rows:?}"
+        );
+    }
+
+    #[test]
+    fn edit_rows_carry_a_band_only_where_the_terminal_can_mix_one() {
+        use crate::tui::transcript_cell::TranscriptCellState::Complete;
+        let cell = edit_cell(
+            "edit_file",
+            serde_json::json!({"path": "src/x.rs", "old_string": "old", "new_string": "new"}),
+            Complete,
+        );
+        let lines = tool_cell_lines(&cell, "⠋");
+        let bands = crate::tui::widgets::diff_review::diff_bands();
+        assert_eq!(lines[3].style.bg, bands.removed);
+        assert_eq!(lines[4].style.bg, bands.added);
+    }
+
+    #[test]
+    fn the_tool_events_keep_the_edit_block_only_for_a_clean_success() {
+        use crate::tui::app_event::{ToolStatus, TuiAppEvent};
+        let start = |cells: &mut Vec<ToolCell>| {
+            apply_tool_event(
+                cells,
+                TuiAppEvent::ToolStarted {
+                    call_id: "c1".into(),
+                    name: "edit_file".into(),
+                    summary: "src/x.rs".into(),
+                    input: serde_json::json!({
+                        "path": "src/x.rs", "old_string": "a", "new_string": "b"
+                    }),
+                },
+            );
+        };
+        let complete = |cells: &mut Vec<ToolCell>, status, output: &str| {
+            apply_tool_event(
+                cells,
+                TuiAppEvent::ToolCompleted {
+                    call_id: "c1".into(),
+                    name: "edit_file".into(),
+                    status,
+                    output: output.into(),
+                    duration_ms: 5,
+                },
+            );
+        };
+
+        let mut cells = Vec::new();
+        start(&mut cells);
+        assert_eq!(cells[0].edits.len(), 1);
+        complete(
+            &mut cells,
+            ToolStatus::Succeeded,
+            "Successfully edited src/x.rs",
+        );
+        assert_eq!(cells[0].edits[0].additions(), 1);
+
+        let mut failed = Vec::new();
+        start(&mut failed);
+        complete(&mut failed, ToolStatus::Failed, "old_string not found");
+        assert!(failed[0].edits.is_empty());
+
+        let mut rewritten = Vec::new();
+        start(&mut rewritten);
+        let note = crate::tools::edited_by_user_note("src/x.rs", "c");
+        complete(&mut rewritten, ToolStatus::Succeeded, &note);
+        assert!(rewritten[0].edits.is_empty());
+    }
+
+    #[test]
+    fn the_start_screen_shows_the_version_folder_plan_recent_activity_and_whats_new() {
+        let mut app = minimal_app();
+        app.start_panel = StartPanel {
+            plan: Some("Max 20x".to_string()),
+            recent: Arc::new(std::sync::Mutex::new(Some(vec![
+                "2h ago  fix the flaky test".to_string(),
+                "3d ago  review the migration".to_string(),
+            ]))),
+        };
+        let rendered = draw_app(&app, 120, 40);
+        assert!(rendered.contains("Max 20x"), "{rendered}");
+        assert!(
+            rendered.contains(&format!("Welcome to AGI v{}", env!("CARGO_PKG_VERSION"))),
+            "{rendered}"
+        );
+        assert!(rendered.contains("Folder "), "{rendered}");
+        assert!(rendered.contains("Recent activity"), "{rendered}");
+        assert!(
+            rendered.contains("2h ago  fix the flaky test"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("/resume for more"), "{rendered}");
+        assert!(rendered.contains("/help for more"), "{rendered}");
+    }
+
+    #[test]
+    fn the_start_screen_says_so_when_there_is_no_recent_activity() {
+        let mut app = minimal_app();
+        app.start_panel = StartPanel::default();
+        let reading = draw_app(&app, 120, 40);
+        assert!(!reading.contains("Recent activity"), "{reading}");
+
+        app.start_panel.recent = Arc::new(std::sync::Mutex::new(Some(Vec::new())));
+        let rendered = draw_app(&app, 120, 40);
+        assert!(rendered.contains("No recent activity"), "{rendered}");
+        assert!(!rendered.contains("/resume for more"), "{rendered}");
+    }
+
+    #[test]
+    fn only_a_managed_session_has_a_plan_to_name() {
+        assert_eq!(
+            StartPanel::new(crate::design_system::AccessMode::Byok).plan,
+            None
+        );
+        assert_eq!(
+            StartPanel::new(crate::design_system::AccessMode::Local).plan,
+            None
+        );
+    }
+
+    #[test]
+    fn recent_activity_lists_this_folders_newest_sessions_with_their_age() {
+        let session = |id: &str, cwd: &str, title: &str, ago_ms: i64, messages: i64| {
+            crate::sessions::SessionSummary {
+                id: id.into(),
+                title: title.into(),
+                model: String::new(),
+                cwd: cwd.into(),
+                git_branch: String::new(),
+                created_at: 0,
+                updated_at: 10_000_000 - ago_ms,
+                total_tokens: 0,
+                message_count: messages,
+                archived: false,
+            }
+        };
+        let sessions = vec![
+            session("a", "/work/app", "newest here", 30_000, 4),
+            session("b", "/work/other", "another folder", 40_000, 4),
+            session("c", "/work/app", "empty session", 50_000, 0),
+            session("d", "/work/app", "two hours back", 7_200_000, 2),
+            session("e", "/work/app", "", 90_000_000, 2),
+        ];
+        assert_eq!(
+            recent_session_rows(&sessions, "/work/app", 10_000_000),
+            vec![
+                "just now  newest here".to_string(),
+                "2h ago  two hours back".to_string(),
+                "1d ago  (untitled)".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn time_ago_picks_the_largest_whole_unit() {
+        assert_eq!(time_ago_label(5), "just now");
+        assert_eq!(time_ago_label(60), "1m ago");
+        assert_eq!(time_ago_label(3_599), "59m ago");
+        assert_eq!(time_ago_label(3_600), "1h ago");
+        assert_eq!(time_ago_label(172_800), "2d ago");
+    }
+
+    #[test]
+    fn fast_mode_on_status_carries_the_credit_rate() {
+        let priced = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| model.input_price_per_1m > 0.0)
+            .expect("the catalog prices at least one model");
+        let status = fast_mode_on_status(&priced.id);
+        assert!(
+            status.starts_with(&format!("ON, using {} for speed · ", priced.id)),
+            "{status}"
+        );
+        assert!(status.contains("credits per 1M tokens"), "{status}");
+        assert_eq!(
+            fast_mode_on_status("no-such-model-in-the-catalog"),
+            "ON, using no-such-model-in-the-catalog for speed"
+        );
+    }
+
+    fn release_noting(version: &str, summary: Option<&str>) -> crate::update_check::CliRelease {
+        crate::update_check::CliRelease {
+            version: version.to_string(),
+            published_at: "2026-09-12T10:00:00Z".to_string(),
+            downloads: Vec::new(),
+            release_notes: Some(crate::update_check::CliReleaseNotes {
+                summary: summary.map(str::to_string),
+                url: "https://example.invalid/notes".to_string(),
+            }),
+        }
+    }
+
+    #[test]
+    fn whats_new_is_the_summary_of_the_running_build_on_one_line() {
+        let release = release_noting("1.4.0", Some("Faster\nstartup \u{1b}[2Jand\n  edits"));
+        assert_eq!(
+            whats_new_for(&release, "1.4.0"),
+            Some("Faster startup and edits".to_string())
+        );
+        assert_eq!(whats_new_for(&release, "1.3.0"), None);
+        assert_eq!(whats_new_for(&release_noting("1.4.0", None), "1.4.0"), None);
+        assert_eq!(
+            whats_new_for(&release_noting("1.4.0", Some("  \n ")), "1.4.0"),
+            None
+        );
+    }
+
+    #[test]
+    fn the_start_screen_shows_whats_new_when_the_chrome_carries_it() {
+        let statusline = shipped_statusline();
+        let messages: Vec<ChatMessage> = Vec::new();
+        let cells: Vec<ToolCell> = Vec::new();
+        let mut ctx = layout_fixture_ctx(&statusline, &messages, &cells, "High", None);
+        ctx.chrome.whats_new = Some("Faster startup".to_string());
+        let mut terminal =
+            Terminal::new(ratatui::backend::TestBackend::new(120, 30)).expect("terminal");
+        terminal
+            .draw(|frame| render_chat(frame, Rect::new(0, 0, 120, 30), &ctx))
+            .expect("draw");
+        let rendered = buffer_rows(&terminal, 120);
+        assert!(rendered.contains("What's new"), "{rendered}");
+        assert!(rendered.contains("Faster startup"), "{rendered}");
     }
 }

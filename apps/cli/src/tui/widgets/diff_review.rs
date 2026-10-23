@@ -54,6 +54,64 @@ impl Mark {
     }
 }
 
+/// Row backgrounds for added and removed lines, tinted from the theme's own
+/// success and danger colours toward the terminal ground. Only a true-colour
+/// terminal can mix a tint; anywhere else the bands are absent and the
+/// foreground colour and the `+`/`-` gutter carry the change.
+#[derive(Debug, Clone, Copy, Default)]
+pub(crate) struct DiffBands {
+    pub added: Option<ratatui::style::Color>,
+    pub removed: Option<ratatui::style::Color>,
+}
+
+const BAND_ACCENT_PERCENT: u16 = 25;
+
+fn band_rgb(accent: (u8, u8, u8), ground: (u8, u8, u8)) -> (u8, u8, u8) {
+    let mix = |accent: u8, ground: u8| {
+        ((u16::from(accent) * BAND_ACCENT_PERCENT
+            + u16::from(ground) * (100 - BAND_ACCENT_PERCENT))
+            / 100) as u8
+    };
+    (
+        mix(accent.0, ground.0),
+        mix(accent.1, ground.1),
+        mix(accent.2, ground.2),
+    )
+}
+
+pub(crate) fn diff_bands() -> DiffBands {
+    use crate::tui::terminal_palette::{best_color, default_bg, ui_danger, ui_success};
+    use ratatui::style::Color;
+
+    let ground = default_bg().unwrap_or((0, 0, 0));
+    let band = |accent: Color| match accent {
+        Color::Rgb(r, g, b) => Some(best_color(band_rgb((r, g, b), ground))),
+        _ => None,
+    };
+    DiffBands {
+        added: band(ui_success()),
+        removed: band(ui_danger()),
+    }
+}
+
+impl DiffBands {
+    /// The style of one diff row: the change colour on its band.
+    pub(crate) fn style_for(&self, added: bool) -> ratatui::style::Style {
+        use crate::tui::terminal_palette::{ui_danger, ui_success};
+        use ratatui::style::Style;
+
+        let (fg, band) = if added {
+            (ui_success(), self.added)
+        } else {
+            (ui_danger(), self.removed)
+        };
+        match band {
+            Some(bg) => Style::default().fg(fg).bg(bg),
+            None => Style::default().fg(fg),
+        }
+    }
+}
+
 enum Row {
     Border(String),
     File { index: usize, text: String },
@@ -600,6 +658,7 @@ impl InteractiveView for DiffReviewView {
 
         let border = Style::default().fg(ui_muted());
         let edge = || Span::styled("│".to_string(), border);
+        let bands = diff_bands();
         let lines = self
             .rows()
             .into_iter()
@@ -643,8 +702,8 @@ impl InteractiveView for DiffReviewView {
                 }
                 Row::Diff(mark, text) => {
                     let style = match mark {
-                        Mark::Added => Style::default().fg(ui_success()),
-                        Mark::Removed => Style::default().fg(ui_danger()),
+                        Mark::Added => bands.style_for(true),
+                        Mark::Removed => bands.style_for(false),
                         Mark::Hunk | Mark::Path => Style::default().fg(ui_accent()),
                         Mark::Context => Style::default(),
                     };
@@ -1157,5 +1216,32 @@ mod tests {
             view.handle_key(KeyAction::Down);
         }
         assert_eq!(view.cursor, 2); // last index
+    }
+    #[test]
+    fn a_band_is_the_change_colour_a_quarter_of_the_way_from_the_ground() {
+        assert_eq!(band_rgb((200, 0, 0), (0, 0, 0)), (50, 0, 0));
+        assert_eq!(band_rgb((0, 200, 0), (255, 255, 255)), (191, 241, 191));
+    }
+
+    #[test]
+    fn a_banded_row_keeps_the_change_colour_and_gains_the_band() {
+        use crate::tui::terminal_palette::{indexed_color, ui_danger, ui_success};
+        let bands = DiffBands {
+            added: Some(indexed_color(22)),
+            removed: Some(indexed_color(52)),
+        };
+        let added = bands.style_for(true);
+        assert_eq!(added.fg, Some(ui_success()));
+        assert_eq!(added.bg, Some(indexed_color(22)));
+        let removed = bands.style_for(false);
+        assert_eq!(removed.fg, Some(ui_danger()));
+        assert_eq!(removed.bg, Some(indexed_color(52)));
+    }
+
+    #[test]
+    fn without_a_band_a_row_has_only_the_change_colour() {
+        let style = DiffBands::default().style_for(true);
+        assert!(style.fg.is_some());
+        assert_eq!(style.bg, None);
     }
 }

@@ -13,6 +13,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 pub enum KeybindingAction {
     Quit,
     CycleMode,
+    CycleModel,
     Redraw,
     ClearChat,
     ClearInput,
@@ -20,9 +21,10 @@ pub enum KeybindingAction {
 }
 
 impl KeybindingAction {
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Quit,
         Self::CycleMode,
+        Self::CycleModel,
         Self::Redraw,
         Self::ClearChat,
         Self::ClearInput,
@@ -33,6 +35,7 @@ impl KeybindingAction {
         match self {
             Self::Quit => "quit",
             Self::CycleMode => "cycle_mode",
+            Self::CycleModel => "cycle_model",
             Self::Redraw => "redraw",
             Self::ClearChat => "clear_chat",
             Self::ClearInput => "clear_input",
@@ -46,6 +49,7 @@ impl KeybindingAction {
         match self {
             Self::Quit => Some("ctrl+d"),
             Self::CycleMode => Some("shift+tab"),
+            Self::CycleModel => Some("alt+p"),
             Self::Redraw => Some("ctrl+l"),
             Self::ClearChat => None,
             Self::ClearInput => Some("ctrl+c"),
@@ -57,6 +61,7 @@ impl KeybindingAction {
         match self {
             Self::Quit => "Quit",
             Self::CycleMode => "Cycle permission mode",
+            Self::CycleModel => "Cycle model",
             Self::Redraw => "Redraw the screen",
             Self::ClearChat => "Clear the conversation",
             Self::ClearInput => "Clear current input",
@@ -389,5 +394,35 @@ mod tests {
             ("redraw".to_string(), "ctrl+x".to_string()),
         ]))
         .is_err());
+    }
+
+    #[test]
+    fn cycle_model_ships_bound_to_alt_p_beside_cycle_mode() {
+        let bindings = Keybindings::from_config(&BTreeMap::new());
+        assert!(bindings.matches(
+            KeybindingAction::CycleModel,
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::ALT)
+        ));
+        assert!(!bindings.matches(
+            KeybindingAction::CycleModel,
+            KeyEvent::new(KeyCode::Char('p'), KeyModifiers::NONE)
+        ));
+        assert_eq!(
+            bindings.display(KeybindingAction::CycleModel),
+            Some("alt+p")
+        );
+        assert!(bindings.render_help("emacs").contains("Cycle model"));
+    }
+
+    #[test]
+    fn cycle_model_can_be_rebound_but_not_onto_another_action() {
+        let custom = BTreeMap::from([("cycle_model".to_string(), "ctrl+o".to_string())]);
+        validate_config(&custom).unwrap();
+        assert!(Keybindings::from_config(&custom).matches(
+            KeybindingAction::CycleModel,
+            KeyEvent::new(KeyCode::Char('o'), KeyModifiers::CONTROL)
+        ));
+        let clash = BTreeMap::from([("cycle_model".to_string(), "ctrl+d".to_string())]);
+        assert!(validate_config(&clash).is_err());
     }
 }

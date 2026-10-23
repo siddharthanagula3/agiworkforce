@@ -9,6 +9,7 @@ pub struct StatusLineConfig {
     pub show_cost: bool,
     pub show_branch: bool,
     pub show_mode: bool,
+    pub show_context: bool,
 }
 
 impl Default for StatusLineConfig {
@@ -19,11 +20,12 @@ impl Default for StatusLineConfig {
             show_cost: false,
             show_branch: true,
             show_mode: true,
+            show_context: false,
         }
     }
 }
 
-const ITEM_LABELS: &[&str] = &["model", "tokens", "cost", "branch", "mode"];
+const ITEM_LABELS: &[&str] = &["model", "tokens", "cost", "branch", "mode", "context"];
 
 pub struct StatusLineSetupView {
     pub config: StatusLineConfig,
@@ -53,6 +55,7 @@ impl StatusLineSetupView {
             2 => self.config.show_cost,
             3 => self.config.show_branch,
             4 => self.config.show_mode,
+            5 => self.config.show_context,
             _ => false,
         }
     }
@@ -64,6 +67,7 @@ impl StatusLineSetupView {
             2 => self.config.show_cost = !self.config.show_cost,
             3 => self.config.show_branch = !self.config.show_branch,
             4 => self.config.show_mode = !self.config.show_mode,
+            5 => self.config.show_context = !self.config.show_context,
             _ => {}
         }
     }
@@ -145,6 +149,7 @@ mod tests {
         assert!(!v.config.show_cost);
         assert!(v.config.show_branch);
         assert!(v.config.show_mode);
+        assert!(!v.config.show_context);
     }
 
     #[test]
@@ -200,5 +205,16 @@ mod tests {
             v.handle_key(KeyAction::Down);
         }
         assert!(v.state.cursor() < ITEM_LABELS.len());
+    }
+
+    #[test]
+    fn context_is_the_last_item_and_toggles_like_the_rest() {
+        let mut v = make_view();
+        for _ in 0..5 {
+            v.handle_key(KeyAction::Down);
+        }
+        v.handle_key(KeyAction::Char(' '));
+        assert!(v.config.show_context);
+        assert!(v.render().contains("[x] context"));
     }
 }

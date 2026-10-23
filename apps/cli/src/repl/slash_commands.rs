@@ -8,6 +8,13 @@ use crate::terminal_style as ts;
 use super::dialogs;
 use super::registry;
 
+fn fast_mode_on_message(model: &str) -> String {
+    match crate::onboarding::fast_mode_cost_note(model) {
+        Some(note) => format!("Fast mode ON, using {model} · {note}"),
+        None => format!("Fast mode ON, using {model}"),
+    }
+}
+
 #[derive(PartialEq, Eq)]
 pub(super) enum SlashResult {
     Handled,
@@ -453,7 +460,7 @@ pub(super) async fn handle_slash_command(
                             return SlashResult::Handled;
                         }
                     }
-                    output::print_info(&format!("Fast mode ON, using {}", session.model));
+                    output::print_info(&fast_mode_on_message(&session.model));
                 }
                 "off" => {
                     if session.fast_mode {
@@ -469,8 +476,11 @@ pub(super) async fn handle_slash_command(
                         output::print_warn(&err.to_string());
                         return SlashResult::Handled;
                     }
-                    let status = if session.fast_mode { "ON" } else { "OFF" };
-                    output::print_info(&format!("Fast mode {}, using {}", status, session.model));
+                    if session.fast_mode {
+                        output::print_info(&fast_mode_on_message(&session.model));
+                    } else {
+                        output::print_info(&format!("Fast mode OFF, using {}", session.model));
+                    }
                 }
             }
         }
@@ -821,7 +831,7 @@ pub(super) fn print_help() {
 
 #[cfg(test)]
 mod tests {
-    use super::{handle_slash_command, SlashResult};
+    use super::{fast_mode_on_message, handle_slash_command, SlashResult};
 
     #[test]
     fn registered_builtin_commands_have_repl_runtime_coverage() {
@@ -934,5 +944,21 @@ mod tests {
             }
             _ => panic!("expected a workflow prompt"),
         }
+    }
+
+    #[test]
+    fn fast_mode_on_names_the_model_and_its_credit_rate() {
+        let priced = crate::model_catalog::catalog()
+            .all()
+            .iter()
+            .find(|model| model.input_price_per_1m > 0.0)
+            .expect("the catalog prices at least one model");
+        let message = fast_mode_on_message(&priced.id);
+        assert!(message.starts_with(&format!("Fast mode ON, using {} · ", priced.id)));
+        assert!(message.contains("credits per 1M tokens"), "{message}");
+        assert_eq!(
+            fast_mode_on_message("no-such-model-in-the-catalog"),
+            "Fast mode ON, using no-such-model-in-the-catalog"
+        );
     }
 }
