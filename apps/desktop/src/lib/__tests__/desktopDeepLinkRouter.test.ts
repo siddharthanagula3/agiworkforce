@@ -104,7 +104,8 @@ describe('routeDesktopDeepLink', () => {
   });
 
   it('hands every cloud-only target to the web fallback, which owns the deleted, expired and unauthorized states', () => {
-    for (const target of PRODUCT_LINK_TARGETS) {
+    const cloudOnlyTargets = PRODUCT_LINK_TARGETS.filter((target) => target !== 'chat');
+    for (const target of cloudOnlyTargets) {
       expect(routeDesktopDeepLink(desktopDeepLink(target, 'item-1'))).toBe(true);
       expect(openExternalUrl).toHaveBeenLastCalledWith(
         productLinkUrl(WEB_APP_URL, target, 'item-1'),

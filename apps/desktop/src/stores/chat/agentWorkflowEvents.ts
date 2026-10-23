@@ -356,14 +356,6 @@ export async function applyBackgroundAgentFailed(
   });
 }
 
-export function applyApprovalRequired(payload: ApprovalRequestEvent): void {
-  if (!payload.approval?.id) {
-    return;
-  }
-
-  addNormalizedApprovalRequest(payload.approval);
-}
-
 export function applyToolConfirmationRequired(payload: ToolConfirmationSummary): void {
   if (!payload.request_id) {
     return;
@@ -513,12 +505,6 @@ export async function initializeAgentWorkflowEventListeners(): Promise<void> {
         void applyBackgroundAgentFailed(payload).catch((error) => {
           console.error('[AgentWorkflowEvents] Failed to apply background failure:', error);
         });
-      }),
-    );
-
-    agentWorkflowUnlistenFunctions.push(
-      await listen<ApprovalRequestEvent>('agi:approval_required', ({ payload }) => {
-        applyApprovalRequired(payload);
       }),
     );
 

@@ -93,7 +93,6 @@ describe('Tauri event contract', () => {
       'scheduler:job_updated',
       'scheduler:job_executed',
       'scheduler:error',
-      'llm:stream_chunk',
       'agi:tool_stream',
       'agi:terminal_command',
       'agi:screenshot',
@@ -111,6 +110,8 @@ describe('Tauri event contract', () => {
         'swarm:complete',
         'agi:llm_chunk',
         'agi:llm_complete',
+        'llm:stream_chunk',
+        'agi:approval_required',
         'agi:terminal_output',
         'computer_use:screenshot',
       ];

@@ -13,7 +13,6 @@ import { useChatStore } from '../chatStore';
 import { useToolStore } from '../toolStore';
 import {
   applyApprovalDenied,
-  applyApprovalRequired,
   applyAgentActionUpdate,
   applyAgentPermissionRequired,
   applyBackgroundAgentCompleted,
@@ -341,16 +340,11 @@ describe('agentWorkflowEvents', () => {
   it('tracks approval requests and denials through the canonical approval store', () => {
     createAssistantMessage();
 
-    applyApprovalRequired({
-      approval: {
-        id: 'approval-2',
-        type: 'terminal_command',
-        description: 'Run rm -rf /tmp/cache',
-        riskLevel: 'high',
-        details: { command: 'rm -rf /tmp/cache' },
-        createdAt: new Date(),
-        status: 'pending',
-      },
+    applyAgentPermissionRequired({
+      actionId: 'approval-2',
+      reason: 'Run rm -rf /tmp/cache',
+      scope: { type: 'terminal', command: 'rm -rf /tmp/cache', risk: 'high' },
+      riskLevel: 'high',
     });
     applyApprovalDenied({
       approval: {

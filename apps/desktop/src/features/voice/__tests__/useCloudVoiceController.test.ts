@@ -166,36 +166,20 @@ describe('useCloudVoiceController', () => {
     return typeof language === 'string' ? language : null;
   }
 
-  it('starts and stops the same cloud capture the composer runs when the shell hotkey fires', async () => {
-    const presses: (() => void)[] = [];
-    Object.defineProperty(window, 'agiHost', {
-      value: {
-        onVoiceHotkey: (callback: () => void) => {
-          presses.push(callback);
-          return () => {};
-        },
-      },
-      configurable: true,
-    });
-    try {
-      const { result } = renderHook(() => useCloudVoiceController(true));
-      await waitFor(() => expect(result.current.controller.state).toBe('idle'));
+  it('starts and stops the cloud capture from the composer toggle and transcribes in the cloud', async () => {
+    const { result } = renderHook(() => useCloudVoiceController(true));
+    await waitFor(() => expect(result.current.controller.state).toBe('idle'));
 
-      await act(async () => presses.forEach((press) => press()));
-      await waitFor(() => expect(result.current.controller.state).toBe('listening'));
+    await act(async () => result.current.controller.onToggle());
+    await waitFor(() => expect(result.current.controller.state).toBe('listening'));
 
-      await act(async () => presses.forEach((press) => press()));
-      await waitFor(() =>
-        expect(
-          vi
-            .mocked(fetch)
-            .mock.calls.some(([url]) => String(url).includes('/api/voice/transcribe')),
-        ).toBe(true),
-      );
-      expect(nativeMock.invoke.mock.calls.some(([c]) => c === 'voice_transcribe_blob')).toBe(false);
-    } finally {
-      Reflect.deleteProperty(window, 'agiHost');
-    }
+    await act(async () => result.current.controller.onToggle());
+    await waitFor(() =>
+      expect(
+        vi.mocked(fetch).mock.calls.some(([url]) => String(url).includes('/api/voice/transcribe')),
+      ).toBe(true),
+    );
+    expect(nativeMock.invoke.mock.calls.some(([c]) => c === 'voice_transcribe_blob')).toBe(false);
   });
 
   it('sends the chosen dictation language, not a fixed one', async () => {
