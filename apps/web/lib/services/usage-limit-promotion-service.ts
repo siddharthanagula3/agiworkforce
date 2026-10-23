@@ -18,6 +18,7 @@ import { z } from 'zod';
 
 import { revenueContextOfSubscription } from '@/lib/billing/revenue-context';
 import { USAGE_WORKLOADS } from '@/lib/billing/usage-attribution';
+import { readFeatureFlagConfig } from '@/lib/feature-flags/flag-config';
 import { readUsagePromotionsOn } from '@/lib/feature-flags/usage-promotions-gate';
 import { logger } from '@/lib/logger';
 import { getNeonDb } from '@/lib/server/neon-db';
@@ -65,11 +66,22 @@ const PlanListSchema = z
 const PromotionFields = {
   id: z.string().regex(PROMOTION_ID),
   description: z.string().trim().max(500).default(''),
-  enabled: z.boolean().default(false),
+  enabled: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Turning a promotion off stops new grants, claims and applies. Held resets stay usable until their own expiry unless the promotion is disabled.',
+    ),
   startsAt: z.string().datetime({ offset: true }),
   endsAt: z.string().datetime({ offset: true }),
   plans: PlanListSchema,
-  costCeilingCredits: z.number().positive().max(1_000_000_000),
+  costCeilingCredits: z
+    .number()
+    .positive()
+    .max(1_000_000_000)
+    .describe(
+      'The most this promotion may give away. Exposure is committed at claim time as a worst case, so the ceiling fills before the real cost does.',
+    ),
 };
 
 export const UsageLimitPromotionInputSchema = z
@@ -79,7 +91,14 @@ export const UsageLimitPromotionInputSchema = z
       kind: z.literal('limit_reset'),
       resetSource: z.enum(USAGE_LIMIT_RESET_SOURCES),
       resetsPerGrant: z.number().int().min(1).max(10),
-      resetValidDays: z.number().int().min(1).max(365),
+      resetValidDays: z
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .describe(
+          'Days a granted reset stays usable. A held reset stays usable until its own expiry unless the promotion is disabled.',
+        ),
       applyAtPercent: z.number().int().min(0).max(100),
     }),
     z.strictObject({
@@ -240,6 +259,40 @@ export async function listUsageLimitPromotions(
   return rows.map(toPromotion).filter((row): row is UsageLimitPromotion => row !== null);
 }
 
+const ENABLED_PROMOTIONS_CACHE_TTL_MS = readFeatureFlagConfig().definitionCacheTtlMs;
+
+let cachedEnabledPromotions: { promotions: UsageLimitPromotion[]; expiresAtMs: number } | null =
+  null;
+let inFlightEnabledPromotions: Promise<UsageLimitPromotion[]> | null = null;
+
+export function resetEnabledPromotionCache(): void {
+  cachedEnabledPromotions = null;
+  inFlightEnabledPromotions = null;
+}
+
+async function readEnabledPromotions(
+  db: DatabaseAdapter,
+  nowMs: number,
+): Promise<UsageLimitPromotion[]> {
+  if (cachedEnabledPromotions && cachedEnabledPromotions.expiresAtMs > nowMs) {
+    return cachedEnabledPromotions.promotions;
+  }
+  if (!inFlightEnabledPromotions) {
+    inFlightEnabledPromotions = listUsageLimitPromotions(db, { enabledOnly: true })
+      .then((promotions) => {
+        cachedEnabledPromotions = {
+          promotions,
+          expiresAtMs: nowMs + ENABLED_PROMOTIONS_CACHE_TTL_MS,
+        };
+        return promotions;
+      })
+      .finally(() => {
+        inFlightEnabledPromotions = null;
+      });
+  }
+  return inFlightEnabledPromotions;
+}
+
 export async function upsertUsageLimitPromotion(
   db: DatabaseAdapter,
   input: UsageLimitPromotionInput,
@@ -292,8 +345,56 @@ export async function upsertUsageLimitPromotion(
             returning ${PROMOTION_COLUMNS}`,
           [...params, expectedVersion],
         );
+  resetEnabledPromotionCache();
   const row = rows[0];
   return row ? toPromotion(row) : null;
+}
+
+const AUDITED_FIELDS = [
+  'enabled',
+  'costCeilingCredits',
+  'startsAt',
+  'endsAt',
+  'plans',
+  'resetSource',
+  'resetsPerGrant',
+  'resetValidDays',
+  'applyAtPercent',
+  'upliftPercent',
+  'upliftWindows',
+  'upliftWorkloads',
+] as const;
+
+function auditedValues(promotion: UsageLimitPromotion | null): Map<string, string> {
+  const values = new Map<string, string>();
+  if (!promotion) return values;
+  const fields: Record<string, unknown> = {
+    ...promotion,
+    costCeilingCredits: creditsFromMicrousd(promotion.costCeilingMicrousd),
+  };
+  for (const field of AUDITED_FIELDS) {
+    const value = fields[field];
+    if (value === undefined || value === null) continue;
+    values.set(field, Array.isArray(value) ? value.join(',') : String(value));
+  }
+  return values;
+}
+
+/** The configuration keys an edit changed, each with its value before and after. */
+export function diffUsageLimitPromotion(
+  before: UsageLimitPromotion | null,
+  after: UsageLimitPromotion,
+): { changedKeys: string[]; before: string[]; after: string[] } {
+  const previous = auditedValues(before);
+  const next = auditedValues(after);
+  const changed = AUDITED_FIELDS.filter((field) => previous.get(field) !== next.get(field));
+  return {
+    changedKeys: [...changed],
+    before: changed.flatMap((field) =>
+      previous.has(field) ? [`${field}:${previous.get(field)}`] : [],
+    ),
+    after: changed.flatMap((field) => (next.has(field) ? [`${field}:${next.get(field)}`] : [])),
+  };
 }
 
 function isLive(promotion: UsageLimitPromotion, nowMs: number): boolean {
@@ -389,17 +490,24 @@ interface GrantRow {
   reference_id: string;
   expires_at: string | Date;
   applied_at: string | Date | null;
+  committed_microusd: string | number | null;
+}
+
+interface UpliftClaim {
+  expiresAt: string;
+  committedMicrousd: number;
 }
 
 interface AccountGrants {
   available: { id: string; promotionId: string; expiresAt: string }[];
   lastResetAt: string | null;
-  claimedUplifts: Set<string>;
+  claimedUplifts: Map<string, UpliftClaim>;
 }
 
 async function readAccountGrants(db: DatabaseAdapter, userId: string): Promise<AccountGrants> {
   const rows = await db.query<GrantRow>(
-    `select g.id, g.promotion_id, p.kind, g.reference_id, g.expires_at, g.applied_at
+    `select g.id, g.promotion_id, p.kind, g.reference_id, g.expires_at, g.applied_at,
+            g.committed_microusd
        from public.usage_limit_promotion_grants g
        join public.usage_limit_promotions p on p.id = g.promotion_id
       where g.user_id = $1
@@ -407,11 +515,16 @@ async function readAccountGrants(db: DatabaseAdapter, userId: string): Promise<A
       order by g.expires_at asc, g.id asc`,
     [userId, ROLLING_WEEKLY_WINDOW_HOURS],
   );
-  const grants: AccountGrants = { available: [], lastResetAt: null, claimedUplifts: new Set() };
+  const grants: AccountGrants = { available: [], lastResetAt: null, claimedUplifts: new Map() };
   const nowMs = Date.now();
   for (const row of rows) {
     if (row.kind === 'limit_uplift') {
-      if (Date.parse(iso(row.expires_at)) > nowMs) grants.claimedUplifts.add(row.promotion_id);
+      if (Date.parse(iso(row.expires_at)) > nowMs) {
+        grants.claimedUplifts.set(row.promotion_id, {
+          expiresAt: iso(row.expires_at),
+          committedMicrousd: amount(row.committed_microusd),
+        });
+      }
       continue;
     }
     if (row.applied_at === null) {
@@ -501,7 +614,39 @@ export async function grantReferralResets(
 
 class CeilingReached extends Error {}
 
-/** Claims an uplift for an account if the promotion's ceiling still covers the most it can add. */
+/** What a claim must still commit: null when the claim already covers the promotion as it stands. */
+function recostOf(
+  claim: UpliftClaim | undefined,
+  promotion: UpliftPromotion,
+  exposureMicrousd: number,
+): number | null {
+  if (!claim) return exposureMicrousd;
+  const covers =
+    Date.parse(claim.expiresAt) >= Date.parse(promotion.endsAt) &&
+    claim.committedMicrousd >= exposureMicrousd;
+  return covers ? null : Math.max(0, exposureMicrousd - claim.committedMicrousd);
+}
+
+function upliftHeldOrFunded(
+  claim: UpliftClaim | undefined,
+  promotion: UpliftPromotion,
+  exposureMicrousd: number,
+): boolean {
+  const additional = recostOf(claim, promotion, exposureMicrousd);
+  return additional === null || fitsCeiling(promotion, additional);
+}
+
+function fitsCeiling(promotion: UpliftPromotion, additionalMicrousd: number): boolean {
+  return promotion.committedMicrousd + additionalMicrousd <= promotion.costCeilingMicrousd;
+}
+
+/**
+ * Claims an uplift for an account, or re-costs a claim the promotion has
+ * outgrown, if the promotion's ceiling still covers the most it can add. A
+ * claim whose expiry predates the promotion's end, or whose commitment is
+ * below the exposure at the promotion's current terms, is extended and charged
+ * the difference under the same row lock, so an edit never lifts the ceiling.
+ */
 async function claimUplift(
   db: DatabaseAdapter,
   userId: string,
@@ -513,42 +658,64 @@ async function claimUplift(
       const [locked] = await tx.query<{
         committed_microusd: string | number;
         cost_ceiling_microusd: string | number;
+        version: number;
         live: boolean;
       }>(
-        `select committed_microusd, cost_ceiling_microusd,
+        `select committed_microusd, cost_ceiling_microusd, version,
                 (enabled and starts_at <= now() and now() < ends_at) as live
            from public.usage_limit_promotions
           where id = $1 and kind = 'limit_uplift'
           for update`,
         [promotion.id],
       );
-      if (!locked?.live) return false;
-      const [existing] = await tx.query<{ id: string }>(
-        `select id from public.usage_limit_promotion_grants
-          where promotion_id = $1 and user_id = $2 and reference_id = $3`,
+      if (!locked?.live || locked.version !== promotion.version) return false;
+      const [existing] = await tx.query<{
+        committed_microusd: string | number | null;
+        lapsed: boolean;
+        ends_short: boolean;
+      }>(
+        `select g.committed_microusd, g.expires_at <= now() as lapsed,
+                g.expires_at < p.ends_at as ends_short
+           from public.usage_limit_promotion_grants g
+           join public.usage_limit_promotions p on p.id = g.promotion_id
+          where g.promotion_id = $1 and g.user_id = $2 and g.reference_id = $3`,
         [promotion.id, userId, UPLIFT_REFERENCE],
       );
-      if (existing) return true;
-      if (
-        amount(locked.committed_microusd) + exposureMicrousd >
-        amount(locked.cost_ceiling_microusd)
-      ) {
+      const committedBefore =
+        existing && !existing.lapsed ? amount(existing.committed_microusd) : 0;
+      const additional = Math.max(0, exposureMicrousd - committedBefore);
+      if (existing && !existing.lapsed && !existing.ends_short && additional === 0) return true;
+      if (amount(locked.committed_microusd) + additional > amount(locked.cost_ceiling_microusd)) {
         throw new CeilingReached();
       }
-      await tx.execute(
-        `insert into public.usage_limit_promotion_grants
-           (promotion_id, user_id, reference_id, granted_at, expires_at, applied_at,
-            committed_microusd)
-         select $1, $2, $3, now(), ends_at, now(), $4::bigint
-           from public.usage_limit_promotions where id = $1`,
-        [promotion.id, userId, UPLIFT_REFERENCE, exposureMicrousd],
-      );
-      await tx.execute(
-        `update public.usage_limit_promotions
-            set committed_microusd = committed_microusd + $2::bigint
-          where id = $1`,
-        [promotion.id, exposureMicrousd],
-      );
+      if (existing) {
+        await tx.execute(
+          `update public.usage_limit_promotion_grants g
+              set expires_at = greatest(g.expires_at, p.ends_at),
+                  committed_microusd = coalesce(g.committed_microusd, 0) + $4::bigint
+             from public.usage_limit_promotions p
+            where p.id = g.promotion_id
+              and g.promotion_id = $1 and g.user_id = $2 and g.reference_id = $3`,
+          [promotion.id, userId, UPLIFT_REFERENCE, additional],
+        );
+      } else {
+        await tx.execute(
+          `insert into public.usage_limit_promotion_grants
+             (promotion_id, user_id, reference_id, granted_at, expires_at, applied_at,
+              committed_microusd)
+           select $1, $2, $3, now(), ends_at, now(), $4::bigint
+             from public.usage_limit_promotions where id = $1`,
+          [promotion.id, userId, UPLIFT_REFERENCE, additional],
+        );
+      }
+      if (additional > 0) {
+        await tx.execute(
+          `update public.usage_limit_promotions
+              set committed_microusd = committed_microusd + $2::bigint
+            where id = $1`,
+          [promotion.id, additional],
+        );
+      }
       return true;
     });
   } catch (error) {
@@ -613,7 +780,7 @@ export async function resolvePromotionalCaps(
   try {
     const db = connect();
     const [promotions, grants] = await Promise.all([
-      listUsageLimitPromotions(db, { enabledOnly: true }),
+      readEnabledPromotions(db, nowMs),
       readAccountGrants(db, input.userId),
     ]);
     const uplifts = promotions.filter(
@@ -623,7 +790,21 @@ export async function resolvePromotionalCaps(
         coversPlan(promotion, input.planTier) &&
         coversWorkload(promotion, input.workload),
     );
-    const claimed = uplifts.filter((promotion) => grants.claimedUplifts.has(promotion.id));
+    const claimed: UpliftPromotion[] = [];
+    for (const promotion of uplifts) {
+      const claim = grants.claimedUplifts.get(promotion.id);
+      if (!claim) continue;
+      const exposure = exposureOf(promotion, base, nowMs);
+      const additional = recostOf(claim, promotion, exposure);
+      if (additional === null) {
+        claimed.push(promotion);
+      } else if (
+        fitsCeiling(promotion, additional) &&
+        (await claimUplift(db, input.userId, promotion, exposure))
+      ) {
+        claimed.push(promotion);
+      }
+    }
     const unclaimed = uplifts
       .filter((promotion) => !grants.claimedUplifts.has(promotion.id))
       .sort((left, right) => right.upliftPercent - left.upliftPercent);
@@ -647,7 +828,9 @@ export async function resolvePromotionalCaps(
         promotion.upliftWindows.some(passes) ||
         (promotion.upliftWindows.includes('weekly') && flagshipPasses);
       if (!needed) continue;
-      if (await claimUplift(db, input.userId, promotion, exposureOf(promotion, base, nowMs))) {
+      const exposure = exposureOf(promotion, base, nowMs);
+      if (!fitsCeiling(promotion, exposure)) continue;
+      if (await claimUplift(db, input.userId, promotion, exposure)) {
         claimed.push(promotion);
         break;
       }
@@ -715,7 +898,7 @@ export async function readSummaryPromotions(
   if (!(await readUsagePromotionsOn(input.userId, input.planTier, nowMs))) return null;
   try {
     const db = connect();
-    const promotions = await listUsageLimitPromotions(db, { enabledOnly: true });
+    const promotions = await readEnabledPromotions(db, nowMs);
     await ensurePromotionResetGrants(db, input.userId, input.planTier, promotions, nowMs);
     const grants = await readAccountGrants(db, input.userId);
     const byId = new Map(promotions.map((promotion) => [promotion.id, promotion]));
@@ -735,9 +918,11 @@ export async function readSummaryPromotions(
         promotion.kind === 'limit_uplift' &&
         isLive(promotion, nowMs) &&
         coversPlan(promotion, input.planTier) &&
-        (grants.claimedUplifts.has(promotion.id) ||
-          promotion.committedMicrousd + exposureOf(promotion, input.caps, nowMs) <=
-            promotion.costCeilingMicrousd),
+        upliftHeldOrFunded(
+          grants.claimedUplifts.get(promotion.id),
+          promotion,
+          exposureOf(promotion, input.caps, nowMs),
+        ),
     );
     const everyWorkload = uplifts.filter((promotion) => promotion.upliftWorkloads.length === 0);
     return {

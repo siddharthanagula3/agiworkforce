@@ -113,6 +113,38 @@ describe('admin usage promotions', () => {
     );
   });
 
+  it('records which keys changed with their values before and after', async () => {
+    mocks.listUsageLimitPromotions.mockResolvedValue([
+      { ...STORED, upliftPercent: 25, plans: ['pro'], costCeilingMicrousd: 500_000_000 },
+    ]);
+    await PUT(request('PUT', { expectedVersion: 2, promotion: UPLIFT }));
+    expect(mocks.recordAuditEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: expect.objectContaining({
+          changedKeys: ['costCeilingCredits', 'plans', 'upliftPercent'],
+          changesBefore: ['costCeilingCredits:100000', 'plans:pro', 'upliftPercent:25'],
+          changesAfter: ['costCeilingCredits:200000', 'plans:pro,max', 'upliftPercent:50'],
+        }),
+      }),
+    );
+  });
+
+  it('keeps the changed keys and their values through the audit sanitizer', async () => {
+    const { sanitizeAuditDetail } =
+      await vi.importActual<typeof import('@/lib/security-audit')>('@/lib/security-audit');
+    expect(
+      sanitizeAuditDetail({
+        changedKeys: ['plans'],
+        changesBefore: ['plans:pro'],
+        changesAfter: ['plans:pro,max'],
+      }),
+    ).toEqual({
+      changedKeys: ['plans'],
+      changesBefore: ['plans:pro'],
+      changesAfter: ['plans:pro,max'],
+    });
+  });
+
   it('reports a stale version as a conflict and records nothing', async () => {
     mocks.upsertUsageLimitPromotion.mockResolvedValueOnce(null);
     const response = await PUT(request('PUT', { expectedVersion: 1, promotion: UPLIFT }));

@@ -35,6 +35,7 @@ const {
   applyUsageLimitReset,
   ensurePromotionResetGrants,
   listUsageLimitPromotions,
+  resetEnabledPromotionCache,
   resolvePromotionalCaps,
 } = await import('./usage-limit-promotion-service');
 
@@ -55,6 +56,7 @@ afterAll(async () => {
 });
 
 beforeEach(() => {
+  resetEnabledPromotionCache();
   mocks.promotionsOn.mockReset();
   mocks.promotionsOn.mockResolvedValue(true);
 });
@@ -375,6 +377,54 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
       await expect(
         resolvePromotionalCaps({ ...request, userId: other }, Date.now(), () => account.db),
       ).resolves.toEqual(CAPS);
+    });
+  });
+
+  it('re-costs a claim after an edit and never lets the ceiling be passed', async () => {
+    await withAccount(async (account) => {
+      await account.db.execute(
+        `insert into public.usage_limit_promotions
+           (id, kind, enabled, starts_at, ends_at, plans, cost_ceiling_microusd,
+            uplift_percent, uplift_windows, uplift_workloads)
+         values ('qa-edit', 'limit_uplift', true, now() - interval '1 day',
+                 now() + interval '6 days', '{pro}', 30000000, 50, '{weekly}', '{code}')`,
+      );
+      await spend(account, 9_950_000, 30);
+      const request = {
+        userId: account.userId,
+        planTier: 'pro',
+        workload: 'code',
+        estimateMicrousd: 100_000,
+        isFlagship: false,
+        caps: CAPS,
+      };
+      await resolvePromotionalCaps(request, Date.now(), () => account.db);
+      expect((await promotion(account, 'qa-edit'))?.committed_microusd).toBe('5000000');
+
+      await account.db.execute(
+        `update public.usage_limit_promotions
+            set uplift_percent = 100, ends_at = now() + interval '13 days', version = version + 1
+          where id = 'qa-edit'`,
+      );
+      resetEnabledPromotionCache();
+      await expect(resolvePromotionalCaps(request, Date.now(), () => account.db)).resolves.toEqual({
+        session: 1_000_000,
+        weekly: 20_000_000,
+        flagshipWeekly: 6_000_000,
+      });
+      expect((await promotion(account, 'qa-edit'))?.committed_microusd).toBe('20000000');
+
+      await account.db.execute(
+        `update public.usage_limit_promotions
+            set uplift_percent = 300, version = version + 1
+          where id = 'qa-edit'`,
+      );
+      resetEnabledPromotionCache();
+      const before = (await promotion(account, 'qa-edit'))?.committed_microusd;
+      await expect(resolvePromotionalCaps(request, Date.now(), () => account.db)).resolves.toEqual(
+        CAPS,
+      );
+      expect((await promotion(account, 'qa-edit'))?.committed_microusd).toBe(before);
     });
   });
 });

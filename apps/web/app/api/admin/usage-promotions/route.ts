@@ -13,6 +13,7 @@ import { recordAuditEvent } from '@/lib/security-audit';
 import { getNeonDb } from '@/lib/server/neon-db';
 import {
   UsageLimitPromotionInputSchema,
+  diffUsageLimitPromotion,
   listUsageLimitPromotions,
   promotablePlanTiers,
   upsertUsageLimitPromotion,
@@ -63,6 +64,12 @@ async function handlePut(request: NextRequest): Promise<Response> {
     throw createError.badRequest('Invalid usage promotion', parsed.error.flatten());
   }
   const { expectedVersion, promotion: input } = parsed.data;
+  const before =
+    expectedVersion === null
+      ? null
+      : ((await listUsageLimitPromotions(getNeonDb())).find(
+          (promotion) => promotion.id === input.id,
+        ) ?? null);
   const saved = await upsertUsageLimitPromotion(getNeonDb(), input, expectedVersion, userId);
   if (!saved) {
     throw createError.conflict(
@@ -71,6 +78,7 @@ async function handlePut(request: NextRequest): Promise<Response> {
         : 'The promotion changed since it was loaded, or its kind differs. Reload it and try again.',
     );
   }
+  const changes = diffUsageLimitPromotion(before, saved);
   await recordAuditEvent({
     userId,
     eventType: 'usage_promotion_changed',
@@ -84,6 +92,9 @@ async function handlePut(request: NextRequest): Promise<Response> {
       enabled: saved.enabled,
       scope: saved.kind,
       version: String(saved.version),
+      changedKeys: changes.changedKeys,
+      changesBefore: changes.before,
+      changesAfter: changes.after,
     },
   });
   return NextResponse.json(
