@@ -1,6 +1,7 @@
 use indicatif::{ProgressBar, ProgressStyle};
 use std::borrow::Cow;
 use std::env;
+use std::io::IsTerminal;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
@@ -366,6 +367,13 @@ pub fn choose_option<S: AsRef<str>>(prompt: &str, items: &[S], default: usize) -
 /// Ask a yes/no question. In screen reader mode it is a numbered menu with a
 /// bell; otherwise the usual prompt. Anything but a clear yes is a no.
 pub fn confirm(prompt: impl Into<String>, default: bool) -> bool {
+    confirm_on(std::io::stderr().is_terminal(), prompt, default)
+}
+
+fn confirm_on(terminal: bool, prompt: impl Into<String>, default: bool) -> bool {
+    if !terminal {
+        return false;
+    }
     let prompt = prompt.into();
     if screen_reader() {
         return read_numbered_choice(
@@ -1482,18 +1490,13 @@ mod tests {
         assert!(shown.contains("press Enter for 2."));
     }
 
-    /// An approval asked with a bare `dialoguer::Confirm` skips the bell and the
+    /// A question asked with a bare `dialoguer::Confirm` skips the bell and the
     /// numbered answer, so the person using a screen reader gets the one prompt
     /// they cannot hear or answer by digit.
     #[test]
-    fn no_approval_prompt_bypasses_the_screen_reader_aware_confirm() {
+    fn no_question_bypasses_the_screen_reader_aware_confirm() {
         let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
-        let mut stack = vec![
-            src.join("features").join("exec").join("tools"),
-            src.join("agent"),
-            src.join("mcp"),
-            src.join("models"),
-        ];
+        let mut stack = vec![src.clone()];
         let mut offenders = Vec::new();
         while let Some(dir) = stack.pop() {
             for entry in std::fs::read_dir(&dir).expect("read source dir").flatten() {
@@ -1503,6 +1506,9 @@ mod tests {
                     continue;
                 }
                 if path.extension().and_then(|e| e.to_str()) != Some("rs") {
+                    continue;
+                }
+                if path == src.join("output.rs") {
                     continue;
                 }
                 let text = std::fs::read_to_string(&path).expect("read source");
@@ -1518,9 +1524,20 @@ mod tests {
         }
         assert!(
             offenders.is_empty(),
-            "approval prompts built on dialoguer::Confirm directly: {offenders:?}. \
+            "questions built on dialoguer::Confirm directly: {offenders:?}. \
              Use `output::confirm`."
         );
+    }
+
+    #[test]
+    fn a_question_with_no_terminal_to_answer_it_is_a_no() {
+        let _guard = print_state_test_lock();
+        for screen_reader_on in [false, true] {
+            set_screen_reader(screen_reader_on);
+            let answered = confirm_on(false, "Allow it?", true);
+            set_screen_reader(false);
+            assert!(!answered, "screen reader {screen_reader_on}");
+        }
     }
 
     #[test]

@@ -391,16 +391,12 @@ fn project_skills_consented(project_root: &Path, sources: &SkillSources) -> bool
     } else {
         ""
     };
-    let confirmed = dialoguer::Confirm::new()
-        .with_prompt(format!(
+    let confirmed = crate::output::confirm(format!(
             "This project supplies {} skill(s) of its own that would load on every run in {}: {}. {changed}Load them? You are asked again when one changes.",
             names.len(),
             project_root.display(),
             names.join(", ")
-        ))
-        .default(false)
-        .interact()
-        .unwrap_or(false);
+        ), false);
 
     if !confirmed {
         if let Ok(mut sets) = DECLINED_SKILL_SETS.lock() {

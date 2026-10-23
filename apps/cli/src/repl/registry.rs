@@ -330,13 +330,10 @@ pub(super) fn handle_delete(arg: &str) {
             return;
         }
         crate::DestructiveDecision::Prompt => {
-            let confirmed = dialoguer::Confirm::new()
-                .with_prompt(format!(
-                    "Permanently delete session '{id}'? This cannot be undone."
-                ))
-                .default(false)
-                .interact()
-                .unwrap_or(false);
+            let confirmed = crate::output::confirm(
+                format!("Permanently delete session '{id}'? This cannot be undone."),
+                false,
+            );
             if !confirmed {
                 output::print_info(&format!("Aborted. '{id}' was not deleted."));
                 return;

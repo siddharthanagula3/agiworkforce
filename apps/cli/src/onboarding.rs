@@ -1020,11 +1020,7 @@ pub async fn run_onboarding() -> Result<bool> {
             "Lasting instructions live in ~/.agiworkforce/CLAUDE.md and a project's AGENTS.md or CLAUDE.md. Ask the agent to remember something and it saves it there; /memory shows what every session loads."
         )
     );
-    let bell = dialoguer::Confirm::new()
-        .with_prompt("  Ring the terminal bell when a long turn finishes?")
-        .default(false)
-        .interact()
-        .unwrap_or(false);
+    let bell = crate::output::confirm("  Ring the terminal bell when a long turn finishes?", false);
     let saved = crate::config::CliConfig::load().and_then(|mut config| {
         config.set_value("bell", &bell.to_string())?;
         config.save()

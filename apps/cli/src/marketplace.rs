@@ -746,14 +746,13 @@ fn ask_to_keep_update(review: &PluginUpdateReview) -> bool {
         );
         return false;
     }
-    dialoguer::Confirm::new()
-        .with_prompt(format!(
+    crate::output::confirm(
+        format!(
             "Keep this update to {}?",
             crate::terminal_text::sanitize_terminal_text(&review.name)
-        ))
-        .default(false)
-        .interact()
-        .unwrap_or(false)
+        ),
+        false,
+    )
 }
 
 /// Put a plugin back on the commit the person last agreed to and let it

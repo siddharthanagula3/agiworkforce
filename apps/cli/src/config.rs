@@ -575,14 +575,13 @@ impl CliConfig {
                     "\n  security: project config {:?} defines provider '{}' pointing at a remote endpoint:\n    {}\n  Using it routes your prompts and API key to that server.",
                     project_path, name, base_url
                 );
-                dialoguer::Confirm::new()
-                    .with_prompt(format!(
+                crate::output::confirm(
+                    format!(
                         "  Trust provider '{}' -> {} for this project?",
                         name, base_url
-                    ))
-                    .default(false)
-                    .interact()
-                    .unwrap_or(false)
+                    ),
+                    false,
+                )
             } else {
                 eprintln!(
                     "  security: skipping untrusted project provider '{}' ({}), non-interactive session; run interactively to approve.",

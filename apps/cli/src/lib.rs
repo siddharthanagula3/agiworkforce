@@ -2449,11 +2449,7 @@ fn confirm_destructive_when(prompt: &str, yes: bool, interactive: bool) -> bool 
             );
             false
         }
-        DestructiveDecision::Prompt => dialoguer::Confirm::new()
-            .with_prompt(prompt)
-            .default(false)
-            .interact()
-            .unwrap_or(false),
+        DestructiveDecision::Prompt => crate::output::confirm(prompt, false),
     }
 }
 
@@ -3011,12 +3007,7 @@ async fn handle_code_handoff(
             "Nothing was handed off: this run cannot ask for confirmation. Re-run with --yes."
         ),
         DestructiveDecision::Prompt => {
-            if !dialoguer::Confirm::new()
-                .with_prompt("Hand this session to the cloud?")
-                .default(false)
-                .interact()
-                .unwrap_or(false)
-            {
+            if !crate::output::confirm("Hand this session to the cloud?", false) {
                 println!("Nothing was handed off.");
                 return Ok(());
             }
@@ -3074,12 +3065,7 @@ async fn handle_code_start(
              the cloud session."
         ),
         DestructiveDecision::Prompt => {
-            if !dialoguer::Confirm::new()
-                .with_prompt("Start the cloud session?")
-                .default(false)
-                .interact()
-                .unwrap_or(false)
-            {
+            if !crate::output::confirm("Start the cloud session?", false) {
                 println!("Nothing was started.");
                 return Ok(());
             }
@@ -4538,11 +4524,7 @@ fn confirm_approval(prompt: &str, yes: bool) -> bool {
             );
             false
         }
-        DestructiveDecision::Prompt => dialoguer::Confirm::new()
-            .with_prompt(prompt)
-            .default(false)
-            .interact()
-            .unwrap_or(false),
+        DestructiveDecision::Prompt => crate::output::confirm(prompt, false),
     }
 }
 
@@ -4791,15 +4773,14 @@ async fn run_update_install(
         return Ok(());
     };
     if !yes {
-        let confirmed = dialoguer::Confirm::new()
-            .with_prompt(format!(
+        let confirmed = crate::output::confirm(
+            format!(
                 "Install agi {} into {}?",
                 release.version,
                 directory.display()
-            ))
-            .default(false)
-            .interact()
-            .unwrap_or(false);
+            ),
+            false,
+        );
         if !confirmed {
             println!("Nothing was installed.");
             return Ok(());
@@ -5501,13 +5482,12 @@ async fn handle_session_action(action: SessionAction) -> Result<()> {
                     );
                 }
                 DestructiveDecision::Prompt => {
-                    let confirmed = dialoguer::Confirm::new()
-                        .with_prompt(format!(
+                    let confirmed = crate::output::confirm(
+                        format!(
                             "Permanently delete session '{session_id}'? This cannot be undone."
-                        ))
-                        .default(false)
-                        .interact()
-                        .unwrap_or(false);
+                        ),
+                        false,
+                    );
                     if !confirmed {
                         println!("Aborted. Session '{session_id}' was not deleted.");
                         return Ok(());
