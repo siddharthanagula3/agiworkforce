@@ -4,6 +4,7 @@
 //! commands live here as pure helpers to keep their behavior aligned.
 
 use crate::agent::{AgentSession, PrivacyMode};
+use crate::design_system::Effort;
 
 const MAX_HANDOFF_SELECTED_MESSAGES: usize = 64;
 const MAX_HANDOFF_TRANSCRIPT_BYTES: usize = 256 * 1024;
@@ -133,7 +134,7 @@ pub fn handle_shared_command(
     };
 
     match command.as_str() {
-        "/review" => ParityCommandResult::Prompt(review_prompt(arg)),
+        "/review" => ParityCommandResult::Prompt(session_review_prompt(arg, session)),
         "/copy" => ParityCommandResult::SystemMessage(render_copy()),
         "/continue-elsewhere" => {
             ParityCommandResult::SystemMessage(crate::cloud::continue_elsewhere(session, arg))
@@ -815,14 +816,69 @@ pub fn render_vim(arg: &str) -> String {
 }
 
 pub fn review_prompt(arg: &str) -> String {
-    let review_scope = if arg.trim().is_empty() {
+    let (level, scope) = split_review_effort(arg);
+    review_prompt_at(scope, level.unwrap_or_default())
+}
+
+fn session_review_prompt(arg: &str, session: &AgentSession) -> String {
+    let (level, scope) = split_review_effort(arg);
+    let requested = level.or(session.effort).unwrap_or_default();
+    let effort = review_effort_for(
+        requested,
+        crate::model_catalog::effort_support(&session.model),
+    );
+    review_prompt_at(scope, effort)
+}
+
+fn split_review_effort(arg: &str) -> (Option<Effort>, &str) {
+    let trimmed = arg.trim();
+    let (first, rest) = trimmed
+        .split_once(char::is_whitespace)
+        .unwrap_or((trimmed, ""));
+    match Effort::from_config_value(first) {
+        Some(effort) => (Some(effort), rest.trim()),
+        None => (None, trimmed),
+    }
+}
+
+fn review_effort_for(requested: Effort, support: crate::model_catalog::EffortSupport) -> Effort {
+    match support {
+        crate::model_catalog::EffortSupport::Levels(levels) => {
+            crate::model_catalog::nearest_supported_effort(requested.wire_value(), &levels)
+                .and_then(Effort::from_config_value)
+                .unwrap_or(requested)
+        }
+        _ => requested,
+    }
+}
+
+const REVIEW_CHECKLIST: &str = "Inspect the actual source files, manifests, config, routes, prompts, tools, and wiring. Look for LLM-generated failure modes: hallucinated APIs/imports/packages, fake or partial implementations, stubs/TODOs/mock leakage, dead UI handlers, architecture drift, requirement drift, unsafe assumptions, swallowed errors, state races, schema/date/pagination bugs, auth/BOLA/IDOR/tenant isolation issues, prompt injection/tool poisoning/RAG poisoning, excessive agency, secret/PII leakage, dependency confusion, false-green tests, config drift, and platform-specific web/mobile/desktop/CLI/extension risks.";
+const REVIEW_TRACE_PASS: &str = "Then read the callers and callees of each changed function and the tests that cover it, and confirm every finding against that code before you report it.";
+const REVIEW_EDGE_PASS: &str = "Then make a second pass over error paths, boundary values, concurrency and backwards compatibility of the changed behavior.";
+const REVIEW_FINDINGS: &str =
+    "Return high-confidence findings with file/line evidence and proposed fixes.";
+
+fn review_pass(effort: Effort) -> String {
+    match effort {
+        Effort::None | Effort::Minimal | Effort::Low => "Make one quick pass over the changed lines only. Report only correctness or security bugs you are certain of, with file/line evidence and the fix; skip style and speculative concerns.".to_string(),
+        Effort::Medium => format!("{REVIEW_CHECKLIST} {REVIEW_FINDINGS}"),
+        Effort::High => format!("{REVIEW_CHECKLIST} {REVIEW_TRACE_PASS} {REVIEW_FINDINGS}"),
+        Effort::Xhigh => format!(
+            "{REVIEW_CHECKLIST} {REVIEW_TRACE_PASS} {REVIEW_EDGE_PASS} {REVIEW_FINDINGS}"
+        ),
+        Effort::Max => format!(
+            "{REVIEW_CHECKLIST} {REVIEW_TRACE_PASS} {REVIEW_EDGE_PASS} {REVIEW_FINDINGS} After them, list lower-confidence findings separately and mark each as unconfirmed."
+        ),
+    }
+}
+
+fn review_prompt_at(scope: &str, effort: Effort) -> String {
+    let review_scope = if scope.is_empty() {
         "my current code changes, including unstaged, staged and untracked files. Run `git diff`, `git diff --cached`, and `git ls-files --others --exclude-standard`, then read the listed untracked files"
     } else {
-        arg.trim()
+        scope
     };
-    format!(
-        "Please review {review_scope}. Inspect the actual source files, manifests, config, routes, prompts, tools, and wiring. Look for LLM-generated failure modes: hallucinated APIs/imports/packages, fake or partial implementations, stubs/TODOs/mock leakage, dead UI handlers, architecture drift, requirement drift, unsafe assumptions, swallowed errors, state races, schema/date/pagination bugs, auth/BOLA/IDOR/tenant isolation issues, prompt injection/tool poisoning/RAG poisoning, excessive agency, secret/PII leakage, dependency confusion, false-green tests, config drift, and platform-specific web/mobile/desktop/CLI/extension risks. Return high-confidence findings with file/line evidence and proposed fixes."
-    )
+    format!("Please review {review_scope}. {}", review_pass(effort))
 }
 
 pub fn create_skill_prompt(arg: &str) -> String {
@@ -1624,18 +1680,28 @@ pub fn render_remote_env() -> String {
     lines.join("\n")
 }
 
+fn effort_ladder_usage() -> String {
+    Effort::ALL
+        .iter()
+        .map(|effort| effort.wire_value())
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
 pub fn set_effort(session: &mut AgentSession, arg: &str) -> String {
     let current = session.effort.unwrap_or_default();
     if arg.trim().is_empty() {
         return format!(
-            "Effort is {}. Change it with /effort low | medium | high | max.",
-            current.label()
+            "Effort is {}. Change it with /effort {}.",
+            current.label(),
+            effort_ladder_usage()
         );
     }
     let Some(effort) = crate::design_system::Effort::from_config_value(arg) else {
         return format!(
-            "Unknown effort level '{}'. Use: low | medium | high | max",
-            arg.trim()
+            "Unknown effort level '{}'. Use: {}",
+            arg.trim(),
+            effort_ladder_usage()
         );
     };
     session.effort = Some(effort);
@@ -2824,6 +2890,103 @@ mod tests {
         assert!(prompt.contains("read the listed untracked files"));
     }
 
+    #[test]
+    fn review_takes_a_leading_effort_and_keeps_the_rest_as_scope() {
+        let mut session = test_session();
+        let ParityCommandResult::Prompt(quick) =
+            handle_shared_command("/review", "low src/auth", &mut session)
+        else {
+            panic!("review must reach the prompt provider");
+        };
+        assert!(
+            quick.starts_with("Please review src/auth. Make one quick pass"),
+            "{quick}"
+        );
+
+        let ParityCommandResult::Prompt(deep) =
+            handle_shared_command("/review", "XHIGH", &mut session)
+        else {
+            panic!("review must reach the prompt provider");
+        };
+        assert!(deep.contains("git diff --cached"), "{deep}");
+        assert!(deep.contains(REVIEW_TRACE_PASS) && deep.contains(REVIEW_EDGE_PASS));
+        assert!(!deep.contains("lower-confidence"));
+
+        let ParityCommandResult::Prompt(scoped) =
+            handle_shared_command("/review", "highlights.rs", &mut session)
+        else {
+            panic!("review must reach the prompt provider");
+        };
+        assert!(
+            scoped.starts_with("Please review highlights.rs. "),
+            "{scoped}"
+        );
+    }
+
+    #[test]
+    fn review_without_a_level_runs_at_the_session_effort() {
+        let mut session = test_session();
+        session.effort = None;
+        let ParityCommandResult::Prompt(default) =
+            handle_shared_command("/review", "", &mut session)
+        else {
+            panic!("review must reach the prompt provider");
+        };
+        assert!(default.contains(REVIEW_CHECKLIST) && !default.contains(REVIEW_TRACE_PASS));
+
+        session.effort = Some(Effort::Max);
+        let ParityCommandResult::Prompt(max) = handle_shared_command("/review", "", &mut session)
+        else {
+            panic!("review must reach the prompt provider");
+        };
+        assert!(max.contains(REVIEW_EDGE_PASS) && max.contains("lower-confidence"));
+
+        let ParityCommandResult::Prompt(overridden) =
+            handle_shared_command("/review", "low", &mut session)
+        else {
+            panic!("review must reach the prompt provider");
+        };
+        assert!(overridden.contains("Make one quick pass"), "{overridden}");
+    }
+
+    #[test]
+    fn every_review_level_runs_a_different_pass() {
+        let passes: std::collections::HashSet<String> = [
+            Effort::Low,
+            Effort::Medium,
+            Effort::High,
+            Effort::Xhigh,
+            Effort::Max,
+        ]
+        .into_iter()
+        .map(review_pass)
+        .collect();
+        assert_eq!(passes.len(), 5);
+    }
+
+    #[test]
+    fn review_effort_narrows_to_the_levels_the_model_offers() {
+        use crate::model_catalog::EffortSupport;
+        let levels = || EffortSupport::Levels(vec!["low".into(), "medium".into(), "high".into()]);
+        assert_eq!(review_effort_for(Effort::Xhigh, levels()), Effort::High);
+        assert_eq!(review_effort_for(Effort::Max, levels()), Effort::High);
+        assert_eq!(review_effort_for(Effort::Medium, levels()), Effort::Medium);
+        assert_eq!(
+            review_effort_for(Effort::Xhigh, EffortSupport::Any),
+            Effort::Xhigh
+        );
+        assert_eq!(
+            review_effort_for(Effort::Max, EffortSupport::NotInCatalog),
+            Effort::Max
+        );
+    }
+
+    #[test]
+    fn app_server_review_reads_an_explicit_level() {
+        assert!(review_prompt("high src").contains(REVIEW_TRACE_PASS));
+        assert!(!review_prompt("src").contains(REVIEW_TRACE_PASS));
+    }
+
     fn test_session() -> AgentSession {
         AgentSession::new(
             "test-model",
@@ -3075,6 +3238,8 @@ mod tests {
         assert!(reply.starts_with("Effort set to High"), "{reply}");
         assert!(set_effort(&mut session, "").contains("Effort is High"));
         assert!(set_effort(&mut session, "extreme").starts_with("Unknown effort level"));
+        assert!(set_effort(&mut session, "extreme")
+            .contains("none | minimal | low | medium | high | xhigh | max"));
         assert_eq!(session.effort, Some(crate::design_system::Effort::High));
     }
 
