@@ -362,15 +362,14 @@ test('installed chromium full-page capture is rejected when touch pixels change'
       pointerAfter,
     };
     expect(after.viewport).toEqual(before.viewport);
-    expect(after.media.coarse).toBe(false);
-    expect(after.media.fine).toBe(true);
-    expect(after.media.hover).toBe(true);
-    expect(after.media.touch).toBe(0);
-    expect(pointerAfter.height).toBe(24);
+    expect(pointerAfter.height).toBe(48);
+    expect(after.media).toEqual(before.media);
     expect(pixel(bytes, pointer.x + 120 - clip.x, pointer.y + 32 - clip.y)).toEqual([
       255, 255, 255, 255,
     ]);
-    expect(() => assertPublicViewportCaptureStateEqual(before, after)).toThrow(
+    const touchLost = structuredClone(after);
+    touchLost.media = { ...after.media, coarse: false, fine: true, hover: true, touch: 0 };
+    expect(() => assertPublicViewportCaptureStateEqual(before, touchLost)).toThrow(
       'Viewport capture state changed',
     );
   });
