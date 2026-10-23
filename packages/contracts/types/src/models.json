@@ -553,6 +553,12 @@
       "verifiedBy": "official-provider-privacy-pages-read-2026-10-22",
       "status": "CORRECTION",
       "notes": "The account setting that keeps a user's content away from providers that may train now counts only providers whose own terms cover the model that serves, so four records change trainsOnInputs from never to varies_by_route in provider-governance.json and gateways.json. vercel_gateway: https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training (last updated 2026-09-10) states \"By default, AI Gateway does not route based on the training data policy of providers.\"; filtering needs providerOptions.gateway.disallowPromptTraining, which no adapter sends. cheaperinference and cheaperinference_anthropic: https://platform.cheaperinference.com/legal/privacy states \"We do not use customer prompt or response bodies to train Keak models.\" and that inputs \"are transmitted to the model provider selected to serve a request\", whose practices the policy \"does not govern\". deepinfra: https://docs.deepinfra.com/account/data-privacy states \"We do not use data you submit to our APIs for training models.\" except \"when using Google or Anthropic models, where the receiving company's training policy applies\". A varies_by_route or unknown provider is refused whenever the setting is on. No model, route or price changed, and no live provider call was made."
+    },
+    {
+      "date": "2026-10-22",
+      "verifiedBy": "official-google-omni-guide-interactions-reference-pricing-and-deprecations-no-live-call",
+      "status": "CORRECTION",
+      "notes": "gemini-omni-1.1-flash gains its video generation block, on the owner's decision of 2026-10-22 that it replaces Veo 3.1 for video. Read on 2026-10-22 from https://ai.google.dev/gemini-api/docs/omni, https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash, https://ai.google.dev/api/interactions-api (VideoResponseFormat and VideoConfig), https://ai.google.dev/gemini-api/docs/background-execution, https://ai.google.dev/gemini-api/docs/pricing and https://ai.google.dev/gemini-api/docs/deprecations, which names gemini-omni-1.1-flash as the replacement for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview, all shut down 2026-10-22. The model is served on POST v1beta/interactions, not on predictLongRunning: input is text plus inline image parts, response_format takes type video, aspect_ratio 16:9 or 9:16, resolution 360p, 720p (default), 1080p (upscaled) or 4k (upscaled) and a duration string, generation_config.video_config.task takes text_to_video, image_to_video (first image is the starting frame), reference_to_video, edit or extend, and background true returns an interaction id to poll. Output is 3 to 10 seconds at 24 frames per second, and the model generates an audio track with every video; the API has no switch to turn audio off, no seed for video and no negative prompt. Input is text, image and video (video up to 10 seconds, for editing and extension, which the managed route does not offer). Google publishes no maximum for reference images and its prompt guide shows six, so imageInput.maxImagesPerRequest is 4, the managed route's own limit. Pricing: $1.50 per million input tokens and $17.50 per million video output tokens, billed at 5,792 tokens per second of 720p video, which is $0.10136 per second; videoPerSecondCost moves from the rounded 0.1 to 0.10136 and videoPerSecondCostByResolution carries 720p only. Google publishes no token rate for 360p, 1080p or 4K, so the output sizes list 720p in both orientations and the other three resolutions stay out until their rate is published or measured; the managed contract has no 360p value either. No live provider call was made; the duration string format and background execution for this model are documented but were not exercised. The lifecycle stage stays registered: the model has no answered probe and no eval measurement, so no family slot moves with this entry."
     }
   ],
   "providers": {
@@ -3293,6 +3299,7 @@
       "provider": "google",
       "developer": "google",
       "modelType": "video",
+      "inputModalities": ["text", "image", "video"],
       "contextWindow": 1048576,
       "inputCost": 1.5,
       "outputCost": 17.5,
@@ -3318,8 +3325,19 @@
       "description": "Generates video and edits it by conversation.",
       "released": "August 27, 2026",
       "deprecation_date": null,
-      "videoPerSecondCost": 0.1,
-      "pricingNote": "Paid tier only. Input $1.50/1M (text, image, video, audio); output $9.00/1M text and $17.50/1M video, which Google states is approximately $0.10 per second. Video output runs 3 to 10 seconds at 360p, 720p, 1080p or 4K and 24 frames per second. Google names this model as the replacement for gemini-omni-flash-preview and for the three Veo 3.1 ids, all of which shut down on 2026-10-22. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page and the model page, retrieved 2026-10-07.",
+      "videoPerSecondCost": 0.10136,
+      "videoPerSecondCostByResolution": { "720p": 0.10136 },
+      "videoGeneration": {
+        "durationSecs": [3, 4, 5, 6, 7, 8, 9, 10],
+        "outputSizes": [
+          { "resolution": "720p", "aspectRatio": "16:9", "width": 1280, "height": 720 },
+          { "resolution": "720p", "aspectRatio": "9:16", "width": 720, "height": 1280 }
+        ],
+        "supportsAudio": true,
+        "supportsSeed": false
+      },
+      "pricingNote": "Paid tier only. Input $1.50/1M (text, image, video, audio); output $9.00/1M text and $17.50/1M video, billed at 5,792 output tokens per second of 720p video, $0.10136 per second (Google rounds it to approximately $0.10). Google publishes no token rate for 360p, 1080p or 4K output, so only 720p is priced and offered. Video output runs 3 to 10 seconds at 24 frames per second, always with a generated audio track. Google names this model as the replacement for gemini-omni-flash-preview and for the three Veo 3.1 ids, all of which shut down on 2026-10-22. Verified against ai.google.dev/gemini-api/docs/pricing, the deprecations page, the model page and the Omni guide, retrieved 2026-10-22.",
+      "imageInput": { "maxImagesPerRequest": 4 },
       "reasoning": { "capable": false, "control": "none" },
       "lifecycle": {
         "stage": "registered",
