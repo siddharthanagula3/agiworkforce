@@ -1016,6 +1016,11 @@
       ],
       "editor/title": [
         {
+          "command": "agi-workforce.openChatInEditor",
+          "when": "resourceScheme == file || resourceScheme == untitled",
+          "group": "navigation@100"
+        },
+        {
           "command": "agi-workforce.revisePlanFromDocument",
           "when": "agi-workforce.planDocumentOpen && resourceScheme == untitled && editorLangId == markdown",
           "group": "navigation"

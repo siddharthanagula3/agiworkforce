@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DEVELOPER_REASONING_EFFORTS } from '@agiworkforce/local-runtime-contract';
 import {
   SETTINGS_PANEL_SETTING_KEYS,
   type ConfigSettingUpdate,
@@ -125,7 +126,7 @@ const settingValueSchemas = {
   'inlineCompletions.debounceMs': z.number().int().min(50).max(2000),
   'inlineCompletions.maxLength': z.number().int().min(50).max(5000),
   'agent.mode': z.enum(['ask', 'auto', 'plan', 'bypass']),
-  'agent.effort': z.enum(['low', 'medium', 'high', 'max']),
+  'agent.effort': z.enum(DEVELOPER_REASONING_EFFORTS),
   'agent.thinking': z.boolean(),
   activateOnStartup: z.boolean(),
   useTerminal: z.boolean(),

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEVELOPER_REASONING_EFFORTS } from '@agiworkforce/local-runtime-contract';
 import {
   SETTINGS_COMMANDS,
   parseSettingsWebviewMessage,
@@ -33,6 +34,18 @@ describe('settings webview protocol', () => {
         update: { key, value },
       });
     }
+  });
+
+  it('accepts every level of the developer effort ladder the panel offers', () => {
+    for (const value of DEVELOPER_REASONING_EFFORTS) {
+      expect(
+        parseSettingsWebviewMessage({ type: 'settings.update', key: 'agent.effort', value }),
+        value,
+      ).toEqual({ type: 'settings.update', update: { key: 'agent.effort', value } });
+    }
+    expect(
+      parseSettingsWebviewMessage({ type: 'settings.update', key: 'agent.effort', value: 'ultra' }),
+    ).toBeUndefined();
   });
 
   it('accepts only allowlisted host commands', () => {
