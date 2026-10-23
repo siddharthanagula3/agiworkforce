@@ -85,7 +85,7 @@ describe('connector OAuth scope ceiling, operator descriptors cannot exceed it',
     configure('linear', ['read', 'admin', 'app:mentionable']);
     getConnectorOAuthProvider('linear');
     expect(logger.warn).toHaveBeenCalledWith(
-      { connectorId: 'linear', dropped: ['admin'] },
+      { connectorId: 'linear', dropped: ['admin', 'app:mentionable'] },
       expect.stringContaining('above the documented ceiling'),
     );
   });

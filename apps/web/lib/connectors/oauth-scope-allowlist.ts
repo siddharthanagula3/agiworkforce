@@ -128,14 +128,7 @@ export const CONNECTOR_OAUTH_SCOPE_CEILINGS: Readonly<Record<string, ConnectorSc
   todoist: SCOPE_REVIEW_PENDING,
   vercel: SCOPE_REVIEW_PENDING,
 
-  linear: [
-    'read',
-    'write',
-    'issues:create',
-    'comments:create',
-    'app:assignable',
-    'app:mentionable',
-  ],
+  linear: ['read', 'write', 'issues:create', 'comments:create'],
   jira: [
     OFFLINE_ACCESS_SCOPE,
     'read:me',
