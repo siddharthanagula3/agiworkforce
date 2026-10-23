@@ -30,7 +30,7 @@ for (const colorScheme of ['dark', 'light'] as const) {
 }
 
 test('lists the packages of a license group once it is opened', async ({ page }) => {
-  await page.goto('/legal/open-source');
+  await page.goto('/legal/open-source', { waitUntil: 'networkidle' });
   const groups = page.locator('#packages details');
   const notGenerated = page.getByText('Notices are generated at build time.');
   await expect(groups.first().or(notGenerated)).toBeVisible();

@@ -26,6 +26,7 @@ const distDirOverride = process.env[DIST_DIR_ENV_VAR]?.trim();
 const distDir = distDirOverride ? { distDir: distDirOverride } : {};
 
 const TRACED_ROUTE_GLOB = '/**';
+const OPEN_SOURCE_ROUTE = '/legal/open-source';
 
 const TRACED_RUNTIME_FILES = [
   './assets/og/**',
@@ -71,6 +72,7 @@ const nextConfig: NextConfig = {
     [TRACED_ROUTE_GLOB]: standaloneEnabled
       ? [...TRACED_RUNTIME_FILES, ...TRACED_STANDALONE_FILES]
       : TRACED_RUNTIME_FILES,
+    [OPEN_SOURCE_ROUTE]: ['./public/legal/third-party-notices.json'],
   },
   outputFileTracingExcludes: {
     [TRACED_ROUTE_GLOB]: UNTRACED_TEST_FILES,

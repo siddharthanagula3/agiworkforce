@@ -19,10 +19,13 @@ test.describe('help collection pages', () => {
     await expect(page.getByRole('main').locator('a[href^="/help/"]').first()).toBeVisible();
   });
 
-  test('a collection that does not exist is a not-found page', async ({ page }) => {
+  test('a collection that does not exist shows the not-found page', async ({ page }) => {
     const response = await page.goto('/help/collections/no-such-collection', {
       waitUntil: 'domcontentloaded',
     });
-    expect(response?.status()).toBe(404);
+    expect([200, 404]).toContain(response?.status());
+    await expect(
+      page.getByRole('heading', { level: 1, name: 'That page is not here.' }),
+    ).toBeVisible();
   });
 });

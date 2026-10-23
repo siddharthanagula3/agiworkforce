@@ -1288,6 +1288,7 @@ async function controlsIdentity(
     titles: await page.getByRole('main').getByRole('heading', { level: 1 }).allTextContents(),
     sections: await page
       .getByRole('main')
+      .locator('.dx-prose')
       .getByRole('heading', { level: 2 })
       .evaluateAll((headings) => headings.map((heading) => heading.id)),
     paragraphs: (await page.getByRole('main').locator('p').allTextContents())

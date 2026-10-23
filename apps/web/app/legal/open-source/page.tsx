@@ -8,8 +8,6 @@ import { summarizeNotices, type NoticesSummary } from './notices';
 import { OpenSourceNotices } from './OpenSourceNotices';
 import './open-source.css';
 
-export const dynamic = 'force-static';
-
 export const metadata = buildMetadata({
   title: 'Open source licenses',
   description:
