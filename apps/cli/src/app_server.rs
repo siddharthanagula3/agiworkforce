@@ -11,6 +11,7 @@
 //!    connecting client is responsible for confirming each call.
 
 pub(crate) mod account;
+pub mod acp;
 mod cloud_threads;
 mod developer_host;
 mod pull_request;
@@ -47,6 +48,14 @@ pub async fn run_developer_session_stdio(
 ) -> Result<()> {
     crate::output::claim_stdout_for_protocol();
     agiworkforce_app_server::run_developer_session_stdio(host, capabilities).await
+}
+
+/// Serve the Agent Client Protocol on stdio until the editor closes stdin.
+/// Stdout is the protocol channel for the life of the process, as for the
+/// stdio app-server.
+pub async fn run_acp_stdio(host: Arc<dyn DeveloperSessionHost>) -> Result<()> {
+    crate::output::claim_stdout_for_protocol();
+    acp::serve_acp(tokio::io::stdin(), tokio::io::stdout(), host).await
 }
 
 const MCP_SERVER_CACHE_TTL_MS: u64 = 3_600_000;

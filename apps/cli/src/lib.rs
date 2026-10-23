@@ -858,6 +858,21 @@ enum Command {
     /// Let AGI Mobile list, start, follow and steer sessions in this folder.
     #[command(alias = "rc")]
     RemoteControl,
+    /// Serve the Agent Client Protocol on stdio for Zed, JetBrains IDEs and other ACP editors.
+    ///
+    /// The editor starts this process in the project folder and talks to it over
+    /// stdin and stdout; nothing listens on the network. Approvals appear in the
+    /// editor. The folder must already be trusted: run `agi` there once.
+    ///
+    /// Zed: add to settings.json, then pick the agent in the Agent Panel:
+    ///
+    ///   "agent_servers": { "AGI": { "type": "custom", "command": "agi", "args": ["acp"], "env": {} } }
+    ///
+    /// JetBrains IDEs: in AI Chat choose Add Custom Agent, then in ~/.jetbrains/acp.json:
+    ///
+    ///   "agent_servers": { "AGI": { "command": "/full/path/to/agi", "args": ["acp"], "env": {} } }
+    #[command(verbatim_doc_comment)]
+    Acp,
     /// Run a prompt in the background so it keeps working after this terminal closes (alias: bg).
     #[command(alias = "bg")]
     Background {
@@ -1766,6 +1781,7 @@ fn invocation_requires_project_trust(cli: &Cli) -> bool {
                 | Command::Review { .. }
                 | Command::Apply { .. }
                 | Command::AppServer { .. }
+                | Command::Acp
                 | Command::RemoteControl
                 | Command::Resume { .. }
                 | Command::Fork { .. }
@@ -6354,6 +6370,26 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 generate_shell_completion(*shell, "agi", &mut io::stdout());
                 Ok(())
             }
+            Command::Acp => {
+                crate::tools::forbid_terminal_questions();
+                let workspace_root = std::env::current_dir()?;
+                let host = std::sync::Arc::new(
+                    app_server::CliDeveloperSessionHost::new(app_config.clone(), workspace_root)?
+                        .with_bypass_permissions_available(
+                            cli.allow_dangerously_skip_permissions
+                                || normalized_cli_options
+                                    .effective_permissions(
+                                        cli.mode,
+                                        cli.dangerously_skip_permissions,
+                                        cli.yes,
+                                        None,
+                                    )
+                                    .skip_permissions,
+                        ),
+                );
+                host.prepare().await;
+                app_server::run_acp_stdio(host).await
+            }
             Command::RemoteControl => {
                 let workspace_root = std::env::current_dir()?;
                 let host = std::sync::Arc::new(
@@ -9362,6 +9398,7 @@ mod tests {
             vec!["agi", "exec", "inspect this project"],
             vec!["agi", "review"],
             vec!["agi", "app-server"],
+            vec!["agi", "acp"],
             vec!["agi", "onboarding"],
         ] {
             let cli = Cli::try_parse_from(args).expect("developer invocation should parse");
