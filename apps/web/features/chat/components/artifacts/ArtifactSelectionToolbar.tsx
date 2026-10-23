@@ -232,7 +232,7 @@ export function ArtifactSelectionToolbar({
   return (
     <div
       className={cn(
-        'pointer-events-auto absolute z-[var(--z-content-raised)]',
+        'pointer-events-auto absolute z-[var(--z-panel)]',
         anchor.below ? '' : '-translate-y-full',
         asking ? '' : '-translate-x-1/2',
       )}

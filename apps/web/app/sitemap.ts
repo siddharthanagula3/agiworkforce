@@ -108,6 +108,7 @@ const routes: RouteConfig[] = [
   { path: '/legal', priority: 0.5, changeFrequency: 'yearly' },
   { path: '/legal/eu-representative', priority: 0.4, changeFrequency: 'monthly' },
   { path: '/legal/government-requests', priority: 0.4, changeFrequency: 'monthly' },
+  { path: '/legal/open-source', priority: 0.3, changeFrequency: 'monthly' },
   { path: '/supported-countries', priority: 0.6, changeFrequency: 'monthly' },
   { path: '/data-use', priority: 0.7, changeFrequency: 'yearly' },
   { path: '/privacy/india', priority: 0.6, changeFrequency: 'yearly' },

@@ -91,6 +91,7 @@ describe('isServerToServerRoute', () => {
       '/api/webhooks/gmail',
       '/api/webhooks/google-calendar',
       '/api/webhooks/slack',
+      '/api/webhooks/slack-interactions',
     ]);
   });
 

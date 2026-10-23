@@ -64,7 +64,7 @@ describe('/press, launch date and upgrade access', () => {
     expect(source).toMatch(
       /AGI Chat runs on managed cloud\. Local runs in the CLI\. BYOK runs on \$\{BYOK_SURFACES\.label\}\. \$\{BYOK_SURFACES\.availability\}`/u,
     );
-    expect(source.match(/on \{BYOK_SURFACES\.label\}\./gu)).toHaveLength(2);
+    expect(source.match(/on(?:\s|\{' '\})+\{BYOK_SURFACES\.label\}\./gu)).toHaveLength(2);
     expect(source).not.toContain('BYOK_SURFACES.exclusion');
     expect(source).not.toMatch(/the other two routes run in the CLI/u);
     expect(source).not.toMatch(/provider-key routes run in the CLI/u);

@@ -255,6 +255,14 @@ export const WORKSPACE_SWITCH_SURFACES: readonly WorkspaceSwitchSurface[] = [
     exportable: true,
   },
   {
+    surface: 'custom_agents',
+    effect: 'partitioned',
+    tables: ['user_agents'],
+    transferable: false,
+    copyable: false,
+    exportable: true,
+  },
+  {
     surface: 'code_sessions',
     effect: 'partitioned',
     tables: [

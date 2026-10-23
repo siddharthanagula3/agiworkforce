@@ -69,14 +69,16 @@ function sourceFiles(): string[] {
   return files;
 }
 
-/** Every `const NAME = 'literal'` in the app, so a key held in one module and
- * written in another still resolves to the string the browser sees. */
+/** Every module-level `const NAME = 'literal'` in the app, so a key held in one
+ * module and written in another still resolves to the string the browser sees.
+ * Class members and indented locals are skipped: a field such as an error's
+ * `name` would otherwise shadow a storage-adapter parameter of the same name. */
 function constantValues(files: readonly string[]): Map<string, string> {
   const values = new Map<string, string>();
   for (const file of files) {
     const source = readFileSync(file, 'utf8');
     for (const match of source.matchAll(
-      /\b(?:const|readonly)\s+([A-Za-z_$][\w$]*)\s*(?::\s*string\s*)?=\s*'([^'\n]+)'/g,
+      /^(?:export\s+)?const\s+([A-Za-z_$][\w$]*)\s*(?::\s*string\s*)?=\s*'([^'\n]+)'/gm,
     )) {
       const [, name, value] = match;
       if (name && value !== undefined) values.set(name, value);

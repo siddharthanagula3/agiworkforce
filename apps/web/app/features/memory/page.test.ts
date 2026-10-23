@@ -69,8 +69,9 @@ describe('/features/memory states the limits the code enforces', () => {
 
   it('describes the import the web settings pane offers', () => {
     expect(importDialog).toContain(
-      'Paste memories exported from another assistant, or upload a text or JSON file. Review what was found before anything is saved.',
+      'Send the prompt below to your other assistant, then paste its reply here to review before anything is saved.',
     );
+    expect(importDialog).toContain("IMPORT_FILE_ACCEPT = '.txt,.json,text/plain,application/json'");
     expect(page).toContain(
       'Paste memories exported from another assistant, or upload a text or JSON file. You review what was found before anything is saved',
     );

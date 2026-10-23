@@ -222,7 +222,7 @@ describe('POST /api/github/webhook', () => {
   });
 
   it('ignores an event nothing subscribes to', async () => {
-    const body = JSON.stringify({ action: 'opened', repository: { full_name: 'agi/workforce' } });
+    const body = JSON.stringify({ action: 'closed', repository: { full_name: 'agi/workforce' } });
     const request = new NextRequest('http://localhost/api/github/webhook', {
       method: 'POST',
       headers: {

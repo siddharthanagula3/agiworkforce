@@ -67,6 +67,10 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
   { url: '/api/mobile/iap/apple-notifications', why: 'the App Store server calls this' },
   { url: '/api/mobile/iap/google-notifications', why: 'the Play billing service calls this' },
   { url: '/api/github/oauth/callback', why: 'GitHub redirects the user here after authorization' },
+  {
+    url: '/api/webhooks/slack-interactions',
+    why: 'Slack calls this with a signed interaction payload',
+  },
 
   // Another surface or the browser reaches these without naming the path in
   // committed source.
@@ -95,12 +99,20 @@ const CALLERLESS: ReadonlyArray<{ url: string; why: string }> = [
     why: 'platform-admin maintenance operation for reviewed stale-flag cleanup',
   },
   {
+    url: '/api/admin/usage-promotions',
+    why: 'platform-admin procedure for banked limit resets and time-boxed limit uplifts',
+  },
+  {
     url: '/api/admin/support-access',
     why: 'two-operator break-glass procedure called from the production-access runbook',
   },
 
   // Authenticated protocol endpoints support API and cross-surface clients.
   // A first-party web screen is not their only valid consumer.
+  {
+    url: '/api/custom-agents/import',
+    why: 'authenticated API that imports a Claude Code agent file; no first-party screen names it yet',
+  },
   {
     url: '/api/github/issues',
     why: 'authenticated GitHub integration API for issue readers and comment clients',

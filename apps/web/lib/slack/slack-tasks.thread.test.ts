@@ -103,7 +103,7 @@ describe('a Slack thread is one conversation', () => {
     await findSlackThreadConversation(db, run());
     const [sql, params] = query.mock.calls[0] as unknown as [string, unknown[]];
     expect(sql).toContain('earlier.user_id = $1');
-    expect(sql).toContain('earlier.organization_id is not distinct from $2::uuid');
+    expect(sql).toContain('conversation.organization_id is not distinct from $2::uuid');
     expect(sql).toContain('conversation.deleted_at is null');
     expect(params).toEqual([
       'user_1',

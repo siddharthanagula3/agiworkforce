@@ -2502,6 +2502,16 @@
               }
             }
           },
+          "403": {
+            "description": "The model's provider may train on requests and the account has training turned off, or the managed usage tenant does not match the caller",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ApiError"
+                }
+              }
+            }
+          },
           "429": {
             "description": "Rate limited",
             "content": {

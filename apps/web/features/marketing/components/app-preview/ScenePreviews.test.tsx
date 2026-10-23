@@ -457,7 +457,7 @@ describe('project page with its settings dialog', () => {
       'Save',
       'sm:max-w-lg',
     ]);
-    expectSource('packages/ui/ui/src/primitives/Dialog.tsx', ['bg-black/70']);
+    expectSource('packages/ui/ui/src/primitives/Dialog.tsx', ['bg-[var(--scrim)]']);
   });
 });
 
@@ -2560,7 +2560,9 @@ describe('the /web close-up and research steps are scaled pictures of the produc
     expectSource('apps/web/features/chat/pages/WebChatPage.tsx', [
       "placeholder={t('chat:placeholderEmpty')}",
       "placeholder={t('chat:placeholder')}",
-      '<GreetingBanner showWorkspace />',
+    ]);
+    expectSource('apps/web/features/chat/pages/WebChatPage.tsx', [
+      '<GreetingBanner\n                      showWorkspace\n                      agiWork={composerToggles?.workMode === AGI_WORK_MODE}',
     ]);
     expectSource('packages/ui/unified-chat/src/components/BrandedGreeting.tsx', [
       "fontFamily: 'var(--chat-font-greeting)',",

@@ -14,7 +14,7 @@ import {
 
 describe('managed cloud resource entitlements', () => {
   it.each([
-    ['free', 1, 1],
+    ['free', 1, 0],
     ['basic', 5, 5],
     ['pro', 25, 25],
     ['team', 25, 25],

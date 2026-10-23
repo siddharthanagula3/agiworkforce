@@ -835,7 +835,7 @@ export function TerminalAppPreview({
         )}
         <div className="agi-app-tui-box agi-app-tui-input" data-title="Default">
           <span>
-            <b>&gt;</b> <i>Message AGI... Enter sends · Ctrl-J newline · / commands · @ files</i>
+            <b>&gt;</b> <i>Message AGI... / for commands</i>
           </span>
         </div>
         <div className="agi-app-tui-status">

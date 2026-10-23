@@ -1,4 +1,3 @@
-
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
@@ -606,7 +605,7 @@ describe('Dialog Component', () => {
         </Dialog>,
       );
 
-      const overlay = document.querySelector('.fixed.inset-0.bg-black\\/70');
+      const overlay = document.querySelector('.fixed.inset-0.backdrop-blur-sm');
       expect(overlay).toHaveClass('data-[state=open]:animate-in');
       expect(overlay).toHaveClass('data-[state=closed]:animate-out');
     });

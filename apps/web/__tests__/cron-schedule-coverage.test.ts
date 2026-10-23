@@ -75,7 +75,10 @@ describe('cron routes and vercel.json schedules agree', () => {
   //     drain-background-jobs is the cadence every queued promise inherits:
   //     the notification and email a finished scheduled run owes its user, the
   //     SIEM delivery, and the agent run an event trigger promises to start
-  //     "when it happens" rather than tomorrow.
+  //     "when it happens" rather than tomorrow. live-artifacts-refresh claims
+  //     each live artifact whose readiness check is due and retries a failed
+  //     check after a fifteen minute backoff, which a daily sweep would stretch
+  //     to a day.
   //
   //   monitoring, a check that exists to catch a problem before a customer
   //     does. health-probe and page-security-anomalies exist to page someone,
@@ -107,6 +110,7 @@ describe('cron routes and vercel.json schedules agree', () => {
     '/api/cron/remind-trials',
     '/api/cron/expire-code-trials',
     '/api/cron/notify-upgrade-waitlist',
+    '/api/cron/live-artifacts-refresh',
   ]);
   const MONITORING_CRONS = new Set([
     '/api/cron/health-probe',

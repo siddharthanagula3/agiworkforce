@@ -49,6 +49,21 @@ describe('GET /api/cron/live-artifacts-refresh', () => {
     expect(mocks.refreshLiveArtifacts).not.toHaveBeenCalled();
   });
 
+  it('skips outside the database low-power window without touching anything', async () => {
+    mocks.verifyCronRequest.mockReturnValue(true);
+    vi.stubEnv('AGI_DB_LOW_POWER', '1');
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-10-23T10:30:00Z'));
+    try {
+      const response = await call();
+      expect(await response.json()).toEqual({ skipped: 'db_low_power' });
+      expect(mocks.refreshLiveArtifacts).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllEnvs();
+    }
+  });
+
   it('runs one bounded pass on the service connection and reports it', async () => {
     mocks.verifyCronRequest.mockReturnValue(true);
     const summary = {

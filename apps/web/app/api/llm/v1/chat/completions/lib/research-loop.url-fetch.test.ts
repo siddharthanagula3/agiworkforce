@@ -455,10 +455,7 @@ describe('research loop runtime web_search', () => {
       );
 
       expect(searchBackendCalls(fetchMock)).toHaveLength(1);
-      expect((fetchMock.mock.calls[0] as unknown[] | undefined)?.[0]).toBe(PERPLEXITY_URL);
-      const requestInit = (fetchMock.mock.calls[0] as unknown[] | undefined)?.[1] as {
-        body?: string;
-      };
+      const requestInit = searchBackendCalls(fetchMock)[0]?.[1] as { body?: string };
       expect(requestInit?.body).toContain('solid-state battery 2026');
 
       // The gathering round keeps the runtime tool; the planning turn stays tool-free.

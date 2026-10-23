@@ -130,7 +130,7 @@ describe('Web and Desktop share the real app shell', () => {
     const page = readSource('apps/web/features/chat/pages/WebChatPage.tsx');
     expect(page).toContain("placeholder={t('chat:placeholder')}");
     expect(page).toContain("placeholder={t('chat:placeholderEmpty')}");
-    expect(page).toContain('<GreetingBanner showWorkspace />');
+    expect(page).toMatch(/<GreetingBanner\s+showWorkspace\s+agiWork=/u);
   });
 
   it.each([
@@ -359,9 +359,7 @@ describe('CLI terminal', () => {
       ' Always Allow ',
     ])
       expect(overlay).toContain(text);
-    expect(readSource('apps/cli/src/tui/tui_app.rs')).toContain(
-      'Message AGI...  Enter sends · Ctrl-J newline · / commands · @ files',
-    );
+    expect(readSource('apps/cli/src/tui/tui_app.rs')).toContain('Message AGI...  / for commands');
     const design = readSource('apps/cli/src/design_system.rs');
     for (const text of ['"Local"', '"Your key"', '"Managed"']) expect(design).toContain(text);
   });

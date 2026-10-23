@@ -20,6 +20,13 @@ const KEYED_BY_ITS_SESSION: Readonly<Record<string, string>> = {
   account_security_sessions: 'session_id',
 };
 
+/**
+ * A setting an account holds once per connector has no identity of its own: its
+ * row is the pair, and the connector id is what keeps it from being keyed by the
+ * account alone.
+ */
+const KEYED_BY_ACCOUNT_AND_CONNECTOR: ReadonlySet<string> = new Set(['connector_account_states']);
+
 function migrationSql(): { file: string; sql: string }[] {
   return readdirSync(MIGRATIONS_DIR)
     .filter((name) => /^\d{4}_.*\.sql$/.test(name))
@@ -144,6 +151,12 @@ describe('authentication identity object', () => {
       if (!SEPARATELY_IDENTIFIED.test(name)) continue;
       if (!shape.columns.has('user_id')) continue;
       checked.push(name);
+      if (KEYED_BY_ACCOUNT_AND_CONNECTOR.has(name)) {
+        expect(shape.body, `${name} is not keyed by account and connector`).toMatch(
+          /\bprimary\s+key\s*\(\s*user_id\s*,\s*connector_id\s*\)/i,
+        );
+        continue;
+      }
       const rowId = KEYED_BY_ITS_SESSION[name] ?? 'id';
       expect(shape.body, `${name} has no row id of its own`).toMatch(
         new RegExp(`\\b${rowId}\\s+\\w+[^,]*\\bprimary\\s+key\\b`, 'i'),

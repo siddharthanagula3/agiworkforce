@@ -104,9 +104,9 @@ export async function findSlackThreadConversation(
        join web_conversations conversation
          on conversation.id = agent.conversation_id
         and conversation.user_id = earlier.user_id
+        and conversation.organization_id is not distinct from $2::uuid
         and conversation.deleted_at is null
       where earlier.user_id = $1
-        and earlier.organization_id is not distinct from $2::uuid
         and earlier.installation_id = $3
         and earlier.channel_id = $4
         and (earlier.thread_ts = $5 or earlier.message_ts = $5)

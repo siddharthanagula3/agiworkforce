@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { NextRequest } from 'next/server';
+import { extractEmbeddedProvenance } from '@agiworkforce/compliance';
 type ScanModule0 = typeof import('@/lib/server/media-storage');
 type ScanModule1 = typeof import('@agiworkforce/types');
 type ScanModule2 = typeof import('@/lib/errors');
@@ -1196,7 +1197,7 @@ describe('POST /api/media/image/generate', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          predictions: [{ bytesBase64Encoded: 'base64imagedata==' }],
+          predictions: [{ bytesBase64Encoded: VALID_JPEG_BASE64 }],
         }),
       });
 
@@ -1213,7 +1214,9 @@ describe('POST /api/media/image/generate', () => {
       expect(data.success).toBe(true);
       expect(data.provider).toBe('google');
       expect(data.catalog_model).toBe(imageRouteFixtures.imagenModelId);
-      expect(data.images[0].b64_json).toBe('base64imagedata==');
+      expect(
+        extractEmbeddedProvenance(new Uint8Array(Buffer.from(data.images[0].b64_json, 'base64'))),
+      ).toEqual(data.provenance[0]);
     });
 
     it.each(['1:1', '3:4', '4:3'] as const)(
@@ -1246,7 +1249,10 @@ describe('POST /api/media/image/generate', () => {
 
         expect(response.status).toBe(200);
         const data = await response.json();
-        expect(data.images).toEqual([{ b64_json: VALID_JPEG_BASE64 }]);
+        expect(data.images).toHaveLength(1);
+        expect(
+          extractEmbeddedProvenance(new Uint8Array(Buffer.from(data.images[0].b64_json, 'base64'))),
+        ).toEqual(data.provenance[0]);
         expect(String(mockFetch.mock.calls[0]?.[0])).toContain('/v1beta/interactions');
         const providerRequest = JSON.parse(String(mockFetch.mock.calls[0]?.[1]?.body));
         expect(providerRequest).toEqual({
@@ -1404,7 +1410,7 @@ describe('POST /api/media/image/generate', () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: async () => ({
-          predictions: [{ bytesBase64Encoded: 'fastbase64==' }],
+          predictions: [{ bytesBase64Encoded: VALID_JPEG_BASE64 }],
         }),
       });
 

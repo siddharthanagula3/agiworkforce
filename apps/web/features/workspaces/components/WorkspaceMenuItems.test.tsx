@@ -2,6 +2,7 @@ import { fireEvent, render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { WorkspaceSummary } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/features/workspaces/lib/workspace-switch-interruptions');
+type UiModule = typeof import('@agiworkforce/ui');
 
 const state = vi.hoisted(() => ({
   activeWorkspaceId: null as string | null,
@@ -48,7 +49,8 @@ vi.mock('@/features/workspaces/lib/workspace-switch-interruptions', async (impor
   useWorkspaceSwitchInterruptions: () => state.interruptions,
 }));
 
-vi.mock('@agiworkforce/ui', () => ({
+vi.mock('@agiworkforce/ui', async (importOriginal) => ({
+  ...(await importOriginal<UiModule>()),
   Badge: ({ children }: { children: React.ReactNode }) => <span>{children}</span>,
   Spinner: () => <span role="status">Loading</span>,
   DropdownMenuLabel: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
