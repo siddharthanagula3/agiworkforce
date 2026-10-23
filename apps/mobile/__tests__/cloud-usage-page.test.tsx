@@ -41,6 +41,7 @@ jest.mock('lucide-react-native', () => {
     BarChart3: Icon,
     RefreshCw: Icon,
     CloudOff: Icon,
+    Coins: Icon,
   };
 });
 
@@ -51,6 +52,12 @@ jest.mock('@/src/features/settings/common', () => {
       <RN.View>{children}</RN.View>
     ),
     SettingsInfo: () => <RN.View />,
+    SettingsGroup: ({ children }: { children: React.ReactNode }) => <RN.View>{children}</RN.View>,
+    SettingsRow: ({ label, onPress }: { label: string; onPress?: () => void }) => (
+      <RN.Pressable accessibilityLabel={label} onPress={onPress}>
+        <RN.Text>{label}</RN.Text>
+      </RN.Pressable>
+    ),
     CloudSyncBlockedBanner: ({ onSwitchToCloud }: { onSwitchToCloud: () => void }) => (
       <RN.Pressable accessibilityLabel="Switch to AGI Cloud" onPress={onSwitchToCloud}>
         <RN.Text>Chat is set to Local Mode</RN.Text>
@@ -78,6 +85,11 @@ jest.mock('@/services/usage', () => ({
   fetchUsageSnapshot: (...args: unknown[]) => mockFetchUsageSnapshot(...args),
   fetchUsageAllowances: () => new Promise(() => undefined),
   fetchUsageHistory: () => new Promise(() => undefined),
+}));
+
+const mockFetchIapCatalog = jest.fn();
+jest.mock('@/src/features/billing/mobileIapService', () => ({
+  fetchMobileIapCatalog: (...args: unknown[]) => mockFetchIapCatalog(...args),
 }));
 
 jest.mock('@/src/features/auth/store', () => ({
@@ -133,6 +145,7 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
     mockAccountEpoch = 1;
     useCloudUsageStore.getState().clear();
     useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockFetchIapCatalog.mockResolvedValue({ enabled: true, products: [{ kind: 'top_up' }] });
   });
 
   it('shows usage as a percentage, never a dollar figure, on the primary card', async () => {
@@ -248,6 +261,56 @@ describe('Cloud Usage screen, percentage-first (Claude-style), real endpoint', (
 
     fireEvent.press(getByLabelText('Upgrade'));
     expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+    expect(queryByText('Buy credits')).toBeNull();
+    expect(mockFetchIapCatalog).not.toHaveBeenCalled();
+  });
+});
+
+describe('Cloud Usage screen, Buy credits row', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    Object.assign(mockAuthState, {
+      isClerkLoaded: true,
+      isClerkSignedIn: true,
+      clerkUserId: 'user-a',
+    });
+    mockAccountOwner = 'user-a';
+    mockAccountEpoch = 1;
+    useCloudUsageStore.getState().clear();
+    useChatAppModeStore.setState({ appMode: 'cloud' });
+    mockFetchUsageSnapshot.mockResolvedValue(snap({ planTier: 'pro' }));
+  });
+
+  it('opens the store top-up purchase when the store sells top-ups', async () => {
+    mockFetchIapCatalog.mockResolvedValue({ enabled: true, products: [{ kind: 'top_up' }] });
+    const { findByLabelText } = render(<CloudUsageScreen />);
+
+    fireEvent.press(await findByLabelText('Buy credits'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/cloud-billing');
+  });
+
+  it.each([
+    ['the catalog leaves top-ups out, as in Japan', { enabled: true, products: [] }],
+    [
+      'native purchases are off',
+      { enabled: false, products: [{ kind: 'top_up' }], unavailableReason: 'off' },
+    ],
+  ])('shows no Buy credits row when %s', async (_name, catalog) => {
+    mockFetchIapCatalog.mockResolvedValue(catalog);
+    const { getByText, queryByText } = render(<CloudUsageScreen />);
+
+    await waitFor(() => expect(getByText(managedUsageBucketLabel('period'))).toBeTruthy());
+    await waitFor(() => expect(mockFetchIapCatalog).toHaveBeenCalled());
+    expect(queryByText('Buy credits')).toBeNull();
+  });
+
+  it('shows no Buy credits row when the catalog cannot be read', async () => {
+    mockFetchIapCatalog.mockRejectedValue(new Error('offline'));
+    const { getByText, queryByText } = render(<CloudUsageScreen />);
+
+    await waitFor(() => expect(getByText(managedUsageBucketLabel('period'))).toBeTruthy());
+    await waitFor(() => expect(mockFetchIapCatalog).toHaveBeenCalled());
+    expect(queryByText('Buy credits')).toBeNull();
   });
 });
 

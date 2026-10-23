@@ -19,17 +19,20 @@ import {
 import { View, ActivityIndicator } from 'react-native';
 import { PressableBox as Pressable } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
-import { BarChart3, RefreshCw } from 'lucide-react-native';
+import { BarChart3, Coins, RefreshCw } from 'lucide-react-native';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
+  SettingsGroup,
   SettingsInfo,
+  SettingsRow,
   SettingsScreenShell,
 } from '@/src/features/settings/common';
 import { useCloudUsageStore } from './store';
+import { useStoreTopUps } from './useStoreTopUps';
 import { fetchUsageAllowances, fetchUsageHistory } from '@/services/usage';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { getBillingPlanPricing, isFreeBillingPlanTier } from '@agiworkforce/types';
@@ -599,6 +602,7 @@ export default function CloudUsageScreen() {
   const isFreePlan = snapshot ? isFreeBillingPlanTier(snapshot.planTier) : false;
   const accountKey =
     isClerkSignedIn && isCloudModeActive && clerkUserId && !isFreePlan ? clerkUserId : null;
+  const storeSellsTopUps = useStoreTopUps(snapshot ? accountKey : null);
   const allowances = useUsageResource<AccountUsageLimitsResponse>(
     accountKey,
     fetchUsageAllowances,
@@ -931,6 +935,20 @@ export default function CloudUsageScreen() {
               </View>
 
               {snapshot.credits ? <CreditBalancesCard credits={snapshot.credits} /> : null}
+              {storeSellsTopUps ? (
+                <SettingsGroup>
+                  <SettingsRow
+                    label="Buy credits"
+                    icon={Coins}
+                    onPress={() =>
+                      router.push(
+                        '/(app)/settings/cloud-billing' as Parameters<typeof router.push>[0],
+                      )
+                    }
+                    isLast
+                  />
+                </SettingsGroup>
+              ) : null}
               <AllowancesCard resource={allowances} />
               <StorageCard resource={allowances} />
               {accountKey ? <UsageHistoryCard accountKey={accountKey} /> : null}

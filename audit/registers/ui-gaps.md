@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: bbb18c185852b2afb175b8333eccaad1aa1bb005263a1a05d89175ec00b6a48c -->
+<!-- ui-gaps-csv-sha256: 7d6b3328eb1e6d5a8e3c134cf546227430a6d1b4c71b0e026391b153d998b242 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -6459,11 +6459,11 @@ Self-serve one-time credit purchase ships via startTopUpCheckout, wired to Billi
 
 **Evidence**
 
-apps/web/shared/components/modals/CreditAlertModal.tsx line ~41 ('No top-up purchases (locked product rule: no credit top-ups)'); apps/web/app/api/stripe-webhook/lib/db.ts (handleCreditTopUp exists but has no reachable UI entry point)
+apps/web/features/billing/components/TopUpPanel.tsx and apps/web/app/api/billing/top-up/route.ts (self-serve top-up checkout); the retired no-top-ups rule is superseded by owner decision 10 (docs/decisions/wire-or-cut.md); no automatic recharge route or toggle exists
 
 **Suggested fix**
 
-If the product decision changes, add a 'Buy credits' button + amount picker and an 'Automatic recharge' toggle to UsageSection.tsx, wired to the existing credit-topup Stripe webhook path. If the no-top-ups rule stands, this is working as intended, no action needed beyond documenting the decision.
+Top-ups are a product (owner decision 10, 2026-10-22). Only the 'Automatic recharge' toggle remains, and it needs a product decision first because it is a standing authorisation to charge a saved card.
 
 **Reference screenshot(s)**
 
