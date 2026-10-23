@@ -30,6 +30,7 @@ interface ConvertibleReferral {
 
 interface ReversibleReferral {
   id: string;
+  referrer_id: string;
   qualifying_invoice_id: string;
   friend_bonus_grant_id: string | null;
   referrer_reward_grant_id: string | null;
@@ -204,7 +205,7 @@ export async function handleReferralChargeReversal(
   if (!customerId || !paymentIntentId) return;
 
   const [referral] = await db.query<ReversibleReferral>(
-    `select referral.id, referral.qualifying_invoice_id, referral.friend_bonus_grant_id,
+    `select referral.id, referral.referrer_id, referral.qualifying_invoice_id, referral.friend_bonus_grant_id,
             referral.referrer_reward_grant_id
        from public.referrals referral
        join public.profiles friend on friend.id = referral.referred_user_id
@@ -234,6 +235,13 @@ export async function handleReferralChargeReversal(
     [referral.friend_bonus_grant_id, referral.referrer_reward_grant_id]
       .filter((grantId): grantId is string => grantId !== null)
       .map((grantId) => revokeBonusCreditGrant(db, grantId, description)),
+  );
+  await db.execute(
+    `delete from public.usage_limit_promotion_grants
+      where user_id = $2
+        and reference_id like 'referral:' || $1::text || ':%'
+        and applied_at is null`,
+    [referral.id, referral.referrer_id],
   );
   await db.execute(
     `update public.referrals

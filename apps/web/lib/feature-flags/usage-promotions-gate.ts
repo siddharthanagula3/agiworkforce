@@ -28,7 +28,7 @@ export async function readUsagePromotionsOn(
           surface: null,
           clientVersion: null,
         },
-        { keyPrefix: USAGE_PROMOTIONS_FLAG_KEY },
+        { keyPrefix: USAGE_PROMOTIONS_FLAG_KEY, failClosed: true },
         nowMs,
       ),
     );
