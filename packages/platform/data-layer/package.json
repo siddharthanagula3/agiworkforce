@@ -37,6 +37,6 @@
     "@neondatabase/serverless": "^1.1.0",
     "@types/pg": "^8.23.1",
     "pg": "^8.23.0",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }

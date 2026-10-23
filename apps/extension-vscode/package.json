@@ -1456,7 +1456,7 @@
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.15",
-    "markdown-it": "^15.0.2",
+    "markdown-it": "^15.0.3",
     "qrcode": "^1.5.4",
     "ws": "^8.20.1",
     "zod": "^4.6.5"
@@ -1482,6 +1482,6 @@
     "mocha": "^11.8.0",
     "rimraf": "^6.0.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.1.11"
+    "vitest": "^4.1.12"
   }
 }

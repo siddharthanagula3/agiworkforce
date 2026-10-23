@@ -44,7 +44,7 @@
       "tar": ">=7.5.19",
       "rollup": ">=4.59.0",
       "serialize-javascript": ">=7.0.5",
-      "vite": ">=8.3.1",
+      "vite": ">=8.3.3",
       "undici": ">=8.11.2 <9",
       "e2b>undici8": "npm:undici@>=8.10.2 <9",
       "picomatch": ">=4.0.4",
@@ -89,7 +89,7 @@
       "@grpc/grpc-js": "^1.14.5",
       "body-parser": ">=2.3.0",
       "deepmerge-ts": ">=8.0.0",
-      "markdown-it": ">=14.2.0",
+      "markdown-it": ">=15.0.3",
       "mermaid": ">=11.16.1",
       "@humanfs/node": ">=0.16.8",
       "fflate": ">=0.8.3",
@@ -444,7 +444,7 @@
     "tsx": "^4.23.15",
     "turbo": "2.11.5",
     "typescript": "5.9.3",
-    "vitest": "^4.1.11",
+    "vitest": "^4.1.12",
     "yaml": "^2.9.1"
   },
   "lint-staged": {
