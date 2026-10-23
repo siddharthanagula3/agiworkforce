@@ -128,8 +128,13 @@ describe('documentation contents follows reading geometry', () => {
     const readStyle = window.getComputedStyle.bind(window);
     vi.spyOn(window, 'getComputedStyle').mockImplementation((element, pseudo) => {
       const style = readStyle(element, pseudo);
-      style.scrollMarginTop = `${margin}px`;
-      return style;
+      return new Proxy(style, {
+        get(target, property) {
+          if (property === 'scrollMarginTop') return `${margin}px`;
+          const value = Reflect.get(target, property, target);
+          return typeof value === 'function' ? value.bind(target) : value;
+        },
+      });
     });
     article = document.createElement('article');
     document.body.append(article);

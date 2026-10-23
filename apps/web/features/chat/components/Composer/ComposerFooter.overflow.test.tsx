@@ -129,7 +129,9 @@ describe('ComposerFooter inline, bottom row stays a single usable line', () => {
     const tooltip = await screen.findByRole('tooltip');
     expect(tooltip).toHaveTextContent(ROUTER_MODEL_NAME);
     expect(tooltip).toHaveTextContent(routerModel.provider);
-    expect(trigger).toHaveAttribute('aria-describedby', receipt!.id);
+    const describedBy = trigger.getAttribute('aria-describedby')!.split(/\s+/);
+    expect(describedBy).toContain(receipt!.id);
+    expect(describedBy).toContain(tooltip.id);
   });
 
   it('hides the name tooltip while the picker is open', async () => {

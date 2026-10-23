@@ -181,7 +181,7 @@ describe('Save to Google Drive and OneDrive', () => {
   it('does not call the server for a file over the size limit', async () => {
     const fetchMock = vi.fn(async () => new Response(JSON.stringify({ items: [] })));
     vi.stubGlobal('fetch', fetchMock);
-    addArtifact({ content: 'x'.repeat(3_000_001) });
+    addArtifact({ content: '€'.repeat(1_000_001) });
     openMenu();
     fireEvent.click(screen.getByTestId('artifact-save-drive'));
     await waitFor(() =>
