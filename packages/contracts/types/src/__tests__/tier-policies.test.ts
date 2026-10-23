@@ -36,9 +36,8 @@ describe('TIER_POLICIES, Free chat tier', () => {
     expect(policy.allowVideoGeneration).toBe(false);
   });
 
-  it('allows free chat tools and one custom remote MCP, but not dev-level computer use', () => {
+  it('allows free chat tools, but not dev-level computer use', () => {
     expect(policy.allowToolUse).toBe(true);
-    expect(policy.allowMCP).toBe('one_custom_remote');
     expect(policy.allowSearch).toBe(true);
     expect(policy.allowComputerUse).toBe(false);
     expect(policy.allowManualSelection).toBe(false);
@@ -124,9 +123,8 @@ describe('TIER_POLICIES, Pro tier compatibility policy', () => {
     expect(policy.imageSyntheticTokenCost).toBe(50_000);
   });
 
-  it('elevates tool use and MCP to unlimited per Round 16 tool-tier ladder', () => {
+  it('elevates tool use to unlimited per Round 16 tool-tier ladder', () => {
     expect(policy.allowToolUse).toBe('unlimited');
-    expect(policy.allowMCP).toBe('unlimited');
   });
 
   it('warns at 80% and hard-caps at 100% with no grace overage', () => {
@@ -248,7 +246,6 @@ describe('getTierPolicy, public getter', () => {
       allowImageGeneration: false,
       allowVideoGeneration: false,
       allowToolUse: true,
-      allowMCP: 'one_custom_remote',
       allowSearch: true,
       allowVoice: true,
       allowComputerUse: false,

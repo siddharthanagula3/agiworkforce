@@ -68,14 +68,20 @@ describe('buildMeCapabilityHandshake, document identity', () => {
 });
 
 describe('buildMeCapabilityHandshake, tier-layer honesty (the required property)', () => {
-  it('free tier: grants search, voice, and connectors while keeping Deep Research paid', () => {
+  it('free tier: grants search and voice while keeping connectors and Deep Research paid', () => {
     const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier: 'free' });
     expect(document.granted).toContain('canUseWebSearch');
     expect(document.granted).not.toContain('canUseDeepResearch');
     expect(document.granted).toContain('canUseVoice');
-    expect(document.granted).toContain('canUseConnectors');
+    expect(document.granted).not.toContain('canUseConnectors');
+    expect(document.deniedBy.canUseConnectors).toEqual(['tier']);
     expect(document.deniedBy.canUseDeepResearch).toEqual(['tier']);
     expect(document.deniedBy.canUseImages).toEqual(['tier']);
+  });
+
+  it.each(['basic', 'pro', 'team', 'enterprise'])('%s tier: grants connectors', (tier) => {
+    const document = buildMeCapabilityHandshake({ ...BASE_INPUT, tier });
+    expect(document.granted).toContain('canUseConnectors');
   });
 
   it('free tier still grants universal capabilities no tier field restricts (free users can chat)', () => {

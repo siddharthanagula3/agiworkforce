@@ -12,7 +12,10 @@ import { getUserScopedDb } from '@/lib/server/rls-db';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
-import { remoteControlRefusal } from '@/lib/feature-flags/remote-control-gate';
+import {
+  remoteControlPlanRefusal,
+  remoteControlRefusal,
+} from '@/lib/feature-flags/remote-control-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { readRequestingDeviceId } from '@/lib/device-steps/requesting-device';
 
@@ -69,6 +72,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     resolveCloudChatSurface(request),
   );
   if (featureGate) return featureGate;
+
+  const planRefusal = await remoteControlPlanRefusal(db, userId);
+  if (planRefusal) return planRefusal;
 
   const switchedOff = await remoteControlRefusal(request, userId);
   if (switchedOff) return switchedOff;

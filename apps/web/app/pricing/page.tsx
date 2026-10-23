@@ -173,7 +173,7 @@ function limitCell(
   formatCount: (count: number) => string = String,
 ): PlanComparisonCell {
   if (limit === undefined) return EXCLUDED_CELL;
-  if (limit === 'unlimited') return textCell(t('unlimited'));
+  if (limit === 'unlimited') return textCell(t('noSetLimit'));
   if (limit === 'custom') return textCell(t('custom'));
   return textCell(formatCount(limit));
 }
@@ -206,7 +206,7 @@ function connectorLimitCell(
   t: TFunction<'pricing'>,
   comingSoon: string,
 ): PlanComparisonCell {
-  const cell = limitCell(limit, t);
+  const cell = countCell(limit, t);
   if (connectorsReleased() || cell.kind !== 'text') return cell;
   return textCell(...cell.lines, comingSoon);
 }
@@ -836,7 +836,8 @@ export default function PricingPage() {
       id: 'tools',
       label: t('compareGroupTools'),
       rows: [
-        capabilityRow('skills_connectors'),
+        capabilityRow('skills'),
+        capabilityRow('connectors', connectorFeatureNote()),
         comparisonRow(
           'customMcp',
           t('compareRowCustomMcp'),
@@ -848,6 +849,7 @@ export default function PricingPage() {
           countCell(getBillingPlanProductLimits(plan)?.maxScheduledTasks, t),
         ),
         comparisonRow('sandboxes', t('compareRowSandboxes'), (plan) => sandboxCell(plan, t)),
+        capabilityRow('remote_control'),
         capabilityRow('managed_api'),
         capabilityRow('developer_surfaces', pricingDeveloperSurfaceNote(t)),
       ],

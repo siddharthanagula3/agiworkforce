@@ -107,6 +107,28 @@ describe('the connector release switch at the shared gates', () => {
     expect(mocks.readKillSwitchGate).toHaveBeenCalledTimes(2);
   });
 
+  it('withholds released connectors from a Free account and grants every paid plan', async () => {
+    connectorRelease.released = true;
+
+    await expect(
+      connectorsAllowedForTurn(request(), USER, { subscriptionTier: 'free', chatSurface: 'web' }),
+    ).resolves.toBe(false);
+    await expect(
+      connectorsAllowedWithoutRequest({ userId: USER, organizationId: null, planTier: 'free' }),
+    ).resolves.toBe(false);
+    await expect(
+      connectorsAllowedWithoutRequest({ userId: USER, organizationId: null, planTier: null }),
+    ).resolves.toBe(false);
+    expect(mocks.readKillSwitchGate).not.toHaveBeenCalled();
+
+    for (const plan of ['basic', 'pro', 'max', 'team', 'enterprise']) {
+      await expect(
+        connectorsAllowedWithoutRequest({ userId: USER, organizationId: null, planTier: plan }),
+        plan,
+      ).resolves.toBe(true);
+    }
+  });
+
   it('refuses a direct entry point with a plain coming-soon message, not an upgrade', () => {
     expect(() => assertConnectorsReleased()).toThrow(
       expect.objectContaining({ statusCode: 403, code: 'FORBIDDEN', message: COMING_SOON }),

@@ -26,9 +26,11 @@ describe('plan capability copy follows the release state', () => {
   it('describes the launch: web chat only, skills without connectors, no developer surfaces', () => {
     expect(CURRENT_RELEASE_STATE.connectors).toBe('coming_soon');
     expect(planCapabilityLabel('managed_chat')).toBe('Managed Cloud chat on the web');
-    expect(planCapabilityLabel('skills_connectors')).toBe('Skills');
+    expect(planCapabilityLabel('skills')).toBe('Skills');
     expect(planCapabilityReleased('developer_surfaces')).toBe(false);
+    expect(planCapabilityReleased('connectors')).toBe(false);
     expect(planCapabilityReleased('artifact_connectors')).toBe(false);
+    expect(planCapabilityReleased('remote_control')).toBe(true);
     expect(planCapabilityReleased('managed_chat')).toBe(true);
     expect(connectorFeatureNote()).toBe(CONNECTORS_COMING_SOON_MESSAGE);
   });
@@ -44,9 +46,10 @@ describe('plan capability copy follows the release state', () => {
     expect(planCapabilityLabel('managed_chat', EVERYTHING_RELEASED)).toBe(
       'Managed Cloud chat on the web, desktop, mobile and Chrome',
     );
-    expect(planCapabilityLabel('skills_connectors', EVERYTHING_RELEASED)).toBe(
-      BILLING_PLAN_CAPABILITY_LABELS.skills_connectors,
+    expect(planCapabilityLabel('connectors', EVERYTHING_RELEASED)).toBe(
+      BILLING_PLAN_CAPABILITY_LABELS.connectors,
     );
+    expect(planCapabilityReleased('connectors', EVERYTHING_RELEASED)).toBe(true);
     expect(planCapabilityReleased('developer_surfaces', EVERYTHING_RELEASED)).toBe(true);
     expect(connectorFeatureNote(EVERYTHING_RELEASED)).toBeUndefined();
   });
@@ -60,7 +63,10 @@ describe('plan capability copy follows the release state', () => {
     }
     const released = getBillingPlanDisplay('pro', EVERYTHING_RELEASED).features;
     expect(released).toContain(BILLING_PLAN_CAPABILITY_LABELS.developer_surfaces);
-    expect(released).toContain(BILLING_PLAN_CAPABILITY_LABELS.skills_connectors);
+    expect(released).toContain(BILLING_PLAN_CAPABILITY_LABELS.connectors);
+    expect(getBillingPlanDisplay('free', EVERYTHING_RELEASED).features).not.toContain(
+      BILLING_PLAN_CAPABILITY_LABELS.connectors,
+    );
     expect(released.some((feature) => /custom MCP server/.test(feature))).toBe(true);
   });
 
@@ -75,6 +81,28 @@ describe('plan capability copy follows the release state', () => {
     const released = summarizePlanChange('max', 'basic', EVERYTHING_RELEASED);
     expect(released.lostCapabilities).toContain(BILLING_PLAN_CAPABILITY_LABELS.developer_surfaces);
     expect(released.limits.map((row) => row.label)).toContain('Custom MCP servers');
+  });
+
+  it('lists Remote Control on every paid plan card and as lost on a move to Free', () => {
+    expect(getBillingPlanDisplay('free').features).not.toContain('Remote Control');
+    for (const plan of ['basic', 'pro', 'max', 'max_15x', 'team'] as const) {
+      expect(getBillingPlanDisplay(plan).features, plan).toContain('Remote Control');
+    }
+    expect(summarizePlanChange('basic', 'free').lostCapabilities).toContain('Remote Control');
+    expect(summarizePlanChange('basic', 'free').lostCapabilities).not.toContain('Connectors');
+    expect(summarizePlanChange('basic', 'free', EVERYTHING_RELEASED).lostCapabilities).toContain(
+      'Connectors',
+    );
+  });
+
+  it('never states a limit as unlimited', () => {
+    for (const plan of ['free', 'basic', 'pro', 'max', 'max_15x', 'team'] as const) {
+      const display = getBillingPlanDisplay(plan, EVERYTHING_RELEASED);
+      expect(display.features.join('\n'), plan).not.toMatch(/unlimited/i);
+    }
+    const change = summarizePlanChange('max', 'pro', EVERYTHING_RELEASED);
+    expect(JSON.stringify(change)).not.toMatch(/unlimited/i);
+    expect(change.limits.find((row) => row.label === 'Projects')?.from).toBe('No set limit');
   });
 
   it('names the plans that include a media capability from the catalog', () => {

@@ -41,6 +41,12 @@ vi.mock('@/lib/workspace-audit', () => ({
   recordWorkspaceAuditEvent: mocks.recordWorkspaceAuditEvent,
 }));
 
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<EntitlementResolutionModule>()),
+  resolveEntitledPlanTier: vi.fn(async () => 'pro'),
+}));
+
 vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   getActiveFlagDefinitions: async () => [],

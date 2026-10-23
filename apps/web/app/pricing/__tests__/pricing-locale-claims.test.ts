@@ -99,12 +99,35 @@ describe('pricing locale bundles, plan feature claims', () => {
       expect(bundle['chatsAtOnce'], `${locale}/pricing.json chatsAtOnce`).toContain('{{chats}}');
       expect(bundle['chatsAtOnce'], `${locale}/pricing.json chatsAtOnce`).not.toMatch(/\p{N}/u);
       expect(
-        bundle['unlimitedProjectsWithStorage'],
-        `${locale}/pricing.json unlimitedProjectsWithStorage`,
+        bundle['projectsNoSetLimitWithStorage'],
+        `${locale}/pricing.json projectsNoSetLimitWithStorage`,
       ).not.toMatch(/MCP|\p{N}/u);
       expect(bundle['compareSubheading'], `${locale}/pricing.json compareSubheading`).not.toMatch(
         /Desktop|デスクトップ|桌面|데스크톱|डेस्कटॉप|سطح المكتب/u,
       );
+    }
+  });
+
+  it('publishes no unlimited claim in any language', () => {
+    const unlimitedClaims = [
+      /unlimited|uncapped/iu,
+      /ilimitad/iu,
+      /illimit/iu,
+      /unbegrenzt/iu,
+      /неогранич|без ограничений/iu,
+      /無制限|上限なし/u,
+      /无限|不设上限/u,
+      /무제한|상한 없는/u,
+      /غير محدود|بلا سقف/u,
+      /असीमित|बिना सीमा/u,
+      /sin límite\b(?! fijo)|sem limite\b(?! fixo)|sans plafond|senza limiti/iu,
+    ];
+    for (const [locale, bundle] of pricingBundles()) {
+      for (const [key, copy] of Object.entries(bundle)) {
+        for (const claim of unlimitedClaims) {
+          expect(copy, `${locale}/pricing.json ${key}`).not.toMatch(claim);
+        }
+      }
     }
   });
 
@@ -125,7 +148,7 @@ describe('pricing locale bundles, plan feature claims', () => {
     );
     for (const [locale, bundle] of bundles) {
       expect(bundle, `${locale}/pricing.json`).not.toHaveProperty('unlimitedProjectsAndStorage');
-      for (const key of ['unlimitedProjectsWithStorage', 'maxFeature4', 'max15xFeature4']) {
+      for (const key of ['projectsNoSetLimitWithStorage', 'maxFeature4', 'max15xFeature4']) {
         const copy = bundle[key] ?? '';
         expect(copy, `${locale}/pricing.json ${key} omits the storage figure`).toContain(
           '{{storage}}',
@@ -134,7 +157,7 @@ describe('pricing locale bundles, plan feature claims', () => {
       }
     }
     const english = bundles.find(([locale]) => locale === 'en')?.[1] ?? {};
-    for (const key of ['unlimitedProjectsWithStorage', 'maxFeature4', 'max15xFeature4']) {
+    for (const key of ['projectsNoSetLimitWithStorage', 'maxFeature4', 'max15xFeature4']) {
       expect(english[key], `en/pricing.json ${key}`).not.toMatch(
         /unlimited projects(?:,| and) storage/iu,
       );
@@ -252,9 +275,7 @@ describe('pricing locale bundles, enterprise capacity claims', () => {
 
     const bundle = pricingBundles().find(([locale]) => locale === 'en');
     expect(bundle).toBeDefined();
-    expect(bundle![1]['compareEnterpriseUsage']).toBe(
-      'Uncapped managed usage, scoped to your contract',
-    );
+    expect(bundle![1]['compareEnterpriseUsage']).toBe('Managed usage set by your contract');
   });
 
   it('promises dedicated or reserved capacity in no language', () => {

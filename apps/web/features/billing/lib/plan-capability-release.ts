@@ -40,8 +40,6 @@ export const MANAGED_CHAT_SURFACES: readonly ManagedChatSurface[] = Object.freez
 
 export const DEVELOPER_SURFACES = ['cli', 'vscode'] as const satisfies readonly SurfaceId[];
 
-const SKILLS_WITHOUT_CONNECTORS_LABEL = 'Skills';
-
 function releasedManagedChatSurfaces(release: ProductReleaseState): ManagedChatSurface[] {
   return MANAGED_CHAT_SURFACES.filter((surface) => isReleased(surface, release.surfaces));
 }
@@ -55,6 +53,7 @@ export function planCapabilityReleased(
       return releasedManagedChatSurfaces(release).length > 0;
     case 'developer_surfaces':
       return DEVELOPER_SURFACES.some((surface) => isReleased(surface, release.surfaces));
+    case 'connectors':
     case 'artifact_connectors':
       return connectorsReleased(release.connectors);
     default:
@@ -71,9 +70,6 @@ export function planCapabilityLabel(
       (surface) => MANAGED_CHAT_SURFACE_PHRASES[surface],
     );
     return `Managed Cloud chat on ${joinSurfaceNames(phrases)}`;
-  }
-  if (capability === 'skills_connectors' && !connectorsReleased(release.connectors)) {
-    return SKILLS_WITHOUT_CONNECTORS_LABEL;
   }
   return BILLING_PLAN_CAPABILITY_LABELS[capability];
 }

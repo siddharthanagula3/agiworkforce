@@ -2,8 +2,16 @@ import { useCallback } from 'react';
 import { Alert, View } from 'react-native';
 import { PressableBox } from '@/components/ui/pressable-box';
 import { useRouter } from 'expo-router';
-import { Check, Laptop, MonitorSmartphone, QrCode, RotateCcw, Unlink } from 'lucide-react-native';
-import { PRODUCT_NAMES } from '@agiworkforce/types';
+import {
+  Check,
+  Laptop,
+  MonitorSmartphone,
+  QrCode,
+  RotateCcw,
+  Sparkles,
+  Unlink,
+} from 'lucide-react-native';
+import { PRODUCT_NAMES, canUseBillingPlanCapability } from '@agiworkforce/types';
 import { Text } from '@/components/ui/text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -11,11 +19,14 @@ import { SettingsGroup, SettingsRow, SettingsScreenShell } from '@/src/features/
 import { offlineStatusLine } from '@/src/features/companion/components/StatusBanners';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
 import { manualReconnect } from '@/services/companion';
+import { useTierStore } from '@/src/features/billing/store';
 import {
   REMOTE_FOLLOW_UP_BEHAVIORS,
   useRemoteCodePreferences,
   type RemoteFollowUpBehavior,
 } from '@/src/features/companion/remote-code/store';
+
+const PAID_PLANS_ONLY = 'Remote Control comes with paid plans.';
 
 const FOLLOW_UP_OPTIONS: Record<RemoteFollowUpBehavior, { label: string; description: string }> = {
   queue: { label: 'Queue', description: 'Send after the current turn finishes.' },
@@ -119,6 +130,8 @@ export default function RemoteControlSettingsScreen() {
   const pairingCode = useConnectionStore((s) => s.pairingCode);
   const lastHeartbeatAt = useConnectionStore((s) => s.lastHeartbeatAt);
   const disconnect = useConnectionStore((s) => s.disconnect);
+  const tier = useTierStore((s) => s.tier);
+  const tierKnown = useTierStore((s) => s.lastRefreshedAt !== null);
 
   const paired = pairingCode !== null;
   const active = status === 'connected' || status === 'stale' || status === 'reconnecting';
@@ -130,9 +143,15 @@ export default function RemoteControlSettingsScreen() {
     muted: colors.textMuted,
   };
   const name = desktopName ?? (paired ? 'Desktop' : 'No computer paired');
+  const needsUpgrade =
+    tierKnown && !paired && !active && !canUseBillingPlanCapability(tier, 'remote_control');
 
   const openRemote = useCallback(() => {
     router.push('/(app)/companion' as Parameters<typeof router.push>[0]);
+  }, [router]);
+
+  const openPlans = useCallback(() => {
+    router.push('/(app)/settings/plans' as Parameters<typeof router.push>[0]);
   }, [router]);
 
   const confirmDisconnect = useCallback(() => {
@@ -195,12 +214,16 @@ export default function RemoteControlSettingsScreen() {
             </View>
           </View>
         </View>
-        <SettingsRow
-          label={paired || active ? 'Open Remote' : 'Pair a computer'}
-          icon={paired || active ? MonitorSmartphone : QrCode}
-          onPress={openRemote}
-          isLast={!(paired || active)}
-        />
+        {needsUpgrade ? (
+          <SettingsRow label="See plans" icon={Sparkles} onPress={openPlans} isLast />
+        ) : (
+          <SettingsRow
+            label={paired || active ? 'Open Remote' : 'Pair a computer'}
+            icon={paired || active ? MonitorSmartphone : QrCode}
+            onPress={openRemote}
+            isLast={!(paired || active)}
+          />
+        )}
         {status === 'disconnected' && paired ? (
           <SettingsRow label="Reconnect" icon={RotateCcw} onPress={manualReconnect} />
         ) : null}
@@ -214,6 +237,19 @@ export default function RemoteControlSettingsScreen() {
           />
         ) : null}
       </SettingsGroup>
+      {needsUpgrade ? (
+        <Text
+          accessibilityRole="text"
+          style={{
+            color: colors.textMuted,
+            fontSize: typeScale.footnote,
+            marginBottom: 16,
+            paddingHorizontal: 2,
+          }}
+        >
+          {PAID_PLANS_ONLY}
+        </Text>
+      ) : null}
       <SectionHeader>Follow-up behavior</SectionHeader>
       <SettingsGroup>
         <FollowUpBehaviorPicker />

@@ -14,6 +14,7 @@ const {
   loggerError,
   connectorsAllowed,
   readPrimaryEmailState,
+  resolveEntitledPlanTier,
 } = vi.hoisted(() => ({
   resolveActiveOrganizationId: vi.fn(),
   readConnectorPolicy: vi.fn(),
@@ -21,6 +22,7 @@ const {
   loggerError: vi.fn(),
   connectorsAllowed: vi.fn(async () => true),
   readPrimaryEmailState: vi.fn(),
+  resolveEntitledPlanTier: vi.fn(async (): Promise<string> => 'pro'),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -36,7 +38,8 @@ vi.mock('@/lib/services/connector-policy-service', async (importOriginal) => ({
   ...(await importOriginal<ScanModule0>()),
   readConnectorPolicy,
 }));
-vi.mock('@/lib/connectors/connector-capability', () => ({
+vi.mock('@/lib/connectors/connector-capability', async (importOriginal) => ({
+  ...(await importOriginal<ConnectorCapabilityModule>()),
   connectorsAllowedWithoutRequest: connectorsAllowed,
 }));
 vi.mock('@/lib/services/entitlement-resolution', () => ({
@@ -44,8 +47,10 @@ vi.mock('@/lib/services/entitlement-resolution', () => ({
   isSeatBearingBillingPlan: vi.fn(),
   resolveEffectiveSubscription: vi.fn(),
   resolveEntitlementBundle: vi.fn(),
-  resolveEntitledPlanTier: vi.fn(async () => 'pro'),
+  resolveEntitledPlanTier,
 }));
+
+import { billingPlanCapabilityUpgradeMessage } from '@agiworkforce/types';
 
 import {
   evaluateConnectorPolicyForUser,
@@ -53,6 +58,7 @@ import {
 } from '../connector-policy-gate';
 
 type EmailConfirmationModule = typeof import('@/lib/auth/email-confirmation');
+type ConnectorCapabilityModule = typeof import('@/lib/connectors/connector-capability');
 
 type TypesModule = typeof import('@agiworkforce/types');
 
@@ -168,6 +174,55 @@ describe('evaluateConnectorPolicyForUser', () => {
       planTier: 'pro',
       surface: 'web',
     });
+  });
+
+  it('refuses a Free account with the upgrade path before any connector decision', async () => {
+    resolveEntitledPlanTier.mockResolvedValueOnce('free');
+
+    const decision = await evaluateConnectorPolicyForUser({
+      db,
+      userId: USER,
+      organizationId: null,
+      connectorId: 'github',
+    });
+
+    expect(decision).toMatchObject({
+      allowed: false,
+      code: 'plan_upgrade_required',
+      reason: billingPlanCapabilityUpgradeMessage('connectors'),
+    });
+    expect(decision.reason).toMatch(/^Your plan does not include Connectors\. Upgrade to Basic/);
+    expect(connectorsAllowed).not.toHaveBeenCalled();
+  });
+
+  it.each(['basic', 'team', 'enterprise'])(
+    'lets a %s account reach the connector decision',
+    async (plan) => {
+      resolveEntitledPlanTier.mockResolvedValueOnce(plan);
+
+      await evaluateConnectorPolicyForUser({
+        db,
+        userId: USER,
+        organizationId: null,
+        connectorId: 'github',
+      });
+
+      expect(connectorsAllowed).toHaveBeenCalledWith(expect.objectContaining({ planTier: plan }));
+    },
+  );
+
+  it('does not tell an account whose plan cannot be read to upgrade', async () => {
+    resolveEntitledPlanTier.mockRejectedValueOnce(new Error('billing unreachable'));
+    connectorsAllowed.mockResolvedValueOnce(false);
+
+    const decision = await evaluateConnectorPolicyForUser({
+      db,
+      userId: USER,
+      organizationId: null,
+      connectorId: 'github',
+    });
+
+    expect(decision).toMatchObject({ allowed: false, code: 'connectors_unavailable' });
   });
 
   it('leaves a personal account ungoverned', async () => {

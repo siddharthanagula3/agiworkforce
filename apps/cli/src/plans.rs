@@ -35,6 +35,16 @@ const CLOUD_CHAT_TIERS: &[&str] = &[
     "enterprise",
 ];
 
+const PAID_TIERS: &[&str] = &[
+    "basic",
+    "pro",
+    "max",
+    "max_15x",
+    "team",
+    "team_premium",
+    "enterprise",
+];
+
 const PRO_TIERS: &[&str] = &[
     "pro",
     "max",
@@ -44,12 +54,14 @@ const PRO_TIERS: &[&str] = &[
     "enterprise",
 ];
 
-const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 16] = [
+const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 18] = [
     ("managed_chat", CLOUD_CHAT_TIERS),
     ("chat_tools", CLOUD_CHAT_TIERS),
     ("projects", CLOUD_CHAT_TIERS),
     ("memory_personalization", CLOUD_CHAT_TIERS),
-    ("skills_connectors", CLOUD_CHAT_TIERS),
+    ("skills", CLOUD_CHAT_TIERS),
+    ("connectors", PAID_TIERS),
+    ("remote_control", PAID_TIERS),
     ("cloud_sync", CLOUD_CHAT_TIERS),
     ("agi_work", PRO_TIERS),
     ("deep_research", PRO_TIERS),
@@ -63,7 +75,7 @@ const PLAN_CAPABILITY_TIERS: [(&str, &[&str]); 16] = [
     ("enterprise_controls", &["enterprise"]),
 ];
 
-const PLAN_CAPABILITY_LABELS: [(&str, &str); 16] = [
+const PLAN_CAPABILITY_LABELS: [(&str, &str); 18] = [
     (
         "managed_chat",
         "Managed Cloud chat on web, desktop, mobile and Chrome",
@@ -71,7 +83,9 @@ const PLAN_CAPABILITY_LABELS: [(&str, &str); 16] = [
     ("chat_tools", "Chat tools"),
     ("projects", "Projects"),
     ("memory_personalization", "Memory and personalization"),
-    ("skills_connectors", "Skills and connectors"),
+    ("skills", "Skills"),
+    ("connectors", "Connectors"),
+    ("remote_control", "Remote Control"),
     ("cloud_sync", "Sync across devices"),
     ("agi_work", "AGI Work"),
     ("deep_research", "Deep Research"),
@@ -223,6 +237,20 @@ mod tests {
             .chunks(2)
             .map(|row| (row[0].as_str(), row[1].as_str()))
             .collect()
+    }
+
+    #[test]
+    fn remote_control_and_connectors_need_a_paid_plan_while_skills_and_memory_stay_on_free() {
+        let free = plan_capabilities("free");
+        assert!(!free.contains(&"remote_control"));
+        assert!(!free.contains(&"connectors"));
+        assert!(free.contains(&"skills"));
+        assert!(free.contains(&"memory_personalization"));
+        for plan in PLAN_ORDER.iter().filter(|plan| **plan != "free") {
+            let included = plan_capabilities(plan);
+            assert!(included.contains(&"remote_control"), "{plan}");
+            assert!(included.contains(&"connectors"), "{plan}");
+        }
     }
 
     #[test]

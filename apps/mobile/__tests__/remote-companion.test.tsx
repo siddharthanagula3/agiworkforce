@@ -84,6 +84,7 @@ import { manualReconnect } from '@/services/companion';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useConnectionStore } from '@/stores/connectionStore';
+import { useTierStore } from '@/src/features/billing/store';
 import {
   useRemoteCodePreferences,
   useRemoteCodeStore,
@@ -136,6 +137,7 @@ beforeEach(() => {
   });
   useRemoteCodeStore.getState().reset();
   useRemoteCodePreferences.setState({ followUpBehavior: 'queue' });
+  useTierStore.setState({ tier: 'free', lastRefreshedAt: null });
 });
 
 describe('offline desktop view', () => {
@@ -346,6 +348,23 @@ describe('remote control settings page', () => {
     expect(getByText('Offline · Last seen 10m ago')).toBeTruthy();
     fireEvent.press(getByLabelText('Reconnect'));
     expect(manualReconnect).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers the plans instead of pairing to a Free account', () => {
+    useTierStore.setState({ tier: 'free', lastRefreshedAt: '2026-10-22T00:00:00.000Z' });
+    const { getByText, getByLabelText, queryByLabelText } = render(<RemoteControlSettingsScreen />);
+    expect(getByText('Remote Control comes with paid plans.')).toBeTruthy();
+    expect(queryByLabelText('Pair a computer')).toBeNull();
+    fireEvent.press(getByLabelText('See plans'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/settings/plans');
+  });
+
+  it('offers pairing to a paid account', () => {
+    useTierStore.setState({ tier: 'basic', lastRefreshedAt: '2026-10-22T00:00:00.000Z' });
+    const { getByLabelText, queryByText } = render(<RemoteControlSettingsScreen />);
+    expect(queryByText('Remote Control comes with paid plans.')).toBeNull();
+    fireEvent.press(getByLabelText('Pair a computer'));
+    expect(mockPush).toHaveBeenCalledWith('/(app)/companion');
   });
 
   it('offers pairing when no computer is paired', () => {

@@ -1090,7 +1090,6 @@ export interface TierPolicy {
   imageSyntheticTokenCost?: number;
 
   allowToolUse?: boolean | string;
-  allowMCP?: boolean | string;
 
   flagshipDailyTokenCap?: number;
 
@@ -1239,7 +1238,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowImageGeneration: false,
     allowVideoGeneration: false,
     allowToolUse: true,
-    allowMCP: 'one_custom_remote',
     allowVoice: true,
     voiceMinutesPerMonth: 10,
     tokenCapPerMonth: null,
@@ -1280,7 +1278,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     imageQuotaPerMonth: null,
     imageSyntheticTokenCost: 50_000,
     allowToolUse: 'unlimited',
-    allowMCP: 'unlimited',
     tokenCapPerMonth: 40_000_000,
     flagshipDailyTokenCap: 50_000,
     capBehavior: STANDARD_CAP_BEHAVIOR,
@@ -1333,7 +1330,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     computerUseSoftCap: 1_000,
     computerUseHardCap: 2_500,
     allowToolUse: 'unlimited',
-    allowMCP: 'unlimited',
     tokenCapPerMonth: 100_000_000,
     capBehavior: STANDARD_CAP_BEHAVIOR,
   },
@@ -1381,7 +1377,6 @@ const TIER_POLICIES_DEFINITION: Record<ProductTier, TierPolicy> = {
     allowVoice: true,
     voiceMinutesPerMonth: null,
     allowToolUse: 'unlimited',
-    allowMCP: 'unlimited',
     tokenCapPerMonth: null,
     capBehavior: STANDARD_CAP_BEHAVIOR,
   },

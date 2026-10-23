@@ -109,6 +109,7 @@ vi.mock('@agiworkforce/mcp', () => ({ connectMcpServer: mocks.connect }));
 
 import { DELETE, GET, POST } from './route';
 import { getCustomRemoteMcpLimit } from '@/lib/services/free-plan-entitlements';
+import { billingPlanCapabilityUpgradeMessage } from '@agiworkforce/types';
 
 type TypesModule = typeof import('@agiworkforce/types');
 
@@ -137,19 +138,17 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
     });
   });
 
-  it('rejects a second custom remote MCP for a free user before network work', async () => {
-    // Routed by SQL: the connector policy gate resolves the caller's workspace
-    // before the entitlement count runs, so a queued single response would be
-    // answered to the wrong query.
-    mocks.query.mockImplementation(async (sql: string) =>
-      String(sql).includes('user_custom_connectors') ? [{ count: '1' }] : [],
-    );
+  it('refuses a custom remote MCP for a free user with the upgrade path before network work', async () => {
+    mocks.query.mockImplementation(async () => []);
 
     const response = await POST(request());
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(mocks.connect).not.toHaveBeenCalled();
-    expect((await response.json()).error.message).toContain('1 custom connector');
+    expect((await response.json()).error.message).toBe(
+      billingPlanCapabilityUpgradeMessage('connectors'),
+    );
+    expect(getCustomRemoteMcpLimit('free')).toBe(0);
   });
 
   it('uses the Pro plan limit from the shared billing catalog', async () => {
@@ -186,19 +185,17 @@ describe('POST /api/connectors/custom free-plan entitlement', () => {
   it.each([
     ['an unrecognised tier', { plan_tier: 'starter', status: 'active' }],
     ['a lapsed Pro subscription', { plan_tier: 'pro', status: 'canceled' }],
-  ])('holds %s to the Free connector limit before network work', async (_label, subscription) => {
+  ])('holds %s to the Free plan, which has no connectors', async (_label, subscription) => {
     mocks.getSubscription.mockResolvedValue(subscription);
-    mocks.query.mockImplementation(async (sql: string) =>
-      String(sql).includes('user_custom_connectors')
-        ? [{ count: String(getCustomRemoteMcpLimit('free')) }]
-        : [],
-    );
+    mocks.query.mockImplementation(async () => []);
 
     const response = await POST(request());
 
-    expect(response.status).toBe(400);
+    expect(response.status).toBe(403);
     expect(mocks.connect).not.toHaveBeenCalled();
-    expect((await response.json()).error.message).toContain('1 custom connector');
+    expect((await response.json()).error.message).toBe(
+      billingPlanCapabilityUpgradeMessage('connectors'),
+    );
   });
 });
 

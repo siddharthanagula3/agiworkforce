@@ -8,10 +8,17 @@ import {
   type ConnectorAccessPolicy,
 } from '@agiworkforce/client-runtime';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_MESSAGE,
+  billingPlanCapabilityUpgradeMessage,
+  connectorsReleased,
+} from '@agiworkforce/types';
 
 import { readPrimaryEmailState, UNCONFIRMED_EMAIL_MESSAGE } from '@/lib/auth/email-confirmation';
-import { connectorsAllowedWithoutRequest } from '@/lib/connectors/connector-capability';
+import {
+  connectorsAllowedWithoutRequest,
+  planIncludesConnectors,
+} from '@/lib/connectors/connector-capability';
 import { logger } from '@/lib/logger';
 import { resolveEntitledPlanTier } from '@/lib/services/entitlement-resolution';
 import { createError } from '@/lib/errors';
@@ -38,7 +45,10 @@ import { readConnectorPolicy } from '@/lib/services/connector-policy-service';
  * unrestricted connection or credential exchange.
  */
 type ConnectorGateRefusalCode =
-  'connectors_unavailable' | 'connectors_coming_soon' | 'email_unconfirmed';
+  | 'connectors_unavailable'
+  | 'connectors_coming_soon'
+  | 'email_unconfirmed'
+  | 'plan_upgrade_required';
 
 export interface ConnectorPolicyGateResult {
   allowed: boolean;
@@ -165,6 +175,14 @@ export async function evaluateConnectorPolicyForUser(
       return null;
     },
   );
+  if (planTier !== null && !planIncludesConnectors(planTier)) {
+    return {
+      allowed: false,
+      code: 'plan_upgrade_required',
+      reason: billingPlanCapabilityUpgradeMessage('connectors'),
+      organizationId,
+    };
+  }
 
   const connectorsAllowed = await connectorsAllowedWithoutRequest({
     userId: params.userId,

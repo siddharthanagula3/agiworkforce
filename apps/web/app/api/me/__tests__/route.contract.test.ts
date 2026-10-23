@@ -157,7 +157,7 @@ describe('GET /api/me, shared cloud contract', () => {
       expect(parsed.data.capability_handshake?.granted).toContain('canUseWebSearch');
       expect(parsed.data.capability_handshake?.granted).not.toContain('canUseDeepResearch');
       expect(parsed.data.capability_handshake?.granted).toContain('canUseVoice');
-      expect(parsed.data.capability_handshake?.granted).toContain('canUseConnectors');
+      expect(parsed.data.capability_handshake?.granted).not.toContain('canUseConnectors');
       expect(parsed.data.capability_handshake?.deniedBy['canUseDeepResearch']).toEqual(['tier']);
       expect(parsed.data.capability_handshake?.granted).toContain('canChat');
     }

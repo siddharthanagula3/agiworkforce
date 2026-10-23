@@ -105,7 +105,7 @@ vi.mock('react-i18next', async (importOriginal) => {
           key === 'compareContextTokens' ||
           key === 'compareSandboxLimit' ||
           key === 'freeLocalByok' ||
-          key === 'unlimitedProjectsWithStorage'
+          key === 'projectsNoSetLimitWithStorage'
         ) {
           if (!instance.exists(key))
             throw new Error(`Missing pricing availability translation: ${key}`);
@@ -342,7 +342,7 @@ function storageLineFor(plan: 'max' | 'max_15x'): string {
     BILLING_PLAN_PRICING[plan].label
   ];
   expect(funded, `${plan} knowledge storage in the comparison table`).toMatch(/^\d+ GB$/);
-  return `Unlimited projects and ${funded} of storage`;
+  return `Projects with no set limit and ${funded} of storage`;
 }
 
 const TEAM_BOTH_CADENCES = {
@@ -1140,13 +1140,17 @@ describe('PricingPage', () => {
         compareRowKnowledgeStorage: facts.storage,
         compareRowMonthlyDownloads: facts.downloads,
         compareRowAttachmentSize: facts.attachment,
-        compareRowCustomMcp: connectorsPending
-          ? `${facts.customMcp} · ${COMING_SOON_LABEL}`
-          : facts.customMcp,
+        compareRowCustomMcp:
+          connectorsPending && facts.customMcp !== NOT_INCLUDED
+            ? `${facts.customMcp} · ${COMING_SOON_LABEL}`
+            : facts.customMcp,
         compareRowConcurrentChats: facts.chats,
         compareRowScheduledTasks: facts.scheduledTasks,
         compareRowSandboxes: facts.sandboxes,
-        [CAPABILITY.skills_connectors]: INCLUDED,
+        [CAPABILITY.skills]: INCLUDED,
+        [CAPABILITY.connectors]:
+          plan === 'free' ? NOT_INCLUDED : connectorsPending ? COMING_SOON_LABEL : INCLUDED,
+        [CAPABILITY.remote_control]: included(plan !== 'free'),
         [CAPABILITY.agi_work]: included(facts.proFeatures),
         [CAPABILITY.deep_research]: included(facts.proFeatures),
         [CAPABILITY.image_generation]: included(facts.proFeatures),
@@ -1168,7 +1172,7 @@ describe('PricingPage', () => {
       storage: '100 MB',
       downloads: '775 MB',
       attachment: '25 MB',
-      customMcp: '1',
+      customMcp: NOT_INCLUDED,
       chats: '1',
       scheduledTasks: NOT_INCLUDED,
       sandboxes: '1 at once, 10 min each',
@@ -1199,11 +1203,11 @@ describe('PricingPage', () => {
     });
     column('max', {
       usage: '5x more usage than Pro',
-      projects: 'unlimited',
+      projects: 'noSetLimit',
       storage: '62 GB',
       downloads: '13.3 GB',
       attachment: '25 MB',
-      customMcp: 'unlimited',
+      customMcp: 'noSetLimit',
       chats: '8',
       scheduledTasks: '10',
       sandboxes: '5 at once, 30 min each',
@@ -1211,11 +1215,11 @@ describe('PricingPage', () => {
     });
     column('max_15x', {
       usage: '20x more usage per session than Pro · 10x more weekly usage than Pro',
-      projects: 'unlimited',
+      projects: 'noSetLimit',
       storage: '124 GB',
       downloads: '26.6 GB',
       attachment: '25 MB',
-      customMcp: 'unlimited',
+      customMcp: 'noSetLimit',
       chats: '12',
       scheduledTasks: '25',
       sandboxes: '5 at once, 60 min each',
@@ -1284,11 +1288,10 @@ describe('PricingPage', () => {
     );
     const connectorNote = connectorFeatureNote() ?? '';
     expect(connectorNote).not.toBe('');
-    expect(comparisonRow(CAPABILITY.skills_connectors).label).toBe(
-      planCapabilityLabel('skills_connectors'),
-    );
-    expect(comparisonRow(CAPABILITY.skills_connectors).label).not.toMatch(/connector/i);
-    expect(comparisonRow(CAPABILITY.skills_connectors).note).toBe('');
+    expect(comparisonRow(CAPABILITY.skills).label).toBe(planCapabilityLabel('skills'));
+    expect(comparisonRow(CAPABILITY.skills).label).not.toMatch(/connector/i);
+    expect(comparisonRow(CAPABILITY.skills).note).toBe('');
+    expect(comparisonRow(CAPABILITY.connectors).note).toBe(connectorNote);
     expect(comparisonRow('compareRowCustomMcp').note).toBe(connectorNote);
   });
 
@@ -1303,7 +1306,7 @@ describe('PricingPage', () => {
     expect(maxCardStorageLine('max')).toBe(storageLineFor('max'));
     expect(maxCardStorageLine('max_15x')).toBe(storageLineFor('max_15x'));
     expect(storageLineFor('max_15x')).not.toBe(storageLineFor('max'));
-    expect(document.body.textContent).not.toMatch(/unlimited projects and storage/i);
+    expect(document.body.textContent).not.toMatch(/unlimited/i);
     expect(document.body.textContent).not.toMatch(lockedKeys);
   });
 
@@ -1384,10 +1387,12 @@ describe('PricingPage', () => {
       'compareRowAttachmentSize',
     ]);
     expect(groups[4]?.rows).toEqual([
-      CAPABILITY.skills_connectors,
+      CAPABILITY.skills,
+      CAPABILITY.connectors,
       'compareRowCustomMcp',
       'compareRowScheduledTasks',
       'compareRowSandboxes',
+      CAPABILITY.remote_control,
       CAPABILITY.managed_api,
       CAPABILITY.developer_surfaces,
     ]);

@@ -333,7 +333,6 @@ async function loadArtifactConnectorAccess(
   const policy = getTierPolicy(input.planTier);
   if (
     policy.allowToolUse === false ||
-    policy.allowMCP === false ||
     !(await connectorsAllowedForTurn(input.request, input.userId, {
       organizationId: input.organizationId,
       subscriptionTier: input.planTier,
@@ -1013,7 +1012,6 @@ export async function liveArtifactMissingConnectors(input: {
   const policy = getTierPolicy(entitlement.plan);
   if (
     policy.allowToolUse === false ||
-    policy.allowMCP === false ||
     !(await connectorsAllowedWithoutRequest({
       userId: input.userId,
       organizationId: input.organizationId,

@@ -74,7 +74,8 @@ function limitLabel(
   plural: string,
   countKey: string,
 ): string {
-  if (limit === 'unlimited') return `Unlimited ${plural}`;
+  if (limit === 'unlimited')
+    return `${plural.charAt(0).toUpperCase()}${plural.slice(1)} with no set limit`;
   if (limit === 'custom') return `Custom ${singular} limit`;
   return translateUiPlural('settings', countKey, limit, {
     one: `{{count}} ${singular}`,
@@ -85,7 +86,7 @@ function limitLabel(
 const BYTES_PER_GIGABYTE = 1024 ** 3;
 
 function limitValue(limit: BillingPlanLimit, format: (value: number) => string): string {
-  if (limit === 'unlimited') return 'Unlimited';
+  if (limit === 'unlimited') return 'No set limit';
   if (limit === 'custom') return 'Custom';
   return format(limit);
 }
@@ -135,7 +136,9 @@ const COMPARED_LIMITS: ReadonlyArray<{
 ];
 
 const COMPARED_CAPABILITIES: readonly BillingPlanCapability[] = [
-  'skills_connectors',
+  'skills',
+  'connectors',
+  'remote_control',
   'agi_work',
   'image_generation',
   'video_generation',
@@ -144,7 +147,9 @@ const COMPARED_CAPABILITIES: readonly BillingPlanCapability[] = [
 ];
 
 const FEATURED_CAPABILITIES: readonly BillingPlanCapability[] = [
-  'skills_connectors',
+  'skills',
+  'connectors',
+  'remote_control',
   'agi_work',
   'image_generation',
   'video_generation',

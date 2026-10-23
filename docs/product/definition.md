@@ -282,15 +282,22 @@ Billing and Usage must include plan, adjust plan, Stripe/payment link, invoices,
 
 Billing plan lock (founder decision, 2026-07-18):
 
-| Plan       | Public price                     | Public usage position               | Projects  | Custom MCP | Managed developer surfaces | Image generation | Video generation | Shared controls |
-| ---------- | -------------------------------- | ----------------------------------- | --------- | ---------- | -------------------------- | ---------------- | ---------------- | --------------- |
-| Free       | Free                             | Small daily allowance               | 1         | 1          | No                         | No               | No               | No              |
-| Basic      | $7/month; India ₹399/month       | Base paid usage                     | 5         | 5          | No                         | No               | No               | No              |
-| Pro        | $20/month; India ₹1,999/month    | 5x Basic                            | 25        | 25         | CLI, Chrome, VS Code       | Yes              | No               | No              |
-| Max 5x     | $100/month; India ₹9,999/month   | 5x Pro                              | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | No               | No              |
-| Max 20x    | $200/month; India ₹19,999/month  | 20x Pro per session, 10x Pro weekly | Unlimited | Unlimited  | CLI, Chrome, VS Code       | Yes              | Yes              | No              |
-| Team       | $25/seat/month or $240/seat/year | Same as Pro per seat                | 25        | 25         | CLI, Chrome, VS Code       | Yes              | No               | Yes             |
-| Enterprise | Contract                         | Contract                            | Contract  | Contract   | Contract                   | Yes              | Yes              | Yes             |
+| Plan       | Public price                     | Public usage position               | Projects | Custom MCP | Managed developer surfaces | Image generation | Video generation | Shared controls |
+| ---------- | -------------------------------- | ----------------------------------- | -------- | ---------- | -------------------------- | ---------------- | ---------------- | --------------- |
+| Free       | Free                             | Small daily allowance               | 1        | None       | No                         | No               | No               | No              |
+| Basic      | $7/month; India ₹399/month       | Base paid usage                     | 5        | 5          | No                         | No               | No               | No              |
+| Pro        | $20/month; India ₹1,999/month    | 5x Basic                            | 25       | 25         | CLI, Chrome, VS Code       | Yes              | No               | No              |
+| Max 5x     | $100/month; India ₹9,999/month   | 5x Pro                              | No limit | No limit   | CLI, Chrome, VS Code       | Yes              | No               | No              |
+| Max 20x    | $200/month; India ₹19,999/month  | 20x Pro per session, 10x Pro weekly | No limit | No limit   | CLI, Chrome, VS Code       | Yes              | Yes              | No              |
+| Team       | $25/seat/month or $240/seat/year | Same as Pro per seat                | 25       | 25         | CLI, Chrome, VS Code       | Yes              | No               | Yes             |
+| Enterprise | Contract                         | Contract                            | Contract | Contract   | Contract                   | Yes              | Yes              | Yes             |
+
+Entitlements (owner decision 2026-10-22): Remote Control and connectors,
+custom MCP servers included, come with paid plans only; past-chat reference
+stays on every plan; single sign-on stays on Enterprise. Published copy never
+says "unlimited": a limit the catalog leaves open is shown as "No set limit".
+The owner is `BILLING_PLAN_CAPABILITY_TIERS` in
+`packages/contracts/types/src/billing-catalog.ts`.
 
 Basic, Pro, Max 5x and Max 20x are billed monthly only; Team is billed monthly
 or yearly (founder decision 2026-09-27, D-2026-09-27-01 in

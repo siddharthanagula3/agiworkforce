@@ -304,7 +304,9 @@ export type BillingPlanCapability =
   | 'chat_tools'
   | 'projects'
   | 'memory_personalization'
-  | 'skills_connectors'
+  | 'skills'
+  | 'connectors'
+  | 'remote_control'
   | 'cloud_sync'
   | 'agi_work'
   | 'deep_research'
@@ -327,6 +329,15 @@ const CLOUD_CHAT_TIERS = [
   'team_premium',
   'enterprise',
 ] as const;
+const PAID_TIERS = [
+  'basic',
+  'pro',
+  'max',
+  'max_15x',
+  'team',
+  'team_premium',
+  'enterprise',
+] as const;
 const PRO_TIERS = ['pro', 'max', 'max_15x', 'team', 'team_premium', 'enterprise'] as const;
 
 export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
@@ -336,7 +347,9 @@ export const BILLING_PLAN_CAPABILITY_TIERS: Readonly<
   chat_tools: CLOUD_CHAT_TIERS,
   projects: CLOUD_CHAT_TIERS,
   memory_personalization: CLOUD_CHAT_TIERS,
-  skills_connectors: CLOUD_CHAT_TIERS,
+  skills: CLOUD_CHAT_TIERS,
+  connectors: PAID_TIERS,
+  remote_control: PAID_TIERS,
   cloud_sync: CLOUD_CHAT_TIERS,
   agi_work: PRO_TIERS,
   deep_research: PRO_TIERS,
@@ -392,7 +405,9 @@ export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapabili
     chat_tools: 'Chat tools',
     projects: 'Projects',
     memory_personalization: 'Memory and personalization',
-    skills_connectors: 'Skills and connectors',
+    skills: 'Skills',
+    connectors: 'Connectors',
+    remote_control: 'Remote Control',
     cloud_sync: 'Sync across devices',
     agi_work: 'AGI Work',
     deep_research: 'Deep Research',
@@ -405,6 +420,17 @@ export const BILLING_PLAN_CAPABILITY_LABELS: Readonly<Record<BillingPlanCapabili
     team_admin: 'Team administration',
     enterprise_controls: 'SSO, SCIM and admin controls',
   });
+
+export function billingPlanCapabilityUpgradeMessage(capability: BillingPlanCapability): string {
+  const labels = billingPlanCapabilityWireTiers(capability).map(
+    (plan) => getBillingPlanPricing(plan).label,
+  );
+  const plans =
+    labels.length <= 2
+      ? labels.join(' or ')
+      : `${labels.slice(0, -1).join(', ')}, or ${labels[labels.length - 1]}`;
+  return `Your plan does not include ${BILLING_PLAN_CAPABILITY_LABELS[capability]}. Upgrade to ${plans} to use it.`;
+}
 
 export function billingPlanCapabilities(plan: string | null | undefined): BillingPlanCapability[] {
   return (Object.keys(BILLING_PLAN_CAPABILITY_TIERS) as BillingPlanCapability[]).filter(
@@ -563,11 +589,11 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     projects: 1,
     knowledgeStorageBytes: 104857600,
     monthlyDownloadBytes: FREE_DAILY_CAPS.egressBytes * DAYS_IN_LONGEST_MONTH,
-    customMcpServers: 1,
+    customMcpServers: 0,
     maxConcurrentTurns: 1,
     maxSandboxes: 1,
     sandboxTtlMs: 10 * MINUTE_MS,
-    maxConnectorTools: 25,
+    maxConnectorTools: 0,
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
     maxAttachmentBytes: MAX_ATTACHMENT_BYTES,

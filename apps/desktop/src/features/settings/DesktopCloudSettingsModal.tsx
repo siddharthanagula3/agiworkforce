@@ -543,7 +543,7 @@ function DesktopUsageSection() {
 }
 
 function formatPlanLimit(limit: BillingPlanLimit | undefined): string {
-  if (limit === 'unlimited') return 'Unlimited';
+  if (limit === 'unlimited') return 'No set limit';
   if (limit === 'custom') return 'Custom';
   return typeof limit === 'number' ? new Intl.NumberFormat().format(limit) : 'Unavailable';
 }

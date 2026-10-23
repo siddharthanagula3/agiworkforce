@@ -114,7 +114,7 @@ function buildTierLayerGrant(tier: string | null | undefined): CapabilityLayerGr
   const granted = allCapabilities();
   if (!policy.allowSearch) granted.delete('canUseWebSearch');
   if (!policy.allowVoice) granted.delete('canUseVoice');
-  if (!policy.allowMCP) granted.delete('canUseConnectors');
+  if (!canUseBillingPlanCapability(tier, 'connectors')) granted.delete('canUseConnectors');
   if (!canUseBillingPlanCapability(tier, 'deep_research')) granted.delete('canUseDeepResearch');
   if (!canUseBillingPlanCapability(tier, 'agi_work')) granted.delete('canUseAgiWork');
   if (!canUseBillingPlanCapability(tier, 'image_generation')) granted.delete('canUseImages');

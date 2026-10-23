@@ -16,6 +16,15 @@ function bulletTexts(): string[] {
 }
 
 describe('PlanCard', () => {
+  it.each(['local', 'free', ...PAID_TIERS] as const)(
+    'claims nothing unlimited on the %s card',
+    (tier) => {
+      render(<PlanCard tier={tier} isCurrentPlan={false} onCtaClick={vi.fn()} />);
+
+      expect(bulletTexts().join('\n')).not.toMatch(/unlimited/i);
+    },
+  );
+
   it.each(PAID_TIERS)('opens the %s plan with its usage relative to the plan below it', (tier) => {
     const lines = managedUsageComparisonLines(tier);
     expect(lines.length).toBeGreaterThan(0);

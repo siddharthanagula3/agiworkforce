@@ -15,6 +15,11 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<EntitlementResolutionModule>()),
+  resolveEntitledPlanTier: vi.fn(async () => 'pro'),
+}));
 vi.mock('@/lib/auth/email-confirmation', async (importOriginal) => ({
   ...(await importOriginal()),
   readPrimaryEmailState: vi.fn(async () => ({ confirmed: true, email: 'person@example.com' })),

@@ -26,7 +26,7 @@ const TIER_CONTENT: Partial<Record<UIPlanTier, TierContent>> = {
       'Ollama, LM Studio, and llama.cpp local models',
       'Fully offline, zero data leaves your device',
       'No account required',
-      'Unlimited local conversations',
+      'No usage meter on local models',
     ],
     ctaLabel: 'Current plan',
     ctaVariant: 'current',

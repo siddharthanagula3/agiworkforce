@@ -144,7 +144,7 @@ function projectsAndStorageFeature(plan: BillingPlanTier, connectorKey: string, 
   const storage = limits?.knowledgeStorageBytes;
   if (limits?.projects !== 'unlimited' || typeof storage !== 'number') return null;
   const withConnectors = connectorsReleased() && limits.customMcpServers === 'unlimited';
-  return t(withConnectors ? connectorKey : 'unlimitedProjectsWithStorage', {
+  return t(withConnectors ? connectorKey : 'projectsNoSetLimitWithStorage', {
     storage: formatBytes(storage, 0),
   });
 }

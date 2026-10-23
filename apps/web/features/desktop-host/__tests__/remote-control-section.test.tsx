@@ -43,6 +43,23 @@ vi.mock('@/lib/client/csrf', () => ({
 }));
 
 const { RemoteControlSection } = await import('../components/RemoteControlSection');
+const { useBillingStore } = await import('@shared/stores/web-auth-store');
+
+function signedInOn(tier: string | null) {
+  useBillingStore.setState({
+    subscription:
+      tier === null
+        ? null
+        : {
+            tier,
+            display_name: tier,
+            status: 'active',
+            current_period_end: null,
+            cancel_at_period_end: false,
+            plan_name: tier,
+          },
+  } as Partial<ReturnType<typeof useBillingStore.getState>>);
+}
 
 const fetchMock = vi.fn();
 
@@ -51,10 +68,48 @@ beforeEach(() => {
   runtimeListener = null;
   vi.stubGlobal('fetch', fetchMock);
   readRemoteControl.mockResolvedValue({ ...IDLE_REMOTE_CONTROL_STATE });
+  signedInOn(null);
 });
 
 afterEach(() => {
   vi.unstubAllGlobals();
+});
+
+describe('Remote Control on the Free plan', () => {
+  it('offers the upgrade path instead of a pairing a Free account cannot start', async () => {
+    signedInOn('free');
+    render(<RemoteControlSection />);
+
+    const upgrade = await screen.findByRole('link', { name: 'Upgrade' });
+    expect(upgrade).toHaveAttribute('href', '/upgrade/basic');
+    expect(screen.getByRole('status')).toHaveTextContent('Remote Control comes with paid plans.');
+    expect(screen.queryByRole('button', { name: 'Pair a phone' })).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('lets a paid account pair', async () => {
+    signedInOn('basic');
+    render(<RemoteControlSection />);
+
+    expect(await screen.findByRole('button', { name: 'Pair a phone' })).toBeEnabled();
+    expect(screen.queryByRole('link', { name: 'Upgrade' })).toBeNull();
+  });
+
+  it('shows the server refusal when the plan was not known before pairing', async () => {
+    fetchMock.mockResolvedValue({
+      ok: false,
+      json: async () => ({
+        error: 'Your plan does not include Remote Control. Upgrade to Basic to use it.',
+        code: 'plan_upgrade_required',
+      }),
+    });
+    render(<RemoteControlSection />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Pair a phone' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Your plan does not include Remote Control.',
+    );
+  });
 });
 
 describe('Remote Control in the desktop shell', () => {

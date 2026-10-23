@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_ATTACHMENT_BYTES } from '../chat';
 import {
+  BILLING_PLAN_CAPABILITY_TIERS,
+  billingPlanCapabilityUpgradeMessage,
   BILLING_PLAN_PRICING,
   getBillingPlanPricing,
   SELF_SERVE_INDIVIDUAL_UPGRADE_LADDER,
@@ -259,6 +261,21 @@ describe('billing catalog', () => {
       );
     });
 
+    it('keeps Remote Control and connectors to paid plans and past-chat memory on every plan', () => {
+      const paid = ['basic', 'pro', 'max', 'max_15x', 'team', 'team_premium', 'enterprise'];
+      for (const capability of ['remote_control', 'connectors'] as const) {
+        expect(canUseBillingPlanCapability('free', capability)).toBe(false);
+        expect(canUseBillingPlanCapability('byok', capability)).toBe(false);
+        expect(BILLING_PLAN_CAPABILITY_TIERS[capability]).toEqual(paid);
+      }
+      expect(canUseBillingPlanCapability('free', 'memory_personalization')).toBe(true);
+      expect(canUseBillingPlanCapability('free', 'skills')).toBe(true);
+      expect(BILLING_PLAN_CAPABILITY_TIERS.enterprise_controls).toEqual(['enterprise']);
+      expect(billingPlanCapabilityUpgradeMessage('remote_control')).toBe(
+        'Your plan does not include Remote Control. Upgrade to Basic, Pro, Max 5x, Max 20x, Team, or Enterprise to use it.',
+      );
+    });
+
     it('fails closed for removed or unknown tier names', () => {
       expect(canUseBillingPlanCapability('hobby', 'managed_api')).toBe(false);
       expect(canUseBillingPlanCapability('pro_plus', 'video_generation')).toBe(false);
@@ -270,7 +287,8 @@ describe('billing catalog', () => {
     it('uses the founder-set project and custom MCP limits', () => {
       expect(getBillingPlanProductLimits('free')).toMatchObject({
         projects: 1,
-        customMcpServers: 1,
+        customMcpServers: 0,
+        maxConnectorTools: 0,
       });
       expect(getBillingPlanProductLimits('basic')).toMatchObject({
         projects: 5,

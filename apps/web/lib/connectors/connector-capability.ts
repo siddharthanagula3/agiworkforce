@@ -2,8 +2,9 @@ import 'server-only';
 
 import {
   CONNECTORS_COMING_SOON_MESSAGE,
+  canUseBillingPlanCapability,
   connectorsReleased,
-  getTierPolicy,
+  normalizeBillingPlanTier,
 } from '@agiworkforce/types';
 
 import { createError, type AppError } from '@/lib/errors';
@@ -15,6 +16,10 @@ import { managedCloudDataRegion } from '@/lib/server/data-region';
 
 export function connectorsComingSoonError(): AppError {
   return createError.forbidden(CONNECTORS_COMING_SOON_MESSAGE).asUserSafe();
+}
+
+export function planIncludesConnectors(planTier: string | null | undefined): boolean {
+  return canUseBillingPlanCapability(normalizeBillingPlanTier(planTier), 'connectors');
 }
 
 export function assertConnectorsReleased(): void {
@@ -44,7 +49,7 @@ export async function connectorsAllowedForTurn(
   },
 ): Promise<boolean> {
   if (!connectorsReleased()) return false;
-  if (!getTierPolicy(turn.subscriptionTier).allowMCP) return false;
+  if (!planIncludesConnectors(turn.subscriptionTier)) return false;
   return connectorSwitchOpen(
     buildFlagSubject(request, {
       userId,
@@ -63,7 +68,7 @@ export async function connectorsAllowedWithoutRequest(input: {
   surface?: string | null;
 }): Promise<boolean> {
   if (!connectorsReleased()) return false;
-  if (!getTierPolicy(input.planTier).allowMCP) return false;
+  if (!planIncludesConnectors(input.planTier)) return false;
   return connectorSwitchOpen({
     userId: input.userId,
     workspaceId: input.organizationId ?? null,

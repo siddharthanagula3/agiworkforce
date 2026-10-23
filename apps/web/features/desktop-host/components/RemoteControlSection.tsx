@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import QRCode from 'qrcode';
 import { Maximize2, RefreshCw } from 'lucide-react';
 import {
@@ -18,7 +19,9 @@ import {
   useConfirmAction,
   translateUiPlural,
 } from '@agiworkforce/ui';
+import { billingPlanCapabilityWireTiers, canUseBillingPlanCapability } from '@agiworkforce/types';
 import { browserPairingLink } from '@/features/remote-dispatch/lib/browser-pairing';
+import { useBillingStore } from '@shared/stores/web-auth-store';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useDesktopHost } from '../lib/host';
 import { PAIR_FAILED, beginRemotePairing, refreshRemotePairing } from '../lib/remote-pairing';
@@ -38,6 +41,8 @@ const BROWSER_PAIRING =
 const STOP_FAILED = 'Remote Control could not be stopped.';
 const COPY_LINK_FAILED = 'The link could not be copied. Pair from the phone instead, or try again.';
 const RECONNECTING = 'Connection lost. Reconnecting so your phone can pick up where it left off.';
+const PAID_PLANS_ONLY = 'Remote Control comes with paid plans.';
+const UPGRADE_PLAN = billingPlanCapabilityWireTiers('remote_control')[0];
 const DISCONNECT_CONSEQUENCE =
   'The phone is disconnected from this computer and can no longer follow or steer its sessions. To connect it again, pair it with a new code.';
 
@@ -63,6 +68,9 @@ export function RemoteControlSection() {
   const [linkCopied, setLinkCopied] = useState(false);
   const [qrEnlarged, setQrEnlarged] = useState(false);
   const { confirm, dialog } = useConfirmAction();
+  const planTier = useBillingStore((s) => s.subscription?.tier ?? null);
+  const needsUpgrade =
+    planTier !== null && !canUseBillingPlanCapability(planTier, 'remote_control');
 
   useEffect(() => {
     if (!host) return undefined;
@@ -250,8 +258,21 @@ export function RemoteControlSection() {
         </p>
       ) : null}
 
+      {needsUpgrade && (status === 'idle' || status === 'error') ? (
+        <p role="status" className="text-sm text-muted-foreground">
+          {`${PAID_PLANS_ONLY} `}
+          <Link
+            href={UPGRADE_PLAN ? `/upgrade/${UPGRADE_PLAN}` : '/upgrade'}
+            className="font-medium text-foreground underline"
+          >
+            Upgrade
+          </Link>
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap gap-2">
-        {status === 'idle' || status === 'error' ? (
+        {needsUpgrade && (status === 'idle' || status === 'error') ? null : status === 'idle' ||
+          status === 'error' ? (
           <button
             type="button"
             className={BUTTON_CLASS}

@@ -1,6 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { CLIENT_VERSION_HEADER } from '@agiworkforce/cloud-contracts';
+import {
+  billingPlanCapabilityUpgradeMessage,
+  billingPlanCapabilityWireTiers,
+} from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/managed-compute-gate');
 type ScanModule1 = typeof import('@/lib/csrf');
 type ScanModule2 = typeof import('@/lib/rate-limit');
@@ -13,6 +17,7 @@ type ScanModule7 = typeof import('@/lib/feature-flags/flag-store');
 const mocks = vi.hoisted(() => ({
   definitions: [] as unknown[],
   signaling: vi.fn(),
+  planTier: vi.fn(async (): Promise<string> => 'pro'),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -47,6 +52,11 @@ vi.mock('@/lib/observability/denials', async (importOriginal) => ({
 vi.mock('@/lib/server/data-region', async (importOriginal) => ({
   ...(await importOriginal<ScanModule6>()),
   managedCloudDataRegion: () => 'us-east-1',
+}));
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
+vi.mock('@/lib/services/entitlement-resolution', async (importOriginal) => ({
+  ...(await importOriginal<EntitlementResolutionModule>()),
+  resolveEntitledPlanTier: mocks.planTier,
 }));
 vi.mock('@/lib/feature-flags/flag-store', async (importOriginal) => ({
   ...(await importOriginal<ScanModule7>()),
@@ -99,6 +109,7 @@ const claimRequest = () => post('/api/pair/claim', { code: 'ABCD1234WXYZ' });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.planTier.mockResolvedValue('pro');
   mocks.definitions = [];
   mocks.signaling.mockImplementation(
     async () => new Response(JSON.stringify({ error: 'unused' }), { status: 502 }),
@@ -154,5 +165,44 @@ describe('Remote Control pairing under the screen share switch', () => {
 
     await initiate(initiateRequest({ [CLIENT_VERSION_HEADER]: '2.4.2' }));
     expect(mocks.signaling).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Remote Control pairing is a paid plan feature', () => {
+  it('refuses both halves of a pairing for a Free account with the upgrade path', async () => {
+    mocks.planTier.mockResolvedValue('free');
+
+    for (const response of [await initiate(initiateRequest()), await claim(claimRequest())]) {
+      expect(response.status).toBe(403);
+      expect(await response.json()).toEqual({
+        error: billingPlanCapabilityUpgradeMessage('remote_control'),
+        code: 'plan_upgrade_required',
+        current_plan: 'free',
+        required_plans: billingPlanCapabilityWireTiers('remote_control'),
+      });
+    }
+    expect(billingPlanCapabilityWireTiers('remote_control')).not.toContain('free');
+    expect(mocks.signaling).not.toHaveBeenCalled();
+  });
+
+  it.each(['basic', 'pro', 'max_15x', 'team', 'enterprise'])(
+    'reaches the relay for a %s account',
+    async (plan) => {
+      mocks.planTier.mockResolvedValue(plan);
+
+      await initiate(initiateRequest());
+      await claim(claimRequest());
+
+      expect(mocks.signaling).toHaveBeenCalledTimes(2);
+    },
+  );
+
+  it('refuses without an upgrade prompt when the plan cannot be read', async () => {
+    mocks.planTier.mockRejectedValue(new Error('billing unreachable'));
+
+    const response = await initiate(initiateRequest());
+    expect(response.status).toBe(503);
+    expect(((await response.json()) as { code?: string }).code).toBeUndefined();
+    expect(mocks.signaling).not.toHaveBeenCalled();
   });
 });

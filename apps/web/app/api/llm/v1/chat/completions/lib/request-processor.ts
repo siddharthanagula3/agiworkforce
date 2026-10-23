@@ -240,7 +240,6 @@ import {
   getDefaultAutoRoutingProfile,
   autoAliasForRoutingProfile,
   ROUTING_PROFILE_CHOICES,
-  getTierPolicy,
   billingPlanCapabilityWireTiers,
   wirePlanOf,
 } from '@agiworkforce/types';
@@ -466,7 +465,10 @@ import {
   enforceManagedContentSafetyPreference,
   ManagedContentSafetyPolicyError,
 } from '@/lib/services/managed-content-safety-service';
-import { connectorsAllowedForTurn } from '@/lib/connectors/connector-capability';
+import {
+  connectorsAllowedForTurn,
+  planIncludesConnectors,
+} from '@/lib/connectors/connector-capability';
 import { loadSelectedMcpContext, McpContextError } from '@/lib/connectors/mcp-context-service';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { timePhase } from '@/lib/observability/phase-timer';
@@ -3378,7 +3380,7 @@ async function processAdmittedRequest(
         connectorToolsEnabled:
           chatRequest.connector_tools_enabled !== false &&
           explicitModelCallsTools &&
-          Boolean(getTierPolicy(subscription.plan_tier).allowMCP),
+          planIncludesConnectors(subscription.plan_tier),
         disabledConnectorIds: chatRequest.disabled_connector_ids,
         researchConnectorIds: chatRequest.research_sources?.connectors,
         contextConnectorIds: chatRequest.mcp_context

@@ -56,6 +56,10 @@ describe('marketing plan matrix', () => {
     expect(serialized).not.toMatch(/dedicated capacity/i);
     expect(serialized).not.toMatch(/reserved capacity/i);
   });
+
+  it('publishes no unlimited or uncapped usage claim', () => {
+    expect(JSON.stringify(MARKETING_FEATURE_MATRIX)).not.toMatch(/unlimited|uncapped/i);
+  });
 });
 
 describe('launch messaging', () => {
