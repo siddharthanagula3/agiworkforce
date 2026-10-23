@@ -26,10 +26,22 @@ const {
   mockInstallTotals: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
-vi.mock('@/lib/api-auth', () => ({ getClerkAuthUser: mockAuthUser }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn().mockReturnValue({}) }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockUserScopedDb }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: mockRateLimit,
+}));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
+  getClerkAuthUser: mockAuthUser,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: vi.fn().mockReturnValue({}),
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  getUserScopedDb: mockUserScopedDb,
+}));
 vi.mock('@/lib/services/workspace-plugin-access', async () => {
   const { listEnabledPluginIds } = await import('@/lib/services/plugin-installation-service');
   return {
@@ -37,8 +49,12 @@ vi.mock('@/lib/services/workspace-plugin-access', async () => {
     listPermittedPluginIds: listEnabledPluginIds,
   };
 });
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/services/plugin-installation-service', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/services/plugin-installation-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/plugin-installation-service')>()),
   listEnabledPluginIds: mockListEnabledPluginIds,
 }));
 vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
@@ -49,10 +65,12 @@ vi.mock('@/lib/services/skill-catalog-service', async (importOriginal) => ({
   SkillCatalogUnavailableError: class extends Error {},
   filterSkillsByInstallOverrides: vi.fn(),
 }));
-vi.mock('@/lib/services/skill-install-service', () => ({
+vi.mock('@/lib/services/skill-install-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/skill-install-service')>()),
   resolveInstalledManagedSkills: mockResolveInstalled,
 }));
-vi.mock('@/lib/services/user-skill-service', () => ({
+vi.mock('@/lib/services/user-skill-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/user-skill-service')>()),
   findUserSkillWithFiles: vi.fn(async () => null),
   findUserSkillByName: vi.fn(async () => null),
   listUserSkillsAsManagedSkills: vi.fn(async () => []),
@@ -61,7 +79,8 @@ vi.mock('@/lib/services/user-skill-service', () => ({
   listUserSkills: mockListUserSkills,
   toUserSkillSummary: vi.fn(),
 }));
-vi.mock('@/lib/services/user-skill-authoring', () => ({
+vi.mock('@/lib/services/user-skill-authoring', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/user-skill-authoring')>()),
   userSkillAuthoringEnabled: mockAuthoringEnabled,
   requireUserSkillAuthoring: vi.fn(),
   USER_SKILL_AUTHORING_ENV_VAR: 'AGI_USER_SKILL_AUTHORING',
@@ -69,7 +88,10 @@ vi.mock('@/lib/services/user-skill-authoring', () => ({
 vi.mock('@/features/skills/server/skill-install-totals', () => ({
   readSkillInstallTotals: mockInstallTotals,
 }));
-vi.mock('@/features/plugins/server/directory/installed-skills', () => ({
+vi.mock('@/features/plugins/server/directory/installed-skills', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/features/plugins/server/directory/installed-skills')
+  >()),
   findInstalledDirectorySkillWithFiles: vi.fn(async () => null),
   listInstalledDirectorySkills: vi.fn(async () => []),
 }));

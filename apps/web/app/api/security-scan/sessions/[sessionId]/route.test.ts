@@ -9,14 +9,19 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({ recordAuditEvent: mocks.audit }));
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
+  recordAuditEvent: mocks.audit,
+}));
 vi.mock('@/features/security-scan/server/route-access', () => ({
   securityScanRouteContext: mocks.routeContext,
 }));
-vi.mock('@/features/security-scan/server/service', () => ({
+vi.mock('@/features/security-scan/server/service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/features/security-scan/server/service')>()),
   runSecurityScan: mocks.runScan,
   readSecurityScanState: mocks.readState,
 }));

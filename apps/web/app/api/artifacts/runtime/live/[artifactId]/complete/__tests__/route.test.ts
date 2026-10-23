@@ -16,17 +16,29 @@ const mocks = vi.hoisted(() => ({
   db: { query: vi.fn() },
 }));
 
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mocks.requireCsrfToken }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mocks.getUserScopedDb }));
-vi.mock('@/lib/api-auth', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: mocks.requireCsrfToken,
+}));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  getUserScopedDb: mocks.getUserScopedDb,
+}));
+vi.mock('@/lib/api-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/api-auth')>()),
   assertAccountActive: mocks.assertAccountActive,
   getClerkAuthUser: vi.fn(),
 }));
-vi.mock('@/lib/connectors/google-user-data', () => ({
+vi.mock('@/lib/connectors/google-user-data', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/google-user-data')>()),
   conversationHoldsGoogleUserData: mocks.conversationHoldsGoogleUserData,
 }));
-vi.mock('@/lib/services/artifact-runtime-service', () => ({
+vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/artifact-runtime-service')>()),
   ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
   buildArtifactConnectorPlan: vi.fn(),
   completeArtifactPrompt: vi.fn(),

@@ -21,14 +21,17 @@ vi.mock('node:dns/promises', () => ({
   lookup: dnsMocks.lookup,
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('./tool-loop-anthropic', () => ({
+vi.mock('./tool-loop-anthropic', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('./tool-loop-anthropic')>()),
   buildToolLoopStream: vi.fn(),
   buildServingRouteId: vi.fn(),
 }));
-vi.mock('@/lib/services/llm-cost-calculator', () => ({
+vi.mock('@/lib/services/llm-cost-calculator', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/llm-cost-calculator')>()),
   LLMCostCalculator: {
     calculateListCost: vi.fn(() => null),
     calculateListCostMicrousd: vi.fn(() => null),

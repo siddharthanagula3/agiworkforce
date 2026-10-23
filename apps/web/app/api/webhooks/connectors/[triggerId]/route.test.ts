@@ -9,12 +9,22 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mocks.withRateLimit }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: mocks.getNeonDb }));
-vi.mock('@/lib/triggers/trigger-ingest', () => ({ ingestTriggerEvent: mocks.ingestTriggerEvent }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: mocks.withRateLimit,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: mocks.getNeonDb,
+}));
+vi.mock('@/lib/triggers/trigger-ingest', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/triggers/trigger-ingest')>()),
+  ingestTriggerEvent: mocks.ingestTriggerEvent,
+}));
 
 import { NextRequest } from 'next/server';
 import {

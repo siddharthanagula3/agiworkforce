@@ -7,17 +7,22 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/services/push-notification-service', () => ({
+vi.mock('@/lib/services/push-notification-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/push-notification-service')>()),
   sendPushToUser: mocks.sendPushToUser,
 }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ transaction: vi.fn() }) }));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: () => ({ transaction: vi.fn() }),
+}));
 vi.mock('@/lib/server/claimed-user-scope-db', () => ({
   createClaimedUserScopedDb: (_serviceDb: unknown, scope: unknown) => {
     mocks.claimedScope(scope);
     return { query: mocks.query };
   },
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 

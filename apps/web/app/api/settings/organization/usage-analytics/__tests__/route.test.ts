@@ -18,15 +18,23 @@ const { mockQuery, mockGetUserScopedDb, mockRequireTeamAdminAccess, mockActivity
   }),
 );
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn(async () => null) }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: vi.fn(async () => null),
+}));
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  getUserScopedDb: mockGetUserScopedDb,
+}));
 vi.mock('@/lib/services/organization-activity-service', () => ({
   readOrganizationActivityDays: (...args: unknown[]) => mockActivity(...args),
 }));
-vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+vi.mock('@/app/api/settings/team/team-admin-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/app/api/settings/team/team-admin-access')>()),
   requireTeamAdminAccess: mockRequireTeamAdminAccess,
 }));
 

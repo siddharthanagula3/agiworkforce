@@ -3,15 +3,24 @@ type ScanModule0 = typeof import('@/lib/github-app');
 type ScanModule1 = typeof import('@/lib/e2b/templates');
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({ logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() } }));
-vi.mock('@/lib/e2b/runtime', () => ({ getE2BExecutor: vi.fn(), killE2BSession: vi.fn() }));
-vi.mock('@/lib/e2b/egress-host-resolution', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
+  logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn() },
+}));
+vi.mock('@/lib/e2b/runtime', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/e2b/runtime')>()),
+  getE2BExecutor: vi.fn(),
+  killE2BSession: vi.fn(),
+}));
+vi.mock('@/lib/e2b/egress-host-resolution', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/e2b/egress-host-resolution')>()),
   assertExtraEgressHostsResolveSafely: vi.fn(async () => undefined),
 }));
 const { managedCloudCodeSessionScope } = vi.hoisted(() => ({
   managedCloudCodeSessionScope: vi.fn(() => ({ scope: 'test' })),
 }));
-vi.mock('@/lib/e2b/session-store', () => ({
+vi.mock('@/lib/e2b/session-store', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/e2b/session-store')>()),
   managedCloudCodeSessionScope,
   CHAT_SANDBOX_NETWORK_ACCESS: 'trusted',
   deleteE2BSession: vi.fn(),
@@ -37,7 +46,8 @@ vi.mock('@/lib/github-app', async (importOriginal) => {
     getGitHubRepositoryDefaultBranch: vi.fn(),
   };
 });
-vi.mock('@/lib/user-connector-tools', () => ({
+vi.mock('@/lib/user-connector-tools', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/user-connector-tools')>()),
   getUserGithubInstallations: vi.fn(async () => []),
 }));
 vi.mock('@/lib/e2b/templates', async (importOriginal) => {

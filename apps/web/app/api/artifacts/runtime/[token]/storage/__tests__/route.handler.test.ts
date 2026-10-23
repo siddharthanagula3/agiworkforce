@@ -62,7 +62,8 @@ vi.mock('@/lib/api-auth', () => ({
   isAccountUnavailableError: vi.fn(),
   assertAccountActive: mocks.assertAccountActive,
 }));
-vi.mock('@/lib/services/artifact-runtime-service', () => ({
+vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/artifact-runtime-service')>()),
   ArtifactRuntimeRouteUnavailableError: class ArtifactRuntimeRouteUnavailableError extends Error {},
   buildArtifactConnectorPlan: vi.fn(),
   completeArtifactPrompt: vi.fn(),
@@ -74,7 +75,8 @@ vi.mock('@/lib/services/artifact-runtime-service', () => ({
   deleteArtifactStorageValue: mocks.deleteArtifactStorageValue,
   listArtifactStorageKeys: mocks.listArtifactStorageKeys,
 }));
-vi.mock('@/lib/services/published-artifact-service', () => ({
+vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/published-artifact-service')>()),
   MAX_CONTENT_CHARS: 1_000_000,
   MAX_PUBLISHED_PER_USER: vi.fn(),
   PUBLISHABLE_KINDS: vi.fn(),

@@ -29,9 +29,16 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a) }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a),
+}));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a),
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
   getUserScopedDb: (...a: unknown[]) => mocks.scopedDb(...a),
 }));
 vi.mock('@/lib/server/neon-db', async (importOriginal) => {
@@ -41,14 +48,17 @@ vi.mock('@/lib/server/neon-db', async (importOriginal) => {
     getNeonDb: () => createDatabaseAdapterFake(),
   };
 });
-vi.mock('@/lib/cors', () => ({
+vi.mock('@/lib/cors', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/cors')>()),
   withCorsRoute: <T>(handler: T) => handler,
   handleCorsPreflightRequest: vi.fn(() => null),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/security-audit', () => ({
+vi.mock('@/lib/security-audit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/security-audit')>()),
   recordAuditEvent: (...a: unknown[]) => mocks.recordAuditEvent(...a),
   BLOCK_APPEAL_PATH: '/support',
   logRateLimitExceeded: vi.fn(),
@@ -58,7 +68,8 @@ vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
   resolveSecretHandlingPolicy: (...a: unknown[]) => mocks.secretMode(...a),
 }));
 
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
   organizationCanShareArtifacts: (...a: unknown[]) => mocks.canShareArtifacts(...a),
 }));
 

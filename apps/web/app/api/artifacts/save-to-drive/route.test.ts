@@ -7,18 +7,28 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: async () => null }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: async () => null }));
-vi.mock('@/lib/connectors/connector-capability', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: async () => null,
+}));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: async () => null,
+}));
+vi.mock('@/lib/connectors/connector-capability', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/connector-capability')>()),
   assertConnectorsReleased: () => undefined,
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
   getUserScopedDb: async () => ({ db: { query: vi.fn() }, userId: 'user-1', organizationId: null }),
 }));
-vi.mock('@/lib/connectors/oauth-access', () => ({
+vi.mock('@/lib/connectors/oauth-access', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/oauth-access')>()),
   connectorUnreachableMessage: (name: string) => `${name} is unreachable`,
   resolveConnectorAccessToken: () => mocks.access(),
 }));

@@ -20,14 +20,16 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
 vi.mock('@agiworkforce/routing', async (importOriginal) => ({
   ...(await importOriginal<RoutingModule>()),
   resolveAutoRoute: mocks.resolveAutoRoute,
 }));
-vi.mock('@/lib/server/side-call-training-policy', () => ({
+vi.mock('@/lib/server/side-call-training-policy', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/side-call-training-policy')>()),
   sideCallRoutingRequest: mocks.routingRequest,
   sideCallProviderAllowed: mocks.providerAllowed,
 }));
@@ -46,7 +48,10 @@ vi.mock('@/lib/services/provider-adapter-service', async (importOriginal) => ({
   buildServerProviderAdapter: () => ({ stream: mocks.stream }),
   toGenericUpstreamError: vi.fn(),
 }));
-vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-providers', () => ({
+vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-providers', async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import('@/app/api/llm/v1/chat/completions/lib/adapter-providers')
+  >()),
   resolveWireMode: () => 'chat',
 }));
 vi.mock('@/app/api/llm/v1/chat/completions/lib/adapter-response', () => ({

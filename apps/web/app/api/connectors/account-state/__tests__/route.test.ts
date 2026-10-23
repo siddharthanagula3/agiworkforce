@@ -11,9 +11,18 @@ const { mockGetUserScopedDb, mockQuery, mockCsrf, mockAudit } = vi.hoisted(() =>
   mockAudit: vi.fn(),
 }));
 
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
-vi.mock('@/lib/server/rls-db', () => ({ getUserScopedDb: mockGetUserScopedDb }));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: vi.fn().mockResolvedValue(null),
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
+  getUserScopedDb: mockGetUserScopedDb,
+}));
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: mockCsrf,
+}));
 vi.mock('@/lib/security-audit', async (importOriginal) => ({
   ...(await importOriginal<SecurityAuditModule>()),
   recordAuditEvent: mockAudit,

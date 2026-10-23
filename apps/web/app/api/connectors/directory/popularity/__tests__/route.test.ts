@@ -8,19 +8,24 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/rate-limit', () => ({
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
   withRateLimit: (...args: unknown[]) => mocks.withRateLimit(...args),
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
   getNeonDb: () => ({ query: mocks.query }),
 }));
-vi.mock('@/lib/connectors/catalog', () => ({
+vi.mock('@/lib/connectors/catalog', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/catalog')>()),
   isKnownConnectorId: (id: string) => ['gmail', 'google-drive', 'slack'].includes(id),
 }));
-vi.mock('@/lib/connectors/mcp-directory-targets', () => ({
+vi.mock('@/lib/connectors/mcp-directory-targets', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/connectors/mcp-directory-targets')>()),
   resolveDirectoryTarget: (id: string) => mocks.resolveDirectoryTarget(id),
 }));
 

@@ -12,14 +12,22 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/csrf', () => ({ requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a) }));
-vi.mock('@/lib/rate-limit', () => ({ withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a) }));
-vi.mock('@/lib/server/rls-db', () => ({
+vi.mock('@/lib/csrf', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/csrf')>()),
+  requireCsrfToken: (...a: unknown[]) => mocks.csrf(...a),
+}));
+vi.mock('@/lib/rate-limit', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/rate-limit')>()),
+  withRateLimit: (...a: unknown[]) => mocks.rateLimit(...a),
+}));
+vi.mock('@/lib/server/rls-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/rls-db')>()),
   getUserScopedDb: (...a: unknown[]) => mocks.scopedDb(...a),
 }));
-vi.mock('@/lib/services/organization-permission-service', async () => {
+vi.mock('@/lib/services/organization-permission-service', async (importOriginal) => {
   const { createError } = await import('@/lib/errors');
   return {
+    ...(await importOriginal<typeof import('@/lib/services/organization-permission-service')>()),
     SHARE_INTO_WORKSPACE_DENIED_MESSAGE: 'read-only',
     requireOrganizationPermission: vi.fn(
       async (_userId: string, _organizationId: string, permission: string, message: string) => {
@@ -29,11 +37,13 @@ vi.mock('@/lib/services/organization-permission-service', async () => {
     resolveOrganizationPermissions: vi.fn(async () => new Set(mocks.permissions)),
   };
 });
-vi.mock('@/lib/services/org-entitlements', () => ({
+vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/org-entitlements')>()),
   organizationCanShareArtifacts: (...a: unknown[]) => mocks.canShareArtifacts(...a),
   getWorkspaceArtifactSharingErrorMessage: () => 'Upgrade to share with your workspace.',
 }));
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
 

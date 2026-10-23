@@ -9,12 +9,20 @@ const mocks = vi.hoisted(() => ({
   db: { query: vi.fn() },
 }));
 
-vi.mock('@/lib/logger', () => ({
+vi.mock('@/lib/logger', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/logger')>()),
   logger: { info: vi.fn(), error: vi.fn(), warn: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/cron-auth', () => ({ verifyCronRequest: mocks.verifyCronRequest }));
-vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => mocks.db }));
-vi.mock('../refresh-live-artifacts', () => ({
+vi.mock('@/lib/server/cron-auth', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/cron-auth')>()),
+  verifyCronRequest: mocks.verifyCronRequest,
+}));
+vi.mock('@/lib/server/neon-db', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/server/neon-db')>()),
+  getNeonDb: () => mocks.db,
+}));
+vi.mock('../refresh-live-artifacts', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../refresh-live-artifacts')>()),
   refreshLiveArtifacts: mocks.refreshLiveArtifacts,
 }));
 

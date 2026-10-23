@@ -87,7 +87,8 @@ vi.mock('@/lib/api-auth', () => ({
   isAccountUnavailableError: vi.fn(),
   assertAccountActive: mocks.assertAccountActive,
 }));
-vi.mock('@/lib/services/artifact-runtime-service', () => ({
+vi.mock('@/lib/services/artifact-runtime-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/artifact-runtime-service')>()),
   deleteArtifactStorageValue: vi.fn(),
   describeArtifactConnectors: vi.fn(),
   listArtifactStorageKeys: vi.fn(),
@@ -100,7 +101,8 @@ vi.mock('@/lib/services/artifact-runtime-service', () => ({
   buildArtifactConnectorPlan: mocks.buildArtifactConnectorPlan,
   completeArtifactPrompt: mocks.completeArtifactPrompt,
 }));
-vi.mock('@/lib/services/published-artifact-service', () => ({
+vi.mock('@/lib/services/published-artifact-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/published-artifact-service')>()),
   MAX_CONTENT_CHARS: 1_000_000,
   MAX_PUBLISHED_PER_USER: vi.fn(),
   PUBLISHABLE_KINDS: vi.fn(),
@@ -128,7 +130,8 @@ vi.mock('@/lib/services/published-artifact-service', () => ({
     'This artifact uses connected apps, which are not available on publicly shared artifacts.',
   publishedArtifactAllowsConnectors: mocks.allowsConnectors,
 }));
-vi.mock('@/lib/services/organization-policy-gate', () => ({
+vi.mock('@/lib/services/organization-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/organization-policy-gate')>()),
   diagnoseMemberPolicy: vi.fn(),
   readOrganizationIpAllowList: vi.fn(),
   resolveEffectiveWorkspaceControls: vi.fn(),
@@ -179,7 +182,8 @@ vi.mock('@/lib/services/managed-content-safety-service', () => ({
   loadManagedContentSafetyPreference: vi.fn(),
   enforceManagedContentSafetyPreference: mocks.enforceManagedContentSafetyPreference,
 }));
-vi.mock('@/lib/services/managed-usage-request-service', () => ({
+vi.mock('@/lib/services/managed-usage-request-service', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@/lib/services/managed-usage-request-service')>()),
   MANAGED_CHAT_CONTRACT_VERSION: vi.fn(),
   TOP_UP_HREF: '/settings/billing',
   UPGRADE_HREF: '/pricing',
