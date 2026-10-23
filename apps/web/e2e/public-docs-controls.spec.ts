@@ -1467,6 +1467,7 @@ async function controlsDestination(
   await expect
     .poll(() =>
       main
+        .locator('.dx-prose')
         .getByRole('heading', { level: 2 })
         .evaluateAll((headings) => headings.map((heading) => heading.id)),
     )

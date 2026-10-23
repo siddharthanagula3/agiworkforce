@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
+import { supportCollectionIndex } from '../app/help/collections';
 import { INSPIRATION, inspirationPath } from '../app/gallery/inspiration';
 import { RELEASES, releasePath } from '../lib/changelog-entries';
 import {
@@ -37,6 +38,11 @@ test('canonical content owners and their path helpers populate current generated
       .sort(),
   );
   expect(pathsFor('/help/[slug]')).toEqual(getHelpArticleRoutePaths());
+  expect(pathsFor('/help/collections/[id]')).toEqual(
+    supportCollectionIndex()
+      .collections.map((collection) => `/help/collections/${collection.id}`)
+      .sort(),
+  );
   expect(result.fixedRoutes.length).toBeGreaterThan(0);
   expect(
     result.fixedRoutes.every(

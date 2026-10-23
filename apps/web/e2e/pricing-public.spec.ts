@@ -237,7 +237,10 @@ test.describe('/pricing shows five plan cards, then Team', () => {
           buttons.map((button) => getComputedStyle(button).backgroundColor),
         );
       expect(fills).toHaveLength(CARD_PLANS.length);
-      expect(new Set(fills).size).toBe(1);
+      const [freeFill, ...paidFills] = fills;
+      expect(new Set(paidFills).size).toBe(1);
+      expect(freeFill).toBe('rgba(0, 0, 0, 0)');
+      expect(paidFills[0]).not.toBe(freeFill);
 
       const smallest = await page
         .locator('.agi-tier-features li, .agi-tier-body')

@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import path from 'node:path';
 import ts from 'typescript';
 import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
+import { supportCollectionIndex } from '../../app/help/collections';
 import { INSPIRATION, inspirationPath } from '../../app/gallery/inspiration';
 import { RELEASES, releasePath } from '../../lib/changelog-entries';
 import {
@@ -1093,6 +1094,15 @@ export function getPublicRouteInventory(
     if (primary.relativeFile === 'help/[slug]/page.tsx') {
       paths = helpPaths;
       dataSource = 'Canonical support corpus rebuilt from content/support; helpArticlePath';
+    } else if (primary.relativeFile === 'help/collections/[id]/page.tsx') {
+      assertParameterProjection(
+        source,
+        'supportCollectionIndex().collections.map((collection) => ({ id: collection.id }))',
+      );
+      paths = supportCollectionIndex()
+        .collections.map((collection) => `/help/collections/${collection.id}`)
+        .sort(compare);
+      dataSource = 'app/help/collections.ts: supportCollectionIndex over the generated corpus';
     } else if (primary.relativeFile === 'gallery/[templateId]/page.tsx') {
       assertParameterProjection(
         source,

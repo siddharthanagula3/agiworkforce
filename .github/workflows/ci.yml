@@ -1178,9 +1178,11 @@ jobs:
             e10-desktop-login.spec.ts \
             enterprise-surface.spec.ts \
             gallery-public.spec.ts \
+            help-collection-page.spec.ts \
             help-support-launcher-clearance.spec.ts \
             home-surface-explorer.spec.ts \
             landing-keyboard.spec.ts \
+            legal-open-source.spec.ts \
             marketing-mobile-nav.spec.ts \
             marketing-mount-scroll.spec.ts \
             marketing-stage-contrast.spec.ts \
