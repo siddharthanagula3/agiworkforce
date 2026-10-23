@@ -157,7 +157,9 @@
           "apps/extension-vscode",
           "apps/mobile",
           "apps/web",
-          "packages/platform/local-llm"
+          "packages/platform/local-llm",
+          "packages/ui/ui",
+          "packages/ui/unified-chat"
         ]
       },
       "patch": {
