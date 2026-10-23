@@ -198,7 +198,7 @@ verification (`pnpm db:rls-probe -- --target local|ci|branch`).
 | Tool                              | Version |
 | --------------------------------- | ------- |
 | Node.js                           | 24      |
-| pnpm                              | 9.15.3  |
+| pnpm                              | 10.34.7 |
 | Rust                              | 1.94.0  |
 | Xcode (macOS, for mobile/desktop) | Latest  |
 | Android SDK (for mobile)          | Latest  |
@@ -207,7 +207,7 @@ verification (`pnpm db:rls-probe -- --target local|ci|branch`).
 git clone https://github.com/siddharthanagula3/agiworkforce.git
 cd agiworkforce
 nvm use
-corepack enable && corepack prepare pnpm@9.15.3 --activate
+corepack enable && corepack prepare pnpm@10.34.7 --activate
 pnpm install
 ```
 

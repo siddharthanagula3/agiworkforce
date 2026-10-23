@@ -9,7 +9,7 @@ covers the mechanics of getting a change in.
 
 ## Setup
 
-Node 24, pnpm 9.15.3, Rust 1.94.0 (pinned in `rust-toolchain.toml` and kept in
+Node 24, pnpm 10.34.7, Rust 1.94.0 (pinned in `rust-toolchain.toml` and kept in
 lockstep with CI). Then:
 
 ```bash
