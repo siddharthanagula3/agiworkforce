@@ -547,6 +547,12 @@
       "verifiedBy": "model-picker-description-line",
       "status": "ADDITION",
       "notes": "Every curated model now carries a description: one short line in our own words that the model picker shows under the model name. Each line restates what the model's own bestFor, qualityTier and modality fields already record; none states a benchmark, price or provider claim. The model-registry tests require it on every curated model, and the compiler rejects any description that is not one sentence of at most 60 characters. No provider fact changed."
+    },
+    {
+      "date": "2026-10-22",
+      "verifiedBy": "official-provider-privacy-pages-read-2026-10-22",
+      "status": "CORRECTION",
+      "notes": "The account setting that keeps a user's content away from providers that may train now counts only providers whose own terms cover the model that serves, so four records change trainsOnInputs from never to varies_by_route in provider-governance.json and gateways.json. vercel_gateway: https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training (last updated 2026-09-10) states \"By default, AI Gateway does not route based on the training data policy of providers.\"; filtering needs providerOptions.gateway.disallowPromptTraining, which no adapter sends. cheaperinference and cheaperinference_anthropic: https://platform.cheaperinference.com/legal/privacy states \"We do not use customer prompt or response bodies to train Keak models.\" and that inputs \"are transmitted to the model provider selected to serve a request\", whose practices the policy \"does not govern\". deepinfra: https://docs.deepinfra.com/account/data-privacy states \"We do not use data you submit to our APIs for training models.\" except \"when using Google or Anthropic models, where the receiving company's training policy applies\". A varies_by_route or unknown provider is refused whenever the setting is on. No model, route or price changed, and no live provider call was made."
     }
   ],
   "providers": {

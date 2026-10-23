@@ -33243,31 +33243,31 @@
     "vercel_gateway": {
       "dataRetentionClass": "conditional",
       "zeroDataRetentionAvailability": "per_request_setting",
-      "trainsOnInputs": "never",
+      "trainsOnInputs": "varies_by_route",
       "residencyRegions": null,
       "source": "https://vercel.com/docs/ai-gateway/security-and-compliance/zdr",
       "verifiedOn": "2026-09-06",
-      "note": "Gateway's own layer is zero retention: Vercel states AI Gateway does not retain prompts, outputs or sensitive data and deletes user data immediately after a request completes, and does not use prompts or responses for training (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training). Upstream retention follows the provider that serves, so the class is conditional: the per-request providerOptions.gateway.zeroDataRetention flag, free on Pro and Enterprise, restricts routing to providers Vercel holds zero-retention agreements with (Anthropic, Azure, Bedrock, Google Vertex, Groq, Fireworks, DeepInfra, Together, Cerebras, Mistral, Moonshot and others on the published list) and fails the request with no_providers_available when none serves the model. The condition on this class is that the adapter sends that flag for a zero-retention workspace, which the vercel_gateway harness declares as zeroDataRetentionOnRequest. Anthropic excludes its newest frontier model from zero retention on every provider (30-day retention, not used for training); the routes data is what says which model that is today. Provider prompt caching is at the provider's layer and its retention follows the provider. No residency commitment is published. Retrieved 2026-09-06.",
+      "note": "Gateway's own layer is zero retention: Vercel states AI Gateway does not retain prompts, outputs or sensitive data and deletes user data immediately after a request completes, and does not use prompts or responses for training (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training). Upstream retention follows the provider that serves, so the class is conditional: the per-request providerOptions.gateway.zeroDataRetention flag, free on Pro and Enterprise, restricts routing to providers Vercel holds zero-retention agreements with (Anthropic, Azure, Bedrock, Google Vertex, Groq, Fireworks, DeepInfra, Together, Cerebras, Mistral, Moonshot and others on the published list) and fails the request with no_providers_available when none serves the model. The condition on this class is that the adapter sends that flag for a zero-retention workspace, which the vercel_gateway harness declares as zeroDataRetentionOnRequest. Anthropic excludes its newest frontier model from zero retention on every provider (30-day retention, not used for training); the routes data is what says which model that is today. Provider prompt caching is at the provider's layer and its retention follows the provider. No residency commitment is published. Retrieved 2026-09-06. Training on inputs is varies_by_route: the disallow-prompt-training page (https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training, last updated 2026-09-10, read 2026-10-22) states \"By default, AI Gateway does not route based on the training data policy of providers.\" and restricts routing only when a request sets providerOptions.gateway.disallowPromptTraining, which no adapter sends, so a route through the gateway is not counted as keeping inputs out of training.",
       "cacheTokenBillingClass": "unknown"
     },
     "cheaperinference": {
       "dataRetentionClass": "conditional",
       "zeroDataRetentionAvailability": "unknown",
-      "trainsOnInputs": "never",
+      "trainsOnInputs": "varies_by_route",
       "residencyRegions": null,
       "source": "https://platform.cheaperinference.com/legal/privacy",
-      "verifiedOn": "2026-09-06",
-      "note": "Gateway's own layer only, operated by Keak: Cheaper Inference does not store prompt or response bodies in its application database, request content is transmitted to the serving provider, and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Retention therefore follows the upstream host that serves each request, which the gateway picks per request from its supply; its public catalog marks a zero_data_retention flag and a zero_data_retention_route per model, but the API exposes no request-level control that restricts routing to those hosts, so the class is conditional and no route on this gateway is admitted for a zero-retention workspace until such a control exists and the adapter sends it. Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates. Re-read 2026-09-06.",
+      "verifiedOn": "2026-10-22",
+      "note": "Gateway's own layer only, operated by Keak: Cheaper Inference does not store prompt or response bodies in its application database, request content is transmitted to the serving provider, and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Retention therefore follows the upstream host that serves each request, which the gateway picks per request from its supply; its public catalog marks a zero_data_retention flag and a zero_data_retention_route per model, but the API exposes no request-level control that restricts routing to those hosts, so the class is conditional and no route on this gateway is admitted for a zero-retention workspace until such a control exists and the adapter sends it. Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates. Re-read 2026-09-06. Training on inputs is varies_by_route: the privacy policy (re-read 2026-10-22) limits its training statement to Keak models (\"We do not use customer prompt or response bodies to train Keak models.\"), says inputs \"are transmitted to the model provider selected to serve a request\" and that it \"does not govern the independent privacy practices of model providers\", so the serving provider's training terms are not covered.",
       "cacheTokenBillingClass": "unknown"
     },
     "cheaperinference_anthropic": {
       "dataRetentionClass": "conditional",
       "zeroDataRetentionAvailability": "unknown",
-      "trainsOnInputs": "never",
+      "trainsOnInputs": "varies_by_route",
       "residencyRegions": null,
       "source": "https://platform.cheaperinference.com/legal/privacy",
-      "verifiedOn": "2026-09-06",
-      "note": "Gateway's own layer only, operated by Keak: Cheaper Inference does not store prompt or response bodies in its application database, request content is transmitted to the serving provider, and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Retention therefore follows the upstream host that serves each request, which the gateway picks per request from its supply; its public catalog marks a zero_data_retention flag and a zero_data_retention_route per model, but the API exposes no request-level control that restricts routing to those hosts, so the class is conditional and no route on this gateway is admitted for a zero-retention workspace until such a control exists and the adapter sends it. Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates. Re-read 2026-09-06.",
+      "verifiedOn": "2026-10-22",
+      "note": "Gateway's own layer only, operated by Keak: Cheaper Inference does not store prompt or response bodies in its application database, request content is transmitted to the serving provider, and temporary uploads expire after one hour (https://platform.cheaperinference.com/legal/dpa). Retention therefore follows the upstream host that serves each request, which the gateway picks per request from its supply; its public catalog marks a zero_data_retention flag and a zero_data_retention_route per model, but the API exposes no request-level control that restricts routing to those hosts, so the class is conditional and no route on this gateway is admitted for a zero-retention workspace until such a control exists and the adapter sends it. Operational logs are retained up to 12 months, account and billing records for the agreement term plus seven years. Keak states it does not use customer prompt or response bodies to train Keak models. Data may be processed in the United States, Canada, Europe, and other countries where Keak operates. Re-read 2026-09-06. Training on inputs is varies_by_route: the privacy policy (re-read 2026-10-22) limits its training statement to Keak models (\"We do not use customer prompt or response bodies to train Keak models.\"), says inputs \"are transmitted to the model provider selected to serve a request\" and that it \"does not govern the independent privacy practices of model providers\", so the serving provider's training terms are not covered.",
       "cacheTokenBillingClass": "additional_to_input",
       "cacheTokenBillingSource": "https://platform.claude.com/docs/en/build-with-claude/prompt-caching",
       "cacheTokenBillingVerifiedOn": "2026-09-05",
@@ -33463,11 +33463,11 @@
     "deepinfra": {
       "dataRetentionClass": "zero_retention",
       "zeroDataRetentionAvailability": "default",
-      "trainsOnInputs": "never",
+      "trainsOnInputs": "varies_by_route",
       "residencyRegions": null,
       "source": "https://docs.deepinfra.com/account/data-privacy",
-      "verifiedOn": "2026-09-06",
-      "note": "Input data is not stored to disk during inference and outputs are not stored; request content is not logged; customer data is not used for training except for Google and Anthropic models served on DeepInfra. Processing regions are not published. Retrieved 2026-09-06.",
+      "verifiedOn": "2026-10-22",
+      "note": "Input data is not stored to disk during inference and outputs are not stored; request content is not logged; customer data is not used for training except for Google and Anthropic models served on DeepInfra. Processing regions are not published. Retrieved 2026-09-06. Training on inputs is varies_by_route: the data-privacy page (re-read 2026-10-22) states \"We do not use data you submit to our APIs for training models.\" except \"when using Google or Anthropic models, where the receiving company's training policy applies\", so the provider-wide record cannot vouch for every route.",
       "cacheTokenBillingClass": "unknown"
     },
     "together": {
@@ -38540,6 +38540,13 @@
       "verifiedBy": "model-picker-description-line",
       "status": "ADDITION",
       "notes": "Every curated model now carries a description: one short line in our own words that the model picker shows under the model name. Each line restates what the model's own bestFor, qualityTier and modality fields already record; none states a benchmark, price or provider claim. The model-registry tests require it on every curated model, and the compiler rejects any description that is not one sentence of at most 60 characters. No provider fact changed."
+    },
+    {
+      "id": "verification/2026-10-22/92",
+      "date": "2026-10-22",
+      "verifiedBy": "official-provider-privacy-pages-read-2026-10-22",
+      "status": "CORRECTION",
+      "notes": "The account setting that keeps a user's content away from providers that may train now counts only providers whose own terms cover the model that serves, so four records change trainsOnInputs from never to varies_by_route in provider-governance.json and gateways.json. vercel_gateway: https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training (last updated 2026-09-10) states \"By default, AI Gateway does not route based on the training data policy of providers.\"; filtering needs providerOptions.gateway.disallowPromptTraining, which no adapter sends. cheaperinference and cheaperinference_anthropic: https://platform.cheaperinference.com/legal/privacy states \"We do not use customer prompt or response bodies to train Keak models.\" and that inputs \"are transmitted to the model provider selected to serve a request\", whose practices the policy \"does not govern\". deepinfra: https://docs.deepinfra.com/account/data-privacy states \"We do not use data you submit to our APIs for training models.\" except \"when using Google or Anthropic models, where the receiving company's training policy applies\". A varies_by_route or unknown provider is refused whenever the setting is on. No model, route or price changed, and no live provider call was made."
     }
   ],
   "retiredModels": {
