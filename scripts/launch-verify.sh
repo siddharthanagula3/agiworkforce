@@ -47,19 +47,19 @@ pids+=($!)
 (run_surface "cli-check"       "cargo check --workspace") &
 pids+=($!)
 
-(run_surface "desktop"         "pnpm --filter @agiworkforce/desktop typecheck && pnpm --filter @agiworkforce/desktop lint && pnpm --filter @agiworkforce/desktop test -- --run") &
+(run_surface "desktop"         "pnpm --filter @agiworkforce/desktop typecheck && pnpm --filter @agiworkforce/desktop lint && pnpm --filter @agiworkforce/desktop test --run") &
 pids+=($!)
 
-(run_surface "web"             "pnpm --filter @agiworkforce/web typecheck && pnpm --filter @agiworkforce/web lint && pnpm --filter @agiworkforce/web test -- --run") &
+(run_surface "web"             "pnpm --filter @agiworkforce/web typecheck && pnpm --filter @agiworkforce/web lint && pnpm --filter @agiworkforce/web test --run") &
 pids+=($!)
 
 (run_surface "mobile"          "pnpm --filter @agiworkforce/mobile typecheck && pnpm --filter @agiworkforce/mobile lint && pnpm --filter @agiworkforce/mobile test") &
 pids+=($!)
 
-(run_surface "chrome-ext"      "pnpm --filter @agiworkforce/extension typecheck && pnpm --filter @agiworkforce/extension lint && pnpm --filter @agiworkforce/extension test -- --run") &
+(run_surface "chrome-ext"      "pnpm --filter @agiworkforce/extension typecheck && pnpm --filter @agiworkforce/extension lint && pnpm --filter @agiworkforce/extension test --run") &
 pids+=($!)
 
-(run_surface "vscode-ext"      "pnpm --filter agi-workforce typecheck && pnpm --filter agi-workforce lint && pnpm --filter agi-workforce test -- --run") &
+(run_surface "vscode-ext"      "pnpm --filter agi-workforce typecheck && pnpm --filter agi-workforce lint && pnpm --filter agi-workforce test --run") &
 pids+=($!)
 
 for pid in "${pids[@]}"; do

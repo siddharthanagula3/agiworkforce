@@ -9,10 +9,10 @@
     "url": "https://github.com/siddharthanagula3/agiworkforce.git"
   },
   "license": "PROPRIETARY",
-  "packageManager": "pnpm@9.15.3",
+  "packageManager": "pnpm@10.34.7",
   "engines": {
     "node": ">=24.15.0 <25",
-    "pnpm": ">=9.15.0"
+    "pnpm": ">=10.16.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -360,7 +360,7 @@
     "check:feature-baseline": "pnpm check:route-states && pnpm check:fake-affordances && pnpm check:production-mocks && pnpm check:route-observability && pnpm check:rollout-flags && pnpm check:route-tests && pnpm check:coverage-floors && pnpm check:error-vocabulary",
     "check:licenses": "node scripts/check-licenses.mjs",
     "check:trust-boundaries": "node scripts/check-trust-boundaries.mjs",
-    "check:provider-contracts": "pnpm --filter @agiworkforce/types test -- provider-contract",
+    "check:provider-contracts": "pnpm --filter @agiworkforce/types test provider-contract",
     "probe:models": "tsx scripts/probe-models.mjs",
     "sync:models": "pnpm --filter @agiworkforce/model-registry generate",
     "sync:models:check": "pnpm --filter @agiworkforce/model-registry check",
