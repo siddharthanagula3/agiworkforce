@@ -214,6 +214,7 @@ function databaseResponse() {
   return { ok: true, json: async () => ({ command: 'SELECT', rowCount: 0, rows: [], fields: [] }) };
 }
 
+import { extractEmbeddedProvenance } from '@agiworkforce/compliance';
 import { POST } from '@/app/api/media/image/generate/route';
 import { GET as GET_FILE } from '@/app/api/files/[id]/route';
 import {
@@ -319,6 +320,44 @@ describe('Article 50(2), generated image provenance', () => {
     expect(body.provenance[0].kind).toBe('image');
     expect(body.provenance[0].provider).toBe('openai');
     expect(body.provenance[0].model).toBe(body.catalog_model);
+  });
+
+  it('writes the claim into the stored image file', async () => {
+    const response = await POST(authedRequest({ prompt: 'a cat' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(storageMocks.store).toHaveBeenCalledTimes(1);
+    const stored = (storageMocks.store.mock.calls[0] as unknown as [{ data: Buffer }])[0].data;
+    expect(extractEmbeddedProvenance(new Uint8Array(Buffer.from(PNG_B64, 'base64')))).toBeNull();
+    expect(extractEmbeddedProvenance(stored)).toEqual(body.provenance[0]);
+  });
+
+  it('writes the claim into inline image bytes when no library storage is configured', async () => {
+    storageMocks.configured.mockReturnValue(false);
+
+    const response = await POST(authedRequest({ prompt: 'a cat' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(storageMocks.store).not.toHaveBeenCalled();
+    const inline = new Uint8Array(Buffer.from(body.images[0].b64_json, 'base64'));
+    expect(extractEmbeddedProvenance(inline)).toEqual(body.provenance[0]);
+  });
+
+  it('delivers no image whose bytes cannot carry the claim', async () => {
+    queuedProviderResponses.push({
+      ok: true,
+      json: async () => ({ data: [{ b64_json: Buffer.from('not an image').toString('base64') }] }),
+    });
+
+    const response = await POST(authedRequest({ prompt: 'a cat' }));
+    const body = await response.json();
+
+    expect(response.status).toBe(502);
+    expect(body.images).toEqual([]);
+    expect(storageMocks.store).not.toHaveBeenCalled();
+    expect(assetMocks.insertMany).not.toHaveBeenCalled();
   });
 
   it('binds the claim to the image bytes, not to their transport encoding', async () => {

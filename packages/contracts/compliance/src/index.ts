@@ -34,6 +34,19 @@ export {
 } from './article50-marker';
 
 export {
+  DIGITAL_SOURCE_TYPE,
+  buildMediaXmpPacket,
+  embedImageProvenance,
+  embedVideoProvenance,
+  extractEmbeddedProvenance,
+  planVideoProvenance,
+  type ByteSource,
+  type ProvenanceVideoMimeType,
+  type VideoProvenancePatch,
+  type VideoProvenancePlan,
+} from './media-provenance';
+
+export {
   CHINESE_HQ_PROVIDER_IDS,
   NAMED_PROVIDER_CONSENT_SURFACES,
   isChineseHqProvider,

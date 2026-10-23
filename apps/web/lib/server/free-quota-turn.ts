@@ -103,6 +103,7 @@ import {
 } from '@/features/models/lib/free-quota-copy';
 import { bytesFromUrl } from '@/lib/server/media-storage';
 import { persistGeneratedFileBytes } from '@/lib/server/generated-file-persist';
+import { markGeneratedMediaBytes } from '@/lib/server/generated-media-provenance';
 import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import { SSE_RESPONSE_HEADERS } from '@/app/api/llm/v1/chat/completions/lib/sse-heartbeat';
 import {
@@ -1481,11 +1482,29 @@ export async function serveFreeQuotaTurn(
       });
       return refuse('provider_failed', copy);
     }
+    let marked: Buffer | null = null;
+    try {
+      marked = await markGeneratedMediaBytes(generated.data, mimeType, provenance);
+    } catch (error) {
+      logger.warn(
+        { offering: entry.offeringKey, mimeType, error },
+        '[free-quota] generated media could not be marked as AI-generated',
+      );
+    }
+    if (!marked) {
+      await settleTurn(ledger, {
+        outcome: 'failed',
+        consumedUnits: consumedMediaUnits,
+        usage: null,
+        refusal: null,
+      });
+      return refuse('provider_failed', copy);
+    }
     const persisted = await persistGeneratedFileBytes(
       {
         userId: scoped.userId,
         organizationId: scoped.organizationId,
-        data: generated.data,
+        data: marked,
         mimeType,
         filename: `free-generated-${mediaKind}.${extension}`,
         provider: offering.provider,

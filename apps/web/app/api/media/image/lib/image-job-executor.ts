@@ -36,6 +36,7 @@ import {
   type ImageGenerationJob,
 } from '@/lib/server/image-generation-jobs';
 import { buildAiGeneratedProvenance, type AiGeneratedProvenance } from '@/lib/compliance/ai-act';
+import { markGeneratedImage } from '@/lib/server/generated-media-provenance';
 import {
   describeImageFailure,
   describeImageFailureFromProviderMessage,
@@ -343,6 +344,24 @@ async function resolveGeneratedImageBytes(
   return { resolved, failures };
 }
 
+function markResolvedImages(
+  resolved: readonly ResolvedImage[],
+  provenance: readonly AiGeneratedProvenance[],
+): { marked: ResolvedImage[]; failures: string[] } {
+  const marked: ResolvedImage[] = [];
+  const failures: string[] = [];
+  for (const image of resolved) {
+    const claim = provenance[image.idx];
+    try {
+      if (!claim) throw new Error('no provenance claim was built');
+      marked.push({ ...image, bytes: markGeneratedImage(image.bytes, claim) });
+    } catch (err) {
+      failures.push(`image ${image.idx}: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+  return { marked, failures };
+}
+
 /**
  * The output half of the safety floor, ahead of the library and of settlement:
  * a refused candidate is never stored, never delivered and never charged for.
@@ -376,7 +395,13 @@ async function persistGeneratedImages(input: {
   const { job } = input;
   const failures: string[] = [];
   if (!isImageStorageConfigured()) {
-    return { assetIds: [], images: input.images, failures };
+    const delivered = input.images.map((image, idx) => {
+      const marked = input.resolved.find((candidate) => candidate.idx === idx);
+      return image.b64_json && marked
+        ? { ...image, b64_json: marked.bytes.toString('base64') }
+        : image;
+    });
+    return { assetIds: [], images: delivered, failures };
   }
 
   type StagedImage = { idx: number; pathname: string; byteSize: number; contentType: string };
@@ -693,16 +718,20 @@ async function executeImageGenerationJobAttempt(input: {
     });
   });
 
-  const persisted = await persistGeneratedImages({
-    db: input.db,
-    job,
-    images: result.images,
-    resolved,
-    provenance,
-    generatedAt,
-  });
+  const { marked, failures: markFailures } = markResolvedImages(resolved, provenance);
+  const persisted: PersistedImages =
+    markFailures.length > 0
+      ? { assetIds: [], images: result.images, failures: [] }
+      : await persistGeneratedImages({
+          db: input.db,
+          job,
+          images: result.images,
+          resolved: marked,
+          provenance,
+          generatedAt,
+        });
 
-  const persistenceFailures = [...resolveFailures, ...persisted.failures];
+  const persistenceFailures = [...resolveFailures, ...markFailures, ...persisted.failures];
   if (persistenceFailures.length > 0) {
     logger.error(
       { userId: job.userId, jobId: job.id, failures: persistenceFailures },

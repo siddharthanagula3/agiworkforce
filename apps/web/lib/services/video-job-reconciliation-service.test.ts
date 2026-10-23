@@ -1,9 +1,10 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { extractEmbeddedProvenance } from '@agiworkforce/compliance';
 import type { VideoGenerationJob } from '@/lib/server/video-generation-jobs';
 type ScanModule0 = typeof import('@/lib/services/video-provider-output-service');
 type ScanModule1 = typeof import('@/lib/observability/media-telemetry');
@@ -37,9 +38,6 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
-}));
-vi.mock('@/lib/compliance/ai-act', () => ({
-  buildAiGeneratedProvenance: () => ({ generated: true }),
 }));
 vi.mock('@/lib/server/video-generation-jobs', () => ({
   beginVideoProviderCancellationAttempt: (...args: unknown[]) => mocks.beginCancellation(...args),
@@ -143,7 +141,9 @@ function job(overrides: Partial<VideoGenerationJob> = {}): VideoGenerationJob {
 }
 
 const STAGED_BYTES = Buffer.concat([
-  Buffer.from('00000018667479706d70343200000000', 'hex'),
+  Buffer.from('00000014667479706d703432000000006d703432', 'hex'),
+  Buffer.from('00001008', 'hex'),
+  Buffer.from('mdat', 'latin1'),
   Buffer.alloc(4096, 0x2f),
 ]);
 const STAGED_DIGEST = createHash('sha256').update(STAGED_BYTES).digest('hex');
@@ -265,6 +265,56 @@ describe('video job reconciliation', () => {
     expect(mocks.cleanup).toHaveBeenCalledTimes(1);
     expect(publicVideoJobStatus(result).video_url).toBe(`/api/files/${JOB_ID}`);
     expect(mocks.transcriptSync).toHaveBeenCalledWith(db, result);
+  });
+
+  it('marks the video as AI-generated before it is stored', async () => {
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+    let stored: Buffer | null = null;
+    mocks.storeFile.mockImplementation(async (input: { filePath: string; byteSize: number }) => {
+      stored = await readFile(input.filePath);
+      return {
+        url: 'https://r2.example/internal-object',
+        pathname: `media/video/user-1/${JOB_ID}.mp4`,
+        byteSize: input.byteSize,
+        contentType: 'video/mp4',
+      };
+    });
+
+    const result = await reconcileVideoGenerationJob(db, job());
+
+    expect(result.status).toBe('completed');
+    expect(stored).not.toBeNull();
+    expect(extractEmbeddedProvenance(stored!)).toMatchObject({
+      kind: 'video',
+      provider: job().provider,
+      model: job().model,
+    });
+    expect(stored!.subarray(0, STAGED_BYTES.byteLength)).toEqual(STAGED_BYTES);
+    expect(mocks.storeFile).toHaveBeenCalledWith(
+      expect.objectContaining({ byteSize: stored!.byteLength }),
+    );
+    expect(stored!.byteLength).toBeGreaterThan(STAGED_BYTES.byteLength);
+  });
+
+  it('never stores a video it cannot mark as AI-generated', async () => {
+    mocks.poll.mockResolvedValue({
+      status: 'completed',
+      output: { url: 'https://generativelanguage.googleapis.com/video' },
+    });
+    await writeFile(stagedFilePath, Buffer.concat([STAGED_BYTES, Buffer.from('trailing')]));
+
+    const result = await reconcileVideoGenerationJob(db, job());
+
+    expect(mocks.storeFile).not.toHaveBeenCalled();
+    expect(mocks.upsertAsset).not.toHaveBeenCalled();
+    expect(mocks.finalize).not.toHaveBeenCalledWith(
+      expect.objectContaining({ outcome: 'completed' }),
+    );
+    expect(result.status).not.toBe('completed');
+    expect(mocks.cleanup).toHaveBeenCalledTimes(1);
   });
 
   /**

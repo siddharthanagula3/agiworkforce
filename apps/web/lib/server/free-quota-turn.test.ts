@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NextRequest } from 'next/server';
 import { createMemoryKeyValueStore, type MemoryKeyValueStore } from '@agiworkforce/key-value';
 import { FreeOfferingRequestSchema } from '@agiworkforce/cloud-contracts';
+import { extractEmbeddedProvenance } from '@agiworkforce/compliance';
 import { getProviderOfferings } from '@agiworkforce/types';
 import {
   credentialSha256,
@@ -256,13 +257,27 @@ async function leaveOnMeter(key: string, unitsLeft: number): Promise<void> {
   });
 }
 
+const GENERATED_PNG = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+  'base64',
+);
+const GENERATED_MP4 = Buffer.concat([
+  Buffer.from('00000014667479706d703432000000006d703432', 'hex'),
+  Buffer.from('00000010', 'hex'),
+  Buffer.from('mdat', 'latin1'),
+  Buffer.alloc(8),
+]);
+
 function generates(mimeType: string, result: Record<string, unknown> = {}) {
   const reserved: { units?: number } = {};
   mocks.media.mockImplementation(async (key: string) => {
     reserved.units = await meterReads(key);
     return { status: 'succeeded', elapsedMs: 1, artifactUrl: ARTIFACT_URL, ...result };
   });
-  mocks.download.mockResolvedValue({ data: Buffer.from('generated'), contentType: mimeType });
+  mocks.download.mockResolvedValue({
+    data: mimeType.startsWith('video/') ? GENERATED_MP4 : GENERATED_PNG,
+    contentType: mimeType,
+  });
   return reserved;
 }
 
@@ -358,6 +373,45 @@ describe('what a free video takes from its allowance', () => {
       );
     },
   );
+
+  it('writes the AI-generated claim into the video it stores', async () => {
+    const [, key] = VIDEO_BY_CLIP_LENGTH[0]!;
+    generates('video/mp4');
+
+    expect((await send(key, 'marked-video')).status).toBe(200);
+
+    const stored = mocks.persist.mock.calls[0]?.[0] as { data: Buffer };
+    expect(extractEmbeddedProvenance(stored.data)).toMatchObject({ kind: 'video' });
+    expect(stored.data.subarray(0, GENERATED_MP4.byteLength)).toEqual(GENERATED_MP4);
+  });
+
+  it('writes the AI-generated claim into the image it stores', async () => {
+    generates('image/png');
+
+    expect((await send(syncImage, 'marked-image')).status).toBe(200);
+
+    const stored = mocks.persist.mock.calls[0]?.[0] as { data: Buffer };
+    expect(extractEmbeddedProvenance(stored.data)).toMatchObject({ kind: 'image' });
+  });
+
+  it('stores nothing and keeps the allowance spent when the output cannot carry the claim', async () => {
+    const [clipSeconds, key] = VIDEO_BY_CLIP_LENGTH[0]!;
+    mocks.media.mockResolvedValue({
+      status: 'succeeded',
+      elapsedMs: 1,
+      artifactUrl: ARTIFACT_URL,
+      consumedSeconds: clipSeconds,
+    });
+    mocks.download.mockResolvedValue({
+      data: Buffer.from('not a video'),
+      contentType: 'video/mp4',
+    });
+
+    expect((await send(key, 'unmarkable-video')).status).toBe(502);
+
+    expect(mocks.persist).not.toHaveBeenCalled();
+    expect(await meterReads(key)).toBe(clipSeconds);
+  });
 
   it('keeps the reported seconds on the meter when the finished video cannot be stored', async () => {
     const [clipSeconds, key] = VIDEO_BY_CLIP_LENGTH[0]!;

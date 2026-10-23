@@ -37,11 +37,13 @@ export const ARTICLE_50_2_WEB_SCOPE: Readonly<
 > = Object.freeze({
   image: Object.freeze({
     marked: true,
-    basis: 'Marked by /api/media/image/generate and re-emitted by /api/files/[id].',
+    basis:
+      'Claim embedded in the stored file (XMP) and returned by /api/media/image/generate, then re-emitted by /api/files/[id].',
   }),
   video: Object.freeze({
     marked: true,
-    basis: 'Marked by /api/media/video/status and re-emitted by /api/files/[id].',
+    basis:
+      'Claim embedded in the stored file (XMP) before storage, returned by /api/media/video/status and re-emitted by /api/files/[id].',
   }),
   text: Object.freeze({
     marked: false,

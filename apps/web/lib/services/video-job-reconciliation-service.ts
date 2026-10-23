@@ -31,6 +31,10 @@ import {
 } from '@/lib/server/video-generation-jobs';
 import { buildAiGeneratedProvenance } from '@/lib/compliance/ai-act';
 import {
+  GeneratedMediaProvenanceError,
+  markGeneratedVideoFile,
+} from '@/lib/server/generated-media-provenance';
+import {
   downloadVideoProviderOutput,
   pollVideoProvider,
   requestRunwayVideoCancellation,
@@ -229,6 +233,28 @@ async function persistCompletedVideo(
       throw new GeneratedVideoRefusedError(screened.refusal, screened.reason);
     }
 
+    const provenance = buildAiGeneratedProvenance({
+      kind: 'video',
+      provider: job.provider,
+      model: job.model,
+    });
+    let markedByteSize: number;
+    try {
+      markedByteSize = await markGeneratedVideoFile(
+        downloaded.filePath,
+        downloaded.contentType,
+        provenance,
+      );
+    } catch (error) {
+      if (error instanceof GeneratedMediaProvenanceError) {
+        throw new VideoProviderOutputError(
+          'The provider video could not be marked as AI-generated, so it was not delivered.',
+          false,
+        );
+      }
+      throw error;
+    }
+
     const plannedPathname = videoStoragePathname({
       userId: job.userId,
       storageId: job.id,
@@ -240,7 +266,7 @@ async function persistCompletedVideo(
         userId: job.userId,
         kind: 'video',
         filePath: downloaded.filePath,
-        byteSize: downloaded.byteSize,
+        byteSize: markedByteSize,
         contentType: downloaded.contentType,
         storageId: job.id,
       });
@@ -260,11 +286,6 @@ async function persistCompletedVideo(
       }
       throw error;
     }
-    const provenance = buildAiGeneratedProvenance({
-      kind: 'video',
-      provider: job.provider,
-      model: job.model,
-    });
     try {
       const assetId = await upsertVideoMediaAsset(
         {
