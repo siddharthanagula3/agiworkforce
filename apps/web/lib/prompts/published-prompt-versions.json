@@ -26,6 +26,7 @@
     "chat.system@10": "sha256:2f9e40fb7d0a5f0c19613332094ebb78fec57c33d860e46298d04ad4605a06d1",
     "chat.system@11": "sha256:bb6bc2545369374b9dfd9f976ed1ace8b9c273acfe7ba78125d703906490af7a",
     "chat.system@12": "sha256:84163df45c4dcc9d96756341764a04ae490396bae5658bf80ce18f2d6df3b62b",
+    "chat.system@13": "sha256:7ebdb2e8a901936f0d59e95757821800041f0cd61b55565a34de5fcf11ad6a8d",
     "voice.live_instructions@2": "sha256:f22d059d91ea638c2dd4f8796b6cdb847123b4daf377b75f3907f04a43587d24",
     "product.memory_fact_extraction@2": "sha256:e05c18702281e0fe823a907439bd38f47b1fe09216021b14e66f6d35d4e46387",
     "product.memory_fact_extraction@3": "sha256:8de084d7cb0662b6ef9353948e24f7ce5619deab672fb1921ed0d1d59c61bbb2",
