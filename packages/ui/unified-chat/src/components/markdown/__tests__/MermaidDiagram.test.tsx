@@ -48,6 +48,19 @@ describe('MermaidDiagram', () => {
     expect(container.querySelector('script')).toBeNull();
   });
 
+  it('keeps a comment in the drawn markup from breaking out as live HTML', async () => {
+    renderMock.mockResolvedValue({
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"><!--><img src="x" onerror="globalThis.pwned = true">--><g><text>Start</text></g></svg>',
+    });
+    const { container } = render(<MermaidDiagram source={FLOWCHART} />);
+
+    await waitFor(() => {
+      expect(container.querySelector('[data-mermaid="ready"] text')?.textContent).toBe('Start');
+    });
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[onerror]')).toBeNull();
+  });
+
   it('keeps centered node labels when Mermaid defines the anchor in its stylesheet', async () => {
     renderMock.mockResolvedValue({
       svg: '<svg xmlns="http://www.w3.org/2000/svg"><style>.node .label text { fill: black; text-anchor: middle; }</style><g class="node"><g class="label"><text>Start</text></g></g></svg>',

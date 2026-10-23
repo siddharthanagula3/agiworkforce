@@ -154,7 +154,20 @@ export function sanitizeSvg(raw: string): string {
           }
         }
       }
-      Array.from(node.children).forEach(sanitizeNode);
+      Array.from(node.childNodes).forEach(sanitizeChild);
+    }
+
+    // The output is re-parsed by the HTML parser (innerHTML), which reads XML
+    // comments, processing instructions and CDATA differently and lets markup
+    // inside them break out of the SVG as live HTML.
+    function sanitizeChild(child: ChildNode) {
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        sanitizeNode(child as Element);
+      } else if (child.nodeType === Node.CDATA_SECTION_NODE) {
+        child.replaceWith(doc.createTextNode((child as CDATASection).data));
+      } else if (child.nodeType !== Node.TEXT_NODE) {
+        child.remove();
+      }
     }
 
     const svgEl = doc.documentElement;
