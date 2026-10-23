@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { isModelLive, modelsCatalog, type ModelMetadata } from '../model-catalog';
+import { modelsCatalog, type ModelMetadata } from '../model-catalog';
 
 function byResolutionPricedVideoModels(): ModelMetadata[] {
   return Object.values(modelsCatalog.models).filter(
     (model) =>
       model.modelType === 'video' &&
-      isModelLive(model) &&
+      model.availability !== 'unavailable' &&
       Object.keys(model.videoPerSecondCostByResolution ?? {}).length > 0 &&
       model.videoGeneration?.pricing === undefined,
   );
