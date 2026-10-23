@@ -11,17 +11,17 @@ for (const viewport of [
 
     for (const colorScheme of ['dark', 'light'] as const) {
       if (viewport.width >= 768) {
-        test(`first pointer activation opens the company menu and repeated activation toggles it in ${colorScheme}`, async ({
+        test(`first pointer activation opens the resources menu and repeated activation toggles it in ${colorScheme}`, async ({
           page,
         }) => {
           await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
           expect((await page.goto('/security'))?.status()).toBe(200);
           const nav = page.getByRole('navigation', { name: 'Primary' });
           const group = nav.locator('.agi-ds-navgroup').filter({
-            has: page.getByRole('button', { name: 'Company', exact: true }),
+            has: page.getByRole('button', { name: 'Resources', exact: true }),
           });
           await expect(group).toHaveCount(1);
-          const trigger = group.getByRole('button', { name: 'Company', exact: true });
+          const trigger = group.getByRole('button', { name: 'Resources', exact: true });
           const panel = group.locator('.agi-ds-navpanel');
           await expect(panel).toHaveCount(1);
           await expect(trigger).toBeVisible();
@@ -68,7 +68,7 @@ for (const viewport of [
           await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
           expect((await page.goto('/security'))?.status()).toBe(200);
           const nav = page.getByRole('navigation', { name: 'Primary' });
-          for (const label of ['Product', 'Features', 'Solutions', 'Developers', 'Company']) {
+          for (const label of ['Products', 'Solutions', 'Resources']) {
             const trigger = nav.getByRole('button', { name: label, exact: true });
             await trigger.focus();
             await trigger.press('Space');

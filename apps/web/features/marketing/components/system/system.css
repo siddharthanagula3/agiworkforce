@@ -3427,6 +3427,12 @@
   }
 }
 
+@media (max-width: 1100px) {
+  [data-design='agi'] .agi-ds-navpanel[data-columns='2'] {
+    min-width: 30rem;
+  }
+}
+
 @media (max-width: 640px) {
   [data-design='agi'] .agi-ds-footer-link {
     padding-block: 0.3rem;

@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { RELEASE_NOTES_METADATA } from '@/app/release-notes/release-notes-metadata';
 import { USE_CASE_SLUGS } from '@/features/marketing/components/pages/business/use-cases-content';
 import { SITE_URL } from '@/lib/seo/site';
@@ -130,7 +131,7 @@ describe('nav, footer discoverability', () => {
   });
 
   it('reaches AGI Work and AGI Code from the header and the footer', () => {
-    const product = headerGroup('Product')?.items.map((item) => item.href) ?? [];
+    const product = headerGroup('Products')?.items.map((item) => item.href) ?? [];
     for (const href of PRODUCT_PAGES) {
       expect(product, href).toContain(href);
       expect(footerHrefs(), href).toContain(href);
@@ -180,10 +181,38 @@ describe('nav, the release archive', () => {
 });
 
 describe('nav, header groups', () => {
-  it('lists every feature detail page that exists, and no other, in the Features group', () => {
-    const features = headerGroup('Features');
-    expect(features?.footer?.href).toBe(FEATURES_INDEX);
-    expect(features?.items.map((item) => item.href).sort()).toEqual(featureDetailRoutes());
+  it('offers exactly the Products, Solutions and Resources menus, in that order', () => {
+    expect(NAV_GROUPS.map((group) => group.label)).toEqual(['Products', 'Solutions', 'Resources']);
+  });
+
+  it('reaches the features index from the header and every feature page from that index', () => {
+    expect(headerHrefs()).toContain(FEATURES_INDEX);
+    const index = readFileSync(resolve(FEATURES_DIR, 'page.tsx'), 'utf8');
+    const routes = featureDetailRoutes();
+    expect(routes.length).toBeGreaterThan(0);
+    for (const route of routes) {
+      expect(index, route).toContain(`'${route}'`);
+    }
+  });
+
+  it('lists every product name from the registry in the Products menu', () => {
+    const labels = headerGroup('Products')?.items.map((item) => item.label) ?? [];
+    for (const name of [
+      PRODUCT_NAMES.chat,
+      PRODUCT_NAMES.desktop,
+      PRODUCT_NAMES.cli,
+      PRODUCT_NAMES.extension,
+      PRODUCT_NAMES.mobile,
+      PRODUCT_NAMES.work,
+      PRODUCT_NAMES.code,
+    ]) {
+      expect(labels, name).toContain(name);
+    }
+  });
+
+  it('never repeats a destination across the three menus', () => {
+    const hrefs = headerHrefs();
+    expect(new Set(hrefs).size).toBe(hrefs.length);
   });
 
   it('never links the same destination twice within one group', () => {
@@ -252,17 +281,9 @@ describe('nav, header descriptions', () => {
     }
   });
 
-  it('describes agents, deep research and providers as their own pages do', () => {
-    const agents = readFileSync(resolve(APP_DIR, 'features/agents/page.tsx'), 'utf8');
-    const research = readFileSync(resolve(APP_DIR, 'features/deep-research/page.tsx'), 'utf8');
+  it('describes providers as their own page does', () => {
     const providers = readFileSync(resolve(APP_DIR, 'providers/page.tsx'), 'utf8');
 
-    expect(agents).toContain("title: 'Agents: delegated work that stops to ask'");
-    expect(headerDescription('/features/agents')).toBe('Delegated work that stops to ask');
-    expect(research).toContain('The model is asked to cite factual claims with numbered sources');
-    expect(headerDescription('/features/deep-research')).toBe(
-      'Reports with numbered sources you can check',
-    );
     expect(providers.replace(/\s+/g, ' ')).toContain('that the CLI takes a key for');
     expect(headerDescription('/providers')).toBe('The providers the CLI takes your key for');
   });

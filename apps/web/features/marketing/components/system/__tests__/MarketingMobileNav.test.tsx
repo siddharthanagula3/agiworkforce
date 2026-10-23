@@ -37,11 +37,7 @@ describe('the phone menu', () => {
   it('ends each group with the index link its header panel ends with', async () => {
     const links = destinations(await openMenuAt('/'));
 
-    expect(GROUP_INDEXES.map((index) => index.href)).toEqual([
-      '/download',
-      '/features',
-      '/solutions',
-    ]);
+    expect(GROUP_INDEXES.map((index) => index.href)).toEqual(['/solutions']);
     for (const index of GROUP_INDEXES) {
       expect(links, index.href).toContainEqual({ label: index.label, href: index.href });
     }
@@ -49,7 +45,8 @@ describe('the phone menu', () => {
 
   it.each([
     ['/features', ['/features']],
-    ['/features/voice', ['/features/voice']],
+    ['/features/voice', ['/features']],
+    ['/download', ['/download']],
   ])('marks only the page being viewed as current on %s', async (pathname, expected) => {
     const nav = await openMenuAt(pathname);
     const current = within(nav)

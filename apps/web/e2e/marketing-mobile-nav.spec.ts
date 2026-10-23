@@ -4,10 +4,10 @@ import { routeIsServed } from './route-availability';
 const ROUTES = ['/', '/dev/landing-preview'];
 const PHONE = { width: 390, height: 844 };
 const MIN_TARGET_PX = 44;
-const SHEET_GROUPS = ['Product', 'Features', 'Solutions', 'Developers', 'Company'];
+const SHEET_GROUPS = ['Products', 'Solutions', 'Resources'];
 const SHEET_LINKS = [
-  'Downloads and release status',
-  'All features',
+  'Features',
+  'Downloads',
   'All solutions',
   'Pricing',
   'Contact sales',
