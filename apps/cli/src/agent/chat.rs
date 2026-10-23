@@ -926,13 +926,24 @@ impl AgentSession {
                 &self.messages,
                 compaction_config,
                 self.context_usage_anchor,
-                Some(&summarizer),
+                self.boundary_summarizer(&summarizer),
             )
             .await;
             (result, summarizer.take_usage())
         };
         self.adopt_compaction(usage, &result, 0);
         result
+    }
+
+    /// The model summarizer when this session's route is inside its trust
+    /// boundary. Otherwise none, and compaction summarizes on the device.
+    fn boundary_summarizer<'s, 'c: 's>(
+        &self,
+        summarizer: &'s CliContextSummarizer<'c>,
+    ) -> Option<&'s (dyn ContextSummarizer + 's)> {
+        self.validate_privacy_boundary()
+            .is_ok()
+            .then_some(summarizer as &(dyn ContextSummarizer + 's))
     }
 
     fn adopt_compaction(
@@ -1014,7 +1025,7 @@ impl AgentSession {
                 &self.messages,
                 keep,
                 &compaction_config,
-                Some(&summarizer),
+                self.boundary_summarizer(&summarizer),
             )
             .await;
             (result, summarizer.take_usage())
@@ -5241,6 +5252,67 @@ mod tests {
                 .expect("serve completion fixture");
         });
         (format!("http://{address}/v1"), hits)
+    }
+
+    const RECORDED_ROUTE_KEY_ENV: &str = "AGI_TEST_RECORDED_KEYED_ROUTE_KEY";
+
+    /// A keyed (BYOK) route whose endpoint is a local recorder, so a test can
+    /// count every request that would have left the device.
+    async fn recorded_keyed_route() -> (
+        crate::models::Provider,
+        std::sync::Arc<std::sync::atomic::AtomicUsize>,
+    ) {
+        std::env::set_var(RECORDED_ROUTE_KEY_ENV, "fixture-key");
+        let (base_url, hits) =
+            local_completion_fixture(vec![ANSWERED_STREAM, ANSWERED_STREAM]).await;
+        let provider = crate::models::Provider::Custom {
+            name: "fixture-recorded-route".to_string(),
+            base_url: format!("{base_url}/chat/completions"),
+            api_key_env: Some(RECORDED_ROUTE_KEY_ENV.to_string()),
+        };
+        (provider, hits)
+    }
+
+    fn long_conversation(session: &mut AgentSession) {
+        for round in 0..8 {
+            session.messages.push(Message::text(
+                "user",
+                format!(
+                    "Round {round}: {}",
+                    "describe the parser design ".repeat(40)
+                ),
+            ));
+            session.messages.push(Message::text(
+                "assistant",
+                format!(
+                    "Round {round}: {}",
+                    "the parser keeps a token cursor ".repeat(40)
+                ),
+            ));
+        }
+    }
+
+    #[tokio::test]
+    async fn compact_never_sends_a_local_session_to_a_route_outside_its_boundary() {
+        let (provider, hits) = recorded_keyed_route().await;
+        let mut session = AgentSession::new(
+            "fixture-local-model:latest",
+            &crate::context::gather_system_context(),
+            None,
+        );
+        assert_eq!(session.privacy_mode, super::super::PrivacyMode::Local);
+        session.provider = provider;
+        session.model = "fixture-remote-model".to_string();
+        long_conversation(&mut session);
+
+        let result = session.compact_now(&CliConfig::default(), None).await;
+
+        assert_eq!(
+            hits.load(std::sync::atomic::Ordering::SeqCst),
+            0,
+            "a Local transcript reached a BYOK route during /compact"
+        );
+        assert!(result.compacted, "compaction still runs on the device");
     }
 
     fn fixture_config(base_url: &str) -> CliConfig {
