@@ -19,6 +19,7 @@ use crate::tier_cache;
 
 const RELEASE_FETCH_TIMEOUT: Duration = Duration::from_secs(5);
 const RELEASE_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
+const SELF_CHECK_TIMEOUT: Duration = Duration::from_secs(15);
 const CLI_RELEASE_PATH: &str = "/api/releases/cli/latest";
 const INSTALL_SCRIPT_URL: &str = "https://agiworkforce.com/install.sh";
 const INSTALL_SCRIPT: &str = include_str!("../../web/public/install.sh");
@@ -375,27 +376,179 @@ fn manifest_checksum(manifest: &[u8], asset_name: &str) -> anyhow::Result<String
         .ok_or_else(|| anyhow!("The signed checksum manifest does not list {asset_name}."))
 }
 
-fn replace_binaries(unpacked: &Path, directory: &Path) -> anyhow::Result<()> {
-    if !unpacked.join(INSTALLED_BINARIES[0]).is_file() {
-        bail!("The release archive does not contain agi; nothing was installed.");
+fn staged_path(directory: &Path, name: &str) -> PathBuf {
+    directory.join(format!(".{name}.update"))
+}
+
+fn previous_path(directory: &Path, name: &str) -> PathBuf {
+    directory.join(format!(".{name}.previous"))
+}
+
+fn start_staged_binary(staged: &Path) -> std::io::Result<std::process::Child> {
+    let mut attempts = 0;
+    loop {
+        let started = Command::new(staged)
+            .arg("--version")
+            .env(NO_UPDATE_CHECK_ENV, "1")
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn();
+        match started {
+            Err(error)
+                if error.kind() == std::io::ErrorKind::ExecutableFileBusy && attempts < 5 =>
+            {
+                attempts += 1;
+                std::thread::sleep(Duration::from_millis(100));
+            }
+            other => return other,
+        }
     }
+}
+
+fn staged_binary_runs(staged: &Path) -> anyhow::Result<()> {
+    let mut child = start_staged_binary(staged)?;
+    let deadline = std::time::Instant::now() + SELF_CHECK_TIMEOUT;
+    loop {
+        match child.try_wait()? {
+            Some(status) if status.success() => return Ok(()),
+            Some(status) => bail!("it exited with {status}"),
+            None if std::time::Instant::now() >= deadline => {
+                let _ = child.kill();
+                let _ = child.wait();
+                bail!(
+                    "it did not answer within {} seconds",
+                    SELF_CHECK_TIMEOUT.as_secs()
+                );
+            }
+            None => std::thread::sleep(Duration::from_millis(50)),
+        }
+    }
+}
+
+fn stage_binaries(unpacked: &Path, directory: &Path) -> anyhow::Result<Vec<&'static str>> {
+    let mut staged = Vec::new();
     for name in INSTALLED_BINARIES {
         let source = unpacked.join(name);
         if !source.is_file() {
             continue;
         }
-        let staged = directory.join(format!(".{name}.update"));
-        std::fs::copy(&source, &staged)
-            .with_context(|| format!("could not write {}", staged.display()))?;
+        let path = staged_path(directory, name);
+        std::fs::copy(&source, &path)
+            .with_context(|| format!("could not write {}", path.display()))?;
+        staged.push(name);
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
-            std::fs::set_permissions(&staged, std::fs::Permissions::from_mode(0o755))?;
+            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))?;
         }
-        std::fs::rename(&staged, directory.join(name))
-            .with_context(|| format!("could not replace {}", directory.join(name).display()))?;
+        staged_binary_runs(&path).map_err(|reason| {
+            anyhow!(
+                "The new {name} does not start ({reason}), so the installed one was left as it was; nothing was installed."
+            )
+        })?;
+    }
+    Ok(staged)
+}
+
+fn keep_previous(target: &Path, backup: &Path) -> std::io::Result<bool> {
+    if !target.is_file() {
+        return Ok(false);
+    }
+    match std::fs::remove_file(backup) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    std::fs::hard_link(target, backup).or_else(|_| std::fs::copy(target, backup).map(drop))?;
+    Ok(true)
+}
+
+struct Replaced {
+    target: PathBuf,
+    backup: Option<PathBuf>,
+}
+
+fn restore_previous(replaced: &[Replaced]) -> Vec<String> {
+    let mut stranded = Vec::new();
+    for entry in replaced.iter().rev() {
+        let restored = match &entry.backup {
+            Some(backup) => std::fs::rename(backup, &entry.target).map_err(|error| {
+                format!(
+                    "{} is kept at {} ({error})",
+                    entry.target.display(),
+                    backup.display()
+                )
+            }),
+            None => std::fs::remove_file(&entry.target)
+                .map_err(|error| format!("could not remove {} ({error})", entry.target.display())),
+        };
+        if let Err(problem) = restored {
+            stranded.push(problem);
+        }
+    }
+    stranded
+}
+
+fn swap_in(directory: &Path, staged: &[&'static str]) -> anyhow::Result<()> {
+    let mut replaced: Vec<Replaced> = Vec::new();
+    for name in staged {
+        let target = directory.join(name);
+        let backup = previous_path(directory, name);
+        let kept = match keep_previous(&target, &backup) {
+            Ok(kept) => kept,
+            Err(error) => {
+                let stranded = restore_previous(&replaced);
+                return Err(swap_failure(
+                    format!("could not keep a copy of {}: {error}", target.display()),
+                    stranded,
+                ));
+            }
+        };
+        if let Err(error) = std::fs::rename(staged_path(directory, name), &target) {
+            if kept {
+                let _ = std::fs::remove_file(&backup);
+            }
+            let stranded = restore_previous(&replaced);
+            return Err(swap_failure(
+                format!("could not replace {}: {error}", target.display()),
+                stranded,
+            ));
+        }
+        replaced.push(Replaced {
+            target,
+            backup: kept.then_some(backup),
+        });
+    }
+    for entry in &replaced {
+        if let Some(backup) = &entry.backup {
+            let _ = std::fs::remove_file(backup);
+        }
     }
     Ok(())
+}
+
+fn swap_failure(problem: String, stranded: Vec<String>) -> anyhow::Error {
+    if stranded.is_empty() {
+        anyhow!("{problem}. The previous agi was put back; nothing was installed.")
+    } else {
+        anyhow!(
+            "{problem}. Putting the previous agi back also failed: {}.",
+            stranded.join("; ")
+        )
+    }
+}
+
+fn replace_binaries(unpacked: &Path, directory: &Path) -> anyhow::Result<()> {
+    if !unpacked.join(INSTALLED_BINARIES[0]).is_file() {
+        bail!("The release archive does not contain agi; nothing was installed.");
+    }
+    let outcome =
+        stage_binaries(unpacked, directory).and_then(|staged| swap_in(directory, &staged));
+    for name in INSTALLED_BINARIES {
+        let _ = std::fs::remove_file(staged_path(directory, name));
+    }
+    outcome
 }
 
 pub async fn install_release(release: &CliRelease, directory: &Path) -> anyhow::Result<()> {
@@ -660,6 +813,97 @@ mod tests {
         );
         assert!(!plan.has_work());
         assert!(plan.render().join("\n").contains("cannot compare"));
+    }
+
+    #[cfg(unix)]
+    fn write_script(directory: &Path, name: &str, body: &str) {
+        use std::os::unix::fs::PermissionsExt;
+        let path = directory.join(name);
+        std::fs::write(&path, format!("#!/bin/sh\n{body}\n")).expect("write script");
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755))
+            .expect("make script executable");
+    }
+
+    #[cfg(unix)]
+    fn file_names(directory: &Path) -> Vec<String> {
+        let mut names: Vec<String> = std::fs::read_dir(directory)
+            .expect("list directory")
+            .map(|entry| {
+                entry
+                    .expect("entry")
+                    .file_name()
+                    .to_string_lossy()
+                    .into_owned()
+            })
+            .collect();
+        names.sort();
+        names
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_build_that_will_not_start_leaves_the_installed_one_in_place() {
+        let installed = tempfile::tempdir().expect("install dir");
+        let unpacked = tempfile::tempdir().expect("unpacked dir");
+        write_script(installed.path(), "agi", "echo old-agi");
+        write_script(installed.path(), "agiworkforce", "echo old-agiworkforce");
+        write_script(unpacked.path(), "agi", "exit 3");
+        write_script(unpacked.path(), "agiworkforce", "echo new");
+
+        let error = replace_binaries(unpacked.path(), installed.path())
+            .expect_err("a build that exits non-zero must not be installed");
+
+        assert!(error.to_string().contains("does not start"), "{error}");
+        assert!(
+            error.to_string().contains("nothing was installed"),
+            "{error}"
+        );
+        for (name, body) in [("agi", "old-agi"), ("agiworkforce", "old-agiworkforce")] {
+            let kept = std::fs::read_to_string(installed.path().join(name)).expect("read binary");
+            assert!(kept.contains(body), "{name} changed: {kept}");
+        }
+        assert_eq!(file_names(installed.path()), ["agi", "agiworkforce"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_working_build_replaces_both_binaries_and_drops_the_backups() {
+        let installed = tempfile::tempdir().expect("install dir");
+        let unpacked = tempfile::tempdir().expect("unpacked dir");
+        write_script(installed.path(), "agi", "echo old");
+        write_script(unpacked.path(), "agi", "echo new-agi");
+        write_script(unpacked.path(), "agiworkforce", "echo new-agiworkforce");
+
+        replace_binaries(unpacked.path(), installed.path()).expect("install the new build");
+
+        for (name, body) in [("agi", "new-agi"), ("agiworkforce", "new-agiworkforce")] {
+            let installed_now =
+                std::fs::read_to_string(installed.path().join(name)).expect("read binary");
+            assert!(installed_now.contains(body), "{name}: {installed_now}");
+        }
+        assert_eq!(file_names(installed.path()), ["agi", "agiworkforce"]);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_swap_that_fails_part_way_puts_the_first_binary_back() {
+        let installed = tempfile::tempdir().expect("install dir");
+        let unpacked = tempfile::tempdir().expect("unpacked dir");
+        write_script(installed.path(), "agi", "echo old-agi");
+        let blocker = installed.path().join("agiworkforce");
+        std::fs::create_dir(&blocker).expect("directory in the way");
+        std::fs::write(blocker.join("keep"), "x").expect("fill the directory");
+        write_script(unpacked.path(), "agi", "echo new-agi");
+        write_script(unpacked.path(), "agiworkforce", "echo new-agiworkforce");
+
+        let error = replace_binaries(unpacked.path(), installed.path())
+            .expect_err("the second binary cannot replace a directory");
+
+        assert!(error.to_string().contains("put back"), "{error}");
+        let agi = std::fs::read_to_string(installed.path().join("agi")).expect("read agi");
+        assert!(agi.contains("old-agi"), "agi was not restored: {agi}");
+        assert!(blocker.is_dir());
+        assert_eq!(file_names(installed.path()), ["agi", "agiworkforce"]);
     }
 
     #[test]
