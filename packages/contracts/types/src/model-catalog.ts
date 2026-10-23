@@ -659,6 +659,7 @@ export interface ModelMetadata {
   quality: ModelQuality;
   qualityTier: ModelQualityTier;
   bestFor: string[];
+  description?: string;
   pickerRecommended?: boolean;
   newUntil?: string;
   variantPartner?: string;

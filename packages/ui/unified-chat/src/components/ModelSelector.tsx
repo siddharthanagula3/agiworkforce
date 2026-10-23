@@ -312,6 +312,7 @@ interface BestAutoRowProps {
 
 function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProps) {
   const { t } = useUiTranslation('models');
+  const { t: tCommon } = useUiTranslation('common');
   const lastDecision = useModelStore(selectLastRoutingDecision);
   const routedModel = lastDecision?.wasRouted ? modelsById[lastDecision.routedModelId] : null;
   const taskLabel = lastDecision?.wasRouted
@@ -342,14 +343,15 @@ function BestAutoRow({ isSelected, onSelect, disabled = false }: BestAutoRowProp
               {t('selector.bestAuto', 'Best (auto)')}
             </span>
             <span
+              data-testid="model-default-badge"
               className={cn(
-                'shrink-0 rounded-compact px-1.5 py-0.5 text-caption font-semibold uppercase tracking-wide',
+                'shrink-0 rounded-full px-2 py-0.5 text-sm font-medium',
                 isSelected
                   ? 'bg-[var(--chat-accent-primary)]/20 text-[var(--chat-accent-primary-text)]'
-                  : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-muted)]',
+                  : 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-secondary)]',
               )}
             >
-              auto
+              {tCommon('default', 'Default')}
             </span>
           </div>
           {/* Routing decision badge, shown after first auto-routed message */}
@@ -855,6 +857,7 @@ export function ModelSelector({
                         getModelEffortOptions(m.id).length > 0 &&
                         Boolean(onEffortChange);
                       const reasoningIsMandatory = requiresReasoning(reasoning);
+                      const description = modelsById[m.id]?.description;
 
                       return (
                         <div key={m.id} className="flex items-start gap-0">
@@ -895,6 +898,14 @@ export function ModelSelector({
                                     </span>
                                   )}
                                 </div>
+                                {description ? (
+                                  <p
+                                    data-testid="model-description"
+                                    className="mt-0.5 truncate text-sm text-[var(--chat-text-secondary)]"
+                                  >
+                                    {description}
+                                  </p>
+                                ) : null}
                                 {/* Verified capability/quality metadata + context */}
                                 <div className="mt-0.5 flex flex-wrap items-center gap-1">
                                   <span

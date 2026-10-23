@@ -388,3 +388,22 @@ test('keeps provider-native Qwen tools unavailable until the AGI harness wires t
     implementation: 'unwired',
   });
 });
+
+test('every curated model carries the one-line description the model picker shows', () => {
+  const generatedModels = JSON.parse(
+    fs.readFileSync(
+      path.join(PACKAGE_ROOT, '..', '..', 'contracts', 'types', 'src', 'models.json'),
+      'utf8',
+    ),
+  ).models;
+  for (const [id, model] of Object.entries(authoredCuration.models)) {
+    assert.equal(typeof model.description, 'string', `${id} has no description`);
+    assert.ok(model.description.length <= 60, `${id} description is longer than 60 characters`);
+    assert.match(model.description, /^[A-Z][^.!?\n]*\.$/u, `${id} description is not one sentence`);
+    assert.equal(
+      generatedModels[id]?.description,
+      model.description,
+      `${id} description not synced`,
+    );
+  }
+});

@@ -129,6 +129,7 @@ const CANONICAL_ORDER = [
   'quality',
   'qualityTier',
   'bestFor',
+  'description',
   'pickerRecommended',
   'newUntil',
   'released',
@@ -609,6 +610,13 @@ function buildCatalog(curation, synced, familyCatalog, defaultsCatalog) {
       merged.newUntil === undefined ||
         (typeof merged.newUntil === 'string' && ISO_DATE_PATTERN.test(merged.newUntil)),
       `${id} newUntil must be a YYYY-MM-DD date`,
+    );
+    assert.ok(
+      merged.description === undefined ||
+        (typeof merged.description === 'string' &&
+          merged.description.length <= MODEL_DESCRIPTION_MAX_LENGTH &&
+          MODEL_DESCRIPTION_PATTERN.test(merged.description)),
+      `${id} description must be one sentence of at most ${MODEL_DESCRIPTION_MAX_LENGTH} characters, starting with a capital and ending with a full stop`,
     );
     assert.ok(
       ['fast', 'balanced', 'best'].includes(merged.qualityTier),
@@ -1351,6 +1359,8 @@ function resolveHarnessId(model) {
 }
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+const MODEL_DESCRIPTION_MAX_LENGTH = 60;
+const MODEL_DESCRIPTION_PATTERN = /^[A-Z][^.!?\n]*\.$/u;
 const PROSE_DATE_PATTERN = /^(?<month>[A-Z][a-z]+)\s+(?<day>\d{1,2}),\s*(?<year>\d{4})$/u;
 const CALENDAR_MONTHS = [
   'January',

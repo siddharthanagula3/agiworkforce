@@ -222,7 +222,7 @@
       "date": "2026-06-20",
       "verifiedBy": "catalog-cleanup-2026-06-20",
       "status": "PARTIAL",
-      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash\u2192dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old\u2192new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 \u2192 glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
+      "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash→dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old→new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 → glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
     },
     {
       "date": "2026-06-20",
@@ -541,6 +541,12 @@
       "verifiedBy": "catalog-verification-log-and-family-slot-history",
       "status": "ADDITION",
       "notes": "Models now carry an optional newUntil date (YYYY-MM-DD, inclusive) that the model picker reads to show a New badge, which stops on its own the day after. Release dates in the catalog are often month-only, so the badge is curated rather than computed. It is set to 30 days after the day each model reached the picker, read from this log and the family slot history: claude-opus-5-5, claude-sonnet-5-5, gpt-6.1-sol, gpt-6-luna, grok-4.7 and deepseek-flash took their family slots on 2026-10-07 and claude-haiku-5-5 joined the catalog that day, so they carry 2026-11-06; gemini-4-argon went live on 2026-10-18 and carries 2026-11-17. gpt-6-astra took its slot on 2026-09-05 and is past the window. No provider fact changed."
+    },
+    {
+      "date": "2026-10-22",
+      "verifiedBy": "model-picker-description-line",
+      "status": "ADDITION",
+      "notes": "Every curated model now carries a description: one short line in our own words that the model picker shows under the model name. Each line restates what the model's own bestFor, qualityTier and modality fields already record; none states a benchmark, price or provider claim. The model-registry tests require it on every curated model, and the compiler rejects any description that is not one sentence of at most 60 characters. No provider fact changed."
     }
   ],
   "providers": {
@@ -1044,6 +1050,7 @@
         "Complex Coding",
         "Computer Use"
       ],
+      "description": "Deepest reasoning for long, complex work.",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -1131,6 +1138,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Balanced Intelligence & Cost", "Coding", "Agentic Tasks", "General Chat"],
+      "description": "Strong all-rounder for coding and everyday chat.",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -1218,6 +1226,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Cost-Efficient Reasoning", "Quick Tasks", "High Throughput", "Classification"],
+      "description": "Quick, low-cost reasoning for simple tasks.",
       "reasoning": {
         "capable": true,
         "control": "effort_levels",
@@ -1298,6 +1307,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Frontier Reasoning", "Complex Agentic Work", "Coding", "Long Documents"],
+      "description": "Frontier reasoning for complex agent work.",
       "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "reasoning": {
@@ -1370,6 +1380,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Frontier Coding", "Agentic Workflows", "Computer Use", "Long Documents"],
+      "description": "Most capable for hard coding and agent work.",
       "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "reasoning": {
@@ -1398,7 +1409,9 @@
         "cached_write": 5,
         "cached_write_1h": 8
       },
-      "fastTier": { "priceMultiplier": 2 },
+      "fastTier": {
+        "priceMultiplier": 2
+      },
       "contextOverride": 1000000,
       "capabilitiesOverride": {
         "streaming": true,
@@ -1445,6 +1458,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Coding", "Tool Use", "Computer Use", "Agentic Tasks", "Long Documents"],
+      "description": "Fast and capable for coding and tool use.",
       "inputModalities": ["text", "image", "pdf"],
       "deprecation_date": null,
       "reasoning": {
@@ -1521,6 +1535,7 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Low Latency", "High Volume", "Tool Use"],
+      "description": "Fastest replies for light, high-volume tasks.",
       "inputModalities": ["text", "image", "pdf"],
       "documentInput": {
         "maxPagesPerRequest": 600
@@ -1602,6 +1617,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Multimodal Retrieval", "Semantic Search", "RAG", "Classification"],
+      "description": "Embeds text and media for search and retrieval.",
       "deprecation_date": null,
       "pricingNote": "Standard text input $0.20/M tokens; Batch text input $0.10/M tokens. Image/audio/video prices vary by modality.",
       "costOverride": {
@@ -1647,6 +1663,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Coding", "Reasoning", "Multimodal", "Long Context"],
+      "description": "Reasoning and coding across text, images and media.",
       "deprecation_date": null,
       "promo_expires_at": "2026-12-01T00:00:00Z",
       "post_promo_prices": {
@@ -1719,6 +1736,7 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Ultra-Fast Inference", "Speed", "Cost-Sensitive", "Long Context"],
+      "description": "Very fast and low-cost, with a long context.",
       "deprecation_date": null,
       "maxOutputTokens": 65536,
       "reasoning": {
@@ -1779,6 +1797,7 @@
       },
       "speedOverride": "fast",
       "bestFor": ["Image Generation", "Image Editing"],
+      "description": "Generates and edits images.",
       "costOverride": {
         "inputCost": 1.5,
         "outputCost": 30
@@ -1806,6 +1825,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Studio Image Generation", "4K Output", "Search-Grounded Imagery"],
+      "description": "Studio-quality images up to 4K.",
       "deprecation_date": null,
       "imageApi": "gemini",
       "imageOutputMimeType": "image/jpeg",
@@ -1861,6 +1881,7 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Cheap Image Generation", "1K Output", "High Volume"],
+      "description": "Low-cost image generation at high volume.",
       "deprecation_date": null,
       "imageApi": "gemini",
       "imageOutputMimeType": "image/jpeg",
@@ -1922,6 +1943,7 @@
         "Multimodal",
         "Cost-Effective"
       ],
+      "description": "Deep reasoning and coding at a low cost.",
       "deprecation_date": null,
       "pricingNote": "DeepSeek bills V4 Pro on a peak/off-peak clock, not a flat rate: peak $1.32/1M input on a cache miss, $3.96/1M output, $0.044/1M cache hit, with off-peak exactly half at $0.66/$1.98/$0.022. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut on any date, and the schema has no field for a time-of-day split. CORRECTED 2026-09-01: this row previously read $0.435/$0.87 with cache read $0.003625 and asserted that DeepSeek made a 75% launch discount permanent on 2026-05-22. DeepSeek's own pricing page carries no discount, promotion or expiry language, and none of those three figures matches any published row; they came from models.dev, which still publishes them for the first-party deepseek provider. Verified against https://api-docs.deepseek.com/quick_start/pricing, retrieved 2026-09-01.",
       "reasoning": {
@@ -1970,6 +1992,7 @@
       "quality": "excellent",
       "qualityTier": "fast",
       "bestFor": ["Cost-Effective", "Coding", "Long Context", "Vision", "High Volume"],
+      "description": "Fast, low-cost coding with a long context.",
       "deprecation_date": null,
       "pricingNote": "DeepSeek bills on a peak and off-peak clock, not a flat rate: peak $0.30/1M input on a cache miss, $1.20/1M output, $0.006/1M cache hit, with off-peak exactly half at $0.15/$0.60/$0.003. Peak is 01:00-04:00 and 06:00-10:00 UTC Monday through Friday, excluding Chinese public holidays; every other hour is off-peak. The catalog carries the peak rate because it is the only figure never undercut, and the schema has no field for a time-of-day split. deepseek-flash is an unversioned id that DeepSeek currently serves with DeepSeek-V4.1-Flash, so the provider can move the model under this row without an id change. The pricing page gives the limits as 1M context and 384K output; the list-models endpoint reports 1,048,576 and 393,216, which is what the row records. Verified against api-docs.deepseek.com/quick_start/pricing, the 2026-09-10 news post and GET /models, retrieved 2026-10-07.",
       "reasoning": {
@@ -2033,6 +2056,7 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Multimodal", "Long Context"],
+      "description": "Quick, budget-friendly multimodal answers.",
       "deprecation_date": "2026-09-06",
       "reasoning": {
         "capable": true,
@@ -2093,6 +2117,7 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Quick Tasks", "Budget Usage", "Multimodal", "Long Context"],
+      "description": "Quick, budget-friendly multimodal answers.",
       "deprecation_date": null,
       "reasoning": {
         "capable": true,
@@ -2149,6 +2174,7 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Web Search", "Quick Research", "Citations"],
+      "description": "Quick web answers with citations.",
       "deprecation_date": "2026-09-27",
       "reasoning": {
         "capable": false,
@@ -2175,6 +2201,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Deep Research", "Complex Analysis", "Citations"],
+      "description": "Reasoned web research with citations.",
       "deprecation_date": "2026-09-27",
       "reasoning": {
         "capable": true,
@@ -2205,6 +2232,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Professional Research", "Long Context Search"],
+      "description": "In-depth web search over long sources.",
       "deprecation_date": "2026-09-27",
       "reasoning": {
         "capable": false,
@@ -2228,6 +2256,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Deep Research", "Multi-Source Synthesis", "Comprehensive Analysis"],
+      "description": "Multi-source research reports.",
       "deprecation_date": "2026-09-27",
       "reasoning": {
         "capable": true,
@@ -2261,6 +2290,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Text-to-Video Generation", "Short Landscape or Portrait Clips"],
+      "description": "Short text-to-video clips.",
       "deprecation_date": null,
       "availability": "unavailable",
       "unavailableReason": "Runway text-to-video provisioning has not been verified by a live AGI-owned account probe.",
@@ -2356,6 +2386,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Text-to-Video Generation", "Long Clips", "Generated Audio"],
+      "description": "Longer video clips with generated audio.",
       "deprecation_date": null,
       "videoGeneration": {
         "durationSecs": [
@@ -2490,6 +2521,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Precise Image Editing", "HD Image Generation", "Text Rendering in Images"],
+      "description": "Precise image editing and clear text in images.",
       "deprecation_date": null,
       "imageApi": "openai",
       "costOverride": {
@@ -2534,6 +2566,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Fast Image Generation", "Image Editing"],
+      "description": "Fast image generation and editing.",
       "deprecation_date": null,
       "imageApi": "openai",
       "costOverride": {
@@ -2578,6 +2611,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Voice Generation", "Narration", "Accessibility"],
+      "description": "Turns text into natural speech.",
       "deprecation_date": "2027-01-06",
       "reasoning": {
         "capable": false,
@@ -2632,6 +2666,7 @@
         "Multimodal Reasoning",
         "Long Context"
       ],
+      "description": "Fast agentic coding and tool calling.",
       "deprecation_date": null,
       "promo_expires_at": "2027-01-01T00:00:00Z",
       "post_promo_prices": {
@@ -2682,6 +2717,7 @@
         "Open-Weight Alternative",
         "Chinese Language"
       ],
+      "description": "Open-weight model for long coding sessions.",
       "deprecation_date": null,
       "maxOutputTokens": 128000,
       "reasoning": {
@@ -2726,6 +2762,7 @@
         "Tool Use",
         "Long Context"
       ],
+      "description": "Fast multimodal agent and coding work.",
       "deprecation_date": null,
       "promo_expires_at": "2026-09-09T16:00:00Z",
       "post_promo_prices": {
@@ -2775,6 +2812,7 @@
         "Cost-Effective",
         "Agent Tasks"
       ],
+      "description": "Multilingual and multimodal with a long context.",
       "deprecation_date": null,
       "reasoning": {
         "capable": true,
@@ -2850,6 +2888,7 @@
         "Vision",
         "Open-Weight Deployment"
       ],
+      "description": "Open-weight model for long coding and agent work.",
       "deprecation_date": null,
       "reasoning": {
         "capable": true,
@@ -2889,6 +2928,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Real-time Info", "Reasoning", "Coding", "Agentic Workflows"],
+      "description": "Fast reasoning and coding with current information.",
       "deprecation_date": null,
       "costOverride": {
         "inputCost": 2,
@@ -2955,6 +2995,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Professional Video", "High Quality Clips"],
+      "description": "High-quality video clips.",
       "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.4,
       "videoPerSecondCostByResolution": {
@@ -3051,6 +3092,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Fast High-Quality Video", "Rapid Iteration"],
+      "description": "Faster video clips for quick iteration.",
       "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.1,
       "videoPerSecondCostByResolution": {
@@ -3147,6 +3189,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
+      "description": "Accurate speech-to-text in many languages.",
       "deprecation_date": "2027-02-26",
       "reasoning": {
         "capable": false,
@@ -3192,6 +3235,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Live Voice Conversation", "Full-duplex Speech", "Voice Agents"],
+      "description": "Live, two-way voice conversation.",
       "knowledgeCutoff": "2025-07-31",
       "deprecation_date": null,
       "openWeight": false,
@@ -3239,6 +3283,7 @@
       "quality": "excellent",
       "qualityTier": "fast",
       "bestFor": ["Transcription", "Speech Recognition", "Multi-language"],
+      "description": "Low-cost speech-to-text in many languages.",
       "deprecation_date": "2027-02-26",
       "reasoning": {
         "capable": false,
@@ -3285,6 +3330,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Complex Reasoning", "Open-Weight Deployment"],
+      "description": "Open-weight model for complex reasoning.",
       "deprecation_date": null,
       "releasedOverride": "June 2026",
       "tierPolicy": {
@@ -3335,6 +3381,7 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Fast Video Drafts", "Cost-Efficient Clips"],
+      "description": "Low-cost video drafts.",
       "deprecation_date": "2026-10-22",
       "videoPerSecondCost": 0.05,
       "videoPerSecondCostByResolution": {
@@ -3416,6 +3463,7 @@
       "quality": "excellent",
       "qualityTier": "best",
       "bestFor": ["Video Generation", "Conversational Video Editing"],
+      "description": "Generates video and edits it by conversation.",
       "videoPerSecondCost": 0.1,
       "reasoning": {
         "capable": false,
@@ -3461,6 +3509,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Real-Time Speech Translation", "Live Multilingual Conversation"],
+      "description": "Live speech translation between languages.",
       "deprecation_date": null,
       "availability": "preview",
       "pricingNote": "Low-latency real-time speech-to-speech translation, 70+ languages. Free tier is free of charge; paid tier $3.50/1M input and $21.00/1M output audio tokens, equivalently $0.0053/min in and $0.0315/min out. Audio bills at 25 tokens per second, an effective ~$0.0368 per minute. Sourced from the published Gemini API pricing table, 2026-08-06. INTERIM: adopted while OpenAI's live/realtime API is unreleased; revisit when that ships.",
@@ -3510,6 +3559,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Realtime Voice", "Live Multimodal Dialogue"],
+      "description": "Live voice and multimodal conversation.",
       "deprecation_date": null,
       "costOverride": {
         "inputCost": 0.75,
@@ -3563,6 +3613,7 @@
       "quality": "excellent",
       "qualityTier": "balanced",
       "bestFor": ["Voice Generation", "Narration"],
+      "description": "Turns text into natural speech.",
       "deprecation_date": null,
       "reasoning": {
         "capable": false,
@@ -3616,6 +3667,7 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Automatic Routing", "Mixed Workloads", "Cost Balancing"],
+      "description": "Picks a model for each request.",
       "deprecation_date": null,
       "pricingNote": "OpenRouter publishes prompt and completion prices of -1 for the Auto Router, meaning the request is billed at the standard rate of whichever model the router selects, with no router fee. The zero rates carried here are a placeholder for that dynamic price, not a free route: meter managed traffic against the model named in the response, never at zero. Verified against openrouter.ai/api/v1/models, retrieved 2026-09-04.",
       "reasoning": {
@@ -3646,6 +3698,7 @@
       "quality": "good",
       "qualityTier": "balanced",
       "bestFor": ["Task-Aware Routing", "Mixed Workloads", "Cost Balancing"],
+      "description": "Picks a model for each request by task.",
       "deprecation_date": null,
       "availability": "preview",
       "pricingNote": "Task-aware sibling of the Auto Router, still labelled Beta by OpenRouter, so it does not replace openrouter/auto. OpenRouter publishes prompt and completion prices of -1, meaning the request bills at the selected model's standard rate with no router fee; the zero rates here are a placeholder for that dynamic price, so meter the model named in the response and never at zero. No maximum completion length is published, so none is recorded. Verified against openrouter.ai/api/v1/models, retrieved 2026-09-04.",
@@ -3698,6 +3751,7 @@
       "quality": "fair",
       "qualityTier": "fast",
       "bestFor": ["Policy Classification", "Content Moderation", "Open-Weight Deployment"],
+      "description": "Open-weight model for content policy checks.",
       "deprecation_date": null,
       "availability": "preview",
       "pricingNote": "Groq classes this as a preview model and warns that preview models are for evaluation only and may be discontinued at short notice, so the row is not selectable. Flat rate identical to gpt-oss-20b: $0.075/1M input, $0.30/1M output, $0.0375/1M cached input, which is the 50% cached-input discount Groq states applied to the input rate. Not on the batch eligibility list. This is a policy-following safety classifier that takes its own policy as input, Groq's replacement for Llama Guard 4, not a chat model. Verified against console.groq.com/docs/model/openai/gpt-oss-safeguard-20b, retrieved 2026-09-04.",
@@ -3760,6 +3814,7 @@
       "quality": "good",
       "qualityTier": "fast",
       "bestFor": ["Open-Weight Vision", "Strict Structured Output", "Tool Use"],
+      "description": "Open-weight vision model with strict structured output.",
       "deprecation_date": null,
       "availability": "preview",
       "pricingNote": "Groq classes this as a preview model and warns that preview models are for evaluation only and may be discontinued at short notice, so the row is not selectable. Flat rate on Groq: $0.80/1M input, $4.00/1M output. Absent from both the prompt-caching and batch pages, so no cached rate and no batch discount apply. Adds strict JSON schema and five-level reasoning_effort over qwen3.6-27b. Thinking is turned off with reasoning_effort none. Groq prints the context window as 131,042 in both its models table and the model card, where every other Groq model reads 131,072; the documented figure is carried here as the safe lower bound. Groq publishes no knowledge cutoff. Verified against console.groq.com/docs/model/qwen/qwen3.8-27b, retrieved 2026-09-04.",

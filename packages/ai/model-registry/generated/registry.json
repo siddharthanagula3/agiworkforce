@@ -38533,6 +38533,13 @@
       "verifiedBy": "catalog-verification-log-and-family-slot-history",
       "status": "ADDITION",
       "notes": "Models now carry an optional newUntil date (YYYY-MM-DD, inclusive) that the model picker reads to show a New badge, which stops on its own the day after. Release dates in the catalog are often month-only, so the badge is curated rather than computed. It is set to 30 days after the day each model reached the picker, read from this log and the family slot history: claude-opus-5-5, claude-sonnet-5-5, gpt-6.1-sol, gpt-6-luna, grok-4.7 and deepseek-flash took their family slots on 2026-10-07 and claude-haiku-5-5 joined the catalog that day, so they carry 2026-11-06; gemini-4-argon went live on 2026-10-18 and carries 2026-11-17. gpt-6-astra took its slot on 2026-09-05 and is past the window. No provider fact changed."
+    },
+    {
+      "id": "verification/2026-10-22/91",
+      "date": "2026-10-22",
+      "verifiedBy": "model-picker-description-line",
+      "status": "ADDITION",
+      "notes": "Every curated model now carries a description: one short line in our own words that the model picker shows under the model name. Each line restates what the model's own bestFor, qualityTier and modality fields already record; none states a benchmark, price or provider claim. The model-registry tests require it on every curated model, and the compiler rejects any description that is not one sentence of at most 60 characters. No provider fact changed."
     }
   ],
   "retiredModels": {
