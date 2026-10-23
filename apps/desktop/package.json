@@ -139,7 +139,7 @@
     "@wdio/tauri-plugin": "^1.4.0",
     "@wdio/tauri-service": "^1.4.0",
     "better-sqlite3": "^13.0.3",
-    "electron": "^44.4.2",
+    "electron": "^44.5.0",
     "electron-builder": "^26.15.3",
     "esbuild": "^0.28.2",
     "eslint": "^10.11.0",
