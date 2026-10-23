@@ -602,6 +602,13 @@ pub fn builtin_slash_registry_commands() -> Vec<RegistryCommand> {
             vec![],
         ),
         RegistryCommand::builtin_slash(
+            "remote-control",
+            "Continue this session from AGI Mobile",
+            false,
+            true,
+            vec!["rc"],
+        ),
+        RegistryCommand::builtin_slash(
             "add-dir",
             "Add a directory to the current workspace context",
             true,
@@ -919,6 +926,22 @@ mod tests {
                 "/{name} must be registered (M11 to 2026-05-14, for Claude Code parity)"
             );
         }
+    }
+
+    #[test]
+    fn remote_control_is_listed_with_its_rc_alias() {
+        let mut registry = CommandRegistry::default();
+        registry.extend(builtin_slash_registry_commands());
+        assert_eq!(
+            registry.find("rc").map(|command| command.name.as_str()),
+            Some("remote-control")
+        );
+        assert_eq!(
+            registry
+                .find("remote-control")
+                .map(|command| command.aliases.clone()),
+            Some(vec!["rc".to_string()])
+        );
     }
 
     #[test]

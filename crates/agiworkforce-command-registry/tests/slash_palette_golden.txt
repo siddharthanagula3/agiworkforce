@@ -74,6 +74,7 @@
 /reload-plugins
 /extra-usage [pricing]
 /remote-env
+/remote-control [rc]
 /add-dir
 /remove-dir
 /desktop [app]

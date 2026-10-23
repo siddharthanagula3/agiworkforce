@@ -4131,7 +4131,6 @@ fn open_command_popup(app: &mut TuiApp) {
             "attach",
             "Attach an image, PDF or Office file to the next message",
         ),
-        ("remote-control", "Continue this session from AGI Mobile"),
         ("memories", "Configure auto-memory settings"),
         ("skills-toggle", "Enable or disable individual skills"),
         ("title", "Configure the terminal window title"),
