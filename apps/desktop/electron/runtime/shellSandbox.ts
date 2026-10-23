@@ -97,6 +97,17 @@ export const SEATBELT_XCODE_READ_RULE =
   '(allow file-read* (regex #"^/Applications/Xcode[^/]*\\.app(/|$)"))';
 
 /**
+ * The metadata of `/Applications`. A tool shim resolves the selected Xcode
+ * bundle to its real path, which inspects each folder above it, and fails
+ * with "Operation not permitted" when the folder that holds the bundle is
+ * not inspectable. Only the folder itself becomes inspectable; nothing under
+ * it is readable beyond the Xcode rule. Mirrors the second rule of
+ * `seatbelt_developer_tool_reads` in the sandbox-policy crate.
+ */
+export const SEATBELT_APPLICATIONS_METADATA_RULE =
+  '(allow file-read-metadata (literal "/Applications"))';
+
+/**
  * The metadata of the `/var` link. A tool shim with no `DEVELOPER_DIR` reads
  * its selection through it, as the crate's profile allows; and with the
  * network open, the resolver reaches its configuration through it, without
@@ -482,6 +493,7 @@ export function seatbeltProfile(input: {
     `(allow file-read* ${subpaths(SEATBELT_SYSTEM_READ_PATHS)} (literal "/"))`,
     `(allow file-read* ${subpaths([...input.writableRoots, ...input.readableRoots])})`,
     SEATBELT_XCODE_READ_RULE,
+    SEATBELT_APPLICATIONS_METADATA_RULE,
     ...(input.network === 'allow' || !input.developerDirNamed ? [SEATBELT_VAR_LINK_RULE] : []),
     ...(input.metadataPaths.length > 0
       ? [

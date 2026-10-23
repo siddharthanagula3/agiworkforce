@@ -1321,10 +1321,12 @@ pub fn host_developer_dir() -> Option<String> {
 }
 
 /// Seatbelt reads Apple's tool shims need beyond the system paths: an Xcode
-/// bundle the selection may name, and, when no `DEVELOPER_DIR` reaches the
-/// program, the metadata of the `/var` link the shim resolves its selection
-/// through. `/Library/Developer`, `/private/var/db/xcode_select_link` and
-/// `/private/var/select` are system reads already.
+/// bundle the selection may name, the metadata of `/Applications` which
+/// resolving that bundle's real path inspects, and, when no `DEVELOPER_DIR`
+/// reaches the program, the metadata of the `/var` link the shim resolves its
+/// selection through. `/Library/Developer`,
+/// `/private/var/db/xcode_select_link` and `/private/var/select` are system
+/// reads already.
 ///
 /// The same link is read when the network is open: the resolver reaches its
 /// configuration through it, and without its metadata no host name is found
@@ -1333,6 +1335,7 @@ pub fn host_developer_dir() -> Option<String> {
 pub(crate) fn seatbelt_developer_tool_reads(network_policy: NetworkPolicy) -> String {
     let mut rules =
         String::from("(allow file-read* (regex #\"^/Applications/Xcode[^/]*\\.app(/|$)\"))\n");
+    rules.push_str("(allow file-read-metadata (literal \"/Applications\"))\n");
     let mut reads_the_var_link = network_policy != NetworkPolicy::Deny;
     if std::env::var_os("DEVELOPER_DIR").is_none() && host_developer_dir().is_none() {
         reads_the_var_link = true;
@@ -3939,7 +3942,10 @@ mod tests {
         let profile = seatbelt_profile(&spec, Some(Path::new("/private/tmp/agi-scratch"))).unwrap();
         let rule = profile
             .lines()
-            .find(|line| line.starts_with("(allow file-read-metadata "))
+            .find(|line| {
+                line.starts_with("(allow file-read-metadata ")
+                    && line.contains(&format!("(literal \"{}\")", tree.display()))
+            })
             .unwrap_or_else(|| panic!("no metadata rule:\n{profile}"));
         for ancestor in [
             tree.clone(),
@@ -4080,6 +4086,7 @@ mod tests {
         .unwrap();
         assert!(args[1]
             .contains("(allow file-read* (regex #\"^/Applications/Xcode[^/]*\\.app(/|$)\"))"));
+        assert!(args[1].contains("(allow file-read-metadata (literal \"/Applications\"))"));
         assert!(args[1].contains("(subpath \"/Library\")"));
         assert!(args[1].contains("(subpath \"/private/var/db\")"));
         assert!(args[1].contains("(subpath \"/private/var/select\")"));

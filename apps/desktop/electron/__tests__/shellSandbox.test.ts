@@ -26,6 +26,7 @@ import {
   SEATBELT_PROCESS_RULES,
   SEATBELT_SYSTEM_READ_PATHS,
   SHARED_PARENT_FOLDERS,
+  SEATBELT_APPLICATIONS_METADATA_RULE,
   SEATBELT_VAR_LINK_RULE,
   SEATBELT_XCODE_READ_RULE,
   bubblewrapArgs,
@@ -1880,9 +1881,10 @@ describe('parity with the CLI seatbelt profile', () => {
     ]);
   });
 
-  it('reads what the tool shims need as the crate does: an Xcode bundle, and the /var link when no developer directory is named', () => {
+  it('reads what the tool shims need as the crate does: an Xcode bundle and the folder holding it, and the /var link when no developer directory is named', () => {
     const reads = rustText(rustFunction('seatbelt_developer_tool_reads'));
     expect(reads).toContain(`"${SEATBELT_XCODE_READ_RULE}\n"`);
+    expect(reads).toContain(`"${SEATBELT_APPLICATIONS_METADATA_RULE}\n"`);
     expect(reads).toContain(`"${SEATBELT_VAR_LINK_RULE}\n"`);
     expect(reads).toContain(
       'if std::env::var_os("DEVELOPER_DIR").is_none() && host_developer_dir().is_none() {',
@@ -1900,6 +1902,7 @@ describe('parity with the CLI seatbelt profile', () => {
     const networked = seatbeltProfile({ ...base, network: 'allow' }).split('\n');
     for (const profile of [named, unnamed, networked]) {
       expect(profile).toContain(SEATBELT_XCODE_READ_RULE);
+      expect(profile).toContain(SEATBELT_APPLICATIONS_METADATA_RULE);
     }
     expect(named).not.toContain(SEATBELT_VAR_LINK_RULE);
     expect(unnamed).toContain(SEATBELT_VAR_LINK_RULE);
@@ -2340,6 +2343,9 @@ describe.runIf(process.platform === 'darwin' && existsSync(SEATBELT_EXECUTABLE))
     // `/usr/bin/git` is a shim that finds the real tool through the developer
     // tool selection, which it cannot read from inside the sandbox. Told the
     // developer directory, it does not have to.
+    // A full Xcode answers through `xcodebuild`, which logs its own start-up
+    // notes to stderr under the sandbox; only the shim's own diagnostics, each
+    // prefixed with the tool name, mean it was refused.
     it.runIf(existsSync('/usr/bin/git') && existsSync('/Library/Developer/CommandLineTools'))(
       'runs the system git shim, which needs the developer directory named for it',
       async () => {
@@ -2355,7 +2361,7 @@ describe.runIf(process.platform === 'darwin' && existsSync(SEATBELT_EXECUTABLE))
         });
 
         expect(result.stdout).toMatch(/^git version \d/u);
-        expect(result.stderr).toBe('');
+        expect(result.stderr).not.toMatch(/^(git|xcrun|xcode-select): /mu);
         expect(result.exitCode).toBe(0);
       },
     );
