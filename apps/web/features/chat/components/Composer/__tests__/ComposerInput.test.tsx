@@ -17,26 +17,6 @@ import {
   type ComposerInputProps,
 } from '../ComposerInput';
 
-// ProseMirror measures a caret rect on mount; jsdom's Range has neither method.
-const ORIGIN_RECT = {
-  x: 0,
-  y: 0,
-  width: 0,
-  height: 0,
-  top: 0,
-  right: 0,
-  bottom: 0,
-  left: 0,
-  toJSON: () => ({}),
-} as DOMRect;
-const EMPTY_RECT_LIST = Object.assign([] as DOMRect[], {
-  item: () => null,
-}) as unknown as DOMRectList;
-if (!Range.prototype.getClientRects) {
-  Range.prototype.getClientRects = () => EMPTY_RECT_LIST;
-  Range.prototype.getBoundingClientRect = () => ORIGIN_RECT;
-}
-
 const ENV_KEY = 'NEXT_PUBLIC_COMPOSER_EDITOR';
 const MAX_LENGTH = 4000;
 const PLACEHOLDER = 'How can I help?';

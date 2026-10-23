@@ -23,6 +23,14 @@ if (typeof HTMLElement !== 'undefined') {
   }
 }
 
+if (typeof Range !== 'undefined' && !Range.prototype.getClientRects) {
+  const emptyRectList = Object.assign([] as DOMRect[], {
+    item: () => null,
+  }) as unknown as DOMRectList;
+  Range.prototype.getClientRects = () => emptyRectList;
+  Range.prototype.getBoundingClientRect = () => new DOMRect();
+}
+
 globalThis.ResizeObserver = class ResizeObserver {
   disconnect() {}
   observe() {}
