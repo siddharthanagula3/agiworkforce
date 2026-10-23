@@ -64,6 +64,7 @@ export function DictationBar() {
 
   return (
     <main
+      id="main-content"
       aria-label={DICTATION_BAR_COPY.label}
       className="flex h-dvh w-full items-center bg-background px-3 text-foreground"
     >

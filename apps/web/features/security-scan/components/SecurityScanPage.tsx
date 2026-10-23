@@ -316,7 +316,7 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
 
   if (!state) {
     return (
-      <main className={styles['page']}>
+      <main id="main-content" className={styles['page']}>
         {header}
         {loadError ? (
           <div className={styles['notice']} role="alert">
@@ -336,7 +336,7 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
 
   if (!state.session.repositoryUrl) {
     return (
-      <main className={styles['page']}>
+      <main id="main-content" className={styles['page']}>
         {header}
         <p className={styles['notice']}>{SECURITY_SCAN_COPY.noRepository}</p>
       </main>
@@ -349,7 +349,7 @@ export function SecurityScanPage({ sessionId, api = securityScanApi }: SecurityS
     scanError ?? (report?.status === SECURITY_SCAN_STATUS.failed ? report.error : null);
 
   return (
-    <main className={styles['page']}>
+    <main id="main-content" className={styles['page']}>
       {header}
       <section className={styles['launcher']} aria-label={SECURITY_SCAN_COPY.title}>
         <p className={styles['prose']}>{SECURITY_SCAN_COPY.description}</p>
