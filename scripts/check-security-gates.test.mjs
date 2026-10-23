@@ -353,7 +353,7 @@ test('another importer reaching the waived package through a permitted dependent
 const PATCH_CONTENT =
   'diff --git a/index.js b/index.js\n--- a/index.js\n+++ b/index.js\n@@ -1 +1 @@\n-module.exports = unsafe;\n+module.exports = safe;\n';
 const PATCH_SHA256 = 'd7ca6c69871ab0e5fdd9f23b06e7f451d194d59839fc3780f8e8a17fcaa78292';
-const PATCH_HASH = 'auhunmvbregeblouyq5ebm56ba';
+const PATCH_HASH = PATCH_SHA256;
 const PATCH_BINDINGS = [
   { advisory: 'GHSA-ch52-4w7c-c8xp', package: 'http-cache-semantics', version: '4.2.0' },
   { advisory: 'GHSA-vfj7-8cjw-p6xm', package: 'braces', version: '3.0.3' },
@@ -403,7 +403,7 @@ function patchedScenario(binding = PATCH_BINDINGS[0]) {
   };
 }
 
-test('pnpm 9 base32 MD5 patch hash matches an independent vector and all existing lock pairs', () => {
+test('pnpm 10 SHA256 patch hash matches an independent vector and all existing lock pairs', () => {
   assert.equal(pnpmPatchHash(PATCH_CONTENT), PATCH_HASH);
   for (const patch of Object.values(lockfile.patchedDependencies)) {
     assert.equal(pnpmPatchHash(fs.readFileSync(path.join(repositoryRoot, patch.path))), patch.hash);

@@ -20,23 +20,7 @@ const PATCHED_ADVISORIES = {
 };
 
 export function pnpmPatchHash(contents) {
-  const alphabet = 'abcdefghijklmnopqrstuvwxyz234567';
-  // MD5 reproduces pnpm 9's content identifier, never a security integrity check.
-  // The registered SHA256 separately verifies the reviewed patch bytes.
-  const digest = createHash('md5').update(contents).digest();
-  let bits = 0;
-  let value = 0;
-  let result = '';
-  for (const byte of digest) {
-    value = (value << 8) | byte;
-    bits += 8;
-    while (bits >= 5) {
-      bits -= 5;
-      result += alphabet[(value >>> bits) & 31];
-    }
-  }
-  if (bits > 0) result += alphabet[(value << (5 - bits)) & 31];
-  return result;
+  return createHash('sha256').update(contents).digest('hex');
 }
 
 export function collectContinueOnErrorSteps(workflow) {
@@ -95,7 +79,7 @@ function pnpmReferenceNodes(reference) {
     const atom = reference.slice(start, index);
     if (atom.startsWith('patch_hash=')) {
       const hash = atom.slice('patch_hash='.length);
-      return /^[a-z2-7]{26}$/u.test(hash) ? { kind: 'hash', hash } : null;
+      return /^[a-f0-9]{64}$/u.test(hash) ? { kind: 'hash', hash } : null;
     }
     const separator = atom.indexOf('@', 1);
     const name = atom.slice(0, separator);
