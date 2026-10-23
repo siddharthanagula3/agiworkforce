@@ -38,13 +38,6 @@
       "reason": "Test fixtures only. The values are synthetic and authenticate nothing; scripts/check-secrets.mjs is the blocking gate for real credential shapes. Scoped by path on purpose, the same rule firing in production code must fail."
     },
     {
-      "rule": "package_managers.dependabot.dependabot-missing-cooldown.dependabot-missing-cooldown",
-      "paths": [".github/dependabot.yml"],
-      "owner": "@siddhartha",
-      "expires": "2026-11-30",
-      "reason": "Supply-chain hardening worth doing: a cooldown is the defense against adopting a package compromised minutes after publication. It changes update cadence for every ecosystem in the file, so it lands as its own reviewed change rather than riding along with a security-gate edit."
-    },
-    {
       "rule": "package_managers.npm.npm-missing-minimum-release-age.npm-missing-minimum-release-age",
       "paths": [".npmrc"],
       "owner": "@siddhartha",
