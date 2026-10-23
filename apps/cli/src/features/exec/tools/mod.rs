@@ -27,6 +27,7 @@ pub mod registry;
 mod task_registry;
 mod web;
 
+#[cfg(unix)]
 pub(crate) async fn browser_site_refusal(url: &str) -> Option<String> {
     web::workspace_site_refusal(url).await
 }
