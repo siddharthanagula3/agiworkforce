@@ -1286,12 +1286,17 @@ mod tests {
         }
     }
 
+    #[cfg(windows)]
+    const WORKSPACE: &str = r"C:\workspace";
+    #[cfg(not(windows))]
+    const WORKSPACE: &str = "/workspace";
+
     fn thread() -> ThreadSummary {
         ThreadSummary {
             id: "thread-1".to_string(),
             title: "Editor session".to_string(),
             model: None,
-            cwd: Some("/workspace".to_string()),
+            cwd: Some(WORKSPACE.to_string()),
             provider: Some("ollama".to_string()),
             trust_mode: DeveloperSessionTrustMode::Local,
             git_branch: None,
@@ -1542,7 +1547,7 @@ mod tests {
             self.response(0, &mut Vec::new()).await;
             self.send(json!({
                 "jsonrpc": "2.0", "id": 1, "method": "session/new",
-                "params": { "cwd": "/workspace", "mcpServers": [] },
+                "params": { "cwd": WORKSPACE, "mcpServers": [] },
             }))
             .await;
             let created = self.response(1, &mut Vec::new()).await;
@@ -1585,7 +1590,7 @@ mod tests {
         client
             .send(json!({
                 "jsonrpc": "2.0", "id": 7, "method": "session/new",
-                "params": { "cwd": "/workspace", "mcpServers": [] },
+                "params": { "cwd": WORKSPACE, "mcpServers": [] },
             }))
             .await;
         let early = client.response(7, &mut Vec::new()).await;
@@ -1627,14 +1632,14 @@ mod tests {
         client
             .send(json!({
                 "jsonrpc": "2.0", "id": 2, "method": "session/new",
-                "params": { "cwd": "/workspace", "mcpServers": [] },
+                "params": { "cwd": WORKSPACE, "mcpServers": [] },
             }))
             .await;
         let created = client.response(2, &mut Vec::new()).await;
         assert_eq!(created["result"]["sessionId"], "thread-1");
         let starts = host.starts.lock().await.clone();
         assert_eq!(starts.len(), 1);
-        assert_eq!(starts[0].0.cwd.as_deref(), Some("/workspace"));
+        assert_eq!(starts[0].0.cwd.as_deref(), Some(WORKSPACE));
         assert_eq!(starts[0].1.name, "zed");
 
         client
@@ -1672,7 +1677,7 @@ mod tests {
         let turns = host.turns.lock().await.clone();
         assert_eq!(turns.len(), 1);
         assert_eq!(turns[0].0.thread_id, "thread-1");
-        assert_eq!(turns[0].0.cwd.as_deref(), Some("/workspace"));
+        assert_eq!(turns[0].0.cwd.as_deref(), Some(WORKSPACE));
         assert!(!turns[0].1.answers_user_input);
         client.close().await.expect("clean shutdown");
     }

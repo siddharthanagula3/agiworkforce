@@ -87,9 +87,7 @@ impl ProjectRegistry {
             .context("Failed to create temp projects.json")?;
         std::io::Write::write_all(&mut temp, contents.as_bytes())
             .context("Failed to write temp projects.json")?;
-        temp.persist(&path)
-            .map_err(|error| error.error)
-            .context("Failed to persist projects.json")?;
+        persist_replacing(temp, &path).context("Failed to persist projects.json")?;
         Ok(())
     }
 
@@ -288,6 +286,34 @@ impl ProjectRegistry {
             suffix += 1;
         }
     }
+}
+
+// Windows refuses to replace a file while another process is replacing or
+// reading it (access denied or a sharing violation) where POSIX rename simply
+// wins, so a concurrent save retries briefly instead of failing.
+fn persist_replacing(mut temp: tempfile::NamedTempFile, path: &Path) -> std::io::Result<()> {
+    const ATTEMPTS: u32 = 50;
+    let mut attempt = 1;
+    loop {
+        match temp.persist(path) {
+            Ok(_) => return Ok(()),
+            Err(error) if attempt < ATTEMPTS && replacement_contended(&error.error) => {
+                temp = error.file;
+                std::thread::sleep(std::time::Duration::from_millis(
+                    u64::from(attempt.min(10)) * 5,
+                ));
+                attempt += 1;
+            }
+            Err(error) => return Err(error.error),
+        }
+    }
+}
+
+fn replacement_contended(error: &std::io::Error) -> bool {
+    const ERROR_SHARING_VIOLATION: i32 = 32;
+    cfg!(windows)
+        && (error.kind() == std::io::ErrorKind::PermissionDenied
+            || error.raw_os_error() == Some(ERROR_SHARING_VIOLATION))
 }
 
 #[cfg(test)]

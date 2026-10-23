@@ -1216,9 +1216,20 @@ mod tests {
             .expect("read before replacement")
             .expect("owned file");
         assert_eq!(before.bytes, b"owned");
-        std::fs::rename(&granted, &moved).expect("move original root");
-        std::fs::create_dir(&granted).expect("replacement root");
-        std::fs::write(granted.join("marker"), b"replacement").expect("replacement marker");
+        match std::fs::rename(&granted, &moved) {
+            Ok(()) => {
+                std::fs::create_dir(&granted).expect("replacement root");
+                std::fs::write(granted.join("marker"), b"replacement").expect("replacement marker");
+            }
+            Err(error) => {
+                // Windows refuses to move a directory the inherited authority holds open.
+                const ERROR_SHARING_VIOLATION: i32 = 32;
+                assert!(
+                    cfg!(windows) && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION),
+                    "move original root: {error}"
+                );
+            }
+        }
         let inherited = manager
             .workspace_authority
             .as_ref()

@@ -430,9 +430,20 @@ mod tests {
                 .await
                 .expect("tool result");
 
+            assert!(exec_requests(&seen).is_empty(), "a cleared command asked");
+            if crate::sandbox::SandboxType::detect() == crate::sandbox::SandboxType::None
+                && !crate::sandbox::sandbox_disabled()
+            {
+                assert!(!result.success, "ran without a sandbox: {}", result.output);
+                assert!(
+                    result.output.starts_with("Sandbox unavailable"),
+                    "{}",
+                    result.output
+                );
+                return;
+            }
             assert!(result.success, "{}", result.output);
             assert!(result.output.contains("auto-gate-cleared"));
-            assert!(exec_requests(&seen).is_empty(), "a cleared command asked");
         }
 
         #[tokio::test]

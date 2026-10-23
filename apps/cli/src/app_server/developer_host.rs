@@ -10490,9 +10490,26 @@ mod tests {
             selected.canonicalize().unwrap().display().to_string()
         );
         assert_eq!(host.workspace_identity().await.unwrap(), first);
-        std::fs::rename(&selected, parent.path().join("moved")).expect("move original");
-        std::fs::create_dir(&selected).expect("replacement");
-        assert!(host.workspace_identity().await.is_err());
+        match std::fs::rename(&selected, parent.path().join("moved")) {
+            Ok(()) => {
+                std::fs::create_dir(&selected).expect("replacement");
+                assert!(host.workspace_identity().await.is_err());
+            }
+            Err(error) => {
+                assert!(
+                    held_directory_pins_its_name(&error),
+                    "move original: {error}"
+                );
+                assert_eq!(host.workspace_identity().await.unwrap(), first);
+            }
+        }
+    }
+
+    // Windows opens the held workspace handle without delete sharing, so the
+    // OS refuses to move the directory away instead of letting it be replaced.
+    fn held_directory_pins_its_name(error: &std::io::Error) -> bool {
+        const ERROR_SHARING_VIOLATION: i32 = 32;
+        cfg!(windows) && error.raw_os_error() == Some(ERROR_SHARING_VIOLATION)
     }
 
     #[tokio::test]

@@ -989,6 +989,9 @@ mod tests {
         assert!(!restrictions.repository_config);
     }
 
+    // Windows rejects control characters in file names, so this hostile
+    // workspace cannot exist there.
+    #[cfg(unix)]
     #[test]
     fn a_grant_message_cannot_carry_terminal_escapes() {
         let dir = tempfile::tempdir().unwrap();

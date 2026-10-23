@@ -361,7 +361,7 @@ pub struct AgentSession {
     /// its shutdown acknowledgment.
     memory_consolidation_tasks: Vec<tokio::task::JoinHandle<()>>,
     memory_extracted_through: usize,
-    memory_extracted_at: std::time::Instant,
+    memory_window_due_at: std::time::Instant,
     /// Marks this session's memory origin tags; see
     /// [`crate::memory_pipeline::origin_memory_tag`].
     memory_nonce: String,
@@ -836,7 +836,8 @@ impl AgentSession {
             team_identity: None,
             memory_consolidation_tasks: Vec::new(),
             memory_extracted_through: 0,
-            memory_extracted_at: std::time::Instant::now(),
+            memory_window_due_at: std::time::Instant::now()
+                + crate::memory_pipeline::MEMORY_WINDOW_INTERVAL,
             memory_nonce,
             retired_memory_nonces: Vec::new(),
             system_prompt_parts,

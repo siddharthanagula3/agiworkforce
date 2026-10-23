@@ -1594,7 +1594,7 @@ message -- revise and call `update_plan` again.\n\n",
     }
 
     fn extract_memory_window(&mut self, home: &std::path::Path, config: &CliConfig) {
-        if self.memory_extracted_at.elapsed() < crate::memory_pipeline::MEMORY_WINDOW_INTERVAL {
+        if std::time::Instant::now() < self.memory_window_due_at {
             return;
         }
         let start = self.memory_extracted_through.min(self.messages.len());
@@ -1607,7 +1607,8 @@ message -- revise and call `update_plan` again.\n\n",
         }
         let window_id = format!("{}.{start}", self.runtime_session_id);
         self.memory_extracted_through = self.messages.len();
-        self.memory_extracted_at = std::time::Instant::now();
+        self.memory_window_due_at =
+            std::time::Instant::now() + crate::memory_pipeline::MEMORY_WINDOW_INTERVAL;
         let home = home.to_path_buf();
         let config = config.clone();
         let route = crate::subagent::InheritedRoute::off_device(self);
@@ -5332,9 +5333,7 @@ mod tests {
         session
             .messages
             .push(Message::text("assistant", "Noted, small commits it is."));
-        session.memory_extracted_at = std::time::Instant::now()
-            .checked_sub(crate::memory_pipeline::MEMORY_WINDOW_INTERVAL * 2)
-            .expect("an instant in the past");
+        session.memory_window_due_at = std::time::Instant::now();
 
         session.extract_memory_window(home.path(), &CliConfig::default());
         for task in session.take_memory_consolidation_tasks() {
