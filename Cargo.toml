@@ -81,13 +81,12 @@ opt-level = 0
 
 [patch.crates-io]
 # ZIP 9 removes the archive extraction issues in RUSTSEC-2026-0367/0368/0369.
-# Pin reviewed migrations until matching releases are published. Calamine is
-# the reviewed PR revision; the libsodium fork changes only its ZIP build
-# requirement, minimum Rust version and provenance note, not runtime bindings.
+# Pin reviewed migrations until matching releases are published: docx-rs 0.4.22
+# and tauri-plugin-updater 2.14.0 still require zip 8 or 4 on crates.io; the
+# libsodium fork changes only its ZIP build requirement, minimum Rust version
+# and provenance note, not runtime bindings.
 docx-rs = { git = "https://github.com/bokuweb/docx-rs", rev = "ad7fede6a7f3b61a097c28d0c39dd04626e44701" }
-rust_xlsxwriter = { git = "https://github.com/jmcnamara/rust_xlsxwriter", rev = "90e31daa3d52458c22ef88ef84c8f015438c01d1" }
 tauri-plugin-updater = { git = "https://github.com/tauri-apps/plugins-workspace", rev = "ba98bfadc4c868c9a7e1a226c83af528e1f11b89" }
-calamine = { git = "https://github.com/tafia/calamine", rev = "d2ddf8837d301011011439708c8395310cee3906" }
 libsodium-sys-stable = { git = "https://github.com/siddharthanagula3/agiworkforce-libsodium-sys-stable", rev = "583d19e644a4fd19cf3b5f73ce402d8aa4b4d35c" }
 # xcb 1.7.0's published build dependency is quick-xml 0.30, which is
 # vulnerable to RUSTSEC-2026-0194/0195. Upstream has merged the quick-xml 0.41

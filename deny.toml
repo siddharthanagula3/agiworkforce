@@ -42,6 +42,10 @@ ignore = []
 # branch already satisfies the expression, and leaving the copyleft branch
 # off the allow list means a future dependency bump that drops the permissive
 # branch fails the gate instead of silently passing.
+#
+# `bzip2-1.0.6` is the BSD-style license of libbz2-rs-sys, the pure-Rust bzip2
+# port that bzip2 0.6 pulls in through zip 9's default `bzip2` feature. It is
+# permissive and carries no copyleft or network-use terms.
 allow = [
     "MIT",
     "Apache-2.0",
@@ -52,6 +56,7 @@ allow = [
     "Zlib",
     "0BSD",
     "BSL-1.0",
+    "bzip2-1.0.6",
     "CC0-1.0",
     "CDLA-Permissive-2.0",
     "MPL-2.0",
@@ -105,14 +110,19 @@ allow-workspace = false
 # https://embarkstudios.github.io/cargo-deny/checks/sources/cfg.html
 [sources]
 unknown-registry = "deny"
-# Deny by default (crates-io only, per the W5 guardrail-batch spec); the three
+# Deny by default (crates-io only, per the W5 guardrail-batch spec); the
 # git-sourced crates below are intentional, documented exceptions, see root
-# Cargo.toml's `[patch.crates-io]` (the websocket-handshake-hardening forks and
-# xcb's upstream quick-xml security migration), not unreviewed drive-by deps.
+# Cargo.toml's `[patch.crates-io]` (the zip 9 migrations of docx-rs, the
+# updater plugin and the libsodium build, xcb's upstream quick-xml security
+# migration and the webdriver plugin), not unreviewed drive-by deps. Each pin is
+# dropped once a crates.io release carries the same change.
 unknown-git = "deny"
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 allow-git = [
+    "https://github.com/bokuweb/docx-rs",
     "https://github.com/rust-x-bindings/rust-xcb",
+    "https://github.com/siddharthanagula3/agiworkforce-libsodium-sys-stable",
+    "https://github.com/tauri-apps/plugins-workspace",
     "https://github.com/webdriverio/desktop-mobile",
 ]
 
