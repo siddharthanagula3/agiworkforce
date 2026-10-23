@@ -23,7 +23,7 @@ async function renderArticle(slug: string) {
 describe('help article page chrome', () => {
   it('ends the breadcrumb with the unlinked article title', async () => {
     const { container } = await renderArticle(ARTICLE_ID);
-    const crumbs = Array.from(container.querySelectorAll('.dx-crumb li'));
+    const crumbs = Array.from(container.querySelectorAll('nav[aria-label="Breadcrumb"] li'));
     const last = crumbs.at(-1);
 
     expect(crumbs.length).toBeGreaterThanOrEqual(3);

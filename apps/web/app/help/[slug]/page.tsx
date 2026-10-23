@@ -11,6 +11,7 @@ import {
   docsNeighbours,
   docsRelated,
 } from '@/features/docs/lib/docs-nav';
+import { Breadcrumb } from '@/features/marketing/components/system';
 import { buildMetadata } from '@/lib/seo/metadata';
 import {
   DOC_AUDIENCE_LABELS,
@@ -67,15 +68,13 @@ export default async function HelpArticlePage({ params }: ArticleProps) {
   return (
     <DocsShell toc={toc}>
       <article className="break-words">
-        <nav aria-label="Breadcrumb">
-          <ol className="dx-crumb">
-            <li>
-              <Link href={DOCS_HOME_PATH}>Documentation</Link>
-            </li>
-            {group ? <li>{group.label}</li> : null}
-            <li aria-current="page">{article.title}</li>
-          </ol>
-        </nav>
+        <Breadcrumb
+          items={[
+            { label: 'Documentation', href: DOCS_HOME_PATH },
+            ...(group ? [{ label: group.label }] : []),
+            { label: article.title },
+          ]}
+        />
         <div className="dx-head">
           <h1 className="dx-title" id="help-article-title">
             {article.title}

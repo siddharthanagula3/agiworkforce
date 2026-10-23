@@ -3,6 +3,7 @@ import './page-header.css';
 import './public-reference.css';
 
 export { Button, ButtonRow } from './Button';
+export { Breadcrumb, type BreadcrumbItem } from './Breadcrumb';
 export { Bento, type BentoTile } from './Bento';
 export { Checklist } from './Checklist';
 export { CodeTabs, type CodeTab } from './CodeTabs';

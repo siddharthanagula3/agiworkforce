@@ -4,7 +4,13 @@ import { notFound } from 'next/navigation';
 import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { Container, Ledger, Section, Stack } from '@/features/marketing/components/system';
+import {
+  Breadcrumb,
+  Container,
+  Ledger,
+  Section,
+  Stack,
+} from '@/features/marketing/components/system';
 import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
 import { supportCollectionIndex } from '../../collections';
 
@@ -36,13 +42,13 @@ export default async function HelpCollectionPage({ params }: CollectionProps) {
       <Header />
       <main id="main-content">
         <Container>
-          <nav aria-label="Breadcrumb" className="agi-ds-prose">
-            <Link href="/help#collections" className="agi-ds-link">
-              All collections
-            </Link>
-            <span aria-hidden="true"> / </span>
-            <span aria-current="page">{collection.label}</span>
-          </nav>
+          <Breadcrumb
+            items={[
+              { label: 'Help', href: '/help' },
+              { label: 'All collections', href: '/help#collections' },
+              { label: collection.label },
+            ]}
+          />
         </Container>
         <PageHero
           id="agi-help-collection-title"

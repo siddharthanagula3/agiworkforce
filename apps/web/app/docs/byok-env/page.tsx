@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { Breadcrumb } from '@/features/marketing/components/system';
 import { DocsCodeBlock } from '@/features/docs/components/DocsCodeBlock';
 import { DocsShell } from '@/features/docs/components/DocsShell';
 import { DOCS_HOME_PATH } from '@/features/docs/lib/docs-nav';
@@ -46,14 +47,9 @@ export default function ByokEnvDocsPage() {
   return (
     <DocsShell toc={SECTIONS}>
       <article className="break-words">
-        <nav aria-label="Breadcrumb">
-          <ol className="dx-crumb">
-            <li>
-              <Link href={DOCS_HOME_PATH}>Documentation</Link>
-            </li>
-            <li>Provider keys</li>
-          </ol>
-        </nav>
+        <Breadcrumb
+          items={[{ label: 'Documentation', href: DOCS_HOME_PATH }, { label: 'Provider keys' }]}
+        />
         <div className="dx-head">
           <h1 className="dx-title" id="agi-docs-byok-env-title">
             Provider-key configuration
