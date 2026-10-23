@@ -3,6 +3,8 @@ version: 2
 # to five pull requests per ecosystem. Merging one never deploys: git
 # deployments are off in vercel.json (git.deploymentEnabled: false), and
 # production deploys go through the founder-gated CLI path.
+# `cooldown: default-days: 7` matches pnpm's minimumReleaseAge: a release must
+# be a week old before a version-update PR opens. Security updates are exempt.
 updates:
   # ─── GitHub Actions ──────────────────────────────────────────────────────────
   - package-ecosystem: 'github-actions'
@@ -10,6 +12,8 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - 'dependencies'
@@ -31,6 +35,8 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - 'dependencies'
@@ -78,6 +84,8 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - 'dependencies'
@@ -141,6 +149,8 @@ updates:
     schedule:
       interval: 'weekly'
       day: 'monday'
+    cooldown:
+      default-days: 7
     open-pull-requests-limit: 5
     labels:
       - 'dependencies'
