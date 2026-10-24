@@ -121,7 +121,7 @@
     "cmdk": "^1.1.1",
     "country-to-currency": "3.0.1",
     "date-fns": "^4.4.0",
-    "docx": "^9.11.0",
+    "docx": "^9.12.0",
     "dompurify": "^3.4.17",
     "embla-carousel-react": "^8.6.0",
     "framer-motion": "^13.5.1",

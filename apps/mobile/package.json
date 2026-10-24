@@ -79,7 +79,7 @@
     "@react-native-community/slider": "5.2.0",
     "@react-navigation/native": "^7.5.1",
     "@shopify/flash-list": "2.0.2",
-    "docx": "^9.11.0",
+    "docx": "^9.12.0",
     "expo": "~57.0.30",
     "expo-age-range": "57.0.5",
     "expo-apple-authentication": "~57.0.2",
