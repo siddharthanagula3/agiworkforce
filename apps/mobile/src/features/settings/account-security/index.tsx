@@ -33,7 +33,7 @@ import {
   SettingsScreenShell,
   SettingsSwitchRow,
 } from '@/src/features/settings/Common';
-import { useStepUp } from '@/src/features/auth/hooks/UseStepUp';
+import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { ChangePasswordModal } from './ChangePasswordModal';
 import { TwoFactorSection } from './TwoFactorSection';

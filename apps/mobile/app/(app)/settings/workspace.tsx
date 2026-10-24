@@ -40,7 +40,7 @@ import { RolePickerModal } from '@/src/features/team/RolePickerModal';
 import { WorkspaceAdministration } from '@/src/features/team/WorkspaceAdministration';
 import { switchWorkspace } from '@/src/features/team/switchWorkspace';
 import { translatePlural } from '@/src/i18n/plural';
-import { useStepUp } from '@/src/features/auth/hooks/UseStepUp';
+import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 
 const WEB_TEAM_URL = 'https://agiworkforce.com/settings/team';

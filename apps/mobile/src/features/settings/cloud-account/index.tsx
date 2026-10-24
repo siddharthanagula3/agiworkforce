@@ -35,7 +35,7 @@ import {
 } from '@/src/features/settings/Common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
-import { useStepUp } from '@/src/features/auth/hooks/UseStepUp';
+import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { exportCloudUserData } from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';
