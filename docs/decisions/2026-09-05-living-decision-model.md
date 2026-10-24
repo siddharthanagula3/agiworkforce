@@ -240,7 +240,7 @@ go at the top. Model names are omitted by rule; families and slots only.
 ## D-2026-09-05-10 Tool support loss is learned, not edited
 
 - Question: how the system learns that a model stopped honouring tool calls, and who acts on it.
-- Evidence: the system map (docs/architecture/system-map-2026-09-05.md) found the capability flag
+- Evidence: the 2026-09-05 system map (removed from the tree; retrievable from git history) found the capability flag
   is compile time only, the liveness probe sends no tools, and the governor's withdrawal lasts one
   turn and is never written back; the day's sandbox incident showed a per turn signal exists.
 - Current implementation: static capability in the catalog; per turn withdrawal in the tool turn

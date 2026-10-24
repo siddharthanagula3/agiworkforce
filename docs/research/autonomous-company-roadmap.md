@@ -1,9 +1,11 @@
 # Autonomous Software Company Roadmap
 
-Status: Current
+Status: Historical snapshot
 Owner: Founder + platform lead
 Last updated: 2026-05-21
 Purpose: plan the long-term operating system for a mostly AI-run software company: customer feedback enters, agents triage, patches are proposed, humans approve risk, releases ship, and support closes the loop.
+
+This is dated research from 2026-05-21, not a statement of what the repository contains. The intake schema, triage service and other paths it names are proposals; neither `packages/contracts/types/src/feedback.ts` nor `services/ops-triage` exists.
 
 ## Thesis
 
