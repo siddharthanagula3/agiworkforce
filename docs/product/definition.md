@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-10-22
+Last updated: 2026-10-23
 
 This is the compact source of truth for what AGI is, what v1 means, where the repo stands today, and how agents should avoid stale-doc hallucination.
 
@@ -14,7 +14,7 @@ For the long-form PRD, serial surface order, per-surface release bars, and decis
 
 ## Product Definition
 
-AGI is the public product brand. AGI Workforce is the formal platform and repo name.
+AGI is the public product brand. AGI Workforce names the company and the site (`PRODUCT_BRAND` and `COMPANY_SITE_NAME` in `packages/contracts/types/src/product-names.ts`); the repo, packages and crates use `agiworkforce`.
 
 AGI is a leading AI application suite across six first-class surfaces:
 
@@ -298,6 +298,8 @@ stays on every plan; single sign-on stays on Enterprise. Published copy never
 says "unlimited": a limit the catalog leaves open is shown as "No set limit".
 The owner is `BILLING_PLAN_CAPABILITY_TIERS` in
 `packages/contracts/types/src/billing-catalog.ts`.
+Connectors stay "coming soon" on every plan until `CONNECTOR_RELEASE_STATE` in
+`packages/contracts/types/src/connector-release.ts` is `released`.
 
 Basic, Pro, Max 5x and Max 20x are billed monthly only; Team is billed monthly
 or yearly (founder decision 2026-09-27, D-2026-09-27-01 in
@@ -336,6 +338,13 @@ asks for an image or video is shown Upgrade. Free quota image and video
 offerings serve only plans that include the capability; see
 `docs/runbooks/free-quota-models.md`.
 
+Video generation is requested through Google's interactions API for Gemini Omni
+Flash (`apps/web/app/api/media/video/generate/route.ts`); the Veo path is gone.
+The `google/veo` family slots still name the Veo 3.1 rows Google shut down on
+2026-10-22, and they move to Omni Flash only after the owner approves a probe and
+an eval run. `VIDEO-VEO-SLOTS-SHUTDOWN-2026-10-22` in
+`audit/registers/known-flaws.md` tracks it.
+
 The provider-funded free chat models on the Free plan are the same kind of
 offer: a separate, temporary layer with its own route, inventory and ledger,
 never a plan model, and gone without trace once every allowance is spent or
@@ -352,9 +361,11 @@ model run by a named provider asks for the person's agreement. The rules and the
 numbers are in `docs/runbooks/free-quota-models.md`.
 
 Paid plan prices are configured on Web, but new paid subscriptions and upgrades
-remain waitlist/access-code gated. Existing paid entitlements resolve on Mobile
-and Desktop, although those clients are not publicly obtainable until their
-verified releases are published. Free and Basic do not include managed-cloud
+on Web remain waitlist/access-code gated. Store in-app purchase on Mobile
+carries no waitlist or access code (owner decision 2026-10-19,
+`docs/compliance/mobile-store-feature-justification.md` O2). Existing paid
+entitlements resolve on Mobile and Desktop, although those clients are not
+publicly obtainable until their verified releases are published. Free and Basic do not include managed-cloud
 CLI, Chrome, or VS Code access; Local/BYOK developer use remains available
 inside its separate trust boundary. Skills and chat tools remain available in
 Free chat, while AGI Work and managed developer surfaces are Pro+ capabilities.
@@ -372,7 +383,8 @@ An immediate paid-plan upgrade preserves the existing renewal date. Stripe previ
 
 Top-ups are available only to active Stripe-billed paid plans through the same
 gated commercial policy. They are whole-dollar purchases at 50 public top-up
-units per $1, with a $10 minimum and $100 ordinary self-serve maximum. Stripe
+units per $1, with a $20 minimum, a $1,000 maximum per purchase and $2,000 a
+day (`packages/contracts/types/src/billing-topups.ts`). Stripe
 Checkout shows and collects tax separately; the managed-usage ledger receives
 only the pre-tax purchased balance. Unused purchased balance carries across
 subscription renewals and purchases older than 12 months are excluded from the
@@ -445,8 +457,8 @@ Mobile:
 - Mobile is not published. Its code currently prioritizes Local Mode and keeps hosted sends gated unless Cloud access is explicitly unlocked.
 - `apps/mobile/services/remoteChatGate.ts` fails closed when Cloud sends are disabled.
 - Mobile v1 has small on-device Local LLM chat plus signed-in Managed Free
-  public alpha. Paid upgrades remain gated, and Mobile BYOK is not a v1 product
-  path.
+  public alpha. Web paid upgrades remain gated; store in-app purchase carries no
+  waitlist or access code. Mobile BYOK is not a v1 product path.
 - Mobile should not be the first heavy local PDF/PPTX/DOCX generation surface.
 
 CLI:
@@ -460,10 +472,11 @@ CLI:
 - MCP discovery is asynchronous and status-bearing (`mcp/loading`,
   `mcp/ready`, `mcp/unavailable`). Failure or timeout degrades the session
   without blocking startup.
-- App-server capabilities currently report `checkpoints: false` and
-  `worktrees: false`. Legacy UI or commands do not prove those shared runtime
-  capabilities; keep them gated until implemented and verified in the Rust
-  owner.
+- App-server capabilities are declared in `AppServerCapabilities`
+  (`capabilities()` in `apps/cli/src/app_server/developer_host.rs`), which
+  reports `checkpoints` and `worktrees` as true. Legacy UI or commands do not
+  prove a shared runtime capability; a flag stays false until the Rust owner
+  implements and verifies it.
 - CLI has Claude Code-style directions such as slash commands, memory, MCP/plugins/hooks/skills, managed sessions, workspaces, voice, and provider dispatch, but it needs a stricter parity pass against Claude Code and Codex CLI.
 
 Chrome:
@@ -497,9 +510,11 @@ Build and release ownership:
   commands delegate to package-owned tasks, and CI uses Turbo affected
   selection plus a static graph regression check.
 - CLI releases use `v-cli-*` tags, validate Cargo/npm version agreement, and
-  publish Sigstore-verified checksum bundles. Desktop releases use
-  `v-desktop-*` tags and Tauri updater signatures. These are separate product
-  channels; no workflow or installer may resolve an unfiltered latest release.
+  publish Sigstore-verified checksum bundles. The public Electron Desktop shell
+  releases on `v-cloud-desktop-*` tags (`release-desktop-cloud.yml`); the
+  retained Tauri build keeps `v-desktop-*` tags and Tauri updater signatures
+  (`release-desktop.yml`). These are separate product channels; no workflow or
+  installer may resolve an unfiltered latest release.
 - This does not establish all-platform release readiness. Desktop macOS and
   Windows signing/notarization and a green full-repo verification baseline
   remain required.

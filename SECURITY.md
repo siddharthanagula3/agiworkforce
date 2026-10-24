@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-07
+Last updated: 2026-10-23
 
 ## Reporting a vulnerability
 
@@ -33,8 +33,9 @@ infrastructure we do not operate.
 
 `docs/security/security.md` is the single security document. It holds the agent
 authority and connector matrix, the OAuth scope ceilings, the encryption key
-rotation procedure, the desktop updater key custody procedure, and the gaps each
-of those records rather than papers over. Local, BYOK and Managed Cloud are
+rotation procedure, the desktop updater key custody procedure, the data
+retention and erasure rules, and the gaps each of those records rather than
+papers over. Local, BYOK and Managed Cloud are
 separate trust boundaries there, security behavior fails closed, tenant data is
 isolated per user, and secrets never enter the repository.
 

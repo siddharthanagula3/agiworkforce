@@ -2,12 +2,12 @@
 
 Status: Current
 Owner: Desktop dictation
-Last updated: 2026-09-05
+Last updated: 2026-10-23
 
 An OS-global dictation shortcut for the desktop product, and the ledger that
 says why system-wide dictation is still refused in the native shell. Replaces
-the deleted `docs/plans/desktop-system-dictation.md`, whose phase list survives
-only in git; the gates it defined are reproduced below with their measured
+the plan document deleted in commit 9e800bba6d, whose phase list survives only in
+git; the gates it defined are reproduced below with their measured
 state so no one has to recover a deleted file to know where the feature stands.
 Flaw: `DESKTOP-SYSTEM-DICTATION-UNWIRED-01`.
 
@@ -30,9 +30,10 @@ and are edited from the tray's Shortcuts submenu.
 | `screenshotShortcut` | `CommandOrControl+Shift+2` | Captures a screen into the composer              |
 | `voiceShortcut`      | `Alt+Shift+V`              | Starts or stops dictation with the app unfocused |
 
-`apps/desktop/src/lib/globalVoiceShortcut.ts` owns the dictation default and
-its preset list. Both shells read that module, so the chord does not drift
-between them.
+The three defaults and their preset lists are owned by `defaultHostShortcut` in
+`packages/contracts/local-runtime/src/host-bridge.ts`, and
+`apps/desktop/src/lib/globalVoiceShortcut.ts` reads the dictation one from it.
+Both shells read that contract, so the chord does not drift between them.
 
 The tray submenu reports a chord that could not be claimed, distinguishing a
 duplicate of another AGI Cloud shortcut from one another application already

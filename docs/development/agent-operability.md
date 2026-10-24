@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-08-28
+Last updated: 2026-10-23
 
 ## Goal
 
@@ -24,7 +24,7 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - `docs/standards/naming-conventions.md` locks product, CLI, file, folder, package, branch, commit, version, and docs naming rules.
 - `docs/standards/service-layer.md` locks the action/route orchestration vs reusable service mechanics rule.
 - `scripts/check-hooks.mjs` locks Husky hook wiring and commitlint policy.
-- `scripts/check-report-retention.mjs` locks report collection ownership and retention metadata.
+- `scripts/check-report-retention.mjs` locks the retired report roots and the retention metadata a returning root must carry.
 - `scripts/check-ci-guardrails.mjs` locks the CI baseline and makes advisory security gates explicit.
 - `scripts/check-codeowners-contract.mjs` locks provisional ownership coverage until real GitHub teams exist.
 
@@ -42,14 +42,14 @@ The repo must be easy for humans and LLM coding agents to navigate, split, audit
 - Historical docs belong in git history, not in the live tree.
 - Working notes belong in `docs/work` until promoted.
 - Evidence belongs in `audit`.
-- Generated reports belong in `reports` or `audit`, not root.
-- Report roots and direct child collections need `Status`, `Owner`, `Purpose`, and `Retention` metadata.
+- Generated reports belong in `audit`, not root. `reports/` and `audit/reports/` are retired roots.
+- If a report root returns, it and its direct child collections need `Status`, `Owner`, `Purpose`, and `Retention` metadata (`scripts/check-report-retention.mjs`).
 - If a doc is too long to be an entry point, summarize it in the tier that owns it and let git hold the long form.
-- Treat `tasks/**`, `reports/**`, `docs/archive/**`, dated audit subdirectories, and local screenshot corpora as evidence or working notes unless promoted by a current doc.
+- Treat dated audit subdirectories and local screenshot corpora as evidence or working notes unless promoted by a current doc.
 
 ## Naming Rules
 
-- Public product copy says `AGI`; formal platform copy may say `AGI Workforce`.
+- Product names come from `packages/contracts/types/src/product-names.ts`: the brand is `AGI`, and `AGI Workforce` names the company and site only.
 - User-facing CLI examples use `agi`; `agiworkforce` is kept only as a compatibility alias or internal package/path identifier.
 - New docs and evidence use lowercase kebab-case filenames, with `YYYY-MM-DD` suffixes only when the date is part of the artifact identity.
 - Do not add new root `TASKS.md`, `FIXME.md`, `PRD.md`, `ROADMAP.md`, or ad hoc report files.

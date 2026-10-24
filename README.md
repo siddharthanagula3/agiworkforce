@@ -182,7 +182,7 @@ plus a per-request explain view.
   (`apps/web/db/neon`), Upstash Redis (rate limiting/cache), Vercel (web
   deployment), Pino (logging).
 - **CLI**: Rust with clap 4, ratatui, rustyline, syntect, crossterm.
-- **Build and CI**: pnpm 9.15, Vite 7, GitHub Actions, Playwright, Vitest,
+- **Build and CI**: pnpm 10, Vite 7, GitHub Actions, Playwright, Vitest,
   ESLint 9 + Prettier, Husky + lint-staged + commitlint.
 
 `apps/web/db/neon` is an immutable, contiguous migration chain checked

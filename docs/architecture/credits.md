@@ -47,6 +47,25 @@ on. Bonus credits expire 90 days after they are granted. Purchased credits
 never expire, except where local law requires it: credits bought in Japan
 expire six months after purchase, with a reminder seven days before.
 
+## Usage-limit promotions
+
+Two time-boxed promotion types adjust the 5-hour and weekly windows. Both sit
+behind the `billing.usage_promotions` feature flag, which is off unless an
+operator turns it on, and need migration 0390
+(`apps/web/db/neon/0390_usage_limit_promotions.sql`). Every amount, plan, date
+and cost ceiling is a row an operator edits through
+`/api/admin/usage-promotions`; none is in code.
+
+- A limit reset is a banked, one-time reset granted by a live promotion or a
+  rewarded referral. The account holder applies it through
+  `POST /api/usage/limit-resets`, and both windows restart at the apply time.
+- A limit uplift raises the 5-hour or weekly cap by a percentage for given plans
+  and workloads between two dates. An account claims it only when a request
+  would pass the plan cap.
+
+Both count against the promotion's ceiling, and any failure leaves the plan caps
+in force. Free accounts see neither.
+
 ## Top-ups
 
 Sold on the web only, at 50 credits per $1 of pack size: $20 (no discount),

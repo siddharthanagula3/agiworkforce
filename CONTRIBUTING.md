@@ -2,19 +2,25 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-22
+Last updated: 2026-10-23
 
 `AGENTS.md` is the operating contract and applies to humans too. This file
 covers the mechanics of getting a change in.
 
 ## Setup
 
-Node 24, pnpm 10.34.7, Rust 1.94.0 (pinned in `rust-toolchain.toml` and kept in
-lockstep with CI). Then:
+Node 24, the pnpm pinned by `packageManager` in `package.json`, Rust 1.94.0
+(pinned in `rust-toolchain.toml` and kept in lockstep with CI). Then:
 
 ```bash
 pnpm install
 ```
+
+pnpm refuses a release younger than seven days (`minimumReleaseAge` in
+`pnpm-workspace.yaml`), and Dependabot waits the same seven days before opening
+a version-update pull request (`.github/dependabot.yml`); security updates are
+exempt. A fresh version that does not install is that floor, not a broken
+registry.
 
 `docs/agent-context/commands.json` is the machine-readable inventory of every
 per-surface command. Read it rather than guessing a workspace filter name.

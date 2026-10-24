@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-21
+Last updated: 2026-10-23
 
 This is the long-form product requirements document for AGI and AGI Workforce.
 It is the durable product spec for humans and coding agents when the compact
@@ -806,7 +806,8 @@ Mobile v1 must include:
 - Attachment-ready controls with honest unavailable states.
 - Mic/dictation-ready control with honest unavailable states if not fully live.
 - Cloud sign-in entry (Free public alpha; no waitlist for Free access).
-- Paid upgrade entry that enforces the waitlist/access-code gate.
+- Paid upgrade entry through store in-app purchase, with no waitlist or access code
+  (owner decision 2026-10-19).
 - Profile/settings/privacy basics.
 - Support, privacy policy, and delete/export/account paths as required for
   release.
@@ -825,7 +826,8 @@ Mobile v1 should not publicly promise:
 Mobile BYOK is not part of Mobile v1. The public Mobile path is small on-device
 Local LLM chat plus public-alpha Cloud sign-in. Free Cloud requires a signed-in
 Free entitlement before any hosted request; paid-only capabilities additionally
-require a paid entitlement obtained through the access-code/waitlist gate.
+require a paid entitlement, which Mobile obtains through store in-app purchase
+with no waitlist or access code (owner decision 2026-10-19).
 
 ### 10.3 Mobile V1 Non-Goals
 
@@ -1045,8 +1047,8 @@ Before public release:
 - Login is not required for core Local functionality unless technically
   unavoidable and approved.
 - Any payments/subscriptions are either absent or compliant.
-- Cloud sign-in wording distinguishes available Free routes from
-  waitlist/access-code-gated paid upgrades.
+- Cloud sign-in wording distinguishes available Free routes from paid
+  upgrades.
 - App handles offline/no-model/no-permission states.
 - Crash-free QA threshold is acceptable.
 - TestFlight external testing has passed.

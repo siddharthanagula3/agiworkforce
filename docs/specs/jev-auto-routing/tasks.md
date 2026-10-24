@@ -1,11 +1,14 @@
 # Jev Auto routing implementation sequence
 
-Status: Planned; implementation tasks have not started
+Status: Response-budget slice implemented behind off-by-default flags; remaining tasks open
 Owner: Provider/platform owner, with Managed inference and billing owners
-Last updated: 2026-09-19
+Last updated: 2026-10-23
 
 Design: [spec.md](spec.md) and [plan.md](plan.md). Each slice should be independently
 reviewable. The feature remains off until the rollout evidence is complete.
+
+A ticked task names the code that satisfies it. An open task is either not started
+or only partly met by the response-budget slice that [spec.md](spec.md) records.
 
 ## 1. Contracts and registry
 
@@ -16,16 +19,24 @@ reviewable. The feature remains off until the rollout evidence is complete.
 - [ ] Add compiled semantic-assessment policy and optional assessed-floor input.
       Default all runtime activation off; preserve existing resolver decisions
       when the new input is absent.
-- [ ] Regenerate through `pnpm sync:models`; verify no evaluator enters chat
+- [x] Regenerate through `pnpm sync:models`; verify no evaluator enters chat
       pickers, Auto generator pools or implicit fallback chains.
+      Done: the evaluator is only the `semanticResponseAssessment` policy at
+      `packages/ai/model-registry/catalog/routing-policies.json:356`, compiled into
+      `packages/ai/model-registry/generated/registry.json:40230`; no
+      `models.curation.json` record names it.
 
 ## 2. Gateway evaluator
 
 - [ ] Add the SDK through the package manager in the existing Gateway provider
       package, export evaluation separately, and construct it with resolved
       credentials and the correct admitted endpoint.
-- [ ] Normalize Choice, Score, Boolean, confidence metadata, usage, model identity
+- [x] Normalize Choice, Score, Boolean, confidence metadata, usage, model identity
       and sanitized errors. Validate responses against the submitted questions.
+      Done: `packages/ai/providers/vercel-gateway/src/evaluation.ts:112` (`parseAnswer`),
+      `:145` (`parseResponse` rejects any answer set that differs from the questions
+      sent) and `:64` (`VercelGatewayEvaluationError`, with a test that no response
+      body is exposed at `evaluation.test.ts:86`).
 - [ ] Test real HTTP boundary behavior with a controlled transport: no hidden
       retries, cancellation propagation, deadline enforcement and malformed output.
 - [ ] Run a bounded authenticated smoke call on synthetic state. Record its
@@ -47,9 +58,13 @@ reviewable. The feature remains off until the rollout evidence is complete.
 
 ## 4. Managed coordinator, accounting and traces
 
-- [ ] Add evaluator egress admission, bounded concurrency, shared quotas, platform
+- [x] Add evaluator egress admission, bounded concurrency, shared quotas, platform
       spend reservation, cancellation and same-turn deduplication. Exclude active
       free-lane and media-dependent workloads initially.
+      Done in `apps/web/lib/services/model-rollout/semantic-response-assessment-service.ts`:
+      eligibility and egress refusals at `:129`, the daily input-token reservation
+      at `:227`, cancellation and deadline at `:257`, same-request deduplication at
+      `:430` and the in-flight bound at `:440`; free-plan and media turns skip.
 - [ ] Integrate after evaluator data policy is known and before final model
       resolution; freeze baseline inputs and keep tool assembly side-effect-free
       across comparison branches.

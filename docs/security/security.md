@@ -272,6 +272,17 @@ The GitHub App's **installation permission set is configured on GitHub and is no
 declared anywhere in this repository.** Public copy must say that rather than
 guess a permission list.
 
+Connectors are not released yet. `CONNECTOR_RELEASE_STATE` in
+`packages/contracts/types/src/connector-release.ts` is `coming_soon`, and the
+connector start and custom-connector routes refuse every plan until it is
+`released`. Once released, connectors and Remote Control are paid-plan
+capabilities (`BILLING_PLAN_CAPABILITY_TIERS` in
+`packages/contracts/types/src/billing-catalog.ts`): the connector turn gate and
+the capability handshake read the `connectors` capability
+(`lib/connectors/connector-capability.ts`), and `/api/pair/initiate` and
+`/api/pair/claim` refuse a plan without `remote_control` with
+`plan_upgrade_required`.
+
 Per-user connector tool count is capped per plan (`getPlanMaxConnectorTools`,
 falling back to `MAX_CONNECTOR_TOOLS_PER_USER`). Remote endpoints pass
 DNS-resolution SSRF validation (`assertResolvedPublicHostname`).

@@ -2,9 +2,14 @@
 
 Status: Active
 Owner: Guardian
-Last updated: 2026-10-18
+Last updated: 2026-10-23
 
-All six were verified open on 2026-08-28. They are ordered: each depends on the
+All six were re-verified open against the code on 2026-10-23: no Guardian
+migration exists under `apps/web/db/neon`; `webhook-router.ts` routes push and
+pull_request to automation events only and has no `merge_group` route;
+`packages/guardian/core/src/adapters` holds only the repo-check adapter, with
+`osv` and `gitleaks` present as source-type names in `schema.ts` and no adapter;
+and there is no Guardian evaluation corpus. They are ordered: each depends on the
 one before it.
 
 1. **Persistence layer**: `guardian_review_runs` / `guardian_findings` /

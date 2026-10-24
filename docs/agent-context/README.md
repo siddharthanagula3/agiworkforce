@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-22
+Last updated: 2026-10-23
 
 This folder is the tool-neutral map for coding agents. Codex, Claude Code, Cursor, VS Code agents, opencode, and future agents should read this before deep exploration.
 
@@ -26,12 +26,15 @@ This folder is the tool-neutral map for coding agents. Codex, Claude Code, Curso
 16. `../standards/service-layer.md` - action/route orchestration vs reusable service mechanics.
 17. `bug-finding-guide.md` - workflow for finding bugs without getting lost in stale docs.
 18. `agent-task-templates.md` - standard prompts for exploration, implementation, review, and verification agents.
+19. `llm-failure-taxonomy.json` - failure taxonomy read by `scripts/check-llm-failure-guardrails.mjs`.
+20. `non-md-artifact-status.json` - ledger of every non-Markdown artifact kept active, checked by `scripts/check-non-md-artifacts.mjs`.
+21. `generated/` - contract registry, dependency graph, and module summaries generated from the repository; regenerate with `pnpm generate:agent-context-indexes` (`pnpm check:agent-context-indexes` fails drift).
 
 ## Rules
 
 - Treat `AGENTS.md` as canonical. Tool-specific files such as `CLAUDE.md` must point back to it.
 - If a bug is already a row in `audit/registers/known-flaws.md`, update that row instead of creating a duplicate finding. A fixed row is deleted in the commit that fixes it, never annotated and left behind.
-- If a source-of-truth conflict appears, prefer `docs/product/definition.md`, `docs/decisions/README.md`, `PLAN.md`, and this folder over older launch plans.
+- If a source-of-truth conflict appears, follow the precedence in `AGENTS.md` section 2: executable code, schemas and enforced configuration win. Among documents, prefer `docs/product/definition.md`, `docs/decisions/README.md`, `PLAN.md`, and this folder over older launch plans.
 - Keep JSON files parseable without comments.
 - Split parallel agent work by disjoint write paths from `lanes.json` and record verification evidence before committing.
 - Do not edit shared files from feature lanes; route them through the integrator or a lane that owns shared files.

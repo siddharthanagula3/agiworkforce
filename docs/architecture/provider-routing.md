@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Provider/platform
-Last updated: 2026-09-22
+Last updated: 2026-10-23
 
 This matrix is the product contract for routing and UI labels. It records what AGI may claim in Local/BYOK/Managed modes. Provider SDK details can change; surfaces must read capability metadata instead of hardcoding provider assumptions.
 
@@ -35,9 +35,10 @@ are not derivable from the catalog.
 
 ## Model identity and serving routes
 
-The whole pipeline, its gaps and the target design are recorded in
-[`routing-and-economics-2026-09-06.md`](routing-and-economics-2026-09-06.md);
-this section is the contract it builds on.
+The catalogs under `packages/ai/model-registry/catalog/` are authoritative for
+what follows; this section is the prose contract over them, and
+[`execution-plan-contract.md`](execution-plan-contract.md) holds the staged
+rollout.
 
 A canonical model (`models.curation.json`) has one developer, resolved from
 `catalog/developers.json`, and one or more serving routes compiled from
@@ -67,8 +68,8 @@ Billing follows the model, cost follows the route. A managed settlement debits
 the model's official price, the sheet on its own developer's route
 (`LLMCostCalculator.calculateListCost`), and records the served route's price
 as provider cost on the same ledger event, so a cheaper host is the company's
-saving, never a change in what the user pays. Users see credits, fifty per
-dollar, and a usage row is labelled by the model, not the route. On OpenRouter
+saving, never a change in what the user pays. Users see credits
+(`packages/contracts/types/src/credits.ts`), and a usage row is labelled by the model, not the route. On OpenRouter
 a managed request sorts providers by price and carries the registry route's
 price as `max_price`; a zero-retention workspace also sets `zdr`, and a route
 whose retention is conditional is refused for that workspace unless its harness
@@ -102,13 +103,15 @@ one edit. Each resolution carries the decision inputs on
 `taskFamilyDecision`: the family, the floor band, every candidate with its
 route and expected microUSD, and the slot and route that were taken.
 
-## Proposed semantic assessment for Auto
+## Jev-assisted response budget for Auto
 
-The [Jev Auto routing specification](../specs/jev-auto-routing/spec.md) now owns
-an implemented, off-by-default response-budget assessment for eligible Managed
-web Auto turns. It uses the Gateway evaluation transport to infer response
-shape, then deterministic policy sets the generation ceiling. It never changes
-a named model request. Jev-driven model selection remains a proposal in the
+The [Jev Auto routing specification](../specs/jev-auto-routing/spec.md) owns an
+implemented response-budget assessment for eligible Managed web Auto turns,
+behind the `routing.response_assessment` (shadow) and
+`routing.response_assessment_apply` feature flags, both off by default. It uses
+the Gateway evaluation transport to infer response shape, then deterministic
+policy sets the generation ceiling. It never changes a named model request.
+Jev-driven model selection remains a proposal in the
 [architecture](../specs/jev-auto-routing/plan.md).
 
 ## Rollout: observed health, region, canary, shadow and the decision trace

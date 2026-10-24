@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder + commercial/platform lead
-Last updated: 2026-09-27
+Last updated: 2026-10-23
 
 ## Bootstrap Rule
 
@@ -22,7 +22,7 @@ pass the paid-launch gate before self-serve paid acquisition opens.
 | Local         | Core differentiation. Free to use where technically available.                                                                                                                             |
 | BYOK          | Explicit provider trust boundary. User pays provider directly.                                                                                                                             |
 | Managed cloud | Free public alpha is enabled for signed-in users. Paid plan acquisition remains waitlist/access-code gated; existing paid entitlements continue to resolve normally. Env kill-switch only. |
-| Mobile v1     | Small on-device Local LLMs plus signed-in Managed Free public alpha. Paid upgrades remain gated. No Mobile BYOK in v1.                                                                     |
+| Mobile v1     | Small on-device Local LLMs plus signed-in Managed Free public alpha. Store in-app purchase has no waitlist or access code; Web paid upgrades remain gated. No Mobile BYOK in v1.           |
 | Web           | Account/chat state through Neon. No Web BYOK. Managed Free is available after sign-in; paid upgrade acquisition remains waitlist/access-code gated.                                        |
 | Desktop       | Electron Cloud chat consumes the shared account entitlement; Desktop Code uses the host-owned developer runtime shared with CLI/VS Code. The two trust domains remain separate.            |
 | CLI/VS Code   | Developer/workspace scoped and entitled through the same account; local credentials stay in the shared host credential broker, with no silent global chat sync.                            |
@@ -63,6 +63,9 @@ and signed order forms before card top-ups.
   waitlist decision before checkout.
 - Access codes authorize acquisition, not a second subscription owner or a
   surface-specific entitlement.
+- The gate applies to Stripe checkout on Web. Store in-app purchase on Mobile
+  opens with no waitlist or access code (owner decision 2026-10-19,
+  `docs/compliance/mobile-store-feature-justification.md` O2).
 - When the founder opens self-serve upgrades, one policy switch and its audited
   rollout state replace the waitlist decision; clients do not fork the rule.
 

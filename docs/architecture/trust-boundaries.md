@@ -2,9 +2,9 @@
 
 Status: Current
 Owner: Founder + platform lead
-Last updated: 2026-09-21
+Last updated: 2026-10-23
 
-The authoritative per-surface definition of which **trust modes** (Local / BYOK / Managed Cloud) and **model sources** each surface exposes, and which surfaces **share cloud chats**. Founder-stated 2026-06-20. This refines `source-of-truth.md` (Local / BYOK / Managed Cloud) into exact per-surface rules. When a surface's code disagrees with this table, the code is the bug.
+The authoritative per-surface definition of which **trust modes** (Local / BYOK / Managed Cloud) and **model sources** each surface exposes, and which surfaces **share cloud chats**. Founder-stated 2026-06-20. This refines the Local / BYOK / Managed Cloud boundaries in `AGENTS.md` section 6 into exact per-surface rules. When a surface's code disagrees with this table, the code is the bug.
 
 Vocabulary:
 
@@ -14,8 +14,8 @@ Vocabulary:
   admitted through the user's canonical AGI entitlement. It is the only path
   that crosses into AGI Cloud. Managed Free is public alpha and enabled after
   sign-in (2026-06-27, CLOUD-01). Paid-only routes require an existing paid
-  entitlement; new paid acquisition remains waitlist/access-code gated
-  (2026-09-21). Metering and abuse controls keep pace with Free usage, and
+  entitlement; new paid acquisition on Web remains waitlist/access-code gated
+  (2026-09-21), while Mobile store in-app purchase has neither (2026-10-19). Metering and abuse controls keep pace with Free usage, and
   commercial controls gate paid launch. `AGI_MANAGED_COMPUTE_PRIVATE_BETA` is an
   incident-response kill-switch only.
 
@@ -60,22 +60,22 @@ unpublished extension available to users.
 4. **Cloud chat store is shared by Web + Desktop + Mobile**, and provenance-eligible Chrome Managed Cloud chats automatically mirror into it. Chrome's local store remains authoritative; CLI/VS Code coding sessions are separate from the chat store.
 5. **Local→BYOK / Local→Cloud transitions are explicit** (fork/continuation with context selection, secret scan, payload preview, consent, provider label), never silent.
 
-## Model env-gating (separate workstream)
+## Model env-gating
 
-Models that run standalone are selectable now. Models that **require a code-execution environment** must be **grayed out** in every model picker until the environment is built. The execution environment will be **E2B** (E2B for Startups credits granted 2026-06-15). Needs a `requiresEnvironment` capability flag in `packages/contracts/types/src/models.json` + picker gating. Not yet implemented.
+Models that **require an execution environment** are grayed out in every model picker until that environment is available. A catalog entry declares it with `requiresEnvironment: 'e2b' | 'local-runtime'` (`packages/contracts/types/src/model-catalog.ts`), `evaluateModelEnvironment` decides selectability, and the web, mobile, VS Code and CLI pickers gate on it. No model in the catalog declares it today (`packages/contracts/types/src/__tests__/model-catalog.test.ts`), so nothing is grayed out yet. The `e2b` environment is the managed code-execution sandbox.
 
 ## Verified competitor topology informing this decision
 
-The July 2026 live-product and official-documentation review confirmed the separation this matrix requires:
+`docs/research/cross-surface-continuity-2026-09-21.md` (verified 2026-09-21) found the separation this matrix requires in the leaders' products:
 
-- Claude Chat cloud history, Claude Cowork runs, and Claude Code developer sessions are not one undifferentiated conversation store.
-- Claude Code CLI and VS Code share local developer-session/configuration behavior; Remote Control projects that local session to web/mobile without converting it into normal Chat history.
-- OpenAI Chat, desktop-local Work, cloud Work, Codex developer tasks, Remote projection, and browser adapters also retain different persistence/runtime authorities despite unified branding.
-- Browser-side agents retain site/browser-task context and permissions rather than silently joining consumer chat history.
+- ChatGPT keeps Cloud Work conversations synced across web, mobile and desktop while Local conversations stay on the computer.
+- Claude's Cloud work follows the account across Web, Desktop, Mobile and the Chrome side panel, while local files, local connectors, browser use and computer use depend on the Desktop host, and memory is not shared with local computer sessions.
+- Local coding work in ChatGPT Codex and Claude is steered from another client through a projection, not by copying local authority into the shared chat store.
 
 AGI's exact product decision remains founder-owned and stricter where stated above: Web/Desktop Cloud/Mobile Cloud share the consumer Cloud store; eligible Chrome Managed Cloud conversations mirror into it automatically while Chrome remains locally authoritative; Local never syncs; CLI/VS Code share separate developer sessions.
 
 Evidence:
 
-- `docs/research/competitor-capability-session-architecture-2026-07-15.md`
+- `docs/research/cross-surface-continuity-2026-09-21.md`
+- `docs/research/chatgpt-claude-ecosystem-delta-2026-09-21.md`
 - `docs/product/experience-contract.md`

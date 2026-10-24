@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-09-06
+Last updated: 2026-10-23
 
 A gateway is any OpenAI Chat Completions, OpenAI Responses, or Anthropic
 Messages compatible endpoint: a self-hosted proxy, an aggregator, a corporate
@@ -162,6 +162,12 @@ Field reference:
   fuller records in `packages/ai/model-registry/catalog/provider-governance.json`.
   Those two fields are also the egress gate: without both, the definition's
   host never enters the managed allowlist.
+  `trainsOnInputs` also feeds the account setting "Only use models that do not
+  train on your chats": while it is on, a gateway whose value is `unknown`,
+  `opt_out` or `varies_by_route` is refused, and only `never` and `opt_in` pass
+  (`providerKeepsInputsOutOfTraining` in the generated registry). Record `never`
+  only when the gateway's own terms cover the model that serves the request, not
+  when it forwards to an upstream whose terms differ.
 
 See `openrouter_via_gateway` in the same file for a complete, real, verified
 example, deliberately not wired into live routing since OpenRouter already has

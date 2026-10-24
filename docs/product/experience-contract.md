@@ -806,7 +806,7 @@ recorded before comparing outputs, so the standard cannot move after a result.
 
 ## 17. Evidence
 
-- `docs/research/competitor-capability-session-architecture-2026-07-15.md`
+- `docs/research/cross-surface-continuity-2026-09-21.md`
 - `audit/prior-audits/parity-implementation-matrix.md`
 - `docs/architecture/trust-boundaries.md`
 - `audit/registers/known-flaws.md`

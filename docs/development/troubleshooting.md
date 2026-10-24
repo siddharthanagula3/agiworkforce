@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Repository maintainers
-Last updated: 2026-09-17
+Last updated: 2026-10-23
 
 Symptoms whose cause is not where the error points. Each entry names what to
 check first, so the usual half hour of chasing the wrong layer is skipped.
@@ -25,6 +25,13 @@ that.
 a workspace's own range, so bumping a package that is overridden at the root is
 cosmetic. Check the root `package.json` overrides block before believing a
 version bump took effect.
+
+**A version that exists on the registry will not install.** pnpm refuses a release
+younger than seven days (`minimumReleaseAge` in `pnpm-workspace.yaml`, in
+minutes), and Dependabot waits the same seven days before it opens a
+version-update pull request (`cooldown` in `.github/dependabot.yml`). Wait out
+the week. A release that must go in early is listed in
+`minimumReleaseAgeExclude` by exact version, with a reason in the commit.
 
 **A lockfile-only install passes and the build then breaks.** Installing from the
 lock alone resolves what the lock says, not what the manifests now ask for. When
