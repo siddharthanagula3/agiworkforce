@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Founder
-Last updated: 2026-10-03
+Last updated: 2026-10-23
 
 Only actions that need the founder: an account, a credential, a signature, a
 paid decision, or a call the founder reserves. Engineering work is never listed
@@ -18,25 +18,129 @@ The founder's decisions of 2026-09-15 live in
 `docs/decisions/2026-09-15-founder-decisions.md`; the items they resolved were
 removed here and their engineering is tracked in `audit/prior-audits/active-issues-register.md` (AGI-35).
 
-## [Deploy] Release the production deploy queue (F1, F2)
+The founder's decisions of 2026-10-22 (numbered 1 to 46) settled the OWNER rows
+of the UI gap campaign. Each `DEF-` or `REF-` id below is a campaign row still
+waiting on the founder; it closes when the action named beside it is done.
+Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 
-**Why founder assistance is required**
-`production-web` requires the founder as reviewer. Run 34549878676 (2026-09-11) has waited for that approval since, and
-the `production-surfaces` concurrency group cancels every newer run behind it with zero jobs, so about 1,000 commits
-(390 touching web) are not live. Migrations 0183 to 0193 have a contested applied state, and deployed code writes
-columns from 0187 and 0189.
-**Exact action**
+## [Deploy] Apply migrations 0368 to 0391, then deploy main (decision 2)
 
-1. Confirm in the Neon console (or `pnpm db:migrate -- status --target production`) whether 0183 to 0193 are applied; approve applying the missing ones in order.
-2. Cancel run 34549878676 and the two August runs still marked in progress (31290571636, 31283553796).
-3. Approve the next `deploy-production` run for the reviewed sha.
+- `scripts/config/production-migrations-applied.json` records production through 0367 (2026-10-18);
+  0368 to 0391 are on main and applied nowhere, and the pre-deploy migration check blocks main until they are.
+- Action: apply them to staging, check, then to production with `--confirm-production`, then deploy.
+  A production apply cannot be undone, so it runs only at a time you choose.
+- Until then: connector tools fail closed (0381); published apps cannot use connectors, organization
+  daily activity is missing and Slack channel replies fail (0383 to 0389); usage promotions (0390) and
+  the artifact AI cap (0391, which needs 0380) cannot be switched on.
+- Done when `pnpm db:migrate -- status --target production` lists 0391 and the JSON record is updated.
+  Impact: RELEASE-BLOCKING.
 
-**Where** GitHub Actions, `production-web` environment; Neon console.
-**Needed input** About fifteen minutes.
-**How to verify completion** The newest production-web deployment status is `success`; `/api/health` is healthy; the deployment aliased to agiworkforce.com is newer than 2026-09-11.
-**What remains after founder action** Signed-in production smoke (agent).
-**Impact** LAUNCH-BLOCKING (every fix since 2026-09-11, including 8 of the 11 cleared §127 blockers)
-**Status** BLOCKED, FOUNDER ACTION REQUIRED
+## [Models] One paid probe before video comes back (decision 1)
+
+- You chose `gemini-omni-1.1-flash` for video; its adapter is merged (`0ed375f365`). The `google/veo`
+  slot in `model-families.json` still names the retired `veo-3.1`, so default video stays off
+  (`VIDEO-VEO-SLOTS-SHUTDOWN-2026-10-22` in `audit/registers/known-flaws.md`).
+- Action: approve one paid probe (3 s, 720p, text only, about $0.30, local Google key); engineering then
+  moves the slot with the probe as its gate evidence. Impact: FEATURE-BLOCKING (video generation).
+
+## [Billing] Switch on usage promotions (decision 25)
+
+- Built in `5daa5cb754` and its review fixes: banked limit resets and time-boxed limit uplifts as runtime
+  promotions with a cost ceiling and a fail-closed switch. No amount is in code.
+- Action: after 0390 is applied, create the promotions with live values in the admin route, then turn on
+  the `billing_usage_promotions` flag. Rows: DEF-0029, DEF-0510, DEF-0512, DEF-1687, DEF-1802,
+  DEF-2062, DEF-2314, DEF-3162, DEF-3272, DEF-3343.
+
+## [AI artifacts] Switch on AI calls from inside artifacts (decision 23)
+
+- DEF-0333: the redesign is merged (`7f4a4b93be`, `180b298342`, `81a310f8d5`) and passed independent
+  review; it stays off behind `AGI_ARTIFACT_AI_ENABLED`.
+- Action: confirm the per-app call counts in `maxArtifactAiCallsPerApp` (`billing-catalog.ts`), apply
+  0391 after 0380, then set `AGI_ARTIFACT_AI_ENABLED=1`. Counsel approves the consent line saying the
+  app may save output where its publisher can read it.
+
+## [Connectors] Release switch (decision 16)
+
+- You decided on 2026-10-22 to keep every connector Coming soon for now. To release one: register its
+  OAuth app (the three connector entries below), write the Gmail data rule (`founder-decisions.md`
+  item 42), apply 0381, then approve flipping `CONNECTOR_RELEASE_STATE`.
+- Rows waiting on it: DEF-0723, DEF-0743, DEF-0767, DEF-1240, DEF-1920, DEF-2027, DEF-2054, DEF-2074,
+  DEF-2083, DEF-2137, DEF-2141, DEF-2166, DEF-3236, DEF-3240, DEF-3262, DEF-3342.
+
+## [Console] GitHub App events, store links and the Slack interactivity URL
+
+- GitHub App console: subscribe the app to Issues and Releases events (decision 20); the shipped
+  automation triggers receive nothing until then.
+- DEF-3226: once both store listings are public, supply the App Store and Google Play URLs for the
+  mobile page (decision 20).
+- Slack app configuration: set the Interactivity Request URL to
+  `https://agiworkforce.com/api/webhooks/slack-interactions` so the in-Slack Approve and Deny buttons work.
+
+## [Mobile] Merge Codex's store-release branch and re-pin the submission test
+
+- `apps/mobile/__tests__/ios-store-submission-config.test.ts` was reported red on main on 2026-10-23:
+  its reviewer notes pin cloud-billing line numbers, and Codex's `codex/mobile-store-release` branch
+  rewrites the store-listing files. Agents do not edit Codex's work, so merging that branch and
+  re-pinning the notes is yours. Not re-run in this pass.
+
+## [Legal] Register a DMCA designated agent (decision 32)
+
+- DEF-0680, DEF-2376: file the designated-agent registration with the US Copyright Office (paid) and
+  supply the registered details; engineering then adds the notice block to `/terms` and the copyright page.
+
+## [Legal] Counsel wording from the 2026-10-22 decisions
+
+Each line is one approval; engineering edits the page and its claim test after it.
+
+- Decision 3, DEF-0671: reword the `/privacy` 30-day deletion sentence to match today; the purge switch
+  itself is in "[Production env] Email sender and purge switch" below.
+- Decision 4 (the no-training setting is now a hard block, `401247f726`, `8ac4898068`): DEF-0670
+  training section and opt-out link on `/privacy`; DEF-0674 consumer training disclosure on `/privacy`
+  and in Settings; DEF-0677 opt-out link in the terms Content section; DEF-1946 policy section 06
+  control and link; DEF-1958 the broader no-training promise; DEF-0676 temporary-chat exclusions copy;
+  DEF-0638 training line in the VS Code onboarding.
+- Decision 6 (web images and video now carry the provenance claim, `170779caa1`): DEF-0736 reword
+  `apps/web/app/acceptable-use/page.tsx`, which still says files carry no mark, and scope
+  `apps/mobile/app/legal/article-50.tsx` to AGI-managed generation; DEF-2425 rule on whether "AGI can
+  make mistakes. Check important info." returns under the composer, and its wording.
+- Decision 7 (security reports acknowledged within 2 business days): DEF-0678, DEF-1964 that sentence on
+  `/security` and the service-level page; DEF-1962 a user-responsibilities section on `/security`;
+  DEF-1963 the "we may update this policy" clause.
+- Decision 8: the subprocessor and privacy text say a video request carries only a text prompt; images
+  can now be sent too.
+- Decision 11 (one address, contact@, shown in full with its subject line): DEF-2368 the `/privacy`
+  children's section, which says "email us" with no address; DEF-1930 the rights list with its
+  verification and authorised-agent sentences; DEF-3062 the verification paragraph and under-13
+  sentence; DEF-3358 the wording that lists contact@ by purpose; DEF-3084 the full-name requirement
+  and opt-out statement in `/terms` section 17.
+- Decision 31, DEF-0682: confirm Texas law, Travis County and the AAA, and settle the enterprise
+  contract to match.
+- Decision 33, DEF-1954, DEF-3365: the required contents of the arbitration opt-out email.
+- Decision 34, one terms batch: DEF-1921 terms-update notice heading; DEF-1966 naming customers and
+  showing logos; DEF-1967 "export your data before termination"; DEF-3074 capitals on the disclaimer
+  and liability paragraphs.
+- Decision 36: DEF-1947 rights list and Global Privacy Control sentence first; then DEF-1933 training
+  sources and de-identified data, DEF-1957 consent by use, DEF-1959 service emails, DEF-1960 browser
+  cookie controls.
+- Decision 37: DEF-2262, DEF-3308 upload retention (kept with the chat until it is deleted); DEF-1206,
+  DEF-1207 confirm live voice keeps the transcript and no audio, then the voice-retention line and its
+  Learn more target; DEF-3366 confirm whether de-identified or promotional-route copies survive
+  deletion, then the retention statement.
+- Decision 38, approve first: DEF-2366, DEF-0161 notice that feedback and reports may be reviewed;
+  DEF-1828 warning on approvals that read untrusted content or send data out; DEF-1174 the mobile
+  billing notices (keep both). Then DEF-1304 safe-use guide from the AGI Work notice, DEF-0397
+  usage-guidelines note on custom instructions, DEF-0404 and DEF-1588 privacy paragraph and privacy
+  centre, DEF-3234 who can see a project's Work runs, DEF-0492 help articles on training and retention.
+- Decision 22, desktop skill recorder: DEF-0374 consent and warning text naming what is captured and
+  where it goes; DEF-2757 a one-sentence sensitive-data warning. DEF-0019 (input listener), DEF-0051
+  (Input Monitoring row) and DEF-0376 (microphone channel) are built only after that wording is approved.
+- Stale policy sentences (found 2026-10-23): `apps/web/app/privacy/page.tsx` (about line 1010) says every
+  paid upgrade needs an access code or the waitlist, but mobile in-app purchase is open; the same page
+  (about lines 1305 and 1526) says connectors are "coming soon", which goes false at release; and
+  `apps/web/app/acceptable-use/page.tsx` (about line 118) says connector tools are "capped by plan",
+  while Free now has none.
+- Chrome extension history search is built opt-in (`apps/extension/src/features/computer-use/historySearch.ts`)
+  and neither `/privacy` nor `/agent-permissions` mentions it; whether it stays is in `open-questions.md`.
 
 ## [Release] GitHub environments and variables the release workflows read (F3, F4, F6 to F10)
 
@@ -319,6 +423,7 @@ registration and require a business application.
 **Needed input** One application per vendor; weeks of turnaround.
 **How to verify completion** The agent flips each directory entry from preregistered to dynamic and a live connect succeeds.
 **What remains after founder action** Verification only.
+**Decided 2026-10-22 (decision 45)** Apply to Figma first. DEF-2246 closes when the application is submitted and the issued OAuth client credentials are handed over.
 **Impact** EXTERNAL-APPROVAL (six connectors; the directory already shows them as not yet available)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -373,6 +478,7 @@ vendor is a legal-risk and spend decision.
 **Needed input** One risk decision, possibly a vendor contract.
 **How to verify completion** The under-threshold flow matches the choice end to end; no marketing or listing claims compliance before then.
 **What remains after founder action** The gate is being built on a documented default threshold table; counsel's confirmation replaces the defaults.
+**Decided 2026-10-22 (decision 30)** Keep 13. Rows DEF-0672 and DEF-3086 close when counsel confirms 13 as the minimum age on `/privacy` and `/terms`.
 **Impact** RELEASE-BLOCKING (mobile stores)
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
@@ -893,6 +999,9 @@ address if one is missing. The drill needs your own recipient addresses.
 trial reminder arrives with the right amount and cancel link. The drill log is
 dated and names its recipients.
 **What remains after founder action** The Stripe test-mode run that proves reminder timing, amount and cancel link needs your authorisation (audit row TC08 in `audit/prior-audits/public-website-audit-2026-10-03.md`). Counsel wording for the EEA statement is held by the counsel entry below (TC06).
+**Decided 2026-10-22 (decision 3, DEF-0671)** Counsel rewords the deletion sentence first; set
+`SOFT_DELETED_RESOURCE_PURGE_ENABLED` in production only after a recovery check, because every item
+deleted more than 30 days earlier is then gone for good.
 **Impact** FEATURE-BLOCKING (referral trials)
 **Status** FOUNDER ACTION REQUIRED
 
@@ -974,6 +1083,7 @@ been pushed.
 **Where** The Vercel project for `apps/web`; the branch `fix/public-site-audit-2026-10-03`.
 **Needed input** One approval, naming (a) or (b).
 **How to verify completion** A Preview deployment of the branch is reachable and a signed-in session opens on it.
+**Also waiting on a Preview** `/legal/open-source` is no longer force-static (decision 14); confirm on a Preview that it reads `public/legal/third-party-notices.json`.
 **What remains after founder action** The Preview browser pass for the rows registered in `audit/prior-audits/signed-in-web-audit-2026-10-03.md` and `audit/prior-audits/public-comparison-2026-10-04.md`, and the signed-in Preview session of Study that gates `L18-D3`.
 **Impact** EXTERNAL-APPROVAL
 **Status** FOUNDER ACTION REQUIRED

@@ -42,8 +42,8 @@ Each is genuinely undecided. None may be resolved by assumption.
   canonical and have the other call it; generate both from the schema; or accept
   the divergence with a conformance test. `packages/ai/routing/README.md`
   ("Known Caveats") holds Rust adoption of the task-family stage until this is
-  answered. `docs/architecture/routing-and-economics-2026-09-06.md` §4.6
-  proposes an answer (TypeScript canonical for every managed-cloud decision;
+  answered. The routing review of 2026-09-06 (since deleted; see git history)
+  proposed an answer (TypeScript canonical for every managed-cloud decision;
   Rust keeps local and BYOK routing under the conformance fixture); it closes
   when that split is recorded as a decision.
 - **OQ-2, what identifies a model snapshot?** `generated/registry.json` exposes
@@ -120,3 +120,28 @@ detail. Two registers will drift apart.
 
 Decide: retire the matrix and its guard in favour of `audit/ledger/`, derive the
 matrix from the ledger, or keep both with a stated owner and a sync check.
+
+## From the founder's decision round of 2026-10-22 (UI gap campaign)
+
+Calls that round left open, or that its results raised. Actions already decided
+are in [`founder-actions.md`](founder-actions.md).
+
+- **Chat system prompt (decision 9).** No candidate passed the prompt gate: v11 lacks the v5 to v7
+  privacy rules, v12 missed the jailbreak and authority-claim cases on Sonnet in 2 of 10 samples, and
+  v13 regressed two chat-prompt cases. The pin stays `chat.system@6`, which tells users Memory is in
+  "Settings, under Memory" (it is under Settings, Personalization). Fund one more paid gate (about $2)
+  for a v14, or keep v6.
+- **Business-plan training default (DEF-0675, DEF-0490).** The no-training setting is now a hard
+  block; decide the Team and Enterprise default and the sentence that states it.
+- **Temporary chats (DEF-0804).** Should temporary chats always route to providers that do not train,
+  whatever the setting, and what does the policy sentence say?
+- **CLI memory for your own keys (decision 46).** Memory is one pool across every provider you bring a
+  key for, keyed localhost endpoints included. Split it per provider, or keep one pool.
+- **What a downgrade removes.** Confirm that the BYOK and local-only tiers also lose managed connectors
+  and Remote Control, and that a phone paired before a downgrade keeps working until it re-pairs.
+- **Chrome history search.** Built opt-in (an optional permission, a confirmation on every search, at
+  most 20 results, blocked sites excluded), but `/privacy` and `/agent-permissions` do not mention it.
+  Keep it and send the wording to counsel, or remove the history half.
+- **Always-allowed apps for computer use.** Application control is session-only by design
+  (`normalizeGrantDuration` in the permission core); ChatGPT keeps a persistent list. Keep session-only
+  with a persistent "Never allow" list, or add a persistent allow list.
