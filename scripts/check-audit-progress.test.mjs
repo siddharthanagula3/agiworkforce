@@ -9,12 +9,18 @@ import { fileURLToPath } from 'node:url';
 const REPO_ROOT = fileURLToPath(new URL('..', import.meta.url));
 const GATE = join(REPO_ROOT, 'scripts', 'check-audit-progress.mjs');
 
-function runOnLedger(ledger) {
-  const dir = mkdtempSync(join(tmpdir(), 'base009-'));
+function runOn({ register, blockers = [] }) {
+  const dir = mkdtempSync(join(tmpdir(), 'audit-progress-'));
   try {
-    if (ledger !== undefined) {
-      mkdirSync(join(dir, 'docs', 'work'), { recursive: true });
-      writeFileSync(join(dir, 'docs/work/audit-remediation-ledger.md'), ledger, 'utf8');
+    if (register !== undefined) {
+      mkdirSync(join(dir, 'audit', 'registers'), { recursive: true });
+      writeFileSync(join(dir, 'audit/registers/known-flaws.md'), register, 'utf8');
+    }
+    if (blockers.length > 0) {
+      mkdirSync(join(dir, 'audit', 'blockers'), { recursive: true });
+      for (const name of blockers) {
+        writeFileSync(join(dir, 'audit/blockers', name), '# blocker\n', 'utf8');
+      }
     }
     return spawnSync(process.execPath, [GATE], { cwd: dir, encoding: 'utf8' });
   } finally {
@@ -22,113 +28,84 @@ function runOnLedger(ledger) {
   }
 }
 
-const closedLedger = [
-  '# Ledger',
+const header = [
+  '# Known flaws register',
   '',
-  '### CRIT-001, A closed task',
+  '## Web',
   '',
-  '- [x] Did the thing.',
-  '- [x] Proved the thing.',
-  '',
-  '- [x] **BASE-009, A closed phase-0 task.** Evidence recorded.',
-  '',
-].join('\n');
+  '| id | severity | summary | where | first seen | owner | still open because |',
+  '| --- | --- | --- | --- | --- | --- | --- |',
+];
 
-test('passes on an intact ledger with every box checked', () => {
-  const result = runOnLedger(closedLedger);
+const register = (...rows) => [...header, ...rows, ''].join('\n');
+const row = (id, severity) => `| ${id} | ${severity} | s | w | 2026-10-23 | Web | r |`;
+
+test('passes when the register has no open rows and no blocker file exists', () => {
+  const result = runOn({ register: register() });
   assert.equal(result.status, 0, `${result.stderr}${result.stdout}`);
-  assert.match(result.stdout, /3 ledger tasks, all closed/);
+  assert.match(result.stdout, /all closed/);
+  assert.equal(result.stderr.trim(), '');
 });
 
-test('fails while any box is unchecked, attributing it to its task', () => {
-  const result = runOnLedger(closedLedger.replace('- [x] Proved the thing.', '- [ ] Prove it.'));
+test('fails while any row is open, with counts per severity', () => {
+  const result = runOn({
+    register: register(row('WEB-A-01', 'High'), row('WEB-B-01', 'Low'), row('WEB-C-01', 'Low')),
+  });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /1 of 3 tasks/);
-  assert.match(result.stderr, /CRIT-001: 1 unchecked item/);
+  assert.match(result.stderr, /3 open rows/);
+  assert.match(result.stderr, /0 Critical, 1 High, 0 Medium, 2 Low/);
+  assert.match(result.stderr, /WEB-A-01 \(High\)/);
+  assert.doesNotMatch(result.stderr, /WEB-B-01/);
 });
 
-test('fails closed when the ledger is missing', () => {
-  const result = runOnLedger(undefined);
+test('fails while a release blocker file remains, even with an empty register', () => {
+  const result = runOn({ register: register(), blockers: ['14-cli.md'] });
+  assert.equal(result.status, 1);
+  assert.match(result.stderr, /1 release blocker file/);
+  assert.match(result.stderr, /audit\/blockers\/14-cli\.md/);
+});
+
+test('fails closed when the register is missing', () => {
+  const result = runOn({ register: undefined });
   assert.equal(result.status, 1);
   assert.match(result.stderr, /cannot read/);
 });
 
-test('fails closed when the ledger carries no checkboxes at all', () => {
-  const result = runOnLedger('# Ledger\n\nProse only.\n');
+test('fails closed when the register carries no table header', () => {
+  const result = runOn({ register: '# Known flaws\n\nProse only.\n' });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /no task checkboxes/);
+  assert.match(result.stderr, /no "\| id \| severity \|" table header/);
 });
 
-test('fails on an unclosed code fence instead of reporting the hidden tasks closed', () => {
-  const ledger = [
-    '# Ledger',
-    '',
-    '### CRIT-001, A closed task',
-    '',
-    '- [x] Did the thing.',
-    '',
-    '```text',
-    'a fence someone forgot to close',
-    '',
-    '### CRIT-002, Everything below is invisible',
-    '',
-    '- [ ] This open task must not vanish.',
-    '- [ ] Neither must this one.',
-    '',
-  ].join('\n');
-  const result = runOnLedger(ledger);
-  assert.equal(result.status, 1, 'an unclosed fence must not read as a clean ledger');
-  assert.match(result.stderr, /unclosed ``` code fence opened at line 7/);
-});
-
-test('does not let a ``` line inside a ~~~ block close that block', () => {
-  const ledger = [
-    '# Ledger',
-    '',
-    '~~~text',
-    'a sample that shows fenced markdown:',
-    '```',
-    '- [ ] this example task is not a real task',
-    '```',
-    '~~~',
-    '',
-    '### CRIT-003, A real task after the sample',
-    '',
-    '- [ ] This open task must be counted.',
-    '',
-  ].join('\n');
-  const result = runOnLedger(ledger);
+test('fails closed on a row whose severity it cannot read', () => {
+  const result = runOn({ register: register(row('WEB-A-01', 'Severe')) });
   assert.equal(result.status, 1);
-  assert.match(result.stderr, /1 of 1 tasks/, 'the sample inside the fence must not be counted');
-  assert.match(result.stderr, /CRIT-003: 1 unchecked item/);
+  assert.match(result.stderr, /severity outside Critical, High, Medium, Low/);
 });
 
-test('fails when a task ID is declared by two headings (a duplicated ledger)', () => {
-  const result = runOnLedger(`${closedLedger}\n${closedLedger}`);
-  assert.equal(result.status, 1, 'a doubled ledger must not report a doubled count as fact');
-  assert.match(result.stderr, /declared more than once/);
-  assert.match(result.stderr, /CRIT-001 \(lines 3, 12\)/);
-  assert.match(result.stderr, /BASE-009 \(lines 8, 17\)/);
+test('fails on an unclosed code fence instead of reporting the hidden rows closed', () => {
+  const result = runOn({
+    register: [...header, '', '```text', 'never closed', row('WEB-A-01', 'High'), ''].join('\n'),
+  });
+  assert.equal(result.status, 1, 'an unclosed fence must not read as a clean register');
+  assert.match(result.stderr, /unclosed ``` code fence opened at line 8/);
 });
 
-test('treats a heading that merely mentions an ID as a reference, not a declaration', () => {
-  const ledger = [
-    '# Ledger',
-    '',
-    '### CRIT-001, A closed task',
-    '',
-    '- [x] Did the thing.',
-    '',
-    '#### Evidence for CRIT-001',
-    '',
-    '- [x] Recorded.',
-    '',
-  ].join('\n');
-  const result = runOnLedger(ledger);
+test('does not count a sample row inside a fence', () => {
+  const result = runOn({
+    register: [...header, '', '~~~text', row('WEB-SAMPLE-01', 'High'), '~~~', ''].join('\n'),
+  });
   assert.equal(result.status, 0, `${result.stderr}${result.stdout}`);
 });
 
-test('returns a coherent verdict when run against the real ledger', () => {
+test('fails when a flaw ID is listed twice (a duplicated register)', () => {
+  const result = runOn({ register: register(row('WEB-A-01', 'Low'), row('WEB-A-01', 'Low')) });
+  assert.equal(result.status, 1, 'a doubled register must not report a doubled count as fact');
+  assert.match(result.stderr, /listed more than once/);
+  assert.match(result.stderr, /WEB-A-01 \(lines 7, 8\)/);
+});
+
+test('returns a coherent verdict when run against the real register', () => {
   const result = spawnSync(process.execPath, [GATE], { cwd: REPO_ROOT, encoding: 'utf8' });
   assert.ok(result.status === 0 || result.status === 1, `unexpected exit ${result.status}`);
   if (result.status === 0) {
@@ -136,6 +113,7 @@ test('returns a coherent verdict when run against the real ledger', () => {
     assert.equal(result.stderr.trim(), '');
   } else {
     assert.notEqual(result.stderr.trim(), '', 'a failing gate must say why');
+    assert.doesNotMatch(result.stderr, /not in a state this gate can measure/);
     assert.equal(result.stdout.trim(), '', 'a failing gate must not print a passing summary');
   }
 });
@@ -150,7 +128,7 @@ test('no ordinary developer flow invokes the gate', () => {
   const wired = Object.entries(scripts).filter(([, body]) =>
     body.includes('check-audit-progress.mjs'),
   );
-  assert.deepEqual(wired, [], 'BASE-009 requires the gate stay out of lint/typecheck/test/CI');
+  assert.deepEqual(wired, [], 'the release gate must stay out of lint/typecheck/test/CI');
 
   const workflowDir = join(REPO_ROOT, '.github', 'workflows');
   const wiredWorkflows = readdirSync(workflowDir).filter((file) =>
@@ -159,6 +137,6 @@ test('no ordinary developer flow invokes the gate', () => {
   assert.deepEqual(
     wiredWorkflows,
     [],
-    'a gate that exits 1 by design would make CI permanently red',
+    'a gate that exits 1 while any flaw is open would make CI permanently red',
   );
 });

@@ -132,14 +132,14 @@ info "  - Homebrew tap repo: https://github.com/siddharthanagula3/homebrew-tap"
 info "    (must exist with at least a README)"
 info "  - clone tap locally: ~/code/homebrew-tap (for update-homebrew-tap.sh)"
 
-# 9. Audit remediation ledger, a release cannot be completed while the
-#    remediation plan still carries unchecked tasks.
+# 9. Known flaws and release blockers, a release cannot be completed while
+#    audit/registers/known-flaws.md has an open row or audit/blockers/ has a file.
 echo ""
-echo "[9/9] Audit remediation ledger"
+echo "[9/9] Known flaws and release blockers"
 if audit_progress=$(node scripts/check-audit-progress.mjs 2>&1); then
   pass "$audit_progress"
 else
-  fail "audit remediation ledger is not release-clean, see docs/work/audit-remediation-ledger.md"
+  fail "open work is not release-clean, see audit/registers/known-flaws.md and audit/blockers/"
   echo "$audit_progress" | head -8 | sed 's/^/      /'
 fi
 

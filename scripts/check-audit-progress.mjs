@@ -4,39 +4,47 @@ import fs from 'node:fs';
 import path from 'node:path';
 import process from 'node:process';
 
-const LEDGER = 'docs/work/audit-remediation-ledger.md';
-const TASK_ID_SOURCE = '[A-Z][A-Z0-9]{1,15}-\\d{1,4}';
-const TASK_ID = new RegExp(`\\b(${TASK_ID_SOURCE})\\b`);
-const HEADING_DECLARATION = new RegExp(`^#{1,6}\\s+(${TASK_ID_SOURCE})\\b`);
-const CHECKBOX_DECLARATION = new RegExp(`^\\s*- \\[[ xX]\\]\\s*\\*\\*(${TASK_ID_SOURCE})\\b`);
+const REGISTER = 'audit/registers/known-flaws.md';
+const BLOCKERS = 'audit/blockers';
+const SEVERITIES = ['Critical', 'High', 'Medium', 'Low'];
 const MAX_LISTED = 20;
 
-const ledgerPath = path.join(process.cwd(), LEDGER);
+const root = process.cwd();
+
 let markdown;
 try {
-  markdown = fs.readFileSync(ledgerPath, 'utf8');
+  markdown = fs.readFileSync(path.join(root, REGISTER), 'utf8');
 } catch (error) {
   console.error(
-    `Audit progress check failed: cannot read ${ledgerPath} (${error.code ?? error.message}).`,
+    `Audit progress check failed: cannot read ${path.join(root, REGISTER)} (${error.code ?? error.message}).`,
   );
   console.error('Run this command from the repository root.');
   process.exit(1);
 }
 
+let blockers = [];
+try {
+  blockers = fs
+    .readdirSync(path.join(root, BLOCKERS), { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => `${BLOCKERS}/${entry.name}`)
+    .sort();
+} catch (error) {
+  if (error.code !== 'ENOENT') {
+    console.error(
+      `Audit progress check failed: cannot list ${BLOCKERS} (${error.code ?? error.message}).`,
+    );
+    process.exit(1);
+  }
+}
+
 /** @type {{ char: string, length: number, line: number } | null} */
 let fence = null;
-let headingId = null;
-let heading = '(no heading)';
-let done = 0;
-const open = [];
-/** @type {Map<string, number[]>} id -> line numbers where it is declared */
+let sawTableHeader = false;
+const rows = [];
+const unparseable = [];
+/** @type {Map<string, number[]>} */
 const declarations = new Map();
-
-const declare = (id, line) => {
-  const lines = declarations.get(id);
-  if (lines) lines.push(line);
-  else declarations.set(id, [line]);
-};
 
 const lines = markdown.split('\n');
 for (let index = 0; index < lines.length; index += 1) {
@@ -58,39 +66,48 @@ for (let index = 0; index < lines.length; index += 1) {
     continue;
   }
   if (fence) continue;
+  if (!line.startsWith('|')) continue;
 
-  const headingMatch = /^#{1,6}\s+(.+)$/.exec(line);
-  if (headingMatch) {
-    heading = headingMatch[1].trim();
-    headingId = TASK_ID.exec(heading)?.[1] ?? null;
-    const declared = HEADING_DECLARATION.exec(line)?.[1];
-    if (declared) declare(declared, lineNumber);
+  const cells = line
+    .split('|')
+    .slice(1, -1)
+    .map((cell) => cell.trim());
+  if (cells.length < 2) continue;
+  if (cells[0] === 'id' && cells[1] === 'severity') {
+    sawTableHeader = true;
     continue;
   }
+  if (cells.every((cell) => /^:?-{3,}:?$/.test(cell))) continue;
 
-  const checkbox = /^\s*- \[([ xX])\]\s*(.*)$/.exec(line);
-  if (!checkbox) continue;
-
-  const declared = CHECKBOX_DECLARATION.exec(line)?.[1];
-  if (declared) declare(declared, lineNumber);
-
-  if (checkbox[1] !== ' ') {
-    done += 1;
+  const [id, severity] = cells;
+  if (!id || !SEVERITIES.includes(severity)) {
+    unparseable.push(lineNumber);
     continue;
   }
-
-  const text = checkbox[2].replaceAll('**', '').trim();
-  open.push(TASK_ID.exec(text)?.[1] ?? headingId ?? heading);
+  rows.push({ id, severity });
+  const at = declarations.get(id);
+  if (at) at.push(lineNumber);
+  else declarations.set(id, [lineNumber]);
 }
-
-const total = done + open.length;
 
 const integrity = [];
 
 if (fence !== null) {
   integrity.push(
     `unclosed ${fence.char.repeat(fence.length)} code fence opened at line ${fence.line}, ` +
-      'every task after it was invisible to this check',
+      'every row after it was invisible to this check',
+  );
+}
+
+if (!sawTableHeader) {
+  integrity.push(`${REGISTER} has no "| id | severity |" table header, so no row can be read`);
+}
+
+if (unparseable.length > 0) {
+  integrity.push(
+    `${unparseable.length} table row${unparseable.length === 1 ? '' : 's'} with no id or a severity ` +
+      `outside ${SEVERITIES.join(', ')} (line${unparseable.length === 1 ? '' : 's'} ` +
+      `${unparseable.slice(0, 5).join(', ')}${unparseable.length > 5 ? ', …' : ''})`,
   );
 }
 
@@ -101,44 +118,46 @@ if (duplicated.length > 0) {
     .map(([id, at]) => `${id} (lines ${at.join(', ')})`)
     .join('; ');
   integrity.push(
-    `${duplicated.length} task ID${duplicated.length === 1 ? ' is' : 's are'} declared more than ` +
-      `once, the ledger looks duplicated or badly merged, so every count below is inflated: ${sample}` +
+    `${duplicated.length} flaw ID${duplicated.length === 1 ? ' is' : 's are'} listed more than ` +
+      `once, so every count below is inflated: ${sample}` +
       (duplicated.length > 5 ? `; …and ${duplicated.length - 5} more` : ''),
   );
 }
 
-if (total === 0) {
-  integrity.push(`${LEDGER} contains no task checkboxes`);
-}
-
 if (integrity.length > 0) {
-  console.error(`Audit progress check failed: ${LEDGER} is not in a state this gate can measure.`);
+  console.error(
+    `Audit progress check failed: ${REGISTER} is not in a state this gate can measure.`,
+  );
   for (const problem of integrity) console.error(`- ${problem}`);
-  console.error('The ledger is the release stop gate; repair it before completing a release.');
+  console.error('The register is the release stop gate; repair it before completing a release.');
   process.exit(1);
 }
 
-if (open.length === 0) {
-  console.log(`Audit progress check passed: ${total} ledger tasks, all closed.`);
+if (rows.length === 0 && blockers.length === 0) {
+  console.log(
+    `Audit progress check passed: ${REGISTER} has no open rows and ${BLOCKERS}/ is empty, all closed.`,
+  );
   process.exit(0);
 }
 
-const counts = new Map();
-for (const id of open) {
-  counts.set(id, (counts.get(id) ?? 0) + 1);
-}
-const entries = [...counts.entries()];
+const bySeverity = SEVERITIES.map(
+  (severity) => `${rows.filter((row) => row.severity === severity).length} ${severity}`,
+).join(', ');
 
 console.error(
-  `Audit progress check failed: ${open.length} of ${total} tasks in ${LEDGER} are still open (${done} closed).`,
+  `Audit progress check failed: ${rows.length} open row${rows.length === 1 ? '' : 's'} in ${REGISTER} ` +
+    `(${bySeverity}) and ${blockers.length} release blocker file${blockers.length === 1 ? '' : 's'} in ${BLOCKERS}/.`,
 );
-for (const [id, count] of entries.slice(0, MAX_LISTED)) {
-  console.error(`- ${id}: ${count} unchecked item${count === 1 ? '' : 's'}`);
+for (const file of blockers.slice(0, MAX_LISTED)) console.error(`- ${file}`);
+if (blockers.length > MAX_LISTED) {
+  console.error(`- ...and ${blockers.length - MAX_LISTED} more blocker files.`);
 }
-if (entries.length > MAX_LISTED) {
-  console.error(`- ...and ${entries.length - MAX_LISTED} more ledger entries with open items.`);
+const severe = rows.filter((row) => row.severity === 'Critical' || row.severity === 'High');
+for (const row of severe.slice(0, MAX_LISTED)) console.error(`- ${row.id} (${row.severity})`);
+if (severe.length > MAX_LISTED) {
+  console.error(`- ...and ${severe.length - MAX_LISTED} more Critical or High rows.`);
 }
 console.error(
-  'Close each task, or record an evidence-backed resolution, before completing a release.',
+  'Fix each flaw and delete its row, and each blocker file, before completing a release.',
 );
 process.exit(1);

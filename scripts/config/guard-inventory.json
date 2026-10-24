@@ -3,8 +3,8 @@
   "unwired": [
     {
       "guard": "check-audit-progress.mjs",
-      "reason": "It reads docs/work/audit-remediation-ledger.md, which is kept out of the repository (git-excluded in the founder's checkout), so in CI it can only fail on a missing file. It is a local tool, not a gate.",
-      "owed": "Either commit the ledger it reads or move the script out of scripts/check-*.mjs so it stops reading as a guard."
+      "reason": "It is the release-completion gate that scripts/launch-readiness-check.sh runs: it exits 1 while audit/registers/known-flaws.md has an open row or audit/blockers/ has a file, so in CI it would stay red by design until both are empty. It is a release tool, not a merge gate.",
+      "owed": "Wire it into the release workflow once audit/registers/known-flaws.md has no open rows and audit/blockers/ is empty."
     }
   ]
 }
