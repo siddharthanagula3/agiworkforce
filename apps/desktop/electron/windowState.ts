@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
+import { isProductPath, isShellAppPath } from '@agiworkforce/types/product-routes';
 import { MIN_WINDOW_HEIGHT, MIN_WINDOW_WIDTH } from './garnishCore';
 
 export interface WorkArea {
@@ -88,31 +89,16 @@ function normalizeFrame(raw: unknown): WindowFrameState | null {
 
 /**
  * A route is only restored when it can do no harm: an in-app path, never an
- * absolute URL, and never one of the flows whose meaning depends on the
- * request that produced it.
+ * absolute URL, and only a page of the signed-in product. A sign-in step or a
+ * public page reached by accident is never where the app opens next time.
  */
-const UNRESTORABLE_ROUTE_PREFIXES = [
-  '/login',
-  '/auth/',
-  '/sign-in',
-  '/sign-up',
-  '/sign-out',
-  '/sso-callback',
-  '/oauth',
-  '/api/',
-  '/checkout',
-  '/error',
-];
-
 export function isRestorableRoute(route: unknown): route is string {
   if (typeof route !== 'string') return false;
   const trimmed = route.trim();
   if (!trimmed.startsWith('/') || trimmed.startsWith('//')) return false;
   if (trimmed.includes('..') || trimmed.length > 2_048) return false;
   const path = trimmed.split(/[?#]/)[0] ?? '';
-  return !UNRESTORABLE_ROUTE_PREFIXES.some(
-    (prefix) => path === prefix.replace(/\/$/, '') || path.startsWith(prefix),
-  );
+  return isProductPath(path) || isShellAppPath(path);
 }
 
 export function normalizeSecondaryPanelWidth(value: unknown): number | null {

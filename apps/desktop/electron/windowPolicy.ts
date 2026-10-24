@@ -6,16 +6,27 @@ import type {
   WebContents,
 } from 'electron';
 import { shell } from 'electron';
-import { hostKeepsSignInInWindow } from '@agiworkforce/local-runtime-contract';
+import {
+  DESKTOP_SIGN_IN_PATH,
+  hostKeepsSignInInWindow,
+} from '@agiworkforce/local-runtime-contract';
 import { VSCODE_CONTEXT_HANDOFF_AUTHORITY } from '@agiworkforce/types';
-import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
+import {
+  isAuthPath,
+  isProductPath,
+  isShellAppPath,
+  isSignInEntryPath,
+} from '@agiworkforce/types/product-routes';
 import { CLERK_DEVELOPMENT_HOST, CLOUD_APP_ORIGIN } from './config';
+import { NEW_CHAT_ROUTE } from './windowState';
 
 /**
- * The window holds the product and the sign-in flow. Everything else the site
- * serves, the marketing pages, the legal surface, the blog, belongs in the
- * user's browser, which is where a link out of a desktop app is expected to
- * land and where the user already has their bookmarks and extensions.
+ * The window holds the signed-in product and the steps that finish or verify a
+ * sign-in. Everything else the site serves, the marketing pages, the legal
+ * surface, the blog, belongs in the user's browser, which is where a link out
+ * of a desktop app is expected to land and where the user already has their
+ * bookmarks and extensions. The pages that ask someone to sign in are not shown
+ * either: the shell signs in through the browser and draws its own screen.
  *
  * The identity hosts are allowed because sign-in is a top-level navigation off
  * our origin and back. Sending that to the browser would strand the user
@@ -51,7 +62,7 @@ const IDENTITY_RETURN_PATH = /^\/v1\/(?:oauth_callback|saml\/acs\/[^/]+)$/;
 
 const APP_NAVIGATION_HOSTS = ['agiworkforce.com', '.agiworkforce.com'] as const;
 
-export type RemoteNavigation = 'allow' | 'open-externally';
+export type RemoteNavigation = 'allow' | 'open-externally' | 'sign-in';
 
 function matchesHost(hostname: string, hosts: readonly string[]): boolean {
   return hosts.some((host) => (host.startsWith('.') ? hostname.endsWith(host) : hostname === host));
@@ -84,6 +95,28 @@ function isAppOrigin(parsed: URL, appOrigin: string): boolean {
   return parsed.protocol === 'https:' && matchesHost(parsed.hostname, APP_NAVIGATION_HOSTS);
 }
 
+function isDesktopSignInEntry(pathname: string): boolean {
+  return pathname.replace(/\/+$/u, '') === DESKTOP_SIGN_IN_PATH;
+}
+
+function decideAppPath(pathname: string): RemoteNavigation {
+  if (isSignInEntryPath(pathname) || isDesktopSignInEntry(pathname)) return 'sign-in';
+  return isProductPath(pathname) ||
+    isShellAppPath(pathname) ||
+    isAuthPath(pathname) ||
+    IDENTITY_RETURN_PATH.test(pathname)
+    ? 'allow'
+    : 'open-externally';
+}
+
+function parseUrl(url: string): URL | null {
+  try {
+    return new URL(url);
+  } catch {
+    return null;
+  }
+}
+
 /**
  * `appOrigin` and `clerkHost` are parameters rather than module reads so a
  * development build pointed at a local origin decides the same way the
@@ -94,21 +127,9 @@ export function decideRemoteNavigation(
   appOrigin: string,
   clerkHost: string | null = CLERK_DEVELOPMENT_HOST,
 ): RemoteNavigation {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return 'open-externally';
-  }
-
-  if (isAppOrigin(parsed, appOrigin)) {
-    return isProductPath(parsed.pathname) ||
-      isAuthPath(parsed.pathname) ||
-      IDENTITY_RETURN_PATH.test(parsed.pathname)
-      ? 'allow'
-      : 'open-externally';
-  }
-
+  const parsed = parseUrl(url);
+  if (parsed === null) return 'open-externally';
+  if (isAppOrigin(parsed, appOrigin)) return decideAppPath(parsed.pathname);
   return isIdentityOrigin(parsed, clerkHost) ? 'allow' : 'open-externally';
 }
 
@@ -120,25 +141,85 @@ function isIdentityOrigin(parsed: URL, clerkHost: string | null): boolean {
 }
 
 /**
- * A server redirect is a hop inside a navigation already allowed, and sign-in
- * passes through paths on our hosts that are neither product nor auth routes,
- * such as the identity provider's callback. Only the origin is decided here;
- * the path split stays with the navigation the user started.
+ * A server redirect onto the app's own origin is judged by its path, like a
+ * navigation: that is how `/upgrade/team` answering with `/pricing` used to
+ * put the pricing page in the window. A redirect onto another of our hosts or
+ * an identity provider is only judged by its origin, because sign-in passes
+ * through paths there that are neither product nor auth routes, such as the
+ * identity provider's session handshake.
  */
 export function decideRemoteRedirect(
   url: string,
   appOrigin: string,
   clerkHost: string | null = CLERK_DEVELOPMENT_HOST,
 ): RemoteNavigation {
-  let parsed: URL;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return 'open-externally';
-  }
+  const parsed = parseUrl(url);
+  if (parsed === null) return 'open-externally';
+  if (parsed.origin === appOrigin) return decideAppPath(parsed.pathname);
   return isAppOrigin(parsed, appOrigin) || isIdentityOrigin(parsed, clerkHost)
     ? 'allow'
     : 'open-externally';
+}
+
+/**
+ * A page that has already committed on the app's origin. The page's own router
+ * moves between paths without asking the shell (`router.push('/help')`, a
+ * `<Link>` to `/`), so what it lands on is judged after the fact. Other
+ * origins were judged when the window navigated to them.
+ */
+/** Whether a committed page is the signed-in product, the part a signed-out window must not keep. */
+export function isSignedInProductPage(url: string, appOrigin: string): boolean {
+  const parsed = parseUrl(url);
+  if (parsed === null || parsed.origin !== appOrigin) return false;
+  return isProductPath(parsed.pathname) || isShellAppPath(parsed.pathname);
+}
+
+export function decideCommittedPage(url: string, appOrigin: string): RemoteNavigation {
+  const parsed = parseUrl(url);
+  if (parsed === null || parsed.origin !== appOrigin) return 'allow';
+  return decideAppPath(parsed.pathname);
+}
+
+/** How close together the same public page must come back to count as a loop. */
+export const PUBLIC_PAGE_REPEAT_MS = 5_000;
+
+export interface PublicPageBounce {
+  readonly url: string | null;
+  readonly at: number;
+  readonly count: number;
+}
+
+export const NO_PUBLIC_PAGE_BOUNCE: PublicPageBounce = { url: null, at: 0, count: 0 };
+
+export interface PublicPageReturn {
+  /** Whether to hand the page to the browser. */
+  readonly openExternally: boolean;
+  /** The product route to put the window back on, or null to leave it. */
+  readonly returnTo: string | null;
+  readonly bounce: PublicPageBounce;
+}
+
+/**
+ * What to do when the window has landed on a public page anyway. The page goes
+ * to the browser and the window back to the product page it came from. If that
+ * product page sends it straight back to the same public page, the window goes
+ * to a new chat instead, and a third time it is left alone: a page that keeps
+ * bouncing must not open a browser tab per bounce or reload forever.
+ */
+export function planPublicPageReturn(
+  bounce: PublicPageBounce,
+  url: string,
+  lastRoute: string,
+  now: number,
+): PublicPageReturn {
+  const repeated = bounce.url === url && now - bounce.at < PUBLIC_PAGE_REPEAT_MS;
+  const count = repeated ? bounce.count + 1 : 1;
+  const next: PublicPageBounce = { url, at: now, count };
+  if (count === 1) return { openExternally: true, returnTo: lastRoute, bounce: next };
+  if (count === 2 && lastRoute !== NEW_CHAT_ROUTE) {
+    return { openExternally: false, returnTo: NEW_CHAT_ROUTE, bounce: next };
+  }
+  return { openExternally: false, returnTo: null, bounce: next };
 }
 
 const DETACHED_PAGE_WINDOW: BrowserWindowConstructorOptions = {
@@ -219,7 +300,16 @@ function lockDetachedPage(child: BrowserWindow): void {
   });
 }
 
-export function applyRemoteWindowPolicy(win: BrowserWindow): void {
+export interface RemoteWindowHandlers {
+  /** The window was about to show a page that asks someone to sign in. */
+  onSignInRequired(url: string): void;
+}
+
+/**
+ * A window given no `onSignInRequired` simply never shows a sign-in page: the
+ * navigation is cancelled and the window stays where it was.
+ */
+export function applyRemoteWindowPolicy(win: BrowserWindow, handlers?: RemoteWindowHandlers): void {
   const appOrigin = CLOUD_APP_ORIGIN;
 
   win.webContents.userAgent = win.webContents.userAgent
@@ -251,18 +341,19 @@ export function applyRemoteWindowPolicy(win: BrowserWindow): void {
     if (isPanelWindowRequest(url, frameName)) closeWithOpener(child, win);
   });
 
+  const refuse = (event: { preventDefault(): void }, url: string, decision: RemoteNavigation) => {
+    if (decision === 'allow') return;
+    event.preventDefault();
+    if (decision === 'sign-in') handlers?.onSignInRequired(url);
+    else openExternally(url);
+  };
+
   win.webContents.on('will-navigate', (event, url) => {
-    if (decideRemoteNavigation(url, appOrigin) !== 'allow') {
-      event.preventDefault();
-      openExternally(url);
-    }
+    refuse(event, url, decideRemoteNavigation(url, appOrigin));
   });
 
   win.webContents.on('will-redirect', (event) => {
     if (!event.isMainFrame) return;
-    if (decideRemoteRedirect(event.url, appOrigin) !== 'allow') {
-      event.preventDefault();
-      openExternally(event.url);
-    }
+    refuse(event, event.url, decideRemoteRedirect(event.url, appOrigin));
   });
 }

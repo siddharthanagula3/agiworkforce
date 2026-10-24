@@ -49,7 +49,7 @@ vi.mock('electron', () => {
     constructor(public options: unknown) {}
     once = vi.fn();
     on = vi.fn();
-    loadURL = vi.fn((url: string) => {
+    loadURL = vi.fn(async (url: string) => {
       loadedUrls.push(url);
     });
     show = vi.fn();

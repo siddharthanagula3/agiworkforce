@@ -16,10 +16,7 @@ const LEGACY_SIGN_IN_ROUTE = 'sso-callback';
 let pending: { verifier: string; challenge: string; startedAtMs: number } | null = null;
 
 export type BrowserSignInLink =
-  | { kind: 'not-sign-in' }
-  | { kind: 'ignored' }
-  | { kind: 'expired' }
-  | { kind: 'complete'; url: string };
+  { kind: 'not-sign-in' } | { kind: 'expired' } | { kind: 'complete'; url: string };
 
 export function browserSignInState(): PendingBrowserSignIn {
   if (pending === null) return { kind: 'idle' };
@@ -65,12 +62,19 @@ function isLegacySignInLink(link: string): boolean {
   }
 }
 
+/**
+ * The pending attempt lives in memory only, so a link answering an attempt this
+ * run no longer holds (one started before a relaunch, one already used, one
+ * from an attempt that was cancelled) can only be reported as expired. Such a
+ * link never consumes the attempt that is still pending.
+ */
 export function readBrowserSignInLink(link: string): BrowserSignInLink {
   const legacy = isLegacySignInLink(link);
   if (!legacy && !isDesktopSignInLink(link)) return { kind: 'not-sign-in' };
   const started = pending;
-  if (started === null) return { kind: legacy ? 'expired' : 'ignored' };
-  if (legacy || readDesktopSignInChallenge(link) !== started.challenge) return { kind: 'ignored' };
+  if (started === null || legacy || readDesktopSignInChallenge(link) !== started.challenge) {
+    return { kind: 'expired' };
+  }
   pending = null;
   const code = readDesktopSignInCode(link);
   if (!code || Date.now() - started.startedAtMs >= PENDING_SIGN_IN_TTL_MS) {

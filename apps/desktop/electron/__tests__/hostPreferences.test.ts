@@ -35,7 +35,7 @@ vi.mock('electron', () => {
     constructor(public options: unknown) {}
     once = vi.fn();
     on = vi.fn();
-    loadURL = vi.fn();
+    loadURL = vi.fn(async () => undefined);
     show = vi.fn();
     focus = vi.fn();
     isDestroyed = () => false;
@@ -150,7 +150,8 @@ vi.mock('../screenshot', () => ({
   takeCaptureBackFromClipboard: vi.fn(),
 }));
 vi.mock('../voiceDictation', () => ({ toggleGlobalDictation: vi.fn() }));
-vi.mock('../windowPolicy', () => ({
+vi.mock('../windowPolicy', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
   applyRemoteWindowPolicy: vi.fn(),
   openExternally: vi.fn(),
 }));

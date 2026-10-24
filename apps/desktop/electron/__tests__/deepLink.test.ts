@@ -1,6 +1,22 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { DESKTOP_RUNTIME_EVENT_CHANNEL } from '@agiworkforce/local-runtime-contract';
+import {
+  DESKTOP_RUNTIME_EVENT_CHANNEL,
+  desktopSignInLink,
+} from '@agiworkforce/local-runtime-contract';
 import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
+import { readShellTokens } from '../shellTokens.mjs';
+
+const shellTokens = readShellTokens(
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..'),
+);
+Object.assign(globalThis, {
+  AGI_PAGE_INK_LIGHT: shellTokens.pageInkLight,
+  AGI_PAGE_INK_DARK: shellTokens.pageInkDark,
+  AGI_PAGE_SECONDARY_INK_LIGHT: shellTokens.pageSecondaryInkLight,
+  AGI_PAGE_SECONDARY_INK_DARK: shellTokens.pageSecondaryInkDark,
+});
 
 const DEEP_LINK = 'agiworkforce-cloud://chat/conversation-1?nonce=nonce-abc123';
 const LEGACY_SSO_LINK = 'agiworkforce-cloud://sso-callback?rotating_token_nonce=nonce-abc123';
@@ -8,7 +24,10 @@ const LEGACY_SSO_LINK = 'agiworkforce-cloud://sso-callback?rotating_token_nonce=
 const shell = vi.hoisted(() => ({
   ready: true,
   readyGate: null as Promise<void> | null,
-  windows: [] as Array<{ loadURL: unknown }>,
+  windows: [] as Array<{
+    loadURL: unknown;
+    webContents: { on: unknown };
+  }>,
 }));
 
 const appHandlers = new Map<string, (...args: unknown[]) => void>();
@@ -26,6 +45,7 @@ function makeWebContents() {
     isLoading: () => false,
     isDestroyed: () => false,
     getURL: () => pageUrl,
+    navigationHistory: { canGoBack: () => false, canGoForward: () => false },
     setWindowOpenHandler: vi.fn(),
     userAgent: 'test',
     focus: vi.fn(),
@@ -44,7 +64,7 @@ vi.mock('electron', () => {
       if (event === 'ready-to-show') cb();
     });
     on = vi.fn();
-    loadURL = vi.fn();
+    loadURL = vi.fn(async () => undefined);
     show = vi.fn();
     focus = vi.fn();
     restore = vi.fn();
@@ -140,7 +160,10 @@ vi.mock('../screenshot', () => ({
   captureWindowToChat: vi.fn(),
   takeCaptureBackFromClipboard: vi.fn(),
 }));
-vi.mock('../windowPolicy', () => ({ applyRemoteWindowPolicy: vi.fn() }));
+vi.mock('../windowPolicy', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  applyRemoteWindowPolicy: vi.fn(),
+}));
 
 async function bootMain() {
   pageUrl = HOSTED_PAGE;
@@ -252,5 +275,144 @@ describe('deep-link delivery', () => {
       (win) => (win.loadURL as ReturnType<typeof vi.fn>).mock.calls,
     );
     expect(loads.flat()).toContainEqual(expect.stringMatching(/\/code$/));
+  });
+});
+
+const APP = 'https://agiworkforce.com';
+const CODE = 'c'.repeat(43);
+
+function loads(): string[] {
+  return shell.windows.flatMap((win) =>
+    (win.loadURL as ReturnType<typeof vi.fn>).mock.calls.map((call) => String(call[0])),
+  );
+}
+
+function lastScreen(): string {
+  const screen =
+    loads()
+      .filter((url) => url.startsWith('data:'))
+      .at(-1) ?? '';
+  return decodeURIComponent(screen.replace(/^data:text\/html;charset=utf-8,/, ''));
+}
+
+function buttonHref(html: string, index = 0): string {
+  const hrefs = [...html.matchAll(/data-href="([^"]+)"/g)].map((match) =>
+    (match[1] ?? '').replace(/&amp;/g, '&'),
+  );
+  return hrefs[index] ?? '';
+}
+
+async function settle(): Promise<void> {
+  await new Promise((resolve) => setImmediate(resolve));
+  await Promise.resolve();
+}
+
+async function requireSignIn(url: string): Promise<void> {
+  const { applyRemoteWindowPolicy } = await import('../windowPolicy');
+  const handlers = vi.mocked(applyRemoteWindowPolicy).mock.calls.at(-1)?.[1];
+  if (!handlers) throw new Error('the main window was given no sign-in handler');
+  handlers.onSignInRequired(url);
+  await settle();
+}
+
+function pageEvent(event: string): (...args: unknown[]) => void {
+  const on = shell.windows[0]?.webContents.on as ReturnType<typeof vi.fn>;
+  const handlers = on.mock.calls
+    .filter(([name]) => name === event)
+    .map(([, handler]) => handler as (...args: unknown[]) => void);
+  if (handlers.length === 0) throw new Error(`${event} was never followed`);
+  return (...args) => {
+    for (const handler of handlers) handler(...args);
+  };
+}
+
+describe('browser sign-in in the window', () => {
+  it('shows the shell sign-in screen where the web sign-in page would have been', async () => {
+    await bootMain();
+    await requireSignIn(`${APP}/login?redirectTo=%2Fchat`);
+
+    expect(lastScreen()).toContain('Sign in to AGI');
+    expect(lastScreen()).toContain('Continue in browser');
+    expect(loads()).not.toContainEqual(expect.stringContaining('/login'));
+  });
+
+  it('opens the browser from the screen and finishes the sign-in the browser hands back', async () => {
+    await bootMain();
+    const { shell: electronShell } = await import('electron');
+    await requireSignIn(`${APP}/login`);
+    await requireSignIn(buttonHref(lastScreen()));
+
+    const opened = new URL(String(vi.mocked(electronShell.openExternal).mock.calls.at(-1)?.[0]));
+    expect(opened.pathname).toBe('/auth/desktop');
+    expect(lastScreen()).toContain('Finish signing in in your browser');
+
+    openUrl(desktopSignInLink(CODE, opened.searchParams.get('challenge')!));
+    expect(loads().at(-1)).toMatch(new RegExp(`^${APP}/auth/desktop/complete#code=`));
+  });
+
+  it('shows a link from a sign-in started before a relaunch as expired on the screen', async () => {
+    await bootMain();
+    pageUrl = '';
+
+    openUrl(desktopSignInLink(CODE, 'x'.repeat(43)));
+    expect(webContentsSend).not.toHaveBeenCalledWith(DESKTOP_RUNTIME_EVENT_CHANNEL, {
+      kind: 'browser-sign-in-expired',
+    });
+    expect(loads()).not.toContainEqual(expect.stringContaining('/auth/desktop/complete'));
+
+    await requireSignIn(`${APP}/login?redirectTo=%2Fchat`);
+    expect(lastScreen()).toContain('Sign-in link expired.');
+    expect(lastScreen()).toContain('Try again');
+  });
+
+  it('lands a sign-out on the sign-in screen, not the web sign-in page', async () => {
+    await bootMain();
+    const { reportShellIdentity } = await import('../shellIdentity');
+    reportShellIdentity({ signedIn: false, email: null });
+    expect(lastScreen()).toContain('Sign in to AGI');
+
+    const before = loads().length;
+    pageEvent('did-navigate-in-page')({}, `${APP}/login`, true);
+    expect(loads()).toHaveLength(before + 1);
+    expect(lastScreen()).toContain('Sign in to AGI');
+  });
+
+  it('replaces a guest chat with the sign-in screen once the page says no one is signed in', async () => {
+    await bootMain();
+    pageUrl = `${APP}/chat`;
+    const { reportShellIdentity } = await import('../shellIdentity');
+    reportShellIdentity({ signedIn: false, email: null });
+    expect(lastScreen()).toContain('Continue in browser');
+  });
+
+  it('sends a public page the site router reached to the browser and goes back, once', async () => {
+    await bootMain();
+    const { shell: electronShell } = await import('electron');
+    const inPage = pageEvent('did-navigate-in-page');
+    const before = loads().length;
+
+    inPage({}, `${APP}/help`, true);
+    expect(electronShell.openExternal).toHaveBeenCalledWith(`${APP}/help`);
+    expect(loads().slice(before)).toEqual([`${APP}/chat`]);
+
+    inPage({}, `${APP}/help`, true);
+    inPage({}, `${APP}/help`, true);
+    expect(vi.mocked(electronShell.openExternal).mock.calls).toHaveLength(1);
+    expect(loads().slice(before)).toEqual([`${APP}/chat`]);
+  });
+
+  it('leaves the product and subframe navigations alone', async () => {
+    await bootMain();
+    const { BrowserWindow, Menu, shell: electronShell } = await import('electron');
+    Object.assign(BrowserWindow, { getFocusedWindow: () => null });
+    Object.assign(Menu, { setApplicationMenu: vi.fn() });
+    const inPage = pageEvent('did-navigate-in-page');
+    const before = loads().length;
+
+    inPage({}, `${APP}/chat/abc`, true);
+    inPage({}, `${APP}/connectors`, true);
+    inPage({}, `${APP}/pricing`, false);
+    expect(electronShell.openExternal).not.toHaveBeenCalled();
+    expect(loads()).toHaveLength(before);
   });
 });

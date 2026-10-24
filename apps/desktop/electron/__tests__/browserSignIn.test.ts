@@ -40,7 +40,7 @@ describe('native browser sign-in ownership', () => {
     expect(url.pathname).toBe('/auth/desktop/complete');
     expect(url.search).toBe('');
     expect(new URLSearchParams(url.hash.slice(1)).get('code')).toBe(CODE);
-    expect(owner.readBrowserSignInLink(callbackFor())).toEqual({ kind: 'ignored' });
+    expect(owner.readBrowserSignInLink(callbackFor())).toEqual({ kind: 'expired' });
     expect(owner.browserSignInState()).toEqual({ kind: 'idle' });
   });
 
@@ -55,10 +55,10 @@ describe('native browser sign-in ownership', () => {
     await owner.startBrowserSignIn();
     const old = callbackFor();
     expect(owner.cancelBrowserSignIn()).toEqual({ cancelled: true });
-    expect(owner.readBrowserSignInLink(old)).toEqual({ kind: 'ignored' });
+    expect(owner.readBrowserSignInLink(old)).toEqual({ kind: 'expired' });
     await owner.startBrowserSignIn();
     expect(callbackFor(1)).not.toBe(old);
-    expect(owner.readBrowserSignInLink(old)).toEqual({ kind: 'ignored' });
+    expect(owner.readBrowserSignInLink(old)).toEqual({ kind: 'expired' });
     expect(owner.readBrowserSignInLink(callbackFor(1)).kind).toBe('complete');
   });
 
@@ -75,13 +75,13 @@ describe('native browser sign-in ownership', () => {
     const first = await owner.startBrowserSignIn();
     vi.setSystemTime(first.expiresAtMs);
     expect(owner.browserSignInState()).toEqual({ kind: 'idle' });
-    expect(owner.readBrowserSignInLink(callbackFor())).toEqual({ kind: 'ignored' });
+    expect(owner.readBrowserSignInLink(callbackFor())).toEqual({ kind: 'expired' });
   });
 
   it('does not let a mismatched callback consume the active attempt', async () => {
     await owner.startBrowserSignIn();
     expect(owner.readBrowserSignInLink(desktopSignInLink(CODE, 'x'.repeat(43)))).toEqual({
-      kind: 'ignored',
+      kind: 'expired',
     });
     expect(owner.readBrowserSignInLink(callbackFor()).kind).toBe('complete');
   });
@@ -108,7 +108,7 @@ describe('native browser sign-in ownership', () => {
     await owner.startBrowserSignIn();
     opened();
     await expect(starting).rejects.toThrow('cancelled');
-    expect(owner.readBrowserSignInLink(old)).toEqual({ kind: 'ignored' });
+    expect(owner.readBrowserSignInLink(old)).toEqual({ kind: 'expired' });
     expect(owner.readBrowserSignInLink(callbackFor(1)).kind).toBe('complete');
   });
 
@@ -126,5 +126,14 @@ describe('native browser sign-in ownership', () => {
     fail(new Error('Old browser launch failed'));
     await expect(starting).rejects.toThrow('Old browser launch failed');
     expect(owner.readBrowserSignInLink(callbackFor(1)).kind).toBe('complete');
+  });
+
+  it('reports a link that answers an attempt from before a relaunch as expired', async () => {
+    await owner.startBrowserSignIn();
+    const fromBeforeRelaunch = callbackFor();
+    vi.resetModules();
+    owner = await import('../browserSignIn');
+    expect(owner.browserSignInState()).toEqual({ kind: 'idle' });
+    expect(owner.readBrowserSignInLink(fromBeforeRelaunch)).toEqual({ kind: 'expired' });
   });
 });

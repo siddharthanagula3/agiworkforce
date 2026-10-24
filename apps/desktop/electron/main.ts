@@ -138,7 +138,13 @@ import {
   type LiveWork,
 } from './quitGuard';
 import { installAppMenu, installDockMenu } from './appMenu';
-import { readBrowserSignInLink } from './browserSignIn';
+import {
+  browserSignInState,
+  cancelBrowserSignIn,
+  readBrowserSignInLink,
+  startBrowserSignIn,
+} from './browserSignIn';
+import { createSignInScreens } from './signInScreen';
 import { approvedRootFor, readLocalThreadLink, type LocalThreadLink } from './localThreadLink';
 import { configureDevicePrompts } from './runtime/devicePrompts';
 import { desktopDiagnostics, recordDesktopEvent } from './runtime/desktopTelemetryService';
@@ -205,7 +211,15 @@ import {
 } from './shortcuts';
 import { createTray, destroyTray, hasTray, refreshTrayMenu, type TrayActivity } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
-import { applyRemoteWindowPolicy, openExternally } from './windowPolicy';
+import {
+  NO_PUBLIC_PAGE_BOUNCE,
+  applyRemoteWindowPolicy,
+  decideCommittedPage,
+  isSignedInProductPage,
+  openExternally,
+  planPublicPageReturn,
+  type PublicPageBounce,
+} from './windowPolicy';
 import { pageBackgroundColor, paintWindows, titleBarChrome } from './windowChrome';
 import {
   NEW_CHAT_ROUTE,
@@ -247,6 +261,8 @@ interface ShellWindowEntry {
   route: string;
   /** Set while the shell is putting a window back after a conversation clash. */
   returningTo: string | null;
+  /** The last public page the window was carried to, so a bouncing page cannot loop. */
+  bounce: PublicPageBounce;
 }
 
 const shellWindows = new Map<number, ShellWindowEntry>();
@@ -256,6 +272,25 @@ const coldStartDeepLinks: string[] = [];
 let deepLinkQueue: QueuedDeepLink[] = [];
 let appReady = false;
 let quitConfirmed = false;
+
+const signInScreens = createSignInScreens({
+  appOrigin: CLOUD_APP_ORIGIN,
+  startBrowserSignIn,
+  cancelBrowserSignIn,
+  browserSignInPending: () => browserSignInState().kind === 'waiting',
+});
+
+/**
+ * The product page to reopen once a browser sign-in finishes. The web page the
+ * sign-in completes on always lands on a new chat, so the shell carries the
+ * window on to where it was, and only for the account that left it there.
+ */
+let resumeAfterSignIn: {
+  route: string;
+  account: string;
+  landed: boolean;
+  reported: string | null | undefined;
+} | null = null;
 
 function liveWindows(): ShellWindowEntry[] {
   return [...shellWindows.values()].filter((entry) => !entry.win.isDestroyed());
@@ -556,10 +591,18 @@ function deliverDeepLink(url: string): void {
 
   const signIn = readBrowserSignInLink(url);
   if (signIn.kind !== 'not-sign-in') {
-    if (signIn.kind === 'ignored') return;
+    const pageCanHear = rendererReady();
     showMainWindow();
-    if (signIn.kind === 'complete') void mainWindow?.loadURL(signIn.url);
-    if (signIn.kind === 'expired') sendRuntimeEvent({ kind: 'browser-sign-in-expired' });
+    if (signIn.kind === 'complete') {
+      completeBrowserSignIn(signIn.url);
+      return;
+    }
+    // A window that has not reached the app's page yet, as on the launch this
+    // link caused, may be about to show the sign-in screen, so the notice
+    // waits for that screen rather than being sent to no page at all.
+    if (!signInScreens.linkExpired(!pageCanHear)) {
+      sendRuntimeEvent({ kind: 'browser-sign-in-expired' });
+    }
     return;
   }
 
@@ -577,6 +620,59 @@ function deliverDeepLink(url: string): void {
   }
   saveDeepLinkQueue(deepLinkQueuePath(), deepLinkQueue);
   if (appReady) showMainWindow();
+}
+
+function completeBrowserSignIn(url: string): void {
+  const state = readShellWindowState();
+  resumeAfterSignIn =
+    state.lastRoute !== null &&
+    state.lastRouteAccount !== null &&
+    state.lastRoute !== NEW_CHAT_ROUTE
+      ? {
+          route: state.lastRoute,
+          account: state.lastRouteAccount,
+          landed: false,
+          reported: undefined,
+        }
+      : null;
+  signInScreens.linkCompleted();
+  void mainWindow?.loadURL(url).catch(() => undefined);
+}
+
+/**
+ * Reopens the page the window held before signing in, once the window has
+ * reached the new chat the sign-in lands on and the page has named the account
+ * that signed in. A different account starts on the new chat.
+ */
+function resumeAfterBrowserSignIn(): void {
+  const resume = resumeAfterSignIn;
+  if (!resume || !resume.landed || resume.reported === undefined) return;
+  resumeAfterSignIn = null;
+  const main = mainWindow ? shellWindows.get(mainWindow.id) : undefined;
+  if (resume.reported === resume.account && main?.route === NEW_CHAT_ROUTE) {
+    openRoute(resume.route);
+  }
+}
+
+/**
+ * The page names its account whenever it settles, including after a sign-out
+ * and on a guest chat. A window still showing the signed-in product for an
+ * account that is gone is switched to the sign-in screen.
+ */
+function followSignedInState(signedIn: boolean, account: string | null): void {
+  if (!signedIn) {
+    for (const entry of liveWindows()) {
+      if (isSignedInProductPage(entry.win.webContents.getURL(), CLOUD_APP_ORIGIN)) {
+        signInScreens.show(entry.win);
+      }
+    }
+    return;
+  }
+  signInScreens.reset();
+  if (resumeAfterSignIn) {
+    resumeAfterSignIn.reported = account;
+    resumeAfterBrowserSignIn();
+  }
 }
 
 const FOLDER_SHOWN = { head: 200, tail: 120 };
@@ -909,7 +1005,15 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     },
   });
 
-  applyRemoteWindowPolicy(win);
+  // The policy calls back from inside a navigation it is cancelling, so the
+  // screen is drawn once that navigation has unwound.
+  applyRemoteWindowPolicy(win, {
+    onSignInRequired: (url) => {
+      setImmediate(() => {
+        if (!win.isDestroyed()) signInScreens.request(win, url);
+      });
+    },
+  });
 
   const entryRoute = options.primary ? restore.route : (options.route ?? null);
   const entry: ShellWindowEntry = {
@@ -917,6 +1021,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     primary: options.primary,
     route: entryRoute ?? NEW_CHAT_ROUTE,
     returningTo: null,
+    bounce: NO_PUBLIC_PAGE_BOUNCE,
   };
   shellWindows.set(win.id, entry);
 
@@ -950,6 +1055,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
 
   win.on('closed', () => {
     shellWindows.delete(win.id);
+    signInScreens.forget(win);
     if (!options.primary) return;
     mainWindow = null;
     if (process.platform !== 'darwin') destroyQuickAsk();
@@ -996,16 +1102,47 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     installMenu();
     if (options.primary) {
       patchShellWindowState(rememberRoute(readShellWindowState(), route, signedInAccount));
+      if (resumeAfterSignIn && route === NEW_CHAT_ROUTE) {
+        resumeAfterSignIn.landed = true;
+        resumeAfterBrowserSignIn();
+      }
     }
   };
-  win.webContents.on('did-navigate', followRoute);
+
+  // The page's own router moves between paths without a navigation the policy
+  // sees, so where it lands is judged here: a sign-in page becomes the shell's
+  // sign-in screen, and a public page goes to the browser while the window
+  // returns to the product page it left.
+  const leaveDisallowedPage = (url: string): boolean => {
+    const decision = decideCommittedPage(url, CLOUD_APP_ORIGIN);
+    if (decision === 'allow') return false;
+    if (decision === 'sign-in') {
+      signInScreens.show(win);
+      return true;
+    }
+    const plan = planPublicPageReturn(entry.bounce, url, entry.route, Date.now());
+    entry.bounce = plan.bounce;
+    if (plan.openExternally) openExternally(url);
+    if (plan.returnTo !== null) {
+      entry.route = plan.returnTo;
+      void win.loadURL(windowUrlFor(plan.returnTo)).catch(() => undefined);
+    }
+    return true;
+  };
+
+  win.webContents.on('did-navigate', (event, url, httpStatusCode) => {
+    if (!url.startsWith('data:')) signInScreens.forget(win);
+    if (leaveDisallowedPage(url)) return;
+    followRoute(event, url, httpStatusCode);
+  });
   followNavigationState(win.webContents, (state) => {
     if (showsTrustedPage(win.webContents)) {
       win.webContents.send(HOST_NAVIGATION_CHANNELS.changed, state);
     }
   });
   win.webContents.on('did-navigate-in-page', (_event, url, isMainFrame) => {
-    if (isMainFrame) followRoute(_event, url);
+    if (!isMainFrame || leaveDisallowedPage(url)) return;
+    followRoute(_event, url);
   });
 
   win.webContents.on(
@@ -1027,7 +1164,9 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
 
   installRendererRecovery(win, entryUrl);
 
-  void win.loadURL(entryUrl);
+  // Signed out, this load is redirected to sign in and the policy cancels it
+  // for the sign-in screen, which rejects the load.
+  void win.loadURL(entryUrl).catch(() => undefined);
   return win;
 }
 
@@ -1157,8 +1296,14 @@ function openLocalSession(rootId: string, threadId: string): void {
  * main window, which already shows its own sign-in when the account is gone.
  */
 function openRouteFromQuickAsk(route: string): void {
-  if (isRestorableRoute(route)) openRoute(route);
-  else showMainWindow();
+  if (isRestorableRoute(route)) {
+    openRoute(route);
+    return;
+  }
+  showMainWindow();
+  if (mainWindow && decideCommittedPage(windowUrlFor(route), CLOUD_APP_ORIGIN) === 'sign-in') {
+    signInScreens.show(mainWindow);
+  }
 }
 
 function openRoute(route: string): void {
@@ -1945,6 +2090,9 @@ if (!hasSingleInstanceLock) {
     registerIpcHandlers();
     signedInAccount = readShellWindowState().lastAccount;
     onShellIdentityReported((identity) => adoptReportedAccount(accountFingerprint(identity)));
+    onShellIdentityReported((identity) =>
+      followSignedInState(identity.signedIn, accountFingerprint(identity)),
+    );
     nativeTheme.themeSource = getPreferences().appearance;
     nativeTheme.on('updated', paintWindowsForTheme);
     configureSession(session.fromPartition(REMOTE_SESSION_PARTITION));

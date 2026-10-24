@@ -22,24 +22,43 @@ describe('shell tokens', () => {
     expect(tokens.pageBackgroundDark).toMatch(/^#[0-9a-f]{6}$/u);
     expect(tokens.pageBackgroundLight).not.toBe(tokens.pageBackgroundDark);
     expect(tokens.titleStripHeight).toBeGreaterThan(0);
+    for (const ink of [
+      tokens.pageInkLight,
+      tokens.pageInkDark,
+      tokens.pageSecondaryInkLight,
+      tokens.pageSecondaryInkDark,
+    ]) {
+      expect(ink).toMatch(/^#[0-9a-f]{6}$/u);
+    }
+    expect(tokens.pageInkLight).not.toBe(tokens.pageInkDark);
   });
 
   it('resolves a dark background held as hsl channels on a foundation token', () => {
     const chat = `@layer base {
       :root {
         --chat-bg: #FAF9F7;
+        --chat-fg: #0d0d0d;
+        --chat-text-secondary: #5d5d5d;
         --chat-window-title-strip: 48px;
         --chat-window-title-strip-inset: 84px;
       }
-      .dark { --chat-bg: hsl(var(--neutral-0)); }
+      .dark {
+        --chat-bg: hsl(var(--neutral-0));
+        --chat-fg: hsl(var(--neutral-fg-1));
+        --chat-text-secondary: #afafaf;
+      }
     }`;
     const foundation = `@layer base {
-      :root { --neutral-0: 210 50% 40%; }
+      :root { --neutral-0: 210 50% 40%; --neutral-fg-1: 0 0% 100%; }
     }`;
 
     expect(parseShellTokens(chat, foundation)).toEqual({
       pageBackgroundLight: '#faf9f7',
       pageBackgroundDark: '#336699',
+      pageInkLight: '#0d0d0d',
+      pageInkDark: '#ffffff',
+      pageSecondaryInkLight: '#5d5d5d',
+      pageSecondaryInkDark: '#afafaf',
       titleStripHeight: 48,
       titleStripInset: 84,
     });
@@ -51,8 +70,17 @@ describe('shell tokens', () => {
     expect(() => parseShellTokens(chat, ':root { --neutral-0: 0 0% 0%; }')).toThrow(/--chat-bg/u);
   });
 
-  it('refuses to build when the title strip token is gone', () => {
+  it('refuses to build when the ink token is gone', () => {
     const chat = '@layer base { :root { --chat-bg: #ffffff; } .dark { --chat-bg: #000000; } }';
+
+    expect(() => parseShellTokens(chat, ':root {}')).toThrow(/--chat-fg/u);
+  });
+
+  it('refuses to build when the title strip token is gone', () => {
+    const chat = `@layer base {
+      :root { --chat-bg: #ffffff; --chat-fg: #0d0d0d; --chat-text-secondary: #5d5d5d; }
+      .dark { --chat-bg: #000000; --chat-fg: #ffffff; --chat-text-secondary: #afafaf; }
+    }`;
 
     expect(() => parseShellTokens(chat, ':root {}')).toThrow(/--chat-window-title-strip/u);
   });

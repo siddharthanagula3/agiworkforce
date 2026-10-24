@@ -32,6 +32,10 @@ const shared = {
   define: {
     AGI_PAGE_BACKGROUND_LIGHT: JSON.stringify(shellTokens.pageBackgroundLight),
     AGI_PAGE_BACKGROUND_DARK: JSON.stringify(shellTokens.pageBackgroundDark),
+    AGI_PAGE_INK_LIGHT: JSON.stringify(shellTokens.pageInkLight),
+    AGI_PAGE_INK_DARK: JSON.stringify(shellTokens.pageInkDark),
+    AGI_PAGE_SECONDARY_INK_LIGHT: JSON.stringify(shellTokens.pageSecondaryInkLight),
+    AGI_PAGE_SECONDARY_INK_DARK: JSON.stringify(shellTokens.pageSecondaryInkDark),
     AGI_TITLE_STRIP_HEIGHT: JSON.stringify(shellTokens.titleStripHeight),
   },
 };

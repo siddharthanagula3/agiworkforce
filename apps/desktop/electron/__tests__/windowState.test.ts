@@ -111,6 +111,27 @@ describe('what may be restored as the opening route', () => {
     expect(isRestorableRoute('/checkout/success')).toBe(false);
     expect(isRestorableRoute('/login?redirectTo=%2Fchat')).toBe(false);
     expect(isRestorableRoute('/auth/desktop/complete')).toBe(false);
+    expect(isRestorableRoute('/login/complete?redirectTo=%2Fchat')).toBe(false);
+  });
+
+  it('remembers only pages of the signed-in product, never a public page', () => {
+    for (const route of ['/chat', '/settings/billing', '/code', '/apps', '/connectors/mcp']) {
+      expect(isRestorableRoute(route), route).toBe(true);
+    }
+    for (const route of ['/', '/pricing', '/help', '/blog/launch', '/terms', '/download']) {
+      expect(isRestorableRoute(route), route).toBe(false);
+    }
+  });
+
+  it('reads no route off a public page the window was carried to', () => {
+    expect(routeFromUrl('https://agiworkforce.com/help', 'https://agiworkforce.com')).toBeNull();
+    expect(routeFromUrl('https://agiworkforce.com/pricing', 'https://agiworkforce.com')).toBeNull();
+  });
+
+  it('drops a public page an older build wrote down as the last route', () => {
+    expect(
+      normalizeWindowState({ lastRoute: '/help', lastRouteAccount: ADA }).lastRoute,
+    ).toBeNull();
   });
 
   it('reads a route off a same-origin url only', () => {

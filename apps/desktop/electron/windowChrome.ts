@@ -3,7 +3,7 @@ import type { BrowserWindowConstructorOptions } from 'electron';
 /**
  * Window chrome for the cloud shell.
  *
- * The three values below are injected by `build-main.mjs`, which reads them out
+ * The values below are injected by `build-main.mjs`, which reads them out
  * of `packages/ui/design-tokens/src` at build time. They are not defaults: a
  * literal here would let the window and the page it loads disagree about the
  * page background and about where the title strip ends, which is exactly the
@@ -13,6 +13,10 @@ import type { BrowserWindowConstructorOptions } from 'electron';
 declare const AGI_PAGE_BACKGROUND_LIGHT: string;
 declare const AGI_PAGE_BACKGROUND_DARK: string;
 declare const AGI_TITLE_STRIP_HEIGHT: number;
+declare const AGI_PAGE_INK_LIGHT: string;
+declare const AGI_PAGE_INK_DARK: string;
+declare const AGI_PAGE_SECONDARY_INK_LIGHT: string;
+declare const AGI_PAGE_SECONDARY_INK_DARK: string;
 
 /**
  * AppKit's own metrics for the window buttons, not ours to choose: the group is
@@ -53,6 +57,27 @@ export function titleStripHeight(): number {
 
 export function pageBackgroundColor(prefersDark: boolean): string {
   return prefersDark ? AGI_PAGE_BACKGROUND_DARK : AGI_PAGE_BACKGROUND_LIGHT;
+}
+
+export interface PagePalette {
+  readonly background: string;
+  readonly ink: string;
+  readonly secondaryInk: string;
+}
+
+/** The colours a screen the shell draws itself writes with, in one appearance. */
+export function pagePalette(prefersDark: boolean): PagePalette {
+  return prefersDark
+    ? {
+        background: AGI_PAGE_BACKGROUND_DARK,
+        ink: AGI_PAGE_INK_DARK,
+        secondaryInk: AGI_PAGE_SECONDARY_INK_DARK,
+      }
+    : {
+        background: AGI_PAGE_BACKGROUND_LIGHT,
+        ink: AGI_PAGE_INK_LIGHT,
+        secondaryInk: AGI_PAGE_SECONDARY_INK_LIGHT,
+      };
 }
 
 export interface PaintableWindow {

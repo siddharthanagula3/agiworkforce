@@ -76,7 +76,7 @@ function createPanel(): BrowserWindow {
   win.setAlwaysOnTop(true, 'floating');
   win.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-  applyRemoteWindowPolicy(win);
+  applyRemoteWindowPolicy(win, { onSignInRequired: (url) => handOff(url) });
 
   win.on('blur', () => {
     if (!win.isDestroyed() && win.isVisible()) win.hide();

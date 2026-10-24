@@ -77,26 +77,38 @@ function requirePixels(chatCss, token) {
   return pixels;
 }
 
+function requireThemeColour(chatCss, foundationCss, token) {
+  const light = declaredValue(chatCss, LIGHT_SELECTOR, token);
+  const dark = declaredValue(chatCss, DARK_SELECTOR, token);
+  if (light === null || dark === null) {
+    throw new Error(`${token} is missing from the design tokens`);
+  }
+  const resolvedLight = resolveColour(light, foundationCss, LIGHT_SELECTOR);
+  const resolvedDark = resolveColour(dark, foundationCss, DARK_SELECTOR);
+  if (resolvedLight === null || resolvedDark === null) {
+    throw new Error(`${token} does not resolve to a colour the shell can paint`);
+  }
+  return { light: resolvedLight, dark: resolvedDark };
+}
+
 /**
  * What the shell needs from the design tokens before it can open a window: the
- * colour it paints behind a page that has not drawn yet, the height of the band
- * it hands back to that page when it hides the native title bar, and how far
- * into that band the window buttons reach.
+ * colour it paints behind a page that has not drawn yet, the ink its own
+ * screens write in, the height of the band it hands back to that page when it
+ * hides the native title bar, and how far into that band the window buttons
+ * reach.
  */
 export function parseShellTokens(chatCss, foundationCss) {
-  const light = declaredValue(chatCss, LIGHT_SELECTOR, '--chat-bg');
-  const dark = declaredValue(chatCss, DARK_SELECTOR, '--chat-bg');
-  if (light === null || dark === null) {
-    throw new Error('--chat-bg is missing from the design tokens');
-  }
-  const pageBackgroundLight = resolveColour(light, foundationCss, LIGHT_SELECTOR);
-  const pageBackgroundDark = resolveColour(dark, foundationCss, DARK_SELECTOR);
-  if (pageBackgroundLight === null || pageBackgroundDark === null) {
-    throw new Error('--chat-bg does not resolve to a colour the shell can paint');
-  }
+  const background = requireThemeColour(chatCss, foundationCss, '--chat-bg');
+  const ink = requireThemeColour(chatCss, foundationCss, '--chat-fg');
+  const secondaryInk = requireThemeColour(chatCss, foundationCss, '--chat-text-secondary');
   return {
-    pageBackgroundLight,
-    pageBackgroundDark,
+    pageBackgroundLight: background.light,
+    pageBackgroundDark: background.dark,
+    pageInkLight: ink.light,
+    pageInkDark: ink.dark,
+    pageSecondaryInkLight: secondaryInk.light,
+    pageSecondaryInkDark: secondaryInk.dark,
     titleStripHeight: requirePixels(chatCss, '--chat-window-title-strip'),
     titleStripInset: requirePixels(chatCss, '--chat-window-title-strip-inset'),
   };
