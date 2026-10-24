@@ -59,7 +59,7 @@ const COOKIES: CookieRow[] = [
     purpose:
       'Keeps you signed in and lets server routes identify you. Without these you cannot use an account.',
     duration: 'Session and short-lived refresh cookies, managed by the provider.',
-    source: 'lib/identity/provider.tsx (ClerkProvider)',
+    source: 'lib/identity/Provider.tsx (ClerkProvider)',
   },
   {
     name: '__Host-anon-session-id',

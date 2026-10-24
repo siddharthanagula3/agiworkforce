@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { globSync } from 'node:fs';
 
@@ -21,9 +21,19 @@ function pages(): string[] {
   ].map((p) => join(WEB, p));
 }
 
+// macOS volumes ignore case, so existsSync alone passes a citation that Linux CI rejects.
+function existsWithExactCase(root: string, relative: string): boolean {
+  let dir = root;
+  for (const segment of relative.split('/')) {
+    if (!existsSync(dir) || !readdirSync(dir).includes(segment)) return false;
+    dir = join(dir, segment);
+  }
+  return true;
+}
+
 function resolves(cited: string): boolean {
   const candidates = cited.startsWith('apps/') ? [cited] : [cited, `apps/web/${cited}`];
-  return candidates.some((c) => existsSync(join(REPO, c)) || existsSync(join(WEB, c)));
+  return candidates.some((c) => existsWithExactCase(REPO, c) || existsWithExactCase(WEB, c));
 }
 
 // These pages cite source paths as EVIDENCE, the subprocessor table names the
