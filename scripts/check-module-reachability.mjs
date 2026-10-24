@@ -173,7 +173,7 @@ const tsTargets = [
   {
     label: 'Desktop renderer',
     sourceRoot: 'apps/desktop/src',
-    entries: ['apps/desktop/src/main.tsx'],
+    entries: ['apps/desktop/src/Main.tsx'],
     aliases: (repoRoot) => {
       const desktopSrc = path.join(repoRoot, 'apps/desktop/src');
       return {

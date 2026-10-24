@@ -2,7 +2,7 @@ export * from './lib/tokens';
 export * from './lib/types';
 export * from './lib/runtime';
 export * from './lib/hostBridge';
-export * from './lib/capabilities';
+export * from './lib/Capabilities';
 export * from './lib/utils';
 export * from './lib/greetings';
 export { useOnlineStatus } from './hooks/use-online-status';

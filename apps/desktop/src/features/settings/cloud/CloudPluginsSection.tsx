@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import { WEB_APP_URL } from '../../../api/config';
 import { openExternalUrl } from '../../../utils/navigation';
-import { SECONDARY_BUTTON, SectionHeading } from './sectionChrome';
+import { SECONDARY_BUTTON, SectionHeading } from './SectionChrome';
 
 const PLUGINS_WEB_PATH = '/settings/plugins';
 const OPEN_FAILED_MESSAGE = 'Could not open your plugins.';

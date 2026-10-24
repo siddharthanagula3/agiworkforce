@@ -40,7 +40,7 @@ import {
   type VisualSourceKind,
 } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
-import { useCapability } from '../lib/capabilities';
+import { useCapability } from '../lib/Capabilities';
 import type { WritingStyle } from '../lib/writingStyle';
 import type { MediaKind, MediaMode } from '../stores/mediaModeStore';
 

@@ -1,7 +1,7 @@
 /**
- * artifactSandboxOriginPreview.test.tsx, DES-C15, the origin half, at the UI.
+ * ArtifactSandboxOriginPreview.test.tsx, DES-C15, the origin half, at the UI.
  *
- * `artifactPreviewScriptsBlocked.test.tsx` pins the HONEST DEGRADATION: when a
+ * `ArtifactPreviewScriptsBlocked.test.tsx` pins the HONEST DEGRADATION: when a
  * preview is a same-document `srcdoc` frame under a CSP that forbids inline
  * scripts, say so. This file pins the other half, that once a dedicated
  * artifact ORIGIN exists, the panel stops apologising and actually renders the

@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
@@ -7,7 +6,7 @@ import {
   saveCloudDisplayName,
   saveCloudPreferenceNamespace,
 } from '../../../api/cloudAccountSettings';
-import { PRIMARY_BUTTON, SectionError, SectionHeading, SectionLoading } from './sectionChrome';
+import { PRIMARY_BUTTON, SectionError, SectionHeading, SectionLoading } from './SectionChrome';
 
 const NAMESPACE = 'general';
 

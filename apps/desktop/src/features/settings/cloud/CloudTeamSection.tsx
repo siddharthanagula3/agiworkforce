@@ -21,7 +21,7 @@ import {
   SectionError,
   SectionHeading,
   SectionLoading,
-} from './sectionChrome';
+} from './SectionChrome';
 
 const ROLE_LABELS: Record<CloudTeamRole, string> = {
   owner: 'Owner',

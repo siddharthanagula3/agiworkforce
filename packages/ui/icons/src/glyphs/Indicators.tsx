@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 
 export const Check = createIcon('Check', <path d="m4 12.5 5 5L20 6.5" />);
 

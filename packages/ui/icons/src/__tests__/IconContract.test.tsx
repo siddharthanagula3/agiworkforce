@@ -1,14 +1,14 @@
 import { render } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import * as account from '../glyphs/account';
-import * as actions from '../glyphs/actions';
-import * as composer from '../glyphs/composer';
-import * as files from '../glyphs/files';
-import * as indicators from '../glyphs/indicators';
-import * as knowledge from '../glyphs/knowledge';
-import * as media from '../glyphs/media';
-import * as navigation from '../glyphs/navigation';
-import * as rowActions from '../glyphs/row-actions';
+import * as account from '../glyphs/Account';
+import * as actions from '../glyphs/Actions';
+import * as composer from '../glyphs/Composer';
+import * as files from '../glyphs/Files';
+import * as indicators from '../glyphs/Indicators';
+import * as knowledge from '../glyphs/Knowledge';
+import * as media from '../glyphs/Media';
+import * as navigation from '../glyphs/Navigation';
+import * as rowActions from '../glyphs/RowActions';
 import { ICON_GEOMETRY, ICON_GRID } from '../grid';
 import type { Icon, IconProps } from '../types';
 

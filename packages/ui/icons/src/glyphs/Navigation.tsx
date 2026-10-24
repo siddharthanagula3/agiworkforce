@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 import { SHIELD_BODY } from './shapes';
 
 export const MessageSquare = createIcon(

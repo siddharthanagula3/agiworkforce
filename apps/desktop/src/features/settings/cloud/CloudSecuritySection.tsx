@@ -14,7 +14,7 @@ import {
 } from '../../../services/ownedWindowPresentation';
 import { CloudBridgedSection } from './CloudBridgedSection';
 import { CloudWebActionNotice } from './CloudWebActionNotice';
-import { SectionError, SectionHeading, SectionLoading, formatSettingsDate } from './sectionChrome';
+import { SectionError, SectionHeading, SectionLoading, formatSettingsDate } from './SectionChrome';
 
 function PresentationModeRow() {
   const [enabled, setEnabled] = useState(() => isPresentationModeEnabled());

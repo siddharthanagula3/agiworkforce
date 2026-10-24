@@ -8,7 +8,7 @@ import {
   CloudReflectMemoryRequiredError,
   fetchCloudReflectRecap,
 } from '../../../api/cloudAccountSettings';
-import { SECONDARY_BUTTON, SectionError, SectionHeading, SectionLoading } from './sectionChrome';
+import { SECONDARY_BUTTON, SectionError, SectionHeading, SectionLoading } from './SectionChrome';
 
 const RANGE_OPTIONS: ReadonlyArray<{ value: ManagedCloudReflectRange; label: string }> = [
   { value: '30d', label: 'Past 30 days' },

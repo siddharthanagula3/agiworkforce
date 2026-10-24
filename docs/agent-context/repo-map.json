@@ -1125,8 +1125,8 @@
       "status": "active",
       "action": "keep",
       "evidence": [
-        "packages/ui/icons/src/createIcon.tsx",
-        "packages/ui/icons/src/__tests__/icon-contract.test.tsx",
+        "packages/ui/icons/src/CreateIcon.tsx",
+        "packages/ui/icons/src/__tests__/IconContract.test.tsx",
         "packages/ui/ui/src/sidebar/Sidebar.tsx",
         "apps/web/package.json"
       ]

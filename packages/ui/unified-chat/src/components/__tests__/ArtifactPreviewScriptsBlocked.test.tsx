@@ -1,5 +1,5 @@
 /**
- * artifactPreviewScriptsBlocked.test.tsx, DES-C15.
+ * ArtifactPreviewScriptsBlocked.test.tsx, DES-C15.
  *
  * Inside the packaged desktop app a srcdoc preview inherits
  * `script-src 'self' 'wasm-unsafe-eval'` from the embedder, so an interactive

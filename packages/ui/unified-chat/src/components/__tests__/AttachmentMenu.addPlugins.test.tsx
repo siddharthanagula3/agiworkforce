@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { AttachmentMenu } from '../AttachmentMenu';
-import { CapabilityProvider } from '../../lib/capabilities';
+import { CapabilityProvider } from '../../lib/Capabilities';
 
 afterEach(cleanup);
 

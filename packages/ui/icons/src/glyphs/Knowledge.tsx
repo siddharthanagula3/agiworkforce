@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 
 export const Brain = createIcon(
   'Brain',

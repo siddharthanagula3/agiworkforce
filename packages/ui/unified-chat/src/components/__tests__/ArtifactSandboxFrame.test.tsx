@@ -1,5 +1,5 @@
 /**
- * artifactSandboxFrame.test.tsx, DES-C15, the origin half.
+ * ArtifactSandboxFrame.test.tsx, DES-C15, the origin half.
  *
  * `ArtifactSandboxFrame` is what makes an interactive artifact actually run
  * inside the packaged desktop app: it renders the preview from a dedicated

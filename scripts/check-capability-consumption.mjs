@@ -28,7 +28,7 @@ export const CAPABILITY_READERS = Object.freeze({
         evidence: '<CapabilityProvider[^>]*\\bdocument=',
       },
       {
-        file: 'packages/ui/unified-chat/src/lib/capabilities.tsx',
+        file: 'packages/ui/unified-chat/src/lib/Capabilities.tsx',
         evidence: 'resolveCapabilityDocumentDecision\\(',
       },
     ],
@@ -98,7 +98,7 @@ export const MATRIX_SYMBOLS = Object.freeze([
 ]);
 
 export const MATRIX_PROVIDERS = Object.freeze([
-  'packages/ui/unified-chat/src/lib/capabilities.tsx',
+  'packages/ui/unified-chat/src/lib/Capabilities.tsx',
   'apps/mobile/src/lib/Capabilities.tsx',
 ]);
 

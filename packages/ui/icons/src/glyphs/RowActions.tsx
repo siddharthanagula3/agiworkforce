@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 
 const PIN_CAP = 'M8 3h8';
 const PIN_BODY = 'M10 3v8l-3.5 4h11L14 11V3';

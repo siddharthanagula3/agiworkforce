@@ -110,7 +110,7 @@ export function buildSurfaces() {
     {
       id: 'desktop',
       label: 'Desktop renderer (Tauri)',
-      entries: existingFiles([absolute('apps/desktop/src/main.tsx')]),
+      entries: existingFiles([absolute('apps/desktop/src/Main.tsx')]),
       productRoots: ['apps/desktop/src'],
       aliases: {
         '@/*': absolute('apps/desktop/src'),

@@ -1,11 +1,10 @@
-
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import {
   getCloudPreferenceNamespace,
   saveCloudPreferenceNamespace,
 } from '../../../api/cloudAccountSettings';
-import { SectionError, SectionHeading, SectionLoading } from './sectionChrome';
+import { SectionError, SectionHeading, SectionLoading } from './SectionChrome';
 
 const NAMESPACE = 'notifications';
 const KEY = 'browserReplyReady';

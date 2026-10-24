@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AttachmentMenu } from '../AttachmentMenu';
-import { CapabilityProvider } from '../../lib/capabilities';
+import { CapabilityProvider } from '../../lib/Capabilities';
 
 const baseProps = {
   open: true,

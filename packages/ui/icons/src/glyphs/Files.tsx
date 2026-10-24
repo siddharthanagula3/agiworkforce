@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 import { DOC_BODY, DOC_FOLD, TRAY } from './shapes';
 
 export const File = createIcon(

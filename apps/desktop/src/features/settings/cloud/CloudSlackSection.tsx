@@ -3,7 +3,7 @@ import { PRODUCT_BRAND } from '@agiworkforce/types';
 
 import { WEB_APP_URL } from '../../../api/config';
 import { openExternalUrl } from '../../../utils/navigation';
-import { SECONDARY_BUTTON, SectionHeading } from './sectionChrome';
+import { SECONDARY_BUTTON, SectionHeading } from './SectionChrome';
 
 const SLACK_WEB_PATH = '/settings/slack';
 const OPEN_FAILED_MESSAGE = 'Could not open Slack app settings.';

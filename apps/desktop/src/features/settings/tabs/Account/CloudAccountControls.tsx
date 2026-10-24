@@ -25,7 +25,7 @@ import {
   SectionError,
   SectionLoading,
   formatSettingsDate,
-} from '../../cloud/sectionChrome';
+} from '../../cloud/SectionChrome';
 
 const DELETE_CONFIRMATION = 'DELETE';
 

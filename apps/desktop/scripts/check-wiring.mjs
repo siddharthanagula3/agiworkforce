@@ -18,7 +18,7 @@ const libPath = 'apps/desktop/src-tauri/src/lib.rs';
 const rustRoot = 'apps/desktop/src-tauri/src';
 const allowlistPath = 'apps/desktop/wiring-allowlist.json';
 const hitlPath = 'apps/desktop/.hitl-required-tools.yaml';
-const rendererEntry = 'apps/desktop/src/main.tsx';
+const rendererEntry = 'apps/desktop/src/Main.tsx';
 const commandClientRoot = 'packages/client/desktop-command-client/src';
 export const INVOKE_CALL_PATTERN =
   /\b(?:invoke[A-Za-z0-9_$]*|[A-Za-z_$][A-Za-z0-9_$]*Invoke)(?:<(?:[^<>]|<[^<>]*>)*>)?\s*\(\s*['"]([a-z_][a-z0-9_]*)['"]/g;
@@ -1152,7 +1152,7 @@ const FAILURE_GROUPS = [
   {
     key: 'registeredWithoutReachableCaller',
     label:
-      'UNREACHABLE (registered command is only invoked from modules unreachable from src/main.tsx)',
+      'UNREACHABLE (registered command is only invoked from modules unreachable from src/Main.tsx)',
     fix:
       `import the calling module from something ${rendererEntry} reaches, or delete the ` +
       'command together with the unmounted module that calls it.',
@@ -1161,7 +1161,7 @@ const FAILURE_GROUPS = [
     key: 'registeredWithUnusedWrapper',
     label:
       'UNUSED WRAPPER (the only caller is a function, in desktop-command-client or the ' +
-      'renderer, that no module reachable from src/main.tsx references)',
+      'renderer, that no module reachable from src/Main.tsx references)',
     fix:
       `call the named function from a module ${rendererEntry} reaches, or cut the command: ` +
       'delete the function and its types, the Rust function, its generate_handler! entry in ' +
@@ -1180,7 +1180,7 @@ const FAILURE_GROUPS = [
     key: 'unreferencedLiveCallers',
     label:
       'DEAD CALLER (a function, class or object literal reaches commands that are live ' +
-      'elsewhere, but no module reachable from src/main.tsx references it)',
+      'elsewhere, but no module reachable from src/Main.tsx references it)',
     fix:
       'delete the function, class or object literal and the types only it used, or use it from ' +
       `a module ${rendererEntry} reaches. The commands stay registered: another caller reaches them.`,

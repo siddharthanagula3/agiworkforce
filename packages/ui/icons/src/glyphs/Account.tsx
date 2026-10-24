@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 import { SQUARE_FRAME } from './shapes';
 
 const HELP_GLYPH = (

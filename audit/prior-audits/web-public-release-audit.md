@@ -837,7 +837,7 @@ Verification steps: 24 invariant-guard tests and the full guard pass; 368 web to
 Severity: P2
 Category: Performance / bundle
 Route: every public route (`/terms`, `/login` and `/` all loaded 47 to 48 scripts, about 1.6 MB compressed and 6.4 MB decoded, before this pass)
-Component: `apps/web/app/providers.tsx`, `apps/web/app/AppRuntimeMounts.tsx`, `apps/web/lib/user-error-message.ts`, `packages/ui/unified-chat/src/lib/capabilities.tsx`, `packages/contracts/types/package.json`, `apps/web/app/i18n/index.ts`, `packages/ui/i18n`
+Component: `apps/web/app/providers.tsx`, `apps/web/app/AppRuntimeMounts.tsx`, `apps/web/lib/user-error-message.ts`, `packages/ui/unified-chat/src/lib/Capabilities.tsx`, `packages/contracts/types/package.json`, `apps/web/app/i18n/index.ts`, `packages/ui/i18n`
 Evidence (MEASURED): the four largest chunks on `/terms` carried the composer,
 thinking blocks, `MarkdownContent`, mermaid, Shiki, docx and pdf helpers
 (1.2 MB raw), the model catalogue (1.6 MB raw), every locale's every
@@ -862,7 +862,7 @@ Root cause: Verified, four causes with one shape: a file that needed one small
 thing imported a barrel that owned everything. `providers.tsx` mounted seven
 app-only providers on every route; `user-error-message.ts` re-exported four
 helpers through the chat barrel instead of the package's own `./network-error`
-entry; `capabilities.tsx` read two helpers through the contracts barrel, which
+entry; `Capabilities.tsx` read two helpers through the contracts barrel, which
 carries the catalogue JSON, and the package did not declare `sideEffects: false`,
 so nothing could be dropped; the web i18n bootstrap took `baseInitOptions`,
 whose `resources` object is every locale.

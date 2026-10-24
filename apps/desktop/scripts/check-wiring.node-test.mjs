@@ -320,12 +320,12 @@ test('the renderer reachability walk reaches the real desktop entry point', () =
     `expected the renderer graph to contain the app, got ${reachable.size} module(s)`,
   );
   assert.ok(
-    [...reachable].some((file) => file.endsWith('/apps/desktop/src/main.tsx')),
-    'main.tsx must be in its own reachable set',
+    [...reachable].some((file) => file.endsWith('/apps/desktop/src/Main.tsx')),
+    'Main.tsx must be in its own reachable set',
   );
   assert.ok(
     [...reachable].some((file) => file.endsWith('/apps/desktop/src/App.tsx')),
-    'App.tsx must be reachable from main.tsx, otherwise the walk is misconfigured',
+    'App.tsx must be reachable from Main.tsx, otherwise the walk is misconfigured',
   );
 });
 

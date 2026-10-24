@@ -2,7 +2,7 @@ import { useState } from 'react';
 
 import type { CloudWebAction } from '../../../api/cloudAccountSettings';
 import { openDesktopCloudAccountWindow } from '../../../services/desktopCloudAccountWindow';
-import { SMALL_BUTTON } from './sectionChrome';
+import { SMALL_BUTTON } from './SectionChrome';
 
 export function CloudWebActionNotice({ action }: { action: CloudWebAction }) {
   const [opening, setOpening] = useState(false);

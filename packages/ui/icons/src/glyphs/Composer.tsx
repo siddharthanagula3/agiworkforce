@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 import { MIC_CAPSULE, MIC_CRADLE, MIC_STAND, SLASH } from './shapes';
 
 export const ArrowUp = createIcon(

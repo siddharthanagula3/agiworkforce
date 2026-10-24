@@ -1,4 +1,3 @@
-
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   BREAK_REMINDER_MINUTES,
@@ -13,7 +12,7 @@ import {
   getCloudPreferenceNamespace,
   saveCloudPreferenceNamespace,
 } from '../../../api/cloudAccountSettings';
-import { PRIMARY_BUTTON, SectionError, SectionHeading, SectionLoading } from './sectionChrome';
+import { PRIMARY_BUTTON, SectionError, SectionHeading, SectionLoading } from './SectionChrome';
 
 const DAYS: ReadonlyArray<{ value: TimeFocusWeekday; label: string; short: string }> = [
   { value: 0, label: 'Sunday', short: 'S' },

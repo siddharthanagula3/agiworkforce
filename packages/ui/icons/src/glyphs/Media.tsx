@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 import { SCREEN_FRAME, SCREEN_STAND, SLASH, SQUARE_FRAME } from './shapes';
 
 const PHOTO_SUN = { cx: '8.5', cy: '8.5', r: '1.5' } as const;

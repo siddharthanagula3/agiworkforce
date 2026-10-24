@@ -15,7 +15,7 @@ import {
   SectionHeading,
   SectionLoading,
   formatSettingsDate,
-} from './sectionChrome';
+} from './SectionChrome';
 
 export function CloudArchivedChatsSection() {
   const [conversations, setConversations] = useState<CloudArchivedConversation[] | null>(null);

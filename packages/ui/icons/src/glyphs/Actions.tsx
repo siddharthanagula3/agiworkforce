@@ -1,4 +1,4 @@
-import { createIcon } from '../createIcon';
+import { createIcon } from '../CreateIcon';
 
 const LENS = { cx: '10.5', cy: '10.5', r: '7.5' } as const;
 const LENS_HANDLE = 'm16 16 5 5';

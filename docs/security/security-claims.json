@@ -1734,7 +1734,7 @@
       "proof": [
         {
           "kind": "test",
-          "file": "packages/ui/unified-chat/src/components/__tests__/artifactSandboxFrame.test.tsx",
+          "file": "packages/ui/unified-chat/src/components/__tests__/ArtifactSandboxFrame.test.tsx",
           "name": "answers no AI or storage request from its own frame, so no bridge rests on a null origin"
         },
         {

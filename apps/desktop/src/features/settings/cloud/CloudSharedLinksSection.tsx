@@ -14,7 +14,7 @@ import {
   SectionHeading,
   SectionLoading,
   formatSettingsDate,
-} from './sectionChrome';
+} from './SectionChrome';
 
 export function CloudSharedLinksSection() {
   const [shares, setShares] = useState<CloudSharedLink[] | null>(null);

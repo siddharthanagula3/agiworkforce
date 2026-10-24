@@ -17,7 +17,7 @@ import {
   getCloudPreferenceNamespace,
   saveCloudPreferenceNamespace,
 } from '../../../api/cloudAccountSettings';
-import { SectionError, SectionHeading, SectionLoading } from './sectionChrome';
+import { SectionError, SectionHeading, SectionLoading } from './SectionChrome';
 
 const NAMESPACE = 'safety';
 const KEY = 'reduceSensitiveContent';

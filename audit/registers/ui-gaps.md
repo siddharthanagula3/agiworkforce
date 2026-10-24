@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 7c1049a51bc994b6fa2ab135af67c53cdd466a5c0f4ca2e3d21437580e137e2e -->
+<!-- ui-gaps-csv-sha256: 373706866dc767537715dfc3e3198906bc89518dcdeb54c3eee318b5297da807 -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -78,7 +78,7 @@ The Desktop tool executor now stops every recognized local path-bearing tool bef
 
 **Evidence**
 
-apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs performs path extraction, canonical resolution, protected-path rejection, explicit consent, and post-approval enforcement revalidation before dispatch. tool_confirmation.rs keeps the native request authoritative, manages task-only and persisted grants, and synchronizes ToolGuard plus the live filesystem MCP server; App.tsx revokes task grants on new-chat and conversation changes. FolderAccessConsentDialog.tsx is mounted by McpToolConfirmationPrompt.tsx with Cancel autofocus, exact targets and roots, capability disclosure, and an unchecked persistent-grant option. GAP-002-folder-access-consent.test.tsx, agentWorkflowEvents.test.ts, and the named gap_002, folder_request, session_folder_grants, and empty_allowed_paths_update Rust tests cover the contract and enforcement seams.
+apps/desktop/src-tauri/src/core/llm/tool_executor/mod.rs performs path extraction, canonical resolution, protected-path rejection, explicit consent, and post-approval enforcement revalidation before dispatch. tool_confirmation.rs keeps the native request authoritative, manages task-only and persisted grants, and synchronizes ToolGuard plus the live filesystem MCP server; App.tsx revokes task grants on new-chat and conversation changes. FolderAccessConsentDialog.tsx is mounted by McpToolConfirmationPrompt.tsx with Cancel autofocus, exact targets and roots, capability disclosure, and an unchecked persistent-grant option. Gap002FolderAccessConsent.test.tsx, agentWorkflowEvents.test.ts, and the named gap_002, folder_request, session_folder_grants, and empty_allowed_paths_update Rust tests cover the contract and enforcement seams.
 
 **Suggested fix**
 
@@ -125,7 +125,7 @@ The reference dedicates a Connections settings page to remote-control management
 
 **Evidence**
 
-packages/ui/ui/src/settings-nav.ts registers Connections in the shared Desktop settings navigation. apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts the production MobileCompanionPanel, whose QRPairingCard and RemoteApprovalCard use the authenticated signaling/WebRTC connectionStore and live tool approval state. SettingsPanel.tsx renders the tab; the duplicate features/experimental/MobileCompanionPanel.tsx is removed. GAP-004-connections-settings.test.tsx and SettingsPanel.render.test.tsx verify the nav, mounted panel, and single implementation owner.
+packages/ui/ui/src/settings-nav.ts registers Connections in the shared Desktop settings navigation. apps/desktop/src/features/settings/tabs/Connections/index.tsx mounts the production MobileCompanionPanel, whose QRPairingCard and RemoteApprovalCard use the authenticated signaling/WebRTC connectionStore and live tool approval state. SettingsPanel.tsx renders the tab; the duplicate features/experimental/MobileCompanionPanel.tsx is removed. Gap004ConnectionsSettings.test.tsx and SettingsPanel.render.test.tsx verify the nav, mounted panel, and single implementation owner.
 
 Independent duplicate evidence (GAP-005): Duplicate GAP-005 is closed by the same canonical Connections nav entry, mounted ConnectionsTab, production MobileCompanionPanel, and removal of the experimental duplicate recorded in GAP-004.
 
@@ -176,7 +176,7 @@ The reference exposes Archived chats as a recoverable destination. The mounted D
 
 **Evidence**
 
-apps/desktop/src/features/v3/Sidebar.tsx switches the live conversation list between active and archived records and passes restoreConversation into each archived row. ConversationRow.tsx replaces active-only actions with Restore and a two-step Delete permanently action for archived records. GAP-007-archived-chats.test.tsx verifies active/archived filtering, opening, restore dispatch, and confirmed permanent delete.
+apps/desktop/src/features/v3/Sidebar.tsx switches the live conversation list between active and archived records and passes restoreConversation into each archived row. ConversationRow.tsx replaces active-only actions with Restore and a two-step Delete permanently action for archived records. Gap007ArchivedChats.test.tsx verifies active/archived filtering, opening, restore dispatch, and confirmed permanent delete.
 
 **Suggested fix**
 
@@ -222,7 +222,7 @@ The mounted Desktop Memory tab now exposes the reference control set: an authori
 
 **Evidence**
 
-apps/desktop/src/features/settings/tabs/Memory.tsx mounts the master, tool-assisted scope, reset, native SQLite adapter, and Managed Cloud adapter. settingsStore.ts persists one fail-closed policy and managedCloudSettingsSync.ts synchronizes the account-safe capability namespace. Native chat streaming/non-streaming, memory tools, direct project-memory loading, project auto-save, and scheduled summarization enforce the policy; the Web managed-memory request path enforces the same account setting. The two orphan localStorage-only memory panels are removed. GAP-009-memory-controls.test.tsx, settingsStore.test.ts, managedCloudSettingsSync.test.ts, request-processor.memory.test.ts, and the named Rust memory-policy tests cover the mounted controls and enforcement seams.
+apps/desktop/src/features/settings/tabs/Memory.tsx mounts the master, tool-assisted scope, reset, native SQLite adapter, and Managed Cloud adapter. settingsStore.ts persists one fail-closed policy and managedCloudSettingsSync.ts synchronizes the account-safe capability namespace. Native chat streaming/non-streaming, memory tools, direct project-memory loading, project auto-save, and scheduled summarization enforce the policy; the Web managed-memory request path enforces the same account setting. The two orphan localStorage-only memory panels are removed. Gap009MemoryControls.test.tsx, settingsStore.test.ts, managedCloudSettingsSync.test.ts, request-processor.memory.test.ts, and the named Rust memory-policy tests cover the mounted controls and enforcement seams.
 
 **Suggested fix**
 
@@ -4504,7 +4504,7 @@ When a local folder is scoped, Desktop asks 'What should we build in <folder>?' 
 
 **Evidence**
 
-DesktopShellV3 passes the mode-aware currentFolderLabel and handleSelectFolder seam into EmptyChat. BrandedGreeting renders the scoped question and Change workspace action only for a real label. GAP-195-205-255-empty-chat.test.tsx verifies the exact accessible heading and picker callback. Rendered shell evidence is retained at apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png.
+DesktopShellV3 passes the mode-aware currentFolderLabel and handleSelectFolder seam into EmptyChat. BrandedGreeting renders the scoped question and Change workspace action only for a real label. Gap195205255EmptyChat.test.tsx verifies the exact accessible heading and picker callback. Rendered shell evidence is retained at apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png.
 
 **Suggested fix**
 
@@ -4734,7 +4734,7 @@ The mounted shared composer renders Code, Write, Research, and only the media/co
 
 **Evidence**
 
-ChatInterface owns QuickChips independently from the host empty-state slot and derives availability from the active runtime plus the Desktop entitlement override. Its handleChipClick writes the matching prompt to the conversation-scoped draft. GAP-195-205-255-empty-chat.test.tsx exercises Code through the mounted ChatInterface; QuickChips.capabilities.test.tsx covers capability filtering. apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png records the mounted chip row at desktop size.
+ChatInterface owns QuickChips independently from the host empty-state slot and derives availability from the active runtime plus the Desktop entitlement override. Its handleChipClick writes the matching prompt to the conversation-scoped draft. Gap195205255EmptyChat.test.tsx exercises Code through the mounted ChatInterface; QuickChips.capabilities.test.tsx covers capability filtering. apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png records the mounted chip row at desktop size.
 
 **Suggested fix**
 
@@ -5884,7 +5884,7 @@ The blank canvas now presents three concise paths: create a file or site, resear
 
 **Evidence**
 
-EmptyChat writes starter prompts through unified-chat's setDraftContent and receives onOpenScheduled from DesktopShellV3, which routes work-scheduled to AgiWorkScheduled or DesktopCloudSchedules according to the current privacy mode. GAP-195-205-255-empty-chat.test.tsx covers both prompt paths and the schedule handoff. Rendered Browser QA is retained at apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png.
+EmptyChat writes starter prompts through unified-chat's setDraftContent and receives onOpenScheduled from DesktopShellV3, which routes work-scheduled to AgiWorkScheduled or DesktopCloudSchedules according to the current privacy mode. Gap195205255EmptyChat.test.tsx covers both prompt paths and the schedule handoff. Rendered Browser QA is retained at apps/desktop/docs/qa/screenshots/GAP-195-205-255-empty-chat.png.
 
 **Suggested fix**
 

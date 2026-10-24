@@ -3,7 +3,7 @@
   "workspaces": {
     "apps/desktop": {
       "entry": [
-        "src/main.tsx",
+        "src/Main.tsx",
         "electron/*.{ts,mjs}",
         "scripts/*.mjs",
         "**/*.test.{ts,tsx}",

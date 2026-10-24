@@ -150,7 +150,7 @@ test('a recorded exception that is fixed fails until it is deleted', () => {
 test('the provider may fall back to the matrix only after consulting the document', () => {
   const root = fixture({
     edits: {
-      'packages/ui/unified-chat/src/lib/capabilities.tsx': (source) =>
+      'packages/ui/unified-chat/src/lib/Capabilities.tsx': (source) =>
         source.replaceAll('resolveCapabilityDocumentDecision(', 'ignoreDocument('),
     },
   });

@@ -1,9 +1,8 @@
-
 import { useState } from 'react';
 
 import { openDesktopCloudAccountWindow } from '../../../services/desktopCloudAccountWindow';
 import { selectHasCloudAccountSession, useAuthStore } from '../../../stores/auth';
-import { PRIMARY_BUTTON, SECONDARY_BUTTON, SectionHeading } from './sectionChrome';
+import { PRIMARY_BUTTON, SECONDARY_BUTTON, SectionHeading } from './SectionChrome';
 
 export interface CloudBridgedSectionProps {
   sectionKey: string;
