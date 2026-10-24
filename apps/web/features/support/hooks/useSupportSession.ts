@@ -1,7 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState, type ReactElement } from 'react';
-import { useStepUp } from '@/features/settings/hooks/use-step-up';
+import { useStepUp } from '@/features/settings/hooks/useStepUp';
 import {
   SUPPORT_MAX_QUESTION_LENGTH,
   type SupportActionOutcome,

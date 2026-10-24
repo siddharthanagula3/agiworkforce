@@ -10,7 +10,7 @@ import {
 } from '@/lib/browser-support';
 import './globals.css';
 import '@/features/marketing/components/legacy-pages.css';
-import Providers from './providers';
+import Providers from './Providers';
 import { AnalyticsConsentGate } from '@shared/components/AnalyticsConsentGate';
 import { CookieConsent } from '@shared/components/CookieConsent';
 import { SupportWidgetEntry } from '@/features/support/components/SupportWidgetEntry';

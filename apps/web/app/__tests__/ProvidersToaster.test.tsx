@@ -6,7 +6,7 @@ vi.mock('@/features/marketing/components/WaitlistModal', () => ({
   WaitlistModalProvider: ({ children }: { children: React.ReactNode }) => children,
 }));
 
-import Providers from '../providers';
+import Providers from '../Providers';
 
 Object.defineProperty(window, 'matchMedia', {
   configurable: true,

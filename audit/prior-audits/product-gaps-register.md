@@ -248,7 +248,7 @@ Severity: P2
 Surface: Web
 Area: Navigation
 Status: UX Gap
-Evidence: runtime, verified in the browser on `:3100`: on `/pricing` signed out, ⌘K opens a dialog listing New chat, New task, Chat, Projects, Library, Models, Schedules, AGI Code, Go to Settings, Go to Billing, Search Conversations, Switch AI Model. `apps/web/app/providers.tsx:38` mounts `CommandPaletteProvider` under the root layout and the command list reads no session.
+Evidence: runtime, verified in the browser on `:3100`: on `/pricing` signed out, ⌘K opens a dialog listing New chat, New task, Chat, Projects, Library, Models, Schedules, AGI Code, Go to Settings, Go to Billing, Search Conversations, Switch AI Model. `apps/web/app/Providers.tsx:38` mounts `CommandPaletteProvider` under the root layout and the command list reads no session.
 Reproduction: signed out, `/pricing`, ⌘K, choose "Go to Billing".
 Expected: no palette for anonymous visitors, or a public command set.
 Actual: every entry bounces through `proxy.ts` to `/login?redirectTo=`; "Switch AI Model" mutates a store the visitor cannot use.
@@ -602,7 +602,7 @@ Severity: P2
 Surface: Shared
 Area: Connectors
 Status: Missing
-Evidence: `needsReauthorization` becomes the warning "Needs to be reconnected." (`apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:497`). `SettingsModal.tsx:280` and `packages/ui/ui/src/directory/ConnectorDetailView.tsx:288` key the connect affordance on "has a row", so only Disconnect renders.
+Evidence: `needsReauthorization` becomes the warning "Needs to be reconnected." (`apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx:497`). `SettingsModal.tsx:280` and `packages/ui/ui/src/directory/ConnectorDetailView.tsx:288` key the connect affordance on "has a row", so only Disconnect renders.
 Expected: a Reconnect primary action re-entering the OAuth start flow.
 Actual: the user must Disconnect, losing per-tool permissions, then find the connector again.
 Recommended fix: thread `needsReauthorization` into both detail views; `connectConnector` already handles the 409 to `oauthStartPath` probe.
@@ -789,7 +789,7 @@ Severity: P2
 Surface: Shared
 Area: Feedback
 Status: UX Gap
-Evidence: 124 files call `toast.error(`; one call sets a `duration`; zero toast calls pass an `id` (verified). `packages/ui/ui/src/primitives/SonnerToaster.tsx` sets `classNames` only. `apps/web/app/providers.tsx:44` mounts with `closeButton`; `apps/desktop/src/NormalApplication.tsx:18` does not, in the opposite corner. No undo affordance exists anywhere. The Chrome extension has no toast system.
+Evidence: 124 files call `toast.error(`; one call sets a `duration`; zero toast calls pass an `id` (verified). `packages/ui/ui/src/primitives/SonnerToaster.tsx` sets `classNames` only. `apps/web/app/Providers.tsx:44` mounts with `closeButton`; `apps/desktop/src/NormalApplication.tsx:18` does not, in the opposite corner. No undo affordance exists anywhere. The Chrome extension has no toast system.
 Expected: errors persist until dismissed or at least 8 to 10 s, repeated identical errors collapse, reversible actions offer Undo.
 Actual: an error shown while the user is reading elsewhere is gone before it can be read and cannot be pinned on desktop.
 Root cause: verified (RC-8).
@@ -897,7 +897,7 @@ Status: Broken
 Evidence: `apps/web/features/desktop-host/lib/notify.ts:20` gates on the host bridge and `document.hidden` only; the `browserReplyReady` preference in `apps/web/features/settings/sections/NotificationsSection.tsx:28` is never read. Three call sites in `WebChatPage.tsx`.
 Recommended fix: read the namespace once and short-circuit in `notifyJobComplete`.
 Overlaps: the Tauri twin of this class is fixed; this path is distinct.
-Verification: unit test in `apps/web/features/desktop-host/__tests__/desktop-host.test.tsx`.
+Verification: unit test in `apps/web/features/desktop-host/__tests__/DesktopHost.test.tsx`.
 
 ### [PG-DESK-03] The Quick Ask panel has no preload, so the dictation hotkey silently does nothing there
 

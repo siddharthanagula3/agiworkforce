@@ -12,7 +12,7 @@ import {
   Stack,
 } from '@/features/marketing/components/system';
 import { CREATE_ACCOUNT_LABEL, webEntryHref } from '@/features/marketing/components/system/nav';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { DIRECTORY_CATEGORIES } from '@/lib/connectors/directory/categorize';
 import { getSnapshotView } from '@/lib/connectors/directory/memory-cache';
 import {

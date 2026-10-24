@@ -5,7 +5,7 @@ import { ChevronRight, FilePlus2 } from 'lucide-react';
 import { Spinner } from '@agiworkforce/ui';
 import { detectArtifactType, extractArtifactTitle } from '@agiworkforce/artifacts';
 import type { ArtifactData } from './ArtifactPreview';
-import { artifactFileName } from './artifact-labels';
+import { artifactFileName } from './ArtifactLabels';
 
 const CREATING_VERB = 'Creating';
 const CREATED_ONE_FILE = 'Created a file';

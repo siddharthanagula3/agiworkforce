@@ -11,7 +11,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import {

@@ -50,7 +50,7 @@ vi.mock('@/features/connectors/components/ConnectorScopeList', () => ({
   ),
 }));
 
-import { useConnectorsSettingsAdapter } from '../use-connectors-settings-adapter';
+import { useConnectorsSettingsAdapter } from '../useConnectorsSettingsAdapter';
 
 const CONNECTED_BODY = {
   connectors: [

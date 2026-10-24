@@ -74,7 +74,7 @@ import {
   useDesktopVoiceHotkey,
   useLocalModelSelection,
 } from '@/features/desktop-host';
-import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
+import { useLeaveLocalModel } from '@features/chat/hooks/useLeaveLocalModel';
 import { AttachmentPreview, type AttachmentUploadVisualStatus } from './AttachmentPreview';
 import { AnchoredComposerMenu } from './AnchoredComposerMenu';
 import { MODEL_MENU_WIDTH_CLASS } from './composer-menu';

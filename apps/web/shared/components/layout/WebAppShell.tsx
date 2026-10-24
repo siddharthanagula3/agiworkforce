@@ -86,7 +86,7 @@ import { GlobalSearchDialog } from '@/features/chat/components/dialogs/GlobalSea
 import { getWorstUsagePercent, useManagedUsageSummary } from '@/lib/hooks/useManagedUsageSummary';
 import { AccountMenuItems } from '@shared/components/layout/AccountMenuItems';
 import { helpHrefForPath } from '@/lib/support/help-entry-points';
-import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
+import { useUpgradePlanFlow } from '@features/billing/hooks/useUpgradePlanFlow';
 import { ComposerFeedbackDialog } from '@/features/chat/components/Composer/ComposerFeedbackDialog';
 import { KeyboardShortcutsDialog } from '@/features/chat/components/dialogs/KeyboardShortcutsDialog';
 import {

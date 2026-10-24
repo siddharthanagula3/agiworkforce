@@ -10,7 +10,7 @@ import {
   openExtraSection,
   stripListMarker,
   type ExtraSection,
-} from './card-extras';
+} from './CardExtras';
 
 interface ComparisonItem {
   name: string;

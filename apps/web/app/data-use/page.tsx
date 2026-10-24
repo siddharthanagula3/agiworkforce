@@ -3,8 +3,8 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Button, ButtonRow, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { NoteList } from '@/features/marketing/components/pages/company/Shared';
 import { CANONICAL_POLICY_ROUTES, POLICY_LAST_UPDATED } from '@/lib/legal-constants';
 import { PolicyVersionsLink } from '@shared/components/legal/PolicyVersionsLink';
 

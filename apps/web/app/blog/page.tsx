@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { RELEASES, releasePath } from '@/lib/changelog-entries';
 import '@/features/marketing/components/pages/company/company.css';
 

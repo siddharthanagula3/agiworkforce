@@ -14,7 +14,7 @@ import {
   openExtraSection,
   stripListMarker,
   type ExtraSection,
-} from './card-extras';
+} from './CardExtras';
 import 'katex/dist/katex.min.css';
 
 const LATEX_ENVIRONMENT_TAG = /\\(?:begin|end)\{[^}]*\}(?:\{[^}]*\})?/g;

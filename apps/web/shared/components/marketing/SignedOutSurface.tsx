@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { PageHero, type PageCta } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero, type PageCta } from '@/features/marketing/components/pages/surfaces/Shared';
 import {
   CREATE_ACCOUNT_LABEL,
   webEntryHref,

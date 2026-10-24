@@ -23,7 +23,7 @@ import {
   SplitFeature,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import CODE_SAMPLES from '@/content/api-docs/code-samples.json';
 
 export const metadata = buildMetadata({

@@ -13,7 +13,7 @@ import {
   WEB_ENTRY_HREF,
   type TranscriptLine,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { BILLING_PLAN_PRICING, BILLING_PLAN_PRODUCT_LIMITS } from '@agiworkforce/types';
 import {
   CLI_AVAILABILITY_NOTE,

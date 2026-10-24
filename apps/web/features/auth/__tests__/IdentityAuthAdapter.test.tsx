@@ -67,7 +67,7 @@ vi.mock('@/features/desktop-host/lib/browser-sign-in', async (importOriginal) =>
   cancelBrowserSignIn: browserSignIn.cancel,
 }));
 
-import { useIdentityAuthClient } from '../identityAuthAdapter';
+import { useIdentityAuthClient } from '../IdentityAuthAdapter';
 import type { AuthMode } from '../authContract';
 import { AUTH_ERROR_SOURCE_COPY } from '@/lib/auth/error-taxonomy.copy';
 

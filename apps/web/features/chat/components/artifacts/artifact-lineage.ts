@@ -1,4 +1,4 @@
-import { UNTITLED_ARTIFACT_TITLE } from './artifact-labels';
+import { UNTITLED_ARTIFACT_TITLE } from './ArtifactLabels';
 
 export interface LineageCandidate {
   id: string;

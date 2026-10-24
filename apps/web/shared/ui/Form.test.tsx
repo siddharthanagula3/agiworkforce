@@ -13,7 +13,7 @@ import {
   FormControl,
   FormDescription,
   FormMessage,
-} from './form';
+} from './Form';
 import { Input } from '@agiworkforce/ui';
 
 interface TestFormProps {

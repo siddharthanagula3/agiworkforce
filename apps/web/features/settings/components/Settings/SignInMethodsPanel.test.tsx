@@ -19,7 +19,7 @@ vi.mock('@/lib/identity/client', () => ({
   }),
 }));
 
-vi.mock('@features/settings/hooks/use-step-up', () => ({
+vi.mock('@features/settings/hooks/useStepUp', () => ({
   useStepUp: () => ({ withStepUp: vi.fn(), dialog: null }),
 }));
 

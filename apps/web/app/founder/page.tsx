@@ -3,8 +3,8 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { FounderBlock } from '@/features/marketing/components/pages/company/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { FounderBlock } from '@/features/marketing/components/pages/company/Shared';
 import {
   CONTACT_EMAIL,
   FOUNDER_NAME,

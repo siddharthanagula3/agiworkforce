@@ -41,7 +41,7 @@ import { addCsrfHeaders, getCsrfToken } from '@/lib/client/csrf';
 import type { CreateApiKeyFormData } from '../schemas/settings-validation';
 import { toUserMessage } from '@/lib/user-error-message';
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
-import { useStepUp } from './use-step-up';
+import { useStepUp } from './useStepUp';
 import { finalizeWorkspaceSwitch } from '@/features/workspaces/lib/workspace-cache-scope';
 import {
   MANAGED_CLOUD_ACCOUNT_DELETION_PATH,

@@ -12,8 +12,8 @@ import { DesktopBrowserSignIn } from '../components/DesktopBrowserSignIn';
 import { beginBrowserSignIn, cancelBrowserSignIn } from '../lib/browser-sign-in';
 
 const localPassword = vi.hoisted(() => vi.fn());
-type IdentityAuthModule = typeof import('@/features/auth/identityAuthAdapter');
-vi.mock('@/features/auth/identityAuthAdapter', async (importOriginal) => ({
+type IdentityAuthModule = typeof import('@/features/auth/IdentityAuthAdapter');
+vi.mock('@/features/auth/IdentityAuthAdapter', async (importOriginal) => ({
   ...(await importOriginal<IdentityAuthModule>()),
   useIdentityAuthClient: () => ({
     isReady: true,

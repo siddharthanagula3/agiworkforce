@@ -39,7 +39,7 @@ vi.mock('@agiworkforce/unified-chat/capabilities', () => ({
   ),
 }));
 
-import Providers from './providers';
+import Providers from './Providers';
 import ProductRuntimeProviders from './ProductRuntimeProviders';
 
 describe('Providers', () => {

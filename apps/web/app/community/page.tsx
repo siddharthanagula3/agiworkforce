@@ -2,8 +2,8 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Section, Stack } from '@/features/marketing/components/system';
-import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { LinkGrid } from '@/features/marketing/components/pages/features/Shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import '@/features/marketing/components/pages/company/company.css';
 

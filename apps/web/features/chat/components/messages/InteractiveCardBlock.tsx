@@ -24,7 +24,7 @@ import { selectIsActiveConversationStreaming, useChatStore } from '@shared/store
 import { cn } from '@shared/lib/utils';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
 import { ImageToolCard } from './cards/ImageToolCard';
-import { ItineraryCardLazy, MapSearchCardLazy, PlacesMapCardLazy } from './cards/lazyMapCards';
+import { ItineraryCardLazy, MapSearchCardLazy, PlacesMapCardLazy } from './cards/LazyMapCards';
 import { McpAppCard } from './cards/McpAppCard';
 import { ProductComparisonCard } from './cards/ProductComparisonCard';
 

@@ -1,6 +1,6 @@
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
-import { PairBody } from '../pair-body';
+import { PairBody } from '../PairBody';
 
 export default function PairCodePage() {
   return (

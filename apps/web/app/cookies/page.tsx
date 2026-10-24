@@ -12,8 +12,8 @@ import {
   Stack,
   type LedgerRow,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { NoteList } from '@/features/marketing/components/pages/company/Shared';
 import { CookiePreferencesButton } from './CookiePreferencesButton';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import { LEGAL_ENTITY, POLICY_LAST_UPDATED } from '@/lib/legal-constants';

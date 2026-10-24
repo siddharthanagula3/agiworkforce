@@ -25,7 +25,7 @@ import { AuthNewPasswordStep } from './AuthNewPasswordStep';
 import { AuthNoticeStep } from './AuthNoticeStep';
 import { AuthPasswordStep } from './AuthPasswordStep';
 import { AuthSecondFactorStep } from './AuthSecondFactorStep';
-import { IdentityBotProtection, useIdentityAuthClient } from './identityAuthAdapter';
+import { IdentityBotProtection, useIdentityAuthClient } from './IdentityAuthAdapter';
 import { useAuthCopy } from './authCopy';
 import { rememberAuthMethod } from './lastUsedMethod';
 import type {

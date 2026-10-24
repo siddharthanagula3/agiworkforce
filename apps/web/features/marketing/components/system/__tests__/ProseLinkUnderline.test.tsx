@@ -11,7 +11,7 @@ vi.mock('@/features/marketing/components/MarketingFooter', () => ({
 
 import PolicyHistoryPage from '@/app/legal/archive/[policy]/page';
 
-import { PageHero } from '../../pages/surfaces/shared';
+import { PageHero } from '../../pages/surfaces/Shared';
 import { Ledger } from '../Ledger';
 import { Prose } from '../Prose';
 import { Stack } from '../Stack';

@@ -47,7 +47,7 @@ import { useSettingsModal } from '@features/settings/components/SettingsModalPro
 import type { WebSettingsContentSection } from '@features/settings/lib/web-settings-sections';
 import { formatLocalModelSize, type LocalModel } from '@agiworkforce/local-runtime-contract';
 import { useLocalModelSelection, useLocalModels } from '@features/desktop-host';
-import { useLeaveLocalModel } from '@features/chat/hooks/use-leave-local-model';
+import { useLeaveLocalModel } from '@features/chat/hooks/useLeaveLocalModel';
 import {
   useModelStore,
   AVAILABLE_MODELS,

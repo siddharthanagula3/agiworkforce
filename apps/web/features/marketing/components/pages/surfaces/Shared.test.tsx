@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 import { render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { FactGrid, PageHero, type FactItem } from './shared';
+import { FactGrid, PageHero, type FactItem } from './Shared';
 
 const SYSTEM_DIR = resolve(__dirname, '..', '..', 'system');
 const STYLESHEET = [

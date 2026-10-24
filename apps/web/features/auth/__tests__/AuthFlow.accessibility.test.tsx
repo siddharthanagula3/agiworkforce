@@ -18,7 +18,7 @@ const client = vi.hoisted(() => ({
   restart: vi.fn(),
 }));
 
-vi.mock('../identityAuthAdapter', () => ({
+vi.mock('../IdentityAuthAdapter', () => ({
   useIdentityAuthClient: () => client,
   IdentityBotProtection: () => null,
 }));

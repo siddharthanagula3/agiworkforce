@@ -19,7 +19,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@shared/ui/form';
+} from '@shared/ui/Form';
 import { Save, Key, Eye, EyeOff } from 'lucide-react';
 import type {
   SecuritySettingsFormData,

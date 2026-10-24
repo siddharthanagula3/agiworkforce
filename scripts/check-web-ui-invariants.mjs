@@ -295,7 +295,7 @@ const INLINE_RADIUS_PROPERTIES = new Set([
   'borderBottomLeftRadius',
 ]);
 const STANDALONE_RENDERERS = new Set([
-  'apps/web/app/api/og/card.tsx',
+  'apps/web/app/api/og/Card.tsx',
   'apps/web/app/global-error.tsx',
 ]);
 

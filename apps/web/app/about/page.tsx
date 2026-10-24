@@ -13,8 +13,8 @@ import {
   Stack,
   WEB_ENTRY_HREF,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { FounderBlock, NoteList } from '@/features/marketing/components/pages/company/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { FounderBlock, NoteList } from '@/features/marketing/components/pages/company/Shared';
 import {
   BYOK_SURFACES,
   CATALOG_AS_OF,

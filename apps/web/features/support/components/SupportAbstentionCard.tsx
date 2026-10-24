@@ -2,7 +2,7 @@
 
 import type { SupportAbstentionView } from '@agiworkforce/cloud-contracts/support';
 import { ABSTENTION_HEADING } from '../lib/normalize-answer';
-import { renderSupportText } from '../lib/render-text';
+import { renderSupportText } from '../lib/RenderText';
 import { SupportCitationList } from './SupportCitationList';
 import styles from './SupportWidget.module.css';
 

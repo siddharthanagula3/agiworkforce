@@ -4,8 +4,8 @@ import { ACCOUNT_MINIMUM_AGE, PARENTAL_PERMISSION_BELOW_AGE } from '@agiworkforc
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { NoteList } from '@/features/marketing/components/pages/company/Shared';
 import {
   Container,
   Ledger,

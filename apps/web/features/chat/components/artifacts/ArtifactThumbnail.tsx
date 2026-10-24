@@ -5,7 +5,7 @@ import { useMounted } from '@shared/hooks/useMounted';
 import { cn } from '@shared/lib/utils';
 import { buildSandboxSrcDoc } from '@shared/utils/html-sanitizer';
 import type { ArtifactData } from './ArtifactPreview';
-import { TypeIcon } from './artifact-labels';
+import { TypeIcon } from './ArtifactLabels';
 import { canRenderLivePreview } from './artifact-render';
 
 const THUMBNAIL_SOURCE_CHARS = 4_000;

@@ -11,7 +11,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { supportCollectionIndex } from '../../collections';
 
 type CollectionProps = { params: Promise<{ id: string }> };

@@ -139,7 +139,7 @@
         "apps/web/app/shared-artifact/[token]/usePublishedArtifactRuntime.test.tsx",
         "apps/web/features/chat/components/SandboxedIframe.origin.test.tsx",
         "apps/web/features/chat/components/SandboxedIframe.test.tsx",
-        "apps/web/features/chat/hooks/use-voice-session.test.tsx",
+        "apps/web/features/chat/hooks/useVoiceSession.test.tsx",
         "apps/web/features/chat/lib/live-voice-session.test.ts",
         "apps/web/features/code/hooks/use-local-session.test.ts",
         "apps/web/features/code/components/LocalSessionPanel.test.tsx",
@@ -1129,7 +1129,7 @@
       "sha256": "cf165b381a89b7d4f60cead628d4b634acfc2817dd3799694e142cb408c80b46"
     },
     {
-      "path": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+      "path": "apps/web/features/auth/__tests__/IdentityAuthAdapter.test.tsx",
       "sha256": "39a18a591bb2a1d58a3d5a30c80d0ab6f143e531e7608648c8987742ee6f4bd3"
     },
     {
@@ -1137,7 +1137,7 @@
       "sha256": "cbc254da66bb2dd3e7ad384ec94076c50f5f0c8d6803b47b4fb51969ef02e979"
     },
     {
-      "path": "apps/web/features/auth/identityAuthAdapter.tsx",
+      "path": "apps/web/features/auth/IdentityAuthAdapter.tsx",
       "sha256": "b29238e7fee0dfd33df689240272c607556ac06992e557421bd3b74fae1dea4f"
     },
     {
@@ -1149,7 +1149,7 @@
       "sha256": "c190413cd44c02c7ee22b98301a1ef6b0c00c4831c5949be6603868363ba9bf2"
     },
     {
-      "path": "apps/web/features/chat/components/__tests__/sandboxed-iframe-repost.test.tsx",
+      "path": "apps/web/features/chat/components/__tests__/SandboxedIframeRepost.test.tsx",
       "sha256": "ab150130275d6661374ceb3eda065ee342b82fdacccd694ffd362d1e07be9f9f"
     },
     {
@@ -1197,7 +1197,7 @@
       "sha256": "6808454c094b0f193f30b047591f8fc80822bb0db9b42bcf7b9ed3e8c2bf590d"
     },
     {
-      "path": "apps/web/features/desktop-host/__tests__/browser-sign-in.test.tsx",
+      "path": "apps/web/features/desktop-host/__tests__/BrowserSignIn.test.tsx",
       "sha256": "7fa1341400d11a1786968ed049e13f966a9e5c709876674b3fcadad77b23f73e"
     },
     {
@@ -1325,7 +1325,7 @@
       "sha256": "977faa54d456ebfb9293fb97e623020b09c06a8d6d1db9ce1048bacae2ea9e35"
     },
     {
-      "path": "apps/web/shared/components/__tests__/cookie-consent.test.tsx",
+      "path": "apps/web/shared/components/__tests__/CookieConsent.test.tsx",
       "sha256": "5e6623ca8b4900ac71a04d56fe33cfa276823a270081263dfaa903c9de2637f1"
     },
     {

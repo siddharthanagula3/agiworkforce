@@ -389,7 +389,7 @@ Code: `apps/web/lib/connectors/oauth-scope-allowlist.ts:181-181`, `apps/web/lib/
 | vscode | missing | Not built on this surface. |  |
 | chrome | partial | partials/mcp-web 2e08cf2e6: Snowflake and Databricks are added by account URL, as custom connectors are in Claude (support.claude.com/en/articles/11175166, 2026-09-28): the cards open the custom connector form with the vendor's MCP URL format, documentation link and OAuth client fields, and a URL on either vendor's host must use that vendor's MCP path (docs.snowflake.com cortex-agents-mcp GA; docs.databricks.com managed-mcp Public Preview, updated 2026-09-21). Neither vendor supports dynamic client registration, so the user brings an OAuth client or a personal access token. Still owed: a run against a real Snowflake and Databricks account, since neither page says whether the server publishes the MCP authorization metadata the OAuth sign-in needs. BigQuery stays unpinned by decision. | states |
 
-Code: `apps/web/lib/connectors/account-url-connectors.ts:12-12`, `apps/web/lib/connectors/account-url-connectors.ts:21-21`, `apps/web/app/api/connectors/route.ts:617-617`, `apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx:669-669`
+Code: `apps/web/lib/connectors/account-url-connectors.ts:12-12`, `apps/web/lib/connectors/account-url-connectors.ts:21-21`, `apps/web/app/api/connectors/route.ts:617-617`, `apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx:669-669`
 
 ## S56.38: Dashboard creation.
 

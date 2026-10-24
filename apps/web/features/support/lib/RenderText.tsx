@@ -1,4 +1,3 @@
-
 import type { ReactElement } from 'react';
 
 export function renderSupportText(text: string): ReactElement[] {

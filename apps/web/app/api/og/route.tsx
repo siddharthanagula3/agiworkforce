@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { ImageResponse } from 'next/og';
-import { OG_CARD_SIZE, ogCard } from './card';
+import { OG_CARD_SIZE, ogCard } from './Card';
 
 export const OG_FONT_FILES = [
   { file: 'Geist-Medium.ttf', name: 'Geist', weight: 500 },

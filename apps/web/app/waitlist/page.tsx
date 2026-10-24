@@ -10,8 +10,8 @@ import {
   Stack,
   WEB_ENTRY_HREF,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { LinkGrid } from '@/features/marketing/components/pages/features/Shared';
 import { PublicWaitlistForm } from '@/features/marketing/components/PublicWaitlistForm';
 import {
   BYOK_SURFACES,

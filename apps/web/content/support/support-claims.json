@@ -1339,12 +1339,12 @@
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/features/settings/sections/__tests__/privacy-rights-reachable.test.tsx",
+          "file": "apps/web/features/settings/sections/__tests__/PrivacyRightsReachable.test.tsx",
           "name": "is linked from the Privacy settings section"
         },
         {
           "kind": "test",
-          "file": "apps/web/features/settings/sections/__tests__/privacy-rights-reachable.test.tsx",
+          "file": "apps/web/features/settings/sections/__tests__/PrivacyRightsReachable.test.tsx",
           "name": "still exists to link to"
         }
       ]
@@ -2258,7 +2258,7 @@
       "kind": "prose",
       "sentence": "On the {{PLAN.free}} plan choosing one goes to checkout when paid upgrades are open to your account; while they are not, it opens the upgrade waitlist instead: join the waitlist, or enter an access code to continue to checkout.",
       "implementation": [
-        "apps/web/features/billing/hooks/use-upgrade-plan-flow.tsx",
+        "apps/web/features/billing/hooks/useUpgradePlanFlow.tsx",
         "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx",
         "apps/web/features/billing/services/upgrade-waitlist.ts#upgradeNeedsWaitlist"
       ],
@@ -2270,7 +2270,7 @@
         },
         {
           "kind": "test",
-          "file": "apps/web/features/billing/hooks/use-upgrade-plan-flow.test.tsx",
+          "file": "apps/web/features/billing/hooks/useUpgradePlanFlow.test.tsx",
           "name": "joins the waitlist the plan card names, in the shared waitlist dialog"
         },
         {
@@ -2352,7 +2352,7 @@
       "sentence": "Joining does not start a subscription, and when upgrades open for your account, choosing the plan again takes you to checkout.",
       "implementation": [
         "apps/web/features/billing/components/UpgradeWaitlistDialog.tsx",
-        "apps/web/features/billing/hooks/use-upgrade-plan-flow.tsx",
+        "apps/web/features/billing/hooks/useUpgradePlanFlow.tsx",
         "apps/web/features/billing/services/upgrade-waitlist.ts#upgradeNeedsWaitlist"
       ],
       "proof": [
@@ -2368,7 +2368,7 @@
         },
         {
           "kind": "test",
-          "file": "apps/web/features/billing/hooks/use-upgrade-plan-flow.test.tsx",
+          "file": "apps/web/features/billing/hooks/useUpgradePlanFlow.test.tsx",
           "name": "sends an account that redeemed an access code straight to checkout"
         }
       ]
@@ -2890,12 +2890,12 @@
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/features/chat/hooks/__tests__/use-attachments.refusals.test.tsx",
+          "file": "apps/web/features/chat/hooks/__tests__/useAttachments.refusals.test.tsx",
           "name": "is reported by name and reason, not only as a toast"
         },
         {
           "kind": "test",
-          "file": "apps/web/features/chat/hooks/__tests__/use-attachments.refusals.test.tsx",
+          "file": "apps/web/features/chat/hooks/__tests__/useAttachments.refusals.test.tsx",
           "name": "separates a file that is too large from one of the wrong type"
         },
         {
@@ -4289,7 +4289,7 @@
         },
         {
           "kind": "copy",
-          "file": "apps/web/features/settings/hooks/use-step-up.tsx",
+          "file": "apps/web/features/settings/hooks/useStepUp.tsx",
           "text": "const silent = await requestStepUpGrant(challenge.action, challenge.resourceId);"
         }
       ]
@@ -5214,7 +5214,7 @@
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/features/chat/hooks/__tests__/shortcut-toggle-wired.test.tsx",
+          "file": "apps/web/features/chat/hooks/__tests__/ShortcutToggleWired.test.tsx",
           "name": "does not fire once the shortcut is switched off"
         }
       ]
@@ -6062,7 +6062,7 @@
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/app/signup/terms-acceptance-gate.test.tsx",
+          "file": "apps/web/app/signup/TermsAcceptanceGate.test.tsx",
           "name": "drops it when a provider sign-in starts, so an account that sign-in creates is asked its age"
         },
         {
@@ -6089,18 +6089,18 @@
       "kind": "prose",
       "sentence": "The code always comes before the password: the sign-up page asks for a password only after the code proves the address is yours.",
       "implementation": [
-        "apps/web/features/auth/identityAuthAdapter.tsx#resolveSignUpState",
-        "apps/web/features/auth/identityAuthAdapter.tsx#submitNewPassword"
+        "apps/web/features/auth/IdentityAuthAdapter.tsx#resolveSignUpState",
+        "apps/web/features/auth/IdentityAuthAdapter.tsx#submitNewPassword"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+          "file": "apps/web/features/auth/__tests__/IdentityAuthAdapter.test.tsx",
           "name": "proves the address with the emailed code before the password can complete the account"
         },
         {
           "kind": "test",
-          "file": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+          "file": "apps/web/features/auth/__tests__/IdentityAuthAdapter.test.tsx",
           "name": "will not set a password on a sign-up whose address is still unproven"
         },
         {
@@ -6230,13 +6230,13 @@
       "kind": "prose",
       "sentence": "A refused password keeps you on the password screen with the reason under the field.",
       "implementation": [
-        "apps/web/features/auth/identityAuthAdapter.tsx#submitNewPassword",
+        "apps/web/features/auth/IdentityAuthAdapter.tsx#submitNewPassword",
         "apps/web/features/auth/AuthNewPasswordStep.tsx"
       ],
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+          "file": "apps/web/features/auth/__tests__/IdentityAuthAdapter.test.tsx",
           "name": "keeps a password the provider refuses on the field, with the rule it broke"
         },
         {
@@ -6258,7 +6258,7 @@
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/features/auth/__tests__/identityAuthAdapter.test.tsx",
+          "file": "apps/web/features/auth/__tests__/IdentityAuthAdapter.test.tsx",
           "name": "tells the person how to make a password the provider calls too weak stronger"
         }
       ]
@@ -6269,11 +6269,11 @@
       "section": "If sign-up does not complete",
       "kind": "prose",
       "sentence": "A sign-up that needs a detail the screen cannot collect ends with a message that starts \"This sign-up also needs\" and tells you to contact support.",
-      "implementation": ["apps/web/features/auth/identityAuthAdapter.tsx"],
+      "implementation": ["apps/web/features/auth/IdentityAuthAdapter.tsx"],
       "proof": [
         {
           "kind": "copy",
-          "file": "apps/web/features/auth/identityAuthAdapter.tsx",
+          "file": "apps/web/features/auth/IdentityAuthAdapter.tsx",
           "text": "'This sign-up also needs {{fields}}, which this page cannot collect. Contact support to finish creating your account.'"
         }
       ]
@@ -6477,7 +6477,7 @@
         },
         {
           "kind": "copy",
-          "file": "apps/web/features/connectors/hooks/use-connectors-settings-adapter.tsx",
+          "file": "apps/web/features/connectors/hooks/useConnectorsSettingsAdapter.tsx",
           "text": "...(input.oauthClientSecret ? { oauthClientSecret: input.oauthClientSecret } : {}),"
         }
       ]
@@ -7294,7 +7294,7 @@
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/features/desktop-host/__tests__/computer-use-settings.test.tsx",
+          "file": "apps/web/features/desktop-host/__tests__/ComputerUseSettings.test.tsx",
           "name": "lists allowed and refused apps, and removing one asks the shell"
         }
       ]
@@ -7317,7 +7317,7 @@
         },
         {
           "kind": "test",
-          "file": "apps/web/features/desktop-host/__tests__/computer-use-settings.test.tsx",
+          "file": "apps/web/features/desktop-host/__tests__/ComputerUseSettings.test.tsx",
           "name": "offers installed apps not yet refused, filters by name, and refuses the one picked"
         }
       ]

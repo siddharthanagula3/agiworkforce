@@ -88,7 +88,7 @@ import {
   EmailArtifact,
   spreadsheetSafeExport,
 } from '@agiworkforce/unified-chat';
-import { TypeIcon } from './artifact-labels';
+import { TypeIcon } from './ArtifactLabels';
 import { ArtifactMoreMenu, type ArtifactMenuItem } from './ArtifactMoreMenu';
 import { ArtifactEditRequestLayer } from './ArtifactEditRequestLayer';
 import { ArtifactTitleField, RENAME_ARTIFACT_LABEL } from './ArtifactTitleField';

@@ -17,7 +17,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 
 export const metadata = buildMetadata({
   title: 'AGI for Teams: seats, roles, and the workspace console',

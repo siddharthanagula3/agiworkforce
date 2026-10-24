@@ -12,7 +12,7 @@ import {
   Stack,
   type LedgerRow,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { formatObjective, SLO_CATALOGUE } from '@/lib/server/slo/catalogue';
 import { BILLING_PLAN_PRICING } from '@agiworkforce/types';

@@ -7,7 +7,7 @@ import {
   ArtifactCreatingRow,
   creatingArtifactLabel,
 } from './ArtifactCreatingRow';
-import { artifactFileName } from './artifact-labels';
+import { artifactFileName } from './ArtifactLabels';
 
 afterEach(() => {
   vi.useRealTimers();

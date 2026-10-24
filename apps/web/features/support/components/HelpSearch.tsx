@@ -5,7 +5,7 @@ import { Spinner, translateUiPlural } from '@agiworkforce/ui';
 import ReactMarkdown from 'react-markdown';
 
 import { Prose, Stack } from '@/features/marketing/components/system';
-import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
+import { LinkGrid } from '@/features/marketing/components/pages/features/Shared';
 
 import { CONTACT_EMAIL } from '@/lib/legal-constants';
 

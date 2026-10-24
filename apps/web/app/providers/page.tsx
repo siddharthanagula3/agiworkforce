@@ -17,7 +17,7 @@ import {
   StatBand,
   type ProviderTile,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { BYOK_PROVIDER_IDS } from '@/app/byok/byok-providers';
 import { CLI_KEY_PROVIDERS_OUTSIDE_CATALOG, CLI_SEARCH_KEYS } from '@/lib/byok-providers';
 import { CATALOG_SCOPES, CATALOG_SCOPE_ORDER, GATEWAY_PROVIDER_IDS } from '@/lib/catalog-scopes';

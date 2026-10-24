@@ -2,7 +2,7 @@ import type { ComponentProps } from 'react';
 import { render } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 
-import { LinkGrid, type LinkCardItem } from './shared';
+import { LinkGrid, type LinkCardItem } from './Shared';
 
 vi.mock('next/link', () => ({
   default: ({ href, children, ...props }: ComponentProps<'a'>) => (

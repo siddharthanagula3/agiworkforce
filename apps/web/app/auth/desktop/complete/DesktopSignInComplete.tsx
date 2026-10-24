@@ -10,7 +10,7 @@ import {
   AUTH_STANDALONE_LINK_CLASS,
   AUTH_STEP_LINKS_CLASS,
 } from '@/features/auth/authStyles';
-import { useIdentityTicketSignIn } from '@/features/auth/identityAuthAdapter';
+import { useIdentityTicketSignIn } from '@/features/auth/IdentityAuthAdapter';
 import { apiErrorMessage } from '@shared/utils/api-error';
 
 const REDEEM_PATH = '/api/auth/desktop/redeem';

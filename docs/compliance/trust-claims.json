@@ -398,7 +398,7 @@
         },
         {
           "kind": "test",
-          "file": "apps/web/app/privacy/__tests__/consent-centre-analytics.test.tsx",
+          "file": "apps/web/app/privacy/__tests__/ConsentCentreAnalytics.test.tsx",
           "name": "stops analytics in the same open tab when consent is withdrawn"
         }
       ]
@@ -446,12 +446,12 @@
       "proof": [
         {
           "kind": "test",
-          "file": "apps/web/lib/__tests__/legal-constants.grievance.test.tsx",
+          "file": "apps/web/lib/__tests__/LegalConstants.grievance.test.tsx",
           "name": "publishes the role account while no individual is designated"
         },
         {
           "kind": "test",
-          "file": "apps/web/lib/__tests__/legal-constants.grievance.test.tsx",
+          "file": "apps/web/lib/__tests__/LegalConstants.grievance.test.tsx",
           "name": "publishes the grievance route on every policy page that names it"
         }
       ],

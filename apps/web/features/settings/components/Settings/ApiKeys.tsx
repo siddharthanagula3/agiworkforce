@@ -29,7 +29,7 @@ import {
   FormItem,
   FormLabel,
   FormMessage,
-} from '@shared/ui/form';
+} from '@shared/ui/Form';
 import { Plus, Key, Copy, Trash2, AlertTriangle, RefreshCw } from 'lucide-react';
 import { toast } from 'sonner';
 import {

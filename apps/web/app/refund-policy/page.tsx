@@ -11,7 +11,7 @@ import {
   Stack,
   type LedgerRow,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { CONTACT_EMAIL, POLICY_LAST_UPDATED, contactMailto } from '@/lib/legal-constants';
 import {
   WITHDRAWAL_CONSENT_STATEMENT,

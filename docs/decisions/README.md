@@ -87,7 +87,7 @@ Archived source material:
     Evidence: `docs/standards/naming-conventions.md`, `docs/development/agent-operability.md`, `scripts/check-structure-conventions.mjs`.
 
 17. The cloud foundation is Clerk for managed identity and Neon for Postgres. The migration off Supabase is complete: no `@supabase`/Supabase client usage remains in app/package/service code, there is no root `supabase/` directory, and the canonical migrations live in `apps/web/db/neon`. Do not reintroduce Supabase or switch providers by docs-only claims. (Updated 2026-06-27: superseded the prior "production stays on Supabase until verified" wording, which was stale.)
-    Evidence: `apps/web/lib/identity/provider.tsx`, `packages/platform/data-layer/src/adapters/neon.ts`, `apps/web/db/neon/`, `apps/web/.env.example`.
+    Evidence: `apps/web/lib/identity/Provider.tsx`, `packages/platform/data-layer/src/adapters/neon.ts`, `apps/web/db/neon/`, `apps/web/.env.example`.
 
 18. `docs/product/definition.md` is the first product read for agents and humans, and `audit/prior-audits/parity-implementation-matrix.md` is the first implementation read for feature/component parity. Older PRDs, generated parity reports, removed corpora retrievable only from git history (`tasks/**`, `reports/**`, `docs/archive/**`), and local screenshot/reference corpora are evidence or working notes unless current docs explicitly promote a conclusion.
     Evidence: `docs/product/definition.md`, `audit/prior-audits/parity-implementation-matrix.md`, `docs/README.md`, `docs/agent-context/doc-status.json`.

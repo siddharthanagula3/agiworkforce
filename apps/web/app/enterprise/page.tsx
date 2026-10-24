@@ -11,7 +11,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { ConsoleWindow } from '@/features/marketing/components/FeatureScenes';
 import { BYOK_SURFACES, CLI_AVAILABILITY_NOTE, SURFACE_STATUS } from '@/lib/marketing-constants';
 

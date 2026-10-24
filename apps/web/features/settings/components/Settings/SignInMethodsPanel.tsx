@@ -6,7 +6,7 @@ import type { AuthProvider, AuthProviderId } from '@agiworkforce/client-runtime'
 import { Spinner, useConfirmAction } from '@agiworkforce/ui';
 
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
-import { useStepUp } from '@features/settings/hooks/use-step-up';
+import { useStepUp } from '@features/settings/hooks/useStepUp';
 import {
   useConnectedAccounts,
   useCurrentUser,

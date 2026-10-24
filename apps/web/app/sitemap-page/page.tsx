@@ -3,7 +3,7 @@ import Link from 'next/link';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Eyebrow, Section, Stack } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 
 export const metadata = buildMetadata({
   title: 'Sitemap',

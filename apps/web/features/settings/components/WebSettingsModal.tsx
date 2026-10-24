@@ -20,8 +20,8 @@ import {
   settingsHashForSection,
 } from '@/features/directory';
 import { ToolPermissionsPanel } from '@/features/connectors/components/ToolPermissionsPanel';
-import { useConnectorsSettingsAdapter } from '@/features/connectors/hooks/use-connectors-settings-adapter';
-import { useSkillsSettingsAdapter } from '@/features/skills/hooks/use-skills-settings-adapter';
+import { useConnectorsSettingsAdapter } from '@/features/connectors/hooks/useConnectorsSettingsAdapter';
+import { useSkillsSettingsAdapter } from '@/features/skills/hooks/useSkillsSettingsAdapter';
 import {
   canonicalWebSettingsSection,
   type WebSettingsHostedSection,
@@ -64,7 +64,7 @@ import {
 } from './web-settings-navigation';
 import { SkillEditorDialog } from '@features/skills/components/SkillEditorDialog';
 
-export { SETTINGS_CONNECTORS } from '@/features/connectors/hooks/use-connectors-settings-adapter';
+export { SETTINGS_CONNECTORS } from '@/features/connectors/hooks/useConnectorsSettingsAdapter';
 
 // ---------------------------------------------------------------------------
 // Skeleton shown while a section is still hydrating

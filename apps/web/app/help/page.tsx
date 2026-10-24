@@ -12,7 +12,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { HelpSearch } from '@/features/support/components/HelpSearch';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import { BYOK_SURFACES } from '@/lib/marketing-constants';

@@ -352,7 +352,7 @@ describe('artifact beside a chat', () => {
     expectSource('apps/web/features/chat/components/artifacts/ArtifactMoreMenu.tsx', [
       '<MoreHorizontal className="h-4 w-4" aria-hidden="true" />',
     ]);
-    expectSource('apps/web/features/chat/components/artifacts/artifact-labels.tsx', [
+    expectSource('apps/web/features/chat/components/artifacts/ArtifactLabels.tsx', [
       "export const ARTIFACT_KIND_LABEL = 'Artifact';",
       'return <Globe className={cls} aria-hidden="true" />;',
     ]);

@@ -72,7 +72,7 @@ vi.mock('@features/billing/components/UpgradeWaitlistDialog', () => ({
 }));
 
 import { UpgradeAccessRequiredError } from '@features/billing/services/stripe-payments';
-import { useUpgradePlanFlow } from './use-upgrade-plan-flow';
+import { useUpgradePlanFlow } from './useUpgradePlanFlow';
 
 type StripePaymentsModule = typeof import('@features/billing/services/stripe-payments');
 

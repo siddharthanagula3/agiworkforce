@@ -14,7 +14,7 @@ import {
   Stack,
   type LedgerRow,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import {
   AUTH_MODE_LABELS,
   BADGE_LABELS,

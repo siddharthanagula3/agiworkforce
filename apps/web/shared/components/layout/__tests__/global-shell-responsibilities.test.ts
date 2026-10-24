@@ -9,7 +9,7 @@ const APP_DIR = path.join(WEB_DIR, 'app');
 
 const HOSTS = {
   rootLayout: path.join(APP_DIR, 'layout.tsx'),
-  providers: path.join(APP_DIR, 'providers.tsx'),
+  providers: path.join(APP_DIR, 'Providers.tsx'),
   productProviders: path.join(APP_DIR, 'ProductRuntimeProviders.tsx'),
   runtimeMounts: path.join(APP_DIR, 'AppRuntimeMounts.tsx'),
   appShell: path.join(LAYOUT_DIR, 'WebAppShell.tsx'),

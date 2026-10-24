@@ -12,7 +12,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactGrid } from '@/features/marketing/components/pages/surfaces/Shared';
 import {
   getCachedHealthChecks,
   NOT_CONFIGURED,

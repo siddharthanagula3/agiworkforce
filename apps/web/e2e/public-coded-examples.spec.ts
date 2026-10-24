@@ -59,7 +59,7 @@ const sourceOwners = [
   'apps/web/features/marketing/components/system/page-header.css',
   'apps/web/features/marketing/components/system/public-reference.css',
   'apps/web/features/marketing/components/system/SplitFeature.tsx',
-  'apps/web/features/marketing/components/pages/surfaces/shared.tsx',
+  'apps/web/features/marketing/components/pages/surfaces/Shared.tsx',
   'packages/ui/design-tokens/src/tailwind.css',
   'packages/ui/design-tokens/src/foundation.css',
   'packages/ui/ui/src/primitives/useTablistKeyboard.ts',

@@ -24,7 +24,7 @@ import {
 } from '@agiworkforce/cloud-contracts/account-security';
 
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
-import { useStepUp } from '@features/settings/hooks/use-step-up';
+import { useStepUp } from '@features/settings/hooks/useStepUp';
 import { isPasskeyCancellation } from '@features/settings/lib/passkey-cancellation';
 import { toUserMessage } from '@/lib/user-error-message';
 import {

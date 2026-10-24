@@ -19,7 +19,7 @@ import {
   artifactExtensionLabel,
   artifactKindLabel,
   artifactTitle,
-} from './artifact-labels';
+} from './ArtifactLabels';
 
 export const OPEN_ARTIFACT_LABEL = 'Open artifact';
 export const HIDE_ARTIFACT_LABEL = 'Hide artifact';

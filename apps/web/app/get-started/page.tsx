@@ -16,7 +16,7 @@ import {
   WEB_ENTRY_HREF,
   type TranscriptLine,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import {
   NOTIFY_CTA,
   SURFACE_NAMES,

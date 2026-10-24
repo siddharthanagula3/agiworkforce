@@ -179,7 +179,7 @@ _§1: 26 of 27 done._
       <br>_`apps/desktop/src/features/mobile-companion/MobileCompanionPanel.tsx`, `apps/mobile/src/features/companion`_
       <br>⛔ Release check: The only desktop release is Tauri v1.2.0 (4 May 2026), Linux assets only.
 - [ ] Web Remote _(revised)_ - 🔴 Missing
-      <br>_apps/web/app/pair/pair-body.tsx:29 says pairing cannot be completed in a browser; no web remote-control surface found under apps/web._
+      <br>_apps/web/app/pair/PairBody.tsx:29 says pairing cannot be completed in a browser; no web remote-control surface found under apps/web._
 - [x] Admin Console
       <br>_`apps/web/app/admin`, gated by `AGI_PLATFORM_ADMIN_USER_IDS` per `apps/web/shared/components/layout/app-nav-items.ts:143`_
 - [x] Background cloud workers
@@ -1953,7 +1953,7 @@ Controllers:
       <br>⛔ Release check: release-mobile.yml:6 v-mobile-* never tagged, zero runs; apps/mobile/lib/constants.ts:15 relay host returns Vercel DEPLOYMENT_NOT_FOUND
       <br>⛔ Relay check: the mobile app pins wss://signaling.agiworkforce.com, which returns Vercel DEPLOYMENT_NOT_FOUND; the healthy Fly app is not the host it uses.
 - [ ] Web - ⚪ N/A
-      <br>_`apps/web/app/pair/pair-body.tsx:24-27` states pairing "cannot be completed in a browser" - deliberately excluded, not a gap_
+      <br>_`apps/web/app/pair/PairBody.tsx:24-27` states pairing "cannot be completed in a browser" - deliberately excluded, not a gap_
       <br>⛔ Relay check: the mobile app pins wss://signaling.agiworkforce.com, which returns Vercel DEPLOYMENT_NOT_FOUND; the healthy Fly app is not the host it uses.
 - [ ] Desktop where useful - 🟡 Partial
       <br>_Desktop is the Host in every file found (`mobile-companion/`); no evidence Desktop can act as a controller of another device_
@@ -2686,9 +2686,9 @@ _§54: 8 of 13 done._
 # 55. Authentication
 
 - [x] Email
-      <br>_`apps/web/features/auth/identityAuthAdapter.tsx:120-188` email code sign-in via Clerk `useSignIn`_
+      <br>_`apps/web/features/auth/IdentityAuthAdapter.tsx:120-188` email code sign-in via Clerk `useSignIn`_
 - [x] Google
-      <br>_`apps/web/features/auth/identityAuthAdapter.tsx:22` `oauth_google` strategy wired_
+      <br>_`apps/web/features/auth/IdentityAuthAdapter.tsx:22` `oauth_google` strategy wired_
 - [ ] Apple _(revised)_ - 🟡 Partial
       <br>_apps/web/features/auth/authProviderConfig.ts:3 reads AGI_AUTH_PROVIDERS (absent from .env.example); packages/client/client-runtime/src/authProviders.ts:17 default is google,github only, no Apple button - unset in …_
 - [ ] Microsoft _(revised)_ - 🟡 Partial

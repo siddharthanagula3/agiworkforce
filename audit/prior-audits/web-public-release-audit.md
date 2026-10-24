@@ -335,7 +335,7 @@ not slop. What follows is what does not belong to either system.
   **Evidence:** `bg-black` loading screens, a black flash for light-theme
   visitors.
   **Smallest correction:** done this pass; `bg-background`.
-- **Location:** `apps/web/app/providers.tsx:44`.
+- **Location:** `apps/web/app/Providers.tsx:44`.
   **Evidence:** raw `sonner` `<Toaster>` with no theme, so every toast rendered
   in sonner's light palette in dark mode while the repository's own
   `SonnerToaster` (system theme, tokens) had no consumer.
@@ -639,7 +639,7 @@ Evidence: `bg-terra-cotta-500 text-white` (3.11:1 by the token contract's own no
 
 ### WEB-011: Every toast rendered in sonner's light palette
 
-Severity: P2 · Category: Theme · Route: every route · Component: `apps/web/app/providers.tsx`
+Severity: P2 · Category: Theme · Route: every route · Component: `apps/web/app/Providers.tsx`
 Evidence: raw `sonner` `<Toaster>` with no `theme` (sonner 2 defaults to light) while `SonnerToaster` in `@agiworkforce/ui` (`theme="system"`, token classes) had no web consumer. Status: Fixed.
 Verification steps: dark theme, trigger any toast (rename a chat).
 
@@ -837,7 +837,7 @@ Verification steps: 24 invariant-guard tests and the full guard pass; 368 web to
 Severity: P2
 Category: Performance / bundle
 Route: every public route (`/terms`, `/login` and `/` all loaded 47 to 48 scripts, about 1.6 MB compressed and 6.4 MB decoded, before this pass)
-Component: `apps/web/app/providers.tsx`, `apps/web/app/AppRuntimeMounts.tsx`, `apps/web/lib/user-error-message.ts`, `packages/ui/unified-chat/src/lib/Capabilities.tsx`, `packages/contracts/types/package.json`, `apps/web/app/i18n/index.ts`, `packages/ui/i18n`
+Component: `apps/web/app/Providers.tsx`, `apps/web/app/AppRuntimeMounts.tsx`, `apps/web/lib/user-error-message.ts`, `packages/ui/unified-chat/src/lib/Capabilities.tsx`, `packages/contracts/types/package.json`, `apps/web/app/i18n/index.ts`, `packages/ui/i18n`
 Evidence (MEASURED): the four largest chunks on `/terms` carried the composer,
 thinking blocks, `MarkdownContent`, mermaid, Shiki, docx and pdf helpers
 (1.2 MB raw), the model catalogue (1.6 MB raw), every locale's every

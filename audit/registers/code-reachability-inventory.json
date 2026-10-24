@@ -3495,7 +3495,7 @@
     "item": "offline-first-store",
     "surface": "packages/platform",
     "status": "built",
-    "evidence": "Desktop: local SQLite persistence at apps/desktop/src-tauri/src/data/async_sqlite.rs and database/sqlite_pool.rs. Web: packages/client/client-runtime/src/offline-queue/index.ts (369 lines, localStorage-backed queue with retry/backoff) wired via apps/web/lib/offline/offlineQueue.ts and apps/web/lib/offline/offlineSync.ts, surfaced by apps/web/shared/components/OfflineIndicator.tsx which is rendered from apps/web/app/providers.tsx."
+    "evidence": "Desktop: local SQLite persistence at apps/desktop/src-tauri/src/data/async_sqlite.rs and database/sqlite_pool.rs. Web: packages/client/client-runtime/src/offline-queue/index.ts (369 lines, localStorage-backed queue with retry/backoff) wired via apps/web/lib/offline/offlineQueue.ts and apps/web/lib/offline/offlineSync.ts, surfaced by apps/web/shared/components/OfflineIndicator.tsx which is rendered from apps/web/app/Providers.tsx."
   },
   {
     "item": "sync-engine",

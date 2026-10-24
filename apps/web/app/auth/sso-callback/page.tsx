@@ -2,7 +2,7 @@ import { Spinner } from '@agiworkforce/ui';
 
 import { AuthLayout } from '@/features/auth/AuthLayout';
 import { AuthProviderCallbackNotice } from '@/features/auth/AuthProviderCallbackNotice';
-import { IdentityBotProtection, IdentitySsoCallback } from '@/features/auth/identityAuthAdapter';
+import { IdentityBotProtection, IdentitySsoCallback } from '@/features/auth/IdentityAuthAdapter';
 import {
   buildLoginCompleteUrl,
   buildLoginUrl,

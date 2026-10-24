@@ -12,7 +12,7 @@ function source(relativePath: string): string {
 
 describe('the public root stays separate from product-only bundles', () => {
   it('does not mount the product runtime from the root provider or layout', () => {
-    const root = `${source('apps/web/app/layout.tsx')}\n${source('apps/web/app/providers.tsx')}`;
+    const root = `${source('apps/web/app/layout.tsx')}\n${source('apps/web/app/Providers.tsx')}`;
 
     expect(root).not.toContain('ProductRuntimeProviders');
     expect(root).not.toContain('AppRuntimeMounts');
@@ -22,9 +22,9 @@ describe('the public root stays separate from product-only bundles', () => {
 
   it('keeps request headers on the narrow cloud-contract entrypoint', () => {
     const csrf = source('apps/web/lib/client/csrf.ts');
-    const manifest = JSON.parse(
-      source('packages/contracts/cloud-contracts/package.json'),
-    ) as { exports: Record<string, string> };
+    const manifest = JSON.parse(source('packages/contracts/cloud-contracts/package.json')) as {
+      exports: Record<string, string>;
+    };
 
     expect(csrf).toContain("from '@agiworkforce/cloud-contracts/client-request'");
     expect(csrf).not.toMatch(/from '@agiworkforce\/cloud-contracts';/);
@@ -33,7 +33,7 @@ describe('the public root stays separate from product-only bundles', () => {
 
   it('uses published UI subpaths in the always-loaded public shell', () => {
     const publicShell = [
-      'apps/web/app/providers.tsx',
+      'apps/web/app/Providers.tsx',
       'apps/web/app/error.tsx',
       'apps/web/shared/components/CookieConsent.tsx',
       'apps/web/features/marketing/components/system/MarketingMobileNav.tsx',

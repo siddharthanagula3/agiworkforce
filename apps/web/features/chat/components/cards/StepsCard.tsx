@@ -12,7 +12,7 @@ import {
   openExtraSection,
   stripListMarker,
   type ExtraSection,
-} from './card-extras';
+} from './CardExtras';
 
 interface ParsedStep {
   title: string;

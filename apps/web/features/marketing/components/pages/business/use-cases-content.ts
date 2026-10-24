@@ -1,5 +1,5 @@
 import type { LedgerRow } from '@/features/marketing/components/system';
-import type { FactItem, PageCta } from '@/features/marketing/components/pages/surfaces/shared';
+import type { FactItem, PageCta } from '@/features/marketing/components/pages/surfaces/Shared';
 import { WEB_ENTRY_HREF } from '@/features/marketing/components/system/nav';
 import { CLI_KEYS_OUTSIDE_CATALOG_NOTE } from '@/lib/byok-providers';
 import { CATALOG_SCOPES } from '@/lib/catalog-scopes';

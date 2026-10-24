@@ -30,7 +30,7 @@ import { HelpArticleLink } from '@/features/support/components/HelpArticleLink';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { isStepUpCancelled } from '@/features/auth/step-up-fetch';
-import { useStepUp } from '@features/settings/hooks/use-step-up';
+import { useStepUp } from '@features/settings/hooks/useStepUp';
 import { SettingsSectionLink } from '@features/settings/components/SettingsSectionLink';
 import { toUserMessage } from '@/lib/user-error-message';
 import { readApiError } from './AccountSection';

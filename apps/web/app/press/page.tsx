@@ -11,7 +11,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import {
   BILLING_PLAN_PRICING,
   CONNECTORS_COMING_SOON_DETAIL,

@@ -16,7 +16,10 @@ function fact(over: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) })));
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) })),
+  );
 });
 
 // 0135 confines some memories to a project. In a flat list a confined fact

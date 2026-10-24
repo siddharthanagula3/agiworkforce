@@ -81,7 +81,7 @@
     "apps/web/app/api/settings/team/invitations/invitation-email.ts": "05636bdcfda5dba1f0817751f297af717c18d4aa1b0b06a5ccd71088cf8bdbca",
     "apps/web/app/api/uploads/chat-attachment/complete/__tests__/route.test.ts": "f5d94e223c37ad2bae77bb277d121c590e13ff3e8b21df69922380708e3bf968",
     "apps/web/app/api/user/__tests__/export-completeness.test.ts": "0ad8221477c39e6be3c0195d10d811177e4dacf1a2e3fe5e1d4c140de6140218",
-    "apps/web/app/billing/__tests__/invoices-page.test.tsx": "dd1ee544d2369fc2c2a782b37f97200cb51c210416e61ac7322de7360523fadf",
+    "apps/web/app/billing/__tests__/InvoicesPage.test.tsx": "dd1ee544d2369fc2c2a782b37f97200cb51c210416e61ac7322de7360523fadf",
     "apps/web/app/billing/invoices/InvoiceList.tsx": "e8b4e81bf507b4c5e4dae1d45d565b7d994c0532c563c3c61ee8048e2feac9ed",
     "apps/web/app/plugins/__tests__/plugin-lifecycle.test.ts": "cce5394ebfd4b6b078abf4a4062684495a4d0ea2382478ac592e3569cdef2e5c",
     "apps/web/db/neon/0267_admin_read_policies_ask_for_permissions.sql": "8cfa246967dd166d7526834f4dd642c1793a43c54796cfa220d4d680fd769b83",

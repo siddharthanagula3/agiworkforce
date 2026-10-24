@@ -9,7 +9,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactGrid, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 const AUDIENCE_ROUTES_CAPTION = 'Which door you need';

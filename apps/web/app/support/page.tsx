@@ -12,7 +12,7 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 
 export const metadata = buildMetadata({

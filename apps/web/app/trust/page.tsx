@@ -11,8 +11,8 @@ import {
   Section,
   Stack,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
-import { NoteList } from '@/features/marketing/components/pages/company/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
+import { NoteList } from '@/features/marketing/components/pages/company/Shared';
 import { PolicyContents } from '@shared/components/legal/PolicyContents';
 import {
   ACCOUNT_MINIMUM_AGE,

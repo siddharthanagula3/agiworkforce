@@ -16,7 +16,7 @@ import { useEmailAddressVerification } from '@/lib/identity/client';
 import { classifyAuthError } from '@/lib/auth/error-taxonomy';
 import { useAuthCopy } from '@/features/auth/authCopy';
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
-import { useStepUp } from '@features/settings/hooks/use-step-up';
+import { useStepUp } from '@features/settings/hooks/useStepUp';
 import { toUserMessage } from '@/lib/user-error-message';
 
 const ENDPOINT = '/api/settings/email';

@@ -8,7 +8,7 @@ import {
   makeAbstention,
   normalizeAnswer,
 } from '../lib/normalize-answer';
-import { renderSupportText } from '../lib/render-text';
+import { renderSupportText } from '../lib/RenderText';
 import {
   SUPPORT_ABSTENTION_REASONS,
   type SupportAbstentionView,

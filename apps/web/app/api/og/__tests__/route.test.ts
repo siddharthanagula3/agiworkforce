@@ -12,7 +12,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('next/og', () => ({ ImageResponse: mocks.ImageResponse }));
 
-import { OG_ACTION, OG_DOMAIN, OG_HEADLINE, OG_HEADLINE_CLOSE, OG_NAV } from '../card';
+import { OG_ACTION, OG_DOMAIN, OG_HEADLINE, OG_HEADLINE_CLOSE, OG_NAV } from '../Card';
 import { GET, OG_FONT_FILES } from '../route';
 
 describe('GET /api/og', () => {

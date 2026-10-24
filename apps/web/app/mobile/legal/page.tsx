@@ -10,7 +10,7 @@ import {
   Stack,
   type LedgerRow,
 } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { COMING_SOON_LABEL, SURFACE_STATUS } from '@/lib/marketing-constants';
 import {
   CONTACT_EMAIL,

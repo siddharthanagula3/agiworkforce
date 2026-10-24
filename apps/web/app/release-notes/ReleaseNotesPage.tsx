@@ -10,7 +10,7 @@ import {
 } from '@/lib/legal/policy-archive';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Ledger, Prose, Section, Stack } from '@/features/marketing/components/system';
-import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { FactLine, PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { DOC_MATURITIES, type DocMaturity } from '@/lib/support/doc-metadata';
 
 import { ATOM_MEDIA_TYPE, CHANGELOG_FEED_PATH } from './changelog-feed';

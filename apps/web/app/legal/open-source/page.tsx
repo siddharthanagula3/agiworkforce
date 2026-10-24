@@ -2,7 +2,7 @@ import { buildMetadata } from '@/lib/seo/metadata';
 import { Header } from '@shared/components/layout/Header';
 import { MarketingFooter } from '@/features/marketing/components/MarketingFooter';
 import { Section } from '@/features/marketing/components/system';
-import { PageHero } from '@/features/marketing/components/pages/surfaces/shared';
+import { PageHero } from '@/features/marketing/components/pages/surfaces/Shared';
 import { GENERATED_NOTICES_FILE, NOTICES_URL, loadThirdPartyNotices } from './load-notices';
 import { summarizeNotices, type NoticesSummary } from './notices';
 import { OpenSourceNotices } from './OpenSourceNotices';

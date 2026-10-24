@@ -14,7 +14,7 @@ import {
   FactGrid,
   FactLine,
   PageHero,
-} from '@/features/marketing/components/pages/surfaces/shared';
+} from '@/features/marketing/components/pages/surfaces/Shared';
 import { CONTACT_EMAIL, contactMailto } from '@/lib/legal-constants';
 import {
   CLI_AVAILABILITY_NOTE,

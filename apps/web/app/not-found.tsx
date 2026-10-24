@@ -3,7 +3,7 @@ import { MarketingFooter } from '@/features/marketing/components/MarketingFooter
 import { Prose, Section, Stack } from '@/features/marketing/components/system';
 import { DesktopRouteMessage } from '@/features/desktop-host/components/DesktopRouteMessage';
 import { DesktopRouteSurface } from '@/features/desktop-host/components/DesktopRouteSurface';
-import { NotFoundActions } from './not-found-client';
+import { NotFoundActions } from './NotFoundClient';
 
 const TITLE_ID = 'agi-not-found-title';
 

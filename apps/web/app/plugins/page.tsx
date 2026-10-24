@@ -7,7 +7,7 @@ import {
   MarketingFooter,
   Prose,
 } from '@/features/marketing/components/system';
-import { LinkGrid } from '@/features/marketing/components/pages/features/shared';
+import { LinkGrid } from '@/features/marketing/components/pages/features/Shared';
 import { loadPluginCatalog } from '@/features/plugins/server/registry-source';
 import {
   pluginAvailabilityClaim,

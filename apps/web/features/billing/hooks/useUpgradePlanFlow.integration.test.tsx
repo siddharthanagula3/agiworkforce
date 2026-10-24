@@ -49,7 +49,7 @@ vi.mock('@shared/stores/authentication-store', () => ({
 }));
 
 import { queryClient, queryKeys } from '@shared/stores/query-client';
-import { useUpgradePlanFlow } from './use-upgrade-plan-flow';
+import { useUpgradePlanFlow } from './useUpgradePlanFlow';
 
 type ReactI18nextModule = typeof import('react-i18next');
 type StripePaymentsModule = typeof import('@features/billing/services/stripe-payments');

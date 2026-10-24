@@ -6,7 +6,7 @@ import { getAuthToken } from '@shared/lib/get-auth-token';
 import { addCsrfHeaders } from '@/lib/client/csrf';
 import { toUserMessage } from '@/lib/user-error-message';
 import { sendAuthorizedJson } from '@/features/auth/step-up-fetch';
-import { useStepUp } from '@/features/settings/hooks/use-step-up';
+import { useStepUp } from '@/features/settings/hooks/useStepUp';
 
 export interface WorkspaceApiKey {
   id: string;

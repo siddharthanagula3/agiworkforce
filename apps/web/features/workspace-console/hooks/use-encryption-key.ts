@@ -3,7 +3,7 @@
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from '@tanstack/react-query';
 
 import { sendAuthorizedJson } from '@/features/auth/step-up-fetch';
-import { useStepUp } from '@/features/settings/hooks/use-step-up';
+import { useStepUp } from '@/features/settings/hooks/useStepUp';
 import { getAuthToken } from '@shared/lib/get-auth-token';
 import { toUserMessage } from '@/lib/user-error-message';
 import type { KeyRewrapState } from '@agiworkforce/types/encryption-key';

@@ -335,7 +335,7 @@ import { TimeFocusReminder } from '@/features/time-focus/TimeFocusReminder';
 import Link from 'next/link';
 import { toast } from 'sonner';
 import { safeClipboard } from '@shared/utils/browser-utils';
-import { useUpgradePlanFlow } from '@features/billing/hooks/use-upgrade-plan-flow';
+import { useUpgradePlanFlow } from '@features/billing/hooks/useUpgradePlanFlow';
 import {
   buildAcceptedHandoffSystemMessage,
   buildWebLocalToByokPreview,

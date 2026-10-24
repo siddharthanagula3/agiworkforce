@@ -154,7 +154,7 @@ vi.mock('@/features/workspaces/components/WorkspaceMenuItems', () => ({
 // WebChatPage (dialog, mid-cycle confirm, real Stripe checkout call) via
 // this shared hook. Stubbed for the same reason WorkspaceMenuItems is: this
 // is a layout test, not a billing-flow one.
-vi.mock('@features/billing/hooks/use-upgrade-plan-flow', () => ({
+vi.mock('@features/billing/hooks/useUpgradePlanFlow', () => ({
   useUpgradePlanFlow: () => ({
     openUpgradeDialog: upgradeFlowState.openUpgradeDialog,
     upgradeDialogs: null,

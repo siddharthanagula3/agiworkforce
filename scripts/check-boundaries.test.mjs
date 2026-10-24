@@ -222,8 +222,8 @@ test('the real identity allowlist names only the provider ui mount, the auth ada
   );
   const allowlistedPaths = new Set(allowlist.entries.map((entry) => entry.path));
   for (const seeded of [
-    'apps/web/lib/identity/provider.tsx',
-    'apps/web/features/auth/identityAuthAdapter.tsx',
+    'apps/web/lib/identity/Provider.tsx',
+    'apps/web/features/auth/IdentityAuthAdapter.tsx',
     'apps/web/lib/identity/client.ts',
     'apps/web/lib/identity/token.ts',
     'apps/web/lib/server/sso/clerk-enterprise-connections.ts',

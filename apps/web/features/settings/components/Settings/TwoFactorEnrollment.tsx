@@ -19,7 +19,7 @@ import settingsService, {
   type TwoFactorStatus,
 } from '@features/settings/services/user-preferences';
 import { isStepUpCancelled, sendAuthorizedJson } from '@/features/auth/step-up-fetch';
-import { useStepUp } from '@features/settings/hooks/use-step-up';
+import { useStepUp } from '@features/settings/hooks/useStepUp';
 import { toUserMessage } from '@/lib/user-error-message';
 import { queryClient } from '@shared/stores/query-client';
 import { WORKSPACE_MFA_REQUIREMENT_QUERY_KEY } from '../WorkspaceMfaNotice';

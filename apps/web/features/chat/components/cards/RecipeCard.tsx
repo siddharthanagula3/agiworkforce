@@ -5,7 +5,7 @@ import { Clock, Users, ChefHat, Printer, Timer, UtensilsCrossed } from 'lucide-r
 import { Badge, Card, CardContent, CardHeader, Button } from '@agiworkforce/ui';
 import { Checkbox } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
-import { CardExtraSections, type ExtraSection } from './card-extras';
+import { CardExtraSections, type ExtraSection } from './CardExtras';
 
 interface ParsedRecipe {
   title: string;
