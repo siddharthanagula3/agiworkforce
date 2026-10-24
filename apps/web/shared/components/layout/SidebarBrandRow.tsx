@@ -5,7 +5,7 @@ import { NotificationBell } from '@/features/notifications/components/Notificati
 
 export function SidebarBrandRow() {
   return (
-    <div className="flex w-full items-center justify-between gap-2">
+    <div className="@container flex w-full items-center justify-between gap-1">
       <SidebarWordmark />
       <NotificationBell />
     </div>
