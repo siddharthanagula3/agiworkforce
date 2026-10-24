@@ -210,6 +210,10 @@ describe('streamFreeChat caller-declared browser tools', () => {
 });
 
 describe('executeChromeManagedChat tool continuation', () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it('continues a long tool leg with a fresh session token, not the one the turn began with', async () => {
     const streamChat = vi
       .fn<
@@ -394,7 +398,10 @@ describe('executeChromeManagedChat tool continuation', () => {
       void promise.finally(() => {
         done = true;
       });
-      for (let step = 0; step < 50 && !done; step += 1) await vi.advanceTimersByTimeAsync(500);
+      while (!done) {
+        await vi.advanceTimersByTimeAsync(500);
+        await new Promise<void>((resolve) => setImmediate(resolve));
+      }
       return promise;
     };
     try {
