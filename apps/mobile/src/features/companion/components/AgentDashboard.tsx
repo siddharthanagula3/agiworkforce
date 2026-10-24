@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, RefreshControl, Alert } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { FlashList } from '@shopify/flash-list';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
@@ -33,11 +33,11 @@ import {
   ExternalLink,
   Layers,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Separator } from '@/components/ui/Separator';
 import { useAgentStore, type Agent, type RunArtifact } from '@/stores/agentStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors, motion } from '@/src/ui/theme';

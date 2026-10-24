@@ -1,6 +1,6 @@
 # agiworkforce UI/UX gap tracker
 
-<!-- ui-gaps-csv-sha256: 7d6b3328eb1e6d5a8e3c134cf546227430a6d1b4c71b0e026391b153d998b242 -->
+<!-- ui-gaps-csv-sha256: 7c1049a51bc994b6fa2ab135af67c53cdd466a5c0f4ca2e3d21437580e137e2e -->
 
 > Canonical comparison tracker normalized from the ChatGPT, Codex, and Claude UI/UX audit.
 > `audit/registers/ui-gaps.csv` is the source of truth; this document is generated with
@@ -55,7 +55,7 @@ The reference gives Skills a first-class screen with navigation, search, source 
 
 **Evidence**
 
-apps/mobile/src/features/skills/service.ts validates the authenticated /api/skills metadata contract. SkillsScreen.tsx enforces Clerk sign-in and Cloud mode before fetching, renders search, source badges, loading/error/refresh states, and a teaching empty state. app/(app)/skills/index.tsx and the authenticated drawer layout register the route; DrawerContent.tsx exposes the Cloud-tagged destination. skills-service.test.ts, skills-page.test.tsx, drawer-content.test.tsx, and drawer-route-contract.test.ts cover the contract, Local no-egress gate, navigation, search, empty/error states, and route ownership.
+apps/mobile/src/features/skills/service.ts validates the authenticated /api/skills metadata contract. SkillsScreen.tsx enforces Clerk sign-in and Cloud mode before fetching, renders search, source badges, loading/error/refresh states, and a teaching empty state. app/(app)/skills/index.tsx and the authenticated drawer layout register the route; DrawerContent.tsx exposes the Cloud-tagged destination. skills-service.test.ts, SkillsPage.test.tsx, DrawerContent.test.tsx, and drawer-route-contract.test.ts cover the contract, Local no-egress gate, navigation, search, empty/error states, and route ownership.
 
 **Suggested fix**
 
@@ -316,7 +316,7 @@ The Mobile Cloud Account screen now presents Email as a first-class settings row
 
 **Evidence**
 
-apps/mobile/src/features/settings/cloud-account/index.tsx mounts the Email SettingsRow and Change your email Alert with Cancel and Continue, then revalidates captureVisibleAccount before calling openExternalUrl for /settings/account. cloud-account-owner-switch.test.tsx verifies the current-address copy and Web handoff.
+apps/mobile/src/features/settings/cloud-account/index.tsx mounts the Email SettingsRow and Change your email Alert with Cancel and Continue, then revalidates captureVisibleAccount before calling openExternalUrl for /settings/account. CloudAccountOwnerSwitch.test.tsx verifies the current-address copy and Web handoff.
 
 **Suggested fix**
 
@@ -339,7 +339,7 @@ Restore purchases now returns a typed terminal outcome instead of silently rever
 
 **Evidence**
 
-apps/mobile/src/features/billing/useIapPurchaseFlow.ts returns restored, none, failed, or account-changed outcomes after store reconciliation and server verification. apps/mobile/src/features/settings/cloud-billing/index.tsx renders platform-aware Alerts and retries the restore operation. use-iap-purchase-flow.test.tsx and cloud-billing-page.test.tsx cover restored tiers, zero purchases, failure, and retry.
+apps/mobile/src/features/billing/useIapPurchaseFlow.ts returns restored, none, failed, or account-changed outcomes after store reconciliation and server verification. apps/mobile/src/features/settings/cloud-billing/index.tsx renders platform-aware Alerts and retries the restore operation. use-iap-purchase-flow.test.tsx and CloudBillingPage.test.tsx cover restored tiers, zero purchases, failure, and retry.
 
 **Suggested fix**
 
@@ -385,7 +385,7 @@ Mobile now separates the composer-first new-chat surface from a dedicated Chats 
 
 **Evidence**
 
-apps/mobile/app/(app)/chats/index.tsx registers the route; ChatsListScreen.tsx owns the mode-scoped unbounded SectionList, recency grouping, filter dialog, search field, empty states, and floating New chat action. DrawerContent.tsx exposes Chats and routes its search affordance to the full screen; the composer copy points users to Chats for history. chats-list-screen.test.tsx verifies ten uncapped rows, filters, search, and creation; drawer-content.test.tsx and drawer-route-contract.test.ts verify discoverability and route ownership.
+apps/mobile/app/(app)/chats/index.tsx registers the route; ChatsListScreen.tsx owns the mode-scoped unbounded SectionList, recency grouping, filter dialog, search field, empty states, and floating New chat action. DrawerContent.tsx exposes Chats and routes its search affordance to the full screen; the composer copy points users to Chats for history. ChatsListScreen.test.tsx verifies ten uncapped rows, filters, search, and creation; DrawerContent.test.tsx and drawer-route-contract.test.ts verify discoverability and route ownership.
 
 **Suggested fix**
 
@@ -408,7 +408,7 @@ A full-screen continuity sheet now appears once per signed-in Cloud owner when t
 
 **Evidence**
 
-src/features/continuity owns the account-scoped encrypted-MMKV acknowledgement, first-Cloud gate, accessible full-screen explanation, and Managed Cloud composer handoff. app/(app)/continuity/index.tsx registers the route, the authenticated drawer mounts the gate, and settings/capabilities/index.tsx exposes the replay row. continuity-onboarding.test.tsx covers owner isolation, Local and acknowledged suppression, benefits, start/not-now behavior, sign-in fallback, and the task_completed notification contract; capabilities-settings.test.tsx covers replay routing, while cloud-tasks-screen.test.tsx and notification-auth-gate.test.ts cover the real run and notification seams.
+src/features/continuity owns the account-scoped encrypted-MMKV acknowledgement, first-Cloud gate, accessible full-screen explanation, and Managed Cloud composer handoff. app/(app)/continuity/index.tsx registers the route, the authenticated drawer mounts the gate, and settings/capabilities/index.tsx exposes the replay row. ContinuityOnboarding.test.tsx covers owner isolation, Local and acknowledged suppression, benefits, start/not-now behavior, sign-in fallback, and the task_completed notification contract; CapabilitiesSettings.test.tsx covers replay routing, while CloudTasksScreen.test.tsx and notification-auth-gate.test.ts cover the real run and notification seams.
 
 **Suggested fix**
 
@@ -431,7 +431,7 @@ The Chats search field names its complete scope and fans out over chat titles an
 
 **Evidence**
 
-src/features/search/mobileGlobalSearch.ts owns the pure grouped projection and attachment metadata collector. ChatsListScreen.tsx selects mode-scoped conversations, messages, projects, images, and artifact provenance, rejects stale content-search results from a previous query, and routes typed results. Library and Artifacts route wrappers accept exact result ids; their feature screens revalidate the authorized store projection before opening. mobile-global-search.test.ts, chats-list-screen.test.tsx, library-search-deep-link.test.tsx, search-result-route-handoff.test.tsx, artifacts-code-sessions.test.tsx, and existing chat-view-search tests cover grouping, attachment discovery, mode boundaries, and exact handoffs.
+src/features/search/mobileGlobalSearch.ts owns the pure grouped projection and attachment metadata collector. ChatsListScreen.tsx selects mode-scoped conversations, messages, projects, images, and artifact provenance, rejects stale content-search results from a previous query, and routes typed results. Library and Artifacts route wrappers accept exact result ids; their feature screens revalidate the authorized store projection before opening. mobile-global-search.test.ts, ChatsListScreen.test.tsx, LibrarySearchDeepLink.test.tsx, SearchResultRouteHandoff.test.tsx, ArtifactsCodeSessions.test.tsx, and existing chat-view-search tests cover grouping, attachment discovery, mode boundaries, and exact handoffs.
 
 **Suggested fix**
 
@@ -454,7 +454,7 @@ The reference controls a session runtime owned by the same Mobile product, but a
 
 **Evidence**
 
-apps/mobile/lib/v1FeatureFlags.ts keeps the legacy Mobile Agents surface disabled while Dispatch uses its separate authenticated contract. apps/mobile/src/features/cloud-bridge/README.md records removal of the unshipped Code Sessions shell. DispatchTaskComposer.tsx tells the user that Desktop privacy and approval rules still apply, and services/companion.ts plus packages/contracts/types/src/cross-device.ts carry no approval-policy override. Desktop coworkDispatch.ts submits the task under Desktop-owned runtime settings and native approval enforcement. The Action approvals route itself falls back to a read-only Ask state while FEATURES.agents is false, covered by auto-approve-settings.test.tsx.
+apps/mobile/lib/v1FeatureFlags.ts keeps the legacy Mobile Agents surface disabled while Dispatch uses its separate authenticated contract. apps/mobile/src/features/cloud-bridge/README.md records removal of the unshipped Code Sessions shell. DispatchTaskComposer.tsx tells the user that Desktop privacy and approval rules still apply, and services/companion.ts plus packages/contracts/types/src/cross-device.ts carry no approval-policy override. Desktop coworkDispatch.ts submits the task under Desktop-owned runtime settings and native approval enforcement. The Action approvals route itself falls back to a read-only Ask state while FEATURES.agents is false, covered by AutoApproveSettings.test.tsx.
 
 **Suggested fix**
 
@@ -477,7 +477,7 @@ Mobile Library now segments All / Images / Documents / Artifacts. Documents are 
 
 **Evidence**
 
-apps/mobile/src/features/library/index.tsx implements the Documents filter, metadata cards, mode-scoped transcript projection, and source-chat routing. mobileGlobalSearch.ts provides the shared attachment projection and owner-scoped asset deduplication. AddToChatSheet.tsx exposes Attach from Library; both chat routes wire it into the composer. chatExecutionStore.ts preserves attachment size and asset id and uploads only newly selected device files. library-search-deep-link.test.tsx, add-to-chat.test.tsx, mobile-global-search.test.ts, and chatStore.test.ts cover discovery, mode isolation, re-attachment, deduplication, exact deep links, and no-reupload Cloud reuse.
+apps/mobile/src/features/library/index.tsx implements the Documents filter, metadata cards, mode-scoped transcript projection, and source-chat routing. mobileGlobalSearch.ts provides the shared attachment projection and owner-scoped asset deduplication. AddToChatSheet.tsx exposes Attach from Library; both chat routes wire it into the composer. chatExecutionStore.ts preserves attachment size and asset id and uploads only newly selected device files. LibrarySearchDeepLink.test.tsx, AddToChat.test.tsx, mobile-global-search.test.ts, and chatStore.test.ts cover discovery, mode isolation, re-attachment, deduplication, exact deep links, and no-reupload Cloud reuse.
 
 **Suggested fix**
 
@@ -500,7 +500,7 @@ Library now pins a Search library pill above the grid. It filters the already-au
 
 **Evidence**
 
-apps/mobile/src/features/library/index.tsx owns the Search library TextInput, clear action, local filtering, and query-aware empty state over the mode-scoped items projection. library-search-deep-link.test.tsx verifies document filtering, no-match feedback, restored matches, and exact source-chat navigation. The same predicate covers image prompt/source and artifact title/content/kind/language/source.
+apps/mobile/src/features/library/index.tsx owns the Search library TextInput, clear action, local filtering, and query-aware empty state over the mode-scoped items projection. LibrarySearchDeepLink.test.tsx verifies document filtering, no-match feedback, restored matches, and exact source-chat navigation. The same predicate covers image prompt/source and artifact title/content/kind/language/source.
 
 **Suggested fix**
 
@@ -523,7 +523,7 @@ Mobile manual entry now teaches and displays the exact grouped 12-character form
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/QRScanner.tsx uses the ABCD EFGH IJKL placeholder and Settings → Connections guidance. services/manualPairing.ts normalizes display separators, validates the current 12-character contract, derives the HTTPS signaling origin, performs the token claim without Clerk credentials or user content, and validates the bounded response. connectionStore.ts claims only when a QR token is absent and passes the returned role token into SignalingClient. services/signaling-server/src/index.ts exposes the strict 10/min/IP Mobile-only claim route with uniform invalid/expired responses and a duplicate-role guard. qr-scanner-manual.test.tsx, manual-pairing.test.ts, manual-pairing-connect.test.ts, dispatch-defense.test.ts, and signaling-server pairings.test.ts cover UI, normalization, exchange, WebSocket handoff, failures, and server contract.
+apps/mobile/src/features/companion/components/QRScanner.tsx uses the ABCD EFGH IJKL placeholder and Settings → Connections guidance. services/manualPairing.ts normalizes display separators, validates the current 12-character contract, derives the HTTPS signaling origin, performs the token claim without Clerk credentials or user content, and validates the bounded response. connectionStore.ts claims only when a QR token is absent and passes the returned role token into SignalingClient. services/signaling-server/src/index.ts exposes the strict 10/min/IP Mobile-only claim route with uniform invalid/expired responses and a duplicate-role guard. QrScannerManual.test.tsx, manual-pairing.test.ts, manual-pairing-connect.test.ts, dispatch-defense.test.ts, and signaling-server pairings.test.ts cover UI, normalization, exchange, WebSocket handoff, failures, and server contract.
 
 **Suggested fix**
 
@@ -546,7 +546,7 @@ The reference is an account-linked family-governance product. agiworkforce v1 ma
 
 **Evidence**
 
-The age-gate screen's module contract explicitly says there is no parental-consent flow in v1 and that minor-safe mode is a content filter only. parental-controls/index.tsx now labels the scope Device age settings only, enumerates the unavailable remote controls, and says review changes only this device; the minor status copy names the real pre-inference Local/Cloud filtering boundary. age-gate.tsx no longer implies that a linked parent account exists. parental-controls.test.tsx verifies the adult and minor disclosures plus the bounded on-device review route.
+The age-gate screen's module contract explicitly says there is no parental-consent flow in v1 and that minor-safe mode is a content filter only. parental-controls/index.tsx now labels the scope Device age settings only, enumerates the unavailable remote controls, and says review changes only this device; the minor status copy names the real pre-inference Local/Cloud filtering boundary. age-gate.tsx no longer implies that a linked parent account exists. ParentalControls.test.tsx verifies the adult and minor disclosures plus the bounded on-device review route.
 
 **Suggested fix**
 
@@ -615,7 +615,7 @@ The reference requires both apps to share one account, but that is not agiworkfo
 
 **Evidence**
 
-ConnectionStateViews.tsx presents a Desktop setup required card above the CTA, names Managed Cloud, explains code-based rather than account-identity authorization, updates the three steps to Settings > Connections, and removes the inaccurate same-network troubleshooting claim. CompanionDemoWalkthrough.tsx repeats the same requirements. companion-pairing-requirements.test.tsx renders both surfaces and asserts the Managed Cloud, account-identity, current navigation, and cross-network copy.
+ConnectionStateViews.tsx presents a Desktop setup required card above the CTA, names Managed Cloud, explains code-based rather than account-identity authorization, updates the three steps to Settings > Connections, and removes the inaccurate same-network troubleshooting claim. CompanionDemoWalkthrough.tsx repeats the same requirements. CompanionPairingRequirements.test.tsx renders both surfaces and asserts the Managed Cloud, account-identity, current navigation, and cross-network copy.
 
 **Suggested fix**
 
@@ -638,7 +638,7 @@ The reference exposes projects and folders from a paired computer. AGI Workforce
 
 **Evidence**
 
-packages/contracts/types/src/cross-device.ts defines dispatch.task.create with prompt/title only; apps/desktop/src/services/coworkDispatch.ts parses that bounded contract and submits the prompt without a path; apps/desktop/src/features/settings/AllowedDirectoriesSettings.tsx and apps/desktop/src-tauri/src/sys/security/tool_guard.rs keep directory grants Desktop-authoritative; RemoteWorkspaceBoundaryNotice.tsx is mounted in DesktopInfoCard.tsx; remote-workspace-boundary-notice.test.tsx pins the disclosure.
+packages/contracts/types/src/cross-device.ts defines dispatch.task.create with prompt/title only; apps/desktop/src/services/coworkDispatch.ts parses that bounded contract and submits the prompt without a path; apps/desktop/src/features/settings/AllowedDirectoriesSettings.tsx and apps/desktop/src-tauri/src/sys/security/tool_guard.rs keep directory grants Desktop-authoritative; RemoteWorkspaceBoundaryNotice.tsx is mounted in DesktopInfoCard.tsx; RemoteWorkspaceBoundaryNotice.test.tsx pins the disclosure.
 
 **Suggested fix**
 
@@ -661,7 +661,7 @@ The empty Scheduled tasks state now teaches concrete uses through four accessibl
 
 **Evidence**
 
-apps/mobile/src/features/schedules/templates.ts owns the bounded IDs, display copy, prompts, supported cadence defaults, and getScheduleTemplate allowlist lookup. schedules/index.tsx renders the template gallery only when task creation is available and routes only the selected ID. schedules/create.tsx resolves that ID locally into ScheduleForm initialData, ignores unknown or array-valued route data, and gives an existing saved schedule precedence while editing. schedule-screen.test.tsx, schedule-create-screen.test.tsx, schedule-templates.test.ts, and schedule-form.test.tsx cover visibility, plan gating, ID-only handoff, allowlist resolution, invalid input, edit precedence, supported cadences, and form initialization.
+apps/mobile/src/features/schedules/templates.ts owns the bounded IDs, display copy, prompts, supported cadence defaults, and getScheduleTemplate allowlist lookup. schedules/index.tsx renders the template gallery only when task creation is available and routes only the selected ID. schedules/create.tsx resolves that ID locally into ScheduleForm initialData, ignores unknown or array-valued route data, and gives an existing saved schedule precedence while editing. ScheduleScreen.test.tsx, ScheduleCreateScreen.test.tsx, schedule-templates.test.ts, and ScheduleForm.test.tsx cover visibility, plan gating, ID-only handoff, allowlist resolution, invalid input, edit precedence, supported cadences, and form initialization.
 
 **Suggested fix**
 
@@ -684,7 +684,7 @@ The reference lets a recurring task carry Camera, Photos, Files, or plugin conte
 
 **Evidence**
 
-ScheduleForm.tsx renders the accessible Prompt-only context disclosure and submits no attachment field; schedule-form.test.tsx pins the copy and payload boundary. apps/mobile/src/features/schedules/store.ts and service.ts define prompt/timing/model inputs only. packages/contracts/cloud-contracts/src/schedules.ts validates an exact mutation without attachments. apps/web/lib/services/schedule-service.ts persists no asset reference, and scheduled-agent-executor.ts sends only task.prompt as the user message.
+ScheduleForm.tsx renders the accessible Prompt-only context disclosure and submits no attachment field; ScheduleForm.test.tsx pins the copy and payload boundary. apps/mobile/src/features/schedules/store.ts and service.ts define prompt/timing/model inputs only. packages/contracts/cloud-contracts/src/schedules.ts validates an exact mutation without attachments. apps/web/lib/services/schedule-service.ts persists no asset reference, and scheduled-agent-executor.ts sends only task.prompt as the user message.
 
 **Suggested fix**
 
@@ -707,7 +707,7 @@ Capabilities now exposes inline switches only for the three persisted preference
 
 **Evidence**
 
-apps/mobile/src/features/settings/capabilities/index.tsx binds Switch rows directly to useChatStore.features.imageGen/codeExecution/research and setFeature, disables them before Cloud unlock, and explains the send-time capability clamp. chatExecutionStore.ts and ChatInput.tsx consume those same feature values while rechecking model, entitlement, and deployment support. capabilities-settings.test.tsx verifies the three accessible switches, signed-out disabled state, automatic Web search status, persisted mutations, and existing navigation; add-to-chat.test.tsx covers the second control surface over the same store.
+apps/mobile/src/features/settings/capabilities/index.tsx binds Switch rows directly to useChatStore.features.imageGen/codeExecution/research and setFeature, disables them before Cloud unlock, and explains the send-time capability clamp. chatExecutionStore.ts and ChatInput.tsx consume those same feature values while rechecking model, entitlement, and deployment support. CapabilitiesSettings.test.tsx verifies the three accessible switches, signed-out disabled state, automatic Web search status, persisted mutations, and existing navigation; AddToChat.test.tsx covers the second control surface over the same store.
 
 **Suggested fix**
 
@@ -730,7 +730,7 @@ Mobile Memory now exposes the two named controls from the reference. Search and 
 
 **Evidence**
 
-apps/mobile/app/(app)/settings/memory.tsx mounts MemoryControlsCard over the existing memory manager. Local and Cloud settings stores persist separate policies; Cloud maps only memory and generateFromHistory into the account-synced capabilities namespace while recursive merging preserves Web-only keys. chatExecutionStore.ts enforces the reference switch before saved-memory and past-chat retrieval, excludes the active conversation, and injects bounded excerpts as untrusted data; consolidation.ts enforces both switches for Local learning. The Web managed-memory policy now enforces generateFromHistory for server-owned Cloud learning. memory-controls-card.test.tsx, past-chat-context.test.ts, consolidation-mode-routing.test.ts, cloud-settings-sync.test.ts, settings-store.test.tsx, request-processor.memory.test.ts, and managed-memory-context-service.test.ts cover the visible controls, mode boundary, current-chat exclusion, bounding, sync, and runtime gates.
+apps/mobile/app/(app)/settings/memory.tsx mounts MemoryControlsCard over the existing memory manager. Local and Cloud settings stores persist separate policies; Cloud maps only memory and generateFromHistory into the account-synced capabilities namespace while recursive merging preserves Web-only keys. chatExecutionStore.ts enforces the reference switch before saved-memory and past-chat retrieval, excludes the active conversation, and injects bounded excerpts as untrusted data; consolidation.ts enforces both switches for Local learning. The Web managed-memory policy now enforces generateFromHistory for server-owned Cloud learning. MemoryControlsCard.test.tsx, past-chat-context.test.ts, consolidation-mode-routing.test.ts, cloud-settings-sync.test.ts, SettingsStore.test.tsx, request-processor.memory.test.ts, and managed-memory-context-service.test.ts cover the visible controls, mode boundary, current-chat exclusion, bounding, sync, and runtime gates.
 
 **Suggested fix**
 
@@ -753,7 +753,7 @@ The reference offers customer conversations to a model-improvement program, but 
 
 **Evidence**
 
-docs/00-foundation/platform-constitution.md defines AGI as not a foundation-model company. apps/web/app/privacy/page.tsx and app/mobile/legal/page.tsx state that AGI-owned models are not trained on customer conversation content. The Web PrivacySection source deliberately excludes improveModelTraining because no training-data pipeline exists and calls a saved-but-unconsumed preference a dead control. Mobile data-controls/index.tsx now shows the non-optional policy before export/sync controls; cloud-privacy/index.tsx reports AGI model training: Always off and removes the unsupported without-consent claim. model-training-policy.test.tsx verifies both screens expose the policy and no training switch.
+docs/00-foundation/platform-constitution.md defines AGI as not a foundation-model company. apps/web/app/privacy/page.tsx and app/mobile/legal/page.tsx state that AGI-owned models are not trained on customer conversation content. The Web PrivacySection source deliberately excludes improveModelTraining because no training-data pipeline exists and calls a saved-but-unconsumed preference a dead control. Mobile data-controls/index.tsx now shows the non-optional policy before export/sync controls; cloud-privacy/index.tsx reports AGI model training: Always off and removes the unsupported without-consent claim. ModelTrainingPolicy.test.tsx verifies both screens expose the policy and no training switch.
 
 **Suggested fix**
 
@@ -776,7 +776,7 @@ Mobile Account now places an authenticated Export Cloud Data action immediately 
 
 **Evidence**
 
-apps/web/app/api/user/export/route.ts now exports explicit tenant-scoped conversation, message, project, project-file, memory, artifact, and artifact-version DTOs while excluding internal token costs, storage URIs, sync cursors, and provider ledgers. Child queries scope ownership through their parent. apps/mobile/services/cloudDataExport.ts binds the request and every file/share step to the visible account epoch, remains behind the Local/Cloud egress guard, validates the response, shares JSON natively, and removes the temporary file. settings/cloud-account/index.tsx renders Export Cloud Data directly before Danger Zone, explains its contents and Local export boundary, requires an explicit Cloud-mode switch, and references export in deletion confirmation. gdpr.test.ts, cloud-data-export.test.ts, and cloud-account-owner-switch.test.tsx verify content inclusion, tenant scoping, cleanup, Local-mode gating, account-switch abort, placement flow, and deletion copy.
+apps/web/app/api/user/export/route.ts now exports explicit tenant-scoped conversation, message, project, project-file, memory, artifact, and artifact-version DTOs while excluding internal token costs, storage URIs, sync cursors, and provider ledgers. Child queries scope ownership through their parent. apps/mobile/services/cloudDataExport.ts binds the request and every file/share step to the visible account epoch, remains behind the Local/Cloud egress guard, validates the response, shares JSON natively, and removes the temporary file. settings/cloud-account/index.tsx renders Export Cloud Data directly before Danger Zone, explains its contents and Local export boundary, requires an explicit Cloud-mode switch, and references export in deletion confirmation. gdpr.test.ts, cloud-data-export.test.ts, and CloudAccountOwnerSwitch.test.tsx verify content inclusion, tenant scoping, cleanup, Local-mode gating, account-switch abort, placement flow, and deletion copy.
 
 **Suggested fix**
 
@@ -822,7 +822,7 @@ Notification Preferences now presents each category as a drill-in row with a Pus
 
 **Evidence**
 
-apps/mobile/src/features/settings/notifications/index.tsx renders category summaries and routes to /(app)/settings/notifications/[category]. NotificationCategoryDetailScreen.tsx owns the live Push switch, the non-interactive Email unavailable state, and explicit no-hidden-preference copy. categories.ts is the bounded shared category allowlist used by both screens. The dynamic Expo route is registered in the authenticated drawer. notification-category-settings.test.tsx verifies summaries, exact navigation, live store mutation, absence of an email preference, and invalid-category rejection; notificationPrefs.test.ts and notification-auth-gate.test.ts continue to verify the stored preference gates notification delivery.
+apps/mobile/src/features/settings/notifications/index.tsx renders category summaries and routes to /(app)/settings/notifications/[category]. NotificationCategoryDetailScreen.tsx owns the live Push switch, the non-interactive Email unavailable state, and explicit no-hidden-preference copy. categories.ts is the bounded shared category allowlist used by both screens. The dynamic Expo route is registered in the authenticated drawer. NotificationCategorySettings.test.tsx verifies summaries, exact navigation, live store mutation, absence of an email preference, and invalid-category rejection; notificationPrefs.test.ts and notification-auth-gate.test.ts continue to verify the stored preference gates notification delivery.
 
 **Suggested fix**
 
@@ -868,7 +868,7 @@ Mobile no longer leaves the device-only scope implicit. It shows whether minor-s
 
 **Evidence**
 
-parental-controls/index.tsx contains separate status and Device age settings only information cards plus the renamed Review Device Age Settings action. app/(public)/age-gate.tsx says that age settings can be reviewed on this device. parental-controls.test.tsx locks the no-linking/no-remote-governance disclosure for adult and minor states and verifies the route payload. The age-gate unit suite continues to verify its validation and stored minor-safe behavior.
+parental-controls/index.tsx contains separate status and Device age settings only information cards plus the renamed Review Device Age Settings action. app/(public)/age-gate.tsx says that age settings can be reviewed on this device. ParentalControls.test.tsx locks the no-linking/no-remote-governance disclosure for adult and minor states and verifies the route payload. The age-gate unit suite continues to verify its validation and stored minor-safe behavior.
 
 **Suggested fix**
 
@@ -914,7 +914,7 @@ Every connected Mobile row now drills into a real detail route instead of immedi
 
 **Evidence**
 
-apps/mobile/app/(app)/connectors/[id].tsx owns the typed dynamic route and the authenticated drawer registers it. ConnectorDetailScreen.tsx enforces sign-in, Cloud mode, account-epoch isolation, real connection metadata, runtime-key permission editing/reset, an explicit default-flow empty state, and confirmed disconnect. services/connectors.ts validates /api/connectors/permissions responses and preserves exact connectorId/toolName keys for PUT and DELETE. cloud-connectors/index.tsx navigates connected rows to detail. connector-detail.test.tsx, custom-connector.test.ts, cloud-connectors-page-enabled.test.tsx, and drawer-route-contract.test.ts cover metadata, filtering, policy mutation/reset, stale-account suppression, destructive confirmation, directory navigation, response validation, and route ownership. The unmounted Web ToolPermissionsPanel itself documents why non-GitHub static labels are not enforceable keys.
+apps/mobile/app/(app)/connectors/[id].tsx owns the typed dynamic route and the authenticated drawer registers it. ConnectorDetailScreen.tsx enforces sign-in, Cloud mode, account-epoch isolation, real connection metadata, runtime-key permission editing/reset, an explicit default-flow empty state, and confirmed disconnect. services/connectors.ts validates /api/connectors/permissions responses and preserves exact connectorId/toolName keys for PUT and DELETE. cloud-connectors/index.tsx navigates connected rows to detail. ConnectorDetail.test.tsx, custom-connector.test.ts, CloudConnectorsPageEnabled.test.tsx, and drawer-route-contract.test.ts cover metadata, filtering, policy mutation/reset, stale-account suppression, destructive confirmation, directory navigation, response validation, and route ownership. The unmounted Web ToolPermissionsPanel itself documents why non-GitHub static labels are not enforceable keys.
 
 **Suggested fix**
 
@@ -937,7 +937,7 @@ The reference stores multiple reusable remote-control authorizations. agiworkfor
 
 **Evidence**
 
-apps/mobile/stores/connectionStore.ts owns singleton signalingClient, peerConnection/dataChannel, and HMAC session state; connect disconnects an active peer before pairing another, disconnect clears keys/queues/agents/tasks, and partialize explicitly refuses to persist pairingCode, pairToken, status, or metadata authority. services/signaling-server enforces one Desktop and one Mobile role per pairing. SingleDesktopSessionNotice.tsx is mounted by DesktopInfoCard.tsx and exposes the ephemeral single-session boundary. single-desktop-session-notice.test.tsx, companion-components.test.tsx, and dispatch-defense.test.ts verify the visible contract and signed session behavior.
+apps/mobile/stores/connectionStore.ts owns singleton signalingClient, peerConnection/dataChannel, and HMAC session state; connect disconnects an active peer before pairing another, disconnect clears keys/queues/agents/tasks, and partialize explicitly refuses to persist pairingCode, pairToken, status, or metadata authority. services/signaling-server enforces one Desktop and one Mobile role per pairing. SingleDesktopSessionNotice.tsx is mounted by DesktopInfoCard.tsx and exposes the ephemeral single-session boundary. SingleDesktopSessionNotice.test.tsx, CompanionComponents.test.tsx, and dispatch-defense.test.ts verify the visible contract and signed session behavior.
 
 **Suggested fix**
 
@@ -960,7 +960,7 @@ Safety & Security now gives adult profiles an explicit Reduce sensitive content 
 
 **Evidence**
 
-settingsStore.ts owns the persisted device-global reduceSensitiveContent field and setter. safety-security/index.tsx renders the explainer and accessible switch, ORs the preference with isMinorMode(), and disables it for minors. chatExecutionStore.ts evaluates that same OR before the send queue, attachments, transcript mutation, or any local/cloud model call; contentFilter.ts supplies distinct minor and adult refusal copy. localDataSnapshot.ts and dsarExport.ts include the preference in user data export and local reset clears it. safety-security.test.tsx covers adult opt-in and forced minor state; content-filter.test.ts covers policy-specific copy; chatStore.test.ts proves a blocked adult-opt-in prompt returns false without transcript or model activity; settings-store.test.tsx and dsar-export-local-stores.test.ts cover persistence semantics and export.
+settingsStore.ts owns the persisted device-global reduceSensitiveContent field and setter. safety-security/index.tsx renders the explainer and accessible switch, ORs the preference with isMinorMode(), and disables it for minors. chatExecutionStore.ts evaluates that same OR before the send queue, attachments, transcript mutation, or any local/cloud model call; contentFilter.ts supplies distinct minor and adult refusal copy. localDataSnapshot.ts and dsarExport.ts include the preference in user data export and local reset clears it. SafetySecurity.test.tsx covers adult opt-in and forced minor state; content-filter.test.ts covers policy-specific copy; chatStore.test.ts proves a blocked adult-opt-in prompt returns false without transcript or model activity; SettingsStore.test.tsx and dsar-export-local-stores.test.ts cover persistence semantics and export.
 
 **Suggested fix**
 
@@ -983,7 +983,7 @@ Mobile now has a first-class Account Security route reachable from Settings and 
 
 **Evidence**
 
-account-security/service.ts validates GET /api/settings/2fa before exposing enabled, enabled_at, or backup-code state. account-security/index.tsx binds the fetch to the current Clerk account epoch and Cloud egress mode, renders factor/session/device groups, and states the missing contract boundaries. app/(app)/settings/account-security.tsx and the authenticated drawer register the route; settings/index.tsx and profile/index.tsx expose it. account-security-service.test.ts, account-security-screen.test.tsx, settings-page.test.tsx, profile-mode-boundary.test.tsx, and drawer-route-contract.test.ts cover validation, auth and Local/Cloud gates, navigation, supported state, unavailable state, and Web handoffs.
+account-security/service.ts validates GET /api/settings/2fa before exposing enabled, enabled_at, or backup-code state. account-security/index.tsx binds the fetch to the current Clerk account epoch and Cloud egress mode, renders factor/session/device groups, and states the missing contract boundaries. app/(app)/settings/account-security.tsx and the authenticated drawer register the route; settings/index.tsx and profile/index.tsx expose it. account-security-service.test.ts, AccountSecurityScreen.test.tsx, SettingsPage.test.tsx, ProfileModeBoundary.test.tsx, and drawer-route-contract.test.ts cover validation, auth and Local/Cloud gates, navigation, supported state, unavailable state, and Web handoffs.
 
 **Suggested fix**
 
@@ -1006,7 +1006,7 @@ The reference visualizes a real 100 GB account quota, but agiworkforce has no st
 
 **Evidence**
 
-StorageScopeNotice.tsx states that the account publishes no file-storage byte quota and that following totals are device-only. apps/mobile/app/(app)/settings/storage.tsx mounts the notice above the renamed On This Device card while retaining real model/cache measurement and deletion. apps/mobile/src/features/settings/cloud-usage/index.tsx reports compute/billing utilization rather than file bytes. Repository routes expose per-file byteCount/byte_count values, but searches find no account storage limit, canonical aggregate, quota enforcement, or storage-usage endpoint. storage-scope-notice.test.tsx prevents device totals from being relabeled as Cloud quota; storageUsage.test.ts continues to verify real recursive device-byte measurement.
+StorageScopeNotice.tsx states that the account publishes no file-storage byte quota and that following totals are device-only. apps/mobile/app/(app)/settings/storage.tsx mounts the notice above the renamed On This Device card while retaining real model/cache measurement and deletion. apps/mobile/src/features/settings/cloud-usage/index.tsx reports compute/billing utilization rather than file bytes. Repository routes expose per-file byteCount/byte_count values, but searches find no account storage limit, canonical aggregate, quota enforcement, or storage-usage endpoint. StorageScopeNotice.test.tsx prevents device totals from being relabeled as Cloud quota; storageUsage.test.ts continues to verify real recursive device-byte measurement.
 
 **Suggested fix**
 
@@ -1029,7 +1029,7 @@ The reference describes a safety intervention product that may monitor for serio
 
 **Evidence**
 
-apps/mobile/src/features/settings/safety-security/index.tsx exposes Trusted contact · Not configured and the explicit non-monitoring/non-notification boundary beside the real content and device safeguards. Repository searches across Mobile, Web, Desktop, gateway routes, schemas, migrations, and notification senders find no trusted-contact entity, contact-consent lifecycle, crisis classifier, or escalation dispatcher. safety-security.test.tsx verifies the boundary is visible and retains coverage of strict content filtering and authenticated device lock.
+apps/mobile/src/features/settings/safety-security/index.tsx exposes Trusted contact · Not configured and the explicit non-monitoring/non-notification boundary beside the real content and device safeguards. Repository searches across Mobile, Web, Desktop, gateway routes, schemas, migrations, and notification senders find no trusted-contact entity, contact-consent lifecycle, crisis classifier, or escalation dispatcher. SafetySecurity.test.tsx verifies the boundary is visible and retains coverage of strict content filtering and authenticated device lock.
 
 **Suggested fix**
 
@@ -1052,7 +1052,7 @@ The reference offers an ongoing voice-call runtime in other apps and under scree
 
 **Evidence**
 
-useVoiceConversation.ts subscribes to AppState and, for inactive/background states, disarms auto-listen and push-to-talk, marks any capture consumed, aborts the native recognizer, stops speech, resets the UI, and never resumes on foreground without another user gesture. settings/voice/index.tsx exposes Foreground conversations only with the mic behavior. Info.plist contains UIBackgroundModes fetch but not audio. Current expo-speech-recognition documentation for installed 3.1.3 covers continuous recognition after silence plus iOS audio-session categories, but does not provide an application-background lifecycle or Android microphone foreground-service contract. voice-conversation-ptt.test.tsx verifies background abort/no auto-resume/listener cleanup; voice-settings.test.tsx verifies the disclosure and absence of a cosmetic switch.
+useVoiceConversation.ts subscribes to AppState and, for inactive/background states, disarms auto-listen and push-to-talk, marks any capture consumed, aborts the native recognizer, stops speech, resets the UI, and never resumes on foreground without another user gesture. settings/voice/index.tsx exposes Foreground conversations only with the mic behavior. Info.plist contains UIBackgroundModes fetch but not audio. Current expo-speech-recognition documentation for installed 3.1.3 covers continuous recognition after silence plus iOS audio-session categories, but does not provide an application-background lifecycle or Android microphone foreground-service contract. VoiceConversationPtt.test.tsx verifies background abort/no auto-resume/listener cleanup; VoiceSettings.test.tsx verifies the disclosure and absence of a cosmetic switch.
 
 **Suggested fix**
 
@@ -1075,7 +1075,7 @@ The two production screens now have first-class inbound navigation. Shared Links
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx routes the Account > Shared Links row through openCloudRoute('/(app)/settings/shared-links') and the feature-gated Device > Device Integrations row directly to '/(app)/settings/integrations'. apps/mobile/app/(app)/settings/shared-links.tsx uses stack back with a Settings-root fallback. settings-page.test.tsx verifies rendered rows, signed-out gating, and both real destinations; shared-links-honesty.test.tsx, integration-feature-honesty.test.ts, and the Settings snapshot cover the existing screens and resulting IA.
+apps/mobile/src/features/settings/index.tsx routes the Account > Shared Links row through openCloudRoute('/(app)/settings/shared-links') and the feature-gated Device > Device Integrations row directly to '/(app)/settings/integrations'. apps/mobile/app/(app)/settings/shared-links.tsx uses stack back with a Settings-root fallback. SettingsPage.test.tsx verifies rendered rows, signed-out gating, and both real destinations; SharedLinksHonesty.test.tsx, integration-feature-honesty.test.ts, and the Settings snapshot cover the existing screens and resulting IA.
 
 **Suggested fix**
 
@@ -1121,7 +1121,7 @@ The reference proactively scans connected accounts to derive task suggestions. a
 
 **Evidence**
 
-WorkModeSourceNotice.tsx presents the request-scoped boundary and Manage connected services action when the Cloud composer is in agiwork mode; app/(app)/(tabs)/chat.tsx mounts it only for that state. apps/web/app/api/connectors/route.ts treats connection rows as tool enablement gates, and the chat tool loop invokes tools within a user-initiated turn. Repository searches find no authenticated connector-suggestion endpoint, scheduled scanner, scan cursor, suggestion cache, or consent record. work-mode-source-notice.test.tsx verifies the privacy copy and action; chat-tab-mode-toggle.test.tsx and add-to-chat.test.tsx retain coverage of Cloud mode and the real Work mode switch.
+WorkModeSourceNotice.tsx presents the request-scoped boundary and Manage connected services action when the Cloud composer is in agiwork mode; app/(app)/(tabs)/chat.tsx mounts it only for that state. apps/web/app/api/connectors/route.ts treats connection rows as tool enablement gates, and the chat tool loop invokes tools within a user-initiated turn. Repository searches find no authenticated connector-suggestion endpoint, scheduled scanner, scan cursor, suggestion cache, or consent record. WorkModeSourceNotice.test.tsx verifies the privacy copy and action; ChatTabModeToggle.test.tsx and AddToChat.test.tsx retain coverage of Cloud mode and the real Work mode switch.
 
 **Suggested fix**
 
@@ -3262,7 +3262,7 @@ The empty chat pins Create an image, Write or edit, and Search the web actions a
 
 **Evidence**
 
-Removed on mobile: the starter chips contradicted the 2026-08-06 removal of sample-prompt chips on every surface recorded at packages/ui/unified-chat/src/components/ChatInterface.tsx:991-994, so the mobile new chat no longer renders them and the empty state is the greeting only. Image, Web search and Deep research stay reachable from the composer's + sheet (apps/mobile/src/features/chat/components/AddToChatSheet.tsx). chat-tab-mode-toggle.test.tsx asserts that no starter chip renders in the empty new chat.
+Removed on mobile: the starter chips contradicted the 2026-08-06 removal of sample-prompt chips on every surface recorded at packages/ui/unified-chat/src/components/ChatInterface.tsx:991-994, so the mobile new chat no longer renders them and the empty state is the greeting only. Image, Web search and Deep research stay reachable from the composer's + sheet (apps/mobile/src/features/chat/components/AddToChatSheet.tsx). ChatTabModeToggle.test.tsx asserts that no starter chip renders in the empty new chat.
 
 **Suggested fix**
 
@@ -3285,7 +3285,7 @@ Mobile now renders the selected model’s supported reasoning efforts as full-wi
 
 **Evidence**
 
-apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx renders the tier list from getModelReasoning supportedEfforts; apps/mobile/**tests**/model-picker.test.tsx covers visibility, selection, the checked state, and switching models. The focused picker suite passed on 2026-09-27.
+apps/mobile/src/features/model-picker/components/ModelPickerSheet.tsx renders the tier list from getModelReasoning supportedEfforts; apps/mobile/**tests**/ModelPicker.test.tsx covers visibility, selection, the checked state, and switching models. The focused picker suite passed on 2026-09-27.
 
 **Suggested fix**
 
@@ -3308,7 +3308,7 @@ NEEDS RE-SITING (verified 2026-08-21): the cited file (apps/mobile/src/features/
 
 **Evidence**
 
-STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/**tests**/artifacts-code-sessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
+STALE -- cited path does not exist: apps/mobile/src/features/code-sessions/ was deleted in c21de5707 (2026-07-30), confirmed via `git log --diff-filter=D`. apps/mobile/**tests**/ArtifactsCodeSessions.test.tsx is the only surviving 'code-sessions' reference and covers ArtifactsGalleryScreen, unrelated to a Code tab. No 'Devices' section exists anywhere in apps/mobile/src/features/companion/ either (checked DesktopInfoCard.tsx, AgentDashboard.tsx), but that is a different, unverified claim from the one this row makes.
 
 **Suggested fix**
 
@@ -3400,7 +3400,7 @@ AGI Mobile now offers App Lock after a signed-in Cloud account completes continu
 
 **Evidence**
 
-apps/mobile/src/features/auth/components/AppLockOffer.tsx mounts in app/(app)/_layout.tsx and guards the offer against account changes; lib/biometricFlagStore.ts persists the offer decision. app-lock-offer.test.tsx and biometric-flag-store.test.ts cover eligibility, Skip, successful authentication, and an account switch during authentication. Focused biometric and Safety & Security suites pass locally.
+apps/mobile/src/features/auth/components/AppLockOffer.tsx mounts in app/(app)/_layout.tsx and guards the offer against account changes; lib/biometricFlagStore.ts persists the offer decision. AppLockOffer.test.tsx and biometric-flag-store.test.ts cover eligibility, Skip, successful authentication, and an account switch during authentication. Focused biometric and Safety & Security suites pass locally.
 
 **Suggested fix**
 
@@ -3469,7 +3469,7 @@ The reference dedicates a full screen to search with the field bottom-anchored a
 
 **Evidence**
 
-apps/mobile/app/(app)/search.tsx and ChatsListScreen.tsx (dedicated scope guide, bottom search input, mode-scoped results); DrawerContent.tsx (search route); chats-list-screen.test.tsx and drawer-content.test.tsx (navigation and search states). Recent queries are not retained to protect search privacy.
+apps/mobile/app/(app)/search.tsx and ChatsListScreen.tsx (dedicated scope guide, bottom search input, mode-scoped results); DrawerContent.tsx (search route); ChatsListScreen.test.tsx and DrawerContent.test.tsx (navigation and search states). Recent queries are not retained to protect search privacy.
 
 **Suggested fix**
 
@@ -3538,7 +3538,7 @@ The current Voice route now displays complete user and assistant text from its o
 
 **Evidence**
 
-apps/mobile/app/(app)/voice.tsx subscribes to the created conversation messages and renders full text turns in voice-session-transcript. voice-conversation-ptt.test.tsx verifies both roles and an untruncated long reply. The retired VoiceConversationScreen.tsx cited by the original row no longer exists.
+apps/mobile/app/(app)/voice.tsx subscribes to the created conversation messages and renders full text turns in voice-session-transcript. VoiceConversationPtt.test.tsx verifies both roles and an untruncated long reply. The retired VoiceConversationScreen.tsx cited by the original row no longer exists.
 
 **Suggested fix**
 
@@ -3630,7 +3630,7 @@ Mobile New Project offers the same starter templates as Web in a horizontal pill
 
 **Evidence**
 
-packages/contracts/types/src/project-templates.ts owns the shared template definitions; apps/web/features/projects/data/project-templates.ts re-exports them. apps/mobile/app/(app)/(tabs)/projects.tsx renders accessible 44-point starter pills and persists the selected seed through the project store. projects-list-ergonomics.test.tsx verifies selection, editable fields, saved values, and custom-name preservation; Web CreateProjectDialog.templates.test.tsx confirms compatibility.
+packages/contracts/types/src/project-templates.ts owns the shared template definitions; apps/web/features/projects/data/project-templates.ts re-exports them. apps/mobile/app/(app)/(tabs)/projects.tsx renders accessible 44-point starter pills and persists the selected seed through the project store. ProjectsListErgonomics.test.tsx verifies selection, editable fields, saved values, and custom-name preservation; Web CreateProjectDialog.templates.test.tsx confirms compatibility.
 
 **Suggested fix**
 
@@ -3722,7 +3722,7 @@ The Projects screen has a bottom-anchored Search projects control. It filters cu
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/projects.tsx filters visibleProjects from query. projects-list-ergonomics.test.tsx verifies name, description, and no-match behavior.
+apps/mobile/app/(app)/(tabs)/projects.tsx filters visibleProjects from query. ProjectsListErgonomics.test.tsx verifies name, description, and no-match behavior.
 
 **Suggested fix**
 
@@ -3837,7 +3837,7 @@ The disconnected Remote screen now provides a setup-steps action. The first-run 
 
 **Evidence**
 
-apps/mobile/app/(app)/companion/index.tsx controls the revisit state; src/features/companion/components/ConnectionStateViews.tsx exposes the action. dispatch-setup-checklist.test.tsx and companion-screen-render-loop.test.tsx cover the flow.
+apps/mobile/app/(app)/companion/index.tsx controls the revisit state; src/features/companion/components/ConnectionStateViews.tsx exposes the action. DispatchSetupChecklist.test.tsx and CompanionScreenRenderLoop.test.tsx cover the flow.
 
 **Suggested fix**
 
@@ -3860,7 +3860,7 @@ Mobile keeps the existing All, Active, and Paused filters and now offers a heade
 
 **Evidence**
 
-apps/mobile/app/(app)/schedules/index.tsx owns the filter and sort controls; src/features/schedules/sort.ts orders a copy of the account-scoped schedules. schedule-screen.test.tsx covers the visible order and filter interaction.
+apps/mobile/app/(app)/schedules/index.tsx owns the filter and sort controls; src/features/schedules/sort.ts orders a copy of the account-scoped schedules. ScheduleScreen.test.tsx covers the visible order and filter interaction.
 
 **Suggested fix**
 
@@ -3906,7 +3906,7 @@ The Scheduled screen now keeps a bottom composer with a full-form button, task d
 
 **Evidence**
 
-apps/mobile/src/features/schedules/components/QuickSchedule.tsx owns the pinned composer and scheduling modal; apps/mobile/app/(app)/schedules/index.tsx places it after the task list; schedule-screen.test.tsx covers dictation, draft preservation, and full-form navigation.
+apps/mobile/src/features/schedules/components/QuickSchedule.tsx owns the pinned composer and scheduling modal; apps/mobile/app/(app)/schedules/index.tsx places it after the task list; ScheduleScreen.test.tsx covers dictation, draft preservation, and full-form navigation.
 
 **Suggested fix**
 
@@ -4090,7 +4090,7 @@ AGI Mobile provides Cloud Archived chats, Archive all chats, and Delete all chat
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx gates bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive/delete. apps/mobile/**tests**/data-controls-bulk-chats.test.tsx covers confirmations, errors, mode/account switching, and response validation. Signed-device verification remains unavailable while deployed sign-in routes are incomplete. apps/mobile/app/(app)/settings/archived-chats.tsx now binds loaded rows and restore/delete actions to the current account and Cloud mode; archived-chats-screen.test.tsx covers old-account rows and stale confirmations.
+apps/mobile/src/features/settings/data-controls/index.tsx gates bulk actions on Cloud mode and account epoch, then calls apps/mobile/src/features/archived-chats/service.ts. apps/web/app/api/chat/conversations/bulk/route.ts applies owner-scoped archive/delete. apps/mobile/**tests**/DataControlsBulkChats.test.tsx covers confirmations, errors, mode/account switching, and response validation. Signed-device verification remains unavailable while deployed sign-in routes are incomplete. apps/mobile/app/(app)/settings/archived-chats.tsx now binds loaded rows and restore/delete actions to the current account and Cloud mode; ArchivedChatsScreen.test.tsx covers old-account rows and stale confirmations.
 
 **Suggested fix**
 
@@ -4113,7 +4113,7 @@ Capabilities exposes a persisted Web search switch for signed-in Cloud use. The 
 
 **Evidence**
 
-apps/mobile/src/features/settings/capabilities/index.tsx renders the switch through useChatStore.setFeature; chatViewStore.ts persists features.webSearch; chatExecutionStore.ts reads it before adding web_search to the Cloud request. capabilities-settings.test.tsx verifies the toggle and chatStore.test.ts verifies both request states.
+apps/mobile/src/features/settings/capabilities/index.tsx renders the switch through useChatStore.setFeature; chatViewStore.ts persists features.webSearch; chatExecutionStore.ts reads it before adding web_search to the Cloud request. CapabilitiesSettings.test.tsx verifies the toggle and chatStore.test.ts verifies both request states.
 
 **Suggested fix**
 
@@ -4159,7 +4159,7 @@ Reference puts 'Permissions, Allow low-risk >' as the first row of the Plugins s
 
 **Evidence**
 
-apps/mobile/app/(app)/settings/auto-approve.tsx OPTIONS (ask/smart/full); apps/mobile/src/features/settings/cloud-connectors/index.tsx shows the canonical toolApprovalPolicyOption summary and routes to Action approvals; cloud-connectors-page-enabled.test.tsx checks the row and navigation
+apps/mobile/app/(app)/settings/auto-approve.tsx OPTIONS (ask/smart/full); apps/mobile/src/features/settings/cloud-connectors/index.tsx shows the canonical toolApprovalPolicyOption summary and routes to Action approvals; CloudConnectorsPageEnabled.test.tsx checks the row and navigation
 
 **Suggested fix**
 
@@ -4182,7 +4182,7 @@ Settings Device section now includes the existing Remote destination with live c
 
 **Evidence**
 
-apps/mobile/src/features/settings/index.tsx reads the canonical companion connection status and opens /(app)/companion. apps/mobile/**tests**/settings-page.test.tsx checks navigation and status; six settings suites passed 48 tests. ConnectionStateViews.tsx and DesktopSetupChecklistView.tsx align failure and setup guidance with the code-based trust boundary; three companion/drawer suites passed 24 tests. Device UI remains to be smoke-tested.
+apps/mobile/src/features/settings/index.tsx reads the canonical companion connection status and opens /(app)/companion. apps/mobile/**tests**/SettingsPage.test.tsx checks navigation and status; six settings suites passed 48 tests. ConnectionStateViews.tsx and DesktopSetupChecklistView.tsx align failure and setup guidance with the code-based trust boundary; three companion/drawer suites passed 24 tests. Device UI remains to be smoke-tested.
 
 **Suggested fix**
 
@@ -4228,7 +4228,7 @@ Voice settings shows the current speech language and opens a picker populated by
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx renders Speech language and SpeechLanguageModal, loads TTS languages, and writes through the active settings store. voice-settings-speech-language.test.tsx covers selection and the empty-language state.
+apps/mobile/src/features/settings/voice/index.tsx renders Speech language and SpeechLanguageModal, loads TTS languages, and writes through the active settings store. VoiceSettingsSpeechLanguage.test.tsx covers selection and the empty-language state.
 
 **Suggested fix**
 
@@ -4251,7 +4251,7 @@ Voice uses the same current chat model as text, with on-device speech playback. 
 
 **Evidence**
 
-apps/mobile/src/features/chat/utils/newConversationModel.ts owns the model fallback shared by the new-chat screen and full-screen Voice Companion. apps/mobile/src/features/settings/voice/index.tsx shows Answer model, links to the existing model picker, and explains the Cloud transcript destination. new-conversation-model.test.ts, voice-conversation-ptt.test.tsx, and voice-settings.test.tsx cover boundary selection and the visible row.
+apps/mobile/src/features/chat/utils/newConversationModel.ts owns the model fallback shared by the new-chat screen and full-screen Voice Companion. apps/mobile/src/features/settings/voice/index.tsx shows Answer model, links to the existing model picker, and explains the Cloud transcript destination. new-conversation-model.test.ts, VoiceConversationPtt.test.tsx, and VoiceSettings.test.tsx cover boundary selection and the visible row.
 
 **Suggested fix**
 
@@ -4366,7 +4366,7 @@ Settings now links directly to the existing Storage screen from Device, includin
 
 **Evidence**
 
-SettingsTabScreen has Device rows for Remote and Storage; settings-page.test.tsx verifies both navigation paths. StorageManagerScreen accepts a Settings-root return path. Safety & Security remains a combined row.
+SettingsTabScreen has Device rows for Remote and Storage; SettingsPage.test.tsx verifies both navigation paths. StorageManagerScreen accepts a Settings-root return path. Safety & Security remains a combined row.
 
 **Suggested fix**
 
@@ -4412,7 +4412,7 @@ The drawer keeps eight recent conversations visible and now offers See all chats
 
 **Evidence**
 
-DrawerContent.tsx renders See all chats beneath Recents and routes to /(app)/chats. ChatsListScreen.tsx owns grouped history, search, and load-more. drawer-content.test.tsx verifies the capped preview and handoff.
+DrawerContent.tsx renders See all chats beneath Recents and routes to /(app)/chats. ChatsListScreen.tsx owns grouped history, search, and load-more. DrawerContent.test.tsx verifies the capped preview and handoff.
 
 **Suggested fix**
 
@@ -4435,7 +4435,7 @@ The full-screen Voice route now keeps an accessible text composer available alon
 
 **Evidence**
 
-apps/mobile/app/(app)/voice.tsx renders the keyboard-aware composer and lazily creates a session on the first send. useVoiceConversation.ts shares response handling for speech and text and suppresses background playback. voice-conversation-ptt.test.tsx covers typed send, retry, and background behavior.
+apps/mobile/app/(app)/voice.tsx renders the keyboard-aware composer and lazily creates a session on the first send. useVoiceConversation.ts shares response handling for speech and text and suppresses background playback. VoiceConversationPtt.test.tsx covers typed send, retry, and background behavior.
 
 **Suggested fix**
 
@@ -4458,7 +4458,7 @@ Voice Settings presents Hands free and Push to talk choices backed by the persis
 
 **Evidence**
 
-apps/mobile/src/features/settings/voice/index.tsx renders the Mode choice; apps/mobile/app/(app)/voice.tsx reads voicePushToTalk and updates it from the in-call toggle. voice-settings.test.tsx verifies the Settings control and voice-conversation-ptt.test.tsx covers its behavior.
+apps/mobile/src/features/settings/voice/index.tsx renders the Mode choice; apps/mobile/app/(app)/voice.tsx reads voicePushToTalk and updates it from the in-call toggle. VoiceSettings.test.tsx verifies the Settings control and VoiceConversationPtt.test.tsx covers its behavior.
 
 **Suggested fix**
 
@@ -4481,7 +4481,7 @@ The new-chat header now exposes Chat and Work above the separate Local/Cloud exe
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/chat.tsx exposes a Chat/Work header switch while retaining Local/Cloud execution mode below it. Work checks the canonical agi_work billing capability and asks before moving a Local session into Cloud; ChatInput.tsx labels eligible Cloud Work with 'Work with AGI'. chat-tab-mode-toggle.test.tsx and chat-input.test.tsx cover navigation, entitlement, consent prompt, and composer copy.
+apps/mobile/app/(app)/(tabs)/chat.tsx exposes a Chat/Work header switch while retaining Local/Cloud execution mode below it. Work checks the canonical agi_work billing capability and asks before moving a Local session into Cloud; ChatInput.tsx labels eligible Cloud Work with 'Work with AGI'. ChatTabModeToggle.test.tsx and ChatInput.test.tsx cover navigation, entitlement, consent prompt, and composer copy.
 
 **Suggested fix**
 
@@ -7036,7 +7036,7 @@ The mobile primary drawer already exposes Remote as a first-class destination ne
 
 **Evidence**
 
-apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS includes Remote using MOBILE_REMOTE_SCREEN_LABEL; apps/mobile/**tests**/drawer-content.test.tsx checks presence and navigation. The focused drawer suite passed 2026-09-27.
+apps/mobile/src/features/drawer/components/DrawerContent.tsx PRIMARY_ITEMS includes Remote using MOBILE_REMOTE_SCREEN_LABEL; apps/mobile/**tests**/DrawerContent.test.tsx checks presence and navigation. The focused drawer suite passed 2026-09-27.
 
 **Suggested fix**
 
@@ -7059,7 +7059,7 @@ The New Project editor now explains the shared context before its fields and pla
 
 **Evidence**
 
-apps/mobile/app/(app)/(tabs)/projects.tsx renders a scope-aware explanation, keeps the form in a scrollable region, and places the action outside that region with safe-area spacing and a 48-point touch target. projects-list-ergonomics.test.tsx checks Local and Cloud copy, bottom-action placement, and that template selection still creates the expected project.
+apps/mobile/app/(app)/(tabs)/projects.tsx renders a scope-aware explanation, keeps the form in a scrollable region, and places the action outside that region with safe-area spacing and a 48-point touch target. ProjectsListErgonomics.test.tsx checks Local and Cloud copy, bottom-action placement, and that template selection still creates the expected project.
 
 **Suggested fix**
 
@@ -7082,7 +7082,7 @@ Manual pairing now disables Connect until the trimmed field has content, reads a
 
 **Evidence**
 
-apps/mobile/src/features/companion/components/QRScanner.tsx implements disabled submission, paste, denied-camera manual entry and exit. apps/mobile/**tests**/qr-scanner-manual.test.tsx covers these flows and full pairing payload submission; focused tests, mobile typecheck, lint and formatting passed 2026-09-27. Signed-device verification remains open in ACTIVE_ISSUES.md.
+apps/mobile/src/features/companion/components/QRScanner.tsx implements disabled submission, paste, denied-camera manual entry and exit. apps/mobile/**tests**/QrScannerManual.test.tsx covers these flows and full pairing payload submission; focused tests, mobile typecheck, lint and formatting passed 2026-09-27. Signed-device verification remains open in ACTIVE_ISSUES.md.
 
 **Suggested fix**
 
@@ -7174,7 +7174,7 @@ Reference co-locates Export data and Delete account at the bottom of Data contro
 
 **Evidence**
 
-apps/mobile/src/features/settings/data-controls/index.tsx now shows Export Cloud data and Delete account rows that open the existing account-scoped Cloud Account flow; data-controls-bulk-chats.test.tsx verifies both links without firing a deletion
+apps/mobile/src/features/settings/data-controls/index.tsx now shows Export Cloud data and Delete account rows that open the existing account-scoped Cloud Account flow; DataControlsBulkChats.test.tsx verifies both links without firing a deletion
 
 **Suggested fix**
 

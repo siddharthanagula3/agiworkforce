@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from 'react';
 import { ActivityIndicator, View, Alert } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { FlashList } from '@shopify/flash-list';
 import { useRouter } from 'expo-router';
@@ -16,9 +16,9 @@ import {
   CheckCircle2,
   ChevronRight,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { formatNotificationTime } from '@/src/features/notifications/time';
 import {
   cloudRunNotificationRoute,

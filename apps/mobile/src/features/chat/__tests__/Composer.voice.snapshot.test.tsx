@@ -13,7 +13,7 @@ jest.mock('@/src/ui/theme', () => {
   };
 });
 
-jest.mock('@/components/ui/text', () => {
+jest.mock('@/components/ui/Text', () => {
   const RN = require('react-native');
   const Text = (props: Record<string, unknown>) => <RN.Text {...props} />;
   Text.displayName = 'Text';

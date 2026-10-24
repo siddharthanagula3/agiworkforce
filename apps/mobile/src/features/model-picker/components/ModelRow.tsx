@@ -1,10 +1,10 @@
 import { ActivityIndicator, View, Switch } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Brain, Check, Cloud, Cpu, Download, Lock, Star } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
-import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { CLOUD_LOCK_REASON, type ModelDef } from '@/src/features/model-picker/service';
 import {

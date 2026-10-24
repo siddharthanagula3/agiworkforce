@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { View, FlatList } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { Image, Mic, GitCompare, Download } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

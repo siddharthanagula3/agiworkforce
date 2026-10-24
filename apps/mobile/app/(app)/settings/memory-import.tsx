@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, ScrollView, TextInput } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as DocumentPicker from 'expo-document-picker';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -13,8 +13,8 @@ import {
   Square,
   CheckSquare,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useMemoryStore } from '@/src/features/memory/store';

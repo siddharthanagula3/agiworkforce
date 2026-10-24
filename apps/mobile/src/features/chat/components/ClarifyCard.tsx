@@ -9,10 +9,10 @@ import {
   type InteractiveCard,
   type InteractiveCardResponsePayload,
 } from '@agiworkforce/types';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

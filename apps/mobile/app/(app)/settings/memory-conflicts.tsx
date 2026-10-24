@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { GitCompareArrows } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { ApiHttpError } from '@/services/apiErrors';

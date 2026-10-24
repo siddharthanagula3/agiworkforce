@@ -2,8 +2,8 @@ import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 import { ChevronDown, ChevronRight } from 'lucide-react-native';
 import type { CloudCodeChanges } from '@agiworkforce/cloud-contracts';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

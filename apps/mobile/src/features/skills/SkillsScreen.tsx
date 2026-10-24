@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { FlatList, RefreshControl, TextInput, View, type ListRenderItemInfo } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, BookOpen, Cloud, RefreshCw, Search, Sparkles, X } from 'lucide-react-native';
 import * as DocumentPicker from 'expo-document-picker';
 
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Text } from '@/components/ui/Text';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import {
   captureCloudAccountEpoch,

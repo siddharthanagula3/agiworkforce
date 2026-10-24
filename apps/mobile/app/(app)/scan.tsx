@@ -9,7 +9,7 @@ import {
   Alert,
   useWindowDimensions,
 } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
@@ -17,14 +17,14 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { X, Zap, ZapOff, Send, RotateCcw, ScanText, Copy, SwitchCamera } from 'lucide-react-native';
 import * as Clipboard from 'expo-clipboard';
 import * as Haptics from 'expo-haptics';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatMessageStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { recognizeText, type OcrRegion } from '@/src/features/image/services/ocr';
 import { useChatExecutionStore } from '@/stores/chatStore';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';

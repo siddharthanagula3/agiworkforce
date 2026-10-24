@@ -6,9 +6,9 @@ import {
   PRODUCT_ANALYTICS_CONSENT_PURPOSE,
   readProductAnalyticsConsent,
 } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { apiFetch } from '@/services/api';
-import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

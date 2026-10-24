@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
 import { View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
 import { ChevronRight } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Separator } from '@/components/ui/separator';
-import { SettingsScreenShell } from '@/src/features/settings/common';
+import { Text } from '@/components/ui/Text';
+import { Separator } from '@/components/ui/Separator';
+import { SettingsScreenShell } from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { usePermissionsStore } from '@/stores/permissionsStore';

@@ -1,6 +1,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { View, Modal, Alert, useWindowDimensions } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Image } from 'expo-image';
 import { Check, Copy, Download, Flag, Paintbrush, Share2, Trash2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
@@ -8,7 +8,7 @@ import { copyGeneratedImage } from '@/services/fileCreation';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { GestureDetector, Gesture, GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { ReportSheet, type ReportTarget } from './ReportFlagButton';
 import { useThemeColors, zIndex } from '@/src/ui/theme';
 import { motion, typeScale } from '@/src/ui/theme/tokens';

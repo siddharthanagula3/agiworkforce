@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import type { ConnectorCallEntry, ConnectorCallOutcome } from '@agiworkforce/cloud-contracts';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { fetchConnectorCalls } from '@/services/connectors';
 import { typeScale } from '@/src/ui/theme/tokens';

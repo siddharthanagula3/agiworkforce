@@ -13,11 +13,11 @@ import {
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { KeyRound, ShieldCheck, ShieldOff } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
-import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/common';
-import type { UseStepUp } from '@/src/features/auth/hooks/useStepUp';
+import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/Common';
+import type { UseStepUp } from '@/src/features/auth/hooks/UseStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { toUserMessage } from '@/services/userMessage';
 import {

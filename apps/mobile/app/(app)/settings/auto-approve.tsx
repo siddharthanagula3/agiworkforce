@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import {
   Shield,
   ShieldCheck,
@@ -12,8 +12,8 @@ import {
   toolApprovalPolicyOption,
   type ToolApprovalPolicy,
 } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { Text } from '@/components/ui/Text';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approvals/useToolApprovalPolicySync';
 import { ApprovalHistory } from '@/src/features/settings/tool-approvals/ApprovalHistory';
 import { useThemeColors } from '@/src/ui/theme';

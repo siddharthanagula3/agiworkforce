@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, ScrollView, TextInput, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn, SlideInDown, useReducedMotion } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import {
@@ -15,9 +15,9 @@ import {
   Database,
   HelpCircle,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
+import { Separator } from '@/components/ui/Separator';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentStore } from '@/stores/agentStore';
 import { useThemeColors, motion } from '@/src/ui/theme';

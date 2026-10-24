@@ -29,8 +29,8 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { Text } from '@/components/ui/Text';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';
 import { DrawerButton } from '@/src/shared/components/DrawerButton';

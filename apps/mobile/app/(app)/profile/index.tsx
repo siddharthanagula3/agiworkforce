@@ -1,7 +1,7 @@
 import type React from 'react';
 import { useCallback, useEffect, useMemo } from 'react';
 import { Alert, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import {
   BarChart3,
@@ -17,7 +17,7 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatStore } from '@/stores/chatStore';
 import { useChatCloudMessageStore } from '@/stores/chat/chatCloudMessageStore';
@@ -29,7 +29,7 @@ import {
   isHistoryVisibleConversation,
 } from '@/src/features/chat/utils/conversationMode';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
-import { SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsScreenShell } from '@/src/features/settings/Common';
 import { UserAvatar } from '@/src/shared/components/UserAvatar';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

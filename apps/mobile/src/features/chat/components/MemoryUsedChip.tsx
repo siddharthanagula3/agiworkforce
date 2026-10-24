@@ -4,8 +4,8 @@ import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Brain } from 'lucide-react-native';
 import type { ManagedMemoryCitations } from '@agiworkforce/types';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

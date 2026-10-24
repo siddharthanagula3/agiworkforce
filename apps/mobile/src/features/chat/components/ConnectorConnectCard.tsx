@@ -2,8 +2,8 @@ import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Plug } from 'lucide-react-native';
 import type { ConnectorConnectRequest } from '@agiworkforce/types';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

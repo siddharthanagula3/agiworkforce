@@ -12,11 +12,11 @@ import {
   type BillingPlanCapability,
   type BillingPlanTier,
 } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, cardRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useTierStore } from '@/src/features/billing/store';
-import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 
 const COMPARED_PLANS: readonly BillingPlanTier[] = [
   'free',

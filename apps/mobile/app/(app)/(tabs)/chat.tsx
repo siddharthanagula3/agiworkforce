@@ -1,7 +1,7 @@
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useCallback, useMemo, useRef, useState, useEffect } from 'react';
 import { View, Alert, Keyboard, Linking, ScrollView, KeyboardAvoidingView } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useNavigation } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
@@ -39,7 +39,7 @@ import {
 import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerSheet';
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
-import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/capabilities';
+import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/Capabilities';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import {
   useVoiceConversation,
@@ -53,7 +53,7 @@ import {
 } from '@/stores/settings/localSettingsStore';
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { findNewAssistantResponse } from '@/src/features/voice/utils/assistantResponse';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { paywallErrorStateFromApiError, useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
 import {

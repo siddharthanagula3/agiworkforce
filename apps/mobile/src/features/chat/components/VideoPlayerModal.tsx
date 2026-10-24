@@ -3,7 +3,7 @@ import { Alert, Modal, View } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Flag, X } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useThemeColors } from '@/src/ui/theme';
 import type { LocalVideoPlayer } from '@/services/fileCreation';
 import { ReportSheet, type ReportTarget } from './ReportFlagButton';

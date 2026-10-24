@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, Modal, ScrollView, StyleSheet, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { Brain, ChevronRight, Clock, Globe, X } from 'lucide-react-native';
 import type { AgentActivityState } from '@agiworkforce/client-runtime';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { motion, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';

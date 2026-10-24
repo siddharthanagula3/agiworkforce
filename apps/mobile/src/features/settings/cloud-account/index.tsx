@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from 'react';
 import { Alert, Clipboard, Image, TextInput, View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import {
   Copy,
   Check,
@@ -24,7 +24,7 @@ import {
   parseAccountDeletionStatus,
   type AccountDeletionStatus,
 } from '@agiworkforce/cloud-contracts';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -32,10 +32,10 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { useAuthStore } from '@/src/features/auth/store';
 import { api } from '@/services/api';
-import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
+import { useStepUp } from '@/src/features/auth/hooks/UseStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 import { exportCloudUserData } from '@/services/cloudDataExport';
 import { openExternalUrl } from '@/lib/safeOpenURL';

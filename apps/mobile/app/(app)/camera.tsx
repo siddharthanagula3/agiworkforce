@@ -8,7 +8,7 @@ import {
   KeyboardAvoidingView,
   Alert,
 } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { CameraView, useCameraPermissions, type CameraType, type FlashMode } from 'expo-camera';
@@ -24,12 +24,12 @@ import {
   Flashlight,
   FlashlightOff,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
 import { IMAGE_CAPTURE_QUALITY } from '@/src/features/media/image-normalization';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';

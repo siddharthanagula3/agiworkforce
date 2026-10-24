@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, FlatList, RefreshControl, ScrollView, View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useNavigation, useRouter } from 'expo-router';
 import { stageComposerAttachments } from '@/src/features/chat/composerHandoff';
 import { setDraft } from '@/src/features/chat/draftStore';
@@ -23,8 +23,8 @@ import {
   type LibrarySort,
 } from '@agiworkforce/cloud-contracts';
 import { formatBytes } from '@agiworkforce/utils/format';
-import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale, zIndex } from '@/src/ui/theme/tokens';
 import { BottomSearchBar } from '@/src/shared/components/BottomSearchBar';

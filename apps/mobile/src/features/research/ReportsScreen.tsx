@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, RefreshControl, ScrollView, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { AlertCircle, ArrowLeft, Telescope, TriangleAlert } from 'lucide-react-native';
 
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Text } from '@/components/ui/Text';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';

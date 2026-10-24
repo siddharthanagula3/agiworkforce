@@ -1,8 +1,8 @@
 import { View, TextInput, Modal, KeyboardAvoidingView } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Minimize2 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, radii } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useFullScreenChrome } from '@/src/features/chat/chrome/fullScreenChrome';

@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { ActivityIndicator, ScrollView, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { FileCode2 } from 'lucide-react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import {
   fetchProjectArtifacts,
   type IndexedProjectArtifact,

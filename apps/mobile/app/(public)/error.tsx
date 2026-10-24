@@ -1,9 +1,9 @@
 import { View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { AlertTriangle, RotateCcw } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 
 const ROOT_ROUTE = '/' as const;

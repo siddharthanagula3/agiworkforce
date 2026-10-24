@@ -1,9 +1,9 @@
 import { useCallback } from 'react';
 import { Alert, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { ShieldAlert } from 'lucide-react-native';
 
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';
 

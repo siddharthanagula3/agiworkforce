@@ -2,8 +2,8 @@ import { useRef, useEffect, useCallback, useState, type ReactElement } from 'rea
 import { FlashList, type FlashListRef } from '@shopify/flash-list';
 import { AccessibilityInfo, View, RefreshControl, StyleSheet } from 'react-native';
 import { useTranslation } from 'react-i18next';
-import { Text } from '@/components/ui/text';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { Text } from '@/components/ui/Text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,

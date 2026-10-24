@@ -1,7 +1,7 @@
 import type { Ref } from 'react';
 import { useEffect, useState } from 'react';
 import { Keyboard, Platform, TextInput, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Search, X } from 'lucide-react-native';
 import { useThemeColors } from '@/src/ui/theme';

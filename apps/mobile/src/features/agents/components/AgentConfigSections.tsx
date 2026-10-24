@@ -16,9 +16,9 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 
-import { Button } from '@/components/ui/button';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { fetchConnectorDirectory } from '@/services/connectors';
 import { PROJECT_ACCENTS, PROJECT_ICONS } from '@/src/features/projects/projectAppearance';
 import { fetchManagedSkills } from '@/src/features/skills/service';

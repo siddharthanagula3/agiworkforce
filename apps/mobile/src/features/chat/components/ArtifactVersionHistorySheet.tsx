@@ -1,8 +1,8 @@
 import { useMemo } from 'react';
 import { FlatList, Modal, View } from 'react-native';
 import { X } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { dialogPadding, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

@@ -1,6 +1,6 @@
 import { useCallback, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, RefreshControl, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { ArrowLeft, Code2, Plus, RefreshCw } from 'lucide-react-native';
@@ -11,8 +11,8 @@ import {
   type CloudCodeSession,
   type CloudCodeSessionStatusFilter,
 } from '@agiworkforce/types';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import {
   FLOATING_PRIMARY_ACTION_STANDALONE_LIST_PADDING,
   FloatingPrimaryAction,

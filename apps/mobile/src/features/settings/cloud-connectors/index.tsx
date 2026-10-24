@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ActivityIndicator, ScrollView, Alert } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import {
   Plug,
   Link,
@@ -12,7 +12,7 @@ import {
 } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { SEARCH_INPUT_DEBOUNCE_MS } from '@agiworkforce/utils';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { BottomSearchBar, useBottomSearchBarSpace } from '@/src/shared/components/BottomSearchBar';
@@ -23,7 +23,7 @@ import {
   SettingsInfo,
   SettingsScreenShell,
   SettingsSwitchRow,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { toUserMessage } from '@/services/userMessage';
 import { AddCustomConnectorModal } from './AddCustomConnectorModal';
@@ -32,7 +32,7 @@ import { ConnectorLogo } from './ConnectorLogo';
 import { connectionStatus, formatConnectorName } from './connectorStatus';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTierStore } from '@/src/features/billing/store';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';

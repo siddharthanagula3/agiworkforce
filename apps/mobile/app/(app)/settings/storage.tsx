@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, Alert, ActivityIndicator } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { HardDrive, Trash2, Download, FileDown, AlertTriangle, Signal } from 'lucide-react-native';
 import { cacheDirectory, deleteAsync, getFreeDiskStorageAsync } from 'expo-file-system/legacy';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Separator } from '@/components/ui/Separator';
+import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { listInstalledModels, deleteInstalledModel } from '@/storage/installedModels';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
@@ -23,7 +23,7 @@ import {
 } from '@/src/features/settings/data-controls/localDataSnapshot';
 import { getDirectorySizeBytes } from '@/src/features/settings/storageUsage';
 import { StorageScopeNotice } from '@/src/features/settings/StorageScopeNotice';
-import { SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsScreenShell } from '@/src/features/settings/Common';
 import type { InstalledModel } from '@/storage/types';
 
 const STORAGE_RETURN_PATHS = [

@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { AlertTriangle } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { computeContextBudget } from '@/src/features/memory/services/contextBudgeter';

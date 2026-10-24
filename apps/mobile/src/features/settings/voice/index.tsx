@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Modal, ScrollView, View } from 'react-native';
 import Slider from '@react-native-community/slider';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { SUPPORTED_LANGUAGES } from '@agiworkforce/i18n';
 import {
@@ -18,8 +18,8 @@ import {
   X,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Switch } from '@/components/ui/switch';
+import { Text } from '@/components/ui/Text';
+import { Switch } from '@/components/ui/Switch';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
@@ -29,7 +29,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { VOICE_PRESETS } from '@/src/features/voice/voicePresets';

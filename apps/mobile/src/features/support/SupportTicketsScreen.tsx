@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, Switch, TextInput, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { LifeBuoy, Plus } from 'lucide-react-native';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import {
@@ -12,7 +12,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

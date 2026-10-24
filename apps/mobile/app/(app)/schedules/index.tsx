@@ -1,15 +1,15 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, FlatList, RefreshControl, Alert, ScrollView } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import * as Haptics from 'expo-haptics';
 import { ArrowLeft, Plus, Calendar, Clock, ListFilter } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
+import { Skeleton } from '@/components/ui/Skeleton';
 import {
   CloudSchedulesGate,
   ScheduleCard,

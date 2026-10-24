@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react';
 import { Alert } from 'react-native';
 import { Mic } from 'lucide-react-native';
-import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import { toUserMessage } from '@/services/userMessage';
 import {
   askFromSiriSupported,

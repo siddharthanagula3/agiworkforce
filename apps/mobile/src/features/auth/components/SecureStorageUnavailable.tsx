@@ -1,7 +1,7 @@
 import { StyleSheet, View } from 'react-native';
 import { Pressable } from 'react-native';
 import { ShieldAlert } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

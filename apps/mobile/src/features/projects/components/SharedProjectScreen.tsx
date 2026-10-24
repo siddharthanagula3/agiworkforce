@@ -6,10 +6,10 @@ import type {
   ManagedCloudProject,
   ManagedCloudProjectKnowledgeFile,
 } from '@agiworkforce/cloud-contracts';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { hiddenSharerIds } from '@/src/features/shared-with-you/hiddenSharers';
 import { SharedItemSafetyActions } from '@/src/features/shared-with-you/SharedItemSafetyActions';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { managedCloudProjects } from '@/services/managedCloudProjects';
 import { cloudProjectSources } from '@/src/features/projects/store';
 import {

@@ -49,7 +49,7 @@ test('a new screen importing raw react-native primitives fails', () => {
 });
 
 test('the primitive layer itself may use react-native directly', () => {
-  const root = tree({ 'apps/mobile/components/ui/text.tsx': RAW_SCREEN });
+  const root = tree({ 'apps/mobile/components/ui/Text.tsx': RAW_SCREEN });
   assert.deepEqual(checkMobilePrimitives(root, { modules: [] }).failures, []);
 });
 

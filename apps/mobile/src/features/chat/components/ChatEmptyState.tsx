@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn, FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Monitor, X } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { storage } from '@/lib/mmkv';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';

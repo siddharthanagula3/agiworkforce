@@ -1,8 +1,8 @@
 import { useRef, useState, type RefObject } from 'react';
 import { Alert, ScrollView, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Svg, { Circle, G, Line, Path, Polyline, Rect, Text as SvgText } from 'react-native-svg';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import type { ColorScheme } from '@/src/ui/theme';
 import { exportPngImage, shareFile } from '@/services/fileCreation';
 import {

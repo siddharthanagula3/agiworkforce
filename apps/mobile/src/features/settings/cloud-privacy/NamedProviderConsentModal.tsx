@@ -1,6 +1,6 @@
 import { Modal, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';

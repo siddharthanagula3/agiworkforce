@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import {
   Brain,
@@ -17,11 +17,11 @@ import {
   Telescope,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Switch } from '@/components/ui/switch';
+import { Text } from '@/components/ui/Text';
+import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import {
   useChatAppModeStore,

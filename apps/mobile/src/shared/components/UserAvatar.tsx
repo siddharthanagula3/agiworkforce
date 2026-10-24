@@ -1,6 +1,6 @@
 import { Image, View } from 'react-native';
 import { UserRound } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 
 export interface UserAvatarProps {

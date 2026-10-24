@@ -10,8 +10,8 @@ import {
   type ManagedCloudPublishedArtifactVersion,
 } from '@agiworkforce/cloud-contracts';
 
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useCopyAction, copyControlLabel } from '@/src/shared/hooks/useCopyAction';
 import {

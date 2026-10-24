@@ -8,7 +8,7 @@ import {
   Keyboard,
   Linking,
 } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useFocusEffect, useNavigation } from 'expo-router';
@@ -62,7 +62,7 @@ import { VoicePickerSheet } from '@/src/features/voice/components/VoicePickerShe
 import { VoiceInlineBar } from '@/src/features/voice/components/VoiceInlineBar';
 import { LiveVoiceComposer } from '@/src/features/voice/components/LiveVoiceComposer';
 import { liveVoiceModeUnavailableReason } from '@/src/features/voice/services/liveVoiceAvailability';
-import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/capabilities';
+import { CAPABILITY_SWITCHED_OFF_BODY, useCapability } from '@/src/lib/Capabilities';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import {
   RenameConversationModal,
@@ -78,7 +78,7 @@ import {
   createMessageIdSet,
   findNewAssistantResponse,
 } from '@/src/features/voice/utils/assistantResponse';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import {
   LOCAL_NO_MODEL_MESSAGE,
   paywallErrorStateFromApiError,

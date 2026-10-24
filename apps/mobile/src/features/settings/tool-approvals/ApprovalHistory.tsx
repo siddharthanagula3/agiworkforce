@@ -3,10 +3,10 @@ import { ActivityIndicator, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { MANAGED_CLOUD_APPROVAL_HISTORY_PATH } from '@agiworkforce/cloud-contracts';
 import { TOOL_APPROVAL_ACTION_LABELS, getToolDisplayLabel } from '@agiworkforce/types';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { api } from '@/services/api';
-import { SettingsGroup } from '@/src/features/settings/common';
+import { SettingsGroup } from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

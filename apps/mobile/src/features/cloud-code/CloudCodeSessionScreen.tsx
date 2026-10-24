@@ -8,7 +8,7 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, ExternalLink, GitBranch, X } from 'lucide-react-native';
@@ -24,9 +24,9 @@ import {
   type CloudCodeTurnMode,
   type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useTierStore } from '@/src/features/billing/store';
 import { useKeyboardSafeComposer } from '@/src/features/chat/chrome/keyboardSafeComposer';

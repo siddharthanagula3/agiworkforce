@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo } from 'react';
 import { ActivityIndicator, Alert, View, ScrollView } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
@@ -39,7 +39,7 @@ import {
   Zap,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import {
   beginCloudPostAuthIntentForDestination,

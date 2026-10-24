@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { FileCode, FileDown, FileText, X, type LucideIcon } from 'lucide-react-native';
 
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { shareFile } from '@/services/fileCreation';
 import {
   artifactExportOptions,

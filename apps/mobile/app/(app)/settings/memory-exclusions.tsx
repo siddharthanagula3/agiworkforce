@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, TextInput, View } from 'react-native';
 import { Ban, Bot, Globe, Laptop, Smartphone, X, type LucideIcon } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import {
   SettingsGroup,
   SettingsInfo,
   SettingsScreenShell,
   SettingsSwitchRow,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { fetchPreferenceNamespace, savePreferenceNamespace } from '@/services/preferences';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

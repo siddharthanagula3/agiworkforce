@@ -1,12 +1,12 @@
 import { useState, useCallback, useRef } from 'react';
 import { View, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { ChevronDown } from 'lucide-react-native';
 import BottomSheet from '@gorhom/bottom-sheet';
-import { Text } from '@/components/ui/text';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Separator } from '@/components/ui/separator';
+import { Text } from '@/components/ui/Text';
+import { Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { Separator } from '@/components/ui/Separator';
 import { RecurrencePicker } from './RecurrencePicker';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import { getDisplayName } from '@/src/features/model-picker/service';

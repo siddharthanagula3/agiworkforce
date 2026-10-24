@@ -5,7 +5,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { useRouter } from 'expo-router';
 
 export default function ParentalControlsScreen() {

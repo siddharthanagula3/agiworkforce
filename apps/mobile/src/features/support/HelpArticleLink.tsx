@@ -1,6 +1,6 @@
 import { CircleHelp } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { API_URL } from '@/lib/constants';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { useThemeColors } from '@/src/ui/theme';

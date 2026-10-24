@@ -212,7 +212,7 @@ describe('the mobile shell is built for a phone, not shrunk from a desktop', () 
       'utf8',
     );
 
-    expect(sheet).toContain("from '@/components/ui/bottom-sheet'");
+    expect(sheet).toContain("from '@/components/ui/BottomSheet'");
     expect(sheet).toContain('<BottomSheet');
   });
 

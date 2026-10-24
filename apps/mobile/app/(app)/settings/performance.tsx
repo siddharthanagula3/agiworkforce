@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, ScrollView, ActivityIndicator, AccessibilityInfo, Platform } from 'react-native';
 import { useFocusEffect } from 'expo-router';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ArrowLeft,
@@ -14,10 +14,10 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import Svg, { Polyline, Line, Text as SvgText, Circle } from 'react-native-svg';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Separator } from '@/components/ui/Separator';
+import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';

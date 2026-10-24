@@ -9,11 +9,11 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { API_URL } from '@/lib/constants';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import {
   ACCESS_LABELS,
   fetchProjectSharing,

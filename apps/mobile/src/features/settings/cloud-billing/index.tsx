@@ -14,7 +14,7 @@ import {
 } from 'lucide-react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -24,7 +24,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import {
   MOBILE_IAP_DEFAULT_ANDROID_REPLACEMENT_MODES,
   canUseBillingPlanCapability,

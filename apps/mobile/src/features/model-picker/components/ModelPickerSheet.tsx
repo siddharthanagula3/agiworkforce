@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetScrollView,
@@ -9,7 +9,7 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { Check, Cpu, Search, X as XIcon } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { ModelRow } from './ModelRow';
 import { SpeedControl } from './SpeedControl';
 import {

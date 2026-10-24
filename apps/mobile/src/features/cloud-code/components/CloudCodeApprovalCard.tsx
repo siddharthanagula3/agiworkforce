@@ -4,8 +4,8 @@ import type {
   CloudCodeApprovalDecision,
 } from '@agiworkforce/cloud-contracts';
 import { CLOUD_CODE_SESSION_COPY } from '@agiworkforce/types';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

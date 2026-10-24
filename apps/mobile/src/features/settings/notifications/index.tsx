@@ -8,7 +8,7 @@ import {
   TextInput,
   useWindowDimensions,
 } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useFocusEffect, useRouter } from 'expo-router';
 import {
   Bell,
@@ -23,15 +23,15 @@ import {
   Vibrate,
   X,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Switch } from '@/components/ui/Switch';
+import { Separator } from '@/components/ui/Separator';
 import {
   useNotificationPrefsStore,
   type PushPreferenceGroup,
 } from '@/stores/notificationPrefsStore';
-import { SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsScreenShell } from '@/src/features/settings/Common';
 import {
   enablePushNotifications,
   getPushDeliveryStatus,

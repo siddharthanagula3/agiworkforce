@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { FileText, Image as ImageIcon } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
 import type { Attachment } from './AttachmentPreview';
 

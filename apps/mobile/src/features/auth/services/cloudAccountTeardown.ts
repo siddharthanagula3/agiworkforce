@@ -163,7 +163,7 @@ function clearLocalCloudAccountStateNow(): void {
   });
 
   runTeardownStep('capability switches', () => {
-    const { useRemoteCapabilityStore } = require('@/src/lib/capabilities');
+    const { useRemoteCapabilityStore } = require('@/src/lib/Capabilities');
     useRemoteCapabilityStore.getState().clear();
   });
 

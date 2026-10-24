@@ -14,7 +14,7 @@ const BOOTSTRAP_STAGES: ReadonlyArray<{
   {
     stage: 'splash',
     entryPoint: /\bholdLaunchSplash\(\)[\s\S]*\buseLaunchSplashRelease\(/,
-    behaviour: '__tests__/launch-splash-release.test.tsx',
+    behaviour: '__tests__/LaunchSplashRelease.test.tsx',
   },
   {
     stage: 'encrypted storage',
@@ -47,7 +47,7 @@ const BOOTSTRAP_STAGES: ReadonlyArray<{
     // which the store arranges itself rather than through the root layout.
     source: 'src/features/model-picker/store.ts',
     entryPoint: /rehydrateWhenMmkvReady\(useModelStore, 'model-store'\)/,
-    behaviour: '__tests__/model-store.test.tsx',
+    behaviour: '__tests__/ModelStore.test.tsx',
   },
   {
     stage: 'app shell',

@@ -19,8 +19,8 @@ import {
   type AuthProviderId,
 } from '@agiworkforce/client-runtime';
 import { validateEmail } from '@agiworkforce/utils';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

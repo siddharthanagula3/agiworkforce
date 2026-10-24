@@ -1,12 +1,12 @@
 import { useCallback } from 'react';
 import { Modal, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { X, AudioLines, Info } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { colors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useSheetSlideIn } from '@/src/shared/hooks/useSheetSlideIn';

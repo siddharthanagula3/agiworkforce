@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Image, View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { RotateCcw, Square } from 'lucide-react-native';
 import type { ChatCodeRunResponse } from '@agiworkforce/cloud-contracts';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useTierStore } from '@/src/features/billing/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors } from '@/src/ui/theme';

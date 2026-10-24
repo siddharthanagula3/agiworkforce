@@ -1,5 +1,5 @@
 import { View, useWindowDimensions, Alert, Modal, Platform } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { readConnectorConnectRequest, type ConnectorConnectRequest } from '@agiworkforce/types';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
 import { useRouter } from 'expo-router';
@@ -31,7 +31,7 @@ import { TapGestureHandler, State } from 'react-native-gesture-handler';
 import type { TapGestureHandlerStateChangeEvent } from 'react-native-gesture-handler';
 import { Image } from 'expo-image';
 import * as Haptics from 'expo-haptics';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { StreamingIndicator } from './StreamingIndicator';
 import { ThinkingChip } from './ThinkingChip';
 import { InlineArtifactCard } from './InlineArtifactCard';

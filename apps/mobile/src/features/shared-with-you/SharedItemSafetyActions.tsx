@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { EyeOff, Flag, type LucideIcon } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import type { SharedReportItem } from '@/services/contentReport';
 import { ReportSheet } from '@/src/features/chat/components/ReportFlagButton';
 import { confirmIrreversible } from '@/src/shared/components/cloud-screen';

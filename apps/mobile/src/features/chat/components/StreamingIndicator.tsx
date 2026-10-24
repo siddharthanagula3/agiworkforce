@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { AgiMark } from '@/components/ui/AgiMark';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

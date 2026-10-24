@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { AlertCircle, Film, Square } from 'lucide-react-native';
 import Animated, {
   FadeInDown,
@@ -10,7 +10,7 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

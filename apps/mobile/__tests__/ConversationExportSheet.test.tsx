@@ -1,0 +1,170 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
+import React from 'react';
+import { Alert } from 'react-native';
+import { render, fireEvent, waitFor } from '@testing-library/react-native';
+
+jest.mock('@/src/ui/theme', () => {
+  const actual = jest.requireActual('@/src/ui/theme/tokens');
+  return {
+    ...actual,
+    useTheme: () => ({ colors: actual.lightColors }),
+  };
+});
+
+jest.mock('@/components/ui/Text', () => {
+  const RN = require('react-native');
+  const Text = (props: Record<string, unknown>) => <RN.Text {...props} />;
+  Text.displayName = 'Text';
+  return { Text };
+});
+
+jest.mock('react-native-safe-area-context', () => {
+  const RN = require('react-native');
+  return {
+    SafeAreaView: ({ children, ...props }: { children: React.ReactNode }) => (
+      <RN.View {...props}>{children}</RN.View>
+    ),
+  };
+});
+
+jest.mock('lucide-react-native', () => {
+  const RN = require('react-native');
+  const Icon = (props: Record<string, unknown>) => <RN.View {...props} />;
+  return {
+    FileText: Icon,
+    File: Icon,
+    Hash: Icon,
+    Copy: Icon,
+    CheckCircle2: Icon,
+    Printer: Icon,
+    X: Icon,
+  };
+});
+
+const mockExportConversationToPDF = jest.fn();
+const mockExportConversationToText = jest.fn();
+const mockExportToMarkdown = jest.fn();
+const mockFormatConversationAsMarkdown = jest.fn(() => 'markdown content');
+const mockShareFile = jest.fn();
+jest.mock('@/services/fileCreation', () => ({
+  exportConversationToPDF: (...args: unknown[]) => mockExportConversationToPDF(...args),
+  exportConversationToText: (...args: unknown[]) => mockExportConversationToText(...args),
+  exportToMarkdown: (...args: unknown[]) => mockExportToMarkdown(...args),
+  formatConversationAsMarkdown: (...args: unknown[]) => mockFormatConversationAsMarkdown(...args),
+  shareFile: (...args: unknown[]) => mockShareFile(...args),
+}));
+
+jest.mock('@/lib/clipboard', () => ({
+  copyToClipboard: jest.fn().mockResolvedValue(true),
+}));
+
+import { ConversationExportSheet } from '@/src/features/chat/components/ConversationExportSheet';
+import type { ChatMessage } from '@/types/chat';
+
+const messages: ChatMessage[] = [
+  {
+    id: 'm1',
+    role: 'user',
+    content: 'Hello',
+    createdAt: new Date().toISOString(),
+  } as ChatMessage,
+  {
+    id: 'm2',
+    role: 'assistant',
+    content: 'Hi there',
+    createdAt: new Date().toISOString(),
+  } as ChatMessage,
+];
+
+describe('ConversationExportSheet', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('renders every export option when visible (not swallowed by a non-modal bottom sheet)', () => {
+    const { getByText, getByLabelText } = render(
+      <ConversationExportSheet
+        visible
+        onClose={jest.fn()}
+        messages={messages}
+        title="Renamed Test Chat"
+      />,
+    );
+
+    expect(getByText('Export Conversation')).toBeTruthy();
+    expect(getByLabelText('Export as PDF')).toBeTruthy();
+    expect(getByLabelText('Export as Text')).toBeTruthy();
+    expect(getByLabelText('Export as Markdown')).toBeTruthy();
+    expect(getByLabelText('Copy All Messages')).toBeTruthy();
+  });
+
+  it('renders nothing meaningful when not visible', () => {
+    const { queryByText } = render(
+      <ConversationExportSheet
+        visible={false}
+        onClose={jest.fn()}
+        messages={messages}
+        title="Renamed Test Chat"
+      />,
+    );
+
+    expect(queryByText('Export Conversation')).toBeNull();
+  });
+
+  it('calls onClose when the backdrop is dismissed', () => {
+    const onClose = jest.fn();
+    const { getByLabelText } = render(
+      <ConversationExportSheet
+        visible
+        onClose={onClose}
+        messages={messages}
+        title="Renamed Test Chat"
+      />,
+    );
+
+    fireEvent.press(getByLabelText('Dismiss export menu'));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  it('invokes exportConversationToText when "Export as Text" is pressed', async () => {
+    mockExportConversationToText.mockResolvedValue({ uri: 'file://export.txt' });
+    const { getByLabelText } = render(
+      <ConversationExportSheet
+        visible
+        onClose={jest.fn()}
+        messages={messages}
+        title="Renamed Test Chat"
+      />,
+    );
+
+    fireEvent.press(getByLabelText('Export as Text'));
+
+    await waitFor(() => {
+      expect(mockExportConversationToText).toHaveBeenCalledWith(messages, 'Renamed Test Chat');
+    });
+  });
+
+  it('keeps the export menu open and hides file errors when sharing fails', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    const onClose = jest.fn();
+    mockExportConversationToText.mockResolvedValue({ uri: 'file://export.txt' });
+    mockShareFile.mockRejectedValue(new Error('internal file path /private/export.txt'));
+    try {
+      const { getByLabelText } = render(
+        <ConversationExportSheet visible onClose={onClose} messages={messages} title="Test Chat" />,
+      );
+
+      fireEvent.press(getByLabelText('Export as Text'));
+
+      await waitFor(() => expect(alert).toHaveBeenCalled());
+      expect(alert).toHaveBeenCalledWith(
+        'Export Failed',
+        'Could not export or share this conversation. Try again.',
+      );
+      expect(onClose).not.toHaveBeenCalled();
+    } finally {
+      alert.mockRestore();
+    }
+  });
+});

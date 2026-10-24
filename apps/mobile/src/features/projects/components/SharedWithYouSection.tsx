@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ChevronRight, Users } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { API_URL } from '@/lib/constants';
 import {
   ACCESS_LABELS,

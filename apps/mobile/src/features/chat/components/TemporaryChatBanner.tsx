@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { Switch, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { EyeOff, X } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useThemeColors } from '@/src/ui/theme';

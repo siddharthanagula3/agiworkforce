@@ -834,19 +834,19 @@
       "rule": "hex"
     },
     {
-      "file": "apps/mobile/components/ui/badge.tsx",
+      "file": "apps/mobile/components/ui/Badge.tsx",
       "line": 31,
       "literal": "color = 'gray'",
       "rule": "named-color"
     },
     {
-      "file": "apps/mobile/components/ui/bottom-sheet.tsx",
+      "file": "apps/mobile/components/ui/BottomSheet.tsx",
       "line": 38,
       "literal": "rgba(",
       "rule": "rgba"
     },
     {
-      "file": "apps/mobile/components/ui/input.tsx",
+      "file": "apps/mobile/components/ui/Input.tsx",
       "line": 18,
       "literal": "rgba(",
       "rule": "rgba"
@@ -3279,19 +3279,19 @@
       "rule": "rgba"
     },
     {
-      "file": "apps/mobile/src/features/settings/permissions/detail.tsx",
+      "file": "apps/mobile/src/features/settings/permissions/Detail.tsx",
       "line": 52,
       "literal": "#fff",
       "rule": "hex"
     },
     {
-      "file": "apps/mobile/src/features/settings/permissions/detail.tsx",
+      "file": "apps/mobile/src/features/settings/permissions/Detail.tsx",
       "line": 52,
       "literal": "#fff",
       "rule": "hex"
     },
     {
-      "file": "apps/mobile/src/features/settings/permissions/detail.tsx",
+      "file": "apps/mobile/src/features/settings/permissions/Detail.tsx",
       "line": 285,
       "literal": "rgba(",
       "rule": "rgba"

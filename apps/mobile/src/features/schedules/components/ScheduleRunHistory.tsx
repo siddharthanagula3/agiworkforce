@@ -12,8 +12,8 @@ import {
   X,
 } from 'lucide-react-native';
 import { runStatusLabel, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { Text } from '@/components/ui/Text';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { useScheduleStore, type ScheduleRun } from '../store';
 

@@ -1,0 +1,370 @@
+import type React from 'react';
+import { ActivityIndicator, View, ScrollView, type RefreshControlProps } from 'react-native';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { StatusBar } from 'expo-status-bar';
+import { ChevronRight, CloudOff, type LucideIcon } from 'lucide-react-native';
+import { Text } from '@/components/ui/Text';
+import { Switch } from '@/components/ui/Switch';
+import { useTheme, useThemeColors, cardRadius } from '@/src/ui/theme';
+import { typeScale } from '@/src/ui/theme/tokens';
+import { ScreenHeader } from '@/src/shared/components/cloud-screen';
+import { useGoBack } from '@/src/shared/hooks/useGoBack';
+import { HelpArticleLink, type MobileHelpArticleId } from '@/src/features/support/HelpArticleLink';
+
+export function SettingsScreenShell({
+  title,
+  children,
+  backHref = '/(app)/(tabs)/settings',
+  help,
+  refreshControl,
+  overlay,
+}: {
+  title: string;
+  children: React.ReactNode;
+  backHref?: string;
+  help?: { docId: MobileHelpArticleId; label: string };
+  refreshControl?: React.ReactElement<RefreshControlProps>;
+  overlay?: React.ReactNode;
+}) {
+  const { colors, statusBarStyle } = useTheme();
+  const goBack = useGoBack(backHref);
+
+  return (
+    <SafeAreaView className="flex-1" style={{ backgroundColor: colors.surfaceBase }}>
+      <StatusBar style={statusBarStyle} />
+      <ScreenHeader title={title} onBack={goBack} />
+      <ScrollView
+        className="flex-1"
+        contentContainerStyle={{
+          flexGrow: 1,
+          paddingHorizontal: 16,
+          paddingTop: 8,
+          paddingBottom: 36,
+        }}
+        refreshControl={refreshControl}
+      >
+        {children}
+        {help ? <HelpArticleLink docId={help.docId} label={help.label} /> : null}
+      </ScrollView>
+      {overlay}
+    </SafeAreaView>
+  );
+}
+
+export function SettingsGroup({ children }: { children: React.ReactNode }) {
+  const colors = useThemeColors();
+  return (
+    <View
+      style={{
+        borderRadius: cardRadius,
+        backgroundColor: colors.surfaceElevated,
+        overflow: 'hidden',
+        marginBottom: 24,
+      }}
+    >
+      {children}
+    </View>
+  );
+}
+
+export function SettingsInfo({
+  title,
+  body,
+  icon: Icon,
+  testID,
+}: {
+  title: string;
+  body: string;
+  icon?: LucideIcon;
+  testID?: string;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View
+      testID={testID}
+      style={{
+        borderRadius: cardRadius,
+        backgroundColor: colors.surfaceElevated,
+        padding: 14,
+        marginBottom: 24,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        {Icon ? <Icon size={18} color={colors.textSecondary} /> : null}
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '700' }}>
+          {title}
+        </Text>
+      </View>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
+        {body}
+      </Text>
+    </View>
+  );
+}
+
+export function CloudAccountRequired({
+  isLoading,
+  onSignIn,
+}: {
+  isLoading: boolean;
+  onSignIn: () => void;
+}) {
+  const colors = useThemeColors();
+
+  if (isLoading) {
+    return (
+      <View
+        style={{
+          minHeight: 120,
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 10,
+        }}
+      >
+        <ActivityIndicator color={colors.teal} />
+        <Text style={{ color: colors.textMuted, fontSize: typeScale.footnote }}>
+          Checking AGI Cloud account…
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <View
+      style={{
+        borderRadius: cardRadius,
+        backgroundColor: colors.surfaceElevated,
+        borderWidth: 1,
+        borderColor: colors.border,
+        padding: 18,
+        gap: 10,
+      }}
+    >
+      <Text style={{ color: colors.textPrimary, fontSize: typeScale.callout, fontWeight: '700' }}>
+        Sign in to AGI Cloud
+      </Text>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 19 }}>
+        Your plan and Cloud data need an account; Local Mode works without one.
+      </Text>
+      <Pressable
+        onPress={onSignIn}
+        accessibilityRole="button"
+        accessibilityLabel="Sign in to AGI Cloud"
+        style={({ pressed }) => ({
+          alignSelf: 'flex-start',
+          minHeight: 42,
+          justifyContent: 'center',
+          paddingHorizontal: 16,
+          borderRadius: 10,
+          backgroundColor: colors.teal,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Text style={{ color: colors.accentText, fontSize: typeScale.subhead, fontWeight: '700' }}>
+          Sign in
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+export function CloudSyncBlockedBanner({
+  onSwitchToCloud,
+  message,
+}: {
+  onSwitchToCloud: () => void;
+  message?: string;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View
+      testID="cloud-sync-blocked-banner"
+      style={{
+        borderRadius: cardRadius,
+        backgroundColor: colors.dangerSurface,
+        borderWidth: 1,
+        borderColor: colors.dangerBorder,
+        padding: 14,
+        marginBottom: 24,
+        gap: 10,
+      }}
+    >
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <CloudOff size={18} color={colors.agentError} />
+        <Text style={{ color: colors.textPrimary, fontSize: typeScale.subhead, fontWeight: '700' }}>
+          Chat is set to Local Mode
+        </Text>
+      </View>
+      <Text style={{ color: colors.textSecondary, fontSize: typeScale.footnote, lineHeight: 18 }}>
+        {message ?? 'Switch to AGI Cloud to see your current plan and usage.'}
+      </Text>
+      <Pressable
+        onPress={onSwitchToCloud}
+        accessibilityRole="button"
+        accessibilityLabel="Switch to AGI Cloud"
+        style={({ pressed }) => ({
+          alignSelf: 'flex-start',
+          paddingHorizontal: 14,
+          paddingVertical: 8,
+          borderRadius: 10,
+          backgroundColor: colors.teal,
+          opacity: pressed ? 0.8 : 1,
+        })}
+      >
+        <Text style={{ color: colors.accentText, fontSize: typeScale.footnote, fontWeight: '600' }}>
+          Switch to AGI Cloud
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+export function SettingsRow({
+  label,
+  icon: Icon,
+  value,
+  onPress,
+  isLast,
+  destructive,
+}: {
+  label: string;
+  icon: LucideIcon;
+  value?: string;
+  onPress?: () => void;
+  isLast?: boolean;
+  destructive?: boolean;
+}) {
+  const colors = useThemeColors();
+  const content = (
+    <View
+      style={{
+        minHeight: 52,
+        paddingHorizontal: 14,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        borderBottomWidth: isLast ? 0 : 1,
+        borderBottomColor: colors.border,
+      }}
+    >
+      <Icon size={19} color={destructive ? colors.agentError : colors.textSecondary} />
+      <Text
+        numberOfLines={1}
+        style={{
+          flex: 1,
+          color: destructive ? colors.agentError : colors.textPrimary,
+          fontSize: typeScale.body,
+        }}
+      >
+        {label}
+      </Text>
+      {value ? (
+        <Text
+          numberOfLines={1}
+          style={{ color: colors.textMuted, fontSize: typeScale.footnote, maxWidth: 140 }}
+        >
+          {value}
+        </Text>
+      ) : null}
+      {onPress && !destructive ? <ChevronRight size={17} color={colors.textMuted} /> : null}
+    </View>
+  );
+
+  if (!onPress) return content;
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={value ? `${label}. ${value}` : label}
+    >
+      {content}
+    </Pressable>
+  );
+}
+
+export function SettingsSwitchRow({
+  label,
+  description,
+  icon: Icon,
+  iconColor,
+  value,
+  onValueChange,
+  disabled,
+  isLast,
+  testID,
+}: {
+  label: string;
+  description?: string;
+  icon: LucideIcon;
+  iconColor?: string;
+  value: boolean;
+  onValueChange: (value: boolean) => void;
+  disabled?: boolean;
+  isLast?: boolean;
+  testID?: string;
+}) {
+  const colors = useThemeColors();
+  const resolvedIconColor = iconColor ?? colors.textSecondary;
+
+  return (
+    <View
+      style={{
+        minHeight: description ? 76 : 56,
+        paddingHorizontal: 14,
+        paddingVertical: description ? 12 : 0,
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+        borderBottomWidth: isLast ? 0 : 1,
+        borderBottomColor: colors.border,
+        opacity: disabled ? 0.7 : 1,
+      }}
+      accessibilityLabel={`${label}. ${value ? 'On' : 'Off'}`}
+    >
+      <View
+        style={{
+          width: 32,
+          height: 32,
+          borderRadius: 10,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: colors.neutralSurface,
+        }}
+      >
+        <Icon size={18} color={resolvedIconColor} />
+      </View>
+      <View style={{ flex: 1, minWidth: 0, justifyContent: 'center' }}>
+        <Text
+          numberOfLines={1}
+          style={{ color: colors.textPrimary, fontSize: typeScale.body, fontWeight: '600' }}
+        >
+          {label}
+        </Text>
+        {description ? (
+          <Text
+            numberOfLines={2}
+            style={{
+              color: colors.textMuted,
+              fontSize: typeScale.footnote,
+              lineHeight: 18,
+              marginTop: 2,
+            }}
+          >
+            {description}
+          </Text>
+        ) : null}
+      </View>
+      <View style={{ justifyContent: 'center', alignItems: 'center' }}>
+        <Switch
+          testID={testID}
+          value={value}
+          onValueChange={onValueChange}
+          disabled={disabled}
+          accessibilityLabel={`${label}. ${value ? 'On' : 'Off'}`}
+          accessibilityHint={description}
+        />
+      </View>
+    </View>
+  );
+}

@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { CornerDownRight } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { fetchFollowUpSuggestions } from '@/src/features/chat/services/followUps';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

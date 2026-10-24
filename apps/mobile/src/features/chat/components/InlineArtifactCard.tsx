@@ -1,5 +1,5 @@
 import { View, Platform } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import {
   Code2,
   Mail,
@@ -11,8 +11,8 @@ import {
   Shield,
 } from 'lucide-react-native';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';

@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { Swipeable } from 'react-native-gesture-handler';
 import Animated, {
   FadeIn,
@@ -10,9 +10,9 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { Pencil, Trash2, Pin, PinOff } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { MemoryEntry } from '@/src/features/memory/store';

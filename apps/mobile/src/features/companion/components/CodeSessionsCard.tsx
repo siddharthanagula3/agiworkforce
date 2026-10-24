@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { TextInput, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import {
   Check,
@@ -19,9 +19,9 @@ import {
   type RemoteCodeSessionStatus,
   type RemoteCodeSessionSummary,
 } from '@agiworkforce/types';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { Text } from '@/components/ui/text';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
+import { Text } from '@/components/ui/Text';
 import { formatRelativeTime } from '@/src/lib/time';
 import { useThemeColors } from '@/src/ui/theme';
 import { listCodeSessions, startCodeSession } from '../remote-code/service';

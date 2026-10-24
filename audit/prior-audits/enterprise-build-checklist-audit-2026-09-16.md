@@ -598,7 +598,7 @@ _§8: 27 of 33 done._
       <br>_`apps/desktop/electron/windowChrome.ts`, `quickAsk.ts`_
       <br>⛔ Release check: The Electron desktop has never been released (release-desktop-cloud.yml never run).
 - [x] Mobile status bar ⛔ **not live**
-      <br>_`apps/mobile/src/ui/theme/useTheme.ts` and StatusBar usage across `settings/common.tsx`, `feedback/index.tsx`, `reminders/index.tsx`_
+      <br>_`apps/mobile/src/ui/theme/useTheme.ts` and StatusBar usage across `settings/Common.tsx`, `feedback/index.tsx`, `reminders/index.tsx`_
       <br>⛔ Release check: The mobile app has never been released (release-mobile.yml never run; no App Store or Google Play listing).
 - [x] No hardcoded component colors
       <br>_`check-css-tokens.mjs` (per-surface stylesheet check), `check-theme-only-text-colours.mjs`, `check-no-hex-colors-mobile.mjs` - all wired with `.test.mjs` companions into `check:llm-operability`_

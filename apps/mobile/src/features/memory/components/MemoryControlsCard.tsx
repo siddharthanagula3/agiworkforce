@@ -1,8 +1,8 @@
 import { View } from 'react-native';
 import { Brain, LockKeyhole, MessageSquareText, Sparkles } from 'lucide-react-native';
 import { SENSITIVE_MEMORY_SUBJECTS } from '@agiworkforce/context';
-import { Text } from '@/components/ui/text';
-import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
+import { Text } from '@/components/ui/Text';
+import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

@@ -12,14 +12,14 @@ import {
   RefreshControl,
   ActivityIndicator,
 } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from 'expo-router';
 import { useRouter } from 'expo-router';
 import { Filter, FolderOpen, Plus, X } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
 import { ProjectCard } from '@/src/features/projects';
 import { SharedWithYouSection } from '@/src/features/projects/components/SharedWithYouSection';
 import { useProjectStore, type Project } from '@/src/features/projects/store';

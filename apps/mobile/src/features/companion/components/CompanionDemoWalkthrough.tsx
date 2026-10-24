@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { View, Modal, Dimensions } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn, FadeOut, SlideInDown, SlideOutDown } from 'react-native-reanimated';
 import {
   QrCode,
@@ -12,7 +12,7 @@ import {
   X,
   CheckCircle2,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { dialogPadding } from '@/src/ui/theme/tokens';
 import { create } from 'zustand';

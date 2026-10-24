@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { Alert, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import {
   Archive,
   ArrowUpFromLine,
@@ -13,7 +13,7 @@ import {
   ShieldCheck,
   Trash2,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { exportAllUserData } from '@/services/dsarExport';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
@@ -24,7 +24,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { useRouter } from 'expo-router';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';

@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { agentCanChat } from '@agiworkforce/cloud-contracts';
 
-import { Button } from '@/components/ui/button';
+import { Button } from '@/components/ui/Button';
 import { DEFAULT_AUTO_MODE_ID } from '@/lib/models';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';

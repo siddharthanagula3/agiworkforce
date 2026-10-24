@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { View, Alert } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import {
   CloudSchedulesGate,
   ScheduleForm,

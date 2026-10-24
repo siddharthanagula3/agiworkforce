@@ -86,7 +86,7 @@ import { resolveRootRedirect } from '@/src/features/auth/services/rootRouting';
 import { OfflineBanner } from '@/src/features/edge-cases/components/OfflineBanner';
 import { ToastHost } from '@/src/shared/components/Toast';
 import { CloudSyncErrorBanner } from '@/src/features/edge-cases/components/CloudSyncErrorBanner';
-import { CapabilityProvider } from '@/src/lib/capabilities';
+import { CapabilityProvider } from '@/src/lib/Capabilities';
 import { refreshRolloutRings, useRolloutStore } from '@/src/features/rollout';
 import { registerAppTransactionForAccount } from '@/src/features/age-assurance/appTransaction';
 import { holdLaunchSplash, useLaunchSplashRelease } from '@/src/shared/hooks/useLaunchSplash';

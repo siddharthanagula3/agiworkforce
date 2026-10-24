@@ -1,6 +1,6 @@
 import { useCallback, forwardRef, useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, View, ScrollView } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, { BottomSheetBackdrop, BottomSheetScrollView } from '@gorhom/bottom-sheet';
 import { useRouter } from 'expo-router';
 import {
@@ -44,8 +44,8 @@ import {
   supportsManagedMediaImageEdit,
 } from '@agiworkforce/cloud-contracts';
 import { supportedVideoDurationSecs } from '@/src/features/video/services/videogen';
-import { Text } from '@/components/ui/text';
-import { Switch } from '@/components/ui/switch';
+import { Text } from '@/components/ui/Text';
+import { Switch } from '@/components/ui/Switch';
 import { useChatStore } from '@/stores/chatStore';
 import { NEW_CHAT_STYLE_KEY, useChatViewStore } from '@/stores/chat/chatViewStore';
 import { clipboardHasImage } from '@/src/features/media/clipboard-image';
@@ -71,7 +71,7 @@ import { FEATURES } from '@/lib/v1FeatureFlags';
 import { executionModeForConversation } from '@/src/features/chat/utils/conversationMode';
 import { recentMobileFiles } from '@/src/features/search/mobileGlobalSearch';
 import { fetchLibraryPage } from '@/src/features/library/libraryClient';
-import { useCapability } from '@/src/lib/capabilities';
+import { useCapability } from '@/src/lib/Capabilities';
 import { useMobileSkillSelectionStore } from '@/src/features/skills/selectionStore';
 import { useOutputFormatStore } from '@/src/features/chat/store/outputFormatStore';
 import type { Attachment } from './AttachmentPreview';

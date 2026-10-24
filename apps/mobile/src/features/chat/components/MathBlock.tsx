@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
 import { View, StyleSheet, useColorScheme } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { WebView } from 'react-native-webview';
 import type { WebViewMessageEvent } from 'react-native-webview';
 import { agiPalette } from '@agiworkforce/design-tokens';

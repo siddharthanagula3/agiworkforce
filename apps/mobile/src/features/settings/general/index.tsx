@@ -17,7 +17,7 @@ import {
   SettingsRow,
   SettingsScreenShell,
   SettingsSwitchRow,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useTierStore } from '@/src/features/billing/store';
 import { getShortDisplayName } from '@/src/features/model-picker/service';
@@ -28,7 +28,7 @@ import {
   setDefaultEffort,
   useDefaultEffort,
 } from '@/src/features/model-picker/components/EffortSlider';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { getModelReasoning } from '@agiworkforce/types';

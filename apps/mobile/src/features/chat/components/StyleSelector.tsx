@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Modal, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useChatStore, type ChatStyle } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

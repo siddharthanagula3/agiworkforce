@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { Globe, Lock, Users } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   usePublishedArtifactAudience,

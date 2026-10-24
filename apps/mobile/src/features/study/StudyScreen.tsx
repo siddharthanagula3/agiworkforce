@@ -17,9 +17,9 @@ import {
   type StudyMode,
   type StudySession,
 } from '@agiworkforce/types';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { listStudySessions, startStudySession } from '@/src/features/study/service';
 import { useChatStore } from '@/stores/chatStore';

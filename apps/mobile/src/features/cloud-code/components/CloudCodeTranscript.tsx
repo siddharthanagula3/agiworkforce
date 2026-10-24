@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ActivityIndicator, Alert, Share, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Check, ChevronRight, Copy, Share2, TriangleAlert } from 'lucide-react-native';
 import type { CloudCodeChanges, CodeTranscriptItem } from '@agiworkforce/cloud-contracts';
 import {
@@ -12,7 +12,7 @@ import {
   type CloudCodeAgentStopReason,
   type CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { renderMarkdownContent } from '@/src/features/chat/components/MessageContentRenderer';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { radii, useThemeColors } from '@/src/ui/theme';

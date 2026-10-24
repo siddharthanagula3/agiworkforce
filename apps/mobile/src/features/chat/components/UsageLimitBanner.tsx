@@ -1,5 +1,5 @@
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Gauge, X } from 'lucide-react-native';
 import {
   normalizeUsagePercentage,
@@ -8,7 +8,7 @@ import {
   type ManagedUsageCreditWindow,
   type ManagedUsageWarning,
 } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { UsageSnapshot } from '@/services/usage';

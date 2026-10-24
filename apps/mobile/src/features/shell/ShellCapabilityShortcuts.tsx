@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { usePathname } from 'expo-router';
 import {
   Camera,
@@ -10,7 +10,7 @@ import {
   ScanText,
   type LucideIcon,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

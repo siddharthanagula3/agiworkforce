@@ -1,11 +1,11 @@
 import Animated, { SlideInDown } from 'react-native-reanimated';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Monitor, Cpu, HardDrive, Unlink } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Separator } from '@/components/ui/Separator';
 import { AgentDashboard } from '@/src/features/companion/components/AgentDashboard';
 import { CodeSessionsCard } from './CodeSessionsCard';
 import { DispatchTaskComposer } from '@/src/features/companion/components/DispatchTaskComposer';

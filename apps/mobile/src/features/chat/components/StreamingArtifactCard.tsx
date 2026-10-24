@@ -1,13 +1,13 @@
 import { useMemo, useState } from 'react';
 import { View, Platform } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Code2 } from 'lucide-react-native';
 import {
   computeDerivedArtifactId,
   extractCodeBlocks,
   extractTrailingUnclosedBlock,
 } from '@agiworkforce/artifacts';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { Artifact } from '@/types/chat';

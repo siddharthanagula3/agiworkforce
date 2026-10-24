@@ -1,14 +1,14 @@
 import { useCallback, useState } from 'react';
 import { View, Share, RefreshControl, Alert } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useFocusEffect } from 'expo-router';
 import { Link2, Trash2, AlertCircle } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { CloudSyncBlockedBanner, SettingsScreenShell } from '@/src/features/settings/common';
+import { CloudSyncBlockedBanner, SettingsScreenShell } from '@/src/features/settings/Common';
 import { fetchSharedLinks, revokeSharedLink, type SharedLink } from '@/src/features/shared-links';
 import { translatePlural } from '@/src/i18n/plural';
 

@@ -8,8 +8,8 @@ import {
   type Effort,
   type ModelReasoning,
 } from '@agiworkforce/types';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useAgentControlStore } from '@/stores/agentControlStore';
 import { useThemeColors } from '@/src/ui/theme';

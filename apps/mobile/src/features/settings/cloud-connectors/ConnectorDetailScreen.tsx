@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { useUser } from '@clerk/expo';
 import {
@@ -27,7 +27,7 @@ import {
   type ConnectorToolCategory,
 } from '@agiworkforce/cloud-contracts';
 
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { ConnectorConsentNotes, ConnectorHealthCard } from './ConnectorTrustSections';
 import { ConnectorCallLog } from './ConnectorCallLog';
 import { LinkedBanks } from './LinkedBanks';
@@ -60,7 +60,7 @@ import {
 import { useAuthStore } from '@/src/features/auth/store';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
 import {
   CloudAccountRequired,
   CloudSyncBlockedBanner,
@@ -68,7 +68,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { cardRadius, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { ConnectorApiKeySheet } from './ConnectorApiKeySheet';

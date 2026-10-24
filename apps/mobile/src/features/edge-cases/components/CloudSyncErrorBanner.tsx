@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { RefreshCw, X } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useNetworkStatus } from '@/hooks/useNetworkStatus';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale, zIndex } from '@/src/ui/theme/tokens';

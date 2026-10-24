@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Modal, Platform, ScrollView, Share, View } from 'react-native';
 import { Image } from 'expo-image';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useNavigation } from 'expo-router';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
@@ -18,8 +18,8 @@ import {
   TriangleAlert,
   X,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useTheme, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

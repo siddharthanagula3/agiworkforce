@@ -9,8 +9,8 @@ import {
   type ConnectorCallHealth,
 } from '@agiworkforce/cloud-contracts';
 
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { MetaText, SectionCard } from '@/src/shared/components/cloud-screen';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

@@ -25,9 +25,9 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { CONNECTORS_COMING_SOON_LABEL } from '@agiworkforce/types';
 
-import { Button } from '@/components/ui/button';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { API_URL } from '@/lib/constants';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import {

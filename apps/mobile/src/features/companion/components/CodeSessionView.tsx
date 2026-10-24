@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { ScrollView, TextInput, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import {
   Check,
   ChevronRight,
@@ -20,10 +20,10 @@ import {
   type RemoteCodeDiff,
   type RemoteCodeToolRecord,
 } from '@agiworkforce/types';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { Switch } from '@/components/ui/switch';
-import { Text } from '@/components/ui/text';
+import { Badge } from '@/components/ui/Badge';
+import { Card } from '@/components/ui/Card';
+import { Switch } from '@/components/ui/Switch';
+import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useThemeColors } from '@/src/ui/theme';

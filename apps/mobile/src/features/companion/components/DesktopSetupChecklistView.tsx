@@ -1,14 +1,14 @@
 import { useCallback } from 'react';
 import { Alert, Linking, ScrollView, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Mail, MonitorDown } from 'lucide-react-native';
 import { useUser } from '@clerk/expo';
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import { mmkvStorage, rehydrateWhenMmkvReady } from '@/lib/mmkv';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingChecklist } from './ConnectionStateViews';

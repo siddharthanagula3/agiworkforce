@@ -1088,7 +1088,7 @@ Severity: P2
 Surface: Mobile
 Area: Chat / Navigation
 Status: Fixed locally; live mobile build unverified
-Evidence: the message store now records a failed Cloud history refresh and clears that state on retry. The Chats list shows loading, a retryable error, or an empty account as distinct states. A rejected managed-cloud fetch and its successful retry are covered in `cloud-chat-shared-client.test.ts`; the list error and Retry action are covered in `chats-list-screen.test.tsx`.
+Evidence: the message store now records a failed Cloud history refresh and clears that state on retry. The Chats list shows loading, a retryable error, or an empty account as distinct states. A rejected managed-cloud fetch and its successful retry are covered in `cloud-chat-shared-client.test.ts`; the list error and Retry action are covered in `ChatsListScreen.test.tsx`.
 
 ### [PG-MOB-04] The Chats and Projects lists have no pull-to-refresh, loading or error state
 
@@ -1134,7 +1134,7 @@ Severity: P2
 Surface: Mobile
 Area: Projects
 Status: Fixed locally; signed-in device flow unverified
-Evidence: `apps/mobile/app/(app)/projects/[id].tsx` now displays "Loading Cloud project" for an unsynced Cloud ID, an explicit retry on fetch failure, and "Local project" only for IDs found in the Local store. `apps/mobile/src/features/projects/service.ts` fetches missing Cloud projects with an account-scoped epoch. `apps/mobile/__tests__/project-detail-screen.snapshot.test.tsx` covers the loading, success, failure, and retry paths. The shipped feature flags no longer contain `crossDeviceSync`.
+Evidence: `apps/mobile/app/(app)/projects/[id].tsx` now displays "Loading Cloud project" for an unsynced Cloud ID, an explicit retry on fetch failure, and "Local project" only for IDs found in the Local store. `apps/mobile/src/features/projects/service.ts` fetches missing Cloud projects with an account-scoped epoch. `apps/mobile/__tests__/ProjectDetailScreen.snapshot.test.tsx` covers the loading, success, failure, and retry paths. The shipped feature flags no longer contain `crossDeviceSync`.
 Verification: Run the project-detail screen test and then open an unsynced Cloud project on a signed-in device after the production Terms route is deployed.
 
 ### [PG-MOB-09] Microphone-denied voice capture lacked a Settings action

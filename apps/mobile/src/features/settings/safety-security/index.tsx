@@ -11,7 +11,7 @@ import {
   SettingsRow,
   SettingsScreenShell,
   SettingsSwitchRow,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { HelpArticleLink } from '@/src/features/support/HelpArticleLink';
 import { useRouter } from 'expo-router';
 

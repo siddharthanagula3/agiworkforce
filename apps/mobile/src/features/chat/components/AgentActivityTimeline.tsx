@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useRecyclingState } from '@shopify/flash-list';
 import {
   AlertCircle,
@@ -23,7 +23,7 @@ import type {
 } from '@agiworkforce/client-runtime';
 import { TOOL_STATUS_PRESENTATION, normalizeToolStatus } from '@agiworkforce/types';
 import { CHAT_CODE_RUN_TOOL_NAME } from '@agiworkforce/cloud-contracts';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { toolStatusColor } from '@/src/features/chat/utils/toolStatusTone';

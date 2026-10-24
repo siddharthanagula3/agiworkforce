@@ -5,8 +5,8 @@ import DateTimePicker, {
   type DateTimePickerChangeEvent,
 } from '@react-native-community/datetimepicker';
 import { CalendarDays, Clock } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

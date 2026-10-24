@@ -1,7 +1,7 @@
 import { View } from 'react-native';
 import { featureDefinition, featureMaturityLabel } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
-import { Switch } from '@/components/ui/switch';
+import { Text } from '@/components/ui/Text';
+import { Switch } from '@/components/ui/Switch';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { fastModeBlockMessage, useFastModeStore, useMobileFastMode } from '../fastMode';

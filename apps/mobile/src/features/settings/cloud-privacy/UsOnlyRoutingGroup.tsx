@@ -12,10 +12,10 @@ import {
   RoutingPreferencesSchema,
   type RoutingPreferences,
 } from '@agiworkforce/cloud-contracts';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { api } from '@/services/api';
 import { useTierStore } from '@/src/features/billing/store';
-import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

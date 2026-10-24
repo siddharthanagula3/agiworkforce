@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { WebView, type WebViewMessageEvent } from 'react-native-webview';
 import { View, type StyleProp, type ViewStyle } from 'react-native';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   buildMermaidPreviewHtml,

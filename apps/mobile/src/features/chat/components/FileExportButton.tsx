@@ -1,11 +1,11 @@
 import { useCallback, useState } from 'react';
 import { View, ActivityIndicator, Modal, StyleSheet } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import * as Haptics from 'expo-haptics';
 import { FileText, FileDown, Copy, Share2, X, Check } from 'lucide-react-native';
 
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

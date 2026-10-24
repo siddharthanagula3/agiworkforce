@@ -1,8 +1,8 @@
 import { Cloud } from 'lucide-react-native';
 import { View } from 'react-native';
 
-import { Card } from '@/components/ui/card';
-import { Text } from '@/components/ui/text';
+import { Card } from '@/components/ui/Card';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

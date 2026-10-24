@@ -1,7 +1,7 @@
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { canUseBillingPlanCapability } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useChatStore } from '@/stores/chatStore';
 import { useTierStore } from '@/src/features/billing/store';
 import { useThemeColors } from '@/src/ui/theme';

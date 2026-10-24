@@ -12,9 +12,9 @@ import {
   type LucideIcon,
 } from 'lucide-react-native';
 import { runStatusLabel } from '@agiworkforce/types';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
-import { Skeleton } from '@/components/ui/skeleton';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { CloudSchedulesGate, useScheduleStore } from '@/src/features/schedules';
 import type { RecentScheduleRun } from '@/src/features/schedules/store';
 import { useThemeColors } from '@/src/ui/theme';

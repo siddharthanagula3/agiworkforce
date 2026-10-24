@@ -11,8 +11,8 @@ import {
   type CloudCodeTurnMode,
   type CloudCodeTurnStepBound,
 } from '@agiworkforce/types';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useAuthStore } from '@/src/features/auth/store';
 import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import { useThemeColors } from '@/src/ui/theme';

@@ -1,14 +1,14 @@
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Check, Palette } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { AccentColor } from '@/stores/settingsStore';
 import { getAccentSwatch, useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 
 const ACCENTS: Array<{ value: AccentColor; label: string }> = [
   { value: 'neutral', label: 'Neutral' },

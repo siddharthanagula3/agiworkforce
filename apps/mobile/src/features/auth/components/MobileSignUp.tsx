@@ -23,8 +23,8 @@ import {
   FREE_PLAN_TRAINING_SIGNUP_NOTICE,
   FREE_PLAN_TRAINING_SIGNUP_NOTICE_LINK_LABEL,
 } from '@agiworkforce/compliance';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { API_URL } from '@/lib/constants';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { useTheme } from '@/src/ui/theme';

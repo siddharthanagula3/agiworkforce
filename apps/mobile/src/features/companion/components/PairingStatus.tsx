@@ -10,7 +10,7 @@ import Animated, {
   cancelAnimation,
 } from 'react-native-reanimated';
 import { Wifi, WifiOff, WifiLow } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { motion } from '@/src/ui/theme/tokens';
 import type { ConnectionStatus, ConnectionQuality } from '@/stores/connectionStore';

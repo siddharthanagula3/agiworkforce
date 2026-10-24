@@ -1,5 +1,5 @@
 import { Image, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import type { ReactElement } from 'react';
 import {
   AlertTriangle,
@@ -16,7 +16,7 @@ import {
   ShieldCheck,
 } from 'lucide-react-native';
 import { formatDeliverableFormatLabel, type GeneratedFilePresentation } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

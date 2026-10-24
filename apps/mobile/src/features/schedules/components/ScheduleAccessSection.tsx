@@ -7,7 +7,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import { CONNECTORS_COMING_SOON_MESSAGE, connectorsReleased } from '@agiworkforce/types';
 
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { fetchConnectorDirectory } from '@/services/connectors';
 import { listAgents } from '@/src/features/agents/service';
 import { useAuthStore } from '@/src/features/auth/store';

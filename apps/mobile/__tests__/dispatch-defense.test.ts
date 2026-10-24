@@ -256,11 +256,11 @@ jest.mock('@shopify/flash-list', () => ({
   FlashList: 'FlashList',
 }));
 
-jest.mock('@/components/ui/text', () => ({ Text: 'Text' }));
-jest.mock('@/components/ui/card', () => ({ Card: 'Card' }));
-jest.mock('@/components/ui/badge', () => ({ Badge: 'Badge' }));
-jest.mock('@/components/ui/button', () => ({ Button: 'Button' }));
-jest.mock('@/components/ui/separator', () => ({ Separator: 'Separator' }));
+jest.mock('@/components/ui/Text', () => ({ Text: 'Text' }));
+jest.mock('@/components/ui/Card', () => ({ Card: 'Card' }));
+jest.mock('@/components/ui/Badge', () => ({ Badge: 'Badge' }));
+jest.mock('@/components/ui/Button', () => ({ Button: 'Button' }));
+jest.mock('@/components/ui/Separator', () => ({ Separator: 'Separator' }));
 jest.mock('@/src/ui/theme', () => ({
   colors: {
     agentActive: '#3b82f6',

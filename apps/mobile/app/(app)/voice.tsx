@@ -10,7 +10,7 @@ import {
   ScrollView,
   TextInput,
 } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -18,7 +18,7 @@ import Svg, { Defs, RadialGradient, Stop, Rect } from 'react-native-svg';
 import { ArrowUp, X, MicOff, Mic, Volume2, Hand } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { VoiceOrb } from '@/src/features/voice/components/VoiceOrb';
 import { useChatStore } from '@/stores/chatStore';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -34,7 +34,7 @@ import { showVoicePermissionAlert } from '@/src/features/voice/components/voiceP
 import { activeSpeechLanguage, speechSettings } from '@/src/features/voice/services/speechSettings';
 import { colors, motion, zIndex } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { CapabilityUnavailable, useCapability } from '@/src/lib/capabilities';
+import { CapabilityUnavailable, useCapability } from '@/src/lib/Capabilities';
 import { getDisplayName } from '@/src/features/model-picker/service';
 import {
   createMessageIdSet,

@@ -1,8 +1,8 @@
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn, FadeOut, useReducedMotion } from 'react-native-reanimated';
 import { Film, Paintbrush, X } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import type { MediaMode } from '@/stores/chat/chatViewStore';

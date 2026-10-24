@@ -27,9 +27,9 @@ import {
   type CloudCodeSession,
   type CloudCodeTerminalEntry,
 } from '@agiworkforce/types';
-import { Button } from '@/components/ui/button';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';

@@ -5,8 +5,8 @@ import { useRouter } from 'expo-router';
 import { Globe } from 'lucide-react-native';
 import type { ManagedCloudPublishedArtifact } from '@agiworkforce/cloud-contracts';
 
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import {
   captureCloudAccountEpoch,
   isCloudAccountEpochCurrent,

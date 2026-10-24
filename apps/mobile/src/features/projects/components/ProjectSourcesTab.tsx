@@ -9,13 +9,13 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import * as DocumentPicker from 'expo-document-picker';
 import { cacheDirectory, writeAsStringAsync } from 'expo-file-system/legacy';
 import { FileText, Plus, Trash2, Type } from 'lucide-react-native';
 import { uuidv7 } from '@agiworkforce/utils/uuidv7';
 import { ALLOWED_ATTACHMENT_MIME_PREFIXES, IMAGE_ATTACHMENT_MIME_TYPES } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import {
   cloudProjectSources,

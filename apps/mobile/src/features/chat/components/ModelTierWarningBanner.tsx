@@ -1,6 +1,6 @@
 import { View } from 'react-native';
 import { Zap } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useModelStore } from '@/src/features/model-picker/store';

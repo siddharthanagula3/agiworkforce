@@ -8,7 +8,7 @@ import {
   TextInput,
   KeyboardAvoidingView,
 } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import * as Haptics from 'expo-haptics';
 import {
   X,
@@ -28,8 +28,8 @@ import {
 import { useState, useCallback, useEffect, useMemo } from 'react';
 import { summarizeGeneratedFileBundle } from '@agiworkforce/types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Text } from '@/components/ui/text';
-import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/Text';
+import { Badge } from '@/components/ui/Badge';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';

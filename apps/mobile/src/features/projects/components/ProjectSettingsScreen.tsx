@@ -1,14 +1,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Alert, TextInput, View } from 'react-native';
 import { Brain, Palette, Trash2, UserRound, Users } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import {
   SettingsGroup,
   SettingsInfo,
   SettingsScreenShell,
   SettingsSwitchRow,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import {
   updateCloudProjectDetails,
   type CloudProjectDetailsPatch,

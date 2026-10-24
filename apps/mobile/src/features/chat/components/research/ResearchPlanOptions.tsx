@@ -15,11 +15,11 @@ import {
   hasResearchSourceChoice,
   type ResearchPlanChoices,
 } from '@/src/features/chat/utils/researchPlanChoices';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { useChatConnectorOptions } from '@/src/features/chat/hooks/useChatConnectorOptions';
-import { Switch } from '@/components/ui/switch';
-import { Text } from '@/components/ui/text';
+import { Switch } from '@/components/ui/Switch';
+import { Text } from '@/components/ui/Text';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

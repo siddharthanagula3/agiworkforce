@@ -15,7 +15,7 @@
  * Linked from: /legal route in the drawer + privacy policy footer.
  */
 import { ScrollView, View, Linking } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ARTICLE_50_1_VERBATIM,
@@ -28,7 +28,7 @@ import {
 } from '@agiworkforce/compliance';
 import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { readChineseHqConsent } from '@/services/providerConsent';

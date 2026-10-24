@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, RefreshControl, Alert } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
@@ -14,8 +14,8 @@ import {
   Trash2,
 } from 'lucide-react-native';
 
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { getBillingPlanPricing, isOrganizationAdminRole } from '@agiworkforce/types';
@@ -24,7 +24,7 @@ import { useWebBillingLinksAllowed } from '@/src/features/billing/webBillingLink
 import { useAuthStore } from '@/src/features/auth/store';
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
-import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/common';
+import { CloudAccountRequired, CloudSyncBlockedBanner } from '@/src/features/settings/Common';
 import {
   WORKSPACE_ROLES,
   fetchWorkspaceMembers,
@@ -40,7 +40,7 @@ import { RolePickerModal } from '@/src/features/team/RolePickerModal';
 import { WorkspaceAdministration } from '@/src/features/team/WorkspaceAdministration';
 import { switchWorkspace } from '@/src/features/team/switchWorkspace';
 import { translatePlural } from '@/src/i18n/plural';
-import { useStepUp } from '@/src/features/auth/hooks/useStepUp';
+import { useStepUp } from '@/src/features/auth/hooks/UseStepUp';
 import { isStepUpCancelled } from '@/src/features/auth/services/stepUp';
 
 const WEB_TEAM_URL = 'https://agiworkforce.com/settings/team';

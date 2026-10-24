@@ -6,8 +6,8 @@ import {
   toolApprovalPolicyOption,
   type ToolApprovalPolicy,
 } from '@agiworkforce/types';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useToolApprovalPolicySync } from '@/src/features/settings/tool-approvals/useToolApprovalPolicySync';
 import { useThemeColors } from '@/src/ui/theme';
 import { sheetRadius, typeScale } from '@/src/ui/theme/tokens';

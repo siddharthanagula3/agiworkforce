@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { Platform, View } from 'react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, cardRadius } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsScreenShell } from '@/src/features/settings/Common';
 import {
   OSS_LICENSES_GENERATED_AT,
   OSS_PACKAGES,

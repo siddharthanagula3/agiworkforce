@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { View, ScrollView, TextInput, Alert } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Check, ChevronsUpDown } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';

@@ -1,8 +1,8 @@
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { AlertTriangle, SignalZero, Clock, RotateCcw } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { formatRelativeTime } from '@/src/lib/time';
 

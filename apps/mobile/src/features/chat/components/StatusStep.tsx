@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, {
   FadeInDown,
   useAnimatedStyle,
@@ -20,7 +20,7 @@ import {
   ChevronRight,
   Loader2,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, type ColorScheme, motion } from '@/src/ui/theme';
 import type { StatusStep as StatusStepType, StepIcon } from '@/types/chat';
 

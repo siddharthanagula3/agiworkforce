@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, StyleSheet, TextInput, View } from 'react-native';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
-import { SettingsScreenShell } from '@/src/features/settings/common';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
+import { SettingsScreenShell } from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

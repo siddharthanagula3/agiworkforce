@@ -18,9 +18,9 @@ import {
   type ManagedCloudAgent,
 } from '@agiworkforce/cloud-contracts';
 
-import { Button } from '@/components/ui/button';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import {
   Chip,
   ErrorBanner,

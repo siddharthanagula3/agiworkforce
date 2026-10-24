@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -12,7 +12,7 @@ import {
   MessageCircleQuestionMark,
   Paperclip,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useChatStore } from '@/stores/chatStore';

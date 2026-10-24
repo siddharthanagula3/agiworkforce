@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { KeyboardAvoidingView, Modal, StyleSheet, TextInput, View } from 'react-native';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';

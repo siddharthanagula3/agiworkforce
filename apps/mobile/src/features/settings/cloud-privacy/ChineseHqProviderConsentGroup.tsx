@@ -1,10 +1,10 @@
 import { useCallback, useState } from 'react';
 import { Alert, View } from 'react-native';
 import { Globe } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsSwitchRow } from '@/src/features/settings/Common';
 import {
   CHINESE_HQ_PROVIDER_IDS,
   chineseHqProviderDisplayName,

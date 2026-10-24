@@ -3,11 +3,11 @@ import { Alert, TextInput, View, type LayoutChangeEvent, type TextInputProps } f
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ArrowLeft, Cloud, RefreshCw, type LucideIcon } from 'lucide-react-native';
 
-import { Button } from '@/components/ui/button';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Switch } from '@/components/ui/switch';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Skeleton } from '@/components/ui/Skeleton';
+import { Switch } from '@/components/ui/Switch';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

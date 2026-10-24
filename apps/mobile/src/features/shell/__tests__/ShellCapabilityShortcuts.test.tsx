@@ -8,7 +8,7 @@ jest.mock('lucide-react-native', () => {
 });
 
 const mockCapabilities = { value: getPlatformCapabilities('mobile') };
-jest.mock('@/src/lib/capabilities', () => ({ useCapabilities: () => mockCapabilities.value }));
+jest.mock('@/src/lib/Capabilities', () => ({ useCapabilities: () => mockCapabilities.value }));
 
 jest.mock('../ShellSecondarySheet', () => {
   const { View, Pressable } = require('react-native');

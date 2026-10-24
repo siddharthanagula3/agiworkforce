@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { View, ScrollView, Alert } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -23,10 +23,10 @@ import {
   Loader2,
   RefreshCw,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Badge } from '@/components/ui/Badge';
+import { Separator } from '@/components/ui/Separator';
 import {
   ToolCallLog,
   ProgressBar,

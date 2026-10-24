@@ -1,5 +1,5 @@
 import { Shield } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -7,7 +7,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { openExternalUrl } from '@/lib/safeOpenURL';
 import { ExternalLink, FileText, EyeOff } from 'lucide-react-native';
 import { View } from 'react-native';

@@ -99,7 +99,7 @@ export const MATRIX_SYMBOLS = Object.freeze([
 
 export const MATRIX_PROVIDERS = Object.freeze([
   'packages/ui/unified-chat/src/lib/capabilities.tsx',
-  'apps/mobile/src/lib/capabilities.tsx',
+  'apps/mobile/src/lib/Capabilities.tsx',
 ]);
 
 export const RECORDED_EXCEPTIONS = Object.freeze({});

@@ -56,14 +56,14 @@ jest.mock('@/src/ui/theme', () => ({
   }),
 }));
 
-jest.mock('@/components/ui/text', () => {
+jest.mock('@/components/ui/Text', () => {
   const RN = require('react-native');
   const Text = (props: Record<string, unknown>) => <RN.Text {...props} />;
   Text.displayName = 'Text';
   return { Text };
 });
 
-jest.mock('@/components/ui/switch', () => {
+jest.mock('@/components/ui/Switch', () => {
   const RN = require('react-native');
   return { Switch: (props: Record<string, unknown>) => <RN.Switch {...props} /> };
 });

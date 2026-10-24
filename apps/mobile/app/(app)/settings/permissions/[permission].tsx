@@ -1,1 +1,1 @@
-export { default } from '@/src/features/settings/permissions/detail';
+export { default } from '@/src/features/settings/permissions/Detail';

@@ -1,14 +1,14 @@
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Check, Monitor, Moon, Sun } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useLocalSettingsStore } from '@/stores/settings/localSettingsStore';
 import { useCloudSettingsStore } from '@/stores/settings/cloudSettingsStore';
 import type { ThemeMode } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 
 const OPTIONS: Array<{ mode: ThemeMode; label: string; description: string; icon: typeof Sun }> = [
   { mode: 'system', label: 'System', description: 'Match this device.', icon: Monitor },

@@ -14,9 +14,9 @@ import {
 
 import { CONNECTORS_COMING_SOON_LABEL, connectorsReleased } from '@agiworkforce/types';
 
-import { Button } from '@/components/ui/button';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { fetchConnectorDirectory } from '@/services/connectors';
 import { fetchManagedSkills } from '@/src/features/skills/service';

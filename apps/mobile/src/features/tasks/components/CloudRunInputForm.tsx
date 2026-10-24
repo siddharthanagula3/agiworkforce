@@ -12,11 +12,11 @@ import {
   type ConnectorInputField,
   type ConnectorInputPrompt,
 } from '@agiworkforce/client-runtime';
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Switch } from '@/components/ui/switch';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Switch } from '@/components/ui/Switch';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

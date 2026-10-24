@@ -1,9 +1,9 @@
 import { useMemo } from 'react';
 import { Modal, ScrollView, View } from 'react-native';
 import { X } from 'lucide-react-native';
-import { Button } from '@/components/ui/button';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { dialogPadding, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

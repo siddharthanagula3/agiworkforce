@@ -8,7 +8,7 @@ import {
   ScrollView,
   SectionList,
 } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Animated, { FadeIn } from 'react-native-reanimated';
@@ -23,10 +23,10 @@ import {
   Plus,
   Upload,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Text } from '@/components/ui/Text';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { AddMemorySheet, MemoryItem } from '@/src/features/settings/components';
-import { SettingsGroup, SettingsRow } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsRow } from '@/src/features/settings/Common';
 import { ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';
 import { useMemoryStore, type MemoryEntry } from '@/src/features/memory/store';

@@ -3,8 +3,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Blocks, Bot, ChevronRight, Plug, Sparkles, type LucideIcon } from 'lucide-react-native';
 
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { MetaText, ScreenHeader } from '@/src/shared/components/cloud-screen';
 import { useGoBack } from '@/src/shared/hooks/useGoBack';

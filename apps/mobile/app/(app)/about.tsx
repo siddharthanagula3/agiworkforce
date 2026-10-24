@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { View, ScrollView, Alert, Linking, Platform } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
@@ -16,9 +16,9 @@ import {
   BookOpen,
   Activity,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Separator } from '@/components/ui/Separator';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';

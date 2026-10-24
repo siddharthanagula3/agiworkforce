@@ -3,8 +3,8 @@ import { ActivityIndicator, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useUser } from '@clerk/expo';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import {
   completeGitHubInstall,
   describeGitHubInstallOutcome,

@@ -1,8 +1,8 @@
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import type { LucideIcon } from 'lucide-react-native';
-import { BottomSheet } from '@/components/ui/bottom-sheet';
-import { Text } from '@/components/ui/text';
+import { BottomSheet } from '@/components/ui/BottomSheet';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

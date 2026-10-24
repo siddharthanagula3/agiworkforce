@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useState } from 'react';
 import { Modal, View, ScrollView, StyleSheet } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
-import { Switch } from '@/components/ui/switch';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
+import { Switch } from '@/components/ui/Switch';
 import { useThemeColors, elevation } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openInAppBrowser } from '@/lib/safeOpenURL';

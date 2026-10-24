@@ -395,7 +395,7 @@ Expected: the disclosure describes the mode about to run.
 Actual: a blanket on-device claim precedes an off-device stream.
 Root Cause: Verified.
 Recommended Correction: branch the disclosure row on the same predicate `startVoiceMode` uses.
-Verification: extend `__tests__/voice-onboarding.test.tsx` for both predicate states. **Fixed in this branch**; see the change log at the end.
+Verification: extend `__tests__/VoiceOnboarding.test.tsx` for both predicate states. **Fixed in this branch**; see the change log at the end.
 
 ### MOBILE-004 Live voice keeps the microphone and peer connection open when backgrounded
 
@@ -434,7 +434,7 @@ Evidence: the lock renders one action, Unlock; every failure path stays locked; 
 Reproduction: enable App Lock, remove enrolment and passcode, relaunch.
 Expected: a way to sign out and reset the lock without reinstalling.
 Actual: Unlock fails forever; reinstalling deletes all local conversations.
-Root Cause: Verified; fail-closed was deliberate (`biometric-gate.test.tsx`), the escape was never added.
+Root Cause: Verified; fail-closed was deliberate (`BiometricGate.test.tsx`), the escape was never added.
 Recommended Correction: a second destructive action, "Reset app lock and sign out", confirmed with the consequence named, calling `clearAuthSession()` and `clearBiometricFlag()`.
 Verification: component test on the overlay; device pass with enrolment removed. **Fixed in this branch**, as an optional `onReset` on `AppLockOverlay` that the cover variant never shows.
 
@@ -456,7 +456,7 @@ Expected: Rename, Pin, Archive, Delete, Cancel.
 Actual: Delete and Cancel never render on Cloud chats; message delete is unreachable for assistant messages.
 Root Cause: Verified (RN source read).
 Recommended Correction: replace the Android `Alert`-as-menu with a bottom sheet (the repo already has `AddToChatSheet` on `@gorhom/bottom-sheet`), keeping `Alert` for two-button confirms; add a test that no Android `Alert.alert` receives more than three buttons.
-Verification: `chats-list-screen.test.tsx` extended.
+Verification: `ChatsListScreen.test.tsx` extended.
 
 ### MOBILE-010 The mobile trust-boundary test asserts against functions it defines itself
 
@@ -470,13 +470,13 @@ Verification: mutate `conversationMode.ts` and confirm red. **Partly addressed i
 
 ### MOBILE-011 The permission "Access level" radio is a dead control that persists a false privacy state
 
-Severity: P1 | Platform: Both | Area: Permissions | Route: `settings/permissions/[permission]` | `src/features/settings/permissions/detail.tsx:139,149-188,294`; `stores/permissionsStore.ts:49-52,66-76`
+Severity: P1 | Platform: Both | Area: Permissions | Route: `settings/permissions/[permission]` | `src/features/settings/permissions/Detail.tsx:139,149-188,294`; `stores/permissionsStore.ts:49-52,66-76`
 Evidence: the radio paints from `userIntent`, which has one read site and gates nothing; choosing "Don't allow" writes the intent and only offers an alert to open Settings; the store keeps the intent when the OS still reports granted. A never-requested permission is labelled "Access Denied".
 Expected: read-only OS status plus "Open Settings"; request only when undetermined.
 Actual: the screen shows "Don't allow" while the OS still grants the microphone and the app still records.
 Root Cause: Verified.
 Recommended Correction: delete `userIntent`; derive levels from `osStatusToLevel`; add an "undetermined" label.
-Verification: extend `permissionStatusLabel.test.tsx` with the granted-after-deny case.
+Verification: extend `PermissionStatusLabel.test.tsx` with the granted-after-deny case.
 
 ### MOBILE-012 Compare opens a local-only model picker on a Cloud-only screen
 
@@ -544,7 +544,7 @@ Recommended Correction: route through the shared confirm once it exists; until t
 Severity: P2 | Platform: Both | Area: Empty and error states | Route: `chats/index` | `src/features/chat/ChatsListScreen.tsx:150-152,466-491`
 Evidence: `isLoadingConversations` is consumed nowhere in UI; the empty component renders unconditionally; a failed cloud fetch shows the same copy; no `RefreshControl`.
 Recommended Correction: render `MessageSkeleton` while loading and add pull-to-refresh calling `loadConversations`.
-Verification: `chats-list-screen.test.tsx` loading and error cases.
+Verification: `ChatsListScreen.test.tsx` loading and error cases.
 
 ### MOBILE-020 Attachments have no upload progress, failure state or retry
 
@@ -684,7 +684,7 @@ Recommended Correction: per-theme `*Text` roles in `tokens.ts` per `.claude/rule
 ### MOBILE-042 985 lines of edge-case modals ship unreachable, one carrying a private Apple URL scheme
 
 Severity: P2 | Platform: Both (iOS review risk) | Area: Dead code | `src/features/edge-cases/components/*Modal.tsx`, `StorageFullModal.tsx:13-22`
-Evidence: eight modals exported and mounted nowhere; `edge-cases.test.tsx` proves they render; `StorageFullModal` calls `Linking.openURL('App-Prefs:...')`, a private scheme that also bypasses `safeOpenURL`, and passes a bare Android action string to `openURL`.
+Evidence: eight modals exported and mounted nowhere; `EdgeCases.test.tsx` proves they render; `StorageFullModal` calls `Linking.openURL('App-Prefs:...')`, a private scheme that also bypasses `safeOpenURL`, and passes a bare Android action string to `openURL`.
 Recommended Correction: delete the eight components and their tests; if one is wanted, mount it once through the confirm primitive with `Linking.openSettings()`. **Deleted in this branch.**
 
 ### MOBILE-043 `READ_EXTERNAL_STORAGE` is declared uncapped, and three permissions duplicate plugin-provided ones
@@ -753,7 +753,7 @@ Recommended Correction: keep the mode guard on registration only.
 
 Severity: P3 | Platform: Both | Area: Accessibility
 Evidence: send and stop button 32pt (`SendButton.tsx:76-93`), message action row 40pt (`MessageBubble.tsx:138-146`), composer mic 32pt (`VoiceInputButton.tsx:350-369`), scroll-to-bottom 36pt, drawer rows 34pt (`DrawerContent.tsx:182,440,488`), and 18 settings controls from 28pt (`settings/voice/index.tsx:184`) to 40pt without `hitSlop`.
-Recommended Correction: `hitSlop` matching `common.tsx:48`; drawer rows to 44. **Send, mic and message action targets fixed in this branch**; main separately fixed the chat header controls (`b613c6e0`) and the notifications entry point (`c05183c9`). The drawer rows and the settings controls remain.
+Recommended Correction: `hitSlop` matching `Common.tsx:48`; drawer rows to 44. **Send, mic and message action targets fixed in this branch**; main separately fixed the chat header controls (`b613c6e0`) and the notifications entry point (`c05183c9`). The drawer rows and the settings controls remain.
 
 ### MOBILE-055 Feedback and haptics gaps
 
@@ -809,7 +809,7 @@ Recommended Correction: promote the settings shell header to a shared `ScreenHea
 
 ### MOBILE-065 Fixed-height headers and single-line labels clip at large Dynamic Type
 
-Severity: P3 | Platform: Both | six screens still at `height: 58` (`permissions/detail.tsx:195,230`, `settings/workspace.tsx:226`, `shared-links.tsx:116`, `reflect.tsx:97`, `archived-chats.tsx:214`), `about.tsx` at 48, `SettingsRow` `numberOfLines={1}`
+Severity: P3 | Platform: Both | six screens still at `height: 58` (`permissions/Detail.tsx:195,230`, `settings/workspace.tsx:226`, `shared-links.tsx:116`, `reflect.tsx:97`, `archived-chats.tsx:214`), `about.tsx` at 48, `SettingsRow` `numberOfLines={1}`
 Evidence: main added `TextScaleBoundary` (`cf5d2036`), which remounts the tree when the reader changes their text size so iOS re-measures instead of painting large text into boxes measured small. That fixes the live-change case; a fixed `height` still cannot grow, so the clipping at large sizes stands.
 Recommended Correction: `minHeight`, allow two lines.
 
@@ -830,7 +830,7 @@ Root Cause: Hypothesis; verify against current RN and Android 16 documentation o
 
 ### MOBILE-069 Five icon-only controls without an accessibility label
 
-Severity: P3 | Platform: Both | `app/(app)/schedules/index.tsx:325`, `app/(app)/settings/memory.tsx:357`, `QuickSchedule.tsx:274,302`, `permissions/detail.tsx:197`, `share-preview/index.tsx:144`
+Severity: P3 | Platform: Both | `app/(app)/schedules/index.tsx:325`, `app/(app)/settings/memory.tsx:357`, `QuickSchedule.tsx:274,302`, `permissions/Detail.tsx:197`, `share-preview/index.tsx:144`
 
 ### MOBILE-070 Models screen favourites and recents announce "Select" but reopen the sheet, and cloud favourites are invisible
 

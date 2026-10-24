@@ -2,8 +2,8 @@ import { useCallback, useEffect, useState } from 'react';
 import { View } from 'react-native';
 import { BookOpen } from 'lucide-react-native';
 import { STUDY_MODE_LABELS, isStudySessionActive, type StudySession } from '@agiworkforce/types';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import {
   endStudySession,
   startStudySession,

@@ -20,10 +20,10 @@ import {
   type UsageLimitPromotionState,
 } from '@agiworkforce/types';
 import { View, ActivityIndicator, Alert } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { BarChart3, Coins, RefreshCw } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {
@@ -33,7 +33,7 @@ import {
   SettingsInfo,
   SettingsRow,
   SettingsScreenShell,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { useCloudUsageStore } from './store';
 import { useStoreTopUps } from './useStoreTopUps';
 import { ApiHttpError } from '@/services/apiErrors';

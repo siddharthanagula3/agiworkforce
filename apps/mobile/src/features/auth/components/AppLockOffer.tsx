@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Alert, Modal, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { Fingerprint } from 'lucide-react-native';
 import { usePathname } from 'expo-router';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useBiometricFlag } from '@/lib/biometricFlagStore';
 import { useAuthStore } from '@/src/features/auth/store';
 import {

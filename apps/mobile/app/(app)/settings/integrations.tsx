@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { View, Alert, Linking, Platform, ActivityIndicator, ScrollView } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from 'expo-router';
@@ -12,11 +12,11 @@ import {
   HelpCircle,
   ExternalLink,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
+import { Separator } from '@/components/ui/Separator';
+import { Switch } from '@/components/ui/Switch';
+import { Badge } from '@/components/ui/Badge';
 import { useThemeColors, type ColorScheme } from '@/src/ui/theme';
 import {
   requestCalendarPermission,

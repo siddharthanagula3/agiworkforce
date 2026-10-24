@@ -7,11 +7,11 @@ import {
   Platform,
   View,
 } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Input } from '@/components/ui/Input';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';

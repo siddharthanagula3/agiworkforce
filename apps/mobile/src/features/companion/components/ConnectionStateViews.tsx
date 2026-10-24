@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { View, ActivityIndicator, ScrollView } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import {
   QrCode,
   Wifi,
@@ -13,8 +13,8 @@ import {
   Laptop,
 } from 'lucide-react-native';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { PairingRiskDisclosure } from './PairingRiskDisclosure';
 import { offlineStatusLine } from './StatusBanners';

@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect } from 'react';
 import { View, ScrollView } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import * as Haptics from 'expo-haptics';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useThemeColors } from '@/src/ui/theme';
 import type { RecurrenceType } from '../store';

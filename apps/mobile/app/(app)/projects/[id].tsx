@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useNavigation } from 'expo-router';
@@ -12,7 +12,7 @@ import { ProjectSourcesTab } from '@/src/features/projects/components/ProjectSou
 import { ProjectWorkTab } from '@/src/features/projects/components/ProjectWorkTab';
 import { ProjectArtifactsTab } from '@/src/features/projects/components/ProjectArtifactsTab';
 import { ProjectRoutinesTab } from '@/src/features/projects/components/ProjectRoutinesTab';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useProjectSourceTarget, useProjectStore } from '@/src/features/projects/store';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

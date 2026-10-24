@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { BOTTOM_SEARCH_BAR_HEIGHT, BOTTOM_SEARCH_BAR_MARGIN } from './BottomSearchBar';

@@ -1,5 +1,5 @@
 import { useCallback } from 'react';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Copy, Check, TriangleAlert } from 'lucide-react-native';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
 import { useThemeColors } from '@/src/ui/theme';

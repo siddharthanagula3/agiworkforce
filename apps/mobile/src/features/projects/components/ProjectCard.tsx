@@ -1,8 +1,8 @@
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { Check } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { formatRelativeTime } from '@agiworkforce/utils/format';
 import { projectAccentHex, projectIcon } from '@/src/features/projects/projectAppearance';

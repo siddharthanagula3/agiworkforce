@@ -1,6 +1,6 @@
 import { useCallback } from 'react';
 import { Alert, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import {
   Check,
@@ -12,10 +12,10 @@ import {
   Unlink,
 } from 'lucide-react-native';
 import { PRODUCT_NAMES, canUseBillingPlanCapability } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { SettingsGroup, SettingsRow, SettingsScreenShell } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsRow, SettingsScreenShell } from '@/src/features/settings/Common';
 import { offlineStatusLine } from '@/src/features/companion/components/StatusBanners';
 import { useConnectionStore, type ConnectionStatus } from '@/stores/connectionStore';
 import { manualReconnect } from '@/services/companion';

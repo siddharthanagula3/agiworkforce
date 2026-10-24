@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { ActivityIndicator, ScrollView, Text, View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useAuth } from '@clerk/expo';

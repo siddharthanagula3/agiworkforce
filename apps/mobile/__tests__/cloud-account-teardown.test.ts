@@ -66,7 +66,7 @@ jest.mock('../src/features/billing/store', () => ({
   useTierStore: { getState: jest.fn() },
 }));
 
-jest.mock('../src/lib/capabilities', () => ({
+jest.mock('../src/lib/Capabilities', () => ({
   useRemoteCapabilityStore: { getState: jest.fn() },
 }));
 
@@ -169,7 +169,7 @@ const { useCloudSettingsStore } = require('../stores/settings/cloudSettingsStore
 const { useTierStore } = require('../src/features/billing/store') as {
   useTierStore: { getState: jest.Mock };
 };
-const { useRemoteCapabilityStore } = require('../src/lib/capabilities') as {
+const { useRemoteCapabilityStore } = require('../src/lib/Capabilities') as {
   useRemoteCapabilityStore: { getState: jest.Mock };
 };
 const { useScheduleStore } = require('../src/features/schedules/store') as {

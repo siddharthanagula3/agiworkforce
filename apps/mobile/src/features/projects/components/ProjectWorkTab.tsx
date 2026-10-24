@@ -1,10 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import { View, ScrollView, ActivityIndicator } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useRouter } from 'expo-router';
 import { Bot } from 'lucide-react-native';
 import type { CloudAgentRun } from '@agiworkforce/cloud-contracts';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { createMobileCloudAgentRunClient } from '@/services/streaming';
 import { describeCloudRunError } from '@/src/features/tasks/service';

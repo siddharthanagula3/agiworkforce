@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { PlatformCapability } from '@agiworkforce/types';
-import { useCapabilities } from '@/src/lib/capabilities';
+import { useCapabilities } from '@/src/lib/Capabilities';
 
 export type ShellShortcutKey = 'voice' | 'camera' | 'scan' | 'compare';
 

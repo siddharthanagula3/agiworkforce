@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef } from 'react';
 import { View } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, ChevronRight, Cloud, Cpu } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
 import {
   useModelInstallStore,

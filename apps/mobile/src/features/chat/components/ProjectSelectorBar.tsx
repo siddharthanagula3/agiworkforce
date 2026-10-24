@@ -1,10 +1,10 @@
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react';
 import { Alert, View, Modal, FlatList, useWindowDimensions } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { FolderOpen, ChevronDown, X, Check, FolderMinus } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useProjectStore } from '@/src/features/projects/store';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';

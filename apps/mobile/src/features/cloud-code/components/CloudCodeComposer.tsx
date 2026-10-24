@@ -4,12 +4,12 @@ import { SlidersHorizontal } from 'lucide-react-native';
 import type { CloudCodeChanges } from '@agiworkforce/cloud-contracts';
 import { CLOUD_CODE_SESSION_COPY } from '@agiworkforce/types';
 import { cleanupVoiceDictation } from '@agiworkforce/utils/voice';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { SendButton } from '@/src/features/chat/components/SendButton';
 import { VoiceInputButton } from '@/src/features/voice/components/VoiceInputButton';
 import { showVoicePermissionAlert } from '@/src/features/voice/components/voicePermissionAlert';
-import { useCapability } from '@/src/lib/capabilities';
+import { useCapability } from '@/src/lib/Capabilities';
 import { radii, useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

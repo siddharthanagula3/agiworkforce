@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Activity, Send, Square } from 'lucide-react-native';
 import { TextInput, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 
-import { Card } from '@/components/ui/card';
-import { Text } from '@/components/ui/text';
+import { Card } from '@/components/ui/Card';
+import { Text } from '@/components/ui/Text';
 import { cancelDispatchTask, sendDispatchTask } from '@/services/companion';
 import { useDispatchTaskStore } from '@/stores/dispatchTaskStore';
 import { useThemeColors } from '@/src/ui/theme';

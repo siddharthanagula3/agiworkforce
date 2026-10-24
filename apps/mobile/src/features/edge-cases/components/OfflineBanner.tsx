@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated } from 'react-native';
 import { WifiOff } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { spacing, useThemeColors, zIndex } from '@/src/ui/theme';
 import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

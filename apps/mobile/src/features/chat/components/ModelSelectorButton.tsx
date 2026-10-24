@@ -1,4 +1,4 @@
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import * as Haptics from 'expo-haptics';
 import {
   EFFORT_LABEL,
@@ -7,7 +7,7 @@ import {
   getModelReasoning,
   type Effort,
 } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatStore } from '@/stores/chatStore';

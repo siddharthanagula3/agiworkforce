@@ -1,12 +1,12 @@
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import {
   CLOUD_CODE_SESSION_STATE_LABELS,
   CLOUD_CODE_SESSION_STATUS_FILTER_LABELS,
   type CloudCodeSession,
 } from '@agiworkforce/types';
-import { Badge } from '@/components/ui/badge';
-import { Text } from '@/components/ui/text';
+import { Badge } from '@/components/ui/Badge';
+import { Text } from '@/components/ui/Text';
 import { formatRelativeTime } from '@/src/lib/time';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

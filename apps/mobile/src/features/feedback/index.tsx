@@ -1,11 +1,11 @@
 import { useState, useCallback, useMemo } from 'react';
 import { View, TextInput, Alert, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Bug, Lightbulb, MessageCircle } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { api } from '@/services/api';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';

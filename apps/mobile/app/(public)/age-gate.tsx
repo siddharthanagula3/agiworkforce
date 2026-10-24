@@ -7,12 +7,12 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft, Lock, Shield } from 'lucide-react-native';
 import { ACCOUNT_AGE_REQUIREMENT_NOTICE, ACCOUNT_MINIMUM_AGE } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useAuthStore } from '@/src/features/auth/store';

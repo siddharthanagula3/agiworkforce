@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { FlatList, View, useWindowDimensions } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import type { NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import BottomSheet, {
   BottomSheetBackdrop,
@@ -11,7 +11,7 @@ import { Square, Volume2, X } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Defs, LinearGradient, Stop, Circle } from 'react-native-svg';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors, sheetRadius } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import { LIVE_VOICES } from '@agiworkforce/types/live-voices';

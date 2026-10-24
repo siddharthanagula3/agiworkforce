@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, View } from 'react-native';
 import { ChevronRight, Users } from 'lucide-react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
-import { SettingsGroup } from '@/src/features/settings/common';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
+import { SettingsGroup } from '@/src/features/settings/Common';
 import {
   ACCESS_LABELS,
   canManageProjectSharing,

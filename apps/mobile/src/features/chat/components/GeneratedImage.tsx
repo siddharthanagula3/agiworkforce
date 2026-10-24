@@ -1,11 +1,11 @@
 import { useState, useCallback, useEffect } from 'react';
 import { View, Alert } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Image } from 'expo-image';
 import { ImageOff } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
-import { Text } from '@/components/ui/text';
-import { Skeleton } from '@/components/ui/skeleton';
+import { Text } from '@/components/ui/Text';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { useThemeColors, zIndex } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { useGeneratedImageSource } from '@/src/features/image/hooks/useGeneratedImageSource';

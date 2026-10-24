@@ -8,8 +8,8 @@ import {
   type CloudAgentRunSteer,
 } from '@agiworkforce/cloud-contracts';
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { handOffConversationSend } from '@agiworkforce/client-runtime';

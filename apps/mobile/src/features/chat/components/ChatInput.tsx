@@ -8,7 +8,7 @@ import {
   useMemo,
 } from 'react';
 import { ActivityIndicator, Alert, View, TextInput, Keyboard } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import {
   Plus,
@@ -32,7 +32,7 @@ import {
   type SendPreviewInput,
   type WorkUsageRecovery,
 } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { AttachmentPreview, type Attachment } from './AttachmentPreview';
 import { SendPreview } from './SendPreview';
 import { validateAttachments } from '@/src/features/chat/utils/attachmentValidation';
@@ -83,7 +83,7 @@ import {
   detectVoiceCommand,
   meteringToAmplitude,
 } from '@agiworkforce/utils/voice';
-import { useCapability } from '@/src/lib/capabilities';
+import { useCapability } from '@/src/lib/Capabilities';
 import {
   LARGE_PASTE_THRESHOLD,
   PASTED_TEXT_MIME_TYPE,

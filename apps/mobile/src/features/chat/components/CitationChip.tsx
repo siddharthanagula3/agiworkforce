@@ -1,8 +1,8 @@
 import { Alert } from 'react-native';
 import type { AgentEventSource } from '@agiworkforce/types';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { ExternalLink } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';

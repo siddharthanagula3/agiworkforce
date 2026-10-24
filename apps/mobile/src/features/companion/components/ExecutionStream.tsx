@@ -1,6 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { View, ScrollView } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useRecyclingState } from '@shopify/flash-list';
 import Animated, {
   FadeIn,
@@ -28,8 +28,8 @@ import {
   AlertCircle,
   ChevronUp,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
 import { useAgentStore } from '@/stores/agentStore';
 import { useThemeColors, motion } from '@/src/ui/theme';
 import { isTerminalToolStatus } from '@agiworkforce/types';

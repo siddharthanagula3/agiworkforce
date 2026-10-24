@@ -1,13 +1,13 @@
 import { Bell, Mail } from 'lucide-react-native';
 
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useNotificationPrefsStore } from '@/stores/notificationPrefsStore';
 import {
   SettingsGroup,
   SettingsInfo,
   SettingsScreenShell,
   SettingsSwitchRow,
-} from '@/src/features/settings/common';
+} from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { PUSH_PREFERENCE_GROUP_COPY, resolvePushPreferenceGroup } from './categories';

@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { View, Alert } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, RefreshCw, HelpCircle } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { QRScanner } from '@/src/features/companion/components/QRScanner';
 import { PairingStatus } from '@/src/features/companion/components/PairingStatus';
 import {

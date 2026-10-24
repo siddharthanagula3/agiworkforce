@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, StyleSheet, Linking, TextInput, Dimensions } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import * as Clipboard from 'expo-clipboard';
 import Animated, {
@@ -11,8 +11,8 @@ import Animated, {
   Easing,
 } from 'react-native-reanimated';
 import { Zap, ZapOff, Keyboard, X } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import { useTheme } from '@/src/ui/theme';
 import { motion, typeScale } from '@/src/ui/theme/tokens';
 import { isValidPairingCode } from '@/services/companion';

@@ -1,6 +1,6 @@
 import { useCallback, useRef, forwardRef, useImperativeHandle } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import BottomSheet, {
   BottomSheetBackdrop,
   BottomSheetView,
@@ -8,8 +8,8 @@ import BottomSheet, {
 } from '@gorhom/bottom-sheet';
 import { ArrowUpCircle, X } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { openExternalUrl } from '@/lib/safeOpenURL';

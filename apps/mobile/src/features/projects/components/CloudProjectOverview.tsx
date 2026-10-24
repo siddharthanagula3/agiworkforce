@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 import { Alert, Modal, ScrollView, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Check } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { getManagedDisplayName } from '@/src/features/model-picker/service';
 import { updateCloudProjectDetails } from '@/src/features/projects/service';

@@ -5,8 +5,8 @@ import {
   workUsageRecoveryActionLabel,
   type WorkUsageRecovery,
 } from '@agiworkforce/types';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { radii, useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 

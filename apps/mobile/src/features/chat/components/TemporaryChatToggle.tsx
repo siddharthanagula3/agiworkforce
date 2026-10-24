@@ -1,8 +1,8 @@
 import { Alert, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
 import { EyeOff } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useTheme, motion } from '@/src/ui/theme';

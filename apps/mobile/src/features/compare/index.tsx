@@ -7,13 +7,13 @@ import {
   type SetStateAction,
 } from 'react';
 import { View, ScrollView, KeyboardAvoidingView, Platform, ActivityIndicator } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, Trophy, Zap, Hash, Clock } from 'lucide-react-native';
 import type BottomSheet from '@gorhom/bottom-sheet';
-import { Text } from '@/components/ui/text';
-import { Card } from '@/components/ui/card';
+import { Text } from '@/components/ui/Text';
+import { Card } from '@/components/ui/Card';
 import { ChatInput } from '@/src/features/chat/components/ChatInput';
 import type { Attachment } from '@/src/features/chat/components/AttachmentPreview';
 import { ModelPickerSheet } from '@/src/features/model-picker/components/ModelPickerSheet';
@@ -32,7 +32,7 @@ import {
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useTierStore } from '@/src/features/billing/store';
-import { CloudSyncBlockedBanner } from '@/src/features/settings/common';
+import { CloudSyncBlockedBanner } from '@/src/features/settings/Common';
 import { EgressBlockedError } from '@/lib/egressGuard';
 
 interface CompareStreamState {

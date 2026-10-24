@@ -1,7 +1,7 @@
 import { useMemo, useState, useCallback, useEffect, useRef } from 'react';
 import { useRecyclingState } from '@shopify/flash-list';
 import { View, Modal, ScrollView } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import {
   ChevronDown,
   ChevronRight,
@@ -15,7 +15,7 @@ import {
   ShieldAlert,
   X,
 } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { lucideRNToolIcon, lucideRNIconByName } from './toolIconRN';

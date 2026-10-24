@@ -1,8 +1,8 @@
 import { useEffect, useMemo } from 'react';
 import { View } from 'react-native';
 import { Brain } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
-import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/common';
+import { Text } from '@/components/ui/Text';
+import { SettingsGroup, SettingsInfo, SettingsScreenShell } from '@/src/features/settings/Common';
 import { useMemoryStore } from '@/src/features/memory/store';
 import { summarizeMemoryFacts } from '@/src/features/memory/services/consolidation';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';

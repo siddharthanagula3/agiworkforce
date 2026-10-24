@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState, type ReactNode } from 'react';
 import { View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { PressableBox } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { useTheme, type ColorScheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { SafeArtifactPreview } from './SafeArtifactPreview';

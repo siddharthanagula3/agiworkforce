@@ -8,13 +8,13 @@ import {
   ScrollView,
   View,
 } from 'react-native';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { ArrowLeft, Bell, CalendarDays, Clock3, ShieldCheck } from 'lucide-react-native';
-import { Input } from '@/components/ui/input';
-import { Text } from '@/components/ui/text';
+import { Input } from '@/components/ui/Input';
+import { Text } from '@/components/ui/Text';
 import { useTheme } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import {

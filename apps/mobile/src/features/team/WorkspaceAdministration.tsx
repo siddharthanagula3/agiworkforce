@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, KeyboardAvoidingView, Modal, StyleSheet, TextInput, View } from 'react-native';
 import { Check, MailPlus, ShieldCheck, TriangleAlert, Users } from 'lucide-react-native';
-import { Button } from '@/components/ui/button';
-import { PressableBox as Pressable } from '@/components/ui/pressable-box';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { PressableBox as Pressable } from '@/components/ui/PressableBox';
+import { Text } from '@/components/ui/Text';
 import { openInAppBrowser } from '@/lib/safeOpenURL';
 import { API_URL } from '@/lib/constants';
 import { keyboardAvoidingBehavior } from '@/src/features/chat/chrome/keyboardSafeComposer';
-import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/common';
+import { SettingsGroup, SettingsInfo, SettingsRow } from '@/src/features/settings/Common';
 import { useThemeColors } from '@/src/ui/theme';
 import { dialogPadding, typeScale } from '@/src/ui/theme/tokens';
 import {

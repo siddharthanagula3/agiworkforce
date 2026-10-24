@@ -1,7 +1,7 @@
 import { Alert, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { Globe, Loader2, SearchX, CircleSlash, TriangleAlert } from 'lucide-react-native';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
 import { hostnameOf, isValidExternalHttpUrl } from '@/src/features/chat/utils/externalUrls';

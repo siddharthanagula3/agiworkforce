@@ -9,13 +9,13 @@ import {
   View,
   type AppStateStatus,
 } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, BellOff, Bot, Clock3, Cloud, Plus, RefreshCw } from 'lucide-react-native';
 import { MOBILE_REMOTE_SCREEN_LABEL } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
-import { Button } from '@/components/ui/button';
+import { Text } from '@/components/ui/Text';
+import { Button } from '@/components/ui/Button';
 import { FEATURES } from '@/lib/v1FeatureFlags';
 import { FeatureUnavailable } from '@/src/shared/components/FeatureUnavailable';
 import {

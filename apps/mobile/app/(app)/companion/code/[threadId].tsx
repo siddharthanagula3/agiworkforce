@@ -1,11 +1,11 @@
 import { useCallback } from 'react';
 import { ActivityIndicator, View } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { ArrowLeft } from 'lucide-react-native';
-import { Button } from '@/components/ui/button';
-import { Text } from '@/components/ui/text';
+import { Button } from '@/components/ui/Button';
+import { Text } from '@/components/ui/Text';
 import { CodeSessionView } from '@/src/features/companion/components/CodeSessionView';
 import { manualReconnect } from '@/services/companion';
 import { useConnectionStore } from '@/stores/connectionStore';

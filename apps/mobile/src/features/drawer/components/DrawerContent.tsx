@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { View, ScrollView } from 'react-native';
-import { PressableBox } from '@/components/ui/pressable-box';
+import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, usePathname } from 'expo-router';
 import { type DrawerContentComponentProps } from 'expo-router/drawer';
@@ -36,7 +36,7 @@ import {
   isFreeBillingPlanTier,
   MOBILE_REMOTE_SCREEN_LABEL,
 } from '@agiworkforce/types';
-import { Text } from '@/components/ui/text';
+import { Text } from '@/components/ui/Text';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { useNotificationCenter } from '@/services/notifications';
