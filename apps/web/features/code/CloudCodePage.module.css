@@ -48,11 +48,49 @@
 }
 
 .railTitle {
+  overflow: hidden;
   margin: 0;
   font-family: var(--chat-font-display), var(--chat-font-sans);
   font-size: 17px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Beside the window buttons and history controls the first row has room for
+   the Chat/Code switch alone, so the title and the tools take a second row
+   that starts at the rail edge. */
+:global(html[data-desktop-host^='electron-darwin'][data-host-navigation])
+  .railTop[data-sidebar-region='header-first-row'] {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  grid-template-rows: var(--agi-window-title-strip) auto;
+  align-items: center;
+  min-height: 0;
+  padding-left: 4px;
+}
+
+:global(html[data-desktop-host^='electron-darwin'][data-host-navigation])
+  .railTop[data-sidebar-region='header-first-row']
+  .railTopActions {
+  display: contents;
+}
+
+:global(html[data-desktop-host^='electron-darwin'][data-host-navigation])
+  .railTop[data-sidebar-region='header-first-row']
+  .segmented {
+  grid-column: 1 / -1;
+  grid-row: 1;
+  justify-self: start;
+  margin-left: calc(var(--agi-window-title-strip-inset) - var(--code-rail-padding) - 4px);
+}
+
+:global(html[data-desktop-host^='electron-darwin'][data-host-navigation])
+  .railTop[data-sidebar-region='header-first-row']
+  .railTitle {
+  grid-column: 1;
+  grid-row: 2;
 }
 
 .segmented {
