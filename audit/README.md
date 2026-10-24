@@ -17,8 +17,9 @@ The [October 17 Tauri completeness review](flows/tauri-desktop-completeness-2026
 
 The [expanded ecosystem review of 2026-09-29](flows/competitive-ecosystem-review-2026-09-29.md)
 audits the newer local integration and distinct satellite/worktree changes.
-It is in progress. Its source hashes, actual reading scopes and fresh checklist
-are under `ledger/`; prior completion labels are not current verification.
+It is in progress. Its source hashes and actual reading scopes are under `ledger/`, and its 16
+proposed criteria outside the ledger are in the flow file; prior completion
+labels are not current verification.
 Confirmed open defects use the existing `registers/known-flaws.md` and
 `prior-audits/active-issues-register.md` owners.
 
@@ -37,7 +38,7 @@ Confirmed open defects use the existing `registers/known-flaws.md` and
 | [`doc-corrections/`](doc-corrections/) | Documents that disagree with the code, and what to correct                                                                                                                                 | by hand                         | when every listed document is corrected                                             |
 | [`prior-audits/`](prior-audits/)       | Earlier audits, registers and trackers (including `active-issues-register.md` and the `website-launch/` working set), kept until what they report is fixed or split into the folders above | by hand                         | each file, when nothing in it is still open                                         |
 | [`overview.md`](overview.md)           | Plain-language summary of the 2026-09-26 audit: what works, and the verdict per surface                                                                                                    | by hand                         | with the last open file                                                             |
-| [`ledger/`](ledger/)                   | The capability ledger: 3,435 items, one status per surface, with evidence; and the source inventory it audits                                                                              | agents fixing items             | stays (the record of what is done)                                                  |
+| [`ledger/`](ledger/)                   | The capability ledger: 3,439 items, one status per surface, with evidence                                                                                                                  | agents fixing items             | stays (the record of what is done)                                                  |
 | [`registers/`](registers/)             | Guard-checked registers: `ui-gaps`, `capability-gaps`, `code-reachability-inventory`, and `known-flaws.md` (open defect rows, cited by ID from CI and tests)                               | by hand, validated by `check:*` | stays; rows close as work lands                                                     |
 | [`baselines/`](baselines/)             | Ratchet baselines for `check:raw-error-to-user`, `check:theme-text-colours`, `check:ui-gaps`                                                                                               | guards                          | stays; shrinks to empty                                                             |
 

@@ -109,10 +109,39 @@ No real website form, cloud provider or browser account was modified.
 - [Historical alternatives, separate](../ledger/2026-09-29-source-manifest-historical-alternatives.jsonl)
 - [Exclusion reasons](../ledger/2026-09-29-source-manifest-exclusions.jsonl)
 - [Actual semantic reading scopes](../ledger/semantic-review-coverage-2026-09-29.jsonl)
-- [Full criterion checklist and review status](../ledger/competitive-review-checklist-2026-09-29.jsonl)
 - [Dated primary competitor evidence](../../docs/research/evidence/competitor-ecosystem-delta-2026-09-29.json)
 - [Canonical open flaw identities](../registers/known-flaws.md)
 - [Root causes and acceptance](../prior-audits/active-issues-register.md)
+
+## Proposed criteria outside the ledger
+
+The review's checklist repeated the 3,439 ledger criteria with a separate
+review status; the ledger in `../ledger/ecosystem-capability-ledger.jsonl` is
+the one status owner, so that copy was deleted. Its only findings on ledger
+items are `AUDIT-DECLINED-COUNTED-DONE-01` (S9.04, S10.20) and `AGI-34`
+(S19.20), held in `../registers/known-flaws.md` and
+`../prior-audits/active-issues-register.md`. These 16 dated criteria are not in
+the ledger. They are proposals, not committed work: each becomes a ledger item
+only when the founder accepts it.
+
+| id | criterion | acceptance | review status |
+| --- | --- | --- | --- |
+| SEP29-DOT-LIFECYCLE | Persistent assistant lifecycle | Create, converse across devices, pause/resume and reset with explicit memory/task consequences. | partially-reviewed |
+| SEP29-DOT-LOCAL-CONSENT | Local versus cloud assistant work | Local-computer access requires explicit consent; cloud tasks identify their execution boundary. | not-reviewed |
+| SEP29-BACKGROUND-RUNS | Work when the laptop is closed | Detached cloud work progresses, persists output, and remains cancellable from another device. | partially-reviewed |
+| SEP29-CLOUD-ENVIRONMENTS | Reusable cloud code environments | Prepared repository setup, secret isolation, constrained networking and task-scoped state have real owners. | not-reviewed |
+| SEP29-CONNECTED-EVENTS | Connected-app events | Authorized events enqueue durable work, deduplicate retries, and stop after revocation. | partially-reviewed |
+| SEP29-MULTIPLE-ACCOUNTS | Connected-account selection | Represent the deliberate single-account limitation honestly; compare multi-account availability without reversing the founder decision. | not-reviewed |
+| SEP29-INTERACTIVE-PLUGINS | Interactive plugin extensions | Viewers/forms/editors have mounted routes and authenticated, scoped tool calls with failure recovery. | not-reviewed |
+| SEP29-CLAUDE-DOCS | Editable collaborative documents | Human/assistant edits, sharing and permissions work; distinguish edit-capable and view-only surfaces. | not-reviewed |
+| SEP29-GROK-ROSTER | Persistent agent roster | Multiple named assistants retain separate context, exchange work, and expose shared-state boundaries. | not-reviewed |
+| SEP29-GROK-COMPUTER | Persistent cloud computer | Browser/files/login state survives tasks with documented isolation and human takeover for authentication. | partially-reviewed |
+| SEP29-MUSE-CONVERSATION | Main conversation and parallel tasks | Concurrent work can be interrupted and tracked without losing conversation or task ownership. | not-reviewed |
+| SEP29-MUSE-PROACTIVE | Proactive work and notification controls | Schedules/events, editable memory/preferences, approval cards and useful notifications work across lifecycle changes. | partially-reviewed (SCHEDULE-POLICY-REFUSAL-AS-SUCCESS-01) |
+| SEP29-PAGES-SPACE | Pages and Space | Review current collaborative page/workspace journeys, permissions and cross-device continuation. | not-reviewed |
+| SEP29-SCHEDULED-SITES | Scheduled Sites | Published artifact schedules use their owner context, can be inspected/paused, and handle publication permissions. | not-reviewed |
+| SEP29-CLOUD-REVIEW-SECURITY | Cloud code review and security work | Repository authorization, run lifecycle, reviewable findings and approval before changes have complete paths. | not-reviewed |
+| SEP29-PROFILE-PLAN-AUTH | Profiles, plan authorization and outside apps | Separate identity, app OAuth and subscription allowance consent; review current release limits. | not-reviewed |
 
 ## Remaining review
 
