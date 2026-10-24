@@ -1937,34 +1937,36 @@ function NavButton({
       aria-describedby={describedBy || undefined}
     >
       <Icon className={cn('h-4 w-4 shrink-0', isActive ? 'opacity-90' : 'opacity-60')} />
-      {matchedField ? (
-        <span className="flex min-w-0 flex-col">
-          <span className="truncate">{label}</span>
-          <span
-            id={matchedFieldId}
-            aria-hidden="true"
-            data-testid={NAV_MATCHED_FIELD_TESTID}
-            className="truncate text-sm font-normal text-muted-foreground"
-          >
-            {matchedField}
+      <span className="flex min-w-0 flex-1 flex-wrap items-center gap-x-2 gap-y-1">
+        {matchedField ? (
+          <span className="flex min-w-0 max-w-full flex-col">
+            <span className="truncate">{label}</span>
+            <span
+              id={matchedFieldId}
+              aria-hidden="true"
+              data-testid={NAV_MATCHED_FIELD_TESTID}
+              className="truncate text-sm font-normal text-muted-foreground"
+            >
+              {matchedField}
+            </span>
           </span>
-        </span>
-      ) : (
-        <span className="truncate">{label}</span>
-      )}
-      {maturityLabel && (
-        <span
-          id={maturityLabelId}
-          aria-hidden="true"
-          data-testid={NAV_MATURITY_LABEL_TESTID}
-          className={cn(
-            'shrink-0 rounded-full px-2 py-0.5 text-sm font-semibold uppercase tracking-wider',
-            isActive ? 'bg-background text-foreground' : 'bg-accent text-accent-foreground',
-          )}
-        >
-          {maturityLabel}
-        </span>
-      )}
+        ) : (
+          <span className="max-w-full truncate">{label}</span>
+        )}
+        {maturityLabel && (
+          <span
+            id={maturityLabelId}
+            aria-hidden="true"
+            data-testid={NAV_MATURITY_LABEL_TESTID}
+            className={cn(
+              'shrink-0 rounded-full px-2 py-0.5 text-sm font-semibold uppercase tracking-wider',
+              isActive ? 'bg-background text-foreground' : 'bg-accent text-accent-foreground',
+            )}
+          >
+            {maturityLabel}
+          </span>
+        )}
+      </span>
       {badge && badge.count > 0 && (
         <span
           className={cn(

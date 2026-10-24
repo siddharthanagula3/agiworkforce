@@ -855,6 +855,19 @@ describe('SettingsModal nav maturity label', () => {
     ).toBeNull();
   });
 
+  it('lets the pill wrap under the label instead of squeezing the label to an ellipsis', () => {
+    renderModal({ navGroups: labelledGroups });
+    const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
+
+    const plugins = within(nav).getByRole('button', { name: 'Plugins' });
+    const pill = within(plugins).getByTestId(NAV_MATURITY_LABEL_TESTID);
+    const label = within(plugins).getByText('Plugins');
+
+    expect(pill.parentElement).toBe(label.parentElement);
+    expect(pill.parentElement?.classList.contains('flex-wrap')).toBe(true);
+    expect(pill.classList.contains('shrink-0')).toBe(true);
+  });
+
   it('shows no pill when the surface sets no label', () => {
     renderModal();
     const nav = screen.getByRole('navigation', { name: 'Settings navigation' });
