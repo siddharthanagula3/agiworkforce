@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-23
+Last updated: 2026-10-24
 
 This is the locked naming policy for AGI Workforce. New files, docs, packages, branches, commands, and release notes should follow this unless a current decision doc explicitly overrides it.
 
@@ -83,8 +83,9 @@ Do not create new root docs such as `ROADMAP.md`, `PRD.md`, `TASKS.md`, `FIXME.m
 - Durable findings belong in `audit/registers/known-flaws.md`; decision/evidence ledgers live under the live root `audit/` directory (e.g. `capability-gaps.csv`, `inventory.json`).
 - Research summaries: `docs/research/<topic>-YYYY-MM-DD.md`.
 - Design prompts and generated design specs: `docs/design/<topic>-YYYY-MM-DD.md`.
-- TypeScript/React source files should follow the local app's existing convention; new domain feature files should prefer kebab-case filenames and PascalCase exported React components.
-- Rust source files and modules use snake_case.
+- `.tsx` files are PascalCase (`ChatInput.tsx`, `ChatInput.test.tsx`), except hooks (`useX.tsx`, `use` + PascalCase) and framework route files (`page`, `layout`, `route`, `loading`, `error`, `not-found`, `template`, `default`, `global-error`, `opengraph-image`, `twitter-image`, `icon`, `apple-icon`, `sitemap`, `robots`, `manifest`, `index`, and Expo's `_layout`, `+html`, `+not-found`). Everything under `apps/mobile/app/` (the file name is the screen URL), paths with a `[` or `(` segment, `audit/`, `.agents/skills/` and `__fixtures__` keep their names. `pnpm check:file-naming` enforces this.
+- `.ts` modules stay camelCase for now, Markdown docs stay kebab-case for now, and Rust source files and modules use snake_case.
+- The owner is deciding whether `.ts` modules, scripts and docs also move to PascalCase.
 - Tests stay near the code unless the local package already centralizes tests.
 
 ## Structural And File-Granularity Conventions
@@ -97,10 +98,10 @@ Canonical as of 2026-06-28. Full version + CI enforcement: `docs/strategy/15-str
 - **One concern per file.** One tool/hook/migration per file; soft cap ~300 lines, split beyond.
 - **Tool layout (TS):** `tools/<Name>Tool/{<Name>Tool.ts, prompt.ts, UI.tsx, constants.ts, <helpers>.ts, index.ts}`.
 - **Tool layout (Rust):** `tools/<tool>/{mod.rs, prompt.rs, validation.rs, ui.rs}` implementing the `Tool` trait.
-- **Command layout:** `commands/<name>/{<name>.tsx, index.ts}`.
+- **Command layout:** `commands/<name>/{<Name>.tsx, index.ts}`.
 - **Hooks:** one per file, `use` + PascalCase (`useToolPermission.ts`); sub-group when many.
 - **utils/ discipline:** multi-file domains get a subfolder (`utils/bash/`); cross-cutting one-offs stay flat (`utils/uuid.ts`). Banned inside a feature: `helpers.ts`, `misc.ts`, `common.ts`, catch-all `utils.ts`.
-- **Casing:** PascalCase for React components/classes and `.tsx`; camelCase for TS utility modules; snake_case for Rust files/modules; co-located prompts `prompt.ts`/`prompt.rs`; per-feature `constants.ts`/`types.ts`.
+- **Casing:** PascalCase for React components/classes and `.tsx` (hooks and framework route files excepted); camelCase for TS utility modules; snake_case for Rust files/modules; co-located prompts `prompt.ts`/`prompt.rs`; per-feature `constants.ts`/`types.ts`.
 - **Generated/vendored isolation:** codegen under `*/generated/` (never hand-edited); ported third-party attributed in `THIRD_PARTY_LICENSES.md` + `PORTING-TRACKER.md`.
 - **Migration is opportunistic** (no big-bang): new code complies now; existing code converts via `scripts/migrate-structure.mjs` (import-transparent moves) as each subsystem is touched.
 
