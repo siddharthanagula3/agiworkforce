@@ -318,6 +318,11 @@
           "date": "2026-10-08",
           "digest": "b39a81c346b9c340",
           "note": "The storage table drops the rows for agi-user-profile-store, agi-notification-store, agi-company-hub-store and agent-metrics-storage, and tool-storage from the interface preferences row, because the stores that wrote them were deleted and the app no longer writes those keys. Nothing new is stored, no cookie or choice changed, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
+        },
+        {
+          "date": "2026-10-08",
+          "digest": "274a478175998253",
+          "note": "The source column cites the identity provider file by its current name, lib/identity/Provider.tsx, after the file was renamed for the repository naming convention. No cookie, storage key or choice changed, and visitors are not asked to choose again. No provider, recipient, retention period, right, limitation or commitment was added or removed, so the date stays."
         }
       ]
     },
