@@ -5171,7 +5171,7 @@ const ChatComposerNewComponent = ({
         onFocusCapture={() => void preloadTranscriptMarkdown()}
         onPointerDown={() => void preloadTranscriptMarkdown()}
         className={cn(
-          'relative z-[var(--z-control)] rounded-2xl border bg-[var(--chat-input-bg)] transition-all duration-quick',
+          '@container relative z-[var(--z-control)] rounded-2xl border bg-[var(--chat-input-bg)] transition-all duration-quick',
           isFocused
             ? 'border-[var(--chat-border-strong)] shadow-e2 ring-2 ring-[var(--chat-focus-ring)]'
             : 'border-[var(--chat-border-strong)] shadow-none',
@@ -5810,7 +5810,7 @@ const ChatComposerNewComponent = ({
                 {projectPicker && canUseAgiWork && !imageMode && !videoMode && (
                   <div
                     data-testid="composer-work-mode"
-                    className="chat-composer-mode-inline flex shrink-0 flex-row items-center self-center rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-px text-xs font-medium sm:p-0.5 sm:text-sm"
+                    className="chat-composer-mode-inline flex shrink-0 flex-row items-center self-center rounded-full border border-[var(--chat-border-strong)] bg-muted/40 p-px text-xs font-medium @[44rem]:p-0.5 @[44rem]:text-sm"
                   >
                     {(['chat', 'agiwork'] as const).map((mode) => {
                       const ModeGlyph = WORK_MODE_GLYPHS[mode];
@@ -5828,15 +5828,15 @@ const ChatComposerNewComponent = ({
                             defaultValue: WORK_MODE_TITLES[mode],
                           })}
                           className={cn(
-                            'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors sm:h-7 sm:w-auto sm:px-2.5',
+                            'flex h-6 min-h-0 w-6 items-center justify-center rounded-full transition-colors @[44rem]:h-7 @[44rem]:w-auto @[44rem]:px-2.5',
                             workMode === mode
                               ? 'bg-background text-foreground shadow-e1'
                               : 'text-muted-foreground hover:text-foreground',
                             (isTurnActive || composerDisabled) && 'cursor-not-allowed opacity-50',
                           )}
                         >
-                          <ModeGlyph className="h-4 w-4 sm:hidden" aria-hidden="true" />
-                          <span className="hidden sm:inline">
+                          <ModeGlyph className="h-4 w-4 @[44rem]:hidden" aria-hidden="true" />
+                          <span className="hidden @[44rem]:inline">
                             {tChat(WORK_MODE_LABEL_KEYS[mode], {
                               defaultValue: WORK_MODE_LABELS[mode],
                             })}

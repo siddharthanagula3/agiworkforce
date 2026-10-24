@@ -196,7 +196,7 @@ export function StyleSelector() {
         aria-expanded={open}
       >
         <Palette className="h-4 w-4" />
-        <span className="hidden sm:inline">
+        <span className="hidden sm:inline @max-[44rem]:hidden">
           {!isActive ? t('composer.style', { defaultValue: 'Style' }) : activeLabel}
         </span>
       </button>

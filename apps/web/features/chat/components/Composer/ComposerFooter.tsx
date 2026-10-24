@@ -1856,7 +1856,10 @@ export function ComposerFooter({
                   aria-expanded={effortOpen}
                   title="Reasoning effort"
                 >
-                  <Brain className="hidden h-4 w-4 shrink-0 sm:block" aria-hidden="true" />
+                  <Brain
+                    className="hidden h-4 w-4 shrink-0 sm:block @max-[44rem]:hidden"
+                    aria-hidden="true"
+                  />
                   <span className="font-medium">
                     {effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}
                   </span>
