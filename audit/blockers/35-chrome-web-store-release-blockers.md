@@ -1,6 +1,6 @@
 # Chrome Web Store release blockers
 
-Lifted on 2026-09-27 from "Release blockers and required evidence" in `apps/extension/docs/chrome-web-store-publish-runbook.md`, whose release steps now point here. `audit/prior-audits/chrome-extension-public-release-audit.md` holds the wider audit of the same surface. Delete this file when a tagged ZIP has passed every row below and the extension is public.
+Lifted on 2026-09-27 from "Release blockers and required evidence" in `docs/runbooks/chrome-web-store-publish.md`, whose release steps now point here. `audit/prior-audits/chrome-extension-public-release-audit.md` holds the wider audit of the same surface. Delete this file when a tagged ZIP has passed every row below and the extension is public.
 
 A candidate is not release-ready until every item below has current evidence for
 the exact tagged ZIP. Source review, unit tests, or an unpacked development build

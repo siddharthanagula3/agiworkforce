@@ -4933,7 +4933,7 @@ _§114: 4 of 11 done._
 - [ ] Mobile - 🟡 Partial
       <br>_Only `store-listing/REVIEWER-NOTES-*.md`; no dev-facing apps/mobile AGENTS.md/README_
 - [ ] Desktop - 🟡 Partial
-      <br>_`apps/desktop/docs/macos-release-runbook.md` + docs qa folder; no top-level `AGENTS.md`/README for the app_
+      <br>_`docs/runbooks/desktop-macos-release.md` + docs qa folder; no top-level `AGENTS.md`/README for the app_
 - [x] CLI
       <br>_`apps/cli/README.md`_
 - [x] VS Code

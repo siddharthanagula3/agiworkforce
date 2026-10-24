@@ -26,7 +26,7 @@ Undecided calls from that round are in [`open-questions.md`](open-questions.md).
 ## [Deploy] Apply migrations 0368 to 0391, then deploy main (decision 2)
 
 - `scripts/config/production-migrations-applied.json` records production through 0367 (2026-10-18);
-  0368 to 0391 are on main and applied nowhere, and the pre-deploy migration check blocks main until they are.
+  0368 to 0391 are on main and not recorded as applied there, and the pre-deploy migration check blocks main until they are.
 - Action: apply them to staging, check, then to production with `--confirm-production`, then deploy.
   A production apply cannot be undone, so it runs only at a time you choose.
 - Until then: connector tools fail closed (0381); published apps cannot use connectors, organization

@@ -170,7 +170,7 @@ Release status: **CONDITIONALLY READY**
 
 Top launch blockers (the conditions on "conditionally"):
 
-1. **No authenticated live run has been performed against production Clerk and Managed Cloud.** Everything that needs a signed-in session (streaming latency T0–T10, stop propagation to the provider, service-worker restart mid-stream, sign-out during a run, account switching) is verified from code and unit tests only. The runbook in `docs/chrome-web-store-publish-runbook.md` already requires this gate; it has to be run with the two production test accounts before submission (§7, §12).
+1. **No authenticated live run has been performed against production Clerk and Managed Cloud.** Everything that needs a signed-in session (streaming latency T0–T10, stop propagation to the provider, service-worker restart mid-stream, sign-out during a run, account switching) is verified from code and unit tests only. The runbook in `docs/runbooks/chrome-web-store-publish.md` already requires this gate; it has to be run with the two production test accounts before submission (§7, §12).
 2. **Store listing assets do not exist in the repository.** No 1280×800 screenshots, no 440×280 promo tile; the Developer Dashboard cannot be completed without them (§8).
 3. **The service worker loads a 2.6 MB shared chunk on every wake** because `@clerk/clerk-js`, `zod`, and the model catalog are bundled into one chunk shared by background, side panel and options. Measured import cost is ~200 ms on a cold document (§7). Not a correctness defect, but it is the single largest performance lever and should be split before a wide launch.
 4. **Enterprise third-party-cookie blocking produces an unexplained sign-in loop** (EXT-012).
@@ -380,7 +380,7 @@ Verification: `chrome://extensions` shows site access "on specific sites" after 
 Severity: P2
 Area: Chrome Web Store
 Surface: Shared
-Evidence: no 1280×800 / 640×400 screenshots and no 440×280 promo tile anywhere in the repository; `docs/chrome-web-store-publish-runbook.md` refers to listing assets as a dashboard operation without naming them.
+Evidence: no 1280×800 / 640×400 screenshots and no 440×280 promo tile anywhere in the repository; `docs/runbooks/chrome-web-store-publish.md` refers to listing assets as a dashboard operation without naming them.
 Expected: the listing doc that calls itself the source of truth covers every asset the Dashboard requires.
 Actual: text only.
 Root Cause: Verified.
