@@ -1,4 +1,5 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineShellInkGlobals } from './shellTokenGlobals';
 
 type Listener = () => void;
 
@@ -34,7 +35,13 @@ class FakeWindow {
 
 const writeText = vi.fn();
 
-vi.mock('electron', () => ({ BrowserWindow: FakeWindow, clipboard: { writeText } }));
+vi.mock('electron', () => ({
+  BrowserWindow: FakeWindow,
+  clipboard: { writeText },
+  nativeTheme: { shouldUseDarkColors: true },
+}));
+
+beforeAll(defineShellInkGlobals);
 
 const { closePairingWindow, showPairingWindow } = await import('../remote/pairingWindow');
 
@@ -68,6 +75,16 @@ describe('the pairing window main draws the QR code in', () => {
     expect(page).toContain(PAIRING.code);
     expect(page).toContain("default-src 'none'");
     expect(page).not.toMatch(/<script/iu);
+  });
+
+  it('draws in the shell tokens, follows the appearance, and has a ground to paint', async () => {
+    await showPairingWindow(null, PAIRING, vi.fn(), () => true);
+
+    const page = decodeURIComponent(created[0]?.loaded ?? '');
+    expect(page).toContain('@media (prefers-color-scheme: dark)');
+    expect(page).toContain('background: var(--ground)');
+    expect(page).not.toMatch(/Canvas|GrayText/u);
+    expect(created[0]?.options['backgroundColor']).toMatch(/^#[0-9a-f]{6}$/u);
   });
 
   it('can neither navigate away nor open another window', async () => {

@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { DESKTOP_SIGN_IN_PATH } from '@agiworkforce/local-runtime-contract';
 import { PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
-import { pagePalette, titleStripHeight } from './windowChrome';
+import { SHELL_STRIP_HTML, escapeHtml, shellBaseCss, shellDataUrl } from './shellPage';
 
 /**
  * The screen a signed-out window shows instead of the site's sign-in pages.
@@ -113,19 +113,6 @@ export function readSignInScreenAction(
   return { action: action as SignInScreenAction, token };
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function paletteRules(prefersDark: boolean): string {
-  const palette = pagePalette(prefersDark);
-  return `--ground:${palette.background};--ink:${palette.ink};--ink-2:${palette.secondaryInk}`;
-}
-
 export function signInScreenUrl(
   state: SignInScreenState,
   token: string,
@@ -141,24 +128,8 @@ export function signInScreenUrl(
     .join('');
   const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="color-scheme" content="light dark"><title>${escapeHtml(view.title)}</title><style>
-  :root{${paletteRules(false)}}
-  @media (prefers-color-scheme: dark){:root{${paletteRules(true)}}}
-  html,body{height:100%;margin:0}
-  body{background:var(--ground);color:var(--ink);display:flex;align-items:center;justify-content:center;
-    font:16px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;
-    -webkit-font-smoothing:antialiased;user-select:none;-webkit-user-select:none}
-  .strip{position:fixed;inset:0 0 auto 0;height:${titleStripHeight()}px;-webkit-app-region:drag}
-  main{display:flex;flex-direction:column;align-items:center;gap:24px;padding:0 16px;text-align:center}
-  h1{margin:0;font-size:24px;line-height:32px;font-weight:600;letter-spacing:-.01em}
-  .actions{display:flex;flex-direction:column;align-items:center;gap:8px}
-  button{-webkit-app-region:no-drag;min-height:44px;min-width:200px;padding:0 20px;border-radius:9999px;
-    font:inherit;font-weight:500;cursor:pointer}
-  .primary{background:var(--ink);color:var(--ground);border:0}
-  .primary:hover{opacity:.88}
-  .secondary{background:transparent;color:var(--ink-2);border:0}
-  .secondary:hover{color:var(--ink)}
-  button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
-</style></head><body><div class="strip"></div><main>
+  ${shellBaseCss()}
+</style></head><body>${SHELL_STRIP_HTML}<main>
   <div role="status" aria-live="polite"><h1>${escapeHtml(view.line)}</h1></div>
   <div class="actions">${buttons}</div>
 </main><script>
@@ -166,7 +137,7 @@ export function signInScreenUrl(
     button.addEventListener('click',function(){location.href=button.dataset.href;});
   });
 </script></body></html>`;
-  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  return shellDataUrl(html);
 }
 
 export interface SignInScreenWindow {

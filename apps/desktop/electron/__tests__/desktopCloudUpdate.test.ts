@@ -218,6 +218,35 @@ describe('desktop cloud update origin and in-place prompts', () => {
     expect(prompt.downloadButton).toBeNull();
   });
 
+  it('offers the installer instead of saying it is downloading once the download failed', () => {
+    const prompt = desktopUpdatePrompt({
+      available: true,
+      currentVersion: '1.2.0',
+      version: '1.3.0',
+      downloadUrl: desktopCloudInstallerDownloadUrl('arm64'),
+      installsAutomatically: true,
+      downloadFailed: true,
+    });
+
+    expect(prompt.message).toContain('could not be downloaded');
+    expect(prompt.message).not.toContain('is downloading');
+    expect(prompt.buttons[prompt.downloadButton ?? -1]).toBe('Download Installer');
+    expect(prompt.restartButton).toBeNull();
+  });
+
+  it('still offers a restart when an update is ready even if an earlier download failed', () => {
+    const prompt = desktopUpdatePrompt({
+      available: true,
+      currentVersion: '1.2.0',
+      version: '1.3.0',
+      downloadUrl: desktopCloudInstallerDownloadUrl('arm64'),
+      readyToInstall: true,
+      downloadFailed: true,
+    });
+
+    expect(prompt.buttons[prompt.restartButton ?? -1]).toBe('Restart to Update');
+  });
+
   it('keeps the signed installer as the answer when the update cannot install in place', () => {
     const prompt = desktopUpdatePrompt({
       available: true,

@@ -217,8 +217,15 @@ function watchResolvedTheme(): void {
   });
 }
 
-if (document.readyState === 'loading') {
-  window.addEventListener('DOMContentLoaded', watchResolvedTheme, { once: true });
-} else {
-  watchResolvedTheme();
+/**
+ * Pages the shell draws itself are `data:` documents that follow the appearance
+ * through `prefers-color-scheme`. They have no theme to report, and the main
+ * process rightly refuses their calls, so they make none.
+ */
+if (location.protocol !== 'data:') {
+  if (document.readyState === 'loading') {
+    window.addEventListener('DOMContentLoaded', watchResolvedTheme, { once: true });
+  } else {
+    watchResolvedTheme();
+  }
 }

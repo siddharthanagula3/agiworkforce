@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { MenuItemConstructorOptions } from 'electron';
 import { HOST_COMMANDS, HOST_MENU_SHORTCUTS } from '@agiworkforce/local-runtime-contract';
+import { COMPANY_SITE_NAME, PRODUCT_NAMES } from '@agiworkforce/types';
 
 vi.mock('electron', () => ({
   Menu: { buildFromTemplate: vi.fn((template: unknown) => template), setApplicationMenu: vi.fn() },
@@ -152,7 +153,7 @@ describe('the application menu', () => {
     const { menu, actions: spies } = template();
     const help = submenu(menu, 'Help');
 
-    for (const label of ['AGI Workforce Support', 'Open Logs', 'Open-Source Licenses']) {
+    for (const label of [`${PRODUCT_NAMES.desktop} Support`, 'Open Logs', 'Open-Source Licenses']) {
       const entry = help.find((candidate) => candidate.label === label);
       expect(entry, label).toBeDefined();
       (entry?.click as () => void)();
@@ -163,6 +164,20 @@ describe('the application menu', () => {
     expect(spies.openLogs).toHaveBeenCalledTimes(1);
     expect(spies.openOpenSourceNotices).toHaveBeenCalledTimes(1);
     expect(spies.checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('names the support item for the product, never the company', () => {
+    const labels = submenu(template().menu, 'Help').map((entry) => entry.label);
+
+    expect(labels).toContain(`${PRODUCT_NAMES.desktop} Support`);
+    expect(labels).not.toContain(`${COMPANY_SITE_NAME} Support`);
+  });
+
+  it('keeps Reload in a packaged build and the developer tools out of it', () => {
+    const view = submenu(template().menu, 'View');
+
+    expect(view.some((entry) => entry.role === 'reload')).toBe(true);
+    expect(view.some((entry) => entry.role === 'toggleDevTools')).toBe(false);
   });
 
   it('leaves no item without an action', () => {

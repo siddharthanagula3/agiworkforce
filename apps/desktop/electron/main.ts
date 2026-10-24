@@ -11,6 +11,8 @@ import {
   desktopCapturer,
   ipcMain,
   nativeTheme,
+  net,
+  powerMonitor,
   powerSaveBlocker,
   screen,
   session,
@@ -33,6 +35,7 @@ import {
   type DesktopUpdatePrompt,
 } from './desktopCloudUpdate';
 import {
+  autoUpdateDownloadFailed,
   autoUpdateSupported,
   checkForAutoUpdate,
   downloadedUpdate,
@@ -156,11 +159,18 @@ import {
   type RendererGoneReason,
 } from './runtime/rendererRecovery';
 import {
+  LOAD_TIMED_OUT_ERROR,
   crashScreen,
   offlineScreen,
   retryUrlAfterFailedLoad,
   shellScreenUrl,
 } from './shellScreens';
+import { installAboutPanel } from './aboutPanel';
+import { applicationsFolderStore, offerMoveToApplications } from './applicationsFolder';
+import { guardFirstLoad } from './firstLoadGuard';
+import { showLoadingOverlay } from './loadingOverlay';
+import { createScreenRetry } from './screenRetry';
+import { hideWindow, shouldHideOnClose } from './windowLifecycle';
 import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
 import { CLOUD_APP_ORIGIN, DEEP_LINK_SCHEME, REMOTE_SESSION_PARTITION } from './config';
 import {
@@ -272,6 +282,34 @@ const coldStartDeepLinks: string[] = [];
 let deepLinkQueue: QueuedDeepLink[] = [];
 let appReady = false;
 let quitConfirmed = false;
+let appQuitting = false;
+
+const REACHABILITY_TIMEOUT_MS = 8_000;
+
+const screenRetry = createScreenRetry({
+  isOnline: () => net.isOnline(),
+  onResume: (listener) => {
+    powerMonitor.on('resume', listener);
+    return () => powerMonitor.removeListener('resume', listener);
+  },
+});
+
+async function appReachable(): Promise<boolean> {
+  try {
+    const response = await net.fetch(CLOUD_APP_ORIGIN, {
+      method: 'HEAD',
+      signal: AbortSignal.timeout(REACHABILITY_TIMEOUT_MS),
+    });
+    return response.status < 500;
+  } catch {
+    return false;
+  }
+}
+
+async function reloadOnceReachable(win: BrowserWindow, url: string): Promise<void> {
+  if (win.isDestroyed() || !(await appReachable()) || win.isDestroyed()) return;
+  await win.loadURL(url).catch(() => undefined);
+}
 
 const signInScreens = createSignInScreens({
   appOrigin: CLOUD_APP_ORIGIN,
@@ -793,9 +831,8 @@ function installRendererRecovery(win: BrowserWindow, entryUrl: string): void {
       return;
     }
     // The page that failed twice may be the cause, so the way out is the entry.
-    void win.loadURL(
-      shellScreenUrl(crashScreen(plan.reference), entryUrl, nativeTheme.shouldUseDarkColors),
-    );
+    screenRetry.release(win.id);
+    void win.loadURL(shellScreenUrl(crashScreen(plan.reference), entryUrl));
   };
 
   win.webContents.on('render-process-gone', (_event, details) => {
@@ -1035,9 +1072,17 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
     win.on('close', flushWindowFrame);
   }
 
-  win.once('ready-to-show', () => {
-    if (!win.isDestroyed()) win.show();
-  });
+  if (options.primary) {
+    win.on('close', (event) => {
+      if (
+        !shouldHideOnClose({ platform: process.platform, quitting: quitConfirmed || appQuitting })
+      ) {
+        return;
+      }
+      event.preventDefault();
+      hideWindow(win);
+    });
+  }
 
   // Not `did-finish-load`: the app's page still reports loading then, while its
   // sign-in frames finish, so a link held for the first load waited for a load
@@ -1054,6 +1099,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
   });
 
   win.on('closed', () => {
+    screenRetry.release(win.id);
     shellWindows.delete(win.id);
     signInScreens.forget(win);
     if (!options.primary) return;
@@ -1065,6 +1111,31 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
 
   const rootUrl = windowUrlFor(null);
   const entryUrl = windowUrlFor(entryRoute);
+
+  const showUnreachable = (errorCode: number, failedUrl: string): void => {
+    const retryUrl = retryUrlAfterFailedLoad(failedUrl, entryUrl);
+    void win.loadURL(shellScreenUrl(offlineScreen(errorCode), retryUrl)).catch(() => undefined);
+    screenRetry.watch(win.id, () => reloadOnceReachable(win, retryUrl));
+  };
+
+  let removeLoadingOverlay: (() => void) | null = null;
+  const firstLoad = guardFirstLoad({
+    showWindow: () => {
+      if (!win.isDestroyed()) win.show();
+    },
+    showLoading: () => {
+      if (win.isDestroyed()) return;
+      win.show();
+      removeLoadingOverlay = showLoadingOverlay(win);
+    },
+    hideLoading: () => {
+      removeLoadingOverlay?.();
+      removeLoadingOverlay = null;
+    },
+    giveUp: () => showUnreachable(LOAD_TIMED_OUT_ERROR, entryUrl),
+  });
+  win.once('ready-to-show', firstLoad.settled);
+  win.on('closed', firstLoad.cancel);
 
   const followRoute = (_event: unknown, url: string, httpStatusCode?: number) => {
     // A restored conversation deleted elsewhere must not become the page the
@@ -1132,6 +1203,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
 
   win.webContents.on('did-navigate', (event, url, httpStatusCode) => {
     if (!url.startsWith('data:')) signInScreens.forget(win);
+    if (/^https?:/u.test(url) || signInScreens.isShowing(win)) screenRetry.release(win.id);
     if (leaveDisallowedPage(url)) return;
     followRoute(event, url, httpStatusCode);
   });
@@ -1152,13 +1224,7 @@ function createShellWindow(options: { primary: boolean; route?: string | null })
       if (errorCode === -3) return;
       if (validatedURL.startsWith('data:')) return;
       recordDesktopEvent({ domain: 'cloud_request', outcome: 'failed', cause: 'network' });
-      void win.loadURL(
-        shellScreenUrl(
-          offlineScreen(errorCode),
-          retryUrlAfterFailedLoad(validatedURL, entryUrl),
-          nativeTheme.shouldUseDarkColors,
-        ),
-      );
+      showUnreachable(errorCode, validatedURL);
     },
   );
 
@@ -1185,6 +1251,30 @@ async function reportCodeSessionActivity(activity: LocalCodeSessionActivity): Pr
   } catch {
     recordDesktopEvent({ domain: 'cloud_request', outcome: 'failed', cause: 'network' });
   }
+}
+
+function offerAppsFolderMove(): Promise<unknown> {
+  return offerMoveToApplications(
+    {
+      platform: process.platform,
+      isPackaged: () => app.isPackaged,
+      isInApplicationsFolder: () => app.isInApplicationsFolder(),
+      moveToApplicationsFolder: () => app.moveToApplicationsFolder(),
+    },
+    applicationsFolderStore(path.join(app.getPath('userData'), 'applications-folder.json')),
+    async (prompt) => {
+      const result = await showNativeMessage(null, {
+        type: 'question',
+        message: prompt.message,
+        detail: prompt.detail,
+        buttons: [prompt.move, prompt.decline],
+        defaultId: 0,
+        cancelId: 1,
+        noLink: true,
+      });
+      return result.response === 0;
+    },
+  );
 }
 
 function showMainWindow(): void {
@@ -1957,7 +2047,7 @@ async function cloudUpdateAvailability(): Promise<DesktopCloudUpdateAvailability
   if (update.available) checkForAutoUpdate();
   return {
     ...update,
-    installsAutomatically: autoUpdateSupported(),
+    installsAutomatically: autoUpdateSupported() && !autoUpdateDownloadFailed(),
     readyToInstall: update.available && downloadedUpdate() === update.version,
   };
 }
@@ -1997,7 +2087,7 @@ async function checkForCloudUpdate(): Promise<void> {
   try {
     const update = await cloudUpdateAvailability();
     recordDesktopEvent({ domain: 'updater', outcome: 'ok' });
-    prompt = desktopUpdatePrompt(update);
+    prompt = desktopUpdatePrompt({ ...update, downloadFailed: autoUpdateDownloadFailed() });
     const chosen = await showUpdatePrompt(prompt);
     if (prompt.restartButton !== null && chosen === prompt.restartButton) {
       await restartToUpdate();
@@ -2093,6 +2183,7 @@ if (!hasSingleInstanceLock) {
     onShellIdentityReported((identity) =>
       followSignedInState(identity.signedIn, accountFingerprint(identity)),
     );
+    installAboutPanel();
     nativeTheme.themeSource = getPreferences().appearance;
     nativeTheme.on('updated', paintWindowsForTheme);
     configureSession(session.fromPartition(REMOTE_SESSION_PARTITION));
@@ -2103,6 +2194,9 @@ if (!hasSingleInstanceLock) {
     );
     appReady = true;
     createMainWindow();
+    offerAppsFolderMove().catch((error: unknown) =>
+      console.warn('[applications-folder] the offer could not be shown:', error),
+    );
     for (const link of coldStartDeepLinks.splice(0)) deliverDeepLink(link);
 
     trayComputerUseState = computerUseTrayState();
@@ -2207,9 +2301,15 @@ if (!hasSingleInstanceLock) {
   let quitPromptOpen = false;
 
   app.on('before-quit', (event) => {
-    if (quitConfirmed) return;
+    if (quitConfirmed) {
+      appQuitting = true;
+      return;
+    }
     const prompt = quitPrompt(liveWork());
-    if (!prompt) return;
+    if (!prompt) {
+      appQuitting = true;
+      return;
+    }
     event.preventDefault();
     if (quitPromptOpen) return;
     quitPromptOpen = true;

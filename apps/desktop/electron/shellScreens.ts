@@ -1,5 +1,5 @@
 import { PRODUCT_BRAND, PRODUCT_NAMES } from '@agiworkforce/types';
-import { pageBackgroundColor } from './windowChrome';
+import { SHELL_STRIP_HTML, escapeHtml, shellBaseCss, shellDataUrl } from './shellPage';
 
 /**
  * The pages the shell itself draws when the window has nothing to show. They
@@ -14,6 +14,9 @@ export interface ShellScreen {
   readonly action: string;
   readonly reference: string;
 }
+
+/** Chromium's own number for a connection that never answered; the first-load watchdog reports it. */
+export const LOAD_TIMED_OUT_ERROR = -7;
 
 /** The one Chromium net error that states this device has no connection. */
 const DEVICE_OFFLINE_ERROR = -106;
@@ -84,39 +87,18 @@ export function retryUrlAfterFailedLoad(validatedUrl: string, entryUrl: string):
   return entryUrl;
 }
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-export function shellScreenUrl(
-  screen: ShellScreen,
-  retryUrl: string,
-  prefersDark: boolean,
-): string {
-  const html = `<!doctype html><html><head><meta charset="utf-8">
-<meta name="color-scheme" content="${prefersDark ? 'dark' : 'light'}"><title>{{title}}</title><style>
-  html,body{height:100%;margin:0}
-  body{background:${pageBackgroundColor(prefersDark)};color:${prefersDark ? '#ececec' : '#1f1f1f'};
-    display:flex;align-items:center;justify-content:center;
-    font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-  main{max-width:30rem;padding:2rem;text-align:center}
-  h1{font-size:1.25rem;font-weight:600;margin:0 0 .5rem;letter-spacing:-.01em}
-  p{color:${prefersDark ? '#b4b4b4' : '#5d5d5d'};margin:0 0 1.5rem}
-  code{color:#8a9693;font-size:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-    word-break:break-all}
-  button{background:#da7756;color:#fff;border:0;border-radius:8px;padding:.6rem 1.25rem;
-    font:inherit;font-weight:600;cursor:pointer}
-  button:hover{opacity:.9}
-  button:focus-visible{outline:2px solid ${prefersDark ? '#ececec' : '#1f1f1f'};outline-offset:2px}
-</style></head><body><main>
+export function shellScreenUrl(screen: ShellScreen, retryUrl: string): string {
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="color-scheme" content="light dark"><title>{{title}}</title><style>
+  ${shellBaseCss()}
+  main{max-width:32rem}
+  p{margin:0;color:var(--ink-2)}
+  code{color:var(--ink-2);font:14px/20px ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
+</style></head><body>${SHELL_STRIP_HTML}<main>
   <h1>{{heading}}</h1>
   <p>{{body}}</p>
-  <button id="retry" data-retry-url="{{retryUrl}}" autofocus>{{action}}</button>
-  <p style="margin:1.5rem 0 0"><code>Reference: {{reference}}</code></p>
+  <div class="actions"><button id="retry" type="button" class="primary" data-retry-url="{{retryUrl}}" autofocus>{{action}}</button></div>
+  <p><code>Reference: {{reference}}</code></p>
 </main><script>
   document.getElementById('retry').addEventListener('click',function(){
     location.href=document.getElementById('retry').dataset.retryUrl;
@@ -133,5 +115,20 @@ export function shellScreenUrl(
   const rendered = html.replace(/\{\{([a-zA-Z]+)\}\}/g, (_, field: string) =>
     escapeHtml(fields[field] ?? ''),
   );
-  return `data:text/html;charset=utf-8,${encodeURIComponent(rendered)}`;
+  return shellDataUrl(rendered);
+}
+
+export function loadingScreenUrl(): string {
+  const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="color-scheme" content="light dark"><title>${escapeHtml(PRODUCT_NAMES.desktop)}</title><style>
+  ${shellBaseCss()}
+  .spinner{width:24px;height:24px;box-sizing:border-box;border-radius:50%;
+    border:2px solid var(--ink-2);border-top-color:var(--ink);animation:spin .9s linear infinite}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  @media (prefers-reduced-motion:reduce){.spinner{animation:none}}
+</style></head><body>${SHELL_STRIP_HTML}<main role="status" aria-live="polite">
+  <div class="spinner" aria-hidden="true"></div>
+  <h1>Loading ${escapeHtml(PRODUCT_BRAND)}</h1>
+</main></body></html>`;
+  return shellDataUrl(html);
 }

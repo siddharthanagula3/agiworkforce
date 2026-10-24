@@ -50,7 +50,7 @@ function isShellApp(bundleId: string): boolean {
 function reachWarning(app: ScreenApplication): string | null {
   if (!app.bundleId) return null;
   if (isShellApp(app.bundleId)) {
-    return `${app.name} runs commands, so controlling it is the same as letting AGI run any command on this computer.`;
+    return `${app.name} runs commands, so controlling it is the same as letting ${PRODUCT_NAMES.desktop} run any command on this computer.`;
   }
   if (app.bundleId === FILE_MANAGER) {
     return 'Finder can open, move and delete any file you can, so controlling it reaches every file on this computer.';
@@ -62,7 +62,7 @@ function reachWarning(app: ScreenApplication): string | null {
 }
 
 function promptReason(app: ScreenApplication): string {
-  const base = `While it uses your computer, AGI can click, type and scroll in ${app.name}. It asks again before it touches any other app.`;
+  const base = `While it uses your computer, ${PRODUCT_NAMES.desktop} can click, type and scroll in ${app.name}. It asks again before it touches any other app.`;
   const warning = reachWarning(app);
   return warning ? `${base}\n\n${warning}` : base;
 }

@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HOST_NAVIGATION_CHANNELS } from '@agiworkforce/local-runtime-contract';
+import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
 
 const exposed = new Map<string, Record<string, unknown>>();
 
@@ -154,5 +155,29 @@ describe('a drop on the page', () => {
 
     expect(sentPaths()).toHaveLength(0);
     expect(getPathForFile).not.toHaveBeenCalledWith(folder);
+  });
+});
+
+describe('the theme report', () => {
+  const themeCalls = () =>
+    invoke.mock.calls.filter(([channel]) => channel === ELECTRON_IPC_CHANNELS.rendererTheme);
+
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it('reports the page theme to main from the hosted app', async () => {
+    invoke.mockClear();
+    await loadPreload([]);
+
+    expect(themeCalls()).toHaveLength(1);
+  });
+
+  it('makes no bridge call from a page the shell drew itself', async () => {
+    vi.stubGlobal('location', { protocol: 'data:' });
+    invoke.mockClear();
+    await loadPreload([]);
+
+    expect(invoke).not.toHaveBeenCalled();
   });
 });

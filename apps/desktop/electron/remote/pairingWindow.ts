@@ -1,8 +1,10 @@
-import { BrowserWindow, clipboard } from 'electron';
+import { BrowserWindow, clipboard, nativeTheme } from 'electron';
 import QRCode from 'qrcode';
 import { REMOTE_SESSION_PARTITION } from '../config';
 import type { RemotePairingDisplay } from '@agiworkforce/utils/remote-control';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
+import { escapeHtml, shellDataUrl, shellPaletteCss } from '../shellPage';
+import { pageBackgroundColor } from '../windowChrome';
 
 const WINDOW_WIDTH = 380;
 const WINDOW_HEIGHT = 520;
@@ -21,14 +23,6 @@ const CLOSE_TO_CANCEL = 'Closing this window cancels pairing.';
 let current: BrowserWindow | null = null;
 let generation = 0;
 
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/gu, '&amp;')
-    .replace(/</gu, '&lt;')
-    .replace(/>/gu, '&gt;')
-    .replace(/"/gu, '&quot;');
-}
-
 interface PageState {
   copied: boolean;
   appClosed: boolean;
@@ -42,14 +36,15 @@ function pairingPage(qrSvg: string, code: string, { copied, appClosed }: PageSta
 <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
 <title>${TITLE}</title>
 <style>
+  ${shellPaletteCss()}
   :root { color-scheme: light dark; }
-  body { margin: 0; padding: 24px; font: 15px/1.45 system-ui, sans-serif; background: Canvas; color: CanvasText; text-align: center; }
+  body { margin: 0; padding: 24px; font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; background: var(--ground); color: var(--ink); text-align: center; -webkit-font-smoothing: antialiased; }
   h1 { margin: 0 0 8px; font-size: 18px; font-weight: 600; }
   p { margin: 0 0 16px; }
   .qr { display: inline-block; padding: 12px; border-radius: 12px; background: white; line-height: 0; }
   .qr svg { width: ${QR_SIZE}px; height: ${QR_SIZE}px; }
   .actions { margin: 0 0 16px; }
-  .action { display: inline-block; margin: 0 4px; padding: 6px 14px; border: 1px solid GrayText; border-radius: 999px; font-size: 14px; color: inherit; text-decoration: none; }
+  .action { display: inline-block; margin: 0 4px; padding: 6px 14px; border: 1px solid var(--ink-2); border-radius: 999px; font-size: 14px; color: var(--ink); text-decoration: none; }
   .code { margin: 16px 0 8px; font: 18px/1.2 ui-monospace, Menlo, monospace; letter-spacing: 0.2em; }
 </style>
 </head>
@@ -97,6 +92,7 @@ export async function showPairingWindow(
     height: WINDOW_HEIGHT,
     title: TITLE,
     show: false,
+    backgroundColor: pageBackgroundColor(nativeTheme.shouldUseDarkColors),
     resizable: false,
     minimizable: false,
     maximizable: false,
@@ -114,9 +110,7 @@ export async function showPairingWindow(
 
   win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   const loadPage = (state: PageState) =>
-    win.loadURL(
-      `data:text/html;charset=utf-8,${encodeURIComponent(pairingPage(qrSvg, pairing.code, state))}`,
-    );
+    win.loadURL(shellDataUrl(pairingPage(qrSvg, pairing.code, state)));
   win.webContents.on('will-navigate', (event) => {
     event.preventDefault();
     if (current !== win) return;

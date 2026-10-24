@@ -5,6 +5,7 @@ import {
 } from '@agiworkforce/local-runtime-contract';
 import {
   BROWSER_CDP_COMMANDS,
+  PRODUCT_NAMES,
   TOOL_APPROVAL_ACTION_LABELS,
   isBrowserCommand,
   type BrowserCommand,
@@ -27,8 +28,7 @@ const GLOBAL_SCOPE: PermissionScope = { kind: 'global' };
 
 export const ASSISTANT_BROWSER_CLIENT = 'AGI';
 
-const BROWSER_STEP_REASON =
-  'AGI wants to use your paired Chrome browser while it answers you: open pages, read them, click and type. Chrome carries out each action only on sites you approved in the extension, and AGI asks before it downloads a file.';
+const BROWSER_STEP_REASON = `${PRODUCT_NAMES.desktop} wants to use your paired Chrome browser while it answers you: open pages, read them, click and type. Chrome carries out each action only on sites you approved in the extension, and ${PRODUCT_NAMES.desktop} asks before it downloads a file.`;
 
 export class BrowserStepRefused extends Error {
   readonly reason: 'permission' | 'cancelled' | 'site';
@@ -123,9 +123,8 @@ async function allowedByUser(window: BrowserWindow | null, reason: string): Prom
     defaultId: 0,
     cancelId: 0,
     title: 'Check this step',
-    message: `AGI wants to: ${reason}`,
-    detail:
-      'AGI is using your paired browser and stopped to check with you first. This step runs only if you allow it.',
+    message: `${PRODUCT_NAMES.desktop} wants to: ${reason}`,
+    detail: `${PRODUCT_NAMES.desktop} is using your paired browser and stopped to check with you first. This step runs only if you allow it.`,
     noLink: true,
   };
   const result = await showDevicePrompt(window, options);

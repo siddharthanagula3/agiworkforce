@@ -1,4 +1,5 @@
 import { BrowserWindow, nativeTheme, type Display } from 'electron';
+import { shellDataUrl, shellPaletteCss } from './shellPage';
 import { pageBackgroundColor } from './windowChrome';
 
 export const RECORDER_OVERLAY_STOP_URL = 'agi-recorder:stop';
@@ -29,23 +30,22 @@ export function recorderOverlayBounds(workArea: {
   };
 }
 
-export function recorderOverlayUrl(startedAt: number, prefersDark: boolean): string {
-  const text = prefersDark ? '#ececec' : '#0d0d0d';
-  const muted = prefersDark ? '#b4b4b4' : '#5d5d5d';
+export function recorderOverlayUrl(startedAt: number): string {
   const html = `<!doctype html><html><head><meta charset="utf-8">
-<meta name="color-scheme" content="${prefersDark ? 'dark' : 'light'}"><title>${RECORDER_OVERLAY_LABEL}</title><style>
+<meta name="color-scheme" content="light dark"><title>${RECORDER_OVERLAY_LABEL}</title><style>
+  ${shellPaletteCss()}
   html,body{height:100%;margin:0;overflow:hidden}
-  body{background:${pageBackgroundColor(prefersDark)};color:${text};display:flex;align-items:center;
+  body{background:var(--ground);color:var(--ink);display:flex;align-items:center;
     gap:10px;padding:0 10px 0 16px;box-sizing:border-box;-webkit-user-select:none;
     font:14px/1 -apple-system,BlinkMacSystemFont,"Segoe UI",system-ui,sans-serif;-webkit-font-smoothing:antialiased}
-  .dot{width:10px;height:10px;border-radius:50%;background:${text};animation:pulse 1.6s ease-in-out infinite}
+  .dot{width:10px;height:10px;border-radius:50%;background:var(--ink);animation:pulse 1.6s ease-in-out infinite}
   @keyframes pulse{50%{opacity:.35}}
   @media (prefers-reduced-motion:reduce){.dot{animation:none}}
   .label{font-weight:600}
-  time{color:${muted};font-variant-numeric:tabular-nums;flex:1}
-  button{background:${text};color:${pageBackgroundColor(prefersDark)};border:0;border-radius:999px;
+  time{color:var(--ink-2);font-variant-numeric:tabular-nums;flex:1}
+  button{background:var(--ink);color:var(--ground);border:0;border-radius:999px;
     padding:8px 16px;font:inherit;font-weight:600;cursor:pointer}
-  button:focus-visible{outline:2px solid ${text};outline-offset:2px}
+  button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
 </style></head><body role="status" aria-live="polite">
   <span class="dot" aria-hidden="true"></span>
   <span class="label">${RECORDER_OVERLAY_LABEL}</span>
@@ -61,7 +61,7 @@ export function recorderOverlayUrl(startedAt: number, prefersDark: boolean): str
     location.href=${JSON.stringify(RECORDER_OVERLAY_STOP_URL)};
   });
 </script></body></html>`;
-  return `data:text/html;charset=utf-8,${encodeURIComponent(html)}`;
+  return shellDataUrl(html);
 }
 
 /**
@@ -80,6 +80,7 @@ export function openRecorderOverlay(options: {
   const win = new BrowserWindow({
     ...recorderOverlayBounds(options.display.workArea),
     show: false,
+    backgroundColor: pageBackgroundColor(nativeTheme.shouldUseDarkColors),
     frame: false,
     focusable: false,
     resizable: false,
@@ -141,7 +142,7 @@ export function openRecorderOverlay(options: {
     settleShown(false);
     if (!closedByOwner) options.onStop();
   });
-  win.loadURL(recorderOverlayUrl(options.startedAt, nativeTheme.shouldUseDarkColors)).catch(() => {
+  win.loadURL(recorderOverlayUrl(options.startedAt)).catch(() => {
     settleShown(false);
     destroy();
   });

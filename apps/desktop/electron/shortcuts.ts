@@ -34,7 +34,9 @@ const TAKEN_NOTIFICATION_TITLE = 'Shortcut unavailable';
 const DUPLICATE_STATUS_DETAIL = `is already assigned to another ${PRODUCT_NAMES.desktop} shortcut`;
 const TAKEN_STATUS_DETAIL = 'is already in use by another app';
 const MALFORMED_STATUS_DETAIL = 'is not a valid accelerator';
-const TRAY_FALLBACK_DETAIL = `Use the ${PRODUCT_NAMES.desktop} tray menu instead.`;
+function menuFallbackDetail(platform: NodeJS.Platform): string {
+  return `Use the ${PRODUCT_NAMES.desktop} ${platform === 'darwin' ? 'menu bar' : 'tray menu'} instead.`;
+}
 
 let warnedAboutConflict = false;
 let registrations: ShortcutRegistration[] = [];
@@ -55,7 +57,7 @@ function warnOnce(accelerator: string, label: string, detail: string): void {
   if (!Notification.isSupported()) return;
   createNativeNotification({
     title: TAKEN_NOTIFICATION_TITLE,
-    body: `${accelerator} ${detail}. ${TRAY_FALLBACK_DETAIL}`,
+    body: `${accelerator} ${detail}. ${menuFallbackDetail(process.platform)}`,
   }).show();
 }
 

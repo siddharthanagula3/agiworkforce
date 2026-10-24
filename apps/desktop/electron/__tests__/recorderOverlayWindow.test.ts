@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { defineShellInkGlobals } from './shellTokenGlobals';
 
 const created = vi.hoisted(() => ({ windows: [] as Array<Record<string, unknown>> }));
 
@@ -50,6 +51,8 @@ const {
   recorderOverlayUrl,
 } = await import('../recorderOverlayWindow');
 
+beforeAll(defineShellInkGlobals);
+
 type FakeWindow = EventEmitter & {
   options: Record<string, unknown>;
   webContents: EventEmitter;
@@ -88,7 +91,7 @@ describe('the recording indicator', () => {
 
   it('draws a label, an elapsed time and a Stop control that asks for the stop URL', () => {
     const html = decodeURIComponent(
-      recorderOverlayUrl(1_000, true).replace(/^data:text\/html;charset=utf-8,/, ''),
+      recorderOverlayUrl(1_000).replace(/^data:text\/html;charset=utf-8,/, ''),
     );
 
     expect(html).toContain(`>${RECORDER_OVERLAY_LABEL}<`);
@@ -96,6 +99,17 @@ describe('the recording indicator', () => {
     expect(html).toContain('>Stop</button>');
     expect(html).toContain(JSON.stringify(RECORDER_OVERLAY_STOP_URL));
     expect(html).not.toMatch(/font-size:\s*1[0-3]px/);
+  });
+
+  it('writes in the shell tokens and follows the appearance, not a baked-in one', () => {
+    const html = decodeURIComponent(
+      recorderOverlayUrl(1_000).replace(/^data:text\/html;charset=utf-8,/, ''),
+    );
+
+    expect(html).toContain('content="light dark"');
+    expect(html).toContain('@media (prefers-color-scheme: dark)');
+    expect(html).toContain('button{background:var(--ink);color:var(--ground)');
+    expect(html.slice(html.indexOf('html,body'))).not.toMatch(/#[0-9a-f]{3,6}\b/iu);
   });
 
   it('is kept out of screen capture and never takes focus', () => {

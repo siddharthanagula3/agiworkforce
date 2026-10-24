@@ -109,6 +109,7 @@ vi.mock('electron', () => {
       quit: vi.fn(),
       relaunch: vi.fn(),
       exit: vi.fn(),
+      setAboutPanelOptions: vi.fn(),
     },
     clipboard: { write: vi.fn(), readText: vi.fn(async () => ''), writeText: vi.fn() },
     ClipboardItem: class {},
@@ -124,7 +125,7 @@ vi.mock('electron', () => {
     nativeImage: {
       createFromPath: vi.fn(() => ({ setTemplateImage: vi.fn(), isEmpty: () => true })),
     },
-    net: { fetch: vi.fn() },
+    net: { fetch: vi.fn(), isOnline: vi.fn(() => true) },
     protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
     safeStorage: { isEncryptionAvailable: () => false },
     screen: {

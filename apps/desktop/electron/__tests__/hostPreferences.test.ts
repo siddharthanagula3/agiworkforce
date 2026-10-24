@@ -70,6 +70,7 @@ vi.mock('electron', () => {
       isReady: () => true,
       quit: vi.fn(),
       exit: vi.fn(),
+      setAboutPanelOptions: vi.fn(),
     },
     ipcMain: {
       handle: vi.fn((channel: string, handler: Handler) => {

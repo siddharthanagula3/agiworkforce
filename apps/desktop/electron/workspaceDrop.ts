@@ -55,7 +55,7 @@ export async function handleWorkspaceDrop(
       title: GRANT_TITLE,
       message: `Let ${PRODUCT_NAMES.desktop} open this folder?`,
       detail: [
-        'AGI can then read and write files inside this folder when you ask it to, and you can attach them from the composer. Remove the folder any time in Settings, under Capabilities.',
+        `${PRODUCT_NAMES.desktop} can then read and write files inside this folder when you ask it to, and you can attach them from the composer. Remove the folder any time in Settings, under Capabilities.`,
         [
           `Folder: ${shownValue(directory, FOLDER_SHOWN)}`,
           ...(directory === dropped

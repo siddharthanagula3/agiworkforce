@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { DEFAULT_SHORTCUTS, type GarnishShortcuts } from '../garnishCore';
 
 const registered = new Map<string, () => void>();
@@ -111,6 +112,23 @@ describe('global shortcut registration', () => {
     expect(statusOf('quickAskShortcut')).toBe('registered');
     expect(notifications).toHaveLength(1);
     expect(notifications[0]?.body).toContain(DEFAULT_SHORTCUTS.voiceShortcut);
+  });
+
+  it.each([
+    ['darwin', 'menu bar'],
+    ['win32', 'tray menu'],
+    ['linux', 'tray menu'],
+  ] as const)('points a %s user at the %s', (platform, place) => {
+    const original = process.platform;
+    Object.defineProperty(process, 'platform', { value: platform });
+    try {
+      rejected.add(DEFAULT_SHORTCUTS.voiceShortcut);
+      registerGarnishShortcuts(handlers());
+    } finally {
+      Object.defineProperty(process, 'platform', { value: original });
+    }
+
+    expect(notifications[0]?.body).toContain(`${PRODUCT_NAMES.desktop} ${place} instead`);
   });
 
   it('announces a conflict again after shortcuts are reconfigured', () => {

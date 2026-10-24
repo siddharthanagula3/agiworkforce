@@ -1,10 +1,11 @@
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DeveloperSessionEvent } from '@agiworkforce/local-runtime-contract';
 import { DESKTOP_RUNTIME_CHANNEL, localSessionPath } from '@agiworkforce/local-runtime-contract';
 import { ELECTRON_IPC_CHANNELS } from '../../src/lib/tauri-electron/bridgeContract';
+import { defineShellInkGlobals } from './shellTokenGlobals';
 
 type Listener = (...args: unknown[]) => void;
 
@@ -24,6 +25,9 @@ const ipcHandlers = new Map<string, Listener>();
 const loadedUrls: string[] = [];
 const sent: Array<[string, unknown]> = [];
 const windowHandlers = new Map<string, Listener[]>();
+const windowOwnHandlers = new Map<string, Listener[]>();
+const createdWindows: Array<{ hide: ReturnType<typeof vi.fn>; show: ReturnType<typeof vi.fn> }> =
+  [];
 let loading = true;
 let pageUrl = 'https://agiworkforce.com/chat';
 
@@ -46,9 +50,17 @@ vi.mock('electron', () => {
       setZoomLevel: vi.fn(),
       focus: vi.fn(),
     };
-    constructor(public options: unknown) {}
-    once = vi.fn();
-    on = vi.fn();
+    constructor(public options: unknown) {
+      createdWindows.push(this);
+    }
+    once = vi.fn((event: string, listener: Listener) => {
+      windowOwnHandlers.set(event, [...(windowOwnHandlers.get(event) ?? []), listener]);
+    });
+    on = vi.fn((event: string, listener: Listener) => {
+      windowOwnHandlers.set(event, [...(windowOwnHandlers.get(event) ?? []), listener]);
+    });
+    hide = vi.fn();
+    setFullScreen = vi.fn();
     loadURL = vi.fn(async (url: string) => {
       loadedUrls.push(url);
     });
@@ -69,6 +81,7 @@ vi.mock('electron', () => {
     setDisplayMediaRequestHandler: vi.fn(),
   };
   return {
+    net: { isOnline: vi.fn(() => true), fetch: vi.fn(async () => ({ status: 200 })) },
     powerMonitor: { on: vi.fn(), removeListener: vi.fn() },
     powerSaveBlocker: { start: vi.fn(() => 1), stop: vi.fn(), isStarted: vi.fn(() => false) },
     BrowserWindow,
@@ -97,6 +110,9 @@ vi.mock('electron', () => {
       getPath: () => userData,
       quit: vi.fn(),
       exit: vi.fn(),
+      setAboutPanelOptions: vi.fn(),
+      isInApplicationsFolder: vi.fn(() => true),
+      moveToApplicationsFolder: vi.fn(() => true),
     },
     autoUpdater: {
       setFeedURL: vi.fn(),
@@ -130,6 +146,9 @@ vi.mock('../desktopAutoUpdate', async (importOriginal) => ({
   installDownloadedUpdate,
   startAutoUpdate: vi.fn(),
 }));
+
+const showLoadingOverlay = vi.fn(() => vi.fn());
+vi.mock('../loadingOverlay', () => ({ showLoadingOverlay }));
 
 vi.mock('../settingsStore', async (importOriginal) => {
   const core = await import('../garnishCore');
@@ -285,9 +304,13 @@ vi.mock('../launchAtLogin', async (importOriginal) => ({
   setLaunchAtLogin: vi.fn(),
 }));
 
+defineShellInkGlobals();
 await import('../main');
 await new Promise((resolve) => setTimeout(resolve, 0));
 const electron = await import('electron');
+const startupAboutCalls = [...vi.mocked(electron.app.setAboutPanelOptions).mock.calls];
+const startupMessageBoxCalls = [...vi.mocked(electron.dialog.showMessageBox).mock.calls];
+const startupMoveCalls = [...vi.mocked(electron.app.moveToApplicationsFolder).mock.calls];
 const showMessageBox = vi.mocked(electron.dialog.showMessageBox);
 const quit = vi.mocked(electron.app.quit);
 
@@ -378,6 +401,187 @@ describe('what main sends to a window', () => {
     pageUrl = 'https://agiworkforce.com/chat';
     pageLoaded();
     expect(deepLinksSent()).toEqual(['agiworkforce-cloud://chat/x']);
+  });
+});
+
+describe('closing the main window', () => {
+  const realPlatform = process.platform;
+  const asPlatform = (platform: NodeJS.Platform): void => {
+    Object.defineProperty(process, 'platform', { value: platform, configurable: true });
+  };
+  const closeMainWindow = (): { preventDefault: ReturnType<typeof vi.fn> } => {
+    const event = { preventDefault: vi.fn() };
+    for (const listener of windowOwnHandlers.get('close') ?? []) listener(event);
+    return event;
+  };
+  const mainWindowStub = createdWindows[0];
+
+  beforeEach(() => {
+    showMessageBox.mockReset();
+    shellRuns = 0;
+    remoteStatus = 'idle';
+    emit({ type: 'runtime-stopped', message: 'reset' });
+  });
+
+  afterEach(() => {
+    asPlatform(realPlatform);
+  });
+
+  it('hides it on a Mac instead of destroying it, so the dock reopens the same page', () => {
+    asPlatform('darwin');
+    mainWindowStub?.hide.mockClear();
+
+    const event = closeMainWindow();
+
+    expect(event.preventDefault).toHaveBeenCalledTimes(1);
+    expect(mainWindowStub?.hide).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the same window again when the dock icon is clicked', () => {
+    mainWindowStub?.show.mockClear();
+
+    appHandlers.get('activate')?.();
+
+    expect(mainWindowStub?.show).toHaveBeenCalled();
+    expect(createdWindows).toHaveLength(1);
+  });
+
+  it('lets it close on Windows and Linux', () => {
+    asPlatform('win32');
+    expect(closeMainWindow().preventDefault).not.toHaveBeenCalled();
+    asPlatform('linux');
+    expect(closeMainWindow().preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('lets it close for the restart that installs an update', async () => {
+    vi.useFakeTimers();
+    try {
+      downloadedVersion = '1.3.0';
+      const restart = ipcHandlers.get(ELECTRON_IPC_CHANNELS.restartToUpdate);
+      const frame = { url: 'https://agiworkforce.com/chat' };
+      await restart?.({ senderFrame: frame, sender: { mainFrame: frame } });
+      asPlatform('darwin');
+
+      expect(closeMainWindow().preventDefault).not.toHaveBeenCalled();
+    } finally {
+      downloadedVersion = null;
+      vi.advanceTimersByTime(61_000);
+      vi.useRealTimers();
+    }
+  });
+
+  it('keeps hiding it after a restart that was never carried out', () => {
+    asPlatform('darwin');
+
+    expect(closeMainWindow().preventDefault).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps it when a quit is held for running work and the person cancels', async () => {
+    shellRuns = 1;
+    showMessageBox.mockReset();
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    try {
+      beforeQuit();
+      await settle();
+      asPlatform('darwin');
+
+      expect(closeMainWindow().preventDefault).toHaveBeenCalledTimes(1);
+    } finally {
+      shellRuns = 0;
+    }
+  });
+
+  it('lets it close for Cmd+Q, which is what the quit then closes', () => {
+    asPlatform('darwin');
+    beforeQuit();
+
+    expect(closeMainWindow().preventDefault).not.toHaveBeenCalled();
+  });
+});
+
+describe('what the app sets up when it starts', () => {
+  it('names the product, its version and the company in the About panel', () => {
+    expect(startupAboutCalls).toEqual([
+      [expect.objectContaining({ applicationName: 'AGI Desktop', applicationVersion: '1.2.0' })],
+    ]);
+  });
+
+  it('offers no move to Applications for a copy that is already there', () => {
+    expect(startupMessageBoxCalls).toEqual([]);
+    expect(startupMoveCalls).toEqual([]);
+  });
+});
+
+describe('the first page of a window', () => {
+  it('shows the window with the loading state when the page is slow to draw', async () => {
+    await vi.waitFor(() => expect(showLoadingOverlay).toHaveBeenCalledTimes(1), { timeout: 3_000 });
+
+    expect(createdWindows[0]?.show).toHaveBeenCalled();
+  });
+});
+
+describe('the screen drawn when the app cannot be reached', () => {
+  const failLoad = (errorCode: number, url: string): void => {
+    for (const listener of windowHandlers.get('did-fail-load') ?? []) {
+      listener({}, errorCode, '', url, true);
+    }
+  };
+  const pageCommitted = (url: string): void => {
+    windowHandlers.get('did-navigate')?.[0]?.({}, url, 200);
+  };
+  const loadedScreens = () => loadedUrls.filter((url) => url.startsWith('data:'));
+
+  it('goes back to the page by itself once the app answers again', async () => {
+    vi.useFakeTimers();
+    try {
+      loadedUrls.length = 0;
+      failLoad(-106, 'https://agiworkforce.com/chat/abc');
+      expect(loadedScreens()).toHaveLength(1);
+      expect(decodeURIComponent(loadedScreens()[0] ?? '')).toContain("You're offline");
+
+      await vi.advanceTimersByTimeAsync(5_000);
+
+      expect(loadedUrls.at(-1)).toBe('https://agiworkforce.com/chat/abc');
+    } finally {
+      pageCommitted('https://agiworkforce.com/chat/abc');
+      vi.useRealTimers();
+    }
+  });
+
+  it('stops retrying once the page has loaded', async () => {
+    vi.useFakeTimers();
+    try {
+      failLoad(-106, 'https://agiworkforce.com/chat');
+      pageCommitted('https://agiworkforce.com/chat');
+      loadedUrls.length = 0;
+
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+
+      expect(loadedUrls).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('does not touch the window while the app still does not answer', async () => {
+    vi.useFakeTimers();
+    const fetchMock = vi.mocked(electron.net.fetch);
+    fetchMock.mockRejectedValue(new Error('offline'));
+    try {
+      loadedUrls.length = 0;
+      failLoad(-106, 'https://agiworkforce.com/chat');
+      const drawn = loadedUrls.length;
+
+      await vi.advanceTimersByTimeAsync(5_000 + 10_000);
+
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+      expect(loadedUrls).toHaveLength(drawn);
+    } finally {
+      fetchMock.mockReset();
+      fetchMock.mockResolvedValue({ status: 200 } as Response);
+      pageCommitted('https://agiworkforce.com/chat');
+      vi.useRealTimers();
+    }
   });
 });
 

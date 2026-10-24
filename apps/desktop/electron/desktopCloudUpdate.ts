@@ -199,6 +199,11 @@ export async function checkDesktopCloudUpdate(
   };
 }
 
+export type DesktopUpdateOutcome = DesktopCloudUpdateAvailability & {
+  /** The shell tried to download this update itself and could not. */
+  readonly downloadFailed?: boolean;
+};
+
 export interface DesktopUpdatePrompt {
   readonly type: 'info' | 'error';
   readonly title: string;
@@ -215,7 +220,7 @@ export interface DesktopUpdatePrompt {
  * what it says, and so the wording is readable without an Electron dialog.
  */
 export function desktopUpdatePrompt(
-  outcome: DesktopCloudUpdateAvailability | { readonly failure: string },
+  outcome: DesktopUpdateOutcome | { readonly failure: string },
 ): DesktopUpdatePrompt {
   if ('failure' in outcome) {
     return {
@@ -251,6 +256,19 @@ export function desktopUpdatePrompt(
       buttons: ['Restart to Update', 'Later'],
       downloadButton: null,
       restartButton: 0,
+    };
+  }
+  if (outcome.downloadFailed) {
+    return {
+      type: 'info',
+      title: `${PRODUCT_NAMES.desktop} update available`,
+      message: `${PRODUCT_NAMES.desktop} ${outcome.version} could not be downloaded.`,
+      detail:
+        `You have ${outcome.currentVersion}. Download the signed and notarized macOS installer, ` +
+        `then replace ${PRODUCT_NAMES.desktop} in Applications. This opens your browser.`,
+      buttons: ['Download Installer', 'Later'],
+      downloadButton: 0,
+      restartButton: null,
     };
   }
   if (outcome.installsAutomatically || outcome.downloading) {

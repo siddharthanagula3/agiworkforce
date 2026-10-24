@@ -7,7 +7,7 @@ import {
   type DeviceFrontWindow,
   type PermissionScope,
 } from '@agiworkforce/local-runtime-contract';
-import { TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
+import { PRODUCT_NAMES, TOOL_APPROVAL_ACTION_LABELS } from '@agiworkforce/types';
 import { gateApplications } from './applicationControl';
 import { showDevicePrompt } from './devicePrompts';
 import { ComputerUseRefused, readFrontWindow } from './computerUseService';
@@ -28,8 +28,7 @@ const GLOBAL_SCOPE: PermissionScope = { kind: 'global' };
 
 const CLIPBOARD_KEYS: ReadonlySet<string> = new Set(['c', 'x', 'v']);
 
-const CLIPBOARD_KEY_REASON =
-  'AGI wants to copy or paste with the keyboard while it uses your computer. Pasting puts whatever your clipboard holds into the app on screen, where AGI can read it, and copying replaces what your clipboard holds.';
+const CLIPBOARD_KEY_REASON = `${PRODUCT_NAMES.desktop} wants to copy or paste with the keyboard while it uses your computer. Pasting puts whatever your clipboard holds into the app on screen, where ${PRODUCT_NAMES.desktop} can read it, and copying replaces what your clipboard holds.`;
 
 const CLIPBOARD_REFUSED =
   'The user has not allowed clipboard access, so copying and pasting with the keyboard is off. Type the text instead, or ask the user to allow clipboard access.';
@@ -95,9 +94,8 @@ async function reviewScreenStep(
     defaultId: 0,
     cancelId: 0,
     title: 'Check this step',
-    message: `AGI wants to: ${reason}`,
-    detail:
-      'AGI is using your computer and stopped to check with you first. This step runs only if you allow it.',
+    message: `${PRODUCT_NAMES.desktop} wants to: ${reason}`,
+    detail: `${PRODUCT_NAMES.desktop} is using your computer and stopped to check with you first. This step runs only if you allow it.`,
     noLink: true,
   };
   const result = await askUserDuringRun(window, () => showDevicePrompt(window, options));
@@ -144,7 +142,7 @@ export async function confirmHandBack(window: BrowserWindow | null): Promise<Com
     defaultId: 0,
     cancelId: 0,
     title: 'Hand the screen back?',
-    message: 'Let AGI carry on using your computer?',
+    message: `Let ${PRODUCT_NAMES.desktop} carry on using your computer?`,
     detail: `It takes a fresh look at the screen first, then carries on from where it paused. Press ${describeAccelerator(COMPUTER_USE_STOP_SHORTCUT, process.platform)} at any time to stop it.`,
     noLink: true,
   };

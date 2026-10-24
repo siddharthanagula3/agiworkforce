@@ -5,15 +5,16 @@ import {
   type ComputerUsePhase,
   type HostCommand,
 } from '@agiworkforce/local-runtime-contract';
+import { PRODUCT_NAMES } from '@agiworkforce/types';
 import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
 
 /**
  * The native application menu.
  *
  * Without one, Electron falls back to a default menu that still carries a
- * working Developer Tools item and a Reload that discards renderer state. This
- * builds the standard editing and window roles deliberately and leaves the
- * developer items to development builds.
+ * working Developer Tools item. This builds the standard editing and window
+ * roles deliberately, keeps Reload for everyone, and leaves the developer
+ * tools to development builds.
  *
  * Two kinds of accelerator appear below. Most are registered with the system in
  * the usual way. The rest carry `registerAccelerator: false`: their chord is
@@ -218,8 +219,9 @@ function viewMenu(actions: AppMenuActions): MenuItemConstructorOptions {
     { type: 'separator' },
     { role: 'togglefullscreen' },
   ];
+  items.push({ type: 'separator' }, { role: 'reload' });
   if (!app.isPackaged) {
-    items.push({ type: 'separator' }, { role: 'reload' }, { role: 'toggleDevTools' });
+    items.push({ role: 'toggleDevTools' });
   }
   return { label: 'View', submenu: items };
 }
@@ -276,7 +278,7 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return {
     role: 'help',
     submenu: [
-      { label: 'AGI Workforce Support', click: actions.openSupport },
+      { label: `${PRODUCT_NAMES.desktop} Support`, click: actions.openSupport },
       {
         label: 'Keyboard Shortcuts',
         accelerator: PAGE_KEYBOARD_SHORTCUTS_ACCELERATOR,

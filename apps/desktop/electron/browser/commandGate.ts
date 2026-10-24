@@ -183,7 +183,7 @@ export function planBrowserCommand(
         { url },
         'Open a new browser tab?',
         withSent(
-          'A new tab opens this address using your browser profile and cookies. If no paired browser is connected, Desktop asks before opening your default browser.',
+          `A new tab opens this address using your browser profile and cookies. If no paired browser is connected, ${PRODUCT_NAMES.desktop} asks before opening your default browser.`,
           [['Address', shownValue(url, ADDRESS_SHOWN)]],
         ),
       );
