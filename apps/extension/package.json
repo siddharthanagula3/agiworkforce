@@ -51,7 +51,7 @@
     "@agiworkforce/types": "workspace:*",
     "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
-    "@clerk/chrome-extension": "^3.1.95",
+    "@clerk/chrome-extension": "^3.1.96",
     "dompurify": "^3.4.17",
     "katex": "^0.18.11",
     "markdown-it": "^15.0.3",

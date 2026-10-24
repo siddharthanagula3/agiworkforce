@@ -33,7 +33,7 @@
     }
   },
   "devDependencies": {
-    "@clerk/backend": "^3.24.0",
+    "@clerk/backend": "^3.25.0",
     "@neondatabase/serverless": "^1.2.0",
     "@types/pg": "^8.23.1",
     "pg": "^8.23.1",

@@ -131,6 +131,64 @@ updates:
       # apps/extension-vscode types against its engines floor (vsce refuses a
       # higher @types/vscode); the extension tests pin the range.
       - dependency-name: '@types/vscode'
+      # Expo SDK 57 fixes the versions of these apps/mobile packages; `expo install`
+      # owns them, so they move with the SDK upgrade, not one by one.
+      - dependency-name: '@expo/dom-webview'
+      - dependency-name: '@expo/metro-runtime'
+      - dependency-name: '@react-native-community/datetimepicker'
+      - dependency-name: '@react-native-community/netinfo'
+      - dependency-name: 'expo-age-range'
+      - dependency-name: 'expo-apple-authentication'
+      - dependency-name: 'expo-asset'
+      - dependency-name: 'expo-audio'
+      - dependency-name: 'expo-background-task'
+      - dependency-name: 'expo-build-properties'
+      - dependency-name: 'expo-calendar'
+      - dependency-name: 'expo-camera'
+      - dependency-name: 'expo-clipboard'
+      - dependency-name: 'expo-constants'
+      - dependency-name: 'expo-crypto'
+      - dependency-name: 'expo-dev-client'
+      - dependency-name: 'expo-document-picker'
+      - dependency-name: 'expo-file-system'
+      - dependency-name: 'expo-font'
+      - dependency-name: 'expo-haptics'
+      - dependency-name: 'expo-image'
+      - dependency-name: 'expo-image-picker'
+      - dependency-name: 'expo-linking'
+      - dependency-name: 'expo-local-authentication'
+      - dependency-name: 'expo-localization'
+      - dependency-name: 'expo-media-library'
+      - dependency-name: 'expo-notifications'
+      - dependency-name: 'expo-print'
+      - dependency-name: 'expo-router'
+      - dependency-name: 'expo-secure-store'
+      - dependency-name: 'expo-sharing'
+      - dependency-name: 'expo-speech'
+      - dependency-name: 'expo-splash-screen'
+      - dependency-name: 'expo-sqlite'
+      - dependency-name: 'expo-status-bar'
+      - dependency-name: 'expo-system-ui'
+      - dependency-name: 'expo-task-manager'
+      - dependency-name: 'expo-updates'
+      - dependency-name: 'expo-web-browser'
+      - dependency-name: 'react-native-gesture-handler'
+      - dependency-name: 'jest-expo'
+      - dependency-name: 'babel-preset-expo'
+      # @clerk/expo 4.11 moves AuthView into @clerk/expo-native-components, which
+      # needs a native build; held on ~4.10 until that build is ready.
+      - dependency-name: '@clerk/expo'
+        update-types: ['version-update:semver-minor']
+      # react-test-renderer is pinned exactly by the root override to match react.
+      - dependency-name: 'react-test-renderer'
+      # 0.x minors that change behaviour, held until their call sites are reviewed:
+      # katex rendering, the MCP tasks extension wire types, and the TypeSafe SDK.
+      - dependency-name: 'katex'
+        update-types: ['version-update:semver-minor']
+      - dependency-name: '@modelcontextprotocol/ext-tasks'
+        update-types: ['version-update:semver-minor']
+      - dependency-name: '@typesafe-ai/sdk'
+        update-types: ['version-update:semver-minor']
       - dependency-name: '@tauri-apps/*'
         update-types: ['version-update:semver-major']
       # Vite and React major bumps require manual review

@@ -71,6 +71,7 @@ export function createAnthropicAdapter(config: AnthropicAdapterConfig = {}): Pro
     ...config.extraHeaders,
   };
   const sdk = new Anthropic({
+    openTelemetry: false,
     ...(config.apiKey ? { apiKey: config.apiKey } : {}),
     ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
     ...(config.fetch ? { fetch: config.fetch } : {}),
