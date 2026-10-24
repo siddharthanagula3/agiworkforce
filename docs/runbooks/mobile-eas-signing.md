@@ -1,5 +1,9 @@
 # EAS signing and mobile-link release runbook
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-10-23
+
 This runbook covers the production identifiers and public verification inputs
 that must agree across EAS, Apple, Google Play, and the web deployment.
 
@@ -26,14 +30,14 @@ work around signing errors. Reconcile the remote credential with these values.
    bash apps/mobile/scripts/release/configure-ios-submit.sh "$ASC_APP_ID"
    ```
 
-   This identifier is not a secret. Commit the resulting `eas.json` change for
+   This identifier is not a secret. Commit the resulting `apps/mobile/eas.json` change for
    a local release. The protected GitHub workflow makes an unpushed CI-only
    configuration commit instead, leaving the tagged application source exact.
 
-3. Put the App Store Connect API key at
-   `apps/mobile/secrets/asc-api-key.p8` and export its key and issuer IDs.
-4. Put the Google Play service-account JSON at
-   `apps/mobile/secrets/google-play-service-account.json`.
+3. Put the App Store Connect API key in the ignored `apps/mobile/secrets/`
+   directory as `asc-api-key.p8` and export its key and issuer IDs.
+4. Put the Google Play service-account JSON in the same directory as
+   `google-play-service-account.json`.
 5. Configure the environment variables listed in `apps/mobile/.env.example`
    in the matching EAS environment. Export the same `EXPO_PUBLIC_API_URL` in the
    local release shell. The preflight requires the Terms status and

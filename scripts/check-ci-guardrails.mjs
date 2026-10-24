@@ -577,12 +577,9 @@ requireNotIncludes('vercel.json', '--no-frozen-lockfile');
 requireIncludes('apps/web/scripts/build-with-chat.sh', 'SCRIPT_DIR=');
 requireNotIncludes('apps/web/scripts/build-with-chat.sh', 'cd ../..');
 
-requireIncludes(
-  'apps/extension-vscode/MARKETPLACE_PUBLISH_RUNBOOK.md',
-  'vsce publish --azure-credential',
-);
-requireIncludes('apps/extension-vscode/MARKETPLACE_PUBLISH_RUNBOOK.md', 'December 1, 2026');
-requireNotIncludes('apps/extension-vscode/MARKETPLACE_PUBLISH_RUNBOOK.md', '--pat');
+requireIncludes('docs/runbooks/vscode-marketplace-publish.md', 'vsce publish --azure-credential');
+requireIncludes('docs/runbooks/vscode-marketplace-publish.md', 'December 1, 2026');
+requireNotIncludes('docs/runbooks/vscode-marketplace-publish.md', '--pat');
 requireIncludes('.github/workflows/release-vscode-extension.yml', "- 'v-vscode-*'");
 requireIncludes(
   '.github/workflows/release-vscode-extension.yml',

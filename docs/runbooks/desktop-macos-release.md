@@ -1,5 +1,9 @@
 # macOS Release Runbook
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-10-23
+
 Canonical procedure for the universal Developer ID distribution published by
 `.github/workflows/release-desktop.yml`.
 

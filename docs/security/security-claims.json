@@ -2242,7 +2242,7 @@
       "section": "Rotation",
       "kind": "prose",
       "sentence": "Only after the transition release has propagated may a release be signed with the new key.",
-      "implementation": ["apps/desktop/docs/macos-release-runbook.md"],
+      "implementation": ["docs/runbooks/desktop-macos-release.md"],
       "why": "operator-procedure"
     },
     {

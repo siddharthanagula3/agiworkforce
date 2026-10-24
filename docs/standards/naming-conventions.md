@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-18
+Last updated: 2026-10-23
 
 This is the locked naming policy for AGI Workforce. New files, docs, packages, branches, commands, and release notes should follow this unless a current decision doc explicitly overrides it.
 
@@ -20,7 +20,7 @@ Use these stable conventions where they fit:
 ## Product And CLI Names
 
 - Public brand: `AGI`.
-- Formal platform name: `AGI Workforce`.
+- Company and site name: `AGI Workforce`; it names no product. Product names come from `PRODUCT_NAMES` in `packages/contracts/types/src/product-names.ts`.
 - Repo, package namespace, crate prefix, database/service identifiers: `agiworkforce`.
 - Primary CLI command: `agi`.
 - Compatibility CLI alias: `agiworkforce`.

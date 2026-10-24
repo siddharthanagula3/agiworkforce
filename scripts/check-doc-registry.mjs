@@ -66,10 +66,6 @@ const NON_DOC_FILES = new Map([
     'apps/web/CLAUDE.md',
     'written by `next dev`; committing it is cheaper than reverting a diff that regenerates',
   ],
-  [
-    'apps/extension-vscode/MARKETPLACE_PUBLISH_RUNBOOK.md',
-    'excluded from the packaged vsix by exact path in vsce-package.js and .vscodeignore, and check-ci-guardrails asserts on it by exact path',
-  ],
   ['apps/web/db/neon/CORRECTIONS.md', 'belongs to the append-only migration chain it corrects'],
   [
     'tools/skill-vetting/THIRD_PARTY_NOTICES.md',

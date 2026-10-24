@@ -120,7 +120,7 @@ info "  - AGI_CLI_RELEASE_SIGNING_KEY (EC P-256 private key whose public half in
 info "  - macos-release environment: APPLE_CERTIFICATE + APPLE_CERTIFICATE_PASSWORD"
 info "  - macos-release environment: APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_PRIVATE_KEY"
 info "  - macos-release environment: TAURI_SIGNING_PRIVATE_KEY + TAURI_SIGNING_PRIVATE_KEY_PASSWORD"
-info "  - see apps/desktop/docs/macos-release-runbook.md for encoding and rotation"
+info "  - see docs/runbooks/desktop-macos-release.md for encoding and rotation"
 
 # 8. Required external resources
 echo ""

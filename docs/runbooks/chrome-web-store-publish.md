@@ -1,5 +1,9 @@
 # Chrome Web Store Publish Runbook
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-10-23
+
 Canonical release procedure for the existing agiworkforce store item.
 
 ## Release boundary
@@ -75,7 +79,7 @@ One-time setup, by the owner in Partner Center:
 
 1. Create the product once by uploading `extension.zip` under Microsoft Edge >
    Overview > Create new extension, and copy the listing and privacy answers
-   from `docs/chrome-web-store-listing.md`. The REST API cannot create a product.
+   from `apps/extension/docs/chrome-web-store-listing.md`. The REST API cannot create a product.
 2. Under Microsoft Edge > Publish API, enable the API-key experience and create
    API credentials. Store the Client ID as `EDGE_CLIENT_ID`, the API key as
    `EDGE_API_KEY` (it expires; renew it there) and the product ID from the
@@ -103,5 +107,5 @@ Brave, Vivaldi, Arc and Comet install from the Chrome Web Store listing;
 Opera does too once the user adds Opera's "Install Chrome Extensions" add-on.
 Where a browser has no `chrome.sidePanel` (reported for Opera and Arc), the toolbar
 button opens the same panel as a window beside the browser window, and every
-page tool works on the last focused browser window. `scripts/install-native-host.sh`
+page tool works on the last focused browser window. `apps/extension/scripts/install-native-host.sh`
 registers the desktop host for each of these browsers that is installed.

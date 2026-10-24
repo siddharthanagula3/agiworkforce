@@ -1,5 +1,9 @@
 # VS Code Marketplace Publish Runbook
 
+Status: Current
+Owner: Platform lead
+Last updated: 2026-10-23
+
 Canonical release procedure for `agiworkforce.agi-workforce`.
 
 ## Release boundary
@@ -34,13 +38,7 @@ If the workload identity is not configured, run the workflow with `publish=false
 
 ## 2. Build and inspect the VSIX
 
-From the repository root:
-
-```bash
-pnpm install --frozen-lockfile
-pnpm --filter agi-workforce test
-pnpm --filter agi-workforce package
-```
+From the repository root, run `pnpm install --frozen-lockfile`, then `pnpm --filter agi-workforce test`, then `pnpm --filter agi-workforce package`.
 
 The package command performs the production esbuild and invokes the pinned `@vscode/vsce` wrapper with `--no-dependencies`.
 
@@ -50,7 +48,7 @@ Inspect the exact archive before publication:
 unzip -l apps/extension-vscode/agi-workforce-<version>.vsix
 ```
 
-Reject the package if it contains source maps, local credentials, fixture secrets, development-only files, or a version that does not match `package.json`.
+Reject the package if it contains source maps, local credentials, fixture secrets, development-only files, or a version that does not match `apps/extension-vscode/package.json`.
 
 ## 3. Verify listing assets
 

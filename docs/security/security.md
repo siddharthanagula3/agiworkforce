@@ -1032,7 +1032,7 @@ those installs stop updating silently.
    step 2 is impossible and **every** install must reinstall. This is the
    scenario escrow exists to prevent.
 
-Related: `apps/desktop/docs/macos-release-runbook.md` for the release-time trust
+Related: `docs/runbooks/desktop-macos-release.md` for the release-time trust
 checks, and section 3 for the application encryption keys, which are a
 separate key domain.
 

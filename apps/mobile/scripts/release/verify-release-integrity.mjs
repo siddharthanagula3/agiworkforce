@@ -14,7 +14,7 @@ const REPO_ROOT = join(MOBILE_ROOT, '..', '..');
 const EXTENSION_DIR = join(MOBILE_ROOT, 'native', 'ios', 'AGIShareExtension');
 
 // The store records these three, and a changed value orphans every install.
-// EAS_SIGNING_RUNBOOK.md documents them; this guard is what enforces them.
+// docs/runbooks/mobile-eas-signing.md documents them; this guard is what enforces them.
 export const CANONICAL_IDENTITY = Object.freeze({
   iosBundleIdentifier: 'com.agiworkforce.app',
   androidPackage: 'com.agiworkforce.app',

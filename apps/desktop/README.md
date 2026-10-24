@@ -72,7 +72,7 @@ session never starts, check the grant store before suspecting the code.
 
 ## Release
 
-`docs/qa/screenshots` holds QA captures and `docs/macos-release-runbook.md` the
+`docs/qa/screenshots` holds QA captures and `docs/runbooks/desktop-macos-release.md` the
 macOS signing and notarisation procedure. The release workflows themselves are
 `.github/workflows/release-desktop.yml`,
 `.github/workflows/release-desktop-cloud.yml` and
