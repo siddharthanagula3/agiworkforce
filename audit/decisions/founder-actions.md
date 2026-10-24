@@ -509,6 +509,9 @@ completes a turn once the template exists.
 **What remains after founder action** Nothing; until the template exists the
 mobile app's turns are refused as an unknown surface, which is loud on purpose.
 **Impact** RELEASE-BLOCKING for the mobile release only
+**Progress** The production instance has the `agi-mobile` template (created
+2026-10-19 with the Clerk CLI). Still open: the development instance template
+and the `CLERK_AUTHORIZED_PARTIES` check on the production web deployment.
 **Status** BLOCKED, FOUNDER ACTION REQUIRED
 
 ## [Infra] `ALLOWED_ORIGINS` on the signaling deploy
@@ -748,7 +751,9 @@ help until it is on.
 In the Clerk Dashboard for the development instance (`handy-jawfish-73`), open
 Native applications and enable the Native API; add the iOS bundle id
 `com.agiworkforce.app` if the page asks for one. Repeat on the production
-instance before a store build.
+instance before a store build. The production instance already reported the
+Native API on (`/v1/environment`, 2026-10-19); the development instance is the
+open half.
 **Where** Clerk Dashboard, development instance, then production.
 **Needed input** One toggle per instance.
 **How to verify completion** A fresh launch of the iOS app shows sign-in

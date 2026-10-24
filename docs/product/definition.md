@@ -340,7 +340,7 @@ offerings serve only plans that include the capability; see
 
 Video generation is requested through Google's interactions API for Gemini Omni
 Flash (`apps/web/app/api/media/video/generate/route.ts`); the Veo path is gone.
-The `google/veo` family slots still name the Veo 3.1 rows Google shut down on
+The `google/veo` family slots still name the Veo rows Google shut down on
 2026-10-22, and they move to Omni Flash only after the owner approves a probe and
 an eval run. `VIDEO-VEO-SLOTS-SHUTDOWN-2026-10-22` in
 `audit/registers/known-flaws.md` tracks it.
