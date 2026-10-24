@@ -25,6 +25,8 @@ function Harness({ host }: { host: HostBridge | null }) {
       <a href="/pricing">Pricing</a>
       <a href="/chat/abc">A conversation</a>
       <a href="/login">Sign in</a>
+      <a href="/connectors/mcp-directory">Connectors</a>
+      <a href="/agi-code">AGI Code</a>
       <a href="/terms" target="_blank" rel="noreferrer">
         Terms in a new window
       </a>
@@ -83,7 +85,7 @@ describe('desktop external links', () => {
     const host = fakeHost();
     const { container } = render(<Harness host={host} />);
 
-    for (const label of ['A conversation', 'Sign in']) {
+    for (const label of ['A conversation', 'Sign in', 'Connectors', 'AGI Code']) {
       expect(clickLink(container, label), label).toBe(false);
     }
     expect(host.openExternal).not.toHaveBeenCalled();

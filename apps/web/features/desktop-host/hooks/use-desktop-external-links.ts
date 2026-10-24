@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react';
 import type { HostBridge } from '@agiworkforce/local-runtime-contract';
-import { isAuthPath, isProductPath } from '@agiworkforce/types/product-routes';
+import { isAuthPath, isProductPath, isShellAppPath } from '@agiworkforce/types/product-routes';
 import { downloadInWindow } from '../lib/in-window-download';
 
 const API_PATH_PREFIX = '/api/';
@@ -49,7 +49,9 @@ export function useDesktopExternalLinks(host: HostBridge | null): void {
         return;
       }
       if (url.origin !== window.location.origin) return;
-      if (isProductPath(url.pathname) || isAuthPath(url.pathname)) return;
+      if (isProductPath(url.pathname) || isShellAppPath(url.pathname) || isAuthPath(url.pathname)) {
+        return;
+      }
 
       event.preventDefault();
       if (url.pathname.startsWith(API_PATH_PREFIX)) {

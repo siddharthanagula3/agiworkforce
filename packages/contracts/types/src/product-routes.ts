@@ -56,6 +56,45 @@ export const AUTH_ROUTE_PREFIXES = [
  */
 export const SESSION_AUTH_ROUTE_PREFIXES = ['/__clerk', '/login', '/signup'] as const;
 
+/**
+ * Signed-in pages that live outside the product prefixes: the pages that serve
+ * the marketing version to a signed-out visitor and the settings section to a
+ * signed-in one, and the short aliases the app redirects into `/chat`. The web
+ * proxy does not read this list, because those marketing versions stay public
+ * on the web; only the desktop shell keeps these routes in its window.
+ */
+export const SHELL_APP_ROUTE_PREFIXES = [
+  '/apps',
+  '/connectors',
+  '/skills',
+  '/agi-work',
+  '/agi-code',
+  '/projects',
+  '/customize',
+  '/sites',
+  '/chats',
+  '/chat-multi',
+  '/cowork',
+] as const;
+
+/**
+ * The auth routes that ask someone to sign in, as opposed to the ones that
+ * finish, verify or recover a sign-in already under way. Exact paths: what sits
+ * beneath them, such as `/login/complete`, is that second kind.
+ */
+export const SIGN_IN_ENTRY_ROUTES = [
+  '/login',
+  '/signup',
+  '/sign-in',
+  '/sign-up',
+  '/register',
+  '/forgot-password',
+  '/session-expired',
+  '/auth/login',
+  '/auth/reset-password',
+  '/auth/update-password',
+] as const;
+
 export type ProductRoutePrefix = (typeof PRODUCT_ROUTE_PREFIXES)[number];
 export type AuthRoutePrefix = (typeof AUTH_ROUTE_PREFIXES)[number];
 
@@ -82,6 +121,14 @@ export function isProductPath(pathname: string): boolean {
 
 export function isAuthPath(pathname: string): boolean {
   return matchesPrefix(pathname, AUTH_ROUTE_PREFIXES);
+}
+
+export function isShellAppPath(pathname: string): boolean {
+  return matchesPrefix(pathname, SHELL_APP_ROUTE_PREFIXES);
+}
+
+export function isSignInEntryPath(pathname: string): boolean {
+  return (SIGN_IN_ENTRY_ROUTES as readonly string[]).includes(normalizePath(pathname));
 }
 
 /**

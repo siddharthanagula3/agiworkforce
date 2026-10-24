@@ -3,8 +3,12 @@ import {
   AUTH_ROUTE_PREFIXES,
   PRODUCT_ROUTE_PREFIXES,
   SESSION_AUTH_ROUTE_PREFIXES,
+  SHELL_APP_ROUTE_PREFIXES,
+  SIGN_IN_ENTRY_ROUTES,
   isAuthPath,
   isProductPath,
+  isShellAppPath,
+  isSignInEntryPath,
   routeMatcherPatterns,
 } from '../product-routes';
 
@@ -132,6 +136,68 @@ describe('product routes', () => {
   it('keeps the session auth routes inside the set the shell holds on to', () => {
     for (const prefix of SESSION_AUTH_ROUTE_PREFIXES) {
       expect(AUTH_ROUTE_PREFIXES).toContain(prefix);
+    }
+  });
+
+  it('holds the signed-in pages outside the product prefixes for the desktop window', () => {
+    for (const path of [
+      '/apps',
+      '/connectors',
+      '/connectors/mcp-directory/github',
+      '/skills',
+      '/agi-work',
+      '/agi-code',
+      '/projects/7',
+      '/customize',
+      '/sites/abc',
+      '/chats',
+    ]) {
+      expect(isShellAppPath(path), path).toBe(true);
+      expect(isProductPath(path), path).toBe(false);
+      expect(isAuthPath(path), path).toBe(false);
+    }
+    for (const path of ['/', '/pricing', '/help', '/appstore', '/skillset', '/download']) {
+      expect(isShellAppPath(path), path).toBe(false);
+    }
+  });
+
+  it('keeps the shell app routes apart from the product and auth sets', () => {
+    for (const prefix of SHELL_APP_ROUTE_PREFIXES) {
+      expect(isProductPath(prefix), prefix).toBe(false);
+      expect(isAuthPath(prefix), prefix).toBe(false);
+    }
+  });
+
+  it('names only the auth routes that ask someone to sign in as sign-in entries', () => {
+    for (const route of SIGN_IN_ENTRY_ROUTES) {
+      expect(isAuthPath(route), route).toBe(true);
+    }
+    for (const path of [
+      '/login',
+      '/login?redirectTo=%2Fchat',
+      '/login/',
+      '/signup',
+      '/sign-in',
+      '/forgot-password',
+      '/session-expired',
+      '/auth/reset-password',
+    ]) {
+      expect(isSignInEntryPath(path), path).toBe(true);
+    }
+    for (const path of [
+      '/login/complete',
+      '/login/verify',
+      '/signup/complete',
+      '/auth/sso-callback',
+      '/auth/callback',
+      '/auth/device',
+      '/device-auth',
+      '/pair/ABCD',
+      '/__clerk/v1/client',
+      '/chat',
+      '/loginx',
+    ]) {
+      expect(isSignInEntryPath(path), path).toBe(false);
     }
   });
 });
