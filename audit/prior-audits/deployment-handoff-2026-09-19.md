@@ -124,8 +124,8 @@ repaired before inclusion, or withheld with a reason before the candidate is
 pushed. Secrets, local environment files, caches, generated build output, and
 temporary audit evidence will not be added merely because they are present.
 
-The final consolidation accounts for every path in
-`audit/prior-audits/release-inclusion-inventory-2026-09-19.md`: 759 paths, consisting of
+The final consolidation accounted for every path in the release inclusion
+inventory of 2026-09-19 (deleted 2026-10-23; see git history): 759 paths, consisting of
 614 modifications, 134 additions, and 11 audited deletions. The total includes
 the manifest itself, the final secondary-audit comment correction, and the
 support-corpus formatter exclusion. No untracked path remains. The deletions are

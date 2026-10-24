@@ -64,7 +64,7 @@ Each is genuinely undecided. None may be resolved by assumption.
   Until this is answered `verifierResult` is always `skipped`.
 - **OQ-5, approval-policy coverage.** Which surfaces already render an approval
   prompt for destructive or expensive actions was not verified when the contract
-  was written. Unknown. (The approval blockers `audit/blockers/01` to `07` now
+  was written. Unknown. (The approval blocker files `audit/blockers/01` to `07`, local-only and excluded from git, now
   record several surfaces that skip the gate.)
 - **OQ-6, task identity across requests.** The CPST denominator counts tasks,
   but nothing in the ledger groups requests into a task.

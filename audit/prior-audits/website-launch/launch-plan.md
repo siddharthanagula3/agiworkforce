@@ -1,6 +1,6 @@
 # Website launch plan
 
-Status: Active implementation and verification
+Status: Historical working set of the September web launch preparation; not updated since 2026-09-21
 Owner: Website launch coordinator
 Last updated: 2026-09-21
 

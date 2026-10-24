@@ -1,6 +1,6 @@
 # AGI Workforce Web Public Release Audit
 
-Status: Current
+Status: Open register; findings last verified 2026-09-22 and not re-verified since
 Owner: Founder + web lead
 Last updated: 2026-09-22
 

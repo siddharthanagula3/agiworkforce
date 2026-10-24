@@ -833,7 +833,7 @@ moment assets exist.
 **The concrete consequence, measured 2026-09-12** Both documented CLI install
 routes fail for the public right now, so this is not only about verification:
 
-1. `scripts/install.sh` fetches `SHA256SUMS` and `SHA256SUMS.sigstore.json`
+1. `apps/web/public/install.sh` fetches `SHA256SUMS` and `SHA256SUMS.sigstore.json`
    before it will unpack anything. The only published CLI release carries
    neither, so the script exits 1 with "Release signature metadata is missing;
    refusing to install unverified bytes." The guard is correct; there is simply

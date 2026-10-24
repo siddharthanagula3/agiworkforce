@@ -1,14 +1,14 @@
 # Execution state
 
-Status: Current
+Status: Historical snapshot of 2026-09-06; not updated since and not current state
 Owner: Fable (architect)
-Last updated: 2026-09-06
+Last updated: 2026-10-23
 
-The living evidence of what is happening. One screen, updated when state
-changes, never a narrative. Older detail lives in the decision model
-(`../decisions/2026-09-05-living-decision-model.md`), the synthesis
-(`../architecture/synthesis-2026-09-05.md`) and the readiness audit
-(`../research/surface-ship-readiness-2026-09-05.md`).
+This was the living execution state of early September; it has not been kept
+since, so read it as dated evidence. Current open work is indexed in
+`audit/README.md`. Older detail lives in the decision model
+(`../../docs/decisions/2026-09-05-living-decision-model.md`); the synthesis and
+readiness audit it once cited are deleted and remain in git history.
 
 ## Current objective
 

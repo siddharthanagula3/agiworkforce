@@ -1,6 +1,6 @@
 # Teams & Enterprise: Control Plane Plan
 
-Status: Active
+Status: Paused plan; every status is as cited at `0d4e6986a` (2026-08-22) and not re-verified since
 Owner: Enterprise/platform lead
 Last updated: 2026-08-22
 

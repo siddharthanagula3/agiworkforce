@@ -1,6 +1,6 @@
 # Frontend ecosystem release
 
-Status: Current
+Status: Paused register; open tasks last verified 2026-09-21 and not re-verified since
 Owner: Fable (lead) for the founder
 Last updated: 2026-09-21
 

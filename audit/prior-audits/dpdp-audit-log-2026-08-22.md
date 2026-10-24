@@ -1,6 +1,6 @@
 # DPDP Act (India) compliance, audit and remediation log
 
-Status: In progress, **no legal copy on this branch has been reviewed by counsel**
+Status: Historical decision log of 2026-08-22, **no legal copy in it has been reviewed by counsel**; the open counsel work is in `audit/decisions/founder-actions.md`
 Branch: `compliance/dpdp`, committed and being merged to `main` (2026-08-22); the
 work described below is no longer uncommitted working-tree state. Migrations
 0113-0116 ARE applied to production, see §7.1.

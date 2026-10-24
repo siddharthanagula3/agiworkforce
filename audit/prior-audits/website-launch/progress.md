@@ -1,6 +1,6 @@
 # Website launch working ledger
 
-Status: In progress
+Status: Historical working set of the September web launch preparation; not updated since 2026-09-23
 Owner: Website launch preparation
 Last updated: 2026-09-23
 

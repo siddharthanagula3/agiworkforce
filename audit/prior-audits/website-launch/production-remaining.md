@@ -1,6 +1,6 @@
 # Production follow-up
 
-Status: Not approved for launch
+Status: Historical working set of the September web launch preparation; not updated since 2026-09-22
 Owner: Website launch preparation
 Last updated: 2026-09-22
 
