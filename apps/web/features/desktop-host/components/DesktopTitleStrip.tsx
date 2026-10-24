@@ -1,5 +1,7 @@
 'use client';
 
+import { usePathname } from 'next/navigation';
+import { isQuickAskPath } from '@/features/chat/lib/new-chat-entry';
 import { useDesktopHost } from '../lib/host';
 import { DesktopHistoryControls } from './DesktopHistoryControls';
 
@@ -16,11 +18,13 @@ import { DesktopHistoryControls } from './DesktopHistoryControls';
  * win the renderer's hit test and swallow clicks on the controls beneath it.
  * Those controls are already `no-drag`, so the window server lets their clicks
  * through and the band drags everywhere else. The history controls sit beside
- * it for the same reason. Renders nothing in a browser.
+ * it for the same reason. Renders nothing in a browser, and nothing in the
+ * Quick Ask panel, a small frameless window with no window buttons to clear.
  */
 export function DesktopTitleStrip() {
   const host = useDesktopHost();
-  if (!host) return null;
+  const pathname = usePathname();
+  if (!host || isQuickAskPath(pathname)) return null;
 
   return (
     <>

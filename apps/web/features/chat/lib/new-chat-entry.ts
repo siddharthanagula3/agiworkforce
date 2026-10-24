@@ -1,5 +1,10 @@
 export const NEW_CHAT_PATH = '/chat';
 export const QUICK_ASK_PATH = '/quick-ask';
+
+export function isQuickAskPath(pathname: string | null | undefined): boolean {
+  return pathname === QUICK_ASK_PATH || Boolean(pathname?.startsWith(`${QUICK_ASK_PATH}/`));
+}
+
 export const NEW_CHAT_DRAFT_PARAM = 'q';
 export const NEW_CHAT_SOURCE_PARAM = 'from';
 export const NEW_CHAT_MODE_PARAM = 'mode';

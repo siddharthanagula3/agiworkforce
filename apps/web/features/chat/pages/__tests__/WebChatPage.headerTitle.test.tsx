@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const CONVERSATION_ID = '00000000-0000-4000-8000-000000000931';
+let routedSessionId: string | null = CONVERSATION_ID;
 
 const toastError = vi.hoisted(() => vi.fn());
 vi.mock('sonner', async (importOriginal) => {
@@ -53,7 +54,7 @@ vi.mock('sonner', async (importOriginal) => {
 vi.mock('next/navigation', async (importOriginal) => ({
   ...(await importOriginal<ScanModule1>()),
   useRouter: () => ({ replace: vi.fn(), push: vi.fn(), back: vi.fn() }),
-  useParams: () => ({ sessionId: CONVERSATION_ID }),
+  useParams: () => (routedSessionId ? { sessionId: routedSessionId } : {}),
   useSearchParams: () => new URLSearchParams(),
   usePathname: () => `/chat/${CONVERSATION_ID}`,
 }));
@@ -315,6 +316,7 @@ function openConversation(): void {
 
 describe('WebChatPage conversation title slot', () => {
   beforeEach(() => {
+    routedSessionId = CONVERSATION_ID;
     mocks.updateConversation.mockClear();
     mocks.updateConversation.mockImplementation(async () => true);
     vi.stubGlobal(
@@ -386,6 +388,20 @@ describe('WebChatPage conversation title slot', () => {
     expect(screen.queryByTestId('chat-sidebar')).toBeNull();
     expect(screen.queryByTestId('research-panel')).toBeNull();
     expect(screen.queryByTestId('artifacts-panel')).toBeNull();
+  });
+
+  it('shows a new Quick Ask as the ask box alone, with no header row', async () => {
+    routedSessionId = null;
+    useChatStore.getState().reset();
+
+    const { container } = render(<WebChatPage compact />);
+
+    await waitFor(() =>
+      expect(container.firstElementChild).toHaveAttribute('data-chat-surface', 'quick-ask'),
+    );
+    expect(container.querySelector('[data-quick-ask-header]')).toBeNull();
+    expect(container.querySelector('[data-app-header]')).toBeNull();
+    expect(screen.queryByRole('link', { name: /quickAsk.newChat|New chat/ })).toBeNull();
   });
 
   it('gives Quick Ask a way to the full conversation and to a new chat', async () => {

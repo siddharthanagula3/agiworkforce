@@ -6,9 +6,11 @@ import { DesktopTitleStrip } from '../components/DesktopTitleStrip';
 type UiModule = typeof import('@agiworkforce/ui');
 
 const push = vi.fn();
+const pathname = vi.hoisted(() => ({ current: '/chat' }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push, replace: vi.fn(), back: vi.fn(), forward: vi.fn() }),
+  usePathname: () => pathname.current,
 }));
 
 vi.mock('@agiworkforce/ui', async (importOriginal) => ({
@@ -50,6 +52,7 @@ function installHost(platform: string, navigation?: FakeNavigation) {
 
 beforeEach(() => {
   push.mockReset();
+  pathname.current = '/chat';
 });
 
 afterEach(() => {
@@ -73,6 +76,19 @@ describe('desktop history controls', () => {
     expect(screen.queryByRole('toolbar')).toBeNull();
     expect(document.documentElement).not.toHaveAttribute('data-host-navigation');
   });
+
+  it.each(['/quick-ask', '/quick-ask/session-1', '/quick-ask/dictate'])(
+    'leaves the Quick Ask panel at %s with no window controls and no drag band',
+    (path) => {
+      pathname.current = path;
+      installHost('electron-darwin', fakeNavigation({ canGoBack: true, canGoForward: true }));
+      render(<DesktopTitleStrip />);
+
+      expect(screen.queryByRole('toolbar')).toBeNull();
+      expect(document.querySelector('[data-app-header]')).toBeNull();
+      expect(document.documentElement).not.toHaveAttribute('data-host-navigation');
+    },
+  );
 
   it('draws nothing where the shell keeps its native title bar', () => {
     installHost('electron-win32', fakeNavigation({ canGoBack: true, canGoForward: true }));
