@@ -129,7 +129,9 @@ recovery properties are these:
 
 `.github/workflows/release-desktop-cloud.yml` builds the Electron macOS
 application from `v-cloud-desktop-*` tags, signs each architecture, notarizes
-the result, and validates the staple. A working release workflow is not proof
+the result, and validates the staple. `scripts/release/build-desktop-mac-local.sh`
+does the same on a Mac without GitHub credentials, and both run
+`scripts/release/verify-desktop-mac-release.sh`. A working release workflow is not proof
 that an installer is published. The release API and public download page remain
 the authority for availability, and no public Electron installer is currently
 published.

@@ -72,8 +72,10 @@ session never starts, check the grant store before suspecting the code.
 
 ## Release
 
-`docs/qa/screenshots` holds QA captures and `docs/runbooks/desktop-macos-release.md` the
-macOS signing and notarisation procedure. The release workflows themselves are
+`docs/qa/screenshots` holds QA captures. `docs/runbooks/desktop-electron-macos-release.md`
+is the signing and notarisation procedure for the public Electron app, including a
+release built on a Mac, and `docs/runbooks/desktop-macos-release.md` is the one for
+the retained Tauri app. The release workflows themselves are
 `.github/workflows/release-desktop.yml`,
 `.github/workflows/release-desktop-cloud.yml` and
 `.github/workflows/build-windows-release.yml`.
