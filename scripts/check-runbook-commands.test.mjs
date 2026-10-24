@@ -125,6 +125,66 @@ test('a package script a runbook names but the manifest does not define fails', 
   );
 });
 
+test('a pnpm built-in that runs no script is not looked up as one', () => {
+  assert.equal(resolveCommandTarget('pnpm install --frozen-lockfile'), null);
+  assert.equal(resolveCommandTarget('pnpm --filter @agiworkforce/web add zod'), null);
+  assert.deepEqual(resolveCommandTarget('pnpm run install'), {
+    kind: 'script',
+    value: 'install',
+    filter: null,
+  });
+  assert.deepEqual(
+    failuresFor((state) => {
+      state.runbook = state.runbook.replace(
+        'pnpm check:restore',
+        'pnpm check:restore\npnpm install --frozen-lockfile',
+      );
+    }),
+    [],
+  );
+  const failures = failuresFor((state) => {
+    state.runbook = state.runbook.replace('pnpm check:restore', 'pnpm run install');
+  });
+  assert.ok(
+    failures.some((failure) => failure.includes('names script "install"')),
+    failures.join('\n'),
+  );
+});
+
+test('a --filter target is found by the manifest name, not by its directory', () => {
+  const withWorkspace = (command) => (state, write) => {
+    state.runbook = state.runbook.replace('pnpm check:restore', command);
+    write('pnpm-workspace.yaml', "packages:\n  - 'apps/*'\n  - 'packages/*/*'\n");
+    write(
+      'apps/extension-vscode/package.json',
+      JSON.stringify({ name: 'agi-workforce', scripts: { test: 'vitest run' } }),
+    );
+    write(
+      'packages/ai/routing/package.json',
+      JSON.stringify({ name: '@agiworkforce/routing', scripts: { build: 'tsc' } }),
+    );
+  };
+
+  assert.deepEqual(failuresFor(withWorkspace('pnpm --filter agi-workforce test')), []);
+  assert.deepEqual(failuresFor(withWorkspace('pnpm --filter @agiworkforce/routing build')), []);
+
+  const missingScript = failuresFor(withWorkspace('pnpm --filter agi-workforce package'));
+  assert.ok(
+    missingScript.some(
+      (failure) =>
+        failure.includes('names script "package"') &&
+        failure.includes('apps/extension-vscode/package.json'),
+    ),
+    missingScript.join('\n'),
+  );
+
+  const unknown = failuresFor(withWorkspace('pnpm --filter extension-vscode test'));
+  assert.ok(
+    unknown.some((failure) => failure.includes('names package "extension-vscode"')),
+    unknown.join('\n'),
+  );
+});
+
 test('a workflow a runbook names but .github/workflows does not hold fails', () => {
   const failures = failuresFor((state) => {
     state.runbook = state.runbook.replace(

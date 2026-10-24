@@ -22,6 +22,48 @@ export const SETTING_ROOTS = ['apps', 'packages', 'crates', 'scripts', 'infrastr
 // Runners whose first non-flag argument is a path in this repository.
 const PATH_RUNNERS = new Set(['node', 'tsx', 'bash', 'sh']);
 
+// pnpm subcommands that run no package script. `pnpm run <name>` is the only way
+// to run a script that shares one of these names.
+const PNPM_BUILT_INS = new Set([
+  'add',
+  'audit',
+  'bin',
+  'cache',
+  'config',
+  'create',
+  'dedupe',
+  'deploy',
+  'dlx',
+  'env',
+  'fetch',
+  'i',
+  'import',
+  'init',
+  'install',
+  'licenses',
+  'link',
+  'list',
+  'ln',
+  'ls',
+  'outdated',
+  'pack',
+  'patch',
+  'patch-commit',
+  'prune',
+  'publish',
+  'rebuild',
+  'remove',
+  'rm',
+  'root',
+  'setup',
+  'store',
+  'unlink',
+  'up',
+  'update',
+  'upgrade',
+  'why',
+]);
+
 const SETTING_SHAPE = /^[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+$/;
 
 // A backticked token that names something on disk rather than a word in prose.
@@ -91,6 +133,7 @@ export function resolveCommandTarget(command) {
   if (runner === 'pnpm' || runner === 'npm' || runner === 'yarn') {
     const words = [...rest];
     let filter = null;
+    let explicitRun = false;
     while (words.length > 0) {
       const word = words[0];
       if (word === '--filter' || word === '-F') {
@@ -100,6 +143,7 @@ export function resolveCommandTarget(command) {
       }
       if (word === 'run' || word === 'exec' || word.startsWith('-')) {
         if (word === 'exec') return null;
+        if (word === 'run') explicitRun = true;
         words.shift();
         continue;
       }
@@ -107,41 +151,75 @@ export function resolveCommandTarget(command) {
     }
     const script = words[0];
     if (!script || script.includes('<')) return null;
+    if (runner === 'pnpm' && !explicitRun && PNPM_BUILT_INS.has(script)) return null;
     return { kind: 'script', value: script, filter };
   }
 
   return null;
 }
 
-function packageScripts(root, filter) {
-  const manifests = [];
-  if (!filter) {
-    manifests.push('package.json');
-  } else {
-    const name = filter.replace(/^@[^/]+\//, '');
-    for (const base of [
-      'apps',
-      'packages',
-      'packages/ai',
-      'packages/contracts',
-      'packages/platform',
-    ]) {
-      manifests.push(`${base}/${name}/package.json`);
-    }
-    manifests.push('package.json');
+function readManifest(root, relative) {
+  const file = path.join(root, relative);
+  if (!fs.existsSync(file)) return null;
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    return null;
   }
-  for (const relative of manifests) {
-    const file = path.join(root, relative);
-    if (!fs.existsSync(file)) continue;
-    let manifest;
-    try {
-      manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
-    } catch {
-      continue;
+}
+
+function workspacePatterns(root) {
+  const file = path.join(root, 'pnpm-workspace.yaml');
+  if (!fs.existsSync(file)) return [];
+  const patterns = [];
+  let inPackages = false;
+  for (const line of fs.readFileSync(file, 'utf8').split('\n')) {
+    if (/^\S/.test(line)) inPackages = /^packages:\s*$/.test(line);
+    else if (inPackages) {
+      const entry = /^\s*-\s*['"]?([^'"#\s]+)['"]?\s*(?:#.*)?$/.exec(line);
+      if (entry) patterns.push(entry[1]);
     }
-    if (filter && manifest.name !== filter && relative !== 'package.json') continue;
-    if (filter && relative === 'package.json' && manifest.name !== filter) continue;
-    return { relative, scripts: manifest.scripts ?? {} };
+  }
+  return patterns;
+}
+
+function expandWorkspacePattern(root, pattern) {
+  let directories = [''];
+  for (const segment of pattern.split('/')) {
+    const next = [];
+    for (const directory of directories) {
+      if (segment !== '*') {
+        next.push(path.posix.join(directory, segment));
+        continue;
+      }
+      const absolute = path.join(root, directory);
+      if (!fs.existsSync(absolute)) continue;
+      for (const entry of fs.readdirSync(absolute, { withFileTypes: true })) {
+        if (entry.isDirectory() && entry.name !== 'node_modules') {
+          next.push(path.posix.join(directory, entry.name));
+        }
+      }
+    }
+    directories = next;
+  }
+  return directories;
+}
+
+/** The package a `--filter` names, found by manifest name rather than by directory. */
+function packageScripts(root, filter) {
+  const rootManifest = readManifest(root, 'package.json');
+  if (!filter) {
+    return rootManifest ? { relative: 'package.json', scripts: rootManifest.scripts ?? {} } : null;
+  }
+  if (rootManifest?.name === filter) {
+    return { relative: 'package.json', scripts: rootManifest.scripts ?? {} };
+  }
+  for (const pattern of workspacePatterns(root)) {
+    for (const directory of expandWorkspacePattern(root, pattern)) {
+      const relative = path.posix.join(directory, 'package.json');
+      const manifest = readManifest(root, relative);
+      if (manifest?.name === filter) return { relative, scripts: manifest.scripts ?? {} };
+    }
   }
   return null;
 }
