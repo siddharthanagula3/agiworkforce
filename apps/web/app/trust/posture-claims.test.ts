@@ -46,13 +46,16 @@ describe('/trust release signing names the pipeline that ships the desktop app',
   it('signs and notarizes each Mac architecture and verifies both before anything is uploaded', () => {
     const credentials = workflow.indexOf('Require Apple signing and notarization credentials');
     const build = workflow.indexOf('electron-builder --mac --arm64 --x64');
-    const verify = workflow.indexOf('xcrun stapler validate');
+    const verify = workflow.indexOf('scripts/release/verify-desktop-mac-release.sh');
     const upload = workflow.indexOf('gh release upload');
 
     expect(credentials).toBeGreaterThan(-1);
     expect(build).toBeGreaterThan(credentials);
     expect(verify).toBeGreaterThan(build);
     expect(upload).toBeGreaterThan(verify);
+    expect(repoText('scripts/release/verify-desktop-mac-release.sh')).toContain(
+      'xcrun stapler validate',
+    );
 
     const text = row(TRUST, 'Release signing');
     expect(text).toContain('a signed and notarized disk image for each Mac architecture');

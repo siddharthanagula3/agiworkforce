@@ -149,7 +149,10 @@ describe('/desktop separates what is built from what is published', () => {
       'utf8',
     );
     expect(workflow).toMatch(/electron-builder --mac --arm64 --x64/u);
-    expect(workflow).toMatch(/xcrun stapler validate/u);
+    expect(workflow).toMatch(/scripts\/release\/verify-desktop-mac-release\.sh/u);
+    expect(
+      readFileSync(join(REPO_ROOT, 'scripts', 'release', 'verify-desktop-mac-release.sh'), 'utf8'),
+    ).toMatch(/xcrun stapler validate/u);
   });
 
   it('describes the Electron app and never the Tauri build or its Linux packages', () => {
@@ -670,7 +673,10 @@ describe('/get-started, desktop availability matches the release pipeline', () =
       'utf8',
     );
     expect(workflow).toMatch(/build-macos:/u);
-    expect(workflow).toMatch(/codesign --verify --deep --strict/u);
+    expect(workflow).toMatch(/scripts\/release\/verify-desktop-mac-release\.sh/u);
+    expect(
+      readFileSync(join(REPO_ROOT, 'scripts', 'release', 'verify-desktop-mac-release.sh'), 'utf8'),
+    ).toMatch(/codesign --verify --deep --strict/u);
   });
 
   it('states the signature gate and keeps both unpublished platforms unpublished', () => {
