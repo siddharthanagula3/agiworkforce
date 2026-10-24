@@ -2,11 +2,14 @@
 
 Status: Current standing guidance and dated research seed
 Owner: Founder + product/architecture leads
-Last updated: 2026-09-26
+Last updated: 2026-10-24
 
 **Repository location:** `docs/product/competitive-guidance.md`
 **Research baseline:** announcements dated on or before **September 21, 2026**.
 **Research performed / live documentation accessed:** **September 22, 2026**.
+**Surface-by-surface refresh:** `docs/research/competitor-surfaces-2026-10-24.md` compares
+what every large competitor ships on web, desktop, mobile, CLI, VS Code and Chrome, with plans,
+as read on **October 24, 2026**. Prefer it over this file's September vendor detail.
 **Scope:** seven application implementations mapped to six public product
 surfaces; the two Desktop implementations have different current roles.
 **Purpose:** persistent product, design, engineering, and verification guidance, not authorization to rebuild or deploy everything at once.
