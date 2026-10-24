@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 type Listener = (...args: unknown[]) => void;
 
@@ -18,7 +18,9 @@ vi.mock('../runtime/desktopTelemetryService', () => ({ recordDesktopEvent: vi.fn
 const platform = Object.getOwnPropertyDescriptor(process, 'platform');
 Object.defineProperty(process, 'platform', { value: 'darwin' });
 const update = await import('../desktopAutoUpdate');
-if (platform) Object.defineProperty(process, 'platform', platform);
+afterAll(() => {
+  if (platform) Object.defineProperty(process, 'platform', platform);
+});
 
 describe('an update download that fails', () => {
   beforeEach(() => {
