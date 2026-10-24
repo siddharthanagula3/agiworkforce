@@ -230,6 +230,28 @@ describe('remembered AI consent across republished code', () => {
     expect(result.current.askingForAi).toBeNull();
   });
 
+  it('reuses consent for a request made before the code fingerprint resolves', async () => {
+    await allowOnce('version one');
+    mocks.call.mockClear();
+    const digest = crypto.subtle.digest.bind(crypto.subtle);
+    const slow = vi.spyOn(crypto.subtle, 'digest').mockImplementation(async (algorithm, data) => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return digest(algorithm, data);
+    });
+    try {
+      const { result } = renderHook(() =>
+        usePublishedArtifactRuntime('artifact-a', 'version one', true),
+      );
+
+      await expect(
+        result.current.host!.handle({ op: 'complete', prompt: 'again', connectors: [] }),
+      ).resolves.toBe('owned result');
+      expect(result.current.askingForAi).toBeNull();
+    } finally {
+      slow.mockRestore();
+    }
+  });
+
   it('asks again when the publisher replaces the code under the same link', async () => {
     await allowOnce('version one');
     mocks.call.mockClear();

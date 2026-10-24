@@ -82,10 +82,13 @@ function forgetConsent(scope: string, key: string): void {
 // Consent is kept per exact revision: republishing new code under the same
 // link must ask again rather than inherit what the earlier code was allowed.
 // Without the code to fingerprint, nothing is remembered and every call asks.
-function useRevisionDigest(revision: string | undefined): string | null {
-  const [digest, setDigest] = useState<{ source: string; value: string } | null>(null);
+function useRevisionDigest(revision: string | undefined): {
+  value: string | null;
+  settled: boolean;
+} {
+  const subtle = globalThis.crypto?.subtle;
+  const [digest, setDigest] = useState<{ source: string; value: string | null } | null>(null);
   useEffect(() => {
-    const subtle = globalThis.crypto?.subtle;
     if (revision === undefined || !subtle) return undefined;
     const source = revision;
     let current = true;
@@ -97,13 +100,18 @@ function useRevisionDigest(revision: string | undefined): string | null {
         ).join('');
         setDigest({ source, value });
       },
-      () => undefined,
+      () => {
+        if (current) setDigest({ source, value: null });
+      },
     );
     return () => {
       current = false;
     };
-  }, [revision]);
-  return revision !== undefined && digest?.source === revision ? digest.value : null;
+  }, [revision, subtle]);
+  if (revision === undefined || !subtle) return { value: null, settled: true };
+  return digest?.source === revision
+    ? { value: digest.value, settled: true }
+    : { value: null, settled: false };
 }
 
 export interface PublishedArtifactRuntime {
@@ -128,12 +136,21 @@ export function usePublishedArtifactRuntime(
   aiEnabled = false,
 ): PublishedArtifactRuntime {
   const { isLoaded, isSignedIn, userId } = useSession();
-  const revisionDigest = useRevisionDigest(revision);
+  const { value: revisionDigest, settled: scopeSettled } = useRevisionDigest(revision);
   const consentScopeRef = useRef<string | null>(null);
+  const scopeSettledRef = useRef(false);
+  const scopeWaitersRef = useRef<Array<() => void>>([]);
+  const releaseScopeWaiters = useCallback(() => {
+    const waiters = scopeWaitersRef.current;
+    scopeWaitersRef.current = [];
+    for (const release of waiters) release();
+  }, []);
   useLayoutEffect(() => {
     consentScopeRef.current =
       token && userId && revisionDigest ? `${userId}:${token}:${revisionDigest}` : null;
-  }, [token, userId, revisionDigest]);
+    scopeSettledRef.current = scopeSettled;
+    if (scopeSettled) releaseScopeWaiters();
+  }, [token, userId, revisionDigest, scopeSettled, releaseScopeWaiters]);
   const [signInNeeded, setSignInNeeded] = useState(false);
   const [askingForAi, setAskingForAi] = useState<ArtifactConsentRequest | null>(null);
   const [grantedConnectorSets, setGrantedConnectorSets] = useState<string[][]>([]);
@@ -164,8 +181,9 @@ export function usePublishedArtifactRuntime(
       const retired = waitingRef.current.filter((waiter) => waiter.context === context);
       waitingRef.current = waitingRef.current.filter((waiter) => waiter.context !== context);
       for (const waiter of retired) waiter.resolve(null);
+      releaseScopeWaiters();
     };
-  }, [owner]);
+  }, [owner, releaseScopeWaiters]);
 
   const ask = useCallback(
     (connectorIds: string[]) => {
@@ -241,7 +259,15 @@ export function usePublishedArtifactRuntime(
   );
 
   const consentFor = useCallback(
-    (connectorIds: readonly string[], review: boolean): Promise<StoredConsent | null> => {
+    function consentFor(
+      connectorIds: readonly string[],
+      review: boolean,
+    ): Promise<StoredConsent | null> {
+      if (!scopeSettledRef.current) {
+        return new Promise<void>((release) => {
+          scopeWaitersRef.current.push(release);
+        }).then(() => consentFor(connectorIds, review));
+      }
       const context = current();
       if (!context) return Promise.resolve(null);
       const key = consentKey(connectorIds);
