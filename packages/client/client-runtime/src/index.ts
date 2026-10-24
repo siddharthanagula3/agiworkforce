@@ -47,6 +47,8 @@ export type {
   FinishAgentActivityLocallyOptions,
 } from './agentActivity';
 
+export { handOffConversationSend, takeConversationSend } from './conversationSendHandoff';
+
 export { createStore } from './state';
 export type { Store, Listener, OnChange } from './state';
 

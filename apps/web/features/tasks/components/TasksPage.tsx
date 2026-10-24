@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { TasksPage as SharedTasksPage, type TasksTransport } from '@agiworkforce/unified-chat';
 import { useChatStore, PENDING_CONVERSATION_KEY } from '@shared/stores/web-chat-store';
 import { createWebCloudTasksClient, setWebCloudTaskArchived } from '../services/cloud-tasks-client';
-import { handOffConversationSend } from '@/features/chat/lib/conversation-send-handoff';
+import { handOffConversationSend } from '@agiworkforce/client-runtime';
 import { routinePromptFromGoal } from '@/features/schedules/lib/schedule-form';
 import { scheduleFromPromptHref } from '@/features/schedules/components/schedule-from-turn';
 

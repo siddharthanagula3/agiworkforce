@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { handOffConversationSend, takeConversationSend } from './conversation-send-handoff';
+import { handOffConversationSend, takeConversationSend } from '../conversationSendHandoff';
 
 describe('conversation send handoff', () => {
   it('hands a message to the conversation once', () => {

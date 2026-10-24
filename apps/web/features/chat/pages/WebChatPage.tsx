@@ -61,7 +61,7 @@ import {
   managedCloudMessagePath,
   type ManagedCloudChatAttachmentUploadStatus,
 } from '@agiworkforce/cloud-contracts';
-import { takeConversationSend } from '@/features/chat/lib/conversation-send-handoff';
+import { takeConversationSend } from '@agiworkforce/client-runtime';
 import {
   getWorstUsagePercent,
   readManagedUsageBuckets,

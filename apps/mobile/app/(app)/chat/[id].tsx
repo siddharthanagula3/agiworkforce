@@ -68,7 +68,7 @@ import {
   RenameConversationModal,
   useConversationActions,
 } from '@/src/features/conversation-actions';
-import { takeConversationSend } from '@/src/features/chat/conversationSendHandoff';
+import { takeConversationSend } from '@agiworkforce/client-runtime';
 import {
   useVoiceConversation,
   voiceCaptureErrorMessage,

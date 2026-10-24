@@ -12,7 +12,7 @@ import { Text } from '@/components/ui/text';
 import { Button } from '@/components/ui/button';
 import { useThemeColors } from '@/src/ui/theme';
 import { typeScale } from '@/src/ui/theme/tokens';
-import { handOffConversationSend } from '@/src/features/chat/conversationSendHandoff';
+import { handOffConversationSend } from '@agiworkforce/client-runtime';
 import { describeCloudRunSteerError, steerCloudRun, withdrawCloudRunSteer } from '../cloudRunSteer';
 
 export function CloudRunSteerSection({ run }: { run: CloudAgentRun }) {
