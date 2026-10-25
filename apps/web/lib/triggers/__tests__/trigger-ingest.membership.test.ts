@@ -39,7 +39,7 @@ const EVENT: TriggerEvent = {
   type: 'message',
   deliveryId: 'delivery_1',
   installationId: null,
-  data: {},
+  data: { channelType: 'channel' },
 } as TriggerEvent;
 
 let world: FakePostgres;

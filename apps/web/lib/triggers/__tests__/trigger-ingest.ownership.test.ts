@@ -113,13 +113,25 @@ describe('an event reaches only triggers whose owner holds the account it came f
     expect(await fired(slackEvent('group'))).toEqual(['installer_slack']);
   });
 
-  it('delivers a Slack event that names no channel to the installer and a linked member', async () => {
-    expect(await fired(slackEvent(null))).toEqual(['installer_slack', 'linked_slack']);
+  it('delivers a Slack event that names no channel type, such as a mention, to the installer alone', async () => {
+    expect(await fired(slackEvent(null))).toEqual(['installer_slack']);
+  });
+
+  it('delivers a channel type it does not know to the installer alone', async () => {
+    expect(await fired(slackEvent('G'))).toEqual(['installer_slack']);
   });
 
   it('delivers no direct or group message with the app to anyone', async () => {
     expect(await fired(slackEvent('im'))).toEqual([]);
     expect(await fired(slackEvent('mpim'))).toEqual([]);
+  });
+
+  it('still lets a linked member verify a pending trigger from a direct message with the app', async () => {
+    world.rowsIn('event_triggers').find((row) => row['id'] === 'linked_slack')![
+      'verification_status'
+    ] = 'pending';
+
+    expect(await fired(slackEvent('im'))).toEqual(['linked_slack']);
   });
 
   it('delivers a GitHub event only for a repository its owner proved through the installation', async () => {

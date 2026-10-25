@@ -26,6 +26,10 @@ import { eventTypeMatchCandidates, type EventTrigger, type TriggerEvent } from '
 const MAX_TRIGGERS_PER_EVENT = 20;
 const MAX_EVENT_DATA_BYTES = 16_384;
 const SLACK_PRIVATE_CONVERSATION_TYPES: ReadonlySet<string> = new Set(['im', 'mpim']);
+const SLACK_LINKED_MEMBER_CHANNEL_TYPES: readonly string[] = [
+  'channel',
+  ...SLACK_PRIVATE_CONVERSATION_TYPES,
+];
 
 export interface TriggerIngestOutcome {
   triggerId: string;
@@ -50,9 +54,11 @@ const OWNER_IS_A_MEMBER = ownerIsActiveWorkspaceMemberSql(
 // An event reaches a trigger only when its owner holds the source account: the
 // GitHub installation they linked and a repository they proved they can reach,
 // or a Slack workspace they installed the app in or linked their Slack user in.
-// A private channel's messages reach only the installer who granted the app its
-// access. A well-formed id or a code posted in the workspace proves nothing about
-// who may read its events.
+// A linked member receives only what Slack labels a public channel message, plus
+// the conversations with the app that can carry a verification code; anything
+// else, a private channel or an event that names no channel type, reaches only
+// the installer who granted the app its access. A well-formed id or a code posted
+// in the workspace proves nothing about who may read its events.
 function triggerMatchStatement(membershipNegation: '' | 'not '): string {
   return `select trigger.*
        from event_triggers as trigger
@@ -82,7 +88,7 @@ function triggerMatchStatement(membershipNegation: '' | 'not '): string {
                and (
                  installation.installed_by_user_id = trigger.user_id
                  or (
-                   coalesce($9::text, '') <> 'group'
+                   $9::text = any ($10::text[])
                    and exists (
                      select 1 from slack_account_links as link
                       where link.installation_id = installation.id
@@ -109,6 +115,7 @@ function triggerMatchParams(event: TriggerEvent): unknown[] {
     UNATTENDED_RUN_DENIED_STATUSES,
     MEMBERSHIP_STATUSES_THAT_MAY_ACT,
     slackChannelType(event),
+    SLACK_LINKED_MEMBER_CHANNEL_TYPES,
   ];
 }
 
