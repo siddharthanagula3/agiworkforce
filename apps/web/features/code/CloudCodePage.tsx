@@ -1212,7 +1212,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
       )}
       {localArchivedThread !== null && !selectedSession && (
         <div className={styles['notice']} role="status" data-testid="local-session-archived">
-          <span>{localSessionArchivedLine(localArchivedThread)}</span>
+          <span>
+            {localSessionArchivedLine(localArchivedThread, local.sessionActions.unarchive)}
+          </span>
           <span className={styles['noticeActions']}>
             <button
               type="button"

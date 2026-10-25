@@ -210,6 +210,11 @@ beforeEach(() => {
   pickWorkspaceRoot.mockClear();
 });
 
+const openSettings = vi.fn();
+vi.mock('@/features/settings/components/SettingsModalProvider', () => ({
+  useSettingsModal: () => ({ isOpen: false, openSettings, closeSettings: vi.fn() }),
+}));
+
 vi.mock('@shared/stores/web-auth-store', () => {
   const state = {
     user: {
@@ -445,6 +450,15 @@ describe('CloudCodePage', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/Build in an isolated cloud workspace/i)).not.toBeInTheDocument();
     expect(screen.queryByText(/Managed Code/i)).not.toBeInTheDocument();
+  });
+
+  it('opens the MCP servers page from the composer menu when this computer serves them', async () => {
+    const user = userEvent.setup();
+    render(<CloudCodePage api={createApi()} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Add to this session' }));
+    await user.click(await screen.findByRole('menuitem', { name: 'MCP servers' }));
+    expect(openSettings).toHaveBeenCalledWith('local-mcp');
   });
 
   it('places the usage card under the home greeting with the account plan', async () => {
@@ -2994,7 +3008,7 @@ describe('the environment the composer starts a session in', () => {
 
       const notice = await screen.findByTestId('local-session-archived');
       expect(notice).toHaveTextContent('Session archived.');
-      expect(notice).toHaveTextContent('agi session unarchive thread-1');
+      expect(notice).toHaveTextContent('choose Show archived in the sidebar, then Restore');
       expect(archiveDeveloperThread).toHaveBeenCalledWith('root-recent', 'thread-1');
 
       await user.click(within(notice).getByRole('button', { name: 'Dismiss' }));

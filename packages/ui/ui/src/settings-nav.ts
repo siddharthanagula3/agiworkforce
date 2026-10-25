@@ -314,7 +314,17 @@ export const SETTINGS_NAV_GROUP_DESKTOP_APP: SettingsNavGroupResolved = {
       key: 'local-mcp',
       label: 'Developer',
       icon: Terminal,
-      keywords: ['developer', 'mcp', 'mcp servers', 'local mcp', 'config', 'logs'],
+      keywords: [
+        'developer',
+        'mcp',
+        'mcp servers',
+        'local mcp',
+        'config',
+        'logs',
+        'terminal',
+        'cursor',
+        'scrollback',
+      ],
     },
     {
       key: 'storage',

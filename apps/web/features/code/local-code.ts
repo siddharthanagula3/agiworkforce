@@ -1367,11 +1367,19 @@ export function localDeleteSessionConsequence(title: string): string {
 }
 
 /**
- * The consequence of archiving a local session. This app has no way to bring
- * one back, so the answer names the command that does.
+ * The consequence of archiving a local session. A CLI that cannot restore one
+ * from this app leaves the command that does as the way back.
  */
-export function localArchiveSessionConsequence(title: string, threadId: string): string {
-  return `${title} leaves this list and can no longer be opened from this app. Its conversation and checkpoints stay on this computer, and files in the folder stay as they are. To bring it back, run "agi session unarchive ${threadId}" in a terminal.`;
+export function localArchiveSessionConsequence(
+  title: string,
+  threadId: string,
+  restorable: boolean,
+): string {
+  const kept =
+    'Its conversation and checkpoints stay on this computer, and files in the folder stay as they are.';
+  return restorable
+    ? `${title} is archived. ${kept} To bring it back, choose Show archived in the sidebar, then Restore.`
+    : `${title} leaves this list and can no longer be opened from this app. ${kept} To bring it back, run "agi session unarchive ${threadId}" in a terminal.`;
 }
 
 /** What the list says once a session's worktree has been removed with it. */
@@ -1380,8 +1388,10 @@ export function localWorktreeRemovedLine(snapshotRef: string): string {
 }
 
 /** What the list says once a session has been archived. */
-export function localSessionArchivedLine(threadId: string): string {
-  return `Session archived. To bring it back, run "agi session unarchive ${threadId}" in a terminal.`;
+export function localSessionArchivedLine(threadId: string, restorable: boolean): string {
+  return restorable
+    ? 'Session archived. To bring it back, choose Show archived in the sidebar, then Restore.'
+    : `Session archived. To bring it back, run "agi session unarchive ${threadId}" in a terminal.`;
 }
 
 /**

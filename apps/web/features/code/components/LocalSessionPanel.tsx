@@ -1060,7 +1060,11 @@ export function LocalSessionPanel({
                 setDeleteError(null);
                 confirm({
                   title: LOCAL_CODE_COPY.archiveSessionTitle,
-                  description: localArchiveSessionConsequence(session.title, session.id),
+                  description: localArchiveSessionConsequence(
+                    session.title,
+                    session.id,
+                    capabilities.has('thread_unarchive'),
+                  ),
                   confirmLabel: LOCAL_CODE_COPY.archiveSessionConfirm,
                   onConfirm: async () => {
                     try {

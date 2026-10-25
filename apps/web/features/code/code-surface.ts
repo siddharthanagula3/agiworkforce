@@ -224,6 +224,7 @@ export const CODE_COPY = {
   turnBudgetUnit: 'minutes.',
   attachMenu: 'Add to this session',
   addConnectors: 'Add connectors',
+  mcpServers: 'MCP servers',
   microphoneMenu: 'Microphone',
   usageMenu: 'Usage',
   contextWindow: 'Context window',
