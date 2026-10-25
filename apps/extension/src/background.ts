@@ -358,6 +358,7 @@ interface PendingChatToolHandoff {
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   streamId: string;
+  calls: ToolCall[];
   callIds: readonly string[];
   finish: (outcome: ChromeManagedToolHandoffOutcome) => void;
 }
@@ -409,6 +410,7 @@ function requestChatToolHandoff(
       owner: active.owner,
       clientInstanceId: active.clientInstanceId,
       streamId,
+      calls,
       callIds: calls.map((call) => call.id),
       finish,
     });
@@ -430,6 +432,25 @@ function requestChatToolHandoff(
       }),
     );
   });
+}
+
+function adoptPendingChatToolHandoffs(
+  active: ActiveChatStream,
+  streamId: string,
+  clientInstanceId: string,
+): import('./types').AdoptedChatToolHandoff[] {
+  const adopted: import('./types').AdoptedChatToolHandoff[] = [];
+  for (const [handoffId, pending] of pendingChatToolHandoffs) {
+    if (
+      pending.streamId !== streamId ||
+      pending.clientInstanceId !== active.clientInstanceId ||
+      !sameManagedCloudOwner(pending.owner, active.owner)
+    )
+      continue;
+    pending.clientInstanceId = clientInstanceId;
+    adopted.push({ handoffId, calls: pending.calls });
+  }
+  return adopted;
 }
 
 function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessage): boolean {
@@ -1704,6 +1725,9 @@ function handleNativeDisconnect(): void {
   scheduleNativeReconnect('native_disconnect');
 }
 
+const SCREENSHOT_NEEDS_ACTIVE_TAB =
+  'Chrome lets AGI capture a tab only after you open AGI on it. Select the AGI icon on this tab, then try again.';
+
 function showNotification(
   title: string,
   message: string,
@@ -1716,7 +1740,7 @@ function showNotification(
     notifId,
     {
       type: 'basic',
-      iconUrl: 'icons/icon128.png',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title,
       message,
     },
@@ -1761,7 +1785,7 @@ async function notifyScheduledTaskRunning(
       publish: () => {
         chrome.notifications.create(`agi_task_notif_${crypto.randomUUID()}`, {
           type: 'basic',
-          iconUrl: 'icons/icon48.png',
+          iconUrl: chrome.runtime.getURL('icons/icon48.png'),
           title: t('notifyScheduledTaskRunningTitle'),
           message: taskName,
           priority: 0,
@@ -4173,6 +4197,11 @@ async function handleMessageAsync(
           await active.settlement;
           return { success: true } as ExtensionResponse;
         }
+        const toolHandoffs = adoptPendingChatToolHandoffs(
+          active,
+          active.streamId,
+          adoptMsg.clientInstanceId,
+        );
         active.clientInstanceId = adoptMsg.clientInstanceId;
         active.panelDetached = false;
         adoptedChatStreamKeys.set(adoptedKey, streamKey);
@@ -4184,6 +4213,7 @@ async function handleMessageAsync(
             text: active.visibleText ?? '',
             ...(active.cloudRun ? { cloudRun: { ...active.cloudRun } } : {}),
             ...(active.assistantMessageId ? { assistantMessageId: active.assistantMessageId } : {}),
+            ...(toolHandoffs.length > 0 ? { toolHandoffs } : {}),
           },
         } as ExtensionResponse;
       }
@@ -4420,9 +4450,12 @@ async function handleMessageAsync(
           timestamp: Date.now(),
         } as ExtensionResponse;
       } catch (error) {
+        const reason = error instanceof Error ? error.message : '';
         return {
           success: false,
-          error: error instanceof Error ? error.message : 'Screenshot failed',
+          error: /activeTab|<all_urls>/u.test(reason)
+            ? SCREENSHOT_NEEDS_ACTIVE_TAB
+            : reason || 'Screenshot failed',
         } as ExtensionResponse;
       }
     }

@@ -16,6 +16,7 @@ import type {
 import {
   ALL_MANAGED_RUN_STATES,
   MANAGED_RUN_CANCELLATION_CONFIRMATION_TIMEOUT_MS,
+  RESUMED_RUN_BROWSER_STEP_MESSAGE,
   cancelChromeManagedRun,
   cancelAndConfirmChromeManagedRun,
   findChromeManagedRunByRequestId,
@@ -242,6 +243,45 @@ describe('Chrome managed run control', () => {
     });
     expect(getAuthToken).toHaveBeenCalledOnce();
     expect(createClient).toHaveBeenCalledOnce();
+  });
+
+  it('settles a resumed run that stopped for a browser step with a retryable explanation', async () => {
+    const event = (sequence: number, body: Record<string, unknown>) => ({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      sequence,
+      emittedAtMs: 1_000 + sequence,
+      event: body as never,
+    });
+    const client: ManagedCloudAgentRunClient = {
+      listRuns: vi.fn(),
+      getRun: vi.fn(),
+      cancelRun: vi.fn(),
+      followRun: vi.fn(async (_runId, options) => {
+        await options?.onEvent?.(
+          event(0, { type: 'tool-use-start', toolUseId: 'call-1', name: 'browser_read_page' }),
+        );
+        await options?.onEvent?.(
+          event(1, { type: 'tool-use-delta', toolUseId: 'call-1', deltaJson: '{}' }),
+        );
+        await options?.onEvent?.(event(2, { type: 'tool-use-end', toolUseId: 'call-1' }));
+        await options?.onEvent?.(event(3, { type: 'stop', reason: 'tool-use' }));
+        return { run: completedRun(), lastSequence: 3 };
+      }),
+    };
+
+    const result = await resumeChromeManagedRun(
+      { run: reference, alreadyVisibleText: '' },
+      dependencies(client),
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      code: 'protocol_error',
+      message: RESUMED_RUN_BROWSER_STEP_MESSAGE,
+    });
+    expect(RESUMED_RUN_BROWSER_STEP_MESSAGE).not.toContain('\n');
   });
 
   it('does not mistake a nonterminal follow boundary for confirmed cancellation', async () => {

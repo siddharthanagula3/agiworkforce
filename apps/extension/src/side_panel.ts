@@ -217,6 +217,8 @@ import {
   reconcileManagedRunActivity,
   requestsCurrentPageContext,
   settleBrowserActivity,
+  settleFailedAgentActivity,
+  reopenBrowserActivity,
   pageContextStillDescribes,
   resolveComposerPrompt,
   selectModelHistory,
@@ -481,6 +483,7 @@ let cloudHistoryOwnerAbort = new AbortController();
 window.addEventListener('pagehide', () => cloudHistoryOwnerAbort.abort());
 let managedModelAccess: ManagedModelAccess | null = null;
 let cloudAccountRefreshGeneration = 0;
+let historyLoadedForOwner: ManagedCloudOwner | null = null;
 let activePersistenceEntry: ConversationEntry | undefined;
 let activePersistenceReadGeneration = 0;
 
@@ -1417,8 +1420,9 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
   }
   if (resumable.cloudAgentRun) {
     resumable.streaming = true;
-    queueMicrotask(() => {
+    void adoptClosedPanelTurn(expectedGeneration, ownerAtAdmission, false).then((adopted) => {
       if (
+        adopted ||
         _ctx.conversationGeneration !== expectedGeneration ||
         !sameManagedCloudOwner(_ctx.managedCloudOwner, ownerAtAdmission) ||
         !resumable.cloudAgentRun ||
@@ -1439,7 +1443,8 @@ function resumeLatestStoredManagedRun(expectedGeneration: number): void {
 async function adoptClosedPanelTurn(
   expectedGeneration: number,
   owner: ManagedCloudOwner,
-): Promise<void> {
+  restoreSettledTurn = true,
+): Promise<boolean> {
   const conversationId = _ctx.conversationId;
   const pending = _ctx.messages[_ctx.messages.length - 1];
   if (
@@ -1449,7 +1454,7 @@ async function adoptClosedPanelTurn(
     pending.interrupted !== true ||
     pending.streamCancellation !== undefined
   )
-    return;
+    return false;
   const isCurrent = (): boolean =>
     _ctx.conversationGeneration === expectedGeneration &&
     _ctx.conversationId === conversationId &&
@@ -1464,20 +1469,22 @@ async function adoptClosedPanelTurn(
       historyConversationId: conversationId,
     })
     .catch(() => null)) as AdoptChatTurnResponse | null;
-  if (!isCurrent()) return;
+  if (!isCurrent()) return false;
   const adopted = response?.adopted;
   if (!adopted) {
+    if (!restoreSettledTurn) return false;
     const storedMessages = (await getConversation(owner, conversationId))?.messages ?? [];
     const stored = storedMessages[storedMessages.length - 1];
-    if (!isCurrent() || stored?.role !== 'assistant' || stored.streaming) return;
+    if (!isCurrent() || stored?.role !== 'assistant' || stored.streaming) return false;
     _ctx.messages[_ctx.messages.length - 1] = hydrateStoredChatMessage(stored, pending.id);
     _ctx.needsMessageRebuild = true;
     renderMessages();
-    return;
+    return false;
   }
   pending.id = adopted.id;
   pending.interrupted = false;
   pending.streaming = true;
+  reopenBrowserActivity(pending);
   if (adopted.text.length >= pending.content.length) pending.content = adopted.text;
   if (adopted.cloudRun) {
     pending.cloudAgentRun = { ...adopted.cloudRun };
@@ -1496,6 +1503,17 @@ async function adoptClosedPanelTurn(
   updateSendButton();
   _ctx.needsMessageRebuild = true;
   renderMessages();
+  for (const handoff of adopted.toolHandoffs ?? []) {
+    void handleChatToolHandoff({
+      type: 'CHAT_TOOL_HANDOFF',
+      owner,
+      clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+      id: adopted.id,
+      handoffId: handoff.handoffId,
+      calls: handoff.calls,
+    });
+  }
+  return true;
 }
 
 let newChatModelSelection = 'auto';
@@ -1573,6 +1591,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
 
   historyRestoreToken += 1;
   historyRestoreInProgress = false;
+  historyLoadedForOwner = null;
   clearActivePersistenceState();
   advanceConversationGeneration();
   const browserRunAtOwnerTransition = composerBrowserRun;
@@ -8270,7 +8289,10 @@ function handleStreamError(
   }
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
-    if (!canRetryPause) settleChatToolActivity(failedTurn, 'error');
+    if (!canRetryPause) {
+      settleChatToolActivity(failedTurn, 'error');
+      settleFailedAgentActivity(failedTurn);
+    }
     if (streamUsedQuick) failedTurn.managedQuickMode = true;
     if (failedRoute) applyResolvedRoute(failedTurn, failedRoute);
     // A failed row pushed with no runtime would flip the whole conversation to
@@ -8643,6 +8665,17 @@ function admitComposerDocument(file: File, mimeType: string): boolean {
   return true;
 }
 
+function composerUploadFetch(getHeaders: () => Promise<HeadersInit>): typeof fetch {
+  const apiOrigin = new URL(FREE_TRIAL_GATEWAY).origin;
+  return async (input, init) => {
+    const url = new URL(input instanceof Request ? input.url : String(input));
+    if (url.origin !== apiOrigin) return fetch(input, init);
+    const headers = new Headers(init?.headers);
+    for (const [name, value] of new Headers(await getHeaders())) headers.set(name, value);
+    return fetch(url.href, { ...init, headers });
+  };
+}
+
 function composerDocumentHeaders(owner: ManagedCloudOwner): () => Promise<HeadersInit> {
   return async () => {
     const auth = await getManagedCloudAuthContext();
@@ -8675,9 +8708,11 @@ async function uploadComposerDocument(entry: ComposerDocument): Promise<void> {
     updateAttachmentPreview();
     return;
   }
+  const getHeaders = composerDocumentHeaders(owner);
   const client = createManagedCloudChatAttachmentsClient({
     baseUrl: FREE_TRIAL_GATEWAY,
-    getHeaders: composerDocumentHeaders(owner),
+    getHeaders,
+    uploadFetchImpl: composerUploadFetch(getHeaders),
   });
   try {
     const [attachment] = await client.upload([entry.file], {
@@ -11436,7 +11471,8 @@ function buildUI(): void {
         );
       }
       refreshPageHostname();
-      if (ownerChanged) {
+      if (!sameManagedCloudOwner(historyLoadedForOwner, _ctx.managedCloudOwner)) {
+        historyLoadedForOwner = _ctx.managedCloudOwner ? { ..._ctx.managedCloudOwner } : null;
         await loadMessages();
         if (refreshGeneration !== cloudAccountRefreshGeneration) return;
         renderMessages();

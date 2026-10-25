@@ -381,6 +381,56 @@ describe('closing the side panel during a managed turn', () => {
     expect((await lastStoredMessage())?.streaming).toBe(true);
   });
 
+  it('hands a browser step that was waiting on the closed panel to the reopened one', async () => {
+    await seedStreamingTurn('');
+    const closePanel = openPanelPort(FIRST_PANEL);
+    const turn = await startTurn('stream-waiting-tool', runReference(false));
+    const call = {
+      id: 'call-read',
+      type: 'function' as const,
+      function: { name: 'browser_read_page', arguments: '{}' },
+    };
+    const outcome = turn.dependencies.onToolHandoff!([call]);
+    await vi.waitFor(() =>
+      expect(harness.chromeMock.runtime.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'CHAT_TOOL_HANDOFF', clientInstanceId: FIRST_PANEL }),
+      ),
+    );
+    const handoffId = (
+      harness.chromeMock.runtime.sendMessage.mock.calls
+        .map(([message]) => message as Record<string, unknown>)
+        .find((message) => message['type'] === 'CHAT_TOOL_HANDOFF') as Record<string, unknown>
+    )['handoffId'];
+    closePanel();
+
+    const adoption = await dispatch({
+      type: 'ADOPT_CHAT_TURN',
+      owner,
+      clientInstanceId: REOPENED_PANEL,
+      historyConversationId: CONVERSATION,
+    });
+    expect(adoption).toMatchObject({
+      adopted: { id: 'stream-waiting-tool', toolHandoffs: [{ handoffId, calls: [call] }] },
+    });
+
+    const resolve = (clientInstanceId: string) =>
+      dispatch({
+        type: 'RESOLVE_CHAT_TOOLS',
+        owner,
+        clientInstanceId,
+        id: 'stream-waiting-tool',
+        handoffId,
+        results: [{ toolCallId: 'call-read', content: 'Owner: Marisol Vance.' }],
+      });
+    expect((await resolve(FIRST_PANEL))['success']).toBe(false);
+    expect((await resolve(REOPENED_PANEL))['success']).toBe(true);
+    await expect(outcome).resolves.toMatchObject({
+      status: 'resolved',
+      results: [{ toolCallId: 'call-read', content: 'Owner: Marisol Vance.' }],
+    });
+    expect(turn.signal.aborted).toBe(false);
+  });
+
   it('reports nothing to adopt for a conversation with no running turn', async () => {
     const response = await dispatch({
       type: 'ADOPT_CHAT_TURN',

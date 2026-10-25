@@ -10,8 +10,10 @@ import {
   reconcileManagedRunActivity,
   requestsCurrentPageContext,
   resolveComposerPrompt,
+  reopenBrowserActivity,
   selectModelHistory,
   settleBrowserActivity,
+  settleFailedAgentActivity,
   shouldRebuildMessageDom,
   shouldRenderTextBubble,
   trimChatMessages,
@@ -111,6 +113,80 @@ describe('in-chat browser activity', () => {
       'm2',
     );
     expect(restored.browserActivity?.status).toBe('completed');
+  });
+
+  it("marks a failed turn's unfinished steps failed, live and after a reload", () => {
+    const agentEvents = [
+      {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: 'run-1',
+        turnId: 'run-1',
+        sequence: 0,
+        emittedAtMs: 10,
+        event: {
+          type: 'tool-execution-start' as const,
+          toolCallId: 'call-1',
+          name: 'browser_read_page',
+          category: 'computer-use' as const,
+          summary: 'Reading the page',
+          input: null,
+        },
+      },
+    ];
+    const live: SidePanelChatMessage = {
+      id: 'm4',
+      role: 'assistant',
+      content: '',
+      timestamp: 5,
+      agentEvents,
+      agentActivity: projectCanonicalAgentActivity(agentEvents),
+    };
+    expect(live.agentActivity?.status).toBe('running');
+    settleFailedAgentActivity(live, 50);
+    expect(live.agentActivity?.status).toBe('failed');
+
+    const restored = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: '',
+        timestamp: 5,
+        agentEvents,
+        error: true,
+        errorText: 'Stopped.',
+      },
+      'm4',
+    );
+    expect(restored.agentActivity?.status).toBe('failed');
+    const stillRunning = hydrateStoredChatMessage(
+      { role: 'assistant', content: '', timestamp: 5, agentEvents, streaming: true },
+      'm5',
+    );
+    expect(stillRunning.agentActivity?.status).toBe('running');
+  });
+
+  it('reopens the browser steps of a turn the panel takes back', () => {
+    const browserEvents = [
+      {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: 'browser:m6',
+        turnId: 'browser:m6',
+        sequence: 0,
+        emittedAtMs: 10,
+        event: {
+          type: 'progress-update' as const,
+          progressId: 'site-access:1',
+          summary: 'Waiting for access to example.com',
+          status: 'running' as const,
+        },
+      },
+    ];
+    const restored = hydrateStoredChatMessage(
+      { role: 'assistant', content: '', timestamp: 5, streaming: true, browserEvents },
+      'm6',
+    );
+    expect(restored.browserActivity?.status).toBe('cancelled');
+    reopenBrowserActivity(restored);
+    expect(restored.browserActivity?.status).toBe('running');
   });
 
   it('settles an unfinished page read as failed or cancelled with its turn', () => {

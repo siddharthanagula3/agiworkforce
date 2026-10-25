@@ -69,8 +69,12 @@ const { executeChromeManagedChat, normalizeChromeManagedRoutingMetadata } =
 const { applyResolvedRoute, resolvedRouteFrom } =
   await import('../src/features/side-panel/answeredModel');
 const { buildBubbleWithTools } = await import('../src/features/side-panel/bubbles');
-const { applyStreamFailure, hydrateStoredChatMessage, settleBrowserActivity } =
-  await import('../src/features/side-panel/chat-state');
+const {
+  applyStreamFailure,
+  hydrateStoredChatMessage,
+  settleBrowserActivity,
+  settleFailedAgentActivity,
+} = await import('../src/features/side-panel/chat-state');
 const { appendBackgroundTurn } = await import('../src/features/background/conversation-history');
 
 type FreeTrialChunk = import('../src/features/cloud-bridge/freeTrialClient').FreeTrialChunk;
@@ -333,6 +337,7 @@ describe('a reply that failed before streaming keeps the answered model', () => 
       applyResolvedRoute,
       applyStreamFailure,
       settleBrowserActivity,
+      settleFailedAgentActivity,
       composerBrowserRun: null,
       resolvedRouteByStreamId: new Map(),
       quickModeByStreamId: new Map(),
