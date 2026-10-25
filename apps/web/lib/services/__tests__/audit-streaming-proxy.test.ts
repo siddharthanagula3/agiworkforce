@@ -160,6 +160,30 @@ describe('delivery', () => {
     expect(AUDIT_STREAM_DELIVERY_TIMEOUT_MS).toBe(10_000);
   });
 
+  it.each([301, 302, 307, 308])(
+    'does not follow a %i redirect and reports the delivery as failed',
+    async (status) => {
+      const fetchImpl = response(status);
+
+      const outcome = await deliverAuditBatch({
+        endpointUrl: 'https://siem.example.test/hook',
+        secret: 'secret',
+        timestamp: TIMESTAMP,
+        body: '{}',
+        fetchImpl,
+      });
+
+      const init = (fetchImpl as unknown as { mock: { calls: [string, RequestInit][] } }).mock
+        .calls[0]![1];
+      expect(init.redirect).toBe('manual');
+      expect(outcome).toEqual({
+        status,
+        error: `Endpoint answered ${status}; redirects are not followed.`,
+        succeeded: false,
+      });
+    },
+  );
+
   it('turns a transport failure into an outcome rather than throwing at the caller', async () => {
     const fetchImpl = vi.fn(async () => {
       throw new Error('ECONNREFUSED');

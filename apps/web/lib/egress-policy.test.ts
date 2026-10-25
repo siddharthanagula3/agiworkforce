@@ -106,6 +106,26 @@ describe('isInternalHostname', () => {
     expect(isInternalHostname(host)).toBe(true);
   });
 
+  it.each([
+    '::10.0.0.1', // IPv4-compatible, private
+    '::169.254.169.254', // IPv4-compatible, metadata dotted
+    '::a9fe:a9fe', // IPv4-compatible, metadata hex
+    '[::a9fe:a9fe]', // bracketed, as a URL host
+    '0:0:0:0:0:0:a9fe:a9fe', // fully-expanded IPv4-compatible
+    '::8.8.8.8', // the whole ::/96 is refused, public embedded address or not
+    '::ffff:0:169.254.169.254', // SIIT dotted
+    '::ffff:0:a9fe:a9fe', // SIIT hex
+    '0:0:0:0:ffff:0:a9fe:a9fe', // fully-expanded SIIT
+    '::ffff:0:8.8.8.8', // the whole ::ffff:0:0/96 is refused
+    '64:ff9b:1::a9fe:a9fe', // NAT64 local-use prefix, hex
+    '64:ff9b:1::169.254.169.254', // NAT64 local-use prefix, dotted
+    '64:ff9b:1:2:3:4:5:6', // anywhere in 64:ff9b::/32
+    '64:ff9b::8.8.8.8', // well-known NAT64 prefix is refused whole
+    '0064:ff9b::a9fe:a9fe', // zero-padded spelling
+  ])('refuses IPv6 ranges that embed an IPv4 destination whole: %s', (host) => {
+    expect(isInternalHostname(host)).toBe(true);
+  });
+
   it.each(['::ffff:8.8.8.8', '::ffff:0808:0808'])(
     'allows IPv4-mapped IPv6 to public target: %s',
     (host) => {
