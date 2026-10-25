@@ -1,6 +1,6 @@
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { WebContentsView, app, dialog, session, type BrowserWindow, type Session } from 'electron';
+import { WebContentsView, app, session, type BrowserWindow, type Session } from 'electron';
 import {
   CLOSED_BROWSER_PANE,
   MAX_BROWSER_SITES,
@@ -13,6 +13,7 @@ import {
   type PreviewConsoleReport,
 } from '@agiworkforce/local-runtime-contract';
 import { PreviewConsoleBuffer } from './previewConsole';
+import { showNativeMessage } from './runtime/nativeSurface';
 
 const PARTITION = 'persist:agi-browser-pane';
 const SITES_FILE = 'desktop-browser-sites.json';
@@ -154,7 +155,7 @@ async function askToAllow(pane: Pane, host: string): Promise<boolean> {
   if (pane.asking) return false;
   pane.asking = true;
   try {
-    const { response } = await dialog.showMessageBox(pane.window, {
+    const { response } = await showNativeMessage(pane.window, {
       type: 'question',
       buttons: ['Cancel', `Allow ${host}`],
       defaultId: 0,
