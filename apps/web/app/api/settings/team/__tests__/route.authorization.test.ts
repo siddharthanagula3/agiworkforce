@@ -7,7 +7,10 @@ import {
 
 vi.mock('server-only', () => ({}));
 
-const permissionRole = vi.hoisted(() => ({ value: 'admin' as string | null }));
+const permissionRole = vi.hoisted(() => ({
+  value: 'admin' as string | null,
+  grants: [] as readonly string[],
+}));
 vi.mock('@/lib/services/organization-permission-service', async () =>
   (
     await import('@/lib/services/__tests__/organization-permission-service-mock')
@@ -107,6 +110,7 @@ describe('POST /api/settings/team authorization invariants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permissionRole.value = 'admin';
+    permissionRole.grants = [];
     mockRlsExecute.mockResolvedValue(0);
     mockRlsTransaction.mockImplementation(async (callback: (tx: unknown) => Promise<unknown>) =>
       callback({
@@ -168,6 +172,47 @@ describe('POST /api/settings/team authorization invariants', () => {
       false,
     );
     expect(mockNeonQuery).not.toHaveBeenCalled();
+  });
+
+  it('refuses to add a member at a role carrying permissions the caller does not hold', async () => {
+    permissionRole.value = 'viewer';
+    permissionRole.grants = ['members.manage'];
+    const profiles: ProfileFixtureRow[] = [
+      { id: 'accomplice', email: 'accomplice@example.com', display_name: null, avatar_url: null },
+    ];
+    mockRlsQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const text = String(sql);
+      const profileResult = rlsScopedProfileLookup(profiles, 'admin-user', text, params);
+      if (profileResult !== undefined) return profileResult;
+      if (text.includes('pg_advisory_xact_lock')) return [];
+      if (text.includes('from sso_connections')) return [{ domain: 'example.com' }];
+      if (text.includes('insert into public.organization_members')) {
+        return [{ organization_id: ORG_A, user_id: 'accomplice', role: 'admin' }];
+      }
+      if (text.includes('from public.organization_members')) {
+        return (params as unknown[] | undefined)?.[1] === 'admin-user'
+          ? [{ organization_id: ORG_A, user_id: 'admin-user', role: 'viewer' }]
+          : [];
+      }
+      return [];
+    });
+    mockNeonQuery.mockImplementation(async (sql: string, params?: unknown[]) => {
+      const profileResult = bypassProfileLookup(profiles, String(sql), params);
+      return profileResult !== undefined ? profileResult : [];
+    });
+
+    const response = await POST(
+      request({ organizationId: ORG_A, email: 'accomplice@example.com', role: 'admin' }),
+    );
+
+    expect(response.status).toBe(403);
+    expect(mockRlsQuery.mock.calls.some(([sql]) => String(sql).includes('insert into'))).toBe(
+      false,
+    );
+    expect(mockNeonQuery).not.toHaveBeenCalled();
+    expect(((await response.json()) as { error: { message: string } }).error.message).toMatch(
+      /carries permissions you do not hold/,
+    );
   });
 
   it('does not read a member count before inserting, because the ceiling is a DB constraint', async () => {
@@ -232,6 +277,64 @@ describe('GET /api/settings/team authorization invariants', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     permissionRole.value = 'admin';
+    permissionRole.grants = [];
+  });
+
+  function rosterRow(userId: string, role: string, email: string, displayName: string | null) {
+    return {
+      organization_id: ORG_A,
+      user_id: userId,
+      role,
+      provisioning_source: 'manual',
+      provisioned_at: null,
+      joined_at: '2026-07-23T00:00:00.000Z',
+      seat_type: null,
+      premium_paid_through: null,
+      premium_paid_through_active: false,
+      email,
+      display_name: displayName,
+      avatar_url: null,
+    };
+  }
+
+  function installRoster() {
+    mockNeonQuery.mockImplementation(async (sql: string) => {
+      const text = String(sql);
+      if (text.includes('left join public.profiles')) {
+        return [
+          rosterRow('admin-user', permissionRole.value ?? 'viewer', 'me@example.com', 'Me'),
+          rosterRow('colleague', 'admin', 'colleague@example.com', null),
+        ];
+      }
+      if (text.includes('from public.organization_members')) {
+        return [{ organization_id: ORG_A }];
+      }
+      return [];
+    });
+  }
+
+  it('withholds co-member emails from a viewer, as the shared roster does', async () => {
+    permissionRole.value = 'viewer';
+    installRoster();
+
+    const response = await GET(listRequest(ORG_A));
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      members: Array<{ userId: string; email: string; name: string }>;
+    };
+    expect(body.members).toHaveLength(2);
+    expect(body.members.map((m) => m.email)).toEqual(['', '']);
+    expect(JSON.stringify(body)).not.toContain('@example.com');
+  });
+
+  it('returns emails to a caller whose permissions show them on the shared roster', async () => {
+    installRoster();
+
+    const response = await GET(listRequest(ORG_A));
+
+    const body = (await response.json()) as { members: Array<{ email: string }> };
+    expect(body.members.map((m) => m.email)).toEqual(['me@example.com', 'colleague@example.com']);
   });
 
   it('refuses a non-UUID organizationId before querying', async () => {

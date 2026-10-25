@@ -227,6 +227,11 @@ export function expandOrganizationPermissions(granted: Iterable<string>): Set<st
   return held;
 }
 
+export function canSeeMemberEmails(granted: Iterable<string>): boolean {
+  const held = expandOrganizationPermissions(granted);
+  return held.has('sharing.manage') || held.has('content.share') || held.has('admin.members.view');
+}
+
 export const PRIMARY_OWNER_ONLY_PERMISSIONS: readonly OrganizationPermission[] = Object.freeze([
   'admin.ownership.manage',
   'admin.lifecycle.manage',
