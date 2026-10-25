@@ -88,6 +88,7 @@ export function resolveExhaustedUsageRecovery(
   const resetAt = earliestExhaustedUsageResetAt(input.readings);
   if (resetAt !== null && resetAt <= now) return null;
   if (isFreeBillingPlanTier(input.planTier)) return 'upgrade';
+  if (purchased.self_serve === false) return 'wait';
   if (purchased.remaining > 0) return 'enable_usage_credits';
   return resolvePlanUsageRecovery(input.planTier);
 }

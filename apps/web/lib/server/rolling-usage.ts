@@ -27,14 +27,15 @@ export function centsMirrorOfMicrousd(microusd: number): number {
 }
 
 /**
- * Managed-usage spend in a rolling window.
+ * Plan-allowance spend in a rolling window, summed as admission sums it (0347).
  *
  * Only `deduction` rows are summed, and they are summed SIGNED. A reservation
  * writes a positive deduction, its reconciliation writes the delta to actual
  * cost, and a release writes a negative one, so the signed sum is the amount
  * the user actually consumed. `refund` rows are a different concept: they
  * revoke granted credit after a payment refund and raise `credits_used`, so
- * they are deliberately not part of consumption in a window.
+ * they are deliberately not part of consumption in a window. Rows tagged
+ * `is_overage` were paid from usage credits and never enter a plan window.
  */
 export async function getRollingUsage(
   db: DatabaseAdapter,
@@ -52,7 +53,8 @@ export async function getRollingUsage(
       `select coalesce(sum(amount_microusd), 0)::bigint as used_microusd,
               min(created_at)::text as oldest_at
        from credit_transactions
-       where user_id = $1 and transaction_type = 'deduction' and created_at >= $2 ${flagshipFilter}`,
+       where user_id = $1 and transaction_type = 'deduction' and created_at >= $2
+         and metadata->>'is_overage' is distinct from 'true' ${flagshipFilter}`,
       [userId, windowStart],
     );
     // bigint arrives as a string on the wire; Number is exact well past any
@@ -74,5 +76,33 @@ export async function getRollingUsage(
       '[getRollingUsage] Failed to fetch rolling usage · treating as 0 used',
     );
     return { usedMicrousd: 0, usedCents: 0, oldestAt: null };
+  }
+}
+
+/**
+ * What a credit period's usage credits paid for: the signed `is_overage`
+ * deductions booked to that account. `credits_used` counts them too, so the
+ * plan's own share of the period is `credits_used` less this.
+ */
+export async function getAccountOverageMicrousd(
+  db: DatabaseAdapter,
+  userId: string,
+  accountId: string,
+): Promise<number> {
+  try {
+    const [row] = await db.query<{ overage_microusd: string | number | null }>(
+      `select coalesce(sum(amount_microusd), 0)::bigint as overage_microusd
+       from credit_transactions
+       where user_id = $1 and credit_account_id = $2::uuid and transaction_type = 'deduction'
+         and metadata->>'is_overage' = 'true'`,
+      [userId, accountId],
+    );
+    return Math.max(0, Math.trunc(Number(row?.overage_microusd ?? 0)) || 0);
+  } catch (error) {
+    logger.warn(
+      { userId, accountId, error: error instanceof Error ? error.message : String(error) },
+      '[getAccountOverageMicrousd] Failed to read usage-credit spend · counting the period as plan usage',
+    );
+    return 0;
   }
 }

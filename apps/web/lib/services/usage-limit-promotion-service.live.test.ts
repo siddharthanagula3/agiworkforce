@@ -222,7 +222,6 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
             userId: account.userId,
             planTier: 'pro',
             workload: 'chat',
-            estimateMicrousd: 0,
             isFlagship: false,
             caps: CAPS,
           },
@@ -341,12 +340,11 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
          values ('qa-uplift', 'limit_uplift', true, now() - interval '1 day',
                  now() + interval '6 days', '{pro}', 5000000, 50, '{weekly}', '{code}')`,
       );
-      await spend(account, 9_950_000, 30);
+      await spend(account, 10_000_000, 30);
       const request = {
         userId: account.userId,
         planTier: 'pro',
         workload: 'code',
-        estimateMicrousd: 100_000,
         isFlagship: false,
         caps: CAPS,
       };
@@ -373,7 +371,7 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
          returning id`,
         [other],
       );
-      await spend({ ...account, userId: other, accountId: otherAccount!.id }, 9_950_000, 30);
+      await spend({ ...account, userId: other, accountId: otherAccount!.id }, 10_000_000, 30);
       await expect(
         resolvePromotionalCaps({ ...request, userId: other }, Date.now(), () => account.db),
       ).resolves.toEqual(CAPS);
@@ -389,12 +387,11 @@ describe.skipIf(!live)('usage-limit promotions against the real statements', () 
          values ('qa-edit', 'limit_uplift', true, now() - interval '1 day',
                  now() + interval '6 days', '{pro}', 30000000, 50, '{weekly}', '{code}')`,
       );
-      await spend(account, 9_950_000, 30);
+      await spend(account, 10_000_000, 30);
       const request = {
         userId: account.userId,
         planTier: 'pro',
         workload: 'code',
-        estimateMicrousd: 100_000,
         isFlagship: false,
         caps: CAPS,
       };

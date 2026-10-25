@@ -15,6 +15,7 @@ const {
   mockEntitledPlan,
   mockGetSpendableCredits,
   mockGetRollingUsage,
+  mockGetAccountOverage,
   mockGetFreeTrialPublicUsage,
   mockGetPrepaidCreditBalances,
 } = vi.hoisted(() => ({
@@ -23,6 +24,7 @@ const {
   mockEntitledPlan: vi.fn(),
   mockGetSpendableCredits: vi.fn(),
   mockGetRollingUsage: vi.fn(),
+  mockGetAccountOverage: vi.fn(),
   mockGetFreeTrialPublicUsage: vi.fn(),
   mockGetPrepaidCreditBalances: vi.fn(),
 }));
@@ -48,6 +50,7 @@ vi.mock('@/lib/server/spendable-credits', () => ({
 
 vi.mock('@/lib/server/rolling-usage', () => ({
   getRollingUsage: mockGetRollingUsage,
+  getAccountOverageMicrousd: mockGetAccountOverage,
 }));
 
 vi.mock('@/lib/services/free-trial-service', () => ({
@@ -95,8 +98,13 @@ function subscription(planTier: string) {
 describe('managed usage summary, stated in credits', () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mockGetSpendableCredits.mockResolvedValue({ availableCents: 400, overageEnabled: true });
+    mockGetSpendableCredits.mockResolvedValue({
+      availableCents: 400,
+      overageEnabled: true,
+      selfServe: true,
+    });
     mockGetRollingUsage.mockResolvedValue({ usedMicrousd: 0, usedCents: 0, oldestAt: null });
+    mockGetAccountOverage.mockResolvedValue(0);
     mockGetPrepaidCreditBalances.mockResolvedValue({
       bonusCredits: 500,
       purchasedCredits: 1_000,
@@ -133,13 +141,64 @@ describe('managed usage summary, stated in credits', () => {
     expect(summary.credits?.weekly).toMatchObject({ allowance: 500, used: 60, remaining: 440 });
     expect(summary.credits?.five_hour).toMatchObject({ allowance: 50, used: 15, remaining: 35 });
     expect(summary.credits?.flagship_weekly).toMatchObject({ allowance: 150, used: 20 });
-    expect(summary.credits?.purchased).toEqual({ remaining: 1_000, overage_enabled: true });
+    expect(summary.credits?.purchased).toEqual({
+      remaining: 1_000,
+      overage_enabled: true,
+      self_serve: true,
+    });
     expect(summary.credits?.bonus).toEqual({
       remaining: 500,
       next_expiry_at: '2026-12-01T00:00:00.000Z',
     });
     expect(summary.usage_allocation).toBe('provisioned');
     expect(summary.effective_plan_tier).toBe('pro');
+  });
+
+  it('keeps a top-up and the turns it paid for out of every plan meter', async () => {
+    const planUsedMicrousd = 1_170_823;
+    const overageMicrousd = 1_917_964;
+    const purchasedLeftMicrousd = 5_000_000 - overageMicrousd;
+    mockResolveEffectiveSubscription.mockResolvedValue(subscription('max'));
+    mockGetBalance.mockResolvedValue({
+      account_id: 'acct-1',
+      credits_allocated_microusd: 55_000_000,
+      credits_used_microusd: planUsedMicrousd + overageMicrousd,
+      credits_remaining_microusd: 55_000_000 - planUsedMicrousd - overageMicrousd,
+      period_start: '2026-10-25T16:15:32.699Z',
+      period_end: '2026-11-25T16:15:32.699Z',
+    });
+    mockGetAccountOverage.mockResolvedValue(overageMicrousd);
+    mockGetRollingUsage.mockResolvedValue({
+      usedMicrousd: planUsedMicrousd,
+      usedCents: 117,
+      oldestAt: null,
+    });
+    mockGetPrepaidCreditBalances.mockResolvedValue({
+      bonusCredits: 0,
+      purchasedCredits: purchasedLeftMicrousd / MICROUSD_PER_CREDIT,
+      expiringPurchasedCredits: 0,
+      overageHeadroomMicrousd: purchasedLeftMicrousd,
+      nextBonusExpiry: null,
+      nextPurchaseExpiry: null,
+      bonusGrants: [],
+      expiringPurchases: [],
+    });
+
+    const summary = await getManagedUsageSummary(db, 'user-1');
+
+    expect(summary.credits?.five_hour).toMatchObject({ allowance: 250, used: 234.1646 });
+    expect(summary.credits?.five_hour.remaining).toBeCloseTo(15.8354, 6);
+    expect(summary.credits?.weekly).toMatchObject({ allowance: 2_500, used: 234.1646 });
+    expect(summary.credits?.monthly).toMatchObject({ allowance: 10_000, used: 234.1646 });
+    expect(summary.credits?.monthly.remaining).toBeCloseTo(9_765.8354, 6);
+    expect(summary.usage_percentage).toBe(2.34);
+    expect(summary.session_usage_percentage).toBe(93.67);
+    expect(summary.credits?.purchased).toEqual({
+      remaining: 616.4072,
+      overage_enabled: true,
+      self_serve: true,
+    });
+    expect(mockGetAccountOverage).toHaveBeenCalledWith(db, 'user-1', 'acct-1');
   });
 
   it('leaves nothing to spend in a month whose credit period never opened, as the gate does', async () => {

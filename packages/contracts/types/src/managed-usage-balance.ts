@@ -45,6 +45,12 @@ export interface ManagedUsagePurchasedCredits {
   /** Null when the balance lookup failed: unknown, which is not the same as none. */
   remaining: number | null;
   overage_enabled: boolean;
+  /**
+   * Billed by Stripe or an app store, so the account holder buys credits and
+   * switches them on in Settings > Billing. False when whoever manages the plan
+   * does; absent on older servers.
+   */
+  self_serve?: boolean;
 }
 
 export interface ManagedUsageBonusCredits {
@@ -209,6 +215,9 @@ function readManagedUsageCredits(value: unknown): ManagedUsageCredits {
       remaining:
         purchasedRecord['remaining'] === null ? null : readCredits(purchasedRecord, 'remaining'),
       overage_enabled: purchasedRecord['overage_enabled'] === true,
+      ...(purchasedRecord['self_serve'] === undefined
+        ? {}
+        : { self_serve: purchasedRecord['self_serve'] === true }),
     },
     ...(record['bonus'] === undefined ? {} : { bonus: readBonusCredits(record['bonus']) }),
     ...(record['purchase_expiry'] === undefined
