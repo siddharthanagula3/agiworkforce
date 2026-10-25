@@ -269,6 +269,13 @@ export function LocalMcpSettings() {
     };
   }, [host, load]);
 
+  useEffect(() => {
+    if (!rootId) return undefined;
+    const reload = () => void load(rootId);
+    window.addEventListener('focus', reload);
+    return () => window.removeEventListener('focus', reload);
+  }, [rootId, load]);
+
   if (!host) return null;
 
   const act = async (name: string, work: () => Promise<unknown>) => {

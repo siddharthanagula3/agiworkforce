@@ -130,6 +130,17 @@ describe('the developer page', () => {
     );
   });
 
+  it('reads the list again when the window comes back, after the config was edited elsewhere', async () => {
+    const { invokeRuntime } = installHost();
+    render(<LocalMcpSettings />);
+    await screen.findByText('files');
+    const listed = () =>
+      invokeRuntime.mock.calls.filter(([command]) => command === 'developer_mcp_list').length;
+    const before = listed();
+    window.dispatchEvent(new Event('focus'));
+    await waitFor(() => expect(listed()).toBe(before + 1));
+  });
+
   it('explains what to do with no approved folder', async () => {
     installHost({ developer_session_list: () => ({ groups: [] }) });
     render(<LocalMcpSettings />);
