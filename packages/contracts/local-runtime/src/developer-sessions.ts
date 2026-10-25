@@ -58,6 +58,9 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_thread_fork',
   'developer_thread_compact',
   'developer_thread_archive',
+  'developer_thread_unarchive',
+  'developer_thread_rename',
+  'developer_thread_pin',
   'developer_thread_takeover',
   'developer_mcp_approval_review',
   'developer_account_report',
@@ -98,6 +101,9 @@ export interface LocalDeveloperSession {
   origin: DeveloperSessionSource;
   location?: 'cloud';
   environment?: 'local' | 'worktree' | 'ssh';
+  pinned?: boolean;
+  /** When the session was archived, in milliseconds; absent while it is not. */
+  archivedAt?: number;
 }
 
 /**
@@ -213,6 +219,9 @@ export const DEVELOPER_RUNTIME_CAPABILITIES = [
   'thread_archive',
   'thread_takeover',
   'reasoning_effort_ladder',
+  'thread_rename',
+  'thread_unarchive',
+  'thread_pin',
 ] as const;
 
 export type DeveloperRuntimeCapability = (typeof DEVELOPER_RUNTIME_CAPABILITIES)[number];

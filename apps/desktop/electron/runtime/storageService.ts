@@ -169,9 +169,11 @@ async function removeOldFiles(directory: string, olderThanMs: number): Promise<v
 
 export class StorageCleanupRefused extends Error {}
 
+export type FileCleanup = Exclude<StorageCleanup, 'archived-sessions'>;
+
 export async function cleanStorage(
   env: StorageEnvironment,
-  cleanup: StorageCleanup,
+  cleanup: FileCleanup,
 ): Promise<StorageUsage> {
   switch (cleanup) {
     case 'web-cache':

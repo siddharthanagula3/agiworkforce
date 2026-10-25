@@ -728,6 +728,62 @@ describe('developer session runtime', () => {
     );
   });
 
+  it('renames, restores and pins a session on a CLI that serves them', async () => {
+    const { service, children } = await loadService((method) => {
+      if (method === 'initialize') {
+        return {
+          ...HANDSHAKE,
+          capabilities: {
+            ...HANDSHAKE.capabilities,
+            threadRename: true,
+            threadUnarchive: true,
+            threadPin: true,
+          },
+        };
+      }
+      if (method === 'thread/rename') return { thread: { ...thread, title: 'Readme quotes' } };
+      if (method === 'thread/unarchive') return { acknowledged: true };
+      if (method === 'thread/pin') return { threadId: thread.id, pinned: true };
+      return defaultResponder(method);
+    });
+    const sentParams = (method: string) =>
+      children.flatMap((child) => child.written).find((entry) => entry.method === method)?.params;
+
+    await expect(
+      service.renameDeveloperThread(root.id, thread.id, '  Readme quotes '),
+    ).resolves.toMatchObject({
+      title: 'Readme quotes',
+    });
+    expect(sentParams('thread/rename')).toEqual({ threadId: thread.id, title: 'Readme quotes' });
+    await expect(service.unarchiveDeveloperThread(root.id, thread.id)).resolves.toBe(true);
+    await expect(service.pinDeveloperThread(root.id, thread.id, true)).resolves.toBe(true);
+    expect(sentParams('thread/pin')).toEqual({ threadId: thread.id, pinned: true });
+    await expect(service.renameDeveloperThread(root.id, thread.id, '   ')).rejects.toThrow(
+      'A session needs a name.',
+    );
+  });
+
+  it('asks for a CLI update before pinning on one that cannot pin', async () => {
+    const { service, children } = await loadService();
+    await expect(service.pinDeveloperThread(root.id, thread.id, true)).rejects.toThrow(/Update/);
+    expect(
+      children.flatMap((child) => child.written).some((entry) => entry.method === 'thread/pin'),
+    ).toBe(false);
+  });
+
+  it('reads the pin and the archive time of each listed session', async () => {
+    const { service } = await loadService((method) =>
+      method === 'thread/list'
+        ? { threads: [{ ...thread, pinned: true, archivedAt: 1_700_000_000_000 }] }
+        : defaultResponder(method),
+    );
+    const list = await service.listDeveloperSessions(undefined, { includeArchived: true });
+    expect(list.groups[0]?.sessions[0]).toMatchObject({
+      pinned: true,
+      archivedAt: 1_700_000_000_000,
+    });
+  });
+
   it('names the program writing a session when the CLI refuses a turn for it', async () => {
     const { service } = await loadService((method) =>
       method === 'turn/start'

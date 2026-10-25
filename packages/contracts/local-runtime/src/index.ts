@@ -529,6 +529,7 @@ export { LOCAL_ROUTINE_COMMANDS } from './local-routines';
 export { SSH_ENVIRONMENT_COMMANDS, isSshEnvironmentId } from './ssh-environments';
 export type { SshEnvironment, SshEnvironmentInput } from './ssh-environments';
 export {
+  OLD_ARCHIVE_AGE_DAYS,
   OLD_LOG_AGE_DAYS,
   STORAGE_CATEGORIES,
   STORAGE_CLEAN_COMMAND,

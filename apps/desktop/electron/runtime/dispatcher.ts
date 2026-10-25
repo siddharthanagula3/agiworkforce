@@ -76,6 +76,7 @@ import {
   STORAGE_CLEAN_COMMAND,
   STORAGE_CLEANUPS,
   STORAGE_READ_COMMAND,
+  OLD_ARCHIVE_AGE_DAYS,
   isStorageCleanup,
   BROWSER_PANE_COMMANDS,
   type BrowserPaneBounds,
@@ -253,6 +254,9 @@ import {
   addDeveloperMemory,
   answerDeveloperApproval,
   archiveDeveloperThread,
+  unarchiveDeveloperThread,
+  renameDeveloperThread,
+  pinDeveloperThread,
   answerDeveloperUserInput,
   applyDeveloperWorktree,
   deleteDeveloperThread,
@@ -295,6 +299,7 @@ import { PathRefused, type PathRefusalReason } from './pathGuard';
 import { readRegularFile } from './regularFile';
 import { showsTrustedPage } from '../permissionPolicy';
 import { getPreferences } from '../settingsStore';
+import { archiveIdleSessions } from './sessionAutoArchive';
 import { REMOTE_SESSION_PARTITION } from '../config';
 import { cliConfigRoot } from '../browser/localClient';
 import {
@@ -762,6 +767,24 @@ const CAPABILITY_BY_COMMAND: Record<string, CommandRequirement> = {
     reason:
       'Archiving a coding session takes it out of the list for this folder. Its conversation and checkpoints stay on this computer, and files in this folder stay as they are.',
   },
+  developer_thread_unarchive: {
+    capability: 'filesystem.read',
+    orGranted: 'shell.execute',
+    reason:
+      'Restoring an archived coding session puts it back in the list for this folder. Files in this folder stay as they are.',
+  },
+  developer_thread_rename: {
+    capability: 'filesystem.read',
+    orGranted: 'shell.execute',
+    reason:
+      'Renaming a coding session changes the name it is listed under. Files in this folder stay as they are.',
+  },
+  developer_thread_pin: {
+    capability: 'filesystem.read',
+    orGranted: 'shell.execute',
+    reason:
+      'Pinning a coding session keeps it at the top of the list for this folder. Files in this folder stay as they are.',
+  },
   developer_thread_takeover: {
     capability: 'shell.execute',
     reason: DEVELOPER_SESSION_REASON,
@@ -1002,10 +1025,13 @@ function stopScreenControl(): ReturnType<typeof stopComputerUse> {
  * and again on every launch. One without the grant is listed with its
  * sessions withheld, which is what offers the user the way to allow it.
  */
-async function listSessionsWithinGrants(): Promise<DeveloperSessionList> {
+async function listSessionsWithinGrants(
+  options: { includeArchived?: boolean; includeCloud?: boolean } = {},
+): Promise<DeveloperSessionList> {
   const roots = listRoots();
   const listed = await listDeveloperSessions(
     (root) => hasSshEnvironment(root.id) || agentAllowedIn(root.id),
+    options,
   );
   const withheld = await Promise.all(
     roots
@@ -1286,6 +1312,45 @@ async function paneCall<T>(work: () => T | Promise<T>): Promise<T> {
   } catch (error) {
     if (error instanceof BrowserPaneRefused) throw new InvalidArguments(error.message);
     throw error;
+  }
+}
+
+async function deleteOldArchivedSessions(window: BrowserWindow | null): Promise<void> {
+  const cutoff = Date.now() - OLD_ARCHIVE_AGE_DAYS * 86_400_000;
+  const listed = await listSessionsWithinGrants({ includeArchived: true });
+  const due = listed.groups.flatMap((group) =>
+    group.sessions.filter(
+      (session) => session.archivedAt !== undefined && session.archivedAt < cutoff,
+    ),
+  );
+  if (due.length === 0) {
+    throw new StorageCleanupRefused(
+      `No session was archived more than ${OLD_ARCHIVE_AGE_DAYS} days ago.`,
+    );
+  }
+  const allowed = await confirmInMain(
+    window,
+    { group: 'storage-archived-sessions', key: String(due.length) },
+    {
+      type: 'warning',
+      buttons: ['Cancel', 'Delete sessions'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Delete old archived sessions?',
+      message:
+        due.length === 1
+          ? 'Delete 1 coding session archived more than a month ago?'
+          : `Delete ${due.length} coding sessions archived more than a month ago?`,
+      detail:
+        'Their conversations and checkpoints are removed from this computer and cannot be brought back. Worktree archives they kept stay in git, and files in your folders stay as they are.',
+      noLink: true,
+    },
+  );
+  if (!allowed) throw new StorageCleanupRefused('Nothing was deleted.');
+  for (const session of due) {
+    await deleteDeveloperThread({ rootId: session.rootId, threadId: session.id }).catch(
+      () => undefined,
+    );
   }
 }
 
@@ -2175,6 +2240,10 @@ async function execute(
         throw new InvalidArguments(`"cleanup" must be one of ${STORAGE_CLEANUPS.join(', ')}.`);
       }
       try {
+        if (cleanup === 'archived-sessions') {
+          await deleteOldArchivedSessions(window);
+          return await readStorageUsage(storageEnvironment());
+        }
         return await cleanStorage(storageEnvironment(), cleanup);
       } catch (error) {
         if (error instanceof StorageCleanupRefused) throw new InvalidArguments(error.message);
@@ -2325,8 +2394,21 @@ async function execute(
       return readDeveloperRuntimeStatus();
     case 'developer_model_list':
       return readDeveloperModels(requireString(args, 'rootId'), args['refresh'] === true);
-    case 'developer_session_list':
-      return listSessionsWithinGrants();
+    case 'developer_session_list': {
+      const includeArchived = args['includeArchived'] === true;
+      return archiveIdleSessions(
+        await listSessionsWithinGrants({
+          includeArchived,
+          includeCloud: args['includeCloud'] === true,
+        }),
+        {
+          days: getPreferences().autoArchiveIdleDays,
+          now: Date.now(),
+          includeArchived,
+          archive: (session) => archiveDeveloperThread(session.rootId, session.id),
+        },
+      );
+    }
     case 'developer_sessions_allow':
       return true;
     case 'developer_session_read':
@@ -2418,6 +2500,23 @@ async function execute(
       });
     case 'developer_thread_archive':
       return archiveDeveloperThread(requireString(args, 'rootId'), requireString(args, 'threadId'));
+    case 'developer_thread_unarchive':
+      return unarchiveDeveloperThread(
+        requireString(args, 'rootId'),
+        requireString(args, 'threadId'),
+      );
+    case 'developer_thread_rename':
+      return renameDeveloperThread(
+        requireString(args, 'rootId'),
+        requireString(args, 'threadId'),
+        requireString(args, 'title'),
+      );
+    case 'developer_thread_pin':
+      return pinDeveloperThread(
+        requireString(args, 'rootId'),
+        requireString(args, 'threadId'),
+        args['pinned'] === true,
+      );
     case 'developer_thread_takeover':
       return takeOverDeveloperThread(
         requireString(args, 'rootId'),
@@ -2830,6 +2929,9 @@ const SSH_SESSION_COMMANDS = new Set([
   'developer_approval_answer',
   'developer_user_input_answer',
   'developer_thread_archive',
+  'developer_thread_unarchive',
+  'developer_thread_rename',
+  'developer_thread_pin',
   'developer_thread_takeover',
   'developer_thread_fork',
   'developer_thread_compact',

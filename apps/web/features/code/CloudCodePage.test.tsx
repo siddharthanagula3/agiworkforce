@@ -2732,11 +2732,11 @@ describe('the environment the composer starts a session in', () => {
         within(screen.getByTestId('local-code-composer')).getByRole('textbox') as HTMLElement;
       await user.type(box(), 'half a thought');
 
-      await user.click(screen.getByRole('button', { name: /Fix the build/u }));
+      await user.click(screen.getByRole('button', { name: /^Fix the build/u }));
       await screen.findByRole('heading', { level: 1, name: 'Fix the build' });
       expect(box()).toHaveValue('');
 
-      await user.click(screen.getByRole('button', { name: /Quote the readme/u }));
+      await user.click(screen.getByRole('button', { name: /^Quote the readme/u }));
       await screen.findByRole('heading', { level: 1, name: 'Quote the readme' });
       expect(box()).toHaveValue('half a thought');
     } finally {
@@ -2813,7 +2813,7 @@ describe('the environment the composer starts a session in', () => {
         within(screen.getByTestId('local-code-composer')).getByRole('textbox') as HTMLElement;
       await user.type(box(), 'only for the first session');
 
-      await user.click(screen.getByRole('button', { name: /Fix the build/u }));
+      await user.click(screen.getByRole('button', { name: /^Fix the build/u }));
 
       await screen.findByRole('heading', { level: 1, name: 'Fix the build' });
       expect(box()).toHaveValue('');
@@ -3294,7 +3294,9 @@ describe('leaving unsaved local edits', () => {
       })),
     });
     render(<CloudCodePage api={api} />);
-    await user.click(await screen.findByRole('button', { name: new RegExp(localSession.title) }));
+    await user.click(
+      await screen.findByRole('button', { name: new RegExp(`^${localSession.title}`) }),
+    );
     await user.click(await screen.findByRole('button', { name: 'Changes' }));
     await user.click(await screen.findByRole('button', { name: 'Edit src/edit.ts' }));
     const field = await screen.findByLabelText('src/edit.ts');

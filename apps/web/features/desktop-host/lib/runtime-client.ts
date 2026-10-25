@@ -633,8 +633,12 @@ export function listDeveloperModels(
   });
 }
 
-export function listDeveloperSessions(): Promise<DeveloperSessionList> {
-  return invoke<DeveloperSessionList>('developer_session_list');
+export function listDeveloperSessions(
+  options: { includeArchived?: boolean } = {},
+): Promise<DeveloperSessionList> {
+  return options.includeArchived
+    ? invoke<DeveloperSessionList>('developer_session_list', { includeArchived: true })
+    : invoke<DeveloperSessionList>('developer_session_list');
 }
 
 /**
@@ -757,6 +761,26 @@ export function forkDeveloperThread(
  */
 export function archiveDeveloperThread(rootId: string, threadId: string): Promise<boolean> {
   return invoke<boolean>('developer_thread_archive', { rootId, threadId });
+}
+
+export function unarchiveDeveloperThread(rootId: string, threadId: string): Promise<boolean> {
+  return invoke<boolean>('developer_thread_unarchive', { rootId, threadId });
+}
+
+export function renameDeveloperThread(
+  rootId: string,
+  threadId: string,
+  title: string,
+): Promise<LocalDeveloperSession> {
+  return invoke<LocalDeveloperSession>('developer_thread_rename', { rootId, threadId, title });
+}
+
+export function pinDeveloperThread(
+  rootId: string,
+  threadId: string,
+  pinned: boolean,
+): Promise<boolean> {
+  return invoke<boolean>('developer_thread_pin', { rootId, threadId, pinned });
 }
 
 /** Take a session from the program writing it, so turns sent from here run. */

@@ -2,7 +2,9 @@
 
 import { useEffect, useId, useState, type FormEvent } from 'react';
 import {
+  AUTO_ARCHIVE_IDLE_DAYS,
   MAX_WORKTREE_BRANCH_PREFIX_LENGTH,
+  isAutoArchiveIdleDays,
   isWorktreeBranchPrefix,
   type HostPreferences,
   type HostPreferencesState,
@@ -28,6 +30,7 @@ export function LocalWorktreePreferences({
   const host = useDesktopHost();
   const prefixId = useId();
   const prefixHelpId = useId();
+  const archiveId = useId();
   const [state, setState] = useState<HostPreferencesState | null>(null);
   const [prefixDraft, setPrefixDraft] = useState('');
   const [busy, setBusy] = useState(false);
@@ -136,6 +139,34 @@ export function LocalWorktreePreferences({
             : LOCAL_WORKTREE_SETTINGS_COPY.prefixInvalid(MAX_WORKTREE_BRANCH_PREFIX_LENGTH)}
         </p>
       </form>
+      {preferences.autoArchiveIdleDays !== undefined && (
+        <div className="flex flex-col gap-1">
+          <label htmlFor={archiveId} className={headingClassName}>
+            {LOCAL_WORKTREE_SETTINGS_COPY.autoArchiveLabel}
+          </label>
+          <select
+            id={archiveId}
+            className={fieldClassName}
+            value={preferences.autoArchiveIdleDays}
+            disabled={busy}
+            onChange={(event) => {
+              const days = Number(event.target.value);
+              if (isAutoArchiveIdleDays(days)) void write({ autoArchiveIdleDays: days }, null);
+            }}
+          >
+            {AUTO_ARCHIVE_IDLE_DAYS.map((days) => (
+              <option key={days} value={days}>
+                {days === 0
+                  ? LOCAL_WORKTREE_SETTINGS_COPY.autoArchiveOff
+                  : LOCAL_WORKTREE_SETTINGS_COPY.autoArchiveDays(days)}
+              </option>
+            ))}
+          </select>
+          <p className="text-sm text-muted-foreground">
+            {LOCAL_WORKTREE_SETTINGS_COPY.autoArchiveHelp}
+          </p>
+        </div>
+      )}
       {message !== null && (
         <p className="text-sm text-muted-foreground" role="status">
           {message}

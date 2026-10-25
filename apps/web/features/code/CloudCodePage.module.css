@@ -315,6 +315,50 @@ svg + .menuRowLabel {
   padding-bottom: 5px;
 }
 
+.railLocalItem {
+  position: relative;
+}
+
+.railLocalItem > .railLocalRow {
+  padding-right: 36px;
+}
+
+.railRowMenu {
+  position: absolute;
+  top: 6px;
+  right: 4px;
+  opacity: 0;
+}
+
+.railLocalItem:hover .railRowMenu,
+.railLocalItem:focus-within .railRowMenu,
+.railRowMenu[data-state='open'] {
+  opacity: 1;
+}
+
+@media (hover: none) {
+  .railRowMenu {
+    opacity: 1;
+  }
+}
+
+.railSectionAction {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: var(--chat-radius-sm);
+  background: transparent;
+  color: var(--chat-text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.railSectionAction:hover {
+  background: var(--chat-surface-hover);
+  color: var(--chat-text-primary);
+}
+
 .railLocalText {
   display: flex;
   overflow: hidden;

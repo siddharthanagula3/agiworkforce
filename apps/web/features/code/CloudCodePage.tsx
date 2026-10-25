@@ -1089,6 +1089,13 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           reviewingMcp={local.reviewingMcp}
           mcpRefusals={local.mcpRefusals}
           onReviewMcpServer={(rootId, server) => void local.reviewMcpServer(rootId, server)}
+          showArchived={local.showArchived}
+          onToggleArchived={() => local.setShowArchived(!local.showArchived)}
+          sessionActions={local.sessionActions}
+          actionError={local.actionError}
+          onRename={local.renameSession}
+          onSetArchived={(session, archived) => void local.setSessionArchived(session, archived)}
+          onSetPinned={(session, pinned) => void local.setSessionPinned(session, pinned)}
         />
       </>
     ) : null,

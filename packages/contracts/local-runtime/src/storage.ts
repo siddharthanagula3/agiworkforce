@@ -14,7 +14,12 @@ export const STORAGE_CATEGORIES = [
 
 export type StorageCategory = (typeof STORAGE_CATEGORIES)[number];
 
-export const STORAGE_CLEANUPS = ['web-cache', 'old-logs', 'shell-scratch'] as const;
+export const STORAGE_CLEANUPS = [
+  'web-cache',
+  'old-logs',
+  'shell-scratch',
+  'archived-sessions',
+] as const;
 
 export type StorageCleanup = (typeof STORAGE_CLEANUPS)[number];
 
@@ -23,6 +28,8 @@ export function isStorageCleanup(value: unknown): value is StorageCleanup {
 }
 
 export const OLD_LOG_AGE_DAYS = 7;
+
+export const OLD_ARCHIVE_AGE_DAYS = 30;
 
 export interface StorageCategoryUsage {
   category: StorageCategory;

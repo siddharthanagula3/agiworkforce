@@ -156,6 +156,19 @@ export const LOCAL_CODE_COPY = {
   overwriteFileDescription: (path: string): string =>
     `Your version replaces what is on disk at ${path} now. Changes made there since you opened it cannot be recovered unless they were committed.`,
   pushAndOpenPullRequest: 'Push and open a pull request',
+  sessionActions: (title: string): string => `More actions for ${title}`,
+  pinSession: 'Pin',
+  unpinSession: 'Unpin',
+  renameSession: 'Rename',
+  restoreSession: 'Restore',
+  sessionName: 'Session name',
+  showArchived: 'Show archived',
+  hideArchived: 'Hide archived',
+  archivedLabel: 'Archived',
+  pinnedLabel: 'Pinned',
+  renameFailed: 'The session could not be renamed.',
+  pinFailed: 'The pin could not be changed.',
+  restoreFailed: 'The session could not be restored.',
   browser: 'Browser',
   closeBrowser: 'Close browser',
   browserBack: 'Back',
@@ -1502,6 +1515,11 @@ export const LOCAL_WORKTREE_SETTINGS_COPY = {
   prefixInvalid: (max: number): string =>
     `Use letters, numbers, dots, dashes and slashes, up to ${max} characters, starting with a letter or number.`,
   prefixSaved: 'Branch prefix saved.',
+  autoArchiveLabel: 'Archive idle sessions',
+  autoArchiveHelp:
+    'Local sessions you have not used for this long are archived. Archived sessions keep everything and can be restored; pinned and running ones are never archived.',
+  autoArchiveOff: 'Never',
+  autoArchiveDays: (days: number): string => `After ${days} days`,
   preferencesFailed: 'This setting could not be saved.',
 } as const;
 

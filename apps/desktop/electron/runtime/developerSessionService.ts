@@ -254,6 +254,11 @@ interface AdvertisedCapabilities {
   writerLease: boolean;
   mcpApproval: boolean;
   reasoningEffortLadder: boolean;
+  threadRename: boolean;
+  threadUnarchive: boolean;
+  threadPin: boolean;
+  mcpLogs: boolean;
+  terminals: boolean;
 }
 
 /**
@@ -446,6 +451,9 @@ const CAPABILITY_FROM_HANDSHAKE: Record<
   thread_archive: () => true,
   thread_takeover: (cli) => cli.writerLease,
   reasoning_effort_ladder: (cli) => cli.reasoningEffortLadder,
+  thread_rename: (cli) => cli.threadRename,
+  thread_unarchive: (cli) => cli.threadUnarchive,
+  thread_pin: (cli) => cli.threadPin,
 };
 
 /**
@@ -1177,6 +1185,11 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
     revertRestore: capabilities['revertRestore'] === true,
     mcpApproval: capabilities['mcpApproval'] === true,
     reasoningEffortLadder: capabilities['reasoningEffortLadder'] === true,
+    threadRename: capabilities['threadRename'] === true,
+    threadUnarchive: capabilities['threadUnarchive'] === true,
+    threadPin: capabilities['threadPin'] === true,
+    mcpLogs: capabilities['mcpLogs'] === true,
+    terminals: capabilities['terminals'] === true,
   };
   lastAdvertised = server.advertised;
 }
@@ -1338,7 +1351,12 @@ function requireAdvertised(
     | 'revertRestore'
     | 'threadCompact'
     | 'writerLease'
-    | 'mcpApproval',
+    | 'mcpApproval'
+    | 'threadRename'
+    | 'threadUnarchive'
+    | 'threadPin'
+    | 'mcpLogs'
+    | 'terminals',
 ): void {
   if (!server.advertised?.[feature]) {
     const { binary, source } = selectRuntimeBinary();
@@ -1495,6 +1513,10 @@ function toSession(rootId: string, raw: unknown): LocalDeveloperSession | null {
     updatedAt: readString(raw, 'updatedAt') ?? '',
     origin: (readString(raw, 'createdBy') ?? 'cli') as DeveloperSessionSource,
     ...(readString(raw, 'location') === 'cloud' ? { location: 'cloud' as const } : {}),
+    ...(raw['pinned'] === true ? { pinned: true } : {}),
+    ...(typeof raw['archivedAt'] === 'number' && Number.isFinite(raw['archivedAt'])
+      ? { archivedAt: raw['archivedAt'] }
+      : {}),
   };
 }
 
@@ -1507,6 +1529,7 @@ function requireSession(rootId: string, raw: unknown): LocalDeveloperSession {
 async function listForRoot(
   root: WorkspaceRoot,
   includeCloud: boolean,
+  includeArchived = false,
 ): Promise<DeveloperSessionGroup[]> {
   const remote = hasSshEnvironment(root.id);
   const { git, unavailableReason } = remote
@@ -1531,6 +1554,7 @@ async function listForRoot(
     const result = await request(server, 'thread/list', {
       cwd: root.path,
       ...(includeCloud ? { includeCloud } : {}),
+      ...(includeArchived ? { includeArchived } : {}),
     });
     const threads = isRecord(result) ? result['threads'] : null;
     if (Array.isArray(threads)) {
@@ -1891,12 +1915,14 @@ export async function readDeveloperModels(
 
 export async function listDeveloperSessions(
   includeRoot: (root: WorkspaceRoot) => boolean = () => true,
-  options: { includeCloud?: boolean } = {},
+  options: { includeCloud?: boolean; includeArchived?: boolean } = {},
 ): Promise<DeveloperSessionList> {
   const groups = await Promise.all(
     [...listRoots(), ...listSshRoots()]
       .filter(includeRoot)
-      .map((root) => listForRoot(root, options.includeCloud === true)),
+      .map((root) =>
+        listForRoot(root, options.includeCloud === true, options.includeArchived === true),
+      ),
   );
   return { groups: groups.flat() };
 }
@@ -2408,6 +2434,48 @@ export async function archiveDeveloperThread(rootId: string, threadId: string): 
     throw new Error('The AGI CLI did not say it archived the session.');
   }
   return true;
+}
+
+export async function unarchiveDeveloperThread(rootId: string, threadId: string): Promise<boolean> {
+  const root = await resolveRoot(rootId);
+  const server = await readyServer(root);
+  requireAdvertised(server, 'threadUnarchive');
+  const result = await request(server, 'thread/unarchive', { threadId });
+  if (!isRecord(result) || result['acknowledged'] !== true) {
+    throw new Error('The AGI CLI did not say it restored the session.');
+  }
+  return true;
+}
+
+export async function renameDeveloperThread(
+  rootId: string,
+  threadId: string,
+  title: string,
+): Promise<LocalDeveloperSession> {
+  const trimmed = title.trim();
+  if (trimmed === '') throw new Error('A session needs a name.');
+  const root = await resolveRoot(rootId);
+  const server = await readyServer(root);
+  requireAdvertised(server, 'threadRename');
+  return requireSession(
+    rootId,
+    await request(server, 'thread/rename', { threadId, title: trimmed }),
+  );
+}
+
+export async function pinDeveloperThread(
+  rootId: string,
+  threadId: string,
+  pinned: boolean,
+): Promise<boolean> {
+  const root = await resolveRoot(rootId);
+  const server = await readyServer(root);
+  requireAdvertised(server, 'threadPin');
+  const result = await request(server, 'thread/pin', { threadId, pinned });
+  if (!isRecord(result) || result['pinned'] !== pinned) {
+    throw new Error('The AGI CLI did not say it changed the pin.');
+  }
+  return pinned;
 }
 
 /**

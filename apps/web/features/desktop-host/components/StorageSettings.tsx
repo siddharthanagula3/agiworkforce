@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import {
+  OLD_ARCHIVE_AGE_DAYS,
   OLD_LOG_AGE_DAYS,
   type StorageCategory,
   type StorageCleanup,
@@ -70,6 +71,13 @@ const CLEANUPS: Record<StorageCleanup, CleanupCopy> = {
     button: 'Delete',
     title: 'Delete old logs?',
     description: `Log files older than ${OLD_LOG_AGE_DAYS} days are deleted and cannot be recovered. Support cannot use them to look into problems from that time.`,
+  },
+  'archived-sessions': {
+    label: 'Old archived sessions',
+    hint: `Coding sessions archived more than ${OLD_ARCHIVE_AGE_DAYS} days ago.`,
+    button: 'Delete',
+    title: 'Delete old archived sessions?',
+    description: `Coding sessions archived more than ${OLD_ARCHIVE_AGE_DAYS} days ago are deleted with their conversations and checkpoints, and cannot be recovered. The app asks once more with the number of sessions. Files in your folders are not touched.`,
   },
   'shell-scratch': {
     label: 'Temporary command files',
