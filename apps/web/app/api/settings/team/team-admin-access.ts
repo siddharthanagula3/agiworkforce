@@ -58,7 +58,7 @@ async function assertOrganizationMember(
   const rows = await db.query<{ user_id: string }>(
     `select user_id
        from public.organization_members
-      where organization_id = $1 and user_id = $2
+      where organization_id = $1 and user_id = $2 and status = 'active'
       limit 1`,
     [organizationId, userId],
   );

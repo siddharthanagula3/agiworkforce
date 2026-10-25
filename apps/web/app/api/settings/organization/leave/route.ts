@@ -16,6 +16,8 @@ import { invalidateActiveOrganizationCache } from '@/lib/server/request-context-
 import { z } from 'zod';
 import { createError } from '@/lib/errors';
 import { resolveActiveOrganizationId } from '@/lib/services/active-workspace-service';
+import { getTeamAdminAccess } from '@/app/api/settings/team/team-admin-access';
+import { requireStepUp } from '@/lib/server/step-up-auth';
 
 const LeaveSchema = z.object({
   successorUserId: z.string().trim().min(1).max(255).optional(),
@@ -38,10 +40,28 @@ async function handleLeave(request: NextRequest) {
   if (!organizationId) {
     throw createError.notFound('Select a workspace before leaving it');
   }
+  const { successorUserId } = parsed.data;
+  if (successorUserId) {
+    await requireStepUp({
+      userId,
+      action: 'organization.transfer_ownership',
+      resourceId: organizationId,
+      organizationId,
+      request,
+      endpoint: '/api/settings/organization/leave',
+    });
+  }
   const result = await leaveOrganization(db, {
     userId,
     organizationId,
-    ...(parsed.data.successorUserId ? { successorUserId: parsed.data.successorUserId } : {}),
+    ...(successorUserId
+      ? {
+          successor: {
+            userId: successorUserId,
+            organizationAccess: await getTeamAdminAccess(db, userId, organizationId),
+          },
+        }
+      : {}),
   });
 
   await invalidateActiveOrganizationCache(userId);

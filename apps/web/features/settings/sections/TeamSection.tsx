@@ -451,7 +451,10 @@ export function TeamSection() {
         organizationId: organization.id,
       });
     } else if (pendingAction.kind === 'leave-workspace') {
-      leaveOrganization.mutate(successorUserId ? { successorUserId } : {});
+      leaveOrganization.mutate({
+        organizationId: organization.id,
+        ...(successorUserId ? { successorUserId } : {}),
+      });
     } else if (pendingAction.kind === 'remove') {
       removeMember.mutate({
         memberId: pendingAction.member.id,
@@ -1393,6 +1396,7 @@ export function TeamSection() {
                 {leaveOrganization.isPending ? 'Leaving…' : 'Transfer ownership and leave'}
               </button>
               <InlineError error={leaveOrganization.error} />
+              {leaveOrganization.stepUpDialog}
             </>
           ) : (
             <>
