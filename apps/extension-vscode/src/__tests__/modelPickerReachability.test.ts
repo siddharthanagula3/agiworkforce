@@ -111,7 +111,7 @@ describe('buildReachabilityQuickPickItems', () => {
 
   it('sets every model the configured privacy pin refuses apart, naming where it is set', () => {
     const cloud = String(FIRST!.id);
-    const local = 'llama3:8b';
+    const local = 'local-fixture-model';
     const pin = { trustMode: 'local' as const, configPath: '/home/me/.agiworkforce/config.toml' };
     const built = buildReachabilityQuickPickItems({
       items: [item(cloud), item(local)],
