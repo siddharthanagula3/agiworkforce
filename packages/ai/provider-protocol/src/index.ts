@@ -34,6 +34,7 @@ export {
   splitSystemPromptCacheBoundary,
   prependSystemPromptAdditionAfterCacheBoundary,
 } from './system-prompt-cache-boundary';
+export { formatTurnContext, isTurnContextText } from './turn-context';
 
 export { normalizeStructuredPromptSection } from './lib/prompt-cache-stability';
 

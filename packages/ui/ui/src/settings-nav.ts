@@ -353,7 +353,12 @@ export const SETTINGS_NAV_GROUPS_WEB: SettingsNavGroupResolved[] = [
       { key: 'security', label: 'Security', icon: Lock },
       { key: 'account', label: 'Account', icon: UserRound },
       { key: 'billing', label: 'Billing', icon: CreditCard },
-      { key: 'usage', label: 'Usage', icon: Gauge },
+      {
+        key: 'usage',
+        label: 'Usage',
+        icon: Gauge,
+        keywords: ['spend limit', 'spending limit', 'monthly limit', 'budget', 'credits'],
+      },
       {
         key: 'referrals',
         label: 'Referrals',

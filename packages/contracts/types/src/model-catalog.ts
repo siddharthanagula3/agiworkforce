@@ -426,6 +426,11 @@ export interface ModelReasoning {
    * `disabled` for this model. Sending `disabled` to such a model is a 400.
    */
   disabledThinkingType?: 'between_tools';
+  /**
+   * The `thinking.display` the provider needs before thinking blocks carry
+   * readable text; at its default the model streams them empty.
+   */
+  thinkingDisplay?: 'summarized';
   rejectsSamplingParameters?: boolean;
   unsupportedRequestParameters?: readonly RequestParameter[];
   thinkingBudget?: ReasoningBudget;

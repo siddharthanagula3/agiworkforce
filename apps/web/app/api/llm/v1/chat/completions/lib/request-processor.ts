@@ -459,7 +459,9 @@ import { buildCustomInstructionsPreamble } from '@/lib/server/user-identity';
 import {
   buildComputerUseSoftCapWarningHeader,
   buildQuotaWarningHeader,
+  getPlanUsageBudgetCents,
 } from '@/lib/server/managed-usage-policy';
+import { getAccountOverageMicrousd } from '@/lib/server/rolling-usage';
 import { assertTierUnitAllowance } from '@/lib/services/tier-unit-quota-service';
 import {
   enforceManagedContentSafetyPreference,
@@ -1554,6 +1556,12 @@ export type ProcessedRequest = {
      * key at the one place that knows both facts.
      */
     promptCacheScope?: PromptCacheScope;
+    /**
+     * Facts true only for this turn (the current time), placed after the first
+     * `afterMessages` messages so the system prompt and history stay
+     * byte-identical from one turn to the next.
+     */
+    turnContext?: { text: string; afterMessages: number };
   };
 };
 
@@ -1757,12 +1765,31 @@ export function collectManagedPromptMaterials(request: ChatCompletionRequest): s
 }
 
 /**
+ * Takes the current time out of the capability preamble. It changes every
+ * minute, so it travels as turn context after the conversation; left in the
+ * system prompt it would make every provider re-read the whole history.
+ */
+export function separateTurnTime(timedCapabilityPreamble: string | null): {
+  capabilityPreamble: string | null;
+  turnTime: string;
+} {
+  const split = timedCapabilityPreamble
+    ? splitSystemPromptCacheBoundary(timedCapabilityPreamble)
+    : undefined;
+  if (!split) return { capabilityPreamble: timedCapabilityPreamble, turnTime: '' };
+  return {
+    capabilityPreamble: `${split.stablePrefix}${SYSTEM_PROMPT_CACHE_BOUNDARY}`,
+    turnTime: split.dynamicSuffix,
+  };
+}
+
+/**
  * Assembles the leading system message so the cacheable prefix (static
  * capability preamble + custom instructions) stays byte-identical across
  * turns of one conversation, with everything that varies per turn
- * (timestamp, matched skills, recalled memories) folded in after
+ * (matched skills, recalled memories) folded in after
  * `SYSTEM_PROMPT_CACHE_BOUNDARY`. `capabilityPreamble` already carries that
- * boundary ahead of its own dynamic time context; `dynamicSystemAddition`
+ * boundary ahead of any dynamic context of its own; `dynamicSystemAddition`
  * (skill/memory content) is inserted right after it, and
  * `customInstructionsPreamble` (static, per-user config) joins the stable
  * side. `projectInstruction` joins it too: the workspace sets it once, so it
@@ -2531,7 +2558,11 @@ export function buildWebCloudAutoRoutingRequest(
 /**
  * Whether this turn may be prompt-cached, and under whose name.
  *
- * The client asks with `use_prompt_cache`; the privacy class decides. A
+ * A first-party surface is cached unless it sends `use_prompt_cache: false`:
+ * those clients resend the whole conversation on every call, and a client
+ * that never learned the flag would otherwise pay full input price for every
+ * repeated prefix. A developer API key still opts in, since a cache write is
+ * billed above the plain input price. The privacy class decides last. A
  * Temporary Chat promises nothing outlives the turn and a zero-retention
  * workspace promises the provider keeps nothing, so neither may leave a cached
  * prefix behind however the caller set the flag. The scope travels with the
@@ -2539,6 +2570,7 @@ export function buildWebCloudAutoRoutingRequest(
  */
 export function resolveTurnPromptCache(input: {
   requested: boolean | undefined;
+  surface: CloudChatSurface;
   temporaryChat: boolean;
   zeroDataRetentionOnly: boolean;
   organizationId: string | null;
@@ -2548,8 +2580,9 @@ export function resolveTurnPromptCache(input: {
     temporaryChat: input.temporaryChat,
     zeroDataRetentionOnly: input.zeroDataRetentionOnly,
   });
+  const requested = input.requested ?? input.surface !== 'api';
   return {
-    usePromptCache: input.requested === true && privacyClass === 'standard',
+    usePromptCache: requested && privacyClass === 'standard',
     promptCacheScope: {
       organizationId: input.organizationId,
       userId: input.userId,
@@ -5907,8 +5940,20 @@ async function processAdmittedRequest(
       })) ??
       buildQuotaWarningHeader({
         planTier: subscription.plan_tier,
-        creditsUsedCents: existingBalance?.credits_used_cents ?? 0,
-        creditsAllocatedCents: existingBalance?.credits_allocated_cents ?? 0,
+        creditsUsedCents: ledgerCentsFromMicrousd(
+          Math.max(
+            0,
+            (existingBalance?.credits_used_microusd ?? 0) -
+              (existingBalance?.account_id
+                ? await getAccountOverageMicrousd(
+                    (await scopedDbPromise).db,
+                    userId,
+                    existingBalance.account_id,
+                  )
+                : 0),
+          ),
+        ),
+        creditsAllocatedCents: getPlanUsageBudgetCents(subscription.plan_tier),
         estimatedCostCents: ledgerCentsFromMicrousd(estimatedCostMicrousd),
       }) ??
       computerUseSoftCapWarning;
@@ -6103,6 +6148,7 @@ async function processAdmittedRequest(
   }
 
   let connectorsAllowed: boolean | undefined;
+  let turnTimeContext = '';
   if (chatSurface !== 'api') {
     const turnMemory = chatTurnMemoryFor({
       read: managedMemoryPolicyRead,
@@ -6152,7 +6198,7 @@ async function processAdmittedRequest(
           ])
         : [false, undefined];
     connectorsAllowed = allowedForTurn;
-    const capabilityPreamble = buildCapabilityPreamble({
+    const timedCapabilityPreamble = buildCapabilityPreamble({
       tools: resolvedTools,
       surface: chatSurface,
       researchUnavailable,
@@ -6186,6 +6232,8 @@ async function processAdmittedRequest(
       }),
     });
 
+    const { capabilityPreamble, turnTime } = separateTurnTime(timedCapabilityPreamble);
+    turnTimeContext = turnTime;
     const preamble = composeManagedSystemPreamble({
       capabilityPreamble,
       customInstructionsPreamble,
@@ -6296,7 +6344,7 @@ async function processAdmittedRequest(
     });
   }
   const responseFormat = requestedResponseFormat(chatRequest.response_format);
-  const llmRequest = {
+  const llmRequest: ProcessedRequest['llmRequest'] = {
     model: chatRequest.model,
     messages: internalMessages,
     temperature: chatRequest.temperature,
@@ -6318,6 +6366,7 @@ async function processAdmittedRequest(
     ...(Object.keys(requestParameters).length > 0 ? { requestParameters } : {}),
     ...resolveTurnPromptCache({
       requested: chatRequest.use_prompt_cache,
+      surface: chatSurface,
       temporaryChat: conversationIsTemporary,
       zeroDataRetentionOnly,
       organizationId: scopedForPolicy.organizationId,
@@ -6380,6 +6429,9 @@ async function processAdmittedRequest(
       });
     }
     return messageTooLongResponse();
+  }
+  if (turnTimeContext) {
+    llmRequest.turnContext = { text: turnTimeContext, afterMessages: llmRequest.messages.length };
   }
 
   const sentCitations =

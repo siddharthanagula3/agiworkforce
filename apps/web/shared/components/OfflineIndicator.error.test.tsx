@@ -34,7 +34,7 @@ describe('OfflineIndicator errors', () => {
     const status = await screen.findByRole('status');
     expect(status.textContent).toMatch(/Something went wrong on our side/i);
     expect(status.textContent).not.toMatch(/SELECT secret|private-trace|HTTP 500/i);
-    expect(status.firstElementChild).toHaveClass(
+    expect(status.firstElementChild?.firstElementChild).toHaveClass(
       'bg-destructive/10',
       'border-destructive/30',
       'text-danger-text',
@@ -43,5 +43,16 @@ describe('OfflineIndicator errors', () => {
       'bg-destructive/15',
       'text-danger-text',
     );
+  });
+
+  it('sits under the header, clear of the composer at the bottom of the chat', async () => {
+    render(<OfflineIndicator />);
+
+    const status = await screen.findByRole('status');
+    expect(status.className).toContain(
+      'top-[calc(var(--agi-header-height-compact)+var(--space-2))]',
+    );
+    expect(status.className).not.toMatch(/\bbottom-0\b/);
+    expect(status.firstElementChild).toHaveClass('w-fit', 'bg-background');
   });
 });

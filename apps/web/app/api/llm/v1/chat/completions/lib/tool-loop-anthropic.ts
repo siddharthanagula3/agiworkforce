@@ -53,6 +53,8 @@ export interface ToolLoopStepSink {
   providerErrorClassification?: StreamChunkErrorClassification;
   usage?: ObservedProviderUsage;
   providerTrace?: ProviderStreamShape;
+  /** Settles once the provider stream has ended and its usage is recorded. */
+  settled?: Promise<void>;
 }
 
 export interface ProviderStreamShape {
@@ -172,6 +174,13 @@ export function chunksToOpenAiSse(
     );
   };
 
+  let markSettled: () => void = () => undefined;
+  if (sink) {
+    sink.settled = new Promise<void>((resolve) => {
+      markSettled = resolve;
+    });
+  }
+
   return new ReadableStream<Uint8Array>({
     async start(controller) {
       startedAt = Date.now();
@@ -258,6 +267,8 @@ export function chunksToOpenAiSse(
         if (sink) sink.providerTrace = providerTrace;
         commitUsage();
         controller.error(err);
+      } finally {
+        markSettled();
       }
     },
   });

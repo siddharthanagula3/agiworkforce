@@ -319,6 +319,7 @@ import { extractTextContent, type ProcessedRequest } from './request-processor';
 import {
   addToolSpend,
   createObservedProviderUsage,
+  hasObservedProviderUsage,
   mergeObservedProviderUsage,
   observedTurnCost,
   type ObservedProviderUsage,
@@ -1774,6 +1775,41 @@ export interface CollectedProviderLine {
 }
 
 /** Exported for unit tests (untrusted-provider-stream accumulation bounds). */
+/** Bounds how long a failed step waits for its stream to record what it measured. */
+const FAILED_STEP_USAGE_SETTLE_MS = 2_000;
+
+const failedProviderStepUsage = new WeakMap<object, ObservedProviderUsage>();
+
+/**
+ * What a provider step that threw had already consumed: a stop or a dropped
+ * stream after message_start is still charged by the provider, so it is
+ * settled at its measured usage rather than released.
+ */
+export function usageOfFailedProviderStep(error: unknown): ObservedProviderUsage | null {
+  return typeof error === 'object' && error !== null
+    ? (failedProviderStepUsage.get(error) ?? null)
+    : null;
+}
+
+async function recordFailedProviderStepUsage(
+  error: unknown,
+  sink: ToolLoopStepSink,
+  usage: ObservedProviderUsage,
+): Promise<void> {
+  if (typeof error !== 'object' || error === null) return;
+  if (sink.settled) {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    await Promise.race([
+      sink.settled,
+      new Promise<void>((resolve) => {
+        timer = setTimeout(resolve, FAILED_STEP_USAGE_SETTLE_MS);
+      }),
+    ]);
+    clearTimeout(timer);
+  }
+  if (hasObservedProviderUsage(usage)) failedProviderStepUsage.set(error, usage);
+}
+
 export async function collectProviderStream(
   stream: ReadableStream,
   onLine?: (entry: CollectedProviderLine) => void,
@@ -3800,6 +3836,26 @@ export async function* runToolLoop(
     );
   }
 
+  function isForcedToolChoice(choice: unknown): boolean {
+    return choice === 'required' || (typeof choice === 'object' && choice !== null);
+  }
+
+  function notOfferedToolResultMessage(qualifiedName: string): string {
+    return (
+      `Tool "${qualifiedName}" is not available on this turn and was not run. ` +
+      'Use only the tools offered now.'
+    );
+  }
+
+  function toolOfferedThisTurn(qualifiedName: string): boolean {
+    return (
+      qualifiedName === TOOL_DIRECTORY_TOOL_NAME ||
+      qualifiedName === TOOL_RESULT_READER_TOOL_NAME ||
+      availableTools.has(qualifiedName) ||
+      isToolOffered(qualifiedName, mcpTools, availableTools)
+    );
+  }
+
   function stoppedBeforeCallMessage(qualifiedName: string): string {
     return `Tool "${qualifiedName}" was not run: the user stopped this run before it started.`;
   }
@@ -3883,6 +3939,17 @@ export async function* runToolLoop(
           text: '',
           usage: stepUsage,
         };
+        try {
+          return await streamProviderStep(stepSink, stepUsage);
+        } catch (error) {
+          await recordFailedProviderStepUsage(error, stepSink, stepUsage);
+          throw error;
+        }
+      };
+      const streamProviderStep = async (
+        stepSink: ToolLoopStepSink,
+        stepUsage: ObservedProviderUsage,
+      ): Promise<ToolLoopProviderStepResult> => {
         const streamDeadlineMs = nestedDeadlineMs(
           PROVIDER_STREAM_DEADLINE_MS,
           maxDurationMs,
@@ -4097,6 +4164,8 @@ export async function* runToolLoop(
           }) ?? servedRouteId;
         return result;
       } catch (err) {
+        const spentBeforeFailure = options.providerExecutor ? null : usageOfFailedProviderStep(err);
+        if (spentBeforeFailure) mergeObservedProviderUsage(observedUsage, spentBeforeFailure);
         if (options.shouldPropagateExecutionError?.(err)) throw err;
         if (err instanceof SharedProviderStreamDeadlineError) throw err;
         if (releasedLinesToClient) throw err;
@@ -4942,7 +5011,10 @@ export async function* runToolLoop(
           isError: false,
         });
       }
-      if (toolGovernor.isWithdrawn(tc.qualifiedName)) {
+      if (
+        toolGovernor.isWithdrawn(tc.qualifiedName) ||
+        (mapSearchBatchCompleted && isMapSearchTool(tc.qualifiedName))
+      ) {
         return Promise.resolve({
           content: withdrawnToolMessage(tc.qualifiedName),
           isError: false,
@@ -5985,12 +6057,12 @@ export async function* runToolLoop(
       const stepMcpTools = offeredMcpToolDefs().map(toOpenAiToolDef);
       const turnTools =
         stepMcpTools.length > 0 ? [...(llmRequest.tools ?? []), ...stepMcpTools] : llmRequest.tools;
-      const offeredTools = mapSearchBatchCompleted
-        ? turnTools?.filter((tool) => !isMapSearchTool(functionToolName(tool)))
-        : turnTools;
-      const stepTools = toolGovernor.capReached()
-        ? undefined
-        : toolGovernor.offered(offeredTools, offeredToolName);
+      // The tool list is part of the cached prompt prefix, so it stays the same
+      // from step to step and a closed tool is refused when it is called. A
+      // provider-run tool is the exception: nothing here sees its call to refuse.
+      const stepTools = turnTools?.filter(
+        (tool) => !nativeSearchToolName(tool) || !toolGovernor.isWithdrawn(offeredToolName(tool)),
+      );
       if ((stepTools?.length ?? 0) > 0) toolCapabilityEvidence.toolsOffered = true;
       const stepRequest = {
         ...llmRequest,
@@ -6009,8 +6081,15 @@ export async function* runToolLoop(
         isForcedSkillToolChoice(llmRequest.tool_choice)
           ? { tool_choice: 'auto' as const }
           : {}),
+        // A forced choice would make the model call a tool the governor has
+        // closed, so once one is closed the step may answer instead.
+        ...(step > 1 &&
+        processed.chatRequest?.tool_choice === undefined &&
+        isForcedToolChoice(llmRequest.tool_choice) &&
+        toolGovernor.anyClosed()
+          ? { tool_choice: 'auto' as const }
+          : {}),
         // A tool choice with no tools on offer is a request providers refuse.
-        // The governor can empty the set mid-turn, so the choice goes with it.
         ...(stepTools && stepTools.length > 0 ? {} : { tool_choice: undefined }),
       };
       if (processed.freeTrial?.promotion) {
@@ -6605,8 +6684,14 @@ export async function* runToolLoop(
       const prohibitedCalls = pendingToolCalls.filter((tc) =>
         turnProhibitsTool(turnToolProhibition, tc.qualifiedName),
       );
+      // A call to a tool this turn never offered has nothing to approve: the
+      // model named a tool it saw earlier or invented one. Asking would put a
+      // card in front of the user for a call that can only fail.
+      const unofferedCalls = pendingToolCalls.filter(
+        (tc) => !prohibitedCalls.includes(tc) && !toolOfferedThisTurn(tc.qualifiedName),
+      );
       const gatedCalls = pendingToolCalls
-        .filter((tc) => !prohibitedCalls.includes(tc))
+        .filter((tc) => !prohibitedCalls.includes(tc) && !unofferedCalls.includes(tc))
         .map((tc) => ({
           tc,
           gate: gateForToolCall(tc, pendingToolCalls),
@@ -6627,29 +6712,37 @@ export async function* runToolLoop(
           ? allowedCalls.filter((call) => !isDeviceStepTool(call.qualifiedName))
           : allowedCalls;
 
-      const refusedCalls = [...prohibitedCalls.map((tc) => ({ tc, gate: null })), ...blockedCalls];
-      for (const { tc, gate } of refusedCalls) {
+      const refusedCalls = [
+        ...prohibitedCalls.map((tc) => ({ tc, gate: null, offered: true })),
+        ...unofferedCalls.map((tc) => ({ tc, gate: null, offered: false })),
+        ...blockedCalls.map((entry) => ({ ...entry, offered: true })),
+      ];
+      for (const { tc, gate, offered } of refusedCalls) {
         const escalationDenied = gate?.reason === 'lethal_trifecta';
         logger.warn(
           {
             tool: tc.qualifiedName,
             requestId: processed.requestId,
-            reason: gate?.reason ?? 'turn_prohibition',
+            reason: gate?.reason ?? (offered ? 'turn_prohibition' : 'not_offered'),
           },
-          gate === null
-            ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
-            : escalationDenied
-              ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
-              : '[tool-loop] tool call blocked by the user permission store',
+          !offered
+            ? '[tool-loop] tool call refused: the tool was not offered on this turn'
+            : gate === null
+              ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
+              : escalationDenied
+                ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
+                : '[tool-loop] tool call blocked by the user permission store',
         );
         const content = await applyToolResultSecretPolicy(
           options.userId,
           tc.qualifiedName,
-          gate === null
-            ? prohibitedToolResultMessage(tc.qualifiedName)
-            : escalationDenied
-              ? refusedToolResultMessage(tc.qualifiedName)
-              : blockedToolResultMessage(tc.qualifiedName),
+          !offered
+            ? notOfferedToolResultMessage(tc.qualifiedName)
+            : gate === null
+              ? prohibitedToolResultMessage(tc.qualifiedName)
+              : escalationDenied
+                ? refusedToolResultMessage(tc.qualifiedName)
+                : blockedToolResultMessage(tc.qualifiedName),
         );
         await auditToolCall(tc.qualifiedName, 'blocked');
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);

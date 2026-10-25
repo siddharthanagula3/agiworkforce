@@ -37918,651 +37918,658 @@
   },
   "evidence": [
     {
-      "id": "verification/2026-09-14/1",
+      "id": "verification/2026-10-25/1",
+      "date": "2026-10-25",
+      "verifiedBy": "bundled-claude-api-reference-and-platform-extended-thinking-page",
+      "status": "CORRECTION",
+      "notes": "Added reasoning.thinkingDisplay summarized to claude-fable-5-1, claude-opus-5-5, claude-sonnet-5-5 and claude-haiku-5-5. On all four the thinking display defaults to omitted, so thinking blocks stream with empty text unless the request sets thinking.display to summarized; the owner decided to show a reasoning summary as ChatGPT and Claude do. The Anthropic adapters send the declared value with adaptive or enabled thinking and never with between_tools, which takes no other field. Display changes visibility only; thinking is billed the same. Read from the bundled Claude API reference (cached 2026-10-06) and platform.claude.com/docs/en/build-with-claude/extended-thinking on 2026-10-25; no live call was made."
+    },
+    {
+      "id": "verification/2026-09-14/2",
       "date": "2026-09-14",
       "verifiedBy": "registry-contract-test-and-free-inference-tos-workbook-2026-09-01",
       "status": "ADDITION",
       "notes": "openrouter-free joined tierAllowedModels.economy on 2026-09-06 (d02aed0b5), which puts it in the picker on every plan, but auto.tierAllowedSlots only carried its two slots, free_workhorse and free_workhorse_fast, under the free tier, so tierAdmissionRejection in packages/ai/routing/src/auto.ts refused every explicit pick on Pro, Max, Enterprise and BYOK with \"routing slot free_workhorse, free_workhorse_fast for model openrouter-free is not allowed for tier <tier>\", reproduced live from the Chrome extension on an Enterprise account on 2026-09-14. The direct fix (adding those two slots to the paid tiers' lists) was tried and reverted: packages/ai/model-registry/tests/registry-contract.test.mjs asserts every non-free tier's allowed slots contain nothing prefixed free_, an invariant authored in 90ac37cc7 specifically so a paid tier could never reach a pool-gated model, and docs/research/free-inference-tos-workbook-2026-09-01.md independently excluded openrouter-free from the free lane's pool because OpenRouter's data_collection parameter defaults to allow (upstream training permitted) unless a caller sends deny. That invariant governs the automatic free lane (free-pools.json, free-auto.ts, FreeEligibility), a silent, system-initiated route the 2026-09-01 workbook is right to gate tightly; it was never a statement that openrouter-free itself may not be explicitly selected. The 2026-09-06 catalog entry for that change already drew exactly this line, made with the training-data fact in view: \"those upstream providers' terms may allow training on prompts, which is why the company free lane... still lists no OpenRouter free route; the picker entry is a user choice, not the free lane.\" This change completes that already-made decision rather than revisiting it: a new tier-neutral slot, router_zero_cost, same modelKey openrouter-free, added after free_workhorse_fast in auto.slots (so free_workhorse stays the first-registered, canonical slot for this modelKey and getSlotForModel('openrouter-free') is unchanged) and appended to tierAllowedSlots for free, pro, max, enterprise and byok. It is deliberately absent from every task's preferredSlots, so policyReachableSlots in packages/ai/routing/src/auto.ts never contains it and the Auto router can never place it in a fallback or task-ranked candidate list on any tier; it is reachable only by a caller naming openrouter-free directly, exactly like free_workhorse today. registry-contract.test.mjs gained one assertion enforcing that reachability stays absent, and its free-lane-slot invariant is otherwise untouched and still passes. The conformance fixture changed on exactly the three openrouter-free rows (two explicit selections, one continuity case, all previously unavailable at tier max) and is byte-identical to what the direct, reverted fix would have produced, which is expected: the two approaches are behaviourally equivalent for admission and differ only in whether a pool-only-by-naming-convention slot got reused, which is what the guard exists to prevent. Not addressed here, and out of this change's scope: whether the dispatch itself should force data_collection: deny for an explicit pick regardless of the caller's organization zeroDataRetentionOnly setting (packages/ai/providers/openrouter/src/provider-routing.ts only sends deny when that org-level flag is already true, which is opt-in and off by default). That is a request-dispatch change, not a routing-admission one, and a separate in-progress note in audit/decisions/founder-actions.md is already tracking it as a founder decision."
     },
     {
-      "id": "verification/2026-09-06/2",
+      "id": "verification/2026-09-06/3",
       "date": "2026-09-06",
       "verifiedBy": "live-route-probes-alibaba-model-studio-models-dev",
       "status": "CORRECTION",
       "notes": "One current model per family. Audited all 26 family slots in model-families.json for a released same-family successor already in the catalog and found five families carrying two generations. qwen/qwen-flash was the only slot whose active model was the older one, so it is the only promotion: Qwen3.5-Flash to Qwen3.8-Flash. The other four already served the successor, so their predecessors were retired without a slot move: gemini-3.6-flash under gemini-3.8-flash, gemini-3.1-flash-lite under gemini-3.5-flash-lite, kimi-k2.6 under kimi-k3, and minimax-m2.7 under minimax-m3. minimax-m2.7 was also the last explicit model id left in tierAllowedModels.pro_additions beside minimax-m3 and it is gone from that list; every other tier entry is already a family slot reference, so those follow the promotion on their own. All five predecessors are deprecated rather than removed: the records stay in the catalog and stay resolvable, so a conversation that named one still opens, and lifecycle.deprecated takes them out of the picker and out of every routing target the compiler resolves. Evidence for the promotion. Qwen3.8-Flash answers: probed 2026-09-06 through its own default route, qwen/qwen-3.8-flash on the dashscope-intl endpoint, first byte at 1011 ms, echoing the model id qwen3.8-flash back, recorded in probes.json. The managed OpenRouter route was probed first because that is what managed cloud dispatches on for Qwen, and it returned 404 with every endpoint excluded by the account zero-data-retention setting at openrouter.ai/settings/privacy. That is an account policy rather than a model fact: the outgoing Qwen3.5-Flash fails the same way through the same route, while gemini-3.8-flash, kimi-k3 and minimax-m3 all answer through it. Release date and shape: models.dev publishes alibaba/qwen3.8-flash with release_date 2026-08-26, a 1,000,000-token context, 131,072 output tokens and 0.15 in / 0.47 out per million, and alibabacloud.com/help/en/model-studio/qwen3-8-flash, retrieved 2026-09-06 and last updated there 2026-08-28, confirms the same 1M context and 131,072 output ceiling. Neither source publishes benchmark scores for this model, so the advance from probed to evaluated rests on that published capability, limit and pricing record plus the live probe, not on comparative scores; that gap is stated here rather than papered over. Two judgments a reviewer should see. The promotion breached the default 25 percent input cost regression ceiling: input rises 0.10 to 0.15 per million, a 50 percent increase, while output rises 0.40 to 0.47, 17.5 percent, and context holds at 1M while max output more than doubles from 64,000 to 131,072. The per-family thresholds override that families.mjs already merges is set on qwen/qwen-flash at maxInputCostIncreaseRatio 0.5 so the slot accepts this generation, and it is recorded here because the family record has no field to carry a reason. Second, loadFamilySnapshot in scripts/compile.mjs never passed the gateway catalog to buildNormalizedRegistry, so every family slot command has crashed since gateways were introduced; the missing argument is restored, which is what made this audit possible at all."
     },
     {
-      "id": "verification/2026-09-05/3",
+      "id": "verification/2026-09-05/4",
       "date": "2026-09-05",
       "verifiedBy": "openrouter-live-model-list",
       "status": "CORRECTION",
       "notes": "Added the OpenRouter failover slug for gpt-6-astra, openai/gpt-6-astra, verified against the live openrouter.ai/api/v1/models list on 2026-09-05. The row shipped without one, so the direct-provider failover guard had no route to fall back to."
     },
     {
-      "id": "verification/2026-09-05/4",
+      "id": "verification/2026-09-05/5",
       "date": "2026-09-05",
       "verifiedBy": "official-openai-anthropic-pages",
       "status": "ADDITION",
       "notes": "Founder-directed addition of the two flagship rows. OpenAI: gpt-6-astra, new to the catalog, verified against developers.openai.com/api/docs/models/gpt-6-astra, developers.openai.com/api/docs/pricing, developers.openai.com/api/docs/guides/reasoning and developers.openai.com/api/docs/guides/prompt-caching on 2026-09-05. A 1,050,000-token context with a 922,000-token input ceiling and 128,000 output, an April 30 2026 knowledge cutoff, released September 3 2026 per the API changelog, and $10 / $1 cached / $12.50 cache write / $50 output per million with a single long-context tier: a prompt over 272,000 input tokens rebills the whole request at 2x input and cache rates and 1.5x output, which is the inputTokenPricingTiers row. It takes no family slot: the gpt-frontier pattern matches only the Sol line, so the slot stays on gpt-5.6-sol. Unpublished fields are left out rather than guessed: OpenAI states no default reasoning effort, no image detail values, and no multi-agent, pro, persistent-reasoning or programmatic tool-calling support for this model, so none of those blocks are authored, and there is no OpenRouter slug or gateway route because no synced gateway carries the model yet. Two authored judgments: speed is slow, because unlike Sol this model rejects reasoning_effort none with a 400 and always reasons, and computerUse and codeExecution are true because the model page lists computer use, code interpreter and hosted shell among its supported tools. Anthropic: claude-fable-5-1 was already curated on 2026-09-04 and was re-checked this wave against platform.claude.com/docs/en/about-claude/models/overview and the pricing page. Every recorded fact still holds, the id, the 1M context, the 128K output, the June 2026 cutoff, $10 / $50 with a 0.025x cache read at $0.25 and $12.50 / $20 cache writes, so the row is unchanged."
     },
     {
-      "id": "verification/2026-09-04/5",
+      "id": "verification/2026-09-04/6",
       "date": "2026-09-04",
       "verifiedBy": "official-anthropic-moonshot-deepseek-google-minimax-openrouter-groq-pages",
       "status": "ADDITION",
       "notes": "Founder-directed catalog refresh, additions. Every row below was verified against the provider page named in its pricingNote on 2026-09-04, and none of them takes a family slot: each either sits outside its family pattern or is an older generation than the slot already holds. Anthropic: claude-haiku-4-5, the pinned snapshot claude-haiku-4-5-20251001, extended thinking only with no effort parameter, a 4,096-token minimum cacheable prompt, and a retirement commitment that runs only to 2025-10-15. Moonshot: kimi-k2.7-code, a dedicated coding lane with forced thinking, and kimi-k2.6, the only Kimi with a thinking toggle; both are 256K context, both publish a Modified MIT License, and both are chat-completions only because Moonshot documents just kimi-k3 on its Messages API. DeepSeek: deepseek-v4-flash-vision-exp, the only DeepSeek model that accepts images. The DeepSeek vision task now routes to it: correcting both text rows to text-only left that task pointed at a model that cannot take an image. Google: gemini-3.6-flash, the only Flash at or above 3.6 that accepts the minimal thinking level; gemini-3.1-flash-lite with its announced 2027-05-07 shutdown; the premium and cheap image lanes gemini-3-pro-image and gemini-3.1-flash-lite-image; and the realtime voice and text-to-speech previews gemini-3.1-flash-live-preview and gemini-3.1-flash-tts-preview. MiniMax: MiniMax-M2.7, text only and always thinking, in the same pro band and at the same price as M3. OpenRouter: openrouter/auto-beta, still labelled Beta, priced -1 like the production router, so it must be metered against the model named in the response. Groq: gpt-oss-safeguard-20b, a policy classifier rather than a chat model, plus qwen3.6-27b and qwen3.8-27b. All four Groq and OpenRouter beta rows are marked preview, which is what makes them addressable but not selectable, because both providers warn that preview endpoints can be withdrawn at short notice. Skipped: gemini-3.5-flash and gemini-3.7-flash, whose ids are in retired-models.json and which the catalog policy test forbids reintroducing, and qwen3.7-flash, which would present as a promotion candidate older than qwen3.8-flash and whose video input, required by the Qwen family contract, no fetched page confirms."
     },
     {
-      "id": "verification/2026-09-04/6",
+      "id": "verification/2026-09-04/7",
       "date": "2026-09-04",
       "verifiedBy": "official-anthropic-xai-alibaba-model-pages",
       "status": "ROSTER",
       "notes": "Founder-directed generation swap, part two of two. Added claude-fable-5-1 (Claude API id claude-fable-5-1, released 2026-09-01, 1M context, 128K output, $10/$50 with cache reads at $0.25, which is 0.025x input rather than the 0.1x every other Claude model uses, five effort levels default high, sampling parameters rejected, 512-token minimum cacheable prompt) and promoted anthropic/claude-fable to it through the gated tool; claude-fable-5 was then removed from the roster and added to retired-models.json, matching how glm-5.2 and gemini-3.7-flash were retired on 2026-09-03. Added grok-4.6 (released 2026-08-12, 500,000 context, $2/$6 with cached input $0.50, rising to $4/$12/$1.00 for every token once a prompt reaches 200,000 tokens, low through xhigh effort) and promoted xai/grok to it, then retired grok-4.5. No maximum output length is recorded for grok-4.6: xAI publishes none, and the 450,000 figure in the proposal came from OpenRouter, which is why that part of the proposal was refuted. The three Anthropic family patterns now accept a dashed minor version, and generation parsing splits on dots and dashes, because Anthropic writes claude-fable-5-1 where the previous pattern only admitted a dotted 5.1. Added qwen3.8-flash (single International band $0.15/$0.47 across the full 1M window, 131,072 output, no published cache rates) and moved qwen3.5-flash to the same International basis it is actually served from. The qwen/qwen-flash promotion is BLOCKED and was not forced: the cost gate reports input rising 50% against a 25% ceiling, which is a real price increase on the economy lane and needs an owner, not a widened threshold. qwen3.8-flash is in the catalog and addressable but is in no tier list until that decision is made."
     },
     {
-      "id": "verification/2026-09-04/7",
+      "id": "verification/2026-09-04/8",
       "date": "2026-09-04",
       "verifiedBy": "official-provider-pricing-and-model-pages",
       "status": "CORRECTION",
       "notes": "Founder-directed catalog refresh, part one of two: corrections to existing entries, each verified against the provider's own pages on 2026-09-04. Zhipu: glm-5.3 license is the custom GLM-5.3 License (Hugging Face cardData license \"other\", license_name \"glm-5.3\"), not MIT; glm-5.3-flash carries its 50% promotion as promo_expires_at 2026-09-09T16:00:00Z with post_promo_prices 0.15/0.50/0.03; release dates 2026-08-18 and 2026-08-26. Moonshot: kimi-k3 publishes the Kimi K3 License, a 1048576 max output (default 131072), text/image/video input, low/high/max reasoning effort defaulting to max, a responsesEffortPath of reasoning.effort on v1/responses, and a 2026-07-16 release. DeepSeek: both V4 rows are text-only (image input is documented only for the vision experimental row), carry a 384000 max output, move to the dated OpenRouter slugs deepseek-v4-flash-0731 and deepseek-v4-pro-0813, take low/high/max effort defaulting to high, and are repriced to the peak rates 0.44/1.32/0.014 and 1.32/3.96/0.044 in the synced snapshot to match the curation overrides that already held them. OpenAI audio: gpt-4o-mini-tts is not deprecated and is the only model served on /v1/audio/speech; both transcribe rows stream and shut down 2027-02-26; all three were added to the Audio API on 2025-03-20, not December 2025. Qwen: qwen3.7-plus moves to the Singapore/International row the adapter has called since 2026-08-30, 0.40/1.60 through 256K and 1.20/4.80 above it, with the provider defaultPricing and the qwen/qwen-plus snapshot following. Google: the three Veo rows take a 1024-token text input budget and their real release dates; gemini-3.8-flash records its introductory rate expiring 2027-01-01 with post-promotion 1.50/7.50/0.15; gemini-omni-flash-preview shuts down 2026-09-30; the live-translate preview is 131072 in and 65536 out. MiniMax: M3 caps output at 524288, reads cache at 0.06, and gains the above-512K band 0.60/2.40/0.12; no cache-write fee is published. Runway: Gen-4.5 accepts image input, gains a videoGeneration block from the published OpenAPI document (2-10 second integer durations, six image-to-video ratios, no audio parameter, seed 0-4294967295), and records the professional-format per-second surcharges the schema cannot key by format. Perplexity: all four Sonar Chat Completions rows are supported only until 2026-09-27; sonar and sonar-pro accept image input and launched January 2025; the two reasoning rows publish no launch date and no way to disable chain-of-thought, and sonar-reasoning-pro publishes no effort levels. OpenRouter: seedance-2.5 accepts text, image, video and audio, released 2026-08-07, and adds the with-video-input video-token SKU at 0.0000064; openrouter-auto keeps its zero placeholder but records that OpenRouter prices it as -1, meaning the routed model's own rate. Skipped as refuted: the qwen3.5-flash cache-rate and tier edits, the qwen3.7-plus single-cell edits (applied instead as the whole International row the refutation prescribed), the minimax-m3 maxInputTokens inference, the sonar-deep-research effort-level trim, and the gpt-oss-20b cached_input rounding, which the verdict itself recommended against."
     },
     {
-      "id": "verification/2026-09-03/8",
+      "id": "verification/2026-09-03/9",
       "date": "2026-09-03",
       "verifiedBy": "official-openai-anthropic-google-xai-openrouter-pricing-pages",
       "status": "CORRECTION",
       "notes": "Founder-directed full catalog price refresh against official provider pricing pages (developers.openai.com/api/docs/pricing, platform.claude.com/docs/en/about-claude/pricing, ai.google.dev/gemini-api/docs/pricing, docs.x.ai/docs/models, api-docs.deepseek.com/quick_start/pricing, docs.z.ai/guides/overview/pricing, help.aliyun.com/zh/model-studio/model-pricing, platform.kimi.ai/docs/pricing/chat-k3, docs.perplexity.ai/getting-started/pricing, console.groq.com/docs/model, openrouter.ai/api/v1/models), retrieved 2026-09-03. Four corrections: (1) gpt-5.6-sol's costOverride and its >272,000-token inputTokenPricingTiers entry were both roughly 20-25% above OpenAI's current published rate; corrected to $4/$20 (cache read $0.40, cache write $5) under 272K and $8/$30 (cache read $0.80, cache write $10) above it. gpt-5.6-terra and gpt-5.6-luna were re-verified and already matched exactly; the founder's initial flag named gpt-5.6-luna, but luna was correct and sol was the stale one. (2) gemini-3.1-pro-preview was missing Google's published pricing tier above 200,000 input tokens ($4.00 input, $18.00 output, $0.40 cache read); added as inputTokenPricingTiers. The base rate (2/12/0.2) already matched. (3) grok-4.5 was missing xAI's published pricing tier at or above 200,000 prompt tokens ($4.00 input, $12.00 output); added as inputTokenPricingTiers with no cache-read field since capabilitiesOverride.caching is false for this model. The base rate (2/6) already matched; xAI confirms the 500,000-token context window directly, so the bestFor label 'Long Context (1M)' is inaccurate copy, not a pricing fact, and is left for whoever owns that copy. (4) claude-sonnet-5: Decision #22 (docs/decisions/README.md) pinned this model's costOverride to $3/$15 on every date specifically because a provider introductory discount is a provider-cost fact, not a product price, and Anthropic's promotional $2/$10 window was scheduled to revert to $3/$15 on 2026-09-01. Anthropic's pricing page now states $2/$10 'is now the standard price' and that the scheduled increase 'will not occur', so the premise behind Decision #22 no longer holds. Per explicit founder instruction 2026-09-03, Decision #22 is retired (docs/decisions/README.md updated in the same change) and claude-sonnet-5.costOverride is set to the founder-selected standard tracking Anthropic's now-permanent rate: $2 input, $10 output, $0.20 cache read, $2.50 five-minute cache write, $4.00 one-hour cache write. packages/ai/model-registry/tests/catalog-policy.test.mjs was updated in the same change to assert the new values and cite the retirement instead of the reaffirmation. Every other model and OpenRouter route in the catalog was checked against its official source in this pass and found correct; minimax-m3's suspected missing cache-read price and >512K tier could not be confirmed against a first-party page (MiniMax's pricing pages are JS-rendered SPAs that returned no text to a direct fetch) and were left unchanged rather than applied from aggregator corroboration alone. Perplexity's per-request search fee and sonar-deep-research's citation/reasoning-token and search-query fees are confirmed to exist on Perplexity's pricing page but have no schema field to record them; flagged for a future schema change, not applied here."
     },
     {
-      "id": "verification/2026-09-02/9",
+      "id": "verification/2026-09-02/10",
       "date": "2026-09-02",
       "verifiedBy": "official-z-ai-glm-model-and-pricing-docs-and-openrouter-model-list",
       "status": "PASS",
       "notes": "Added GLM-5.3 and GLM-5.3-Flash to the catalog and promoted the zhipu/glm family slot from glm-5.2 to glm-5.3 via the family-slots promotion script, then removed glm-5.2 from the roster and added it to retired-models.json. Official Z.ai documentation confirms glm-5.3 keeps GLM-5.2's shape (text-only input/output, 1,000,000-token context, function calling, structured output, streaming, context caching) but replaces the 5.2 thinking.type on/off toggle with mandatory reasoning at three effort levels (low, high, max via the reasoning_effort parameter; thinking.type now accepts only 'enabled'), and newly documents a 128,000-token output cap that 5.2 never published. GLM-5.3-Flash is a new addition, not a promotion target: it is the first natively multimodal GLM (text, image, video, PDF input; BUA/CUA computer-use and autonomous tool invocation) on the same 1,000,000-token context and 128,000-token output, same mandatory low/high/max reasoning. Pricing: glm-5.3 is unchanged from 5.2 at $1.40/M input, $4.40/M output, $0.26/M cache read; glm-5.3-flash is the current promotional rate of $0.075/M input, $0.25/M output, $0.015/M cache read, which Z.ai's pricing page lists as reverting to $0.15/$0.50/$0.03 on 2026-09-09 and must be re-verified before that date. Z.ai's pricing page was checked explicitly for day/night or peak/off-peak tiers on every model and carries none, so no time-of-day schedule applies (DeepSeek's peak-rate convention elsewhere in this catalog does not apply here). Benchmarks are omitted because Z.ai publishes none for either 5.3 model and carrying 5.2's numbers forward would be fabricated. GLM-5.3-Flash was left out of every provider default, task-routing slot, and tier list: those already resolve through family:zhipu/glm (unaffected by adding a non-family-pattern id), and Zhipu's provider block has no separate fast-tier route the way Google's flash-lite/flash split does, so inventing one was out of scope for this change. openrouter.ai/z-ai/glm-5.3 and openrouter.ai/z-ai/glm-5.3-flash confirm both slugs at matching context/output limits and pricing. Sources retrieved 2026-09-02: docs.z.ai/guides/llm/glm-5.3, docs.z.ai/guides/vlm/glm-5.3-flash, docs.z.ai/guides/overview/pricing, openrouter.ai/z-ai/glm-5.3, and openrouter.ai/z-ai/glm-5.3-flash."
     },
     {
-      "id": "verification/2026-09-02/10",
+      "id": "verification/2026-09-02/11",
       "date": "2026-09-02",
       "verifiedBy": "official-google-gemini-model-and-pricing-docs-and-openrouter-model-list",
       "status": "PASS",
       "notes": "Added Gemini 3.8 Flash to the catalog and promoted the google/gemini-flash family slot from gemini-3.7-flash to gemini-3.8-flash via the family-slots promotion script, then removed gemini-3.7-flash from the roster and added it to retired-models.json. Official Google documentation confirms the exact gemini-3.8-flash API ID, the same 1,048,576-token input and 65,536-token output limits as 3.7, text/image/audio/video/PDF input with text-only output, function calling, code execution, search grounding, context caching, and low/medium/high thinking levels (minimal remains unsupported). Pricing is unchanged from 3.7's promotional rate of $0.75/M input, $3.75/M output, $0.075/M cache read, which Google's pricing page lists as reverting to $1.50/$7.50/$0.15 on 2027-01-01 and must be re-verified before that date. Benchmarks are omitted because Google publishes none for 3.8. openrouter.ai/google/gemini-3.8-flash confirms the google/gemini-3.8-flash slug at the same context/output limits and pricing. Sources retrieved 2026-09-02: ai.google.dev/gemini-api/docs/models/gemini-3.8-flash, /docs/latest-model, /docs/pricing, and openrouter.ai/google/gemini-3.8-flash."
     },
     {
-      "id": "verification/2026-08-18/11",
+      "id": "verification/2026-08-18/12",
       "date": "2026-08-18",
       "verifiedBy": "official-google-gemini-model-and-pricing-docs-and-openrouter-model-list",
       "status": "PASS",
       "notes": "Replaced Gemini 3.6 Flash with Gemini 3.7 Flash across the catalog, Google provider default/task routing, managed-cloud canonicalization, and the economy tier list. Official Google documentation confirms the exact gemini-3.7-flash API ID, 1,048,576-token input and 65,536-token output limits, text/image/audio/video/PDF input with text-only output, function calling, code execution, search grounding, context caching, batch, computer use (preview), and low/medium/high thinking levels, minimal is NOT supported on 3.7, so it was dropped from supportedEfforts. Pricing is the current promotional rate of $0.75/M input, $3.75/M output, $0.075/M cache read, which Google lists as reverting to $1.50/$7.50/$0.15 on 2027-01-01 and must be re-verified before that date. Benchmarks are omitted because Google publishes none for 3.7 and carrying 3.6 numbers forward would be fabricated. openrouter.ai/api/v1/models confirms the google/gemini-3.7-flash slug. Sources retrieved 2026-08-18: ai.google.dev/gemini-api/docs/models, /docs/models/gemini-3.7-flash, /docs/pricing, and openrouter.ai/api/v1/models."
     },
     {
-      "id": "verification/2026-08-10/12",
+      "id": "verification/2026-08-10/13",
       "date": "2026-08-10",
       "verifiedBy": "official-openrouter-video-model-api-and-video-generation-contract",
       "status": "PASS",
       "notes": "Added OpenRouter's current ByteDance Seedance 2.5 video route from the live official video-model catalog and current create, poll, authenticated-content, and signed-webhook documentation. The canonical record carries every supported 4-30 second duration, each exact resolution/aspect/pixel tuple, audio and seed support, and the provider-published video-token formula so reservation cost is derived from pixels rather than a misleading flat resolution rate. The managed adapter polls and downloads authenticated content into AGI private storage; provider URLs never become client output. Sources retrieved 2026-08-10: openrouter.ai/api/v1/videos/models, openrouter.ai/docs/guides/overview/multimodal/video-generation, and the OpenRouter video API reference."
     },
     {
-      "id": "verification/2026-08-10/13",
+      "id": "verification/2026-08-10/14",
       "date": "2026-08-10",
       "verifiedBy": "official-alibaba-model-studio-pricing-cache-docs-and-canonical-endpoint-audit",
       "status": "CORRECTION",
       "notes": "Reverified current Qwen pricing against Alibaba Cloud Model Studio and tied catalog prices to the deployment scope the production adapter actually calls. The canonical Qwen adapter defaults to dashscope.aliyuncs.com, the Chinese-mainland deployment, not dashscope-intl.aliyuncs.com. In that scope qwen3.5-flash uses three input-length bands: $0.029/$0.287 through 128K input, $0.115/$1.147 above 128K through 256K, and $0.172/$1.72 above 256K through 1M. qwen3.7-plus uses $0.276/$1.101 through 256K and $0.826/$3.301 above 256K through 1M; the former International-scope $0.40/$1.60 and $1.20/$4.80 values did not match the production endpoint and were removed. Implicit cache reads cost 20% of the active input band and explicit cache creation costs 125%, so every band carries its matching cache rates. Limited-time discounts remain excluded. Sources retrieved 2026-08-10: alibabacloud.com/help/en/model-studio/model-pricing and alibabacloud.com/help/en/model-studio/context-cache. The pricing page identifies qwen3.5-flash as the current alias of the 2026-02-23 snapshot and qwen3.7-plus as the current alias of the 2026-05-26 snapshot."
     },
     {
-      "id": "verification/2026-08-10/14",
+      "id": "verification/2026-08-10/15",
       "date": "2026-08-10",
       "verifiedBy": "official-openai-model-pages-and-founder-screenshot",
       "status": "CORRECTION",
       "notes": "Reverified the complete current OpenAI reasoning family against each official model page, the official GPT-5.6 model guidance, and the founder-provided official comparison screenshot. The published short-context rates were already correct: Sol $5 input / $0.50 cached input / $30 output, Terra $2 / $0.20 / $12, and Luna $0.20 / $0.02 / $1.20 per million tokens. All three publish a 1,050,000-token context window, 128,000 maximum output, and a 2026-02-16 knowledge cutoff. The cards do not publish a separate 922,000 maximum-input limit, so that previously derived field was removed rather than presented as an upstream fact. Requests above 272,000 input tokens are charged at 2x input and 1.5x output; the missing Terra and Luna long-context blocks are restored from those published multipliers, including the family's 1.25x cache-write rate. Image input supports low, high, original, and auto detail. Provider-hosted tools remain separate from AGI application capability flags: catalog search is true only because the Responses search harness is implemented, while computer use, code execution, and image generation stay false until their AGI execution paths are wired and verified. Sources retrieved 2026-08-10: developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, and developers.openai.com/api/docs/guides/latest-model."
     },
     {
-      "id": "verification/2026-08-10/15",
+      "id": "verification/2026-08-10/16",
       "date": "2026-08-10",
       "verifiedBy": "founder-directive-remove-prior-stability-image-model",
       "status": "POLICY",
       "notes": "Founder directive: remove the prior Stability image model from the canonical registry and every generated or authored product surface. The generic provider adapter remains dormant so a future verified replacement can be introduced through this canonical catalog without adding model identifiers to application code."
     },
     {
-      "id": "verification/2026-08-10/16",
+      "id": "verification/2026-08-10/17",
       "date": "2026-08-10",
       "verifiedBy": "founder-directive-remove-prior-generation-compact-openai-model",
       "status": "POLICY",
       "notes": "Founder directive: remove the prior-generation compact OpenAI reasoning model from the canonical registry, every subscription roster, Auto-routing, examples, tests, snapshots, and historical product copy. Free coding now uses the current Free tool-capable model selected by the canonical coding_fast slot. No compatibility alias is retained, so stale explicit selections fail closed instead of silently routing to a different model."
     },
     {
-      "id": "verification/2026-08-09/17",
+      "id": "verification/2026-08-09/18",
       "date": "2026-08-09",
       "verifiedBy": "official-google-interactions-image-docs-and-live-contract-probe",
       "status": "CORRECTION",
       "notes": "Gemini 3.1 Flash Image generation now uses Google's current v1beta Interactions API. The current REST examples and a live AGI-owned request prove response_format.mime_type=image/jpeg; the endpoint rejects image/png for this model. The output MIME is model metadata so a future image-model replacement changes the canonical curation row rather than Web/Mobile/Desktop route code. Source retrieved 2026-08-09: ai.google.dev/gemini-api/docs/image-generation."
     },
     {
-      "id": "verification/2026-08-09/18",
+      "id": "verification/2026-08-09/19",
       "date": "2026-08-09",
       "verifiedBy": "official-runway-text-to-video-model-pricing-output-docs",
       "status": "CORRECTION",
       "notes": "Corrected the stable internal runway-gen-4 catalog entry from the image-to-video-only gen4_turbo wire model to Runway's current text-to-video-capable gen4.5 model. Runway announced Gen-4.5 in December 2025; its POST /v1/text_to_video reference accepts gen4.5 but not gen4_turbo, constrains prompts to 1-1,000 UTF-16 code units, supports only 1280:720 landscape and 720:1280 portrait output, and accepts integer durations from 2-10 seconds. Runway prices gen4.5 at 12 credits per output second and sells credits for $0.01 each, so canonical cost is $0.12/second for the supported 720p orientations. The separate API changelog dates Gen-4.5 API availability to 2026-02-10; that API date is not the model release date. Removed the prior invented 4,000-token context because Runway documents a character limit, not a token context window. Documentation availability is not account provisioning: the entry remains availability=unavailable and Runway has no provider default until a live AGI-owned account probe returns 200. Runway also requires successful task output URLs to be downloaded and stored because they expire after 24-48 hours and must not be exposed directly. Sources retrieved 2026-08-09: docs.dev.runwayml.com/api, docs.dev.runwayml.com/assets/inputs, docs.dev.runwayml.com/guides/models, docs.dev.runwayml.com/guides/pricing, docs.dev.runwayml.com/api-details/api_changelog, and docs.dev.runwayml.com/assets/outputs."
     },
     {
-      "id": "verification/2026-08-05/19",
+      "id": "verification/2026-08-05/20",
       "date": "2026-08-05",
       "verifiedBy": "founder-decision-22-sonnet-5-standard-pricing",
       "status": "POLICY",
       "notes": "Founder reaffirmed 2026-08-05 (docs/decisions/README.md Decision #22) that a provider introductory window is a PROVIDER-COST fact, never a product price. Claude Sonnet 5 is billed to users at the founder-selected standard $3/$15 per MTok with cache read $0.30, 5m write $3.75 and 1h write $6.00 on EVERY date, restoring the 2026-07-15 and 2026-07-18 founder pins. The intro pricingSchedule added earlier the same day (Anthropic's $2/$10 through 2026-08-31) is REMOVED from claude-sonnet-5: Anthropic's promotional rate lowers our cost of goods and does not change what the product charges. The dated pricingSchedule MECHANISM stays in the catalog, compiler, schema, and every consumer for future real product price changes; packages/ai/model-registry/tests/catalog-policy.test.mjs now fails if any Sonnet 5 schedule window prices below the standard top-level rates. SUPERSEDED 2026-08-10: this historical pass temporarily removed two unverified long-context blocks; the top 2026-08-10 verification entry records the subsequently reverified current tiers and their production consumers. No upstream model fact was re-probed in this entry."
     },
     {
-      "id": "verification/2026-08-05/20",
+      "id": "verification/2026-08-05/21",
       "date": "2026-08-05",
       "verifiedBy": "official-anthropic-and-openai-pricing-pages",
       "status": "CORRECTION",
       "notes": "Pricing verified 2026-08-05 against the official Anthropic and OpenAI pricing pages. (1) SUPERSEDED the same day by Decision #22 (entry above): Anthropic publishes introductory Sonnet 5 rates of $2/$10 per MTok with cache read $0.20, 5m write $2.50 and 1h write $4.00 through 2026-08-31, then $3/$15 with cache read $0.30, 5m write $3.75 and 1h write $6.00. That is a provider-cost fact and is recorded here only; it is NOT a product price and no longer appears as a claude-sonnet-5 pricingSchedule. Batch prices for the two provider windows are $1.00/$5.00 and $1.50/$7.50 per MTok, recorded here because the catalog has no batch-pricing field. (2) OpenAI's 2026-07-30 price cut is applied: gpt-5.6-terra $2/$12 with cached input $0.20 and cache write $2.50, gpt-5.6-luna $0.20/$1.20 with cached input $0.02 and cache write $0.25; gpt-5.6-sol was already correct at $5/$30 with cached input $0.50 and cache write $6.25. (3) OpenAI charges prompt-cache WRITES at 1.25x the uncached input rate starting with the GPT-5.6 family; earlier compact models published no write price. (4) openWeight/license metadata added only where verified or secondary-sourced; hosted Qwen variants and every other unverified model are left absent, which means unknown."
     },
     {
-      "id": "verification/2026-08-04/21",
+      "id": "verification/2026-08-04/22",
       "date": "2026-08-04",
       "verifiedBy": "founder-decision-free-roster",
       "status": "POLICY",
       "notes": "Founder decision 2026-08-04: gpt-5.6-luna moves to tierPolicy.minTier 'free' following its permanent price reduction. FREE_TRIAL_MODELS (apps/web/lib/free-trial-config.ts) derives from this field intersected with the economy roster, so no hand-maintained Free model list exists on any surface. This is a product/pricing policy change, not a model-capability verification: no upstream model fact was re-probed and no cost/limit data changed. Paired with a fix to canAccessModelForSubscriptionTier (packages/contracts/types/src/model-catalog.ts), which previously returned false for every model on Free and forced services/api-gateway to carry a divergent free-roster special case that admitted Free to the entire economy roster."
     },
     {
-      "id": "verification/2026-07-25/22",
+      "id": "verification/2026-07-25/23",
       "date": "2026-07-25",
       "verifiedBy": "official-anthropic-opus-5-docs",
       "status": "CORRECTION",
       "notes": "Replaced the prior Opus generation with Claude Opus 5 under AGI's latest-family-only policy. Official Anthropic documentation confirms the claude-opus-5 API ID, 1M context, 128K synchronous output, May 2026 knowledge cutoff, $5/M input and $25/M output pricing, adaptive thinking by default, low/medium/high/xhigh/max effort, disabled-thinking limited to low/medium/high effort, sampling-parameter restrictions, 512-token prompt-cache minimum, native web-fetch unavailability, and current computer-use tool contract. Sources retrieved 2026-07-25 from platform.claude.com model overview, model comparison, extended thinking, effort, prompt caching, web fetch, and computer use documentation."
     },
     {
-      "id": "verification/2026-07-22/23",
+      "id": "verification/2026-07-22/24",
       "date": "2026-07-22",
       "verifiedBy": "founder-directive-and-official-google-model-thinking-pricing-docs",
       "status": "CORRECTION",
       "notes": "Replaced the previous Flash-Lite chat model with the GA Gemini 3.5 Flash-Lite across the catalog, routing slots, and product surfaces. Official Google documentation confirms the exact gemini-3.5-flash-lite API ID, 1,048,576-token input and 65,536-token output limits, $0.30/M standard input, $2.50/M output, $0.03/M cache-read pricing, multimodal/PDF input, function calling, code execution, search grounding, URL context, caching, and minimal/low/medium/high thinking levels with minimal as default. The same pricing page corrects Gemini 3.6 Flash output pricing to $7.50/M and its current model page confirms the same 1,048,576/65,536 token limits. Sources retrieved 2026-07-22: ai.google.dev/gemini-api/docs/models/gemini-3.5-flash-lite, /docs/models/gemini-3.6-flash, /docs/latest-model, /docs/thinking, and /docs/pricing."
     },
     {
-      "id": "verification/2026-07-22/24",
+      "id": "verification/2026-07-22/25",
       "date": "2026-07-22",
       "verifiedBy": "founder-tier-directive-and-official-openai-model-docs",
       "status": "CORRECTION",
       "notes": "Historical founder override restored a prior-generation compact OpenAI model for Free tool-capable tasks and moved Gemini 3.6 Flash from Pro to Basic. The later 2026-08-10 founder directive supersedes the compact-model portion of this decision; ordinary Free chat continues to use Gemini 3.5 Flash-Lite."
     },
     {
-      "id": "verification/2026-07-20/25",
+      "id": "verification/2026-07-20/26",
       "date": "2026-07-20",
       "verifiedBy": "live-provider-docs-sweep-2026-07-20",
       "status": "CORRECTION",
       "notes": "Latest-family-only wave 3, every fact live-verified today against official provider docs (docs.x.ai, docs.mistral.ai, ai.google.dev, developers.openai.com, docs.perplexity.ai, openrouter.ai/api/v1/models). Provider model replacements, removals, corrected pricing, and corrected capability metadata from that sweep remain recorded in the generated changelog for the dated registry revision. A later founder directive removed the prior Stability image record, so this historical note no longer repeats retired model identifiers."
     },
     {
-      "id": "verification/2026-07-20/26",
+      "id": "verification/2026-07-20/27",
       "date": "2026-07-20",
       "verifiedBy": "founder-directive-latest-family-versions-only",
       "status": "CORRECTION",
       "notes": "Founder policy: catalog carries ONLY the latest version of each model family. Removed older compact and nano GPT generations because the current sol/terra/luna family covers flagship/chat/fast slots. Every retained family still requires live lineup verification before replacement; a later founder directive removed the prior Stability image record instead of retaining an unverified legacy model."
     },
     {
-      "id": "verification/2026-07-20/27",
+      "id": "verification/2026-07-20/28",
       "date": "2026-07-20",
       "verifiedBy": "founder-directive-and-official-moonshot-platform-docs",
       "status": "CORRECTION",
       "notes": "Founder directive: removed ALL legacy kimi models (kimi-k2.6 lingered in models.synced.json after 7a78ecbd0 removed it from curation, leaving moonshot with zero models) and the prior OpenAI text generation; the sol/terra/luna family is the current OpenAI lineup and provider routing already points at it. Added kimi-k3, verified 2026-07-20 against platform.moonshot.ai (quickstart + pricing/chat-k3 + api/chat docs): id kimi-k3, context 1,048,576 tokens, $3.00/M input ($0.30 cache hit), $15.00/M output, tool calling + vision confirmed, thinking ALWAYS-ON (Preserved Thinking; reasoning_effort field exists but only value 'max' is accepted for k3, cannot disable). Released 2026-07-16 via API; open weights announced for 2026-07-27. Benchmarks omitted pending official verifiable numbers; codeExecution/search capabilities left false pending explicit platform-tool verification for k3."
     },
     {
-      "id": "verification/2026-07-18/28",
+      "id": "verification/2026-07-18/29",
       "date": "2026-07-18",
       "verifiedBy": "founder-provider-policy-and-official-qwen-anthropic-docs",
       "status": "CORRECTION",
       "notes": "Removed founder-banned provider stubs and retired model records. Added the exact current qwen3.7-plus and qwen3.5-flash API IDs. Alibaba Cloud Model Studio official documentation confirms text+image+video input, text output, 1M context, 64K max output, function calling, structured output, thinking, and context caching for both models. Qwen pricing is deployment- and prompt-length-dependent; the catalog records published list-price tiers and does not use limited-time discounts. Claude Sonnet 5 uses its founder-selected standard $3/$15 per-million prices with $0.30 cache reads, $3.75 five-minute cache writes, and $6 one-hour cache writes rather than a temporary introductory price. Sources retrieved 2026-07-18: alibabacloud.com/help/en/model-studio/vision-model, alibabacloud.com/help/en/model-studio/model-pricing, alibabacloud.com/help/en/model-studio/context-cache, alibabacloud.com/help/en/model-studio/qwen-api-via-openai-chat-completions, platform.claude.com/docs/en/about-claude/models/whats-new-sonnet-5, and platform.claude.com/docs/en/build-with-claude/prompt-caching."
     },
     {
-      "id": "verification/2026-07-17/29",
+      "id": "verification/2026-07-17/30",
       "date": "2026-07-17",
       "verifiedBy": "official-openai-responses-web-search-docs-and-regression-contract",
       "status": "PASS",
       "notes": "Wired OpenAI Responses native web search end-to-end for current catalog models. The managed Web route no longer forces Chat Completions, injects the stable {type:web_search} tool, requests web_search_call.action.sources, translates search lifecycle/citation/source events into the canonical stream, and exposes additive source-card events to Web, Desktop, and Mobile. Search capability is published only where the application execution path is covered by focused provider, wire, registry, and route tests. Official sources retrieved 2026-07-17: developers.openai.com/api/docs/guides/tools-web-search and developers.openai.com/api/docs/guides/your-data."
     },
     {
-      "id": "verification/2026-07-17/30",
+      "id": "verification/2026-07-17/31",
       "date": "2026-07-17",
       "verifiedBy": "founder-tier-policy-and-official-openai-nano-docs",
       "status": "CORRECTION",
       "notes": "Applied the founder-confirmed cloud subscription roster: Basic includes the then-current nano OpenAI model and excludes Claude Haiku 4.5; Haiku remains Pro+. Max+ intentionally inherits the Max model roster and differs through budget and product limits, not additional model names. This changes admission only; runtime profiles and harness status still fail closed independently."
     },
     {
-      "id": "verification/2026-07-15/31",
+      "id": "verification/2026-07-15/32",
       "date": "2026-07-15",
       "verifiedBy": "official-openai-anthropic-current-roster-live-probes",
       "status": "CORRECTION",
       "notes": "Corrected the then-current OpenAI and Anthropic API roster from first-party documentation and live account probes. OpenAI GPT-5.6 Sol, Terra, and Luna are GA and selectable: GET model metadata and minimal Responses requests returned HTTP 200 for all three on 2026-07-15, superseding the stale 2026-07-10 account-specific 404. Official OpenAI model pages and pricing confirmed exact IDs, 1,050,000 context, 128,000 maximum output, 2026-02-16 knowledge cutoff, text+image input, and short-context prices. A previously recorded 922,000 maximum-input value was a derived context-minus-output budget rather than a standalone provider-published limit and was removed in the 2026-08-10 verification. Anthropic probes covered Fable 5, the then-current Opus generation, Sonnet 5, and Haiku 4.5; the 2026-07-25 verification entry supersedes the Opus portion of this historical note. The product catalog uses the founder-selected standard Sonnet 5 prices rather than temporary promotional pricing. Availability is kept separate from AGI harness implementation: OpenAI provider-native Responses tools remain marked unwired where AGI has not connected them. Sources retrieved 2026-07-15: developers.openai.com/api/docs/guides/latest-model, developers.openai.com/api/docs/models/gpt-5.6-sol, developers.openai.com/api/docs/models/gpt-5.6-terra, developers.openai.com/api/docs/models/gpt-5.6-luna, developers.openai.com/api/docs/pricing, openai.com/index/gpt-5-6, platform.claude.com/docs/en/about-claude/models/overview, platform.claude.com/docs/en/about-claude/pricing, and platform.claude.com/docs/en/build-with-claude/effort."
     },
     {
-      "id": "verification/2026-07-15/32",
+      "id": "verification/2026-07-15/33",
       "date": "2026-07-15",
       "verifiedBy": "official-google-gemini-embedding-docs",
       "status": "CORRECTION",
       "notes": "Replaced the Desktop Google Batch app-owned gemini-embedding-001 default with the current gemini-embedding-2 model in the canonical registry. Official Google Gemini Embeddings documentation lists gemini-embedding-2 as the latest multimodal embedding model (April 2026), with text, image, video, audio, and PDF input, an 8,192-token input limit, flexible 128-3,072 dimensions, $0.20 per 1M standard text-input tokens, and $0.10 per 1M Batch text-input tokens. Embedding spaces are incompatible with gemini-embedding-001, so data migration/re-embedding remains an explicit application concern rather than an alias redirect. Sources retrieved 2026-07-15: ai.google.dev/gemini-api/docs/embeddings and ai.google.dev/gemini-api/docs/pricing."
     },
     {
-      "id": "verification/2026-07-15/33",
+      "id": "verification/2026-07-15/34",
       "date": "2026-07-15",
       "verifiedBy": "official-google-runway-video-pricing-docs",
       "status": "CORRECTION",
       "notes": "Moved Web video reservations onto canonical per-second model pricing. Official Google Gemini API pricing lists Veo 3.1 Standard at $0.40/second for 720p and 1080p and $0.60/second for 4k; the Veo guide requires 8-second output for 1080p/4k. Official Runway pricing lists gen4_turbo at 5 credits/second with credits costing $0.01 ($0.05/second). Sources retrieved 2026-07-15: ai.google.dev/gemini-api/docs/pricing, ai.google.dev/gemini-api/docs/veo, docs.dev.runwayml.com/guides/pricing, and docs.dev.runwayml.com/api-details/api_changelog."
     },
     {
-      "id": "verification/2026-07-14/34",
+      "id": "verification/2026-07-14/35",
       "date": "2026-07-14",
       "verifiedBy": "official-openai-compact-model-docs",
       "status": "CORRECTION",
       "notes": "Historical compact-model correction verified the then-current OpenAI reasoning entry, limits, modalities, Responses support, effort controls, and published prices. The latest-family-only founder policy later removed that prior generation completely; active truth now comes only from current curated records."
     },
     {
-      "id": "verification/2026-07-11/35",
+      "id": "verification/2026-07-11/36",
       "date": "2026-07-11",
       "verifiedBy": "websearch-enable-2026-07-11",
       "status": "CORRECTION",
       "notes": "Founder directive: capabilities.search must be true only for models that genuinely produce web results through the application path, false wherever it would be a cosmetic no-op. The Web request path, provider translation, wire payload, and canonical source events were traced rather than trusting a provider allowlist. Anthropic and Google native search were confirmed end-to-end. Providers without an implemented search request shape were corrected to false and remain fail-closed until their real tool or request parameter is wired and covered by provider, route, and source-event tests."
     },
     {
-      "id": "verification/2026-06-03/36",
+      "id": "verification/2026-06-03/37",
       "date": "2026-06-03",
       "verifiedBy": "official-docs-model-repair",
       "status": "PASS",
       "notes": "Historical catalog repair verified provider identities and media routes from official documentation. Later audits supersede this roster: active selectable models come only from the current curated records and generated tier lists. AGI keeps unverified video IDs out of the selectable catalog and routes video generation only through verified current media records."
     },
     {
-      "id": "verification/2026-06-20/37",
+      "id": "verification/2026-06-20/38",
       "date": "2026-06-20",
       "verifiedBy": "catalog-cleanup-2026-06-20",
       "status": "PARTIAL",
       "notes": "Deleted all legacy version-redirect canonicalization entries from openai, anthropic, and xai providers. These are no longer needed: format aliases (dash→dot) are handled by apiModelId lookups in resolveCanonicalTarget(); version redirects (old→new) are unnecessary for a fresh deployment with no users. Cleared managed_cloud.taskRouting (superseded by SLOT_REGISTRY; no active users). Updated glm-5.1 → glm-5.2 per user confirmation that GLM-5.2 was released (June 2026). Pricing, benchmarks, and context window for glm-5.2 carried from glm-5.1 pending API verification."
     },
     {
-      "id": "verification/2026-06-20/38",
+      "id": "verification/2026-06-20/39",
       "date": "2026-06-20",
       "verifiedBy": "research-agent-2026-06-20",
       "status": "PASS",
       "notes": "Re-verified the active GLM, Groq, Qwen, NVIDIA, xAI, DeepSeek, and Moonshot roster against official provider documentation. Deprecated or retired records were removed from the selectable catalog, and current API IDs, context limits, and multimodal capabilities now live only on active records. Sources: official provider docs, build.nvidia.com, api-docs.deepseek.com, and Alibaba Cloud Model Studio."
     },
     {
-      "id": "verification/2026-06-23/39",
+      "id": "verification/2026-06-23/40",
       "date": "2026-06-23",
       "verifiedBy": "screenshot-verified-openai-compare-2026-06-23",
       "status": "PASS",
       "notes": "Added missing cheap OpenAI nano models, verified from OpenAI official Compare-models page (developers.openai.com), and added them to tierAllowedModels.economy. Release dates came from public launch information; the Compare page shows knowledge cutoff rather than release date. Later latest-family-only policy superseded these roster entries."
     },
     {
-      "id": "verification/2026-07-09/40",
+      "id": "verification/2026-07-09/41",
       "date": "2026-07-09",
       "verifiedBy": "research-agent-2026-07-09",
       "status": "PASS",
       "notes": "Added the GPT-5.6 family at launch and verified its published identities, limits, modalities, and knowledge cutoff from the official model pages. The launch-era prices recorded during this pass were superseded by the current official rates in the top 2026-08-10 verification entry and are intentionally not repeated here. No dated snapshot identities were published. Provider-hosted tools observed in documentation remained separate from AGI application capabilities pending an implemented harness. Historical notes about the prior frontier generation were removed under the latest-family-only founder policy."
     },
     {
-      "id": "verification/2026-07-10/41",
+      "id": "verification/2026-07-10/42",
       "date": "2026-07-10",
       "verifiedBy": "live-api-verification-2026-07-10",
       "status": "CORRECTION",
       "notes": "REVERTED the gpt-5.6 family (sol/terra/luna) added 2026-07-09 after live requests returned HTTP 404 for that account. The documentation-only claim did not prove account provisioning. Later live probes superseded this result and restored the current family. Lesson: verify model IDs against a live API call, not just documentation pages."
     },
     {
-      "id": "verification/2026-07-10/42",
+      "id": "verification/2026-07-10/43",
       "date": "2026-07-10",
       "verifiedBy": "reasoning-effort-capability-wave-2026-07-10",
       "status": "PASS",
       "notes": "Added additive per-model `reasoning` capability blocks (control/supportedEfforts/defaultEffort/canDisableThinking/thinkingBudget/request paths) for every served model, sourced from docs/research/reasoning-effort-capability-matrix-2026-07-10.md (live-probed 2026-07-10). Fixed claude-haiku-4.5 capabilities.thinking false->true (live 200 with thinking_tokens; control=thinking_budget classic enabled+budget, NOT adaptive). Added GPT-5.6 family (sol/terra/luna) as availability:\"coming_soon\" (LIVE 404 on our key 2026-07-10, NOT provisioned); bare gpt-5.6 will alias to Sol at GA (no canonicalization alias added this wave, the family is non-routable while coming_soon); kept OUT of tierAllowedModels/SLOT_REGISTRY/taskRouting/defaultModel (enforced by new check:availability-invariant). 5.6 reasoning ladder none/low/medium/high/xhigh/max (max above xhigh). Ultra (multi_agent.enabled + max_concurrent_subagents, beta responses_multi_agent=v1), Pro (reasoning.mode:\"pro\"), persistent reasoning (reasoning.context), and programmatic tool calling (tool type programmatic_tool_calling + allowed_callers) are RESPONSES-API-ONLY and INERT this wave, our web chat route uses /chat/completions, so the at-GA wave must add a Responses path for those four; effort/vision/tools work on the existing chat path. Added inert tierPolicy.minTier authored data (NOT used to derive tierAllowedModels this wave, all budget models stay available for testing per founder). Gemini 3.x request path migrated to thinkingConfig.thinkingLevel (thinkingBudget kept as legacy fallback). The launch-era pricing figures in this historical note were superseded by the current official rates verified in the top 2026-08-10 entry; reasoningDots remains 5/4/3."
     },
     {
-      "id": "verification/2026-07-28/43",
+      "id": "verification/2026-07-28/44",
       "date": "2026-07-28",
       "verifiedBy": "voice-model-sweep-2026-07-28",
       "status": "PASS",
       "notes": "Voice/audio lineup swept live against developers.openai.com/api/docs/models and elevenlabs.io/docs/overview/models. REMOVED tts-1 + tts-1-hd (November 2023, superseded); the previous wave kept them because gpt-4o-mini-tts pricing was not then verifiable, it now is. ADDED gpt-4o-mini-tts ($0.60/1M input text, $12/1M output audio, 2k input cap, default snapshot gpt-4o-mini-tts-2025-12-15), which also removes a unit inconsistency: tts-1 was priced per 1M CHARACTERS in inputCost, a field every other model uses for dollars per 1M TOKENS. FIXED gpt-4o-transcribe and gpt-4o-mini-transcribe: both carried whisper-1 leftovers after that model was retired, released \"September 2022\" (whisper-1's date) and costOverride.inputCost 0.006 (whisper-1's $/minute), which published transcription at $0.006/1M tokens against real prices of $2.50/1M and $1.25/1M, understating by ~417x and ~208x. Now $2.50/$10 and $1.25/$5 with 16k context. Desktop TTS defaults fixed in the same pass: ElevenLabs eleven_monolingual_v1 was REMOVED upstream 2026-07-09 and was still the fallback for any user who never set a model, so unconfigured ElevenLabs playback was calling a nonexistent model, now eleven_flash_v2_5; OpenAI tts-1 -> gpt-4o-mini-tts. NOT DONE (follow-up): TTS has no routing slot, so apps/desktop/src-tauri/src/features/speech/tts.rs still hardcodes both defaults; a voice_tts slot would only cover OpenAI because the catalog carries no ElevenLabs provider. Also unaddressed: gpt-4o-transcribe-diarize (new upstream, not added), and managed-cloud transcription is rate-limited but never metered against the usage balance."
     },
     {
-      "id": "verification/2026-07-28/44",
+      "id": "verification/2026-07-28/45",
       "date": "2026-07-28",
       "verifiedBy": "voice-model-sweep-2026-07-28-followup",
       "status": "PASS",
       "notes": "Founder flagged that gpt-4o-mini-tts carries a Deprecated badge on the developers.openai.com model catalog listing, correct, and it landed the same day we adopted it. Resolved against four sources: the listing badges it Deprecated; its own model page shows NO deprecation banner and no shutdown date; the deprecations table has no family-level row for it (only snapshot gpt-4o-mini-tts-2025-03-20 -> -2025-12-15, shut down 2026-07-23); and the text-to-speech guide still calls it the newest and most reliable TTS model. Decisive fact: it is the ONLY model OpenAI serves on /v1/audio/speech, gpt-audio-1.5's model page lists \"Speech generation | v1/audio/speech | Not supported\". So there is no newer member of this family to move to. Marked deprecated:true (compile.mjs then sets selectable:false) and KEPT, because removing it would leave the OpenAI TTS path with no model at all. NOT ADDED, deliberately: the realtime family (gpt-realtime-2.1, gpt-realtime-2.1-mini, gpt-realtime-translate, gpt-realtime-whisper). Three reasons, ModelType has no \"realtime\" member, so it is a schema change across the TS union, the registry schema and both Rust registries; the duplex audio path is gpt-live-1 (family openai/live, v1/live/sessions, promoted 2026-09-10), a session-priced product distinct from the token-priced realtime family, which therefore stays out; and registering them live would advertise capability we do not have. Recorded as VOICE-REALTIME-FAMILY-ABSENT so the ids do not need re-researching: gpt-realtime-2.1 ($4/$24 text, $32/$64 audio, $0.40 cached, 128k ctx, 32k max out) and gpt-realtime-2.1-mini ($0.60/$2.40 text, $10/$20 audio) are the current heads; gpt-realtime, gpt-realtime-mini, gpt-audio, gpt-audio-mini and every gpt-4o-audio/gpt-4o-realtime variant shut down 2027-01-20. gpt-4o-transcribe and gpt-4o-mini-transcribe carry NO deprecated badge and stay as-is."
     },
     {
-      "id": "verification/2026-08-29/45",
+      "id": "verification/2026-08-29/46",
       "date": "2026-08-29",
       "verifiedBy": "official-openrouter-live-model-list",
       "status": "PASS",
       "notes": "Added the two OpenRouter router routes the product had no entry for: openrouter/auto (Auto Router) and openrouter/free (Free Models Router), and set open_router.defaultModel to openrouter/auto, which was previously empty so the provider had no route at all. Every field is read from https://openrouter.ai/api/v1/models retrieved 2026-08-29 with a live key. Auto Router: canonical_slug openrouter/auto, 2,000,000 context, tokenizer \"Router\", modality text+image+file+audio+video->text+image, and supported_parameters including reasoning, reasoning_effort, tools, tool_choice and structured_outputs, hence reasoning.control \"effort\". Free Models Router: canonical_slug openrouter/free, 200,000 context, modality text+image->text, pricing prompt \"0\" and completion \"0\", and supported_parameters including reasoning_effort, tools and structured_outputs. Both routes report pricing that is resolved per request, auto returns \"-1\" for prompt and completion because cost follows the model it selects, so no per-million rate is recorded here and reservation must price the resolved route, not the router. No benchmarks are recorded because OpenRouter publishes none for either router, and carrying a member model's numbers forward would be fabricated. openrouter/auto is recorded with inputCost/outputCost 0 because ModelMetadata requires both and the router publishes no rate of its own; managed metering must price the model the router actually resolved (the completion response reports it) rather than the router record, so this route is safe on BYOK, where OpenRouter bills the key holder directly, and must not be exposed on a metered managed plan until resolved-route pricing is wired. openrouter/free is genuinely zero-rated (\"0\"/\"0\" from the provider)."
     },
     {
-      "id": "verification/2026-08-29/46",
+      "id": "verification/2026-08-29/47",
       "date": "2026-08-29",
       "verifiedBy": "live-openrouter-completion-through-both-router-routes",
       "status": "PASS",
       "notes": "Both router routes were exercised end to end against the live API after the account key was rotated. openrouter/auto returned HTTP 200 in 752ms and reported routing to deepseek/deepseek-v4-flash-0731, confirming the earlier note that the router itself publishes no rate and that metering must price the resolved model. openrouter/free returned HTTP 200 and routed to free members (nvidia/nemotron-3-super-120b-a12b:free, minimax/minimax-m2.7:free) with usage.cost 0, confirming the zero rating. Both free members are reasoning models whose reasoning tokens count against max_tokens: a 16-token cap returned empty content while a 200-token cap returned the expected text with finish_reason \"stop\" and 31 reasoning tokens. The product default is DEFAULT_MAX_OUTPUT_TOKENS 8192, so this is not reachable in normal use, but any caller that lowers the cap for a free-router turn must leave room for reasoning tokens."
     },
     {
-      "id": "verification/2026-09-01/47",
+      "id": "verification/2026-09-01/48",
       "date": "2026-09-01",
       "verifiedBy": "official-google-gemini-model-cards-and-pricing-table",
       "status": "CORRECTION",
       "notes": "Adjudicated three input-budget rows a litellm cross-check flagged, reading Google's own pages rather than either snapshot. gemini-3.1-pro-preview: the model card publishes an input token limit of 1,048,576 and an output token limit of 65,536, so the recorded 2,000,000 was wrong and the snapshot's 1,048,576 was right; corrected in models.synced.json, where models.dev already carried 1,048,576. Google markets this model at 1M scale and no 2,000,000 or 2,097,152 figure appears on the card or in its context-caching section. gemini-3.1-flash-image: the card publishes an input token limit of 131,072 and an output token limit of 32,768, so BOTH sides were wrong, the recorded 1,000,000 and litellm's 65,536. gemini-omni-flash-preview: no model card exists at that id (it 404s) and the models overview table lists only gemini-omni-1.1-flash; the pricing page carries the preview id as a billing SKU whose model-card link resolves to the shared Gemini Omni Flash card, which publishes a combined context window of 1,048,576 tokens. The recorded 4,000 was a video-model placeholder shared with the veo-3.1 rows and litellm's 131,072 matches nothing Google publishes. Prices on all three rows were re-read at the same time and are unchanged: gemini-3.1-pro-preview $2.00/$12.00 with $0.20 caching under 200k tokens and $4.00/$18.00/$0.40 above it; gemini-3.1-flash-image $0.50 input, $3.00 text output, $60.00 image output; gemini-omni-flash-preview $1.50 input, $9.00 text output, $17.50 video output. Sources retrieved 2026-09-01: https://ai.google.dev/gemini-api/docs/models, https://ai.google.dev/gemini-api/docs/pricing, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-pro-preview, https://ai.google.dev/gemini-api/docs/models/gemini-3.1-flash-image, https://ai.google.dev/gemini-api/docs/models/gemini-omni-flash."
     },
     {
-      "id": "verification/2026-09-01/48",
+      "id": "verification/2026-09-01/49",
       "date": "2026-09-01",
       "verifiedBy": "official-deepseek-and-openai-pricing-pages",
       "status": "CORRECTION",
       "notes": "DeepSeek publishes a peak/off-peak rate card, and both V4 rows carried figures that match neither half of it. Peak is $0.44/$1.32 per 1M with a $0.014 cache hit for deepseek-v4-flash and $1.32/$3.96 with a $0.044 cache hit for deepseek-v4-pro; off-peak is exactly half of each, and peak hours are 01:00-04:00 and 06:00-10:00 UTC Monday through Friday. Both rows now carry the peak rate as a curation costOverride, because peak is the only figure never undercut on any date and the schema has no field for a time-of-day split; the same reasoning moved providers.deepseek.defaultPricing, the cost-calculator fallback for unrecognised deepseek ids, from $0.14/$0.28 to $0.44/$1.32. The prior values ($0.14/$0.28/$0.0028 for flash, $0.435/$0.87/$0.003625 for pro) came from models.dev, which still publishes them for the first-party deepseek provider; litellm's first-party deepseek entry independently agrees with the peak rate. The pro row additionally asserted that DeepSeek made a 75% launch discount permanent on 2026-05-22, no discount, promotion or expiry language appears anywhere on DeepSeek's pricing page, so that claim is withdrawn. The override lives in curation rather than the synced snapshot so a later models.dev refresh cannot silently restore the undercharge. gpt-image-2 was checked in the same pass and is correct as recorded: OpenAI publishes an image row at $8.00 input, $2.00 cached input, $30.00 output and a separate text row at $5.00 input, $1.25 cached input, and this entry carries the image row throughout, so the $2.00 cache read stands and the $1.25 a snapshot reports is the text row. Sources retrieved 2026-09-01: https://api-docs.deepseek.com/quick_start/pricing and https://developers.openai.com/api/docs/pricing."
     },
     {
-      "id": "verification/2026-09-06/49",
+      "id": "verification/2026-09-06/50",
       "date": "2026-09-06",
       "verifiedBy": "founder-direction-and-openrouter-live-model-list",
       "status": "ADDITION",
       "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) joins tierAllowedModels.economy on the founder's instruction of 2026-09-06 so the composer offers it on the Free plan and every paid plan; the route was already registered on 2026-09-05 with a live end to end check against the OpenRouter API. Its $0 price is the router's list price for the free upstream models it picks, and those upstream providers' terms may allow training on prompts, which is why the company free lane (check-free-pools) still lists no OpenRouter free route; the picker entry is a user choice, not the free lane."
     },
     {
-      "id": "verification/2026-09-06/50",
+      "id": "verification/2026-09-06/51",
       "date": "2026-09-06",
       "verifiedBy": "catalog-developers-and-provider-labels",
       "status": "ADDITION",
       "notes": "Every model now carries a developer (who trained it) separate from its provider (which route serves it), resolved from catalog/developers.json: a first-party provider inherits its developer, a host such as groq or open_router resolves through the author segment of the upstream model id, so GPT-OSS on Groq is an OpenAI model and a synced OpenRouter entry keeps its author. The qwen provider label becomes Alibaba Model Studio because that provider id is the DashScope account that serves Qwen and third-party models; the Qwen developer label stays Qwen."
     },
     {
-      "id": "verification/2026-09-19/51",
+      "id": "verification/2026-09-19/52",
       "date": "2026-09-19",
       "verifiedBy": "user-qwencloud-benefits-screenshots-and-authenticated-model-list",
       "status": "ADDITION",
       "notes": "Added 272 provider offering observations as an explicitly separate quota inventory: 205 fully visible provider IDs and 67 truncated IDs retained as unresolved. This inventory does not admit models to production routing, override lifecycle retirement, change paid prices, or establish account-bound free eligibility. Allocation evidence remains in apps/web/config/free-pools.json. Read-only discovery with the configured key returned 169 IDs; discovery alone does not prove its account owns the screenshot allocations."
     },
     {
-      "id": "verification/2026-09-27/52",
+      "id": "verification/2026-09-27/53",
       "date": "2026-09-27",
       "verifiedBy": "official-openai-images-vision-guide",
       "status": "CORRECTION",
       "notes": "GPT-6 Astra accepts the image detail value original. developers.openai.com/api/docs/guides/images-vision, retrieved 2026-09-27, lists gpt-6-astra with the gpt-5.6 series among the models that take original detail, so its imageInput now records the same detail values as gpt-5.6."
     },
     {
-      "id": "verification/2026-09-28/53",
+      "id": "verification/2026-09-28/54",
       "date": "2026-09-28",
       "verifiedBy": "official-anthropic-messages-api-reference",
       "status": "CORRECTION",
       "notes": "Claude Sonnet 5 rejects sampling parameters. platform.claude.com/docs/en/api/messages, retrieved 2026-09-28, says models released after Claude Opus 4.6 accept only a temperature of 1.0 and do not accept top_p or top_k, rejecting other values with a 400. Sonnet 5 was released on 2026-06-30, so its reasoning now records rejectsSamplingParameters as Opus 5 and Fable 5.1 already did."
     },
     {
-      "id": "verification/2026-09-28/54",
+      "id": "verification/2026-09-28/55",
       "date": "2026-09-28",
       "verifiedBy": "official-xai-chat-completions-reference",
       "status": "CORRECTION",
       "notes": "Grok 4.6 is a reasoning model and rejects stop, frequency_penalty and presence_penalty. docs.x.ai/developers/rest-api-reference/inference/chat-completions, retrieved 2026-09-28, marks stop and frequency_penalty with 'Reasoning models don't support this parameter' and presence_penalty as unsupported for reasoning models, so its reasoning records them as unsupportedRequestParameters."
     },
     {
-      "id": "verification/2026-09-28/55",
+      "id": "verification/2026-09-28/56",
       "date": "2026-09-28",
       "verifiedBy": "official-anthropic-and-openai-pdf-guides",
       "status": "CORRECTION",
       "notes": "Claude and GPT chat models take PDFs natively. platform.claude.com/docs/en/build-with-claude/pdf-support, retrieved 2026-09-28: all active models support PDF processing, up to 600 pages per request, 100 when the request's context window is under 1M tokens, within a 32 MB request. developers.openai.com/api/docs/guides/pdf-files, retrieved 2026-09-28: models with vision capabilities, gpt-4o and later, take PDF file inputs under 50 MB per request. Their inputModalities now record pdf, and Claude Haiku 4.5, whose context window is 200K tokens, records 100 pages and 100 images per request."
     },
     {
-      "id": "verification/2026-09-28/56",
+      "id": "verification/2026-09-28/57",
       "date": "2026-09-28",
       "verifiedBy": "official-provider-image-guides",
       "status": "ADDITION",
       "notes": "Harness media input limits. platform.claude.com/docs/en/build-with-claude/vision, retrieved 2026-09-28: 600 images per API request, 100 for models with a 200k-token context window. developers.openai.com/api/docs/guides/images-vision, retrieved 2026-09-28: up to 1,500 images per request. ai.google.dev/gemini-api/docs/image-understanding, retrieved 2026-09-28: 3,600 image files per request; ai.google.dev/gemini-api/docs/document-processing: PDFs up to 1,000 pages."
     },
     {
-      "id": "verification/2026-09-28/57",
+      "id": "verification/2026-09-28/58",
       "date": "2026-09-28",
       "verifiedBy": "official-provider-structured-output-guides",
       "status": "ADDITION",
       "notes": "Native JSON response formats for five more chat harnesses, read on 2026-09-28. docs.z.ai/guides/capabilities/struct-output: response_format {\"type\": \"json_object\"} enables JSON mode on models that support structured output such as glm-5, glm-4.7, glm-4.5 and glm-4.6, with no json_schema type, so zhipu/chat-completions lists json_object. platform.kimi.ai/docs/guide/use-json-mode-feature-of-kimi-api: set response_format to {\"type\": \"json_object\"} to enable JSON Mode, with no json_schema type, so moonshot/chat-completions lists json_object. alibabacloud.com/help/en/model-studio/qwen-structured-output (last updated 2026-09-28): JSON Object mode covers most Qwen models plus kimi-k3, deepseek-v4-pro, deepseek-v4-flash and glm-5.x, and needs the word JSON in the messages, which the enforced JSON directive always supplies; JSON Schema mode covers only the Qwen3.7 and Qwen3.8 Plus, Flash and Max series, so qwen/chat-completions lists json_object only. docs.perplexity.ai/api-reference/sonar-post: response_format is text or json_schema (\"Set type to json_schema for structured output\"), and its json_schema object takes schema, name and strict, the three fields the translation sends, so perplexity/chat-completions lists json_schema. console.groq.com/docs/structured-outputs: JSON Object Mode is supported on all models while json_schema is limited to named models, so groq/chat-completions lists json_object. Not listed: MiniMax's OpenAI-compatible reference (platform.minimax.io/docs/api-reference/text-openai-api) documents no response_format; DeepInfra (docs.deepinfra.com/chat/structured-outputs, 'many of our models'), Together (docs.together.ai structured outputs, per-model catalogue), Novita (docs.novita.ai/guides/llm-structured-outputs, per-model list) and Workers AI (developers.cloudflare.com/workers-ai/features/json-mode, per-model list) name support per model rather than per API, so a harness-wide entry could send the field to a model that refuses it. The gateways (OpenRouter, Vercel AI Gateway, CheaperInference, Experiential Labs) and the Anthropic-compatible relays were not checked. Every JSON request keeps the enforced directive and reply validation whether or not the route takes the native format."
     },
     {
-      "id": "verification/2026-09-28/58",
+      "id": "verification/2026-09-28/59",
       "date": "2026-09-28",
       "verifiedBy": "official-gateway-structured-output-guides",
       "status": "ADDITION",
       "notes": "Native JSON response formats for the gateway harnesses, read on 2026-09-28. openrouter.ai/docs/guides/routing/provider-selection: even without require_parameters, response_format (including structured outputs) is a routing preference, so a request goes only to a model's providers that support it, and when none do the parameter is ignored rather than refused; the gateway never sets require_parameters, so open-router/chat-completions and open-router/chat-completions-managed list json_object and json_schema. vercel.com/docs/ai-gateway/sdks-and-apis/openai-chat-completions/structured-outputs: the chat completions API takes the OpenAI json_schema format (name, description, schema) and a legacy json type, with no json_object, so vercel_gateway/chat-completions lists json_schema. platform.experientiallabs.ai/llms.txt: its OpenRouter migration steps keep the json_schema request shape as supported, so experientiallabs/chat-completions lists json_schema. Not listed: www.cheaperinference.com/api-reference forwards extra chat fields to the serving provider without naming response_format; api-docs.deepseek.com/guides/anthropic_api supports only effort inside output_config, so deepseek-anthropic/messages keeps the directive, and the other Anthropic-compatible relays document no output_config.format. Every JSON request keeps the enforced directive and reply validation whether or not the route takes the native format."
     },
     {
-      "id": "verification/2026-09-28/59",
+      "id": "verification/2026-09-28/60",
       "date": "2026-09-28",
       "verifiedBy": "official-together-serverless-model-catalogue",
       "status": "ADDITION",
       "notes": "Structured output on the Together routes, read on 2026-09-28. docs.together.ai/docs/inference/chat/structured-outputs takes the OpenAI json_schema format (name and schema) and points to the serverless catalogue for which models support it; docs.together.ai/docs/serverless/models marks Structured outputs Yes for DeepSeek-V4-Flash-0731, DeepSeek V4 Pro 0813, GLM-5.3, GLM-5.3 Flash, Kimi K3 and MiniMax M3, and leaves Qwen3.8 Flash blank. Those six Together routes carry responseFormats json_schema, which overrides the harness list for that route alone; qwen-3.8-flash on Together keeps the directive. Checked and left on the directive: developers.cloudflare.com/workers-ai/features/json-mode lists no model the gateway routes there and does not stream JSON Mode; docs.deepinfra.com/chat/structured-outputs names no models ('many of our models'); the model list on docs.novita.ai/guides/llm-structured-outputs does not render outside a browser."
     },
     {
-      "id": "verification/2026-09-28/60",
+      "id": "verification/2026-09-28/61",
       "date": "2026-09-28",
       "verifiedBy": "official-deepinfra-and-novita-model-catalogues",
       "status": "ADDITION",
       "notes": "Structured output on the DeepInfra and Novita routes, read on 2026-09-28. docs.deepinfra.com/chat/structured-outputs describes json_object and json_schema modes on the OpenAI-compatible API for the models its catalogue marks; the public catalogue at api.deepinfra.com/models/list tags deepseek-ai/DeepSeek-V4-Flash, deepseek-ai/DeepSeek-V4-Pro, zai-org/GLM-5.3, zai-org/GLM-5.3-Flash, moonshotai/Kimi-K3 and MiniMaxAI/MiniMax-M3 with both json and structured-output, so those six DeepInfra routes list json_object and json_schema. docs.novita.ai/guides/llm-structured-outputs uses the OpenAI json_schema format and renders its supported-model list from the public catalogue at api.novita.ai/v3/openai/models, which gives structured-outputs in the features of all seven routed models (deepseek/deepseek-v4-flash, deepseek/deepseek-v4-pro-0813, qwen/qwen3.8-flash, zai-org/glm-5.3, zai-org/glm-5.3-flash, moonshotai/kimi-k3, minimax/minimax-m3), so those Novita routes list json_schema."
     },
     {
-      "id": "verification/2026-10-02/61",
+      "id": "verification/2026-10-02/62",
       "date": "2026-10-02",
       "verifiedBy": "official-model-studio-retirement-notices",
       "status": "CORRECTION",
       "notes": "Provider offerings whose Model Studio model is being retired now carry retiresAt, and a free quota offering is withdrawn at that instant even though its allocation runs longer. Alibaba Cloud's notices, read on 2026-10-02: [Model Studio] Notice on the Postponed Retirement of Selected Legacy Models (alibabacloud.com/en/notice/model_studio_notice_on_the_postponed_retirement_of_selected_legacy_models_7d0, published 2026-07-06), [Model Studio] Notice of Retirement for Selected Legacy Models (alibabacloud.com/en/notice/model_studio_notice_of_retirement_for_selected_legacy_models_7d9, 2026-07-10), [Model Studio] Notice of Retirement for Selected Legacy Long-tail Models (alibabacloud.com/en/notice/model_studio_notice_of_retirement_for_selected_legacy_longtail_models_7d4, 2026-07-09) and the speech and mainline notices they cite (alibabacloud.com/en/notice/modelstudiospeech_series_legacy_mainline_models_eos_notice_792 and alibabacloud.com/en/notice/model_studionotice_on_the_decommissioning_of_certain_historical_mainline_models_731) each say the listed models cease service on 2026-10-10 00:00:00 (UTC+08), recorded as 2026-10-09T16:00:00.000Z. The notice on the decommissioning of selected historical snapshot models (alibabacloud.com/en/notice/model_studio_notice_on_the_decommissioning_of_selected_historical_snapshot_models_730) says its models ceased on 2026-05-13 00:00:00 (UTC+08), recorded as 2026-05-12T16:00:00.000Z. deepseek-v4-flash retires with deepseek-v4-flash-0731 named as its replacement, so the 0731 offering carries no retirement. Every offering with a quota protocol was also found on the Model Studio pricing page (alibabacloud.com/help/en/model-studio/model-pricing, last updated 2026-09-28), so no provider model id was found wrong."
     },
     {
-      "id": "verification/2026-10-04/62",
+      "id": "verification/2026-10-04/63",
       "date": "2026-10-04",
       "verifiedBy": "official-model-studio-api-references-two-independent-readers-no-live-call",
       "status": "ADDITION",
       "notes": "Fifteen Model Studio media offerings gained a quota protocol from documentation alone. Their request settings were extracted from the provider's API references on 2026-10-04 by two independent readers who cross-checked each other, and no live provider call was made: the owner decided to connect them from the documentation, so the first real request to each is a user's. wan2.6-t2v (qwen-quota-009) was already connected and its 2-second request was verified live on 2026-09-20; its clip length moves to 5 seconds, inside the documented range of 2 to 15, and that length has not been exercised live. Text-to-video, an asynchronous task on /api/v1/services/aigc/video-generation/video-synthesis with X-DashScope-Async: enable, polled at /api/v1/tasks/{task_id}, result at output.video_url: wan2.2-t2v-plus at 832*480, because it has no 720P tier, and wan2.1-t2v-plus and wan2.1-t2v-turbo at 1280*720, all three with a duration the provider fixes at 5 seconds, so none is sent; wan2.7-t2v, wan2.7-t2v-2026-04-25 and wan2.7-t2v-2026-06-12 at resolution 720P, ratio 16:9 and duration 5, with no size and no shot_type; happyhorse-1.0-t2v and happyhorse-1.1-t2v at resolution 720P, ratio 16:9, duration 3 and watermark false, because their watermark defaults to on and their reference documents neither size nor prompt_extend. prompt_extend false is sent wherever the parameter is documented. The wan2.7-t2v-2026-04-25 snapshot is named by the video model list, the price list and the rate-limit list but not by the wan2.7 API reference, so its parameters are those of the family page. Text-to-image: wan2.6-t2i on the existing synchronous /api/v1/services/aigc/multimodal-generation/generation shape at 1280*1280, its documented minimum; wan2.7-image-pro and wan2.7-image on the same shape at 1024*1024 with size and n only, because the two pages that cover the parameter list prompt_extend as not supported for them; wan2.2-t2i-plus, wan2.2-t2i-flash, wan2.1-t2i-plus and wan2.1-t2i-turbo on the asynchronous old protocol, /api/v1/services/aigc/text2image/image-synthesis with X-DashScope-Async: enable and input.prompt, result at the first output.results entry that has a url, at 1024*1024 with n 1 and prompt_extend false, and with the prompt shortened to their documented maximum of 500 characters because the reference does not say what happens beyond it. z-image-turbo (qwen-quota-101), connected and verified live on 2026-09-20, now holds its 1024*1024 size in the catalogue instead of taking it from the web policy, so its request is unchanged; the z-image reference lists 1024*1024 as the 1:1 size, and every image offering with a quota protocol must now state its size. Left without a protocol: wan2.5-t2v-preview, wan2.5-t2i-preview, wan3.0-video and wan3.0-video-prime, which the provider marks as preview; wan2.6-image, whose text-only path the Alibaba Cloud and QwenCloud references describe differently; and every model that needs an input image or video. Sources read on 2026-10-04: alibabacloud.com/help/en/model-studio/legacy-wan-text-to-video-api-reference, alibabacloud.com/help/en/model-studio/text-to-video-api-reference, alibabacloud.com/help/en/model-studio/happyhorse-text-to-video-api-reference, alibabacloud.com/help/en/model-studio/video-generate-edit-model, alibabacloud.com/help/en/model-studio/text-to-image-v2-api-reference, alibabacloud.com/help/en/model-studio/wan-image-generation-and-editing-api-reference, alibabacloud.com/help/en/model-studio/wan-image-edit, alibabacloud.com/help/en/model-studio/z-image-api-reference, alibabacloud.com/help/en/model-studio/model-pricing, alibabacloud.com/help/en/model-studio/rate-limit, docs.qwencloud.com/api-reference/video-generation/wan-text-to-video/create-task.md, docs.qwencloud.com/api-reference/video-generation/wan27-text-to-video/create-task.md, docs.qwencloud.com/api-reference/video-generation/happyhorse-text-to-video/create-task.md, docs.qwencloud.com/developer-guides/getting-started/video-models.md, docs.qwencloud.com/api-reference/image-generation/wan-text-to-image-v2/create-task.md, docs.qwencloud.com/api-reference/image-generation/wan27-image-gen-edit/synchronous.md and docs.qwencloud.com/developer-guides/image-generation/text-to-image.md."
     },
     {
-      "id": "verification/2026-10-04/63",
+      "id": "verification/2026-10-04/64",
       "date": "2026-10-04",
       "verifiedBy": "user-qwencloud-benefits-screenshots-text-recognition-and-visual-check-no-live-call",
       "status": "ADDITION",
       "notes": "Re-observed the QwenCloud Benefits page from three screenshots the account owner captured on 2026-10-04: 279 rows, 277 eligible and 2 unavailable, against 272 rows (270 and 2) on 2026-09-19. Every one of the 272 earlier offerings was found again and matched by its position; 26 of them moved row because seven rows were inserted on the third page, and consumption figures were refreshed. Every active row showed the free-quota-only switch on, including qwen-quota-247, qwen-quota-248, qwen-quota-249 and qwen-quota-250, which showed it off on 2026-09-19; the two expired rows are recorded with it off. qwen-audio-3.1-tts-flash (qwen-quota-248) now reads 1,000,000 tokens expiring 2026-12-21 where it read 10,000 chars expiring 2026-12-16; no other limit, unit or expiry was changed. Added seven provider offering observations, qwen-quota-273 to qwen-quota-279: two fully visible provider IDs, qwen-image-2.1-pro (image, 10 images, expiring 2027-01-01) and qwen-audio-3.1-asr-flash (audio, 1,000,000 tokens, expiring 2026-12-21), and five audio rows of 1,000,000 tokens each whose IDs the page cuts off: one beginning qwen3.8-omni-flash-realt, three different IDs beginning qwen-audio-3.1-asr-flash, and one beginning qwen-audio-3.1-realtime-. The five truncated IDs are retained as unresolved, with the visible prefix as the label and no provider model ID, until they are read in full. None of the seven carries a quota protocol and none is named in the terms review, so none can be served. Names of earlier offerings were kept from the catalogue rather than taken from text recognition, numbers and dates were cross-checked, the inserted rows were read by eye, and no live provider call was made. This inventory still does not admit models to production routing, override lifecycle retirement, change paid prices, or establish account-bound free eligibility. Allocation evidence remains in apps/web/config/free-pools.json."
     },
     {
-      "id": "verification/2026-10-07/64",
+      "id": "verification/2026-10-07/65",
       "date": "2026-10-07",
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "ADDITION",
       "notes": "Claude Haiku 5.5 (claude-haiku-5-5), released 2026-10-07, joins the catalog at lifecycle stage registered and takes no family slot. Every field was read from platform.claude.com on 2026-10-07: the model overview (id, 1M context, 128K output, Jun 2026 knowledge cutoff, prompt-length pricing with the 100,000-token boundary), the migration guide and what's-new page (adaptive thinking only, sampling parameters and assistant prefill rejected, forced tool_choice accepted, thinking disabled at high effort or below, computer use through computer_toolset_20260801, refusal stop reason), the effort page (all five levels, default medium), the prompt caching page (512-token minimum) and the code execution tool page (model listed). The OpenRouter slug anthropic/claude-haiku-5.5 was read from the public openrouter.ai/api/v1/models list the same day. No inference call was made, so the first real request to it is a user's. Claude Haiku 4.5 stays in the catalog as the legacy row Anthropic still serves."
     },
     {
-      "id": "verification/2026-10-07/65",
+      "id": "verification/2026-10-07/66",
       "date": "2026-10-07",
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Claude Opus 5.5 carried four values that Anthropic's pages contradict. The effort page states that medium is its default effort and that adaptive thinking is always on, with thinking.type disabled returning 400 at every effort level, where the row recorded default effort high, thinking that could be disabled and a maximum disabled effort of high; the models overview gives a Jun 2026 knowledge cutoff where the row recorded 2026-05; and the public OpenRouter list names it anthropic/claude-opus-5.5 where the row recorded anthropic/claude-opus-5-5. Corrected from platform.claude.com/docs/en/build-with-claude/effort, the models overview and openrouter.ai/api/v1/models, retrieved 2026-10-07. Prices, context and output limits already matched."
     },
     {
-      "id": "verification/2026-10-07/66",
+      "id": "verification/2026-10-07/67",
       "date": "2026-10-07",
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "ADDITION",
       "notes": "Claude Sonnet 5.5 (claude-sonnet-5-5), released 2026-09-28, joins the catalog at lifecycle stage registered. Read from platform.claude.com on 2026-10-07: the model overview (id, 1M context, 128K output, Jun 2026 cutoff, $2/$10), the what's-new page (thinking.type disabled returns 400 and between_tools replaces it at high effort or below, forced tool_choice returns 400, computer use through computer_toolset_20260801, thinking blocks bound to model, prefix and account, notes between tool calls returned as thinking blocks), and the effort and prompt caching pages (all five levels, default high, 512-token minimum). The row declares reasoning.disabledThinkingType between_tools, which the Anthropic adapter sends in place of disabled, and providerCompatibility.forcedToolChoice false. The cache read price is recorded at $0.20 because Anthropic's pages give both $0.20 and $0.10. The OpenRouter slug anthropic/claude-sonnet-5.5 was read from the public openrouter.ai/api/v1/models list the same day."
     },
     {
-      "id": "verification/2026-10-07/67",
+      "id": "verification/2026-10-07/68",
       "date": "2026-10-07",
       "verifiedBy": "official-anthropic-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Claude Opus 5.5 and Claude Fable 5.1 now declare providerCompatibility.forcedToolChoice false. The Claude Opus 5.5 what's-new page states that tool_choice any or a named tool returns 400 on Claude Opus 5.5 and that the same applies on Claude Fable 5.1; neither row recorded it, so a forced tool choice sent to either was a provider error. Verified against platform.claude.com/docs/en/models/opus-5-5/whats-new-opus-5-5, retrieved 2026-10-07."
     },
     {
-      "id": "verification/2026-10-07/68",
+      "id": "verification/2026-10-07/69",
       "date": "2026-10-07",
       "verifiedBy": "official-xai-documentation",
       "status": "ADDITION",
       "notes": "Grok 4.7 (grok-4.7), released September 2026, joins the catalog at lifecycle stage registered. Read from docs.x.ai on 2026-10-07: the model page (500,000 token context, text and image input, text output, $2.00/$0.50/$6.00 below 200,000 prompt tokens and $4.00/$1.00/$12.00 for every token once the prompt reaches 200,000, effort low, medium, high and xhigh with high the default, function calling and structured outputs, no batch API), the models overview (knowledge cutoff May 2026), the reasoning guide (reasoning cannot be disabled; presencePenalty, frequencyPenalty and stop return an error) and the release notes (no text output limit; the Responses API always returns reasoning.encrypted_content). The tools overview uses grok-4.7 in its web search, X search and code interpreter examples. OpenRouter lists x-ai/grok-4.7 and the Vercel AI Gateway lists spacexai/grok-4.7, both at the same price; those two gateway routes are recorded. The Experiential Labs page for grok-4.7 shows a default waterfall of one disabled rung, so no route through that gateway is recorded. No inference call was made for this entry."
     },
     {
-      "id": "verification/2026-10-07/69",
+      "id": "verification/2026-10-07/70",
       "date": "2026-10-07",
       "verifiedBy": "official-deepseek-documentation-and-live-api",
       "status": "ADDITION",
       "notes": "DeepSeek V4.1 Flash (deepseek-flash), released 2026-09-10, joins the catalog at lifecycle stage registered. Read on 2026-10-07 from api-docs.deepseek.com: the pricing page (peak $0.30 cache miss, $1.20 output, $0.006 cache hit, off-peak half, vision supported, thinking and non-thinking), the 2026-09-10 news post (native multimodal support; V4-Flash and V4-Flash-Vision-Exp are retired and their ids temporarily route to V4.1-Flash; deepseek-v4-pro requests route to V4.1-Flash at V4.1-Flash rates from 2026-09-14 04:00 UTC until V4.1-Pro launches) and the thinking mode guide (thinking.type enabled or disabled, enabled by default, reasoning_effort low, high or max with high the default). Measured the same day on the DeepSeek API: GET /models lists deepseek-flash as DeepSeek-V4.1-Flash with a 1,048,576 token context, 393,216 output tokens and text and image input; a request for deepseek-v4-flash is answered by deepseek-flash; and tool_choice required in thinking mode returns \"Thinking mode does not support this tool_choice\", so the row declares providerCompatibility.forcedToolChoice false. The weights are published at huggingface.co/deepseek-ai/DeepSeek-V4.1-Flash under the MIT license. OpenRouter lists deepseek/deepseek-v4.1-flash. The deepseek/deepseek-flash slot does not move with this entry."
     },
     {
-      "id": "verification/2026-10-07/70",
+      "id": "verification/2026-10-07/71",
       "date": "2026-10-07",
       "verifiedBy": "official-openai-documentation-no-live-call",
       "status": "ADDITION",
       "notes": "GPT-6.1 Sol (gpt-6.1-sol) and GPT-6 Luna (gpt-6-luna) join the catalog at lifecycle stage registered. Read from developers.openai.com on 2026-10-07: each model page (1,050,000 token context, 922,000 input, 128,000 output; Sol $2/$0.10/$2.50/$10 with an Apr 30 2026 cutoff and effort low to max, medium the default; Luna $0.10/$0.01/$0.125/$0.50 with a May 18 2026 cutoff and effort none to max, medium the default; text and image input, text output; over 272K input tokens billed at 2x input and cache and 1.5x output; Chat Completions, Responses and Batch; web search, file search, image generation, code interpreter, hosted shell, apply patch, skills, computer use, MCP and tool search on Responses), the latest-model guide (GPT-6 Astra and GPT-6.1 Sol do not accept none; tool calling on those two requires Responses; Luna supports function calling in Chat Completions only at reasoning_effort none; temperature, top_p and top_logprobs must be removed when effort is not none) and the prompt caching guide (GPT-5.6 and later: 1,024 token minimum, 30 minute lifetime, writes at 1.25x, explicit breakpoints). Both rows declare reasoning.rejectsSamplingParameters, which the OpenAI adapter now reads. The models list shows no Terra in generation 6 and describes GPT-6.1 Sol as near-Astra performance at a lower cost. OpenAI gives no release date for either; the OpenRouter slugs are dated 2026-09-29 and 2026-09-22. Whether a forced tool_choice is accepted is not stated on any page read."
     },
     {
-      "id": "verification/2026-10-07/71",
+      "id": "verification/2026-10-07/72",
       "date": "2026-10-07",
       "verifiedBy": "official-openai-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "GPT-6 Astra now records medium as its default effort and declares reasoning.rejectsSamplingParameters. The latest-model guide states that GPT-6 Astra and GPT-6.1 Sol support low, medium (default), high, xhigh and max, do not support none, and that temperature, top_p and top_logprobs must be removed when reasoning effort is not none; the row recorded no default and did not say sampling parameters are rejected, so a request carrying a temperature was a provider error. Prices, limits, cutoff and endpoints on developers.openai.com/api/docs/models/gpt-6-astra still match the row. Verified 2026-10-07."
     },
     {
-      "id": "verification/2026-10-07/72",
+      "id": "verification/2026-10-07/73",
       "date": "2026-10-07",
       "verifiedBy": "official-deepseek-documentation-and-live-api",
       "status": "CORRECTION",
       "notes": "DeepSeek V4 Flash (deepseek-v4-flash) now carries the price DeepSeek actually bills for it. The 2026-09-10 news post and the pricing page state that V4-Flash and V4-Flash-Vision-Exp are retired and that both ids temporarily route to V4.1-Flash at V4.1-Flash rates, and a request for deepseek-v4-flash on 2026-10-07 was answered by deepseek-flash. The row is corrected from $0.44/$1.32/$0.014 to the peak V4.1-Flash rate of $0.30/$1.20/$0.006. The DeepSeek vision default moves from deepseek-v4-flash-vision-exp to deepseek-flash, which is the model that already answers the retired id and which the list-models endpoint reports as accepting image input; deepseek-v4-flash-vision-exp then leaves the catalog through retired-models.json. The deepseek/deepseek-flash slot stays on deepseek-v4-flash: the promotion gate refused deepseek-flash on 2026-10-07 with the refusal corpus at 0.000 and the jailbreak corpus at 0.364 against floors of 1.000."
     },
     {
-      "id": "verification/2026-10-07/73",
+      "id": "verification/2026-10-07/74",
       "date": "2026-10-07",
       "verifiedBy": "official-google-documentation-and-one-live-image-call",
       "status": "ADDITION",
       "notes": "Four Google models join the catalog at lifecycle stage registered: Gemini Omni 1.1 Flash (gemini-omni-1.1-flash, stable 2026-08-27, video), Gemini 3.8 Live (gemini-3.8-live, 2026-09-15, live audio), Gemini 3.8 Flash TTS (gemini-3.8-flash-tts, 2026-09-22, speech) and Gemini Nano Banana 2.1 (gemini-nano-banana-2.1, 2026-10-06, image). Prices were read from ai.google.dev/gemini-api/docs/pricing, release dates and replacements from the deprecations page, and limits and capabilities from each model page, all on 2026-10-07. One live call was made, a single 1K image from gemini-nano-banana-2.1 to read the output format the catalog requires, which was image/jpeg; no call was made to the other three. None of the four matches the family pattern of the slot it would replace, because Google renamed each line, and the eval harness measures text answers only, so no slot moves with this entry."
     },
     {
-      "id": "verification/2026-10-07/74",
+      "id": "verification/2026-10-07/75",
       "date": "2026-10-07",
       "verifiedBy": "official-google-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Shutdown dates from the Gemini API deprecations page, retrieved 2026-10-07, are now recorded as deprecation_date: 2026-10-22 for veo-3.1-generate-preview, veo-3.1-fast-generate-preview, veo-3.1-lite-generate-preview and gemini-omni-flash-preview (which read 2026-09-30), and 2026-11-17 for gemini-3.1-flash-live-preview and gemini-3.1-flash-tts-preview. The three Veo rows hold the google/veo, google/veo-fast and google/veo-lite slots, so video generation through those slots stops on 2026-10-22 unless the slots are moved before then. gemini-3.1-flash-image was deprecated on 2026-10-06 with no shutdown date announced, so its row carries no date."
     },
     {
-      "id": "verification/2026-10-07/75",
+      "id": "verification/2026-10-07/76",
       "date": "2026-10-07",
       "verifiedBy": "official-groq-documentation-no-live-call",
       "status": "CORRECTION",
       "notes": "Groq shut down qwen/qwen3.6-27b on 2026-09-14 and names qwen/qwen3.8-27b as its replacement; its deprecations page says requests to a deprecated model id return errors after the date. The catalog row qwen-3.6-27b was still offered as a preview model with no date. It now carries the shutdown date and is marked unavailable with that reason, which stops it being routed or probed. The family tool cannot deprecate it, because the compiler holds a model that is not live at or below the shadow stage, and it stays in the catalog because model-routes.json still declares two routes for it; removing it is a separate step. Verified against console.groq.com/docs/deprecations, retrieved 2026-10-07."
     },
     {
-      "id": "verification/2026-10-07/76",
+      "id": "verification/2026-10-07/77",
       "date": "2026-10-07",
       "verifiedBy": "official-openai-documentation-no-live-call",
       "status": "ADDITION",
       "notes": "GPT Image 2.5 Sunburst (gpt-image-2.5-sunburst) and GPT Image 2.5 Flare (gpt-image-2.5-flare) join the catalog at lifecycle stage registered, read from their model pages on developers.openai.com on 2026-10-07: identical token prices (text input $5 and $1.25 cached, image input $8 and $2 cached, image output $30), image generation, image edit and batch endpoints, quality low to max, snapshots dated 2026-09-08. No inference call was made. The openai/gpt-image slot stays on gpt-image-2: neither id matches the slot pattern, which expects a bare version after gpt-image, and the eval harness has no measurement for image output. OpenAI lists no deprecation for gpt-image-2. gpt-transcribe is not added: OpenAI prices it at $0.0045 per minute of audio and the catalog has no per-audio-minute price field for a transcription model, so a row would bill at zero or at a guessed token rate."
     },
     {
-      "id": "verification/2026-10-07/77",
+      "id": "verification/2026-10-07/78",
       "date": "2026-10-07",
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model outside the QwenCloud free quota, the anthropic/claude-opus slot moves from claude-opus-5 to claude-opus-5-5 and the anthropic/claude-sonnet slot from claude-sonnet-5 to claude-sonnet-5-5. The eval gate was not run for either move: no Anthropic slot has a committed baseline and no run was recorded for either model, so nothing here says the new models were measured against the old ones. The catalog-side gates the family tool computes (provider, family identity, lifecycle, capability coverage, price and limit regression) were evaluated and are recorded on each slot. Claude Opus 5.5 lists at $4/$20 per million against $5/$25 for Claude Opus 5, cannot have thinking switched off and defaults to medium effort; Claude Sonnet 5.5 keeps $2/$10. claude-opus-5, claude-opus-4-8, claude-sonnet-5 and claude-haiku-4-5 leave the roster through the retire tool into retired-models.json, each naming its successor, and their route and probe records go with them. claude-haiku-5-5 takes no family slot: no routing slot names a Haiku model and the picker lists it from its own row. The successors carry only their direct Anthropic route. The marketplace routes the retired rows had (OpenRouter, Vercel AI Gateway, Cheaper Inference, Experiential Labs) were not copied, because no source read for this change states that those gateways serve the new ids or at what price; until they are added, a Claude model has no same-model fallback route and one Claude model cannot stand in for another in a fallback plan. No provider call was made."
     },
     {
-      "id": "verification/2026-10-07/78",
+      "id": "verification/2026-10-07/79",
       "date": "2026-10-07",
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the three OpenAI chat slots follow the tier names OpenAI uses from generation 6: the frontier slot now matches the astra name and holds gpt-6-astra, the balanced slot matches sol and holds gpt-6.1-sol, and the fast slot holds gpt-6-luna. The eval gate was not run for any of them: no OpenAI slot has a committed baseline and no run was recorded for these models. The catalog-side gates are recorded on each slot, and one of them fails: gpt-6-astra lists at $10/$50 per million against $4/$20 for gpt-5.6-sol, a 150% rise on both sides against the 25% ceiling, so the frontier slot, the OpenAI default and the flagship_general Auto slot now cost two and a half times what they did. gpt-6.1-sol lists at $2/$10 against $2/$12 for gpt-5.6-terra and gpt-6-luna at $0.10/$0.50 against $0.20/$1.20. gpt-6.1-sol moves from the Max list to the Pro list with the balanced slot it now holds, and its minTier follows; the direct entries for gpt-6-astra, gpt-6.1-sol and gpt-6-luna in tierAllowedModels are dropped because the slots now name them. The openai/gpt-image slot matches the sunburst name and holds gpt-image-2.5-sunburst, the model OpenAI describes as its most capable for generation and editing; gpt-image-2.5-flare stays as a registered row outside the slot. Both 2.5 image rows now declare image input and prompt caching, which their pricing rows (image input and cached input prices) and the edits endpoint already stated; OpenAI publishes no context limit for them, so the slot's 4,000 token minimum is unmet by data and recorded as such on the slot. gpt-5.6-sol, gpt-5.6-terra, gpt-5.6-luna and gpt-image-2 leave through the retire tool into retired-models.json, each naming the model that took its slot, with their route, probe and synced records. The successors carry fewer routes: gpt-6-astra keeps its Experiential Labs and Cheaper Inference routes, gpt-6.1-sol and gpt-6-luna have only the direct OpenAI route, and the OpenRouter and Vercel AI Gateway routes of the 5.6 rows were not copied because nothing read for this change says those gateways serve the new ids. The GPT-6 rows record no ultra, pro or persistent reasoning surface and gpt-6-astra and gpt-6.1-sol do not accept effort none; nothing in product code reads the three surface records. No provider call was made."
     },
     {
-      "id": "verification/2026-10-07/79",
+      "id": "verification/2026-10-07/80",
       "date": "2026-10-07",
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the xai/grok slot moves from grok-4.6 to grok-4.7 against the eval gate. The gate was run on 2026-10-07 and refused grok-4.7: it scored 0.818 on the jailbreak corpus against a floor of 1.000, and its p95 latency rose past the 50% tolerance on coding, files and computer use; it scored 1.000 on the other fourteen corpora, where grok-4.6 scored 0.600 on refusal, 0.778 on chat and 0.833 on coding. The slot records the refusal as its promotion reason. Both models list at $2/$6 per million with a 500,000 token context. grok-4.6 leaves through the retire tool into retired-models.json naming grok-4.7, with its route and probe records; its run file and the slot's baseline, which measured it, stay as recorded. No Auto slot names the Grok family, so the model is reached only when picked by name. No provider call was made for this change."
     },
     {
-      "id": "verification/2026-10-07/80",
+      "id": "verification/2026-10-07/81",
       "date": "2026-10-07",
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the DeepSeek flash family slot moves from deepseek-v4-flash to the row keyed by DeepSeek's current unversioned id, which serves DeepSeek V4.1 Flash, against the eval gate. The gate was run on 2026-10-07 on the three zero-tolerance corpora and refused that model: golden 0.917, refusal 0.000 and jailbreak 0.364 against floors of 0.900, 1.000 and 1.000, the same three scores its predecessor recorded; the other twelve corpora were not measured for it. The slot records the refusal as its promotion reason. An id with no version gives the slot pattern nothing to parse, so the slot now declares that this id resolves to generation 4.1 (unversionedModelIds), which the family matcher reads; the pattern itself is unchanged. Both models list at $0.30/$1.20 per million. deepseek-v4-flash leaves through the retire tool into retired-models.json naming its successor, with its route, probe and synced records, and deepseek-v4-pro now names the new row as its variant partner. The new row has only the direct DeepSeek route; the marketplace routes of the old row were not copied because nothing read for this change says those gateways serve the new id. The reasoning_premium Auto slot names this family, so the eval safety floor baseline entry for that slot now states what is true of the new model. No task's preferred slots and no plan's allowed slots include reasoning_premium, so Auto does not dispatch to it. deepseek-v4-pro is unchanged. No provider call was made for this change."
     },
     {
-      "id": "verification/2026-10-07/81",
+      "id": "verification/2026-10-07/82",
       "date": "2026-10-07",
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, the google/gemini-flash-image slot moves from gemini-3.1-flash-image, which Google deprecated on 2026-10-06, to gemini-nano-banana-2.1; the slot pattern now matches the nano-banana name. The eval gate was not run: the harness has no measurement for image output and the slot has no baseline. Two catalog-side gates fail and are recorded on the slot as failing. Input rises from $0.50 to $1.50 per million, 200% against the 25% ceiling, while image output falls from $60 to $30 per million and the 1K image from $0.067 to $0.0336, so a generated image costs about half. The slot's minimum context of 1,000,000 tokens is unmet by both models, which each publish 131,072; the minimum predates the 2026-09-01 correction of the old row and was not changed here. This slot serves the image_generation Auto slot on Pro and above. gemini-3.1-flash-image leaves through the retire tool, and gemini-3-pro-image and gemini-3.1-flash-lite-image now name the new row as their variant partner. Three preview rows with shutdown dates leave for the stable models Google names as their replacements: gemini-omni-flash-preview for gemini-omni-1.1-flash, gemini-3.1-flash-live-preview for gemini-3.8-live and gemini-3.1-flash-tts-preview for gemini-3.8-flash-tts. The retire tool cannot carry out a row that is not live, because the compiler holds such a row at or below the shadow stage and the tool removes only from deprecated; their retired records were written in the tool's shape directly and the rows deleted. gemini-3.5-live-translate-preview stays: it has no shutdown date and no newer row covers live speech translation. gemini-3.8-flash, gemini-3.5-flash-lite, gemini-3.1-pro-preview, gemini-embedding-2 and the three Veo rows are unchanged. The retire tool reads a released field the authored rows do not carry and stamps the UTC day, so the sixteen records written for this refresh take their release date from each row's releasedOverride and are dated 2026-10-07, the local day the work was done. No provider call was made."
     },
     {
-      "id": "verification/2026-10-07/82",
+      "id": "verification/2026-10-07/83",
       "date": "2026-10-07",
       "verifiedBy": "owner-instruction-2026-10-07-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's instruction of 2026-10-07 to keep only the newest version of every model, three more rows leave the roster. minimax-m2.7, deprecated on 2026-09-06 in favour of minimax-m3, and kimi-k2.7-code, superseded by kimi-k3, leave through the retire tool. qwen-3.6-27b, the Groq-hosted model Groq shut down on 2026-09-14, was marked unavailable and so cannot reach the deprecated stage; its retired record was written directly in the tool's shape, naming qwen-3.8-27b, and its two routes were removed with it. qwen-3.8-27b no longer names it as a variant partner. Removing the Groq row uncovers one row of the synced OpenRouter catalog, which the curated row had hidden because both carried the same wire id: OpenRouter's own listing of that model now appears at stage discovered, like the 346 other mirrored OpenRouter rows. Those rows mirror OpenRouter's catalog, old generations included; none is at a stage that managed traffic or a managed picker admits. No row under provider qwen, no providerOfferings entry and neither qwen family slot was touched. The moonshot/kimi, zhipu/glm and minimax/minimax slots already held their newest models and are unchanged. No provider call was made."
     },
     {
-      "id": "verification/2026-10-07/83",
+      "id": "verification/2026-10-07/84",
       "date": "2026-10-07",
       "verifiedBy": "catalog-type-contract-no-live-call",
       "status": "CORRECTION",
       "notes": "gpt-image-2.5-sunburst and gpt-image-2.5-flare were added without a speed, which the compatibility catalog type requires of every model, so every package that typechecks against models.json failed from the commit that added them. Both now carry one. OpenAI publishes no speed for either model: the Sunburst row takes medium, the value the catalog uses where a provider states none and the value gpt-image-2 carried, and the Flare row takes fast, because OpenAI's own description of that model is fast everyday image generation. Neither value is a measurement. No provider call was made."
     },
     {
-      "id": "verification/2026-10-09/84",
+      "id": "verification/2026-10-09/85",
       "date": "2026-10-09",
       "verifiedBy": "official-google-gemini-4-argon-announcement",
       "status": "ADDITION",
       "notes": "Added Gemini 4 Argon (gemini-4-argon) as availability:\"coming_soon\", following the GPT-5.6 precedent: the model is non-routable while coming_soon and is kept OUT of tierAllowedModels, routing slots, taskRouting and defaultModel (enforced by check:availability-invariant); the web picker lists it under Google as a grayed, non-selectable row. Source: https://blog.google/innovation-and-ai/models-and-research/gemini-models/gemini-4-argon/ (published 2026-09-30, retrieved 2026-10-09): rolling out to trusted cyber defenders through the Fairwind Program, then paid API customers and Google AI Ultra subscribers, no date given; introductory $2/1M input and $10/1M output, cached input 95% below the input price, then $4/$20; output token limit expanded to 1M from 64K, no context window stated. ai.google.dev/gemini-api/docs/models did not list the model on 2026-10-09 and Google has published no API model code, so apiModelId, contextWindow, maxOutputTokens, released and reasoning controls are deliberately unset; contextWindowUnpublished cites the announcement, which check:model-registry-integrity accepts only while the model is not live. No live probe was made; a coming_soon model needs none. At GA: set apiModelId from Google's model page, replace contextWindowUnpublished with the published contextWindow, add the published limits and reasoning block, probe, and only then flip availability to live."
     },
     {
-      "id": "verification/2026-10-10/85",
+      "id": "verification/2026-10-10/86",
       "date": "2026-10-10",
       "verifiedBy": "live-probe-and-eval-run-2026-10-10",
       "status": "ROSTER",
       "notes": "claude-haiku-5-5 takes a new family slot, anthropic/claude-haiku, so a consumer can address it as family:anthropic/claude-haiku instead of naming the model. This replaces the 2026-10-07 statement that it takes no family slot. It is the slot's first generation: claude-haiku-4-5 is in retired-models.json, so the slot has no previous model and an empty fallback chain, and the family tool's promote command, which only moves a slot to a newer member, has nothing to move. The slot was declared with the gate results the family tool computes (provider, family identity, lifecycle, capability coverage; no price or limit regression exists against itself), and the lifecycle stage was advanced with the checks that command runs. The owner approved live calls for this model on 2026-10-10. pnpm probe:models, scoped to this model alone, answered through anthropic/claude-haiku-5-5 and honoured a forced tool call (probes.json). pnpm evals:live --baseline ran all fifteen suites through the same route, 109 cases for about $0.08: golden 11/12 (0.917 against a 0.9 corpus threshold; the one miss is a 20-word summary answered in 25 words), refusal 10/10, jailbreak 11/11 and every capability suite at 1.000. That run is the slot's baseline, so pnpm evals:gate compared it with itself and the bar it held is each corpus's own threshold, not a predecessor. The stage moved registered, probed, benchmarked, evaluated, promoted on 2026-10-10, with lifecycleRefusals and runEvalGate from family-slots.mjs both clear before the last step. tierPolicy.minTier stays pro, tierAllowedModels is unchanged, and no routing policy slot, task route or default names the new family, so Auto does not serve it and no plan admits it that did not before."
     },
     {
-      "id": "verification/2026-10-11/86",
+      "id": "verification/2026-10-11/87",
       "date": "2026-10-11",
       "verifiedBy": "owner-approved-live-probe-qwen-free-quota-text-2026-10-11",
       "status": "CORRECTION",
       "notes": "The owner asked for every text offering in the QwenCloud free quota inventory to be checked and approved the calls. One request of at most 8 output tokens went to each of the 127 chat offerings through the international compatible-mode endpoint at 2026-10-11T16:29Z. 57 answered. 44 returned 404 model_not_found, 24 returned 403 access_denied and 2 (qvq-max-latest, qvq-max-2025-03-25) are not served in compatible mode. Of the 71 chat offerings that carry the 2026-10-09T16:00Z retiresAt recorded on 2026-10-02 from the Model Studio retirement notices, 69 are refused, which agrees with the second reminder the provider sent the owner for the 2026-10-10 decommissioning; qwen-vl-ocr and qwen-turbo still answer, neither is offered by the free picker and the free row of qwen-turbo ended on 2026-08-22, so their dates are left as recorded. qwen3-max-2025-10-30 (qwen-quota-196) carried no retirement and is refused with access_denied, so it now carries retiresAt set to the instant of that refusal, which is the latest it can have stopped serving, not a date the provider announced. No offering the free picker serves was refused. qwen-plus and qwen-turbo answered although their free rows are expired, so those two calls were billed at list price; they should not be probed again."
     },
     {
-      "id": "verification/2026-10-13/87",
+      "id": "verification/2026-10-13/88",
       "date": "2026-10-13",
       "verifiedBy": "owner-direction-2026-10-13",
       "status": "ROSTER",
       "notes": "openrouter-free (OpenRouter Free Auto, openrouter/free) leaves the catalog on the owner's instruction of 2026-10-13: the free router kept answering that it was overloaded, and it was the only model the Free plan could reach. Asked what should serve Free instead, the owner chose the fast OpenAI family. The row, its route, its synced record and its probe are removed and the id is recorded in catalog/retired-models.json so a conversation that names it still renders a label. The Free Auto slots free_workhorse and free_workhorse_fast move to family:openai/gpt-fast and the slot router_zero_cost is deleted, because no slot is zero cost any more. gpt-6-luna takes tierPolicy.minTier free, which with its existing place in tierAllowedModels.economy is what admits it to the Free plan; a Free turn on it is metered against the Free usage windows in packages/contracts/types/src/managed-usage-limits.ts. The two retired :free aliases that redirected to the router now redirect to the same family. No live provider call was made for this change."
     },
     {
-      "id": "verification/2026-10-18/88",
+      "id": "verification/2026-10-18/89",
       "date": "2026-10-18",
       "verifiedBy": "official-google-gemini-4-argon-ga-pages-no-live-call",
       "status": "ROSTER",
       "notes": "On the owner's request of 2026-10-18, gemini-4-argon goes from coming_soon to live. Google made it available to everyone on 2026-10-13: the Gemini API and AI Studio serve it as gemini-4-argon, labelled stable, and it is not on the free tier. Read on 2026-10-18 from https://ai.google.dev/gemini-api/docs/latest-model (last updated 2026-10-16), the model page https://ai.google.dev/gemini-api/docs/models/gemini-4-argon and https://cloud.google.com/blog/products/ai-machine-learning/gemini-4-argon-available-on-google-cloud (2026-10-13). The row takes apiModelId, the shared 1,048,576-token window in place of contextWindowUnpublished, a 65,536 maxOutputTokens (the synchronous default; the long decode needs background execution), text, image, audio, video and PDF input, low/medium/high thinking levels defaulting to medium on thinkingConfig.thinkingLevel with no budget path, implicit caching from 4,096 tokens, and the introductory $2/$0.10/$10 with promo_expires_at 2026-12-01 and post_promo_prices $4/$0.20/$20. Capabilities follow the model page; computer use, listed as Preview, and deep research, not listed, are false. tierPolicy.minTier is pro, the tier of the row it replaces. The google/gemini-pro slot pattern now also matches -argon ids, and the slot moves from gemini-3.1-pro-preview to gemini-4-argon; the promotion was built with the family tool's own functions, since its promote command refuses without a probe and an eval gate run. Under the owner's order of 2026-10-07 to keep only the newest generation of every family, gemini-3.1-pro-preview then leaves through the retire tool into retired-models.json, naming gemini-4-argon, with its marketplace routes, probe and synced record; Google has announced no shutdown date for it. The slot keeps it as previous with an empty fallback chain. The tool built the retirement record from a registry that no longer had the synced record, so its context window, capabilities, release date and successor were restored from the registry before this change. gemini-3.5-flash-lite and gemini-3.8-flash now name gemini-4-argon as their variant partner, and gemini-4-argon names gemini-3.5-flash-lite. The capabilityCoverage gate fails and is recorded as failing: the slot's 2,000,000 minimum context predates the current rows, and neither model meets it. The slot is in pro_additions and serves the long_context_balanced and long_context_pro Auto slots and Google's complex_reasoning and long_context task routes, so those move to the new model; at the post-introductory price its input costs twice and its output 67% more than gemini-3.1-pro-preview did. The direct Google route carries the promotion and its end date. A marketplace route cannot carry the end date, so the one OpenRouter route is priced at the post-introductory $4/$20 with a $0.20 cache read now, which overstates the cost until 2026-12-01 and never understates it after; a registry test holds every route of a running promotion at or above the post-promotion price. Vercel AI Gateway and Experiential Labs also list the model and get no route. The row carries OpenRouter's slug google/gemini-4-argon, read from OpenRouter's model endpoints listing on 2026-10-18, because every direct-provider chat model needs one for OpenRouter failover. The OpenRouter adapter turns a prompt-cache request on a google/ slug into cache_control breakpoints, which OpenRouter uses for Gemini's explicit caching; providerCompatibility.explicitPromptCache false now makes it send none for this model. No probe was made and the eval gate was not run; the owner has not approved spend for this model."
     },
     {
-      "id": "verification/2026-10-22/89",
+      "id": "verification/2026-10-22/90",
       "date": "2026-10-22",
       "verifiedBy": "official-openrouter-openapi-and-video-models-listing-no-live-call",
       "status": "CORRECTION",
       "notes": "seedance-2.5 takes imageInput.maxImagesPerRequest 4, which is what lets the managed video route send it input images. OpenRouter's OpenAPI document (https://openrouter.ai/openapi.json, read 2026-10-22) defines VideoGenerationRequest.frame_images (image_url parts with frame_type first_frame or last_frame) and input_references (image references that every provider honours); the public listing https://openrouter.ai/api/v1/videos/models, read the same day, gives bytedance/seedance-2.5 supported_frame_images [first_frame, last_frame], and its model page says each url is an https URL or a base64 data URL. Neither source publishes a maximum number of reference images, so the catalog sets 4, the multi-image-to-video count the reference products show. Image input does not change the price: the listing's with_video_input SKU applies only to a video reference, and the route settles on OpenRouter's reported cost. No live provider call was made for this change."
     },
     {
-      "id": "verification/2026-10-22/90",
+      "id": "verification/2026-10-22/91",
       "date": "2026-10-22",
       "verifiedBy": "catalog-verification-log-and-family-slot-history",
       "status": "ADDITION",
       "notes": "Models now carry an optional newUntil date (YYYY-MM-DD, inclusive) that the model picker reads to show a New badge, which stops on its own the day after. Release dates in the catalog are often month-only, so the badge is curated rather than computed. It is set to 30 days after the day each model reached the picker, read from this log and the family slot history: claude-opus-5-5, claude-sonnet-5-5, gpt-6.1-sol, gpt-6-luna, grok-4.7 and deepseek-flash took their family slots on 2026-10-07 and claude-haiku-5-5 joined the catalog that day, so they carry 2026-11-06; gemini-4-argon went live on 2026-10-18 and carries 2026-11-17. gpt-6-astra took its slot on 2026-09-05 and is past the window. No provider fact changed."
     },
     {
-      "id": "verification/2026-10-22/91",
+      "id": "verification/2026-10-22/92",
       "date": "2026-10-22",
       "verifiedBy": "model-picker-description-line",
       "status": "ADDITION",
       "notes": "Every curated model now carries a description: one short line in our own words that the model picker shows under the model name. Each line restates what the model's own bestFor, qualityTier and modality fields already record; none states a benchmark, price or provider claim. The model-registry tests require it on every curated model, and the compiler rejects any description that is not one sentence of at most 60 characters. No provider fact changed."
     },
     {
-      "id": "verification/2026-10-22/92",
+      "id": "verification/2026-10-22/93",
       "date": "2026-10-22",
       "verifiedBy": "official-provider-privacy-pages-read-2026-10-22",
       "status": "CORRECTION",
       "notes": "The account setting that keeps a user's content away from providers that may train now counts only providers whose own terms cover the model that serves, so four records change trainsOnInputs from never to varies_by_route in provider-governance.json and gateways.json. vercel_gateway: https://vercel.com/docs/ai-gateway/security-and-compliance/disallow-prompt-training (last updated 2026-09-10) states \"By default, AI Gateway does not route based on the training data policy of providers.\"; filtering needs providerOptions.gateway.disallowPromptTraining, which no adapter sends. cheaperinference and cheaperinference_anthropic: https://platform.cheaperinference.com/legal/privacy states \"We do not use customer prompt or response bodies to train Keak models.\" and that inputs \"are transmitted to the model provider selected to serve a request\", whose practices the policy \"does not govern\". deepinfra: https://docs.deepinfra.com/account/data-privacy states \"We do not use data you submit to our APIs for training models.\" except \"when using Google or Anthropic models, where the receiving company's training policy applies\". A varies_by_route or unknown provider is refused whenever the setting is on. No model, route or price changed, and no live provider call was made."
     },
     {
-      "id": "verification/2026-10-22/93",
+      "id": "verification/2026-10-22/94",
       "date": "2026-10-22",
       "verifiedBy": "official-google-omni-guide-interactions-reference-pricing-and-deprecations-no-live-call",
       "status": "CORRECTION",

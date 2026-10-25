@@ -4,6 +4,7 @@ import { resolveResidencyRegion, resolveTurnPromptCache } from '../request-proce
 
 const TURN = {
   requested: true,
+  surface: 'web' as const,
   temporaryChat: false,
   zeroDataRetentionOnly: false,
   organizationId: 'org_alpha',
@@ -46,8 +47,36 @@ describe('resolveTurnPromptCache', () => {
     expect(resolved.promptCacheScope.privacyClass).toBe('temporary');
   });
 
-  it('leaves caching off when the client never asked for it', () => {
-    expect(resolveTurnPromptCache({ ...TURN, requested: undefined }).usePromptCache).toBe(false);
+  it('caches a first-party surface whose client never sent the flag', () => {
+    for (const surface of ['chrome', 'vscode', 'cli', 'mobile', 'web'] as const) {
+      expect(
+        resolveTurnPromptCache({ ...TURN, surface, requested: undefined }).usePromptCache,
+      ).toBe(true);
+    }
+  });
+
+  it('leaves caching off when a first-party client turns it off', () => {
+    expect(resolveTurnPromptCache({ ...TURN, requested: false }).usePromptCache).toBe(false);
+  });
+
+  it('leaves caching off for a developer API key that never asked for it', () => {
+    expect(
+      resolveTurnPromptCache({ ...TURN, surface: 'api', requested: undefined }).usePromptCache,
+    ).toBe(false);
+    expect(
+      resolveTurnPromptCache({ ...TURN, surface: 'api', requested: true }).usePromptCache,
+    ).toBe(true);
+  });
+
+  it('refuses a Temporary Chat on a surface that caches by default', () => {
+    expect(
+      resolveTurnPromptCache({
+        ...TURN,
+        surface: 'chrome',
+        requested: undefined,
+        temporaryChat: true,
+      }).usePromptCache,
+    ).toBe(false);
   });
 
   it('scopes a personal turn to its user when there is no workspace', () => {

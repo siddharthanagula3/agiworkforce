@@ -169,6 +169,7 @@ async fn trace_output_of_real_request_contains_no_key_material() {
         thinking_budget: None,
         tool_choice: None,
         anthropic_thinking: None,
+        thinking_display: None,
         effort: None,
         top_p: None,
         top_k: None,

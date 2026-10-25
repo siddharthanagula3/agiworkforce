@@ -22,7 +22,7 @@ export default function AppRuntimeMounts() {
       <SessionTimeoutGuard />
       <ConnectorOutcomeAnnouncer />
       <DesktopHostMount />
-      <OfflineIndicator position="bottom" />
+      <OfflineIndicator />
       <WebPushOptIn />
       <PendingCheckoutConfirmation />
       <ProductNotices />

@@ -187,6 +187,17 @@ describe('web settings search reaches the chat font controls', () => {
     expect(scrollIntoView).toHaveBeenLastCalledWith({ block: 'center' });
   });
 
+  it.each(['spend limit', 'spending limit', 'monthly limit'])(
+    '"%s" lists Usage, where the monthly spend limit lives',
+    (query) => {
+      render(<WebSettingsSearchHarness />);
+      const nav = searchSettings(query);
+
+      expect(resultLabels(nav)).toEqual(['Usage']);
+      expect(within(nav).queryByText('No matches.')).toBeNull();
+    },
+  );
+
   it('indexes only controls the General section really renders', () => {
     render(<GeneralSection />);
 

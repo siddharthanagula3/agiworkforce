@@ -1,7 +1,7 @@
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { StreamAnnouncer, STREAM_ANNOUNCE_INTERVAL_MS } from '../StreamAnnouncer';
+import { StreamAnnouncer, STREAM_ANNOUNCE_INTERVAL_MS, speakableText } from '../StreamAnnouncer';
 
 function announcer(): HTMLElement {
   return screen.getByTestId('stream-announcer');
@@ -146,5 +146,35 @@ describe('StreamAnnouncer announcements', () => {
     expect(region.getAttribute('aria-atomic')).toBe('true');
     expect(region.className).toContain('sr-only');
     expect(region.contains(screen.getByTestId('body'))).toBe(false);
+  });
+});
+
+describe('StreamAnnouncer reads plain text', () => {
+  it('announces bold, headings, lists and links without their markdown marks', () => {
+    const { rerender } = render(
+      <StreamAnnouncer text="" isStreaming>
+        <p>body</p>
+      </StreamAnnouncer>,
+    );
+    rerender(
+      <StreamAnnouncer
+        text={'## Plan\n- **Book** the [venue](https://example.com/v) *today* '}
+        isStreaming
+      >
+        <p>body</p>
+      </StreamAnnouncer>,
+    );
+    advance(STREAM_ANNOUNCE_INTERVAL_MS);
+    const spoken = announcer().textContent ?? '';
+    expect(spoken).not.toMatch(/[*#[\]()]/);
+    expect(spoken).toContain('Plan');
+    expect(spoken).toContain('Book the venue today');
+  });
+
+  it('keeps arithmetic and identifiers that only look like markdown', () => {
+    expect(speakableText('2 * 3 is 6 and snake_case_name stays')).toBe(
+      '2 * 3 is 6 and snake_case_name stays',
+    );
+    expect(speakableText('**half bold')).toBe('half bold');
   });
 });

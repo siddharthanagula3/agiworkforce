@@ -40,6 +40,7 @@ describe('turnMayBeShadowMirrored', () => {
         });
         const cache = resolveTurnPromptCache({
           requested: true,
+          surface: 'web',
           temporaryChat,
           zeroDataRetentionOnly,
           ...USER,

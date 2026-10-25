@@ -33,6 +33,7 @@ import {
 import type { ProcessedRequest } from '@/app/api/llm/v1/chat/completions/lib/request-processor';
 import {
   runToolLoop,
+  usageOfFailedProviderStep,
   type CollectedProviderLine,
   type FetchedSource,
   type PendingToolCall,
@@ -703,6 +704,10 @@ export async function executeCloudAgentWorkflowInvocation(
             return persisted;
           },
           usage: (result) => ({ ...result.usage }),
+          failureUsage: (error) => {
+            const spent = usageOfFailedProviderStep(error);
+            return spent ? { ...spent } : null;
+          },
         }),
       toolExecutor: async ({ operationKey, retrySafety, toolCall, execute }) => {
         const refused = await toolPermissionGate.refusalFor(toolCall.qualifiedName);

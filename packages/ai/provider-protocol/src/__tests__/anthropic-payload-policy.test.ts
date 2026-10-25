@@ -5,6 +5,7 @@ import {
   resolveAnthropicPayloadPolicy,
 } from '../anthropic-payload-policy';
 import { SYSTEM_PROMPT_CACHE_BOUNDARY } from '../system-prompt-cache-boundary';
+import { formatTurnContext } from '../turn-context';
 
 describe('resolveAnthropicPayloadPolicy', () => {
   it('returns no cacheControl when enableCacheControl is unset/false', () => {
@@ -159,5 +160,77 @@ describe('applyAnthropicPayloadPolicyToParams', () => {
     const system = params['system'] as Array<Record<string, unknown>>;
     expect(system[0]?.['text']).toBe('cache-stable\n\ndynamic');
     expect(system[0]?.['cache_control']).toBeUndefined();
+  });
+
+  it('writes the conversation breakpoint for five minutes when per-turn system text precedes it', () => {
+    const params: Record<string, unknown> = {
+      system: [{ type: 'text', text: `stable${SYSTEM_PROMPT_CACHE_BOUNDARY}time 16:33` }],
+      messages: [{ role: 'user', content: 'q' }],
+    };
+    applyAnthropicPayloadPolicyToParams(params, {
+      allowsServiceTier: false,
+      cacheControl: { type: 'ephemeral', ttl: '1h' },
+      serviceTier: undefined,
+    });
+    const system = params['system'] as Array<Record<string, unknown>>;
+    const messages = params['messages'] as Array<{ content: Array<Record<string, unknown>> }>;
+    expect(system[0]?.['cache_control']).toEqual({ type: 'ephemeral', ttl: '1h' });
+    expect(messages[0]?.content[0]?.['cache_control']).toEqual({ type: 'ephemeral' });
+  });
+
+  it('puts the conversation breakpoint ahead of turn context in the same message', () => {
+    const params: Record<string, unknown> = {
+      messages: [
+        {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'what time is it?' },
+            { type: 'text', text: formatTurnContext('The current UTC date and time is X.') },
+          ],
+        },
+      ],
+    };
+    applyAnthropicPayloadPolicyToParams(params, {
+      allowsServiceTier: false,
+      cacheControl: { type: 'ephemeral' },
+      serviceTier: undefined,
+    });
+    const content = (params['messages'] as Array<{ content: Array<Record<string, unknown>> }>)[0]!
+      .content;
+    expect(content[0]?.['cache_control']).toEqual({ type: 'ephemeral' });
+    expect(content[1]?.['cache_control']).toBeUndefined();
+  });
+
+  it('puts the conversation breakpoint on the tool result before a turn-context message', () => {
+    const params: Record<string, unknown> = {
+      messages: [
+        { role: 'user', content: [{ type: 'tool_result', tool_use_id: 't1', content: 'ok' }] },
+        { role: 'user', content: formatTurnContext('The current UTC date and time is X.') },
+      ],
+    };
+    applyAnthropicPayloadPolicyToParams(params, {
+      allowsServiceTier: false,
+      cacheControl: { type: 'ephemeral' },
+      serviceTier: undefined,
+    });
+    const messages = params['messages'] as Array<{ content: unknown }>;
+    expect((messages[0]!.content as Array<Record<string, unknown>>)[0]?.['cache_control']).toEqual({
+      type: 'ephemeral',
+    });
+    expect(typeof messages[1]!.content).toBe('string');
+  });
+
+  it('keeps the long conversation breakpoint when nothing per-turn precedes it', () => {
+    const params: Record<string, unknown> = {
+      system: [{ type: 'text', text: 'stable only' }],
+      messages: [{ role: 'user', content: 'q' }],
+    };
+    applyAnthropicPayloadPolicyToParams(params, {
+      allowsServiceTier: false,
+      cacheControl: { type: 'ephemeral', ttl: '1h' },
+      serviceTier: undefined,
+    });
+    const messages = params['messages'] as Array<{ content: Array<Record<string, unknown>> }>;
+    expect(messages[0]?.content[0]?.['cache_control']).toEqual({ type: 'ephemeral', ttl: '1h' });
   });
 });

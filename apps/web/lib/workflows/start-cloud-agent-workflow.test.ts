@@ -74,6 +74,7 @@ vi.mock('@/lib/services/cloud-agent-run-service', () => ({
   transitionCloudAgentRun: vi.fn(),
 }));
 vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
+  hasObservedProviderUsage: () => false,
   createObservedProviderUsage: () => ({
     providerCalls: 0,
     inputTokens: 0,

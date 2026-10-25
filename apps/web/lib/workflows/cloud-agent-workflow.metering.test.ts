@@ -19,6 +19,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   runToolLoop: vi.fn(),
+  usageOfFailedProviderStep: vi.fn(),
   executeOperation: vi.fn(),
   settle: vi.fn(),
   appendEvent: vi.fn(),
@@ -60,6 +61,7 @@ vi.mock('@/app/api/llm/v1/chat/completions/lib/tool-loop', () => ({
   toolStatusEvent: vi.fn(() => ''),
   trimToolResultHistory: vi.fn(),
   runToolLoop: mocks.runToolLoop,
+  usageOfFailedProviderStep: mocks.usageOfFailedProviderStep,
   mapWithConcurrency: vi.fn(),
 }));
 vi.mock('./cloud-agent-operation-executor', () => ({
@@ -284,6 +286,30 @@ describe('durable invocation rebuilds the request on the side its reservation ca
 
     await expect(ledgerRow.execute()).resolves.not.toHaveProperty('lines');
     expect(() => ledgerRow.resultSchema.parse(providerStepResult())).not.toThrow();
+  });
+
+  it('settles a stopped provider step at the usage the provider measured', async () => {
+    await executeCloudAgentWorkflowInvocation(makeInput(MANAGED_BILLING));
+
+    const providerExecutor = toolLoopOptions()['providerExecutor'] as (input: unknown) => unknown;
+    mocks.executeOperation.mockResolvedValue({});
+    await providerExecutor({
+      operationKey: 'provider:1',
+      step: 1,
+      request: {},
+      execute: async () => providerStepResult(),
+    });
+    const ledgerRow = mocks.executeOperation.mock.calls[0]![1] as {
+      failureUsage?: (error: unknown) => Record<string, unknown> | null;
+    };
+    const stopped = new Error('Request was aborted.');
+    const measured = { providerCalls: 1, inputTokens: 7773, outputTokens: 0 };
+    mocks.usageOfFailedProviderStep.mockImplementation((error: unknown) =>
+      error === stopped ? measured : null,
+    );
+
+    expect(ledgerRow.failureUsage?.(stopped)).toEqual(measured);
+    expect(ledgerRow.failureUsage?.(new Error('nothing measured'))).toBeNull();
   });
 });
 

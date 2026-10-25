@@ -86,6 +86,10 @@ pub struct ChatRequest<'a> {
     pub thinking_budget: Option<u32>,
     /// Anthropic thinking mode; supersedes `thinking_budget` when set.
     pub anthropic_thinking: Option<AnthropicThinking>,
+    /// Anthropic `thinking.display`, sent only alongside active thinking.
+    /// Models that default to `omitted` stream thinking blocks with empty
+    /// text unless it is `summarized`.
+    pub thinking_display: Option<&'a str>,
     /// Anthropic `output_config.effort` parameter for supported Claude models.
     pub effort: Option<&'a str>,
     /// Nucleus sampling; serialized by the Anthropic, OpenAI and Gemini dialects.
@@ -394,6 +398,10 @@ pub fn build_anthropic_request_body(req: &ChatRequest<'_>) -> Value {
             body["thinking"] = serde_json::json!({"type": "disabled"});
         }
         None => {}
+    }
+
+    if thinking_active && let Some(display) = req.thinking_display {
+        body["thinking"]["display"] = serde_json::json!(display);
     }
 
     if let Some(effort) = req.effort {
@@ -2230,6 +2238,7 @@ mod responses_request_tests {
             thinking_budget: None,
             tool_choice: None,
             anthropic_thinking: None,
+            thinking_display: None,
             effort: None,
             top_p: None,
             top_k: None,
@@ -2285,6 +2294,7 @@ mod anthropic_request_tests {
             thinking_budget: None,
             tool_choice: None,
             anthropic_thinking: None,
+            thinking_display: None,
             effort: None,
             top_p: None,
             top_k: None,
@@ -2347,6 +2357,33 @@ mod anthropic_request_tests {
         // Disabled keeps the caller's temperature (only active thinking
         // forbids it).
         assert!((body["temperature"].as_f64().unwrap() - 0.5).abs() < 1e-6);
+    }
+
+    #[test]
+    fn thinking_display_rides_only_on_active_thinking() {
+        let messages = vec![Message::text("user", "Plan.")];
+        let mut req = base_request(&messages);
+        req.thinking_display = Some("summarized");
+        req.anthropic_thinking = Some(AnthropicThinking::Adaptive);
+        let body = build_anthropic_request_body(&req);
+        assert_eq!(
+            body["thinking"],
+            serde_json::json!({"type": "adaptive", "display": "summarized"})
+        );
+
+        req.anthropic_thinking = Some(AnthropicThinking::Enabled {
+            budget_tokens: 2048,
+        });
+        let body = build_anthropic_request_body(&req);
+        assert_eq!(body["thinking"]["display"], "summarized");
+
+        req.anthropic_thinking = Some(AnthropicThinking::Disabled);
+        let body = build_anthropic_request_body(&req);
+        assert_eq!(body["thinking"], serde_json::json!({"type": "disabled"}));
+
+        req.anthropic_thinking = None;
+        let body = build_anthropic_request_body(&req);
+        assert!(body.get("thinking").is_none());
     }
 
     #[test]

@@ -10,10 +10,13 @@ import {
   buildPromptCachePlan,
   decodeTextFileBlock,
   getModelMetadataById,
+  type ModelReasoning,
   isTextLikeFileMediaType,
   UnsupportedFileInputError,
   type PromptCachePlan,
 } from '@agiworkforce/types';
+
+type ThinkingDisplay = NonNullable<ModelReasoning['thinkingDisplay']>;
 
 interface AnthropicTranslatedRequest {
   model: string;
@@ -27,10 +30,10 @@ interface AnthropicTranslatedRequest {
   top_k?: number;
   stop_sequences?: string[];
   thinking?:
-    | { type: 'enabled'; budget_tokens: number }
+    | { type: 'enabled'; budget_tokens: number; display?: ThinkingDisplay }
     | { type: 'disabled' }
     | { type: 'between_tools' }
-    | { type: 'adaptive' };
+    | { type: 'adaptive'; display?: ThinkingDisplay };
   output_config?: {
     effort?: string;
     format?: { type: 'json_schema'; schema: Record<string, unknown> };
@@ -308,6 +311,21 @@ function outputFormatFor(
   return { type: 'json_schema', schema: format.schema };
 }
 
+function withThinkingDisplay(
+  thinking: AnthropicTranslatedRequest['thinking'],
+  reasoning: ModelReasoning | undefined,
+): AnthropicTranslatedRequest['thinking'] {
+  const display = reasoning?.thinkingDisplay;
+  if (!display) return thinking;
+  if (thinking === undefined) {
+    const thinksByDefault =
+      reasoning.thinkingDefault === 'adaptive' || reasoning.canDisableThinking === false;
+    return thinksByDefault ? { type: 'adaptive', display } : undefined;
+  }
+  if (thinking.type === 'adaptive' || thinking.type === 'enabled') return { ...thinking, display };
+  return thinking;
+}
+
 export function translateChatRequest(req: ChatRequest): AnthropicTranslatedRequest {
   const metadata = getModelMetadataById(req.model);
   const reasoning = metadata?.reasoning;
@@ -337,7 +355,7 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
   const tools = [...translatedTools, ...((req.rawVendorTools ?? []) as AnthropicToolParam[])];
   const toolChoice = translateToolChoice(req.toolChoice);
 
-  const thinking =
+  const requestedThinking =
     reasoning?.thinkingDefault === 'adaptive' &&
     reasoning.supportsManualThinking === false &&
     req.thinking?.type !== 'disabled' &&
@@ -353,6 +371,7 @@ export function translateChatRequest(req: ChatRequest): AnthropicTranslatedReque
           : req.thinking?.type === 'adaptive'
             ? { type: 'adaptive' as const }
             : undefined;
+  const thinking = withThinkingDisplay(requestedThinking, reasoning);
 
   const rejectsSamplingParameters = reasoning?.rejectsSamplingParameters === true;
   const metadataUserId = req.metadata?.['user_id'];

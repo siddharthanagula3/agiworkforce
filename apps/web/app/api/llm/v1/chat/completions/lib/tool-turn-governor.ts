@@ -19,12 +19,12 @@ export const AGI_WORK_TURN_TOOL_CALL_CAP = 120;
 export type ToolWithdrawalReason = 'unavailable' | 'budget' | 'repeated-query' | 'turn-cap';
 
 export interface ToolTurnGovernor {
-  /** Drop a tool from the offered set for the remainder of the turn. */
+  /** Close a tool for the remainder of the turn; a call to it is refused. */
   withdraw(name: string, reason: ToolWithdrawalReason): void;
   isWithdrawn(name: string): boolean;
+  /** Whether any tool is closed, or the turn has used its calls. */
+  anyClosed(): boolean;
   withdrawalReason(name: string): ToolWithdrawalReason | undefined;
-  /** Filter one step's tool list down to what is still on offer. */
-  offered<T>(tools: readonly T[] | undefined, nameOf: (tool: T) => string): T[] | undefined;
   /**
    * Record a search query. `repeat` means this normalised query already ran
    * this turn, which is the breaker: the caller withdraws the search tool and
@@ -145,13 +145,11 @@ export function createToolTurnGovernor(cap: number): ToolTurnGovernor {
     isWithdrawn(name) {
       return withdrawn.has(name);
     },
+    anyClosed() {
+      return withdrawn.size > 0 || used >= cap;
+    },
     withdrawalReason(name) {
       return withdrawn.get(name);
-    },
-    offered(tools, nameOf) {
-      if (!tools) return undefined;
-      if (withdrawn.size === 0) return [...tools];
-      return tools.filter((tool) => !withdrawn.has(nameOf(tool)));
     },
     noteQuery(name, rawQuery) {
       const normalised = normaliseSearchQuery(rawQuery);

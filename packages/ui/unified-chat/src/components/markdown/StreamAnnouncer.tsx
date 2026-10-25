@@ -12,6 +12,33 @@ function wordBoundedDelta(source: string, from: number): string {
   return '';
 }
 
+const FENCE_LINE = /^[ \t]{0,3}(?:`{3,}|~{3,}).*$/gm;
+const IMAGE = /!\[([^\]]*)\]\([^)]*\)/g;
+const LINK = /\[([^\]]+)\]\([^)]*\)/g;
+const HEADING_MARK = /^[ \t]{0,3}#{1,6}[ \t]+/gm;
+const QUOTE_MARK = /^[ \t]{0,3}>[ \t]?/gm;
+const LIST_MARK = /^[ \t]*(?:[-*+]|\d{1,3}[.)])[ \t]+(?:\[[ xX]\][ \t]+)?/gm;
+const TABLE_RULE = /^[ \t]*\|?(?:[ \t]*:?-{3,}:?[ \t]*\|?)+[ \t]*$/gm;
+const PAIRED_MARKS = /\*\*|__|~~|`+/g;
+const OPENING_EMPHASIS = /(^|[\s(])[*_](?=\S)/g;
+const CLOSING_EMPHASIS = /(?<=\S)[*_](?=[\s).,;:!?]|$)/g;
+
+export function speakableText(markdown: string): string {
+  return markdown
+    .replace(FENCE_LINE, '')
+    .replace(TABLE_RULE, '')
+    .replace(IMAGE, '$1')
+    .replace(LINK, '$1')
+    .replace(HEADING_MARK, '')
+    .replace(QUOTE_MARK, '')
+    .replace(LIST_MARK, '')
+    .replace(/\|/g, ' ')
+    .replace(PAIRED_MARKS, '')
+    .replace(OPENING_EMPHASIS, '$1')
+    .replace(CLOSING_EMPHASIS, '')
+    .replace(/[ \t]{2,}/g, ' ');
+}
+
 /**
  * The text a polite live region should carry for a message that is streaming.
  * Each tick announces only what arrived since the last one, so the reader hears
@@ -37,7 +64,8 @@ export function useStreamAnnouncement(
       const ready = wordBoundedDelta(latestRef.current, consumedRef.current);
       if (!ready.trim()) return;
       consumedRef.current += ready.length;
-      setAnnouncement(ready.trim());
+      const spoken = speakableText(ready).trim();
+      if (spoken) setAnnouncement(spoken);
     }, intervalMs);
     return () => clearInterval(id);
   }, [isStreaming, intervalMs]);
@@ -52,7 +80,7 @@ export function useStreamAnnouncement(
       return;
     }
     wasStreamingRef.current = false;
-    const tail = latestRef.current.slice(consumedRef.current).trim();
+    const tail = speakableText(latestRef.current.slice(consumedRef.current)).trim();
     consumedRef.current = latestRef.current.length;
     if (tail) setAnnouncement(tail);
   }, [isStreaming]);
