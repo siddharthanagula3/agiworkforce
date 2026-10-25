@@ -28,8 +28,8 @@ driven by the AGI CLI running on your own machine.
   disabled and trust-boundary, endpoint, CLI-path, and Desktop-bridge settings
   cannot be overridden by workspace settings.
 - An AGI Cloud account only when you choose Managed Cloud or cloud-backed
-  editor extras such as inline completions. Local models and provider BYOK stay
-  available through the AGI CLI without an AGI subscription.
+  editor utilities such as inline completions and refactor. Local models and
+  provider BYOK stay available through the AGI CLI without an AGI subscription.
 
 ## Quick start
 
@@ -55,14 +55,15 @@ validated against path traversal, symlinks, folders, and sensitive filenames
 before anything is sent, and the current editor selection can be included as
 context.
 
-**Reviewable edits, never surprise writes.** Proposed changes open in VS
-Code's native diff view. Accept or reject per hunk, per file, or globally.
-`Ctrl/Cmd+Shift+A` accepts and `Ctrl/Cmd+Shift+R` rejects the diff under the
-cursor. `agiWorkforce.autoApplyFixes` is off by default.
+**Reviewable edits.** Every agent edit shows its diff in the turn, with
+Review changes and Undo. Applying a code block from chat shows it as an inline
+diff in the editor, where `Ctrl/Cmd+Shift+A` accepts and `Ctrl/Cmd+Shift+R`
+rejects the change under the cursor. Fix, refactor, tests and docs ask before
+they change the file. `agiWorkforce.autoApplyFixes` is off by default.
 
 **Agent modes with explicit approval.** `ask` confirms writes and commands,
-`auto` (the default) runs read-only work on its own while writes and commands
-still ask, `plan` proposes a plan before editing, and `bypass` skips prompts
+`auto` (the default) reads and edits files on its own while commands still
+ask, `plan` proposes a plan before editing, and `bypass` skips prompts
 only after you confirm the risk. Use the composer control or
 **AGI Code: Choose Agent Mode**; normal Tab and Shift+Tab focus traversal is
 never repurposed to change authority.
@@ -75,10 +76,11 @@ shows the active model and non-default agent mode.
 **Session history per workspace.** The History view lists developer sessions
 owned by the local runtime, so you can reopen or delete earlier conversations.
 
-**Editor utilities.** Explain selection, fix, refactor, generate tests,
-generate docs, code review with diagnostics, explain error, terminal command
-suggestion and output explanation, hover actions, CodeLens actions, and a token
-counter. Hover, CodeLens, and inline completions are each opt-in.
+**Editor utilities.** Explain selection, explain error, ask about code and
+terminal output explanation run in chat through the AGI CLI. Fix, refactor,
+generate tests, generate docs, code review with diagnostics, terminal command
+suggestion and inline completions are cloud-backed and need AGI Cloud sign-in.
+Hover, CodeLens, and inline completions are each opt-in.
 
 **Workspace memory.** Curate short facts in the Memory view; they are stored
 only in this VS Code workspace and injected as bounded, untrusted context on

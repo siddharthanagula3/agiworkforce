@@ -161,6 +161,16 @@ describe('package.json ↔ runtime command parity', () => {
     ).toEqual([]);
   });
 
+  it('never hides a Command Palette entry behind focus, which the palette itself takes', () => {
+    const manifest = JSON.parse(
+      fs.readFileSync(path.resolve(__dirname, '../../package.json'), 'utf8'),
+    ) as { contributes: { menus: { commandPalette: { command: string; when?: string }[] } } };
+    const focusGated = manifest.contributes.menus.commandPalette.filter((entry) =>
+      /\b(?:editorTextFocus|editorFocus|terminalFocus|webviewFocus)\b/u.test(entry.when ?? ''),
+    );
+    expect(focusGated).toEqual([]);
+  });
+
   it('keeps Cloud connectors and Team administration as explicit Web handoffs', () => {
     const setupSource = fs.readFileSync(path.resolve(__dirname, '../core/commandSetup.ts'), 'utf8');
 

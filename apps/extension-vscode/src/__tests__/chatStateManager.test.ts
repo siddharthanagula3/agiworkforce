@@ -2991,6 +2991,18 @@ describe('ChatStateManager local turn lifecycle', () => {
       input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
     });
     harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'Successfully edited src/math.ts',
+      isError: false,
+      elapsedMs: 1,
+    });
+    harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',
       turnId: 'turn-1',
@@ -3018,6 +3030,53 @@ describe('ChatStateManager local turn lifecycle', () => {
       type: 'turnChangesUndone',
       payload: { turnId: 'turn-1' },
     });
+  });
+
+  it('does not offer review or undo for a write that failed or was denied', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      category: 'filesystem',
+      summary: 'Edit src/math.ts',
+      input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'File has not been read yet. Read it first before writing to it.',
+      isError: true,
+      elapsedMs: 1,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Could not edit.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    const done = harness.posted.find((message) => message.type === 'done');
+    expect(done).toBeDefined();
+    expect(done?.payload).not.toHaveProperty('changedFiles');
   });
 
   it('forwards dropped image attachments as image turn input', async () => {

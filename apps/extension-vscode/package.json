@@ -1043,7 +1043,7 @@
         },
         {
           "command": "agi-workforce.fix",
-          "when": "editorTextFocus"
+          "when": "editorHasSelection"
         },
         {
           "command": "agi-workforce.docs",
@@ -1051,7 +1051,7 @@
         },
         {
           "command": "agi-workforce.codeReview",
-          "when": "editorTextFocus"
+          "when": "editorIsOpen"
         },
         {
           "command": "agi-workforce.acceptBatch",

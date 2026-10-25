@@ -885,6 +885,7 @@ export class ChatStateManager {
   private _lastMeterBoundary: string | undefined;
   private readonly _servedModelByTurn = new Map<string, string>();
   private readonly _writtenFilesByTurn = new Map<string, Set<string>>();
+  private readonly _pendingWritesByToolCall = new Map<string, { turnId: string; path: string }>();
   private _lastChangedTurn:
     { threadId: string; turnId: string; files: readonly string[] } | undefined;
   private readonly _pendingAttachments: PendingAttachment[] = [];
@@ -2516,21 +2517,33 @@ export class ChatStateManager {
     this._followDefaultModel();
   }
 
-  /**
-   * Push the usage meter for the model the next turn will actually dispatch.
-   *
-   * `source` doubles as the header trust-boundary pill (Local / BYOK / Cloud),
-   * so it is derived from {@link _providerBoundaryForModel}, the same
-   * classification that decides when a thread must be restarted on a boundary
-   * change, and never from a fixed literal.
-   */
-  private _noteWrittenFile(turnId: string, toolName: string, input: unknown): void {
+  private _notePendingWrite(
+    turnId: string,
+    toolCallId: string,
+    toolName: string,
+    input: unknown,
+  ): void {
     const filePath = writtenFilePath(toolName, input);
     const cwd = this._thread?.cwd;
     if (filePath === undefined || cwd === undefined) return;
-    const written = this._writtenFilesByTurn.get(turnId) ?? new Set<string>();
-    written.add(path.resolve(cwd, filePath));
-    this._writtenFilesByTurn.set(turnId, written);
+    this._pendingWritesByToolCall.set(toolCallId, { turnId, path: path.resolve(cwd, filePath) });
+  }
+
+  private _settlePendingWrite(toolCallId: string, succeeded: boolean): void {
+    const pending = this._pendingWritesByToolCall.get(toolCallId);
+    if (pending === undefined) return;
+    this._pendingWritesByToolCall.delete(toolCallId);
+    if (!succeeded) return;
+    const written = this._writtenFilesByTurn.get(pending.turnId) ?? new Set<string>();
+    written.add(pending.path);
+    this._writtenFilesByTurn.set(pending.turnId, written);
+  }
+
+  private _forgetTurnWrites(turnId: string): void {
+    this._writtenFilesByTurn.delete(turnId);
+    for (const [toolCallId, pending] of this._pendingWritesByToolCall) {
+      if (pending.turnId === turnId) this._pendingWritesByToolCall.delete(toolCallId);
+    }
   }
 
   /** Puts back the files the latest reply changed, from the checkpoint taken with its prompt. */
@@ -2616,6 +2629,14 @@ export class ChatStateManager {
     this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
   }
 
+  /**
+   * Push the usage meter for the model the next turn will actually dispatch.
+   *
+   * `source` doubles as the header trust-boundary pill (Local / BYOK / Cloud),
+   * so it is derived from {@link _providerBoundaryForModel}, the same
+   * classification that decides when a thread must be restarted on a boundary
+   * change, and never from a fixed literal.
+   */
   async pushUsageMeter(shouldPost: () => boolean = () => true): Promise<void> {
     const modelId = this._activeModel;
     const boundary = this._providerBoundaryForModel(modelId);
@@ -4687,7 +4708,7 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'tool_execution_start') {
-      this._noteWrittenFile(event.turnId, event.name, event.input);
+      this._notePendingWrite(event.turnId, event.toolCallId, event.name, event.input);
       const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
       if (plan !== undefined) {
         this._latestPlan = { threadId: event.threadId, plan };
@@ -4710,12 +4731,14 @@ export class ChatStateManager {
     if (event.type === 'tool_execution_end') {
       const entry = this._activityEntry('tool', event.toolCallId);
       const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
+      const isError = entry === undefined ? event.isError : entry.status === 'failed';
+      this._settlePendingWrite(event.toolCallId, !isError);
       this._post({
         type: 'toolCallEnd',
         payload: {
           toolUseId: event.toolCallId,
           output: entry?.output ?? event.output,
-          isError: entry === undefined ? event.isError : entry.status === 'failed',
+          isError,
           ...(elapsedMs === undefined ? {} : { elapsedMs }),
         },
       });
@@ -4784,7 +4807,7 @@ export class ChatStateManager {
       const servedModel = this._servedModelByTurn.get(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
       const writtenFiles = [...(this._writtenFilesByTurn.get(event.turnId) ?? [])];
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._forgetTurnWrites(event.turnId);
       if (writtenFiles.length > 0) {
         this._lastChangedTurn = {
           threadId: event.threadId,
@@ -4836,14 +4859,14 @@ export class ChatStateManager {
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._forgetTurnWrites(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
     this._expirePendingApprovals(event.turnId);
     this._servedModelByTurn.delete(event.turnId);
-    this._writtenFilesByTurn.delete(event.turnId);
+    this._forgetTurnWrites(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
       this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });
