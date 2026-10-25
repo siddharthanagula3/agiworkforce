@@ -4,7 +4,6 @@ import { logger } from '@/lib/logger';
 import {
   accumulateObservedProviderUsage,
   finalizeObservedManagedUsage,
-  hasObservedProviderUsage,
   observedTurnCost,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
@@ -152,7 +151,8 @@ export function buildManagedAgentStream(
   const publicText = createPublicTextDeltaProjector();
   const sourceCollector = new AssistantTurnSourceCollector();
   let assistantText = '';
-  let deliveredText = '';
+  let unbilledText = '';
+  let unbilledSinceProviderCalls = input.usage.providerCalls;
   const interactiveCards = new Map<string, InteractiveCard>();
   let turnPersisted = false;
   let settledCostMicrousd: number | null = null;
@@ -327,18 +327,18 @@ export function buildManagedAgentStream(
     if (recorded) report.settledCostMicrousd = settledCostMicrousd;
   };
 
-  // A reader who stops the first provider step before its usage frame leaves no
-  // observed usage after the provider has billed the prompt and the output so
-  // far, which would release the reservation for an answer the reader kept. The
-  // prompt estimate and the text that reached the reader stand in, as
-  // `stoppedTurnUsage` does for a direct stream.
+  // A reader who stops a provider step before its usage frame leaves that step
+  // unobserved after the provider has billed its prompt and the output so far,
+  // which would release the reservation for text the reader kept. The prompt
+  // estimate and the text that step delivered stand in, as `stoppedTurnUsage`
+  // does for a direct stream; text from a step whose usage arrived is counted.
   const recordStoppedTurnUsage = (serving: ProcessedRequest): void => {
-    if (hasObservedProviderUsage(input.usage) || !deliveredText.trim()) return;
+    if (input.usage.providerCalls !== unbilledSinceProviderCalls || !unbilledText.trim()) return;
     accumulateObservedProviderUsage(
       input.usage,
       {
         inputTokens: input.processed.estimatedPromptTokens,
-        outputTokens: estimateTokens(deliveredText, serving.chatRequest.model),
+        outputTokens: estimateTokens(unbilledText, serving.chatRequest.model),
       },
       { provider: serving.provider, model: serving.chatRequest.model },
     );
@@ -450,7 +450,11 @@ export function buildManagedAgentStream(
             reportedFailureCode ??= managedAgentReportedFailureCode(next.value);
           }
           const textDelta = publicText.push(extractAssistantTextDelta(next.value));
-          deliveredText += textDelta;
+          if (input.usage.providerCalls !== unbilledSinceProviderCalls) {
+            unbilledText = '';
+            unbilledSinceProviderCalls = input.usage.providerCalls;
+          }
+          unbilledText += textDelta;
           if (persistable) {
             assistantText += textDelta;
             sourceCollector.ingestWireBytes(next.value);

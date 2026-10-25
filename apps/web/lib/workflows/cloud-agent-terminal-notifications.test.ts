@@ -44,6 +44,7 @@ vi.mock('@/lib/services/cloud-agent-execution-service', () => ({
   summarizeCloudAgentRunOutcome: mocks.summarize,
 }));
 vi.mock('@/lib/services/managed-usage-accounting-service', () => ({
+  accumulateObservedProviderUsage: vi.fn(),
   finalizeObservedManagedUsage: mocks.finalize,
   calculateObservedProviderUsageCostDollars: () => 0,
   addToolSpend: vi.fn(),

@@ -383,7 +383,33 @@ describe('managed agent stream', () => {
     expect(settledUsage.providerCalls).toBe(0);
   });
 
-  it('keeps observed provider usage as reported when the reader stops', async () => {
+  it('keeps a step as reported once the usage of the step that delivered the text arrived', async () => {
+    finalize.mockClear();
+    const usage = createObservedProviderUsage();
+    async function* reportedStep(): AsyncGenerator<Uint8Array> {
+      const encoder = new TextEncoder();
+      yield encoder.encode('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n');
+      accumulateObservedProviderUsage(usage, { inputTokens: 120, outputTokens: 40 });
+      yield encoder.encode(': keep-alive\n\n');
+      yield encoder.encode('data: [DONE]\n\n');
+    }
+    const stream = buildManagedAgentStream({
+      generator: reportedStep(),
+      processed: { ...processed, estimatedPromptTokens: 3_000 } as ProcessedRequest,
+      usage,
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+    });
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.read();
+    await reader.cancel();
+
+    const settledUsage = (finalize.mock.calls.at(-1)?.[0] as { usage: typeof usage }).usage;
+    expect(settledUsage).toMatchObject({ providerCalls: 1, inputTokens: 120, outputTokens: 40 });
+  });
+
+  it('bills a later step the reader stops before that step reported usage', async () => {
     finalize.mockClear();
     const usage = createObservedProviderUsage();
     accumulateObservedProviderUsage(usage, { inputTokens: 120, outputTokens: 40 });
@@ -399,7 +425,9 @@ describe('managed agent stream', () => {
     await reader.cancel();
 
     const settledUsage = (finalize.mock.calls.at(-1)?.[0] as { usage: typeof usage }).usage;
-    expect(settledUsage).toMatchObject({ providerCalls: 1, inputTokens: 120, outputTokens: 40 });
+    expect(settledUsage.providerCalls).toBe(2);
+    expect(settledUsage.inputTokens).toBe(3_120);
+    expect(settledUsage.outputTokens).toBeGreaterThan(40);
   });
 
   it('releases an error response with no observed usage instead of charging an estimate', async () => {
