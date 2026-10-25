@@ -11,7 +11,11 @@
  * @vitest-environment jsdom
  */
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { SURFACE_REQUEST_HEADER } from '@agiworkforce/cloud-contracts';
+import { OMITTED_TOOL_CONTEXT } from '../src/features/computer-use/chatBrowserTools';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   canAccessModelForSubscriptionTier,
@@ -94,6 +98,8 @@ import {
   MANAGED_MODELS_ENDPOINT,
   MANAGED_USAGE_ENDPOINT,
   MANAGED_CHAT_MAX_INPUT_CHARS,
+  MANAGED_CHAT_SITE_CONTEXT_LABEL,
+  MANAGED_CHAT_TRIMMED_HISTORY_NOTICE,
   MANAGED_CHAT_MAX_ATTACHMENTS,
   MANAGED_CHAT_MAX_SSE_FRAME_CHARS,
   MANAGED_CHAT_MAX_STREAMED_TEXT_CHARS,
@@ -170,6 +176,10 @@ function makeErrorResponse(status: number, bodyText: string): Response {
   } as unknown as Response;
 }
 
+const MANAGED_REASONING_STREAM = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), 'fixtures/managed-reasoning-stream.sse'),
+  'utf8',
+);
 const SAMPLE_MESSAGES: FreeTrialMessage[] = [{ role: 'user', content: 'Hello!' }];
 const LEGACY_FREE_PROMPTS_USED_KEY = 'agi_free_prompts_used';
 
@@ -872,30 +882,74 @@ describe('streamFreeChat, SSE happy path', () => {
     expect(thinkingText(chunks)).toContain('private reasoning');
   });
 
-  it('streams thinking text apart from the answer and keeps it out of the answer text', async () => {
-    fetchMock.mockResolvedValueOnce(
-      makeStreamResponse([
-        JSON.stringify({
-          choices: [
-            { delta: { content: '<thinking>Weighing the **options**' }, finish_reason: null },
-          ],
-        }),
-        JSON.stringify({
-          choices: [{ delta: { content: '</thinking>The answer.' }, finish_reason: null }],
-        }),
-        JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
-      ]),
-    );
+  it('streams the reasoning the server sends as reasoning-delta events into the thinking section', async () => {
+    fetchMock.mockResolvedValueOnce(makeRawStreamResponse(MANAGED_REASONING_STREAM));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
-    expect(chunks.filter((chunk) => chunk.type === 'thinking')).toEqual([
-      { type: 'thinking', text: 'Weighing the **options**' },
-    ]);
-    expect(chunks.filter((chunk) => chunk.type === 'text')).toEqual([
-      { type: 'text', text: 'The answer.' },
-    ]);
+    expect(thinkingText(chunks)).toBe(
+      "I'm setting up the classic ONE + ONE = TWO cryptarithm, analyzing digit constraints: O must be even and",
+    );
+    expect(
+      chunks
+        .filter(
+          (chunk): chunk is Extract<FreeTrialChunk, { type: 'text' }> => chunk.type === 'text',
+        )
+        .map((chunk) => chunk.text)
+        .join(''),
+    ).toBe('There are **16 solutions**.\n\nTWO has');
     expect(chunks.findIndex((chunk) => chunk.type === 'thinking')).toBeLessThan(
       chunks.findIndex((chunk) => chunk.type === 'text'),
     );
+    expect(chunks.at(-1)).toEqual({ type: 'done' });
+  });
+
+  it('shows reasoning once when a route forwards tagged content and its reasoning-delta projection', async () => {
+    const reasoning = (sequence: number, delta: string) =>
+      JSON.stringify({
+        choices: [
+          {
+            delta: {
+              x_agent_event: {
+                schemaVersion: 5,
+                sessionId: '00000000-0000-4000-8000-000000000001',
+                turnId: 'agi.chrome.send.fixture',
+                sequence,
+                emittedAtMs: 1,
+                event: { type: 'reasoning-delta', delta },
+              },
+            },
+            index: 0,
+          },
+        ],
+      });
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: '<thinking>Weigh the' }, index: 0 }] }),
+        reasoning(0, 'Weigh the'),
+        JSON.stringify({ choices: [{ delta: { content: ' options</thinking>' }, index: 0 }] }),
+        reasoning(1, ' options'),
+        reasoning(2, ' and one more step'),
+        JSON.stringify({ choices: [{ delta: { content: 'The answer.' }, index: 0 }] }),
+        JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop', index: 0 }] }),
+      ]),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+    expect(thinkingText(chunks)).toBe('Weigh the options and one more step');
+    expect(chunks.filter((chunk) => chunk.type === 'text')).toEqual([
+      { type: 'text', text: 'The answer.' },
+    ]);
+  });
+
+  it('streams reasoning-delta events on an approval continuation', async () => {
+    fetchMock.mockResolvedValueOnce(makeRawStreamResponse(MANAGED_REASONING_STREAM));
+    const chunks = await collectChunks(
+      streamManagedChatApproval(
+        '11111111-1111-4111-8111-111111111111',
+        [{ tool_call_id: 'call-1', decision: 'approved' }],
+        'valid-token',
+        { idempotencyKey: 'agi.chrome.approval.request-1' },
+      ),
+    );
+    expect(thinkingText(chunks)).toContain('ONE + ONE = TWO');
     expect(chunks.at(-1)).toEqual({ type: 'done' });
   });
 
@@ -1218,6 +1272,87 @@ describe('streamFreeChat, input truncation', () => {
     expect(body.messages[0]!.content.length).toBe(MANAGED_CHAT_MAX_INPUT_CHARS);
   });
 
+  it('sends a page read from an earlier turn whole and keeps the conversation around it', async () => {
+    const page = `<page_abc>\n${'p'.repeat(30_000)}\n</page_abc>`;
+    const attached = `<page_context_${'b'.repeat(32)}>\n${'q'.repeat(20_000)}\n</page_context_${'b'.repeat(32)}>`;
+    const messages: FreeTrialMessage[] = [
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Summarize this invoice' },
+          { type: 'text', text: attached, context: true },
+        ],
+      },
+      { role: 'assistant', content: 'The total is 1,019.26.' },
+      { role: 'user', content: 'Summarize this page' },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: 'toolu_1',
+            type: 'function',
+            function: { name: 'browser_read_page', arguments: '{}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: 'toolu_1', content: page },
+      { role: 'assistant', content: 'Espresso is concentrated coffee.' },
+      { role: 'user', content: 'Which point matters most?' },
+    ];
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+    await collectChunks(streamFreeChat(messages, 'token'));
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as { messages: FreeTrialMessage[] };
+    expect(body.messages).toEqual([
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Summarize this invoice' },
+          { type: 'text', text: attached },
+        ],
+      },
+      ...messages.slice(1),
+    ]);
+  });
+
+  it('leaves out the oldest page text, never cutting one, when the page budget is spent', async () => {
+    const read = (index: number): FreeTrialMessage[] => [
+      { role: 'user', content: `Read page ${index}` },
+      {
+        role: 'assistant',
+        content: '',
+        tool_calls: [
+          {
+            id: `call_${index}`,
+            type: 'function',
+            function: { name: 'browser_read_page', arguments: '{}' },
+          },
+        ],
+      },
+      { role: 'tool', tool_call_id: `call_${index}`, content: String(index).repeat(50_000) },
+    ];
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+      ]),
+    );
+    await collectChunks(streamFreeChat([...read(1), ...read(2), ...read(3)], 'token'));
+
+    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(fetchOpts.body as string) as { messages: FreeTrialMessage[] };
+    expect(
+      body.messages
+        .filter((message) => message.role === 'tool')
+        .map((message) => (message.content as string).length),
+    ).toEqual([OMITTED_TOOL_CONTEXT.length, 50_000, 50_000]);
+  });
+
   it('does not truncate messages within the char limit', async () => {
     const shortContent = 'Hello!';
     const messages: FreeTrialMessage[] = [{ role: 'user', content: shortContent }];
@@ -1240,22 +1375,108 @@ describe('streamFreeChat, input truncation', () => {
       role: index % 2 === 0 ? ('user' as const) : ('assistant' as const),
       content: String(index).repeat(10_000),
     }));
-    fetchMock.mockResolvedValueOnce(
-      makeStreamResponse([
-        JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
-      ]),
-    );
-
-    await collectChunks(streamFreeChat(messages, 'token'));
-
-    const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
-    const body = JSON.parse(fetchOpts.body as string) as { messages: FreeTrialMessage[] };
+    const body = await sentBody(messages);
     const totalText = body.messages.reduce(
       (sum, message) => sum + (typeof message.content === 'string' ? message.content.length : 0),
       0,
     );
-    expect(totalText).toBe(32_000);
+    expect(totalText).toBeLessThanOrEqual(MANAGED_CHAT_MAX_INPUT_CHARS);
     expect(body.messages.at(-1)?.content).toBe(messages.at(-1)?.content);
+  });
+});
+
+const turnPair = (index: number): FreeTrialMessage[] => [
+  { role: 'user', content: `question ${index} ${'q'.repeat(700)}` },
+  { role: 'assistant', content: `answer ${index} ${'a'.repeat(900)}` },
+];
+
+async function sentBody(
+  messages: FreeTrialMessage[],
+  siteContext?: string,
+): Promise<{ messages: FreeTrialMessage[] }> {
+  fetchMock.mockClear();
+  fetchMock.mockResolvedValueOnce(
+    makeStreamResponse([
+      JSON.stringify({ choices: [{ delta: { content: 'ok' }, finish_reason: 'stop' }] }),
+    ]),
+  );
+  await collectChunks(streamFreeChat(messages, 'token', siteContext ? { siteContext } : {}));
+  const [, fetchOpts] = fetchMock.mock.calls[0] as [string, RequestInit];
+  return JSON.parse(fetchOpts.body as string) as { messages: FreeTrialMessage[] };
+}
+
+function conversationAtTurn(turns: number): FreeTrialMessage[] {
+  return [
+    ...Array.from({ length: turns }, (_, index) => turnPair(index)).flat(),
+    { role: 'user', content: `current ${turns}` },
+  ];
+}
+
+describe('streamFreeChat, a request prefix the provider can cache', () => {
+  it('repeats the earlier part of the request byte for byte on consecutive turns past the trim threshold', async () => {
+    let previous: FreeTrialMessage[] | null = null;
+    let transitions = 0;
+    let breaks = 0;
+    let trimmedTurns = 0;
+    for (let turns = 30; turns < 90; turns += 1) {
+      const { messages } = await sentBody(conversationAtTurn(turns));
+      const earlier = messages.slice(0, -1);
+      if (earlier[0] && JSON.stringify(earlier[0]).includes('left out')) trimmedTurns += 1;
+      if (previous) {
+        transitions += 1;
+        const unchanged =
+          JSON.stringify(earlier.slice(0, previous.length)) === JSON.stringify(previous);
+        if (!unchanged) breaks += 1;
+      }
+      previous = earlier;
+    }
+    expect(trimmedTurns).toBe(60);
+    const turnChars = 1_600;
+    const turnsPerChunk = Math.floor(8_000 / turnChars);
+    expect(breaks).toBeGreaterThan(0);
+    expect(breaks).toBeLessThanOrEqual(Math.ceil(transitions / turnsPerChunk));
+  });
+
+  it('keeps the newest messages whole and the request inside the character cap while trimming', async () => {
+    const messages = conversationAtTurn(60);
+    const { messages: sent } = await sentBody(messages);
+    const text = sent.reduce(
+      (sum, message) => sum + (typeof message.content === 'string' ? message.content.length : 0),
+      0,
+    );
+    expect(text).toBeLessThanOrEqual(MANAGED_CHAT_MAX_INPUT_CHARS);
+    expect(sent.at(-1)).toEqual(messages.at(-1));
+    expect(sent[0]?.role).toBe('user');
+    expect(sent[0]?.content).toContain(MANAGED_CHAT_TRIMMED_HISTORY_NOTICE.trim());
+  });
+
+  it('puts the site the person is on after the history, so a tab switch leaves the earlier request unchanged', async () => {
+    const messages = conversationAtTurn(12);
+    const onSlack = await sentBody(messages, 'You are assisting on Slack.');
+    const onGithub = await sentBody(messages, 'You are assisting on GitHub.');
+    const plain = await sentBody(messages);
+
+    expect(onSlack.messages.slice(0, -1)).toEqual(onGithub.messages.slice(0, -1));
+    expect(onSlack.messages.slice(0, -1)).toEqual(plain.messages.slice(0, -1));
+    expect(onSlack.messages.some((message) => message.role === 'system')).toBe(false);
+    expect(onSlack.messages.at(-1)).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'current 12' },
+        { type: 'text', text: `${MANAGED_CHAT_SITE_CONTEXT_LABEL}You are assisting on Slack.` },
+      ],
+    });
+    expect(onGithub.messages.at(-1)?.content).toEqual([
+      { type: 'text', text: 'current 12' },
+      { type: 'text', text: `${MANAGED_CHAT_SITE_CONTEXT_LABEL}You are assisting on GitHub.` },
+    ]);
+  });
+
+  it('does not let the site context move where the history is cut', async () => {
+    const messages = conversationAtTurn(40);
+    const short = await sentBody(messages, 'x');
+    const long = await sentBody(messages, 'y'.repeat(4_000));
+    expect(long.messages.slice(0, -1)).toEqual(short.messages.slice(0, -1));
   });
 });
 

@@ -14,7 +14,7 @@ import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
 import { TERMINAL_AGENT_TASK_STATES } from '@agiworkforce/types';
 import { FREE_TRIAL_GATEWAY, getAuthToken } from './freeTrialClient';
 import { platformRequestHeaders } from '../../platformHeaders';
-import { chatBrowserToolDefinitions } from '../computer-use/chatBrowserTools';
+import { CHAT_BROWSER_TOOL_DEFINITIONS } from '../computer-use/chatBrowserTools';
 import { createToolUseJournal } from '../computer-use/toolHandoff';
 
 const UNCONFIRMED_CANCELLATION_MESSAGE =
@@ -166,7 +166,7 @@ export async function resumeChromeManagedRun(
     await resolvedDependencies.onRunReference?.({ ...latestRun });
   };
 
-  const toolUseJournal = createToolUseJournal(chatBrowserToolDefinitions('act', true));
+  const toolUseJournal = createToolUseJournal(CHAT_BROWSER_TOOL_DEFINITIONS);
   let askedForBrowserTool = false;
 
   try {

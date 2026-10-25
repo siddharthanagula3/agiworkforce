@@ -170,8 +170,7 @@ import {
   type ChromeManagedToolHandoffOutcome,
 } from './features/cloud-bridge/managedChatHandler';
 import {
-  chatBrowserToolDefinitions,
-  isChatBrowserToolTier,
+  CHAT_BROWSER_TOOL_DEFINITIONS,
   CHAT_TOOL_HANDOFF_TIMEOUT_MS,
   MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
   MAX_CHAT_TOOL_RESULT_CHARS,
@@ -532,24 +531,32 @@ function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessa
         result.toolCallId !== pending.callIds[index] ||
         typeof result.content !== 'string' ||
         result.content.length > MAX_CHAT_TOOL_RESULT_CHARS,
-    ) ||
-    (message.browserToolTier !== undefined && !isChatBrowserToolTier(message.browserToolTier)) ||
-    (message.browserHistory !== undefined && message.browserHistory !== true)
+    )
   )
     return false;
-  const tools = chatBrowserToolDefinitions(
-    message.browserToolTier,
-    message.browserHistory === true,
-  );
   pending.finish({
     status: 'resolved',
     results: results.map((result) => ({
       toolCallId: result.toolCallId,
       content: result.content,
     })),
-    ...(tools.length ? { tools } : {}),
   });
   return true;
+}
+
+function cancelChatToolHandoffs(
+  owner: ManagedCloudOwner,
+  clientInstanceId: string,
+  streamId: string,
+): void {
+  for (const pending of [...pendingChatToolHandoffs.values()]) {
+    if (
+      pending.streamId === streamId &&
+      pending.clientInstanceId === clientInstanceId &&
+      sameManagedCloudOwner(owner, pending.owner)
+    )
+      pending.finish({ status: 'cancelled' });
+  }
 }
 
 const oneTimeSiteGrantTimers = new Map<string, ReturnType<typeof setTimeout>>();
@@ -4345,6 +4352,9 @@ async function handleMessageAsync(
       if (active && !sameManagedCloudOwner(active.owner, owner)) {
         return { success: false, error: 'Managed Cloud stream owner changed' };
       }
+      // A Stop must end a pending browser step before the server confirms the
+      // cancellation, or the step's answer starts one more billed model call.
+      cancelChatToolHandoffs(owner, cancelMsg.clientInstanceId, cancelMsg.id);
       const cloudRun = active?.cloudRun ?? cancelMsg.cloudRun;
       if (!active && !cloudRun) {
         return { success: false, error: 'No active stream for id' } as ExtensionResponse;
@@ -6499,20 +6509,16 @@ async function handleChatMessage(
   };
 
   try {
-    let systemPrompt: string | undefined;
+    let siteContext: string | undefined;
     if (!delivery) {
       try {
         const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (activeTab?.url) systemPrompt = getPlatformPrompt(activeTab.url) ?? undefined;
+        if (activeTab?.url) siteContext = getPlatformPrompt(activeTab.url) ?? undefined;
       } catch {
         // Platform context is optional; inference remains Managed Cloud only.
       }
     }
 
-    const chatTools = chatBrowserToolDefinitions(
-      isChatBrowserToolTier(message.browserToolTier) ? message.browserToolTier : undefined,
-      message.browserHistory === true,
-    );
     const result = await executeChromeManagedChat(
       {
         id,
@@ -6521,7 +6527,8 @@ async function handleChatMessage(
         quickMode: message.quickMode,
         effort: message.effort,
         pageContext: message.pageContext,
-        systemPrompt,
+        pageContextFence: message.pageContextFence,
+        siteContext,
         conversationHistory: message.conversationHistory,
         attachments: message.attachments,
         fileAttachments: message.fileAttachments,
@@ -6538,7 +6545,7 @@ async function handleChatMessage(
         assistantMessageId: message.assistantMessageId,
         ...(message.memoryCommand ? { memoryCommand: message.memoryCommand } : {}),
         ...(message.skillName !== undefined ? { skillName: message.skillName } : {}),
-        ...(!delivery && chatTools.length ? { tools: chatTools } : {}),
+        ...(!delivery ? { tools: CHAT_BROWSER_TOOL_DEFINITIONS } : {}),
         idempotencyKey: delivery?.requestId,
         completionMode: delivery ? 'unattended' : 'interactive',
         signal: activeStream.controller.signal,

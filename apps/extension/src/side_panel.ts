@@ -159,13 +159,14 @@ import {
   recordTransientHostPermission,
 } from './features/computer-use/transientHostPermissions';
 import {
+  CHAT_HISTORY_TRIM_STEP_MESSAGES,
   CHAT_READ_PAGE_TOOL,
   CHAT_TOOL_FENCE_RESERVE_CHARS,
   CHAT_TOOL_HANDOFF_TIMEOUT_MS,
   MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
   MAX_CHAT_TOOL_RESULT_CHARS,
+  PAGE_UNCHANGED_SINCE_READ,
   parseChatBrowserToolCall,
-  type ChatBrowserToolTier,
 } from './features/computer-use/chatBrowserTools';
 import {
   CHAT_SEARCH_HISTORY_TOOL,
@@ -229,7 +230,10 @@ import {
   reopenBrowserActivity,
   pageContextStillDescribes,
   resolveComposerPrompt,
-  selectModelHistory,
+  createPageContextFence,
+  pageDigest,
+  selectModelHistorySelection,
+  type ModelHistoryMessage,
   shouldRebuildMessageDom,
   trimChatMessages,
   type PageContextSource,
@@ -1051,6 +1055,7 @@ interface ComposerFile {
 interface TurnPayload {
   prompt: string;
   pageText: string | null;
+  pageContextFence?: string;
   capturePage: boolean;
   images: ComposerImage[];
   files: ComposerFile[];
@@ -1112,7 +1117,7 @@ function pruneTurnPayloads(): void {
 }
 
 function trimLiveMessages(): void {
-  if (trimChatMessages(_ctx.messages, MAX_STORED_MESSAGES) > 0) {
+  if (trimChatMessages(_ctx.messages, MAX_STORED_MESSAGES, CHAT_HISTORY_TRIM_STEP_MESSAGES) > 0) {
     _ctx.lastRenderedCount = 0;
     _ctx.needsMessageRebuild = true;
     pruneTurnPayloads();
@@ -1177,6 +1182,9 @@ function serializeMessagesForHistory() {
     ...(message.role === 'assistant' && message.thinking ? { thinking: message.thinking } : {}),
     ...(message.role === 'assistant' && message.thinking && message.thinkingDurationMs !== undefined
       ? { thinkingDurationMs: message.thinkingDurationMs }
+      : {}),
+    ...(message.role === 'user' && message.modelContent
+      ? { modelContent: message.modelContent }
       : {}),
     ...(message.role === 'user' && message.attachments ? { attachments: message.attachments } : {}),
     ...(message.role === 'user' && message.pages ? { pages: message.pages } : {}),
@@ -6520,6 +6528,11 @@ function resumeManagedCloudRun(
 }
 
 let stoppingStreamId: string | null = null;
+const pagesInContextByStreamId = new Map<string, Set<string>>();
+
+function streamStopRequested(streamId: string): boolean {
+  return stoppingStreamId === streamId;
+}
 
 interface BrowserTaskOutcome {
   status: 'completed' | 'stopped' | 'error';
@@ -7179,27 +7192,6 @@ async function originHasHostPermission(origin: string): Promise<boolean> {
   return hasBrowserControlHostPermission(origin).catch(() => false);
 }
 
-async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolTier | undefined> {
-  let tab: chrome.tabs.Tab | undefined;
-  try {
-    [tab] = await chrome.tabs.query(await activePageQuery());
-  } catch {
-    return undefined;
-  }
-  const origin = webTabOrigin(tab);
-  if (!origin || (await isUserBlockedSite(origin))) return undefined;
-  if (turnSiteGrants.get(streamId)?.has(origin)) return 'act';
-  if (await originApprovedForBrowserControl(origin)) return 'act';
-  const policy = await loadSitePolicyInput();
-  return evaluateSitePolicy(
-    { ...policy, userAllowlist: [...policy.userAllowlist, origin] },
-    tab?.url ?? origin,
-    'automation',
-  ).allowed
-    ? 'act'
-    : 'read';
-}
-
 async function writeApprovedSite(origin: string): Promise<void> {
   const list = await readUserSiteAllowlist();
   if (list.includes(origin)) return;
@@ -7403,13 +7395,16 @@ function siteAccessRefusal(access: BrowserSiteAccess): string {
     : `${access.reason ?? 'This page cannot be used.'} Answer without it.`;
 }
 
-async function runReadPageTool(streamId: string, toolCallId: string): Promise<string> {
+async function runReadPageTool(
+  streamId: string,
+  toolCallId: string,
+): Promise<{ content: string; pageDigest?: string }> {
   let [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
   let access: BrowserSiteAccess = { status: 'granted' };
   let capture = await capturePageContext();
   if (!capture.ok && capture.reason === PAGE_CONTEXT_DENIED_REASON) {
     access = await requestBrowserSiteAccess(streamId, 'read');
-    if (access.status !== 'granted') return siteAccessRefusal(access);
+    if (access.status !== 'granted') return { content: siteAccessRefusal(access) };
     [tab] = await chrome.tabs.query(await activePageQuery()).catch((): chrome.tabs.Tab[] => []);
     capture = await capturePageContext();
   }
@@ -7425,15 +7420,23 @@ async function runReadPageTool(streamId: string, toolCallId: string): Promise<st
     },
   ]);
   try {
-    const result =
-      capture.ok && capture.source.tabId === tab?.id
-        ? fencedToolResult(
+    const readable = capture.ok && capture.source.tabId === tab?.id ? capture : null;
+    const digest = readable
+      ? await pageDigest(readable.source.url, readable.source.title ?? '', readable.text)
+      : undefined;
+    const inContext = pagesInContextByStreamId.get(streamId);
+    const unchanged = digest !== undefined && inContext?.has(digest) === true;
+    const result = readable
+      ? unchanged
+        ? PAGE_UNCHANGED_SINCE_READ
+        : fencedToolResult(
             'page',
-            `Title: ${capture.source.title ?? ''}\nAddress: ${capture.source.url}\n${capture.truncated ? '(The page text was shortened.)\n' : ''}\n${capture.text}`,
+            `Title: ${readable.source.title ?? ''}\nAddress: ${readable.source.url}\n${readable.truncated ? '(The page text was shortened.)\n' : ''}\n${readable.text}`,
           )
-        : capture.ok
-          ? PAGE_CONTEXT_CHANGED_REASON
-          : capture.reason;
+      : capture.ok
+        ? PAGE_CONTEXT_CHANGED_REASON
+        : capture.reason;
+    if (digest && !unchanged) inContext?.add(digest);
     recordBrowserActivity(streamId, [
       {
         type: 'tool-execution-end',
@@ -7452,7 +7455,7 @@ async function runReadPageTool(streamId: string, toolCallId: string): Promise<st
         ];
       }
     }
-    return result;
+    return digest && !unchanged ? { content: result, pageDigest: digest } : { content: result };
   } finally {
     await access.release?.();
   }
@@ -7592,15 +7595,28 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
   const generation = _ctx.conversationGeneration;
   const stillCurrent = (): boolean =>
     _ctx.currentStreamId === streamId &&
+    !streamStopRequested(streamId) &&
     _ctx.conversationGeneration === generation &&
     sameManagedCloudOwner(owner, _ctx.managedCloudOwner);
+  const cancelHandoff = (): void => {
+    void chrome.runtime
+      .sendMessage({
+        type: 'RESOLVE_CHAT_TOOLS',
+        owner,
+        clientInstanceId: SIDE_PANEL_CLIENT_INSTANCE_ID,
+        id: streamId,
+        handoffId: message.handoffId,
+        cancelled: true,
+      } satisfies ResolveChatToolsMessage)
+      .catch(() => undefined);
+  };
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
     _ctx.streamTimeoutHandle = null;
   }
   removeThinking();
-  ensureStreamingAssistant(streamId, quickModeByStreamId.get(streamId) === true);
-  const results: Array<{ toolCallId: string; content: string }> = [];
+  const assistant = ensureStreamingAssistant(streamId, quickModeByStreamId.get(streamId) === true);
+  const results: Array<{ toolCallId: string; content: string; pageDigest?: string }> = [];
   const deadline = setTimeout(() => {
     dismissPendingSiteGrants();
     if (composerBrowserRun?.nested && composerBrowserRun.messageId === streamId)
@@ -7623,12 +7639,14 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
     try {
       results.push({
         toolCallId: call.id,
-        content:
-          parsed.kind === 'read_page'
-            ? await runReadPageTool(streamId, parsed.toolCallId)
-            : parsed.kind === 'search_history'
-              ? await runHistorySearchTool(streamId, parsed.toolCallId, parsed)
-              : await runBrowserTaskTool(streamId, parsed.goal),
+        ...(parsed.kind === 'read_page'
+          ? await runReadPageTool(streamId, parsed.toolCallId)
+          : {
+              content:
+                parsed.kind === 'search_history'
+                  ? await runHistorySearchTool(streamId, parsed.toolCallId, parsed)
+                  : await runBrowserTaskTool(streamId, parsed.goal),
+            }),
       });
     } catch (error) {
       results.push({
@@ -7638,14 +7656,27 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
     }
   }
   clearTimeout(deadline);
-  if (!stillCurrent()) return;
-  const [browserToolTier, browserHistory] = await Promise.all([
-    activeBrowserToolTier(streamId),
-    hasHistoryPermission(),
-  ]);
-  if (!stillCurrent()) return;
+  if (!stillCurrent()) {
+    cancelHandoff();
+    return;
+  }
   armManagedStreamInactivityWatchdog(streamId);
   showThinking();
+  const priorLegs = assistant.toolLegs ?? [];
+  const legStart = priorLegs[priorLegs.length - 1]?.contentEnd ?? 0;
+  assistant.toolLegs = [
+    ...priorLegs,
+    {
+      text: assistant.content.slice(legStart),
+      contentEnd: assistant.content.length,
+      calls: message.calls.map((call) => ({ ...call, function: { ...call.function } })),
+      results: results.map((result) => ({
+        toolCallId: result.toolCallId,
+        content: result.content.slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
+        ...(result.pageDigest ? { pageDigest: result.pageDigest } : {}),
+      })),
+    },
+  ];
   const response: ResolveChatToolsMessage = {
     type: 'RESOLVE_CHAT_TOOLS',
     owner,
@@ -7656,8 +7687,6 @@ async function handleChatToolHandoff(message: ChatToolHandoffMessage): Promise<v
       toolCallId: result.toolCallId,
       content: result.content.slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
     })),
-    ...(browserToolTier ? { browserToolTier } : {}),
-    ...(browserHistory ? { browserHistory: true } : {}),
   };
   void chrome.runtime.sendMessage(response).catch(() => {
     if (stillCurrent())
@@ -7838,10 +7867,12 @@ function sendMessage(text: string, displayText?: string): void {
   updateAttachmentPreview();
 
   const attachments = turnAttachmentDescriptors(payload);
+  const shownText = displayText ?? (capturePage && slashCmd ? slashCmd.display : prompt);
   const userMsg: ChatMessage = {
     id: `u-${Date.now()}`,
     role: 'user',
-    content: displayText ?? (capturePage && slashCmd ? slashCmd.display : prompt),
+    content: shownText,
+    ...(payload.prompt !== shownText ? { modelContent: payload.prompt } : {}),
     timestamp: Date.now(),
     runtime: 'managed-cloud',
     ...(attachments.length > 0 ? { attachments } : {}),
@@ -8125,10 +8156,18 @@ function postTurn(
   quickMode: boolean,
   memoryCommand?: ManagedMemoryCommandTurn,
 ): void {
-  const history = selectModelHistory(
+  const { history, pageDigests } = selectModelHistorySelection(
     _ctx.messages.filter((message) => message.id !== streamId),
     userMsg.id,
   );
+  pagesInContextByStreamId.clear();
+  pagesInContextByStreamId.set(streamId, pageDigests);
+  if (payload.pageText) {
+    payload.pageContextFence ??= createPageContextFence();
+    userMsg.pageContext = { text: payload.pageText, fence: payload.pageContextFence };
+  } else {
+    delete userMsg.pageContext;
+  }
   if (!_ctx.messages.some((message) => message.id === streamId)) {
     _ctx.messages.push({
       id: streamId,
@@ -8140,22 +8179,9 @@ function postTurn(
     });
   }
   lastStreamPersistAtMs = Date.now();
-  void Promise.all([
-    saveMessagesNow(),
-    selectedModelSupportsChatTools() ? activeBrowserToolTier(streamId) : Promise.resolve(undefined),
-    selectedModelSupportsChatTools() ? hasHistoryPermission() : Promise.resolve(false),
-  ]).then(([, browserToolTier, browserHistory]) => {
+  void saveMessagesNow().then(() => {
     if (_ctx.currentStreamId !== streamId) return;
-    sendChatTurn(
-      streamId,
-      owner,
-      payload,
-      history,
-      quickMode,
-      memoryCommand,
-      browserToolTier,
-      browserHistory,
-    );
+    sendChatTurn(streamId, owner, payload, history, quickMode, memoryCommand);
   });
 }
 
@@ -8163,11 +8189,9 @@ function sendChatTurn(
   streamId: string,
   owner: ManagedCloudOwner,
   payload: TurnPayload,
-  history: ReturnType<typeof selectModelHistory>,
+  history: ModelHistoryMessage[],
   quickMode: boolean,
   memoryCommand: ManagedMemoryCommandTurn | undefined,
-  browserToolTier: ChatBrowserToolTier | undefined,
-  browserHistory: boolean,
 ): void {
   chrome.runtime.sendMessage(
     {
@@ -8177,6 +8201,9 @@ function sendChatTurn(
       id: streamId,
       text: payload.prompt,
       pageContext: payload.pageText ?? undefined,
+      ...(payload.pageText && payload.pageContextFence
+        ? { pageContextFence: payload.pageContextFence }
+        : {}),
       conversationHistory: history,
       attachments:
         payload.images.length > 0 ? payload.images.map((image) => image.dataUrl) : undefined,
@@ -8195,8 +8222,6 @@ function sendChatTurn(
       ...managedOutboundRoutingPayload(quickMode),
       ...managedTurnPersistencePayload(streamId),
       ...(_ctx.temporaryChat ? {} : { historyConversationId: _ctx.conversationId }),
-      ...(browserToolTier ? { browserToolTier } : {}),
-      ...(browserHistory ? { browserHistory: true } : {}),
     },
     (response?: { success?: boolean; error?: string }) => {
       if (chrome.runtime.lastError) {

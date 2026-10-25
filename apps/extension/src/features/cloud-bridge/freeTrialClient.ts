@@ -34,6 +34,7 @@ import {
   IMAGE_CARD_KIND,
   INTERACTIVE_CARD_REQUEST_KEY,
   MAX_ATTACHMENT_BYTES,
+  messageKindForAgentEvent,
   normalizeBillingPlanTier,
   parseManagedUsageSummaryResponse,
   WEB_SEARCH_CITATION_DELTA_KEY,
@@ -41,6 +42,7 @@ import {
   type Effort,
   type InteractiveCard,
   type ManagedQuotaBlockPresentation,
+  type MessageKind,
   type ManagedUsageSummaryResponse,
 } from '@agiworkforce/types';
 import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
@@ -59,6 +61,11 @@ import { logger } from '../../utils';
 import { readAnsweredModel } from './answeredModel';
 import type { ToolDefinition } from '../computer-use/browserToolDefinitions';
 import { createToolUseJournal, readToolHandoff, type ToolCall } from '../computer-use/toolHandoff';
+import {
+  CHAT_HISTORY_TRIM_STEP_MESSAGES,
+  OMITTED_TOOL_CONTEXT,
+  retainedToolContextIndexes,
+} from '../computer-use/chatBrowserTools';
 import type { MemoryCommandKind, MemoryCommandStatus } from './memoryClient';
 import {
   ThinkingTagSplitter,
@@ -73,6 +80,11 @@ export const FREE_TRIAL_MODEL: string = getDefaultModelFor(normalizeBillingPlanT
  * memory. This is a surface safety bound, not a free-plan usage counter.
  */
 export const MANAGED_CHAT_MAX_INPUT_CHARS = 32_000;
+export const MANAGED_CHAT_TRIM_CHUNK_CHARS = MANAGED_CHAT_MAX_INPUT_CHARS / 4;
+export const MANAGED_CHAT_SITE_CONTEXT_LABEL =
+  'Context for this turn only, about the site the person has open:\n';
+export const MANAGED_CHAT_TRIMMED_HISTORY_NOTICE =
+  '[Earlier messages in this conversation were left out to keep it within its context budget.]\n\n';
 
 export const MANAGED_CHAT_MAX_MESSAGES = 100;
 export const MANAGED_CHAT_MAX_ATTACHMENTS = 5;
@@ -445,7 +457,7 @@ export async function signOutOfAccount(): Promise<{ webSessionEnded: boolean }> 
 }
 
 export type FreeTrialContentPart =
-  | { type: 'text'; text: string }
+  | { type: 'text'; text: string; context?: true }
   | ManagedCloudChatAttachmentContentPart
   | {
       type: 'image_url';
@@ -518,10 +530,17 @@ export function createMultimodalUserContent(
 function selectBoundedMessageWindow(messages: readonly FreeTrialMessage[]): FreeTrialMessage[] {
   if (messages.length <= MANAGED_CHAT_MAX_MESSAGES) return [...messages];
   const firstSystem = messages.find((message) => message.role === 'system');
-  const recent = messages.slice(-(MANAGED_CHAT_MAX_MESSAGES - (firstSystem ? 1 : 0)));
+  const body = messages.filter((message) => message !== firstSystem);
+  const allowed = MANAGED_CHAT_MAX_MESSAGES - (firstSystem ? 1 : 0);
+  const dropped = Math.min(
+    body.length - 1,
+    Math.ceil((body.length - allowed) / CHAT_HISTORY_TRIM_STEP_MESSAGES) *
+      CHAT_HISTORY_TRIM_STEP_MESSAGES,
+  );
+  const recent = body.slice(dropped);
   const firstAnswerable = recent.findIndex((message) => message.role !== 'tool');
   const bounded = firstAnswerable > 0 ? recent.slice(firstAnswerable) : recent;
-  return firstSystem && !bounded.includes(firstSystem) ? [firstSystem, ...bounded] : bounded;
+  return firstSystem ? [firstSystem, ...bounded] : bounded;
 }
 
 function assertMessageShape(message: FreeTrialMessage): void {
@@ -567,7 +586,11 @@ function assertMessageShape(message: FreeTrialMessage): void {
   for (const part of message.content) {
     if (!part || typeof part !== 'object') throw new Error('Invalid managed chat content part');
     if (part.type === 'text') {
-      if (typeof part.text !== 'string') throw new Error('Invalid managed chat text part');
+      if (
+        typeof part.text !== 'string' ||
+        (part.context !== undefined && (part.context !== true || message.role !== 'user'))
+      )
+        throw new Error('Invalid managed chat text part');
       continue;
     }
     if (part.type === 'file') {
@@ -586,6 +609,12 @@ function assertMessageShape(message: FreeTrialMessage): void {
   }
 }
 
+function deltaOfKind(event: AgentEventEnvelope['event'], kind: MessageKind): string | undefined {
+  if (messageKindForAgentEvent(event.type) !== kind) return undefined;
+  const delta = (event as { delta?: unknown }).delta;
+  return typeof delta === 'string' ? delta : undefined;
+}
+
 function lastUserTurnIndex(messages: readonly FreeTrialMessage[]): number {
   for (let index = messages.length - 1; index >= 0; index -= 1) {
     if (messages[index]?.role === 'user') return index;
@@ -593,9 +622,120 @@ function lastUserTurnIndex(messages: readonly FreeTrialMessage[]): number {
   return -1;
 }
 
+/**
+ * Page reads and browser results are kept by their own budget, newest first,
+ * and never cut mid-way: a cut changes the bytes a later turn repeats, which
+ * loses the provider's prompt cache from that point on.
+ */
+function retainedContext(window: readonly FreeTrialMessage[]): (key: string) => boolean {
+  const keys: string[] = [];
+  const sizes: number[] = [];
+  window.forEach((message, index) => {
+    if (message.role === 'tool' && typeof message.content === 'string') {
+      keys.push(`${index}`);
+      sizes.push(message.content.length);
+      return;
+    }
+    if (typeof message.content === 'string') return;
+    message.content.forEach((part, partIndex) => {
+      if (part.type !== 'text' || !part.context) return;
+      keys.push(`${index}:${partIndex}`);
+      sizes.push(part.text.length);
+    });
+  });
+  const kept = retainedToolContextIndexes(sizes);
+  const keptKeys = new Set(keys.filter((_key, index) => kept.has(index)));
+  return (key) => keptKeys.has(key);
+}
+
+function budgetedChars(message: FreeTrialMessage): number {
+  if (message.role === 'tool') return 0;
+  if (typeof message.content === 'string') return message.content.length;
+  return message.content.reduce(
+    (sum, part) => (part.type === 'text' && !part.context ? sum + part.text.length : sum),
+    0,
+  );
+}
+
+function withTrimNotice(message: FreeTrialMessage): FreeTrialMessage {
+  return {
+    ...message,
+    content:
+      typeof message.content === 'string'
+        ? `${MANAGED_CHAT_TRIMMED_HISTORY_NOTICE}${message.content}`
+        : [{ type: 'text', text: MANAGED_CHAT_TRIMMED_HISTORY_NOTICE }, ...message.content],
+  };
+}
+
+/**
+ * Drops the oldest turns in coarse steps. A cut lands only on a turn that starts
+ * at a multiple of the chunk size counted from the start of the conversation,
+ * so the same cut, and every byte after it, repeats for many turns and the
+ * provider's prompt cache keeps hitting. Sliding by one message per turn
+ * rewrites the start of the prompt every time. The budget leaves a fixed
+ * reserve for the current turn instead of measuring it, so a short message
+ * after a long one cannot move the cut back.
+ */
+function trimHistoryInChunks(window: readonly FreeTrialMessage[]): FreeTrialMessage[] {
+  const system = window[0]?.role === 'system' ? window[0] : undefined;
+  const firstHistory = system ? 1 : 0;
+  const current = lastUserTurnIndex(window);
+  if (current <= firstHistory) return [...window];
+  const offsets: number[] = [];
+  let total = 0;
+  for (let index = firstHistory; index < current; index += 1) {
+    offsets.push(total);
+    total += budgetedChars(window[index]!);
+  }
+  const budget =
+    MANAGED_CHAT_MAX_INPUT_CHARS -
+    MANAGED_CHAT_TRIM_CHUNK_CHARS -
+    MANAGED_CHAT_TRIMMED_HISTORY_NOTICE.length -
+    (system ? budgetedChars(system) : 0);
+  if (total <= budget) return [...window];
+
+  const turnStart = (from: number): number => {
+    let index = from;
+    while (index < current && window[index]!.role !== 'user') index += 1;
+    return index;
+  };
+  for (let chunk = 1; ; chunk += 1) {
+    const first = offsets.findIndex((offset) => offset >= chunk * MANAGED_CHAT_TRIM_CHUNK_CHARS);
+    const cut = first < 0 ? current : turnStart(firstHistory + first);
+    const kept = cut >= current ? 0 : total - offsets[cut - firstHistory]!;
+    if (kept <= budget || cut >= current) {
+      const rest = window.slice(cut);
+      return [...(system ? [system] : []), withTrimNotice(rest[0]!), ...rest.slice(1)];
+    }
+  }
+}
+
+function withSiteContext(
+  messages: FreeTrialMessage[],
+  siteContext: string | undefined,
+): FreeTrialMessage[] {
+  const index = siteContext ? lastUserTurnIndex(messages) : -1;
+  const turn = messages[index];
+  if (!siteContext || !turn) return messages;
+  const parts: FreeTrialContentPart[] =
+    typeof turn.content === 'string' ? [{ type: 'text', text: turn.content }] : turn.content;
+  return messages.map((message, position) =>
+    position === index
+      ? {
+          ...message,
+          content: [
+            ...parts,
+            { type: 'text', text: `${MANAGED_CHAT_SITE_CONTEXT_LABEL}${siteContext}` },
+          ],
+        }
+      : message,
+  );
+}
+
 function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMessage[] {
-  const window = selectBoundedMessageWindow(messages);
+  const window = trimHistoryInChunks(selectBoundedMessageWindow(messages));
   const currentUserTurnIndex = lastUserTurnIndex(window);
+  const keepsContext = retainedContext(window);
   let remaining = MANAGED_CHAT_MAX_INPUT_CHARS;
   const reversed: FreeTrialMessage[] = [];
   let attachmentCount = 0;
@@ -606,6 +746,13 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
     const message = window[index];
     if (!message) continue;
     assertMessageShape(message);
+    if (message.role === 'tool' && typeof message.content === 'string') {
+      reversed.push({
+        ...message,
+        content: keepsContext(`${index}`) ? message.content : OMITTED_TOOL_CONTEXT,
+      });
+      continue;
+    }
     if (typeof message.content === 'string') {
       const content = message.content.slice(0, remaining);
       remaining -= content.length;
@@ -619,10 +766,17 @@ function capRequestMessages(messages: readonly FreeTrialMessage[]): FreeTrialMes
     for (let partIndex = message.content.length - 1; partIndex >= 0; partIndex -= 1) {
       const part = message.content[partIndex];
       if (!part) continue;
+      if (part.type === 'text' && part.context) {
+        parts.unshift({
+          type: 'text',
+          text: keepsContext(`${index}:${partIndex}`) ? part.text : OMITTED_TOOL_CONTEXT,
+        });
+        continue;
+      }
       if (part.type === 'text') {
         const text = part.text.slice(0, remaining);
         remaining -= text.length;
-        if (text) parts.unshift({ ...part, text });
+        if (text) parts.unshift({ type: 'text', text });
         continue;
       }
       if (part.type === 'file') {
@@ -752,6 +906,7 @@ export interface ManagedChatStreamOptions {
   approvalResume?: ToolApprovalResumeRequest;
   inputResume?: ToolInputResumeRequest;
   idempotencyKey?: string;
+  siteContext?: string;
   conversationId?: string;
   assistantMessageId?: string;
   tools?: readonly ToolDefinition[];
@@ -1360,7 +1515,7 @@ export async function* streamFreeChat(
         body: JSON.stringify(
           resumeBody ?? {
             model,
-            messages: cappedMessages,
+            messages: withSiteContext(cappedMessages, options.siteContext),
             stream: true,
             [INTERACTIVE_CARD_REQUEST_KEY]: {
               supported: [
@@ -1496,11 +1651,13 @@ export async function* streamFreeChat(
     let handedOff = false;
     let streamedTextCharacters = 0;
     let unacknowledgedPublicText = '';
+    let unacknowledgedTaggedThinking = '';
     const contentSplitter = new ThinkingTagSplitter();
     const publicTextChunks = (parts: readonly ThinkingTagPart[]): FreeTrialChunk[] => {
       const chunks: FreeTrialChunk[] = [];
       for (const part of parts) {
         if (part.type === 'thinking' && part.text) {
+          unacknowledgedTaggedThinking += part.text;
           chunks.push({ type: 'thinking', text: part.text });
           continue;
         }
@@ -1510,6 +1667,16 @@ export async function* streamFreeChat(
         chunks.push({ type: 'text', text: part.text });
       }
       return chunks;
+    };
+
+    // A route that forwards the provider's tagged content also projects the same
+    // reasoning onto `reasoning-delta`; only the part not already shown is new.
+    const reasoningChunk = (delta: string): FreeTrialChunk | undefined => {
+      const reconciled = reconcileManagedCloudPublicText(unacknowledgedTaggedThinking, delta);
+      unacknowledgedTaggedThinking = reconciled.pending;
+      return reconciled.unmatchedIncoming
+        ? { type: 'thinking', text: reconciled.unmatchedIncoming }
+        : undefined;
     };
 
     const publishRunReference = (
@@ -1552,11 +1719,17 @@ export async function* streamFreeChat(
         }
         if (frame.agentEvent) {
           sawAgentActivity = true;
-          if (frame.agentEvent.event.type === 'text-delta') {
+          const textDelta = deltaOfKind(frame.agentEvent.event, 'text');
+          if (textDelta !== undefined) {
             unacknowledgedPublicText = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
-              frame.agentEvent.event.delta,
+              textDelta,
             ).pending;
+          }
+          const reasoningDelta = deltaOfKind(frame.agentEvent.event, 'reasoning');
+          if (reasoningDelta !== undefined) {
+            const thinking = reasoningChunk(reasoningDelta);
+            if (thinking) chunks.push(thinking);
           }
           chunks.push({ type: 'agent-event', envelope: frame.agentEvent });
           const runChunk = publishRunReference({ lastSequence: frame.agentEvent.sequence });
@@ -1640,10 +1813,11 @@ export async function* streamFreeChat(
           signal: controller.signal,
           onEvent: (envelope) => {
             armInactivityWatchdog();
-            if (envelope.event.type === 'text-delta') {
+            const textDelta = deltaOfKind(envelope.event, 'text');
+            if (textDelta !== undefined) {
               const reconciled = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
-                envelope.event.delta,
+                textDelta,
               );
               unacknowledgedPublicText = reconciled.pending;
               if (reconciled.unmatchedIncoming) {
@@ -1655,6 +1829,11 @@ export async function* streamFreeChat(
                 }
                 publish({ type: 'text', text: reconciled.unmatchedIncoming });
               }
+            }
+            const reasoningDelta = deltaOfKind(envelope.event, 'reasoning');
+            if (reasoningDelta !== undefined) {
+              const thinking = reasoningChunk(reasoningDelta);
+              if (thinking) publish(thinking);
             }
             publish({ type: 'agent-event', envelope, durableReplay: true });
             const replayedHandoff = toolUseJournal.observe(envelope.event);

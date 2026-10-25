@@ -100,6 +100,7 @@ export interface HistoryMessage {
   interactiveCards?: InteractiveCard[];
   codeExecution?: ManagedCodeExecution;
   videoTaskId?: string;
+  modelContent?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
   sources?: SidePanelSource[];
@@ -442,6 +443,17 @@ function normalizeHistoryMessage(
     }
   }
   if (message['role'] === 'user') {
+    const modelContent = message['modelContent'];
+    if (
+      typeof modelContent === 'string' &&
+      modelContent.length > 0 &&
+      modelContent !== normalized.content &&
+      modelContent.length <= MAX_HISTORY_CONTENT_CHARS &&
+      modelContent.length <= budget.remainingContentChars
+    ) {
+      budget.remainingContentChars -= modelContent.length;
+      normalized.modelContent = modelContent;
+    }
     const attachments = readStoredAttachments(message['attachments']);
     if (attachments.length > 0) normalized.attachments = attachments;
     const pages = readStoredPages(message['pages']);

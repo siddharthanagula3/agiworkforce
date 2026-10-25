@@ -8,15 +8,11 @@ import {
   sameManagedCloudOwner,
 } from '../src/features/cloud-bridge/managedCloudAuthority';
 import {
-  CHAT_BROWSER_TASK_TOOL,
   CHAT_READ_PAGE_TOOL,
   CHAT_TOOL_HANDOFF_TIMEOUT_MS,
-  chatBrowserToolDefinitions,
-  isChatBrowserToolTier,
   MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
   MAX_CHAT_TOOL_RESULT_CHARS,
 } from '../src/features/computer-use/chatBrowserTools';
-import { CHAT_SEARCH_HISTORY_TOOL } from '../src/features/computer-use/historySearch';
 import type { ChromeManagedToolHandoffOutcome } from '../src/features/cloud-bridge/managedChatHandler';
 import type { ToolCall } from '../src/features/computer-use/toolHandoff';
 
@@ -35,15 +31,13 @@ const CALLS: ToolCall[] = [
 
 function bridge(sendMessage = vi.fn(async () => undefined)) {
   const compiled = ts.transpileModule(
-    `${source.slice(start, end)}\nreturn { requestChatToolHandoff, resolveChatToolHandoff, pending: pendingChatToolHandoffs };`,
+    `${source.slice(start, end)}\nreturn { requestChatToolHandoff, resolveChatToolHandoff, cancelChatToolHandoffs, pending: pendingChatToolHandoffs };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   );
   const dependencies = {
     chrome: { runtime: { sendMessage } },
     normalizeManagedCloudOwner,
     sameManagedCloudOwner,
-    isChatBrowserToolTier,
-    chatBrowserToolDefinitions,
     MAX_CHAT_TOOL_CALLS_PER_HANDOFF,
     MAX_CHAT_TOOL_RESULT_CHARS,
     CHAT_TOOL_HANDOFF_TIMEOUT_MS,
@@ -58,6 +52,7 @@ function bridge(sendMessage = vi.fn(async () => undefined)) {
       calls: ToolCall[],
     ): Promise<ChromeManagedToolHandoffOutcome>;
     resolveChatToolHandoff(message: Record<string, unknown>): boolean;
+    cancelChatToolHandoffs(owner: typeof OWNER, clientInstanceId: string, streamId: string): void;
     pending: Map<string, unknown>;
   };
   return { ...api, sendMessage };
@@ -86,7 +81,6 @@ describe('background chat tool handoff bridge', () => {
         id: 'stream-1',
         handoffId: sent['handoffId'],
         results: [{ toolCallId: 'call_1', content: 'Page text' }],
-        browserToolTier: 'act',
       }),
     ).toBe(true);
     const resolved = await outcome;
@@ -94,9 +88,7 @@ describe('background chat tool handoff bridge', () => {
       status: 'resolved',
       results: [{ toolCallId: 'call_1', content: 'Page text' }],
     });
-    expect(
-      resolved.status === 'resolved' && resolved.tools?.map((tool) => tool.function.name),
-    ).toEqual([CHAT_READ_PAGE_TOOL, CHAT_BROWSER_TASK_TOOL]);
+    expect(resolved).not.toHaveProperty('tools');
     expect(b.pending.size).toBe(0);
   });
 
@@ -110,8 +102,6 @@ describe('background chat tool handoff bridge', () => {
       'an oversized result',
       { results: [{ toolCallId: 'call_1', content: 'x'.repeat(MAX_CHAT_TOOL_RESULT_CHARS + 1) }] },
     ],
-    ['an unknown tool tier', { browserToolTier: 'everything' }],
-    ['a history flag that is not true', { browserHistory: 'yes' }],
   ])('refuses an answer from %s', async (_label, override) => {
     const b = bridge();
     void b.requestChatToolHandoff(activeStream(), 'stream-1', CALLS);
@@ -129,24 +119,6 @@ describe('background chat tool handoff bridge', () => {
     expect(b.pending.size).toBe(1);
   });
 
-  it('keeps offering history search after the step only while the panel says it is on', async () => {
-    const b = bridge();
-    const outcome = b.requestChatToolHandoff(activeStream(), 'stream-1', CALLS);
-    const handoffId = (b.sendMessage.mock.calls[0]![0] as Record<string, unknown>)['handoffId'];
-    b.resolveChatToolHandoff({
-      owner: OWNER,
-      clientInstanceId: 'panel-a',
-      id: 'stream-1',
-      handoffId,
-      results: [{ toolCallId: 'call_1', content: 'Page text' }],
-      browserHistory: true,
-    });
-    const resolved = await outcome;
-    expect(
-      resolved.status === 'resolved' && resolved.tools?.map((tool) => tool.function.name),
-    ).toEqual([CHAT_SEARCH_HISTORY_TOOL]);
-  });
-
   it('ends the tool step when the user stops the turn', async () => {
     const b = bridge();
     const active = activeStream();
@@ -154,6 +126,33 @@ describe('background chat tool handoff bridge', () => {
     active.controller.abort();
     await expect(outcome).resolves.toEqual({ status: 'cancelled' });
     expect(b.pending.size).toBe(0);
+  });
+
+  it('ends a pending step the moment Stop arrives, before any answer can start another leg', async () => {
+    const b = bridge();
+    const outcome = b.requestChatToolHandoff(activeStream(), 'stream-1', CALLS);
+    const other = b.requestChatToolHandoff(activeStream(), 'stream-2', CALLS);
+    const handoffId = (b.sendMessage.mock.calls[0]![0] as Record<string, unknown>)['handoffId'];
+    b.cancelChatToolHandoffs(
+      { accountId: 'user-b', authIncarnation: 'session-b' },
+      'panel-a',
+      'stream-1',
+    );
+    b.cancelChatToolHandoffs(OWNER, 'panel-b', 'stream-1');
+    expect(b.pending.size).toBe(2);
+    b.cancelChatToolHandoffs(OWNER, 'panel-a', 'stream-1');
+    await expect(outcome).resolves.toEqual({ status: 'cancelled' });
+    expect(
+      b.resolveChatToolHandoff({
+        owner: OWNER,
+        clientInstanceId: 'panel-a',
+        id: 'stream-1',
+        handoffId,
+        results: [{ toolCallId: 'call_1', content: 'Declined' }],
+      }),
+    ).toBe(false);
+    expect(b.pending.size).toBe(1);
+    void other;
   });
 
   it('honours a cancel from the panel', async () => {

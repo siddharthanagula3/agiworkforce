@@ -1,0 +1,38 @@
+: durable-open
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":0,"emittedAtMs":1792954859809,"event":{"type":"task-state-changed","taskId":"agi.chrome.send.fixture","state":"queued","summary":"Task accepted by the agent engine."}}},"index":0}]}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":1,"emittedAtMs":1792954859813,"event":{"type":"task-state-changed","taskId":"agi.chrome.send.fixture","state":"running","previousState":"queued","summary":"Agent started working."}}},"index":0}]}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":2,"emittedAtMs":1792954859825,"event":{"type":"lifecycle","phase":"started"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":3,"emittedAtMs":1792954871898,"event":{"type":"reasoning-delta","delta":"I'm setting up the"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":4,"emittedAtMs":1792954871905,"event":{"type":"reasoning-delta","delta":" classic ONE + ON"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":5,"emittedAtMs":1792954871918,"event":{"type":"reasoning-delta","delta":"E = TWO c"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":6,"emittedAtMs":1792954871930,"event":{"type":"reasoning-delta","delta":"ryptarithm, anal"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":7,"emittedAtMs":1792954871943,"event":{"type":"reasoning-delta","delta":"yzing digit const"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":8,"emittedAtMs":1792954871956,"event":{"type":"reasoning-delta","delta":"raints: O must be even and"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"content":"There","x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":9,"emittedAtMs":1792954872988,"event":{"type":"text-delta","delta":"There"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"content":" are **16 solutions**","x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":10,"emittedAtMs":1792954873001,"event":{"type":"text-delta","delta":" are **16 solutions**"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"content":".\n\nT","x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":11,"emittedAtMs":1792954873014,"event":{"type":"text-delta","delta":".\n\nT"}}},"index":0}]}
+
+data: {"choices":[{"delta":{"content":"WO has","x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":12,"emittedAtMs":1792954873028,"event":{"type":"text-delta","delta":"WO has"}}},"index":0}]}
+
+data: {"choices":[{"delta":{},"index":0}],"usage":{"prompt_tokens":143,"completion_tokens":1789,"total_tokens":1932,"prompt_tokens_details":{"cached_tokens":8161}}}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":13,"emittedAtMs":1792954873945,"event":{"type":"task-state-changed","taskId":"agi.chrome.send.fixture","state":"ready_for_review","previousState":"running","summary":"Agent work finished and is ready for review."}}},"index":0}]}
+
+data: {"choices":[],"usage":{"prompt_tokens":143,"completion_tokens":1789,"total_tokens":1932}}
+
+data: {"choices":[{"delta":{"x_agent_event":{"schemaVersion":5,"sessionId":"00000000-0000-4000-8000-000000000001","turnId":"agi.chrome.send.fixture","sequence":14,"emittedAtMs":1792954873972,"event":{"type":"stop","reason":"end-turn"}}},"index":0}]}
+
+data: [DONE]
+

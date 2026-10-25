@@ -19,10 +19,13 @@ import {
 import {
   CHAT_BROWSER_TASK_TOOL,
   CHAT_READ_PAGE_TOOL,
-  chatBrowserToolDefinitions,
+  CHAT_BROWSER_TOOL_DEFINITIONS,
   parseChatBrowserToolCall,
 } from '../src/features/computer-use/chatBrowserTools';
+import { CHAT_SEARCH_HISTORY_TOOL } from '../src/features/computer-use/historySearch';
 import { getBrowserToolDefinitions } from '../src/features/computer-use/browserToolDefinitions';
+
+const DECLARED_TOOL_NAMES = [CHAT_READ_PAGE_TOOL, CHAT_BROWSER_TASK_TOOL, CHAT_SEARCH_HISTORY_TOOL];
 
 const ADMITTED = getPickerModels().map((model) => model.id);
 
@@ -86,21 +89,36 @@ const readCall = {
 describe('chat browser tool declaration cost', () => {
   it('declares a small fraction of the full browser tool set on an ordinary turn', () => {
     const full = estimateTokens(JSON.stringify(getBrowserToolDefinitions(true, true)));
-    const read = estimateTokens(JSON.stringify(chatBrowserToolDefinitions('read')));
-    const act = estimateTokens(JSON.stringify(chatBrowserToolDefinitions('act')));
-    expect(read).toBeLessThanOrEqual(200);
-    expect(act).toBeLessThanOrEqual(400);
-    expect(act * 10).toBeLessThan(full);
+    const declared = estimateTokens(JSON.stringify(CHAT_BROWSER_TOOL_DEFINITIONS));
+    expect(declared).toBeLessThanOrEqual(700);
+    expect(declared * 5).toBeLessThan(full);
   });
 
-  it('offers the action tool only on the act tier', () => {
-    expect(chatBrowserToolDefinitions('read').map((tool) => tool.function.name)).toEqual([
-      CHAT_READ_PAGE_TOOL,
-    ]);
-    expect(chatBrowserToolDefinitions('act').map((tool) => tool.function.name)).toEqual([
-      CHAT_READ_PAGE_TOOL,
-      CHAT_BROWSER_TASK_TOOL,
-    ]);
+  it('declares the same tools in the same order for every conversation', () => {
+    expect(CHAT_BROWSER_TOOL_DEFINITIONS.map((tool) => tool.function.name)).toEqual(
+      DECLARED_TOOL_NAMES,
+    );
+  });
+
+  it('serializes the same tools array on every turn of a conversation', async () => {
+    const fetchMock = vi.fn(async () =>
+      sseResponse([{ choices: [{ index: 0, delta: { content: 'ok' } }] }]),
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    const bodies: string[] = [];
+    for (let turn = 0; turn < 2; turn += 1) {
+      await collect(
+        streamFreeChat([{ role: 'user', content: 'hi' }], 'token', {
+          tools: CHAT_BROWSER_TOOL_DEFINITIONS,
+        }),
+      );
+      const body = JSON.parse(
+        String((fetchMock.mock.calls.at(-1) as [string, RequestInit])[1].body),
+      );
+      bodies.push(JSON.stringify(body.tools));
+    }
+    expect(bodies[0]).toBe(bodies[1]);
+    expect(bodies[0]).toBe(JSON.stringify(CHAT_BROWSER_TOOL_DEFINITIONS));
   });
 
   it('accepts only exact arguments for each chat browser tool', () => {
@@ -140,14 +158,14 @@ describe('streamFreeChat caller-declared browser tools', () => {
 
     const chunks = await collect(
       streamFreeChat([{ role: 'user', content: 'what does this page say?' }], 'token', {
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       }),
     );
 
     const body = JSON.parse(String((fetchMock.mock.calls[0] as [string, RequestInit])[1].body));
-    expect(body.tools.map((tool: { function: { name: string } }) => tool.function.name)).toEqual([
-      CHAT_READ_PAGE_TOOL,
-    ]);
+    expect(body.tools.map((tool: { function: { name: string } }) => tool.function.name)).toEqual(
+      DECLARED_TOOL_NAMES,
+    );
     expect(body.tool_choice).toBe('auto');
     expect(chunks).toEqual([{ type: 'tool-handoff', calls: [readCall] }, { type: 'done' }]);
   });
@@ -170,7 +188,9 @@ describe('streamFreeChat caller-declared browser tools', () => {
     );
     const chunks = await collect(
       streamFreeChat([{ role: 'user', content: 'click it' }], 'token', {
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS.filter(
+          (tool) => tool.function.name === CHAT_READ_PAGE_TOOL,
+        ),
       }),
     );
     expect(chunks.some((chunk) => chunk.type === 'tool-handoff')).toBe(false);
@@ -237,7 +257,7 @@ describe('executeChromeManagedChat tool continuation', () => {
         id: 'stream-fresh',
         text: 'What does this page say?',
         modelSelection: 'auto',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       dependencies({
         streamChat,
@@ -275,7 +295,6 @@ describe('executeChromeManagedChat tool continuation', () => {
     const onToolHandoff = vi.fn(async () => ({
       status: 'resolved' as const,
       results: [{ toolCallId: 'call_1', content: 'Page text' }],
-      tools: chatBrowserToolDefinitions('act'),
     }));
     const onText = vi.fn();
     const result = await executeChromeManagedChat(
@@ -283,7 +302,7 @@ describe('executeChromeManagedChat tool continuation', () => {
         id: 'stream-1',
         text: 'What does this page say?',
         modelSelection: 'auto',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       dependencies({ streamChat, onToolHandoff, onText }),
     );
@@ -293,11 +312,8 @@ describe('executeChromeManagedChat tool continuation', () => {
     expect(streamChat).toHaveBeenCalledTimes(2);
     const [firstMessages, , firstOptions] = streamChat.mock.calls[0]!;
     const [secondMessages, , secondOptions] = streamChat.mock.calls[1]!;
-    expect(firstOptions?.tools?.map((tool) => tool.function.name)).toEqual([CHAT_READ_PAGE_TOOL]);
-    expect(secondOptions?.tools?.map((tool) => tool.function.name)).toEqual([
-      CHAT_READ_PAGE_TOOL,
-      CHAT_BROWSER_TASK_TOOL,
-    ]);
+    expect(firstOptions?.tools?.map((tool) => tool.function.name)).toEqual(DECLARED_TOOL_NAMES);
+    expect(JSON.stringify(secondOptions?.tools)).toBe(JSON.stringify(firstOptions?.tools));
     expect(secondOptions?.idempotencyKey).not.toBe(firstOptions?.idempotencyKey);
     expect(secondMessages.slice(-2)).toEqual([
       { role: 'assistant', content: 'Reading. ', tool_calls: [readCall] },
@@ -319,7 +335,7 @@ describe('executeChromeManagedChat tool continuation', () => {
         id: 'stream-1',
         text: 'Read it',
         modelSelection: 'auto',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       dependencies({
         streamChat,
@@ -339,7 +355,7 @@ describe('executeChromeManagedChat tool continuation', () => {
         id: 'stream-1',
         text: 'Read it',
         modelSelection: 'auto',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       dependencies({
         streamChat,
@@ -356,7 +372,7 @@ describe('executeChromeManagedChat tool continuation', () => {
         id: 'stream-1',
         text: 'Read it',
         modelSelection: 'auto',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       dependencies({
         streamChat: vi.fn(() =>
@@ -379,7 +395,7 @@ describe('executeChromeManagedChat tool continuation', () => {
         id: 'stream-1',
         text: 'Read it',
         modelSelection: 'auto',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       dependencies({
         streamChat,
@@ -428,7 +444,7 @@ describe('executeChromeManagedChat tool continuation', () => {
           id: 'stream-1',
           text: 'Read it',
           modelSelection: 'auto',
-          tools: chatBrowserToolDefinitions('read'),
+          tools: CHAT_BROWSER_TOOL_DEFINITIONS,
         },
         dependencies({
           streamChat,
@@ -456,7 +472,7 @@ describe('executeChromeManagedChat tool continuation', () => {
           id: 'stream-2',
           text: 'Read it',
           modelSelection: 'auto',
-          tools: chatBrowserToolDefinitions('read'),
+          tools: CHAT_BROWSER_TOOL_DEFINITIONS,
         },
         dependencies({
           streamChat: alwaysRefused,
@@ -485,7 +501,7 @@ describe('executeChromeManagedChat tool continuation', () => {
         id: 'stream-1',
         text: 'Read it',
         modelSelection: 'auto',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       dependencies({ streamChat }),
     );
@@ -500,7 +516,7 @@ describe('executeChromeManagedChat tool continuation', () => {
         text: 'Read it',
         modelSelection: 'auto',
         completionMode: 'unattended',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       deps,
     );
@@ -525,7 +541,7 @@ describe('a browser step asked for after an approval', () => {
         id: 'stream-paused',
         text: 'Check the page and send the update',
         modelSelection: 'auto',
-        tools: chatBrowserToolDefinitions('read'),
+        tools: CHAT_BROWSER_TOOL_DEFINITIONS,
       },
       dependencies({
         streamChat: vi.fn(() =>
@@ -547,7 +563,7 @@ describe('a browser step asked for after an approval', () => {
     const continuation = await pausedTurn();
     expect(continuation).toMatchObject({ nextLeg: 1, pendingText: 'Needs approval. ' });
     expect(continuation.messages.at(-1)).toMatchObject({ role: 'user' });
-    expect(continuation.tools.map((tool) => tool.function.name)).toEqual([CHAT_READ_PAGE_TOOL]);
+    expect(continuation.tools.map((tool) => tool.function.name)).toEqual(DECLARED_TOOL_NAMES);
   });
 
   it('runs the browser tool and carries on the same turn after the approval', async () => {
@@ -591,7 +607,7 @@ describe('a browser step asked for after an approval', () => {
       { role: 'assistant', content: 'Needs approval. Approved. ', tool_calls: [readCall] },
       { role: 'tool', tool_call_id: 'call_1', content: 'Owner: Marisol Vance.' },
     ]);
-    expect(options.tools?.map((tool) => tool.function.name)).toEqual([CHAT_READ_PAGE_TOOL]);
+    expect(options.tools?.map((tool) => tool.function.name)).toEqual(DECLARED_TOOL_NAMES);
     expect(options.idempotencyKey).not.toBe(continuation.streamOptions.idempotencyKey);
     expect(onText).toHaveBeenCalledWith('Marisol Vance owns it.');
   });

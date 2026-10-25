@@ -136,6 +136,19 @@ describe('conversation-history', () => {
     });
   });
 
+  it('keeps the prompt a user turn was sent as beside the shorter text shown for it', async () => {
+    const sent = 'Summarize this page concisely. Include key points.';
+    const conversationId = await saveConversation([
+      { role: 'user', content: '/summarize', modelContent: sent, timestamp: Date.now() },
+      { role: 'assistant', content: 'Here it is.', modelContent: 'ignored', timestamp: Date.now() },
+      { role: 'user', content: 'plain', modelContent: 'plain', timestamp: Date.now() },
+    ]);
+    const restored = await getConversation(conversationId);
+    expect(restored?.messages[0]).toMatchObject({ content: '/summarize', modelContent: sent });
+    expect(restored?.messages[1]).not.toHaveProperty('modelContent');
+    expect(restored?.messages[2]).not.toHaveProperty('modelContent');
+  });
+
   it('keeps the thinking summary of an answer apart from its text, bounded and only on assistant turns', async () => {
     const conversationId = await saveConversation([
       {

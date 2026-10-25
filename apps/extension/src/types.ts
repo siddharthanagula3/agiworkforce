@@ -16,8 +16,8 @@ import type {
   ManagedQuotaWarningSignal,
 } from './features/cloud-bridge/freeTrialClient';
 import type { SiteToolEffect } from './features/tools/siteToolRegistry';
-import type { ChatBrowserToolTier } from './features/computer-use/chatBrowserTools';
 import type { ToolCall } from './features/computer-use/toolHandoff';
+import type { ManagedChatHistoryMessage } from './features/cloud-bridge/managedChatHandler';
 import type {
   BrowserUploadBinding,
   BrowserUploadedFileMetadata,
@@ -441,12 +441,8 @@ export interface ChatMessageMessage extends BaseMessage {
   id: string;
   text: string;
   pageContext?: string;
-  conversationHistory?: Array<{
-    role: 'user' | 'assistant';
-    content: string;
-    uploadedAttachments?: ManagedCloudChatAttachment[];
-    fileAttachments?: Array<{ assetId: string; mimeType: string }>;
-  }>;
+  pageContextFence?: string;
+  conversationHistory?: ManagedChatHistoryMessage[];
   attachments?: string[];
   fileAttachments?: Array<{ assetId: string; mimeType: string }>;
   uploadedAttachments?: ManagedCloudChatAttachment[];
@@ -464,8 +460,6 @@ export interface ChatMessageMessage extends BaseMessage {
   assistantMessageId?: string;
   memoryCommand?: ManagedMemoryCommandTurn;
   skillName?: string;
-  browserToolTier?: ChatBrowserToolTier;
-  browserHistory?: boolean;
 }
 
 export interface ChatToolHandoffMessage {
@@ -485,8 +479,6 @@ export interface ResolveChatToolsMessage extends BaseMessage {
   handoffId: string;
   cancelled?: boolean;
   results?: Array<{ toolCallId: string; content: string }>;
-  browserToolTier?: ChatBrowserToolTier;
-  browserHistory?: boolean;
 }
 
 export interface GrantSiteOnceMessage extends BaseMessage {

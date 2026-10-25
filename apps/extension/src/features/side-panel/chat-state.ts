@@ -11,7 +11,15 @@ import type { AgentEventSource, InteractiveCard } from '@agiworkforce/types';
 import type { AgentEventEnvelope, AgentEventStopReason } from '@agiworkforce/types/protocol';
 import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
+import type { ManagedChatHistoryMessage } from '../cloud-bridge/managedChatHandler';
 import { browserActivityEnvelope } from '../computer-use/browserTurnActivity';
+import {
+  CHAT_HISTORY_TRIM_STEP_MESSAGES,
+  MAX_CHAT_HISTORY_MESSAGES,
+  OMITTED_TOOL_CONTEXT,
+  retainedToolContextIndexes,
+} from '../computer-use/chatBrowserTools';
+import type { ToolCall } from '../computer-use/toolHandoff';
 import { t, tPlural } from '../../i18n';
 
 export interface SidePanelMessageAttachment {
@@ -32,10 +40,30 @@ export interface SidePanelSource extends AgentEventSource {
 
 export const MAX_MESSAGE_SOURCES = 40;
 
+/**
+ * One browser step of a reply, exactly as the model was sent it: the text it
+ * wrote before calling, its calls, and their results. `contentEnd` is where
+ * that text ends in the reply. `pageDigest` names the page a read returned.
+ */
+export interface SidePanelToolLeg {
+  text: string;
+  contentEnd: number;
+  calls: ToolCall[];
+  results: Array<{ toolCallId: string; content: string; pageDigest?: string }>;
+}
+
+/** Page text a turn attached, with the fence it was sent in, so a follow-up repeats it exactly. */
+export interface SidePanelPageContext {
+  text: string;
+  fence: string;
+  digest?: string;
+}
+
 export interface SidePanelChatMessage {
   id: string;
   role: 'user' | 'assistant';
   content: string;
+  modelContent?: string;
   streaming?: boolean;
   /**
    * Hydrated from a message that was still `streaming` the last time it was
@@ -68,6 +96,8 @@ export interface SidePanelChatMessage {
   videoTaskId?: string;
   attachments?: SidePanelMessageAttachment[];
   pages?: SidePanelPageReference[];
+  pageContext?: SidePanelPageContext;
+  toolLegs?: SidePanelToolLeg[];
   sources?: SidePanelSource[];
   citations?: SidePanelSource[];
   durationMs?: number;
@@ -91,6 +121,7 @@ export interface SidePanelChatMessage {
 export interface StoredSidePanelChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  modelContent?: string;
   timestamp: number;
   /** Still mid-reply as of the last save; see `SidePanelChatMessage.interrupted`. */
   streaming?: boolean;
@@ -335,6 +366,7 @@ export function hydrateStoredChatMessage(
     id,
     role: message.role,
     content: message.content,
+    ...(message.modelContent ? { modelContent: message.modelContent } : {}),
     timestamp: message.timestamp,
     ...(agentEvents
       ? {
@@ -532,10 +564,15 @@ export function requestsCurrentPageContext(text: string): boolean {
   );
 }
 
-export function trimChatMessages(messages: SidePanelChatMessage[], maximum: number): number {
-  const overflow = Math.max(0, messages.length - Math.max(1, maximum));
-  if (overflow > 0) messages.splice(0, overflow);
-  return overflow;
+export function trimChatMessages(
+  messages: SidePanelChatMessage[],
+  maximum: number,
+  step = 1,
+): number {
+  const excess = Math.max(0, messages.length - Math.max(1, maximum));
+  const overflow = Math.min(messages.length - 1, Math.ceil(excess / step) * step);
+  if (excess > 0) messages.splice(0, overflow);
+  return excess > 0 ? overflow : 0;
 }
 
 /**
@@ -630,28 +667,125 @@ export function streamErrorOffersModelSwitch(
   return errorCode !== undefined && !ERRORS_ANOTHER_MODEL_CANNOT_FIX.has(errorCode);
 }
 
-export interface ModelHistoryMessage {
-  role: 'user' | 'assistant';
-  content: string;
-  fileAttachments?: Array<{ assetId: string; mimeType: string }>;
+export type ModelHistoryMessage = ManagedChatHistoryMessage;
+
+export function createPageContextFence(): string {
+  return Array.from(crypto.getRandomValues(new Uint8Array(16)), (byte) =>
+    byte.toString(16).padStart(2, '0'),
+  ).join('');
+}
+
+export async function pageDigest(url: string, title: string, text: string): Promise<string> {
+  const bytes = new TextEncoder().encode(JSON.stringify([url, title, text]));
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+export interface ModelHistorySelection {
+  history: ModelHistoryMessage[];
+  /** The pages whose full text this history still carries. */
+  pageDigests: Set<string>;
+}
+
+interface ModelHistoryEntry {
+  message: ModelHistoryMessage;
+  pageDigest?: string;
+}
+
+function messageModelHistory(message: SidePanelChatMessage): ModelHistoryEntry[] {
+  const files = (message.attachments ?? []).flatMap((attachment) =>
+    attachment.assetId ? [{ assetId: attachment.assetId, mimeType: attachment.mimeType }] : [],
+  );
+  const fileAttachments = files.length > 0 ? { fileAttachments: files } : {};
+  if (message.role === 'user') {
+    const page = message.pageContext;
+    return [
+      {
+        message: {
+          role: 'user',
+          content: message.modelContent ?? message.content,
+          ...fileAttachments,
+          ...(page ? { pageContext: page.text, pageContextFence: page.fence } : {}),
+        },
+        ...(page?.digest ? { pageDigest: page.digest } : {}),
+      },
+    ];
+  }
+  const legs = message.toolLegs ?? [];
+  return [
+    ...legs.flatMap((leg): ModelHistoryEntry[] => [
+      {
+        message: {
+          role: 'assistant',
+          content: leg.text,
+          toolCalls: leg.calls.map((call) => ({ ...call, function: { ...call.function } })),
+        },
+      },
+      ...leg.results.map((result): ModelHistoryEntry => ({
+        message: { role: 'tool', toolCallId: result.toolCallId, content: result.content },
+        ...(result.pageDigest ? { pageDigest: result.pageDigest } : {}),
+      })),
+    ]),
+    {
+      message: {
+        role: 'assistant',
+        content: message.content.slice(legs[legs.length - 1]?.contentEnd ?? 0),
+        ...fileAttachments,
+      },
+    },
+  ];
+}
+
+function contextText(message: ModelHistoryMessage): string | undefined {
+  return message.role === 'tool' ? message.content : message.pageContext;
+}
+
+function withoutContext(message: ModelHistoryMessage): ModelHistoryMessage {
+  if (message.role === 'tool') return { ...message, content: OMITTED_TOOL_CONTEXT };
+  const { pageContext: _pageContext, pageContextFence: _pageContextFence, ...rest } = message;
+  return rest;
+}
+
+/**
+ * What the model is sent of the conversation so far. Page text it read, by a
+ * tool or attached to a message, stays in so a follow-up answers from the same
+ * text instead of reading the page again; the oldest is left out first once
+ * the shared context budget is spent.
+ */
+export function selectModelHistorySelection(
+  messages: readonly SidePanelChatMessage[],
+  excludedMessageId?: string,
+): ModelHistorySelection {
+  const entries = messages
+    .filter((message) => !message.error && message.id !== excludedMessageId)
+    .flatMap(messageModelHistory);
+  const excess = Math.max(0, entries.length - MAX_CHAT_HISTORY_MESSAGES);
+  let first = Math.ceil(excess / CHAT_HISTORY_TRIM_STEP_MESSAGES) * CHAT_HISTORY_TRIM_STEP_MESSAGES;
+  while (entries[first]?.message.role === 'tool') first += 1;
+  const window = entries.slice(first);
+  const context = window.filter((entry) => contextText(entry.message) !== undefined);
+  const kept = retainedToolContextIndexes(
+    context.map((entry) => contextText(entry.message)?.length ?? 0),
+  );
+  const omitted = new Set(context.filter((_entry, index) => !kept.has(index)));
+  const pageDigests = new Set(
+    context.flatMap((entry, index) =>
+      kept.has(index) && entry.pageDigest ? [entry.pageDigest] : [],
+    ),
+  );
+  return {
+    history: window.map((entry) =>
+      omitted.has(entry) ? withoutContext(entry.message) : entry.message,
+    ),
+    pageDigests,
+  };
 }
 
 export function selectModelHistory(
   messages: readonly SidePanelChatMessage[],
   excludedMessageId?: string,
 ): ModelHistoryMessage[] {
-  return messages
-    .filter((message) => !message.error && message.id !== excludedMessageId)
-    .map((message) => {
-      const files = (message.attachments ?? []).flatMap((attachment) =>
-        attachment.assetId ? [{ assetId: attachment.assetId, mimeType: attachment.mimeType }] : [],
-      );
-      return {
-        role: message.role,
-        content: message.content,
-        ...(files.length > 0 ? { fileAttachments: files } : {}),
-      };
-    });
+  return selectModelHistorySelection(messages, excludedMessageId).history;
 }
 
 export function shouldRebuildMessageDom(input: {

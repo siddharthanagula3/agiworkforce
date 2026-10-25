@@ -14,6 +14,7 @@ import {
   resolveComposerPrompt,
   reopenBrowserActivity,
   selectModelHistory,
+  selectModelHistorySelection,
   settleBrowserActivity,
   settleFailedAgentActivity,
   settleFinishedAgentActivity,
@@ -25,6 +26,12 @@ import {
   trimChatMessages,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
+import { expandSlashCommand } from '../src/features/side-panel/pageCommands';
+import {
+  CHAT_READ_PAGE_TOOL,
+  MAX_RETAINED_TOOL_CONTEXT_CHARS,
+  OMITTED_TOOL_CONTEXT,
+} from '../src/features/computer-use/chatBrowserTools';
 
 function message(index: number, role: 'user' | 'assistant' = 'user'): SidePanelChatMessage {
   return {
@@ -628,6 +635,100 @@ describe('side-panel chat state', () => {
     ]);
   });
 
+  it('keeps the page a tool read in the history of a follow-up, exactly as the model was sent it', () => {
+    const readCall = {
+      id: 'toolu_1',
+      type: 'function' as const,
+      function: { name: CHAT_READ_PAGE_TOOL, arguments: '{}' },
+    };
+    const page = '<page_abc>\nTitle: Espresso\nEspresso is a concentrated coffee.\n</page_abc>';
+    const messages: SidePanelChatMessage[] = [
+      { ...message(1), content: 'Summarize this page' },
+      {
+        ...message(2, 'assistant'),
+        content: 'Reading it now. Espresso is concentrated coffee.',
+        toolLegs: [
+          {
+            text: 'Reading it now. ',
+            contentEnd: 'Reading it now. '.length,
+            calls: [readCall],
+            results: [{ toolCallId: 'toolu_1', content: page, pageDigest: 'digest-1' }],
+          },
+        ],
+      },
+      { ...message(3), content: 'Which point matters most?' },
+    ];
+
+    expect(selectModelHistorySelection(messages, 'message-3')).toEqual({
+      history: [
+        { role: 'user', content: 'Summarize this page' },
+        { role: 'assistant', content: 'Reading it now. ', toolCalls: [readCall] },
+        { role: 'tool', toolCallId: 'toolu_1', content: page },
+        { role: 'assistant', content: 'Espresso is concentrated coffee.' },
+      ],
+      pageDigests: new Set(['digest-1']),
+    });
+  });
+
+  it('keeps attached page text with the fence it was first sent in', () => {
+    const messages: SidePanelChatMessage[] = [
+      {
+        ...message(1),
+        pageContext: { text: 'Invoice 4821 total 1,019.26', fence: 'a'.repeat(32) },
+      },
+      message(2, 'assistant'),
+    ];
+    expect(selectModelHistory(messages)).toEqual([
+      {
+        role: 'user',
+        content: 'content-1',
+        pageContext: 'Invoice 4821 total 1,019.26',
+        pageContextFence: 'a'.repeat(32),
+      },
+      { role: 'assistant', content: 'content-2' },
+    ]);
+  });
+
+  it('leaves the oldest page reads out first once the context budget is spent', () => {
+    const third = Math.floor(MAX_RETAINED_TOOL_CONTEXT_CHARS / 3) + 1;
+    const turn = (index: number): SidePanelChatMessage[] => [
+      { ...message(index * 2), content: `Read page ${index}` },
+      {
+        ...message(index * 2 + 1, 'assistant'),
+        content: `Page ${index} read.`,
+        toolLegs: [
+          {
+            text: '',
+            contentEnd: 0,
+            calls: [
+              {
+                id: `call_${index}`,
+                type: 'function',
+                function: { name: CHAT_READ_PAGE_TOOL, arguments: '{}' },
+              },
+            ],
+            results: [
+              {
+                toolCallId: `call_${index}`,
+                content: String(index).repeat(third),
+                pageDigest: `digest-${index}`,
+              },
+            ],
+          },
+        ],
+      },
+    ];
+    const selection = selectModelHistorySelection([...turn(1), ...turn(2), ...turn(3)]);
+    const results = selection.history.filter((entry) => entry.role === 'tool');
+    expect(results.map((entry) => entry.content.length)).toEqual([
+      OMITTED_TOOL_CONTEXT.length,
+      third,
+      third,
+    ]);
+    expect(results[0]!.content).toBe(OMITTED_TOOL_CONTEXT);
+    expect(selection.pageDigests).toEqual(new Set(['digest-2', 'digest-3']));
+  });
+
   it('forces a DOM rebuild after trimming even when retained length is unchanged', () => {
     expect(
       shouldRebuildMessageDom({ forceRebuild: true, renderedCount: 50, messageCount: 50 }),
@@ -745,5 +846,63 @@ describe('thinking summary on an assistant turn', () => {
       thinkingDurationMs: 4_000,
     });
     expect(isThinkingLive(restored)).toBe(false);
+  });
+});
+
+describe('a model history that repeats between turns', () => {
+  it('sends the expanded slash command on the turn after it, not the short text shown for it', () => {
+    const slash = expandSlashCommand('/summarize');
+    expect(slash).not.toBeNull();
+    const shown: SidePanelChatMessage = {
+      id: 'u-1',
+      role: 'user',
+      content: slash!.display,
+      modelContent: slash!.prompt,
+      timestamp: 1,
+    };
+    const reply: SidePanelChatMessage = {
+      id: 'a-1',
+      role: 'assistant',
+      content: 'It is about espresso.',
+      timestamp: 2,
+    };
+    const next: SidePanelChatMessage = { id: 'u-2', role: 'user', content: 'More?', timestamp: 3 };
+
+    const turnOne = selectModelHistory([], 'u-1');
+    const turnTwo = selectModelHistory([shown, reply, next], 'u-2');
+
+    expect(turnOne).toEqual([]);
+    expect(turnTwo).toEqual([
+      { role: 'user', content: slash!.prompt },
+      { role: 'assistant', content: 'It is about espresso.' },
+    ]);
+    expect(shown.content).toBe('/summarize');
+    expect(hydrateStoredChatMessage({ ...shown }, 'h-1').modelContent).toBe(slash!.prompt);
+  });
+
+  it('keeps the oldest turns of the history for many turns before dropping a block of them', () => {
+    const conversation = (turns: number): SidePanelChatMessage[] =>
+      Array.from({ length: turns * 2 }, (_, index) =>
+        message(index, index % 2 === 0 ? 'user' : 'assistant'),
+      );
+    const starts = new Set<string>();
+    for (let turns = 51; turns <= 60; turns += 1) {
+      starts.add(JSON.stringify(selectModelHistory(conversation(turns))[0]));
+    }
+    expect([...starts]).toEqual([JSON.stringify({ role: 'user', content: 'content-20' })]);
+    expect(selectModelHistory(conversation(60))).toHaveLength(100);
+    expect(selectModelHistory(conversation(61))[0]).toEqual({
+      role: 'user',
+      content: 'content-40',
+    });
+  });
+
+  it('trims the live conversation in blocks so its start holds still between trims', () => {
+    const messages = Array.from({ length: 51 }, (_, index) => message(index));
+
+    expect(trimChatMessages(messages, 50, 20)).toBe(20);
+    expect(messages).toHaveLength(31);
+    expect(messages[0]?.id).toBe('message-20');
+    expect(trimChatMessages(messages, 50, 20)).toBe(0);
   });
 });

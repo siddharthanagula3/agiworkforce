@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   CHAT_BROWSER_TASK_TOOL,
   CHAT_READ_PAGE_TOOL,
-  chatBrowserToolDefinitions,
+  CHAT_BROWSER_TOOL_DEFINITIONS,
   parseChatBrowserToolCall,
 } from '../src/features/computer-use/chatBrowserTools';
 import {
@@ -29,20 +29,13 @@ function call(args: unknown) {
   };
 }
 
-describe('history search is offered only when it is on', () => {
-  it('adds the history tool to whichever page tools apply, and offers it on pages it cannot read', () => {
-    const names = (tools: readonly { function: { name: string } }[]) =>
-      tools.map((tool) => tool.function.name);
-    expect(names(chatBrowserToolDefinitions('act'))).toEqual([
+describe('history search is declared with the other chat browser tools', () => {
+  it('stays in the declared tools whether or not the permission is granted, so the tool list never changes mid-conversation', () => {
+    expect(CHAT_BROWSER_TOOL_DEFINITIONS.map((tool) => tool.function.name)).toEqual([
       CHAT_READ_PAGE_TOOL,
       CHAT_BROWSER_TASK_TOOL,
-    ]);
-    expect(names(chatBrowserToolDefinitions('read', true))).toEqual([
-      CHAT_READ_PAGE_TOOL,
       CHAT_SEARCH_HISTORY_TOOL,
     ]);
-    expect(names(chatBrowserToolDefinitions(undefined, true))).toEqual([CHAT_SEARCH_HISTORY_TOOL]);
-    expect(chatBrowserToolDefinitions(undefined)).toEqual([]);
   });
 });
 
