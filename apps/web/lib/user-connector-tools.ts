@@ -367,14 +367,19 @@ export async function getUserGithubInstallations(
     .filter((r) => Number.isFinite(r.installationId));
 }
 
-function resolveInstallationForOwner(
-  installations: { installationId: number; login: string }[],
+// An installation token reaches every repository the installation covers, which
+// is wider than what the linking account can see, so the repository must be in
+// the set that account proved it can reach (github-app.ts).
+function resolveVerifiedInstallation(
+  installations: { installationId: number; verifiedRepositories: string[] | null }[],
   owner: string,
+  repo: string,
 ): number | null {
-  const match = installations.find((i) => i.login.toLowerCase() === owner.toLowerCase());
-  if (match) return match.installationId;
-  if (installations.length === 1) return installations[0]!.installationId;
-  return null;
+  const fullName = `${owner}/${repo}`.toLowerCase();
+  return (
+    installations.find((installation) => installation.verifiedRepositories?.includes(fullName))
+      ?.installationId ?? null
+  );
 }
 
 function asString(value: unknown): string | null {
@@ -452,11 +457,11 @@ async function executeGithubTool(
     return { handled: true, content: 'owner and repo are required.', isError: true };
   }
 
-  const installationId = resolveInstallationForOwner(installations, owner);
+  const installationId = resolveVerifiedInstallation(installations, owner, repo);
   if (installationId === null) {
     return {
       handled: true,
-      content: `No GitHub installation matches owner "${owner}". Specify a repo your GitHub App installation can access.`,
+      content: `No connected GitHub installation proved access to ${owner}/${repo}. Reconnect GitHub with an account that can reach that repository.`,
       isError: true,
     };
   }
