@@ -8,9 +8,10 @@ import type {
   ManagedCloudAgentRunReference,
 } from '@agiworkforce/cloud-contracts';
 import type { AgentEventSource, InteractiveCard } from '@agiworkforce/types';
-import type { AgentEventEnvelope } from '@agiworkforce/types/protocol';
+import type { AgentEventEnvelope, AgentEventStopReason } from '@agiworkforce/types/protocol';
 import { normalizeSourceUrlKey } from '@agiworkforce/utils/source-url';
 import type { ManagedCodeExecution, ManagedQuotaRecovery } from '../cloud-bridge/freeTrialClient';
+import { browserActivityEnvelope } from '../computer-use/browserTurnActivity';
 import { t, tPlural } from '../../i18n';
 
 export interface SidePanelMessageAttachment {
@@ -193,6 +194,32 @@ export function applyBrowserActivityEvent(
   message.browserEvents = [...(message.browserEvents ?? []), envelope].slice(
     -MAX_PERSISTED_ACTIVITY_EVENTS,
   );
+}
+
+export function settleBrowserActivity(
+  message: SidePanelChatMessage,
+  reason: Extract<AgentEventStopReason, 'end-turn' | 'error' | 'cancelled'>,
+  emittedAtMs = Date.now(),
+): boolean {
+  const status = message.browserActivity?.status;
+  if (
+    !status ||
+    status === 'completed' ||
+    status === 'failed' ||
+    status === 'cancelled' ||
+    status === 'partial'
+  )
+    return false;
+  applyBrowserActivityEvent(
+    message,
+    browserActivityEnvelope(
+      message.browserActivity,
+      message.id,
+      { type: 'stop', reason },
+      emittedAtMs,
+    ),
+  );
+  return true;
 }
 
 export function reconcileManagedRunActivity(

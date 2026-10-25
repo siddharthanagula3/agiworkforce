@@ -216,6 +216,7 @@ import {
   hydrateStoredChatMessage,
   reconcileManagedRunActivity,
   requestsCurrentPageContext,
+  settleBrowserActivity,
   pageContextStillDescribes,
   resolveComposerPrompt,
   selectModelHistory,
@@ -5073,6 +5074,7 @@ function injectStyles(): void {
     .sp-title-text {
       flex: 0 1 auto;
       min-width: 0;
+      max-width: calc(100% - var(--control-sm) - 4px);
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -6266,6 +6268,7 @@ async function requestStreamCancellation(streamId: string): Promise<void> {
           cloudRunsByStreamId.set(streamId, { ...response.cloudRun });
         }
         reconcileManagedRunActivity(assistant);
+        settleChatToolActivity(assistant, 'cancelled');
         delete assistant.streamCancellation;
         delete assistant.errorText;
         delete assistant.error;
@@ -6484,6 +6487,14 @@ function recordBrowserActivity(messageId: string, events: readonly AgentEvent[])
   _ctx.needsMessageRebuild = true;
   saveMessages();
   renderMessages();
+}
+
+function settleChatToolActivity(
+  message: ChatMessage,
+  reason: Parameters<typeof settleBrowserActivity>[1],
+): void {
+  if (composerBrowserRun?.messageId === message.id) return;
+  settleBrowserActivity(message, reason);
 }
 
 function browserTurnControlsFor(messageId: string): BrowserTurnControls {
@@ -8259,6 +8270,7 @@ function handleStreamError(
   }
   const failedTurn = _ctx.messages.find((message) => message.id === id);
   if (failedTurn) {
+    if (!canRetryPause) settleChatToolActivity(failedTurn, 'error');
     if (streamUsedQuick) failedTurn.managedQuickMode = true;
     if (failedRoute) applyResolvedRoute(failedTurn, failedRoute);
     // A failed row pushed with no runtime would flip the whole conversation to
@@ -13812,6 +13824,7 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
         existing.error = true;
         existing.errorText = t('spEmptyResponse');
       }
+      settleChatToolActivity(existing, existing.error ? 'error' : 'end-turn');
     }
     streamStartedAtById.delete(chunk.id);
     assistantCloudIdByStreamId.delete(chunk.id);

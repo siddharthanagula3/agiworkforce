@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
+  applyBrowserActivityEvent,
   applyCanonicalAgentEvent,
   applyStreamFailure,
   hydrateStoredChatMessage,
@@ -10,6 +11,7 @@ import {
   requestsCurrentPageContext,
   resolveComposerPrompt,
   selectModelHistory,
+  settleBrowserActivity,
   shouldRebuildMessageDom,
   shouldRenderTextBubble,
   trimChatMessages,
@@ -56,6 +58,82 @@ describe('in-chat browser activity', () => {
     );
     expect(interrupted.browserActivity?.status).toBe('cancelled');
     expect(interrupted.agentActivity).toBeUndefined();
+  });
+
+  it('settles a page read when the answer ends, and keeps it settled after a reload', () => {
+    const turn: SidePanelChatMessage = {
+      id: 'm2',
+      role: 'assistant',
+      content: '',
+      timestamp: 1_000,
+    };
+    const envelope = (
+      sequence: number,
+      event: Parameters<typeof applyBrowserActivityEvent>[1]['event'],
+    ) => ({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'browser:m2',
+      turnId: 'browser:m2',
+      sequence,
+      emittedAtMs: 1_000 + sequence,
+      event,
+    });
+    applyBrowserActivityEvent(
+      turn,
+      envelope(0, {
+        type: 'tool-execution-start',
+        toolCallId: 'read-1',
+        name: 'browser_read_page',
+        category: 'computer-use',
+        summary: 'Reading example.com',
+        input: null,
+      }),
+    );
+    applyBrowserActivityEvent(
+      turn,
+      envelope(1, {
+        type: 'tool-execution-end',
+        toolCallId: 'read-1',
+        name: 'browser_read_page',
+        output: 'Done',
+        isError: false,
+      }),
+    );
+    expect(turn.browserActivity?.status).toBe('running');
+
+    expect(settleBrowserActivity(turn, 'end-turn', 4_000)).toBe(true);
+    expect(turn.browserActivity?.status).toBe('completed');
+    expect(turn.browserActivity?.completedAtMs).toBe(4_000);
+    expect(settleBrowserActivity(turn, 'error', 5_000)).toBe(false);
+
+    const restored = hydrateStoredChatMessage(
+      { role: 'assistant', content: 'Done.', timestamp: 1_000, browserEvents: turn.browserEvents },
+      'm2',
+    );
+    expect(restored.browserActivity?.status).toBe('completed');
+  });
+
+  it('settles an unfinished page read as failed or cancelled with its turn', () => {
+    const failed: SidePanelChatMessage = { id: 'm3', role: 'assistant', content: '', timestamp: 1 };
+    expect(settleBrowserActivity(failed, 'error')).toBe(false);
+    applyBrowserActivityEvent(failed, {
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'browser:m3',
+      turnId: 'browser:m3',
+      sequence: 0,
+      emittedAtMs: 2,
+      event: {
+        type: 'progress-update',
+        progressId: 'site-access:1',
+        summary: 'Waiting for access to example.com',
+        status: 'running',
+      },
+    });
+    const cancelled = structuredClone(failed);
+    settleBrowserActivity(failed, 'error', 10);
+    settleBrowserActivity(cancelled, 'cancelled', 10);
+    expect(failed.browserActivity?.status).toBe('failed');
+    expect(cancelled.browserActivity?.status).toBe('cancelled');
   });
 });
 
