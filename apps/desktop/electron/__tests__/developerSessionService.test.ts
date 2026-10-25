@@ -238,6 +238,7 @@ async function loadService(
   answersUserInput?: () => boolean,
   preferredBinary = 'agi',
   consentAtMs?: number,
+  worktreesRoot?: () => string,
 ) {
   vi.resetModules();
   const children: FakeChild[] = [];
@@ -266,6 +267,7 @@ async function loadService(
     onTerminalEvent: (event) => terminalEvents.push(event),
     ...(accountBridge ? { accountBridge } : {}),
     ...(answersUserInput ? { answersUserInput } : {}),
+    ...(worktreesRoot ? { worktreesRoot } : {}),
   });
 
   return { service, children, events, spawn, terminalEvents };
@@ -370,6 +372,89 @@ describe('developer session runtime', () => {
     ]);
     expect(service.worktreesRootArgs('')).toEqual([]);
     expect(service.worktreesRootArgs('relative/worktrees')).toEqual([]);
+  });
+
+  describe('a changed worktree location', () => {
+    let descriptor: PropertyDescriptor | undefined;
+    let location = '/Volumes/first/worktrees';
+
+    beforeEach(() => {
+      descriptor = Object.getOwnPropertyDescriptor(process, 'resourcesPath');
+      Object.defineProperty(process, 'resourcesPath', {
+        configurable: true,
+        value: '/owned/e10/resources',
+      });
+      packagedHost = true;
+      location = '/Volumes/first/worktrees';
+      statSync.mockImplementation(() => ({ isDirectory: () => true, isFile: () => true }));
+    });
+
+    afterEach(() => {
+      packagedHost = false;
+      if (descriptor) Object.defineProperty(process, 'resourcesPath', descriptor);
+      else Reflect.deleteProperty(process, 'resourcesPath');
+    });
+
+    const bundledService = () =>
+      loadService(defaultResponder, undefined, undefined, '', 1_700_000_000_123, () => location);
+
+    const appServerRoots = (spawn: ReturnType<typeof vi.fn>) =>
+      spawn.mock.calls
+        .map((call) => call[1] as readonly string[])
+        .filter((args) => args[0] === 'app-server')
+        .map((args) => args[args.indexOf('--worktrees-root') + 1]);
+
+    it('restarts an idle app-server so new worktrees go to the new folder', async () => {
+      const { service, spawn, children, events } = await bundledService();
+      await service.listDeveloperSessions();
+      const first = children.find((child) => child.written.length > 0)!;
+
+      location = '/Volumes/second/worktrees';
+      service.applyWorktreesRootChange();
+
+      expect(first.ended).toBe(true);
+      expect(events.some(({ event }) => event.type === 'runtime-stopped')).toBe(false);
+      await service.listDeveloperSessions();
+      expect(appServerRoots(spawn)).toEqual([
+        '/Volumes/first/worktrees',
+        '/Volumes/second/worktrees',
+      ]);
+    });
+
+    it('waits for a running or approval-waiting session to settle before restarting', async () => {
+      const { service, spawn, children, events } = await bundledService();
+      await service.listDeveloperSessions();
+      const first = children.find((child) => child.written.length > 0)!;
+      first.notify('turn/started', { threadId: thread.id, turnId: 'turn-1' });
+      first.notify('approval/requested', {
+        threadId: thread.id,
+        turnId: 'turn-1',
+        requestId: 'approval-1',
+        kind: 'Exec { command: "pnpm test" }',
+        summary: 'Run pnpm test',
+        detail: 'pnpm test',
+      });
+      expect(events.map(({ event }) => event.type)).toContain('approval-requested');
+
+      location = '/Volumes/second/worktrees';
+      service.applyWorktreesRootChange();
+      await service.listDeveloperSessions();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(first.ended).toBe(false);
+      expect(appServerRoots(spawn)).toEqual(['/Volumes/first/worktrees']);
+
+      first.notify('turn/completed', { threadId: thread.id, turnId: 'turn-1', response: 'done' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+
+      expect(first.ended).toBe(true);
+      expect(events.some(({ event }) => event.type === 'runtime-stopped')).toBe(false);
+      await service.listDeveloperSessions();
+      expect(appServerRoots(spawn)).toEqual([
+        '/Volumes/first/worktrees',
+        '/Volumes/second/worktrees',
+      ]);
+    });
   });
 
   it('points the app-server at the origin the shell itself is signed in to', async () => {

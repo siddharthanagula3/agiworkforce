@@ -64,6 +64,34 @@ pub(super) fn worktrees_root(
     }
 }
 
+/// The file in the CLI config root listing every worktrees folder a host here
+/// has made worktrees under, so moving the folder never hides earlier ones.
+const WORKTREE_ROOTS_FILE: &str = "worktree-roots.json";
+
+/// Record `current` and the default root in `record`, and return every other
+/// root it holds: the folders whose worktrees this host still serves.
+pub(super) fn record_worktrees_roots(
+    record: &Path,
+    current: &Path,
+    default: &Path,
+) -> anyhow::Result<Vec<PathBuf>> {
+    let recorded = agiworkforce_worktree::managed::record_roots(record, &[default, current])?;
+    Ok(recorded
+        .into_iter()
+        .filter(|root| root != current)
+        .collect())
+}
+
+/// [`record_worktrees_roots`] against the CLI config root's record.
+pub(super) fn recorded_earlier_worktrees_roots(current: &Path) -> anyhow::Result<Vec<PathBuf>> {
+    let config_dir = crate::config::CliConfig::config_dir()?;
+    record_worktrees_roots(
+        &config_dir.join(WORKTREE_ROOTS_FILE),
+        current,
+        &config_dir.join("worktrees"),
+    )
+}
+
 /// A folder named for managed worktrees, made when missing and checked before
 /// the host serves a request: a worktree that cannot be made later would fail
 /// the session that asked for it.
@@ -111,6 +139,7 @@ pub(super) fn prepare_worktrees_root(root: &Path) -> Result<PathBuf, DeveloperSe
 /// repository resolved for it first, like checkpoints.
 pub(super) async fn manager(
     root: &Path,
+    earlier_roots: &[PathBuf],
     workspace: &Path,
 ) -> Result<WorktreeManager<'static>, DeveloperSessionHostError> {
     let pinned = pinned_workspace(workspace).await?.ok_or_else(|| {
@@ -120,7 +149,8 @@ pub(super) async fn manager(
         ))
     })?;
     let pinned = pinned.with_config_trusted(config_trusted(workspace));
-    Ok(WorktreeManager::open(&BookkeepingRunner, root, &pinned))
+    Ok(WorktreeManager::open(&BookkeepingRunner, root, &pinned)
+        .with_earlier_roots(earlier_roots.iter().cloned()))
 }
 
 pub(super) fn start_point(start: WorktreeStartPoint) -> StartPoint {

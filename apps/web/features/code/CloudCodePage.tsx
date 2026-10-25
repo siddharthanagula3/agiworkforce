@@ -88,8 +88,10 @@ import {
   localSessionDeletedLine,
   localWorktreeRemovedLine,
   preferredLocalRootId,
+  resolveLocalSessionLink,
   startingModelId,
   type LocalPlacement,
+  type LocalSessionLink,
 } from './local-code';
 import { useLocalSessions } from './hooks/use-local-sessions';
 import { forgetLocalSession } from './local-session-memory';
@@ -169,6 +171,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const [detailLoading, setDetailLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [routeNotice, setRouteNotice] = useState<string | null>(null);
+  const [pendingLocalLink, setPendingLocalLink] = useState<Extract<
+    LocalSessionLink,
+    { kind: 'withheld' | 'unlisted' }
+  > | null>(null);
   const [draft, setDraft] = useState<CodeDraft>(EMPTY_CODE_DRAFT);
   const [task, setTask] = useState('');
   const [turnSteps, setTurnSteps] = useState<CloudCodeTurnStepBound>(CLOUD_CODE_DEFAULT_TURN_STEPS);
@@ -217,6 +223,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     typeof window === 'undefined' || pane ? null : localSessionFromSearch(window.location.search),
   );
   const titleInputRef = useRef<HTMLInputElement>(null);
+  const titleEditedRef = useRef(false);
 
   const router = useRouter();
   const routerRef = useRef(router);
@@ -467,7 +474,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
 
   useEffect(() => {
     if (!renaming) return;
-    const frame = window.requestAnimationFrame(() => titleInputRef.current?.select());
+    titleEditedRef.current = false;
+    const frame = window.requestAnimationFrame(() => {
+      if (!titleEditedRef.current) titleInputRef.current?.select();
+    });
     return () => window.cancelAnimationFrame(frame);
   }, [renaming]);
 
@@ -629,19 +639,30 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   useEffect(() => {
     const wanted = routeLocalRef.current;
     if (wanted === null || !local.settled || local.loading) return;
+    const link = resolveLocalSessionLink(local.groups, wanted);
+    if (link.kind === 'withheld' || link.kind === 'unlisted') {
+      setPendingLocalLink(link);
+      return;
+    }
     routeLocalRef.current = null;
-    const found = local.groups
-      .find((group) => group.rootId === wanted.rootId)
-      ?.sessions.find((session) => session.id === wanted.threadId);
-    if (found) {
-      setLocalSession(found);
+    setPendingLocalLink(null);
+    if (link.kind === 'found') {
+      setLocalSession(link.session);
       return;
     }
     setRouteNotice(LOCAL_CODE_COPY.sessionNotFound);
     routerRef.current.replace(CODE_ROUTES.root);
   }, [local.settled, local.loading, local.groups]);
 
+  const dropPendingLocalLink = useCallback(() => {
+    routeLocalRef.current = null;
+    setPendingLocalLink(null);
+    routerRef.current.replace(CODE_ROUTES.root);
+  }, []);
+
   const openLocalSession = useCallback((session: LocalDeveloperSession) => {
+    routeLocalRef.current = null;
+    setPendingLocalLink(null);
     setLocalSession(session);
     setRouteNotice(null);
     if (!paneRef.current) routerRef.current.replace(localSessionPath(session.rootId, session.id));
@@ -1227,6 +1248,42 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
           </span>
         </div>
       )}
+      {pendingLocalLink && (
+        <div className={styles['notice']} role="status" data-testid="local-session-link-pending">
+          <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+          <span>
+            {pendingLocalLink.kind === 'withheld'
+              ? LOCAL_CODE_COPY.linkedSessionWithheld(pendingLocalLink.folder.name)
+              : pendingLocalLink.message}
+            {pendingLocalLink.kind === 'withheld' &&
+              local.allowRefusals[pendingLocalLink.folder.rootId] !== undefined && (
+                <span role="alert"> {local.allowRefusals[pendingLocalLink.folder.rootId]}</span>
+              )}
+          </span>
+          <span className={styles['noticeActions']}>
+            {pendingLocalLink.kind === 'withheld' && (
+              <button
+                type="button"
+                className={styles['secondaryButton']}
+                disabled={local.allowing !== null}
+                onClick={() => void local.allowSessions(pendingLocalLink.folder.rootId)}
+              >
+                {local.allowing === pendingLocalLink.folder.rootId
+                  ? LOCAL_CODE_COPY.allowingSessions
+                  : LOCAL_CODE_COPY.allowSessions}
+              </button>
+            )}
+            <button
+              type="button"
+              className={styles['secondaryButton']}
+              onClick={dropPendingLocalLink}
+            >
+              <X size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
+              {CODE_COPY.dismiss}
+            </button>
+          </span>
+        </div>
+      )}
       {routeNotice && (
         <div className={styles['notice']} role="status">
           <TriangleAlert size={NOTICE_GLYPH_SIZE} aria-hidden="true" />
@@ -1416,7 +1473,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                           value={titleDraft}
                           aria-label={CODE_COPY.renameLabel}
                           maxLength={CODE_LIMITS.title}
-                          onChange={(event) => setTitleDraft(event.target.value)}
+                          onChange={(event) => {
+                            titleEditedRef.current = true;
+                            setTitleDraft(event.target.value);
+                          }}
                           onBlur={() => void handleRename()}
                           onKeyDown={(event) => {
                             if (isImeComposingKey(event.nativeEvent)) return;

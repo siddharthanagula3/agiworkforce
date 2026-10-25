@@ -82,6 +82,7 @@ import {
 import { activeShellRunCount, cancelAllShellRuns } from './runtime/shellService';
 import {
   answerDeveloperApproval,
+  applyWorktreesRootChange,
   configureDeveloperSessions,
   interruptDeveloperTurn,
   killAllDeveloperRuntimes,
@@ -1992,6 +1993,7 @@ async function writeHostPreferences(
       const chosen = await chooseWorktreeLocation(window, before.worktreeLocation);
       if (chosen !== null) saveSettings({ worktreeLocation: chosen });
     }
+    if (getPreferences().worktreeLocation !== before.worktreeLocation) applyWorktreesRootChange();
   }
 
   if (isAutoArchiveIdleDays(patch.autoArchiveIdleDays)) {

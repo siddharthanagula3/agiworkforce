@@ -565,6 +565,9 @@ pub struct CliDeveloperSessionHost {
     /// Where `worktree/managed/create` makes worktrees; `None` is the CLI
     /// config root.
     worktrees_root: Option<PathBuf>,
+    /// Folders this host made worktrees under before `worktrees_root` moved;
+    /// their worktrees are still listed and served, but none are made there.
+    earlier_worktrees_roots: Vec<PathBuf>,
     /// The checkout this host serves when it was started inside a worktree it
     /// or another host made, which then belongs to one session only.
     worktree_checkout: Option<PathBuf>,
@@ -688,6 +691,7 @@ impl CliDeveloperSessionHost {
             client_turns: Arc::new(StdMutex::new(HashMap::new())),
             taken_handoffs: Arc::new(Mutex::new(Vec::new())),
             worktrees_root: None,
+            earlier_worktrees_roots: Vec::new(),
             worktree_checkout,
             setup_runs: Arc::new(Mutex::new(HashMap::new())),
             thread_files: Arc::new(StdMutex::new(HashMap::new())),
@@ -762,8 +766,43 @@ impl CliDeveloperSessionHost {
         Ok(self.with_worktrees_root(review::prepare_worktrees_root(root)?))
     }
 
+    /// Also serve the worktrees made under `roots` before the root moved.
+    pub fn with_earlier_worktrees_roots(mut self, roots: Vec<PathBuf>) -> Self {
+        self.earlier_worktrees_roots = roots;
+        self
+    }
+
+    /// Record this host's worktree root in the CLI config root, and serve the
+    /// worktrees of every root recorded there before. A record that cannot be
+    /// read or written leaves only the current root served.
+    pub fn with_recorded_worktrees_roots(self) -> Self {
+        let earlier = self
+            .worktrees_root()
+            .map_err(|error| anyhow::anyhow!(error.message().to_string()))
+            .and_then(|root| review::recorded_earlier_worktrees_roots(&root));
+        match earlier {
+            Ok(roots) => self.with_earlier_worktrees_roots(roots),
+            Err(error) => {
+                tracing::warn!(%error, "earlier worktree folders are not served");
+                self
+            }
+        }
+    }
+
     fn worktrees_root(&self) -> Result<PathBuf, DeveloperSessionHostError> {
         review::worktrees_root(self.worktrees_root.as_deref())
+    }
+
+    async fn worktree_manager(
+        &self,
+    ) -> Result<agiworkforce_worktree::managed::WorktreeManager<'static>, DeveloperSessionHostError>
+    {
+        review::manager(
+            &self.worktrees_root()?,
+            &self.earlier_worktrees_roots,
+            &self.workspace_root,
+        )
+        .await
     }
 
     /// The session this host's worktree belongs to, when it serves one.
@@ -853,10 +892,7 @@ impl CliDeveloperSessionHost {
             }
             return released;
         }
-        let Ok(root) = self.worktrees_root() else {
-            return released;
-        };
-        let Ok(manager) = review::manager(&root, &self.workspace_root).await else {
+        let Ok(manager) = self.worktree_manager().await else {
             return released;
         };
         match manager.release_thread(thread_id).await {
@@ -5318,7 +5354,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "This session already runs in a worktree. Make new worktrees from the original folder.",
             ));
         }
-        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let manager = self.worktree_manager().await?;
         let created = manager
             .create(review::start_point(params.start), params.label)
             .await
@@ -5349,7 +5385,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         &self,
     ) -> Result<ManagedWorktreeListResponse, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let manager = self.worktree_manager().await?;
         let mut worktrees = Vec::new();
         for worktree in manager.list().await.map_err(internal_error)? {
             worktrees.push(self.worktree_with_thread(&worktree).await);
@@ -5369,7 +5405,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: WorktreeIdParams,
     ) -> Result<WorktreeArchive, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let manager = self.worktree_manager().await?;
         manager
             .archive(&params.worktree_id)
             .await
@@ -5382,7 +5418,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         params: WorktreePinParams,
     ) -> Result<ManagedWorktreeSummary, DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
-        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let manager = self.worktree_manager().await?;
         let worktree = manager
             .set_pinned(&params.worktree_id, params.pinned)
             .await
@@ -5422,7 +5458,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         } else {
             Some(self.lock_workspace_files("").await?)
         };
-        let manager = review::manager(&self.worktrees_root()?, &self.workspace_root).await?;
+        let manager = self.worktree_manager().await?;
         let outcome = manager
             .apply_to_local(&params.worktree_id, params.preview)
             .await
@@ -5441,7 +5477,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
     ) -> Result<(), DeveloperSessionHostError> {
         let _admission = self.admit_request().await?;
         let root = self.worktrees_root()?;
-        let manager = review::manager(&root, &self.workspace_root).await?;
+        let earlier_roots = self.earlier_worktrees_roots.clone();
+        let manager = self.worktree_manager().await?;
         let worktree = manager
             .get(&params.worktree_id)
             .await
@@ -5469,7 +5506,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             let exit_code =
                 review::run_setup_script(run, &worktree_id, thread_id.as_deref(), &notifications)
                     .await;
-            if let Ok(manager) = review::manager(&root, &workspace).await {
+            if let Ok(manager) = review::manager(&root, &earlier_roots, &workspace).await {
                 if let Err(error) = manager.record_setup_result(&worktree_id, exit_code) {
                     tracing::warn!(worktree_id = %worktree_id, %error, "setup result not recorded");
                 }
@@ -12597,6 +12634,67 @@ mod tests {
             named.display()
         );
         assert!(checkout.join("README.md").is_file());
+    }
+
+    #[tokio::test]
+    async fn worktrees_made_before_the_root_moved_stay_listed_and_can_be_deleted() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        git_repo(workspace.path());
+        let store = tempdir().expect("store");
+        let config = tempdir().expect("config");
+        let record = config.path().join("worktree-roots.json");
+        let default_root = config.path().join("worktrees");
+        let moved_root = tempdir().expect("moved");
+        let start = || ManagedWorktreeCreateParams {
+            start: agiworkforce_protocol::developer_session::WorktreeStartPoint::Ref {
+                name: "HEAD".to_string(),
+            },
+            label: None,
+        };
+
+        let earlier = review::record_worktrees_roots(&record, &default_root, &default_root)
+            .expect("record the default root");
+        let before = boundary_host(workspace.path(), store.path())
+            .with_worktrees_root(default_root.clone())
+            .with_earlier_worktrees_roots(earlier);
+        let old = before
+            .create_managed_worktree(start())
+            .await
+            .expect("create");
+
+        let earlier = review::record_worktrees_roots(&record, moved_root.path(), &default_root)
+            .expect("record the moved root");
+        assert_eq!(earlier, vec![default_root.clone()]);
+        let after = boundary_host(workspace.path(), store.path())
+            .with_worktrees_root(moved_root.path().to_path_buf())
+            .with_earlier_worktrees_roots(earlier);
+        let new = after
+            .create_managed_worktree(start())
+            .await
+            .expect("create");
+        assert!(PathBuf::from(&new.worktree.path).starts_with(moved_root.path()));
+
+        let listed: Vec<_> = after
+            .list_managed_worktrees()
+            .await
+            .expect("list")
+            .worktrees
+            .into_iter()
+            .map(|worktree| worktree.id)
+            .collect();
+        assert_eq!(
+            listed,
+            vec![new.worktree.id.clone(), old.worktree.id.clone()]
+        );
+
+        after
+            .delete_worktree(WorktreeIdParams {
+                worktree_id: old.worktree.id.clone(),
+            })
+            .await
+            .expect("an earlier root's worktree is deleted by id");
+        assert!(!PathBuf::from(&old.worktree.path).exists());
     }
 
     #[test]

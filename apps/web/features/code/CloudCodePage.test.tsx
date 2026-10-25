@@ -9,6 +9,7 @@ import {
 import {
   DEVELOPER_RUNTIME_CAPABILITIES,
   DesktopRuntimeError,
+  worktreeRootId,
   type DeveloperSessionGroup,
   type LocalDeveloperSession,
 } from '@agiworkforce/local-runtime-contract';
@@ -1925,6 +1926,32 @@ describe('CloudCodePage', () => {
     );
   });
 
+  it('keeps what was typed when the rename field selects its title late', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [session], runtimes: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await openSession(user, session.title);
+    await user.click(await screen.findByRole('button', { name: 'Session actions' }));
+    const frames: FrameRequestCallback[] = [];
+    const frameSpy = vi
+      .spyOn(window, 'requestAnimationFrame')
+      .mockImplementation((callback) => frames.push(callback));
+    await user.click(await screen.findByRole('menuitem', { name: 'Rename' }));
+
+    const field = await screen.findByRole('textbox', { name: 'Session title' });
+    await user.clear(field);
+    await user.type(field, 'A');
+    act(() => frames.splice(0).forEach((callback) => callback(0)));
+    frameSpy.mockRestore();
+
+    expect(field).toHaveValue('A');
+    expect(field).toHaveProperty('selectionStart', 1);
+    expect(field).toHaveProperty('selectionEnd', 1);
+  });
+
   it('leaves Enter and Escape to an input method while the session title composes', async () => {
     const user = userEvent.setup();
     const rename: CloudCodeApi['rename'] = vi.fn(async (_sessionId, title) => ({
@@ -3030,6 +3057,62 @@ describe('the environment the composer starts a session in', () => {
         await screen.findByText('That coding session is not on this device any more.'),
       ).toBeInTheDocument();
       expect(replace).toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('keeps a link to a session in a withheld folder until the folder is allowed, then opens it', async () => {
+    const user = userEvent.setup();
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [], sessionsWithheld: true })];
+    allowDeveloperSessions.mockImplementationOnce(async () => {
+      localGroups = [folder({ rootId: 'root-recent', sessions: [localSession] })];
+      return true;
+    });
+    window.history.replaceState({}, '', '/code?local=root-recent&thread=thread-1');
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      const pending = await screen.findByTestId('local-session-link-pending');
+      expect(pending).toHaveTextContent(
+        'That session is in qa-project. Allow running commands there to open it.',
+      );
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+
+      await user.click(within(pending).getByRole('button', { name: 'Allow running commands' }));
+
+      expect(allowDeveloperSessions).toHaveBeenCalledWith('root-recent');
+      expect(
+        await screen.findByRole('heading', { level: 1, name: 'Quote the readme' }),
+      ).toBeInTheDocument();
+      expect(screen.queryByTestId('local-session-link-pending')).toBeNull();
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
+    } finally {
+      window.history.replaceState({}, '', '/');
+    }
+  });
+
+  it('keeps a link to a worktree session while its folder is withheld', async () => {
+    replace.mockClear();
+    host = {};
+    localGroups = [folder({ rootId: 'root-recent', sessions: [], sessionsWithheld: true })];
+    window.history.replaceState(
+      {},
+      '',
+      `/code?local=${encodeURIComponent(worktreeRootId('root-recent', 'abcd1234'))}&thread=thread-1`,
+    );
+    try {
+      render(<CloudCodePage api={createApi()} />);
+
+      expect(await screen.findByTestId('local-session-link-pending')).toHaveTextContent(
+        'That session is in qa-project.',
+      );
+      expect(screen.queryByText('That coding session is not on this device any more.')).toBeNull();
+      expect(replace).not.toHaveBeenCalledWith('/code');
     } finally {
       window.history.replaceState({}, '', '/');
     }

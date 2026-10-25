@@ -206,6 +206,13 @@ interface RunningServer {
   exited: boolean;
   /** What this process said at initialize that it serves, and nothing a later one said. */
   advertised: AdvertisedCapabilities | null;
+  /** The worktree location it was started with; null when it was given none to honor. */
+  worktreesRoot: string | null;
+  /** Turns it is running, waiting on an approval or an answer included. */
+  activeTurns: Set<string>;
+  terminals: Set<string>;
+  /** Setup scripts it is running or was just asked to run, by worktree. */
+  setups: Map<string, number>;
 }
 
 const servers = new Map<string, RunningServer>();
@@ -633,7 +640,7 @@ function killProcess(server: RunningServer): void {
  * only the registry entry left the CLI running, and each retry started
  * another beside it.
  */
-function closeServer(server: RunningServer, error: Error): void {
+function closeServer(server: RunningServer, error: Error, announce = true): void {
   if (server.closed) return;
   server.closed = true;
   server.stopReason = error.message;
@@ -644,7 +651,57 @@ function closeServer(server: RunningServer, error: Error): void {
   }
   server.pending.clear();
   if (servers.get(server.root.id) === server) servers.delete(server.root.id);
-  emit(server.root.id, { type: 'runtime-stopped', message: error.message });
+  if (announce) emit(server.root.id, { type: 'runtime-stopped', message: error.message });
+}
+
+/**
+ * Whether the server is doing anything a restart would cut short: a turn, an
+ * approval or question it waits on, a terminal, a setup script, or a request
+ * still unanswered.
+ */
+function serverBusy(server: RunningServer): boolean {
+  return (
+    server.activeTurns.size > 0 ||
+    server.terminals.size > 0 ||
+    server.setups.size > 0 ||
+    server.pending.size > 0
+  );
+}
+
+/**
+ * Ends a server started with a worktree location the user has since changed,
+ * once nothing on it would be interrupted. The next request starts its
+ * replacement with the new location. Nothing was running, so no session hears
+ * that its runtime stopped.
+ */
+function restartIfStale(server: RunningServer): void {
+  if (server.closed || server.worktreesRoot === null) return;
+  if (server.worktreesRoot === worktreesRoot() || serverBusy(server)) return;
+  closeServer(server, new Error('The AGI CLI restarted to use the new worktree location.'), false);
+}
+
+function countSetup(server: RunningServer, worktreeId: string, change: 1 | -1): void {
+  const count = (server.setups.get(worktreeId) ?? 0) + change;
+  if (count > 0) server.setups.set(worktreeId, count);
+  else server.setups.delete(worktreeId);
+}
+
+/**
+ * Applies a change that may leave the server idle, then looks again once the
+ * caller has had its turn to send a follow-up request on the same server.
+ */
+function settle(server: RunningServer, change: () => unknown): void {
+  change();
+  if (server.worktreesRoot === null || server.worktreesRoot === worktreesRoot()) return;
+  setTimeout(() => restartIfStale(server), 0);
+}
+
+/**
+ * The saved worktree location changed: every CLI started with the old one is
+ * restarted, now when idle, otherwise as soon as its last session settles.
+ */
+export function applyWorktreesRootChange(): void {
+  for (const server of [...servers.values()]) restartIfStale(server);
 }
 
 /** The CLI's refusal of a grant as it left the wire, before `data` has been read. */
@@ -677,7 +734,7 @@ function acceptLine(server: RunningServer, line: string): void {
     const pending = server.pending.get(parsed['id']);
     if (!pending) return;
     clearTimeout(pending.timer);
-    server.pending.delete(parsed['id']);
+    settle(server, () => server.pending.delete(parsed['id'] as number));
     const failure = parsed['error'];
     if (isRecord(failure)) {
       const message = readString(failure, 'message') ?? 'The AGI CLI refused that request.';
@@ -839,6 +896,8 @@ function worktreeSetupEvent(
 ): void {
   const worktreeId = readString(params, 'worktreeId');
   const threadId = readString(params, 'threadId');
+  if (worktreeId && method === 'worktree/managed/setup/finished')
+    settle(server, () => countSetup(server, worktreeId, -1));
   if (!worktreeId || !threadId) return;
   const rootId = worktreeRootId(server.root.id, worktreeId);
   if (method === 'worktree/managed/setup/log') {
@@ -877,6 +936,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
       return;
     }
     terminalRoots.delete(terminalId);
+    settle(server, () => server.terminals.delete(terminalId));
     const code = params['code'];
     terminalEmit({
       rootId: server.root.id,
@@ -891,6 +951,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
   if (!threadId || !turnId) return;
 
   if (method === 'turn/started') {
+    server.activeTurns.add(turnId);
     emit(server.root.id, { type: 'turn-started', threadId, turnId });
     return;
   }
@@ -911,6 +972,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
   if (method === 'approval/requested') {
     const approval = toApprovalRequest(params);
     if (!approval) return;
+    server.activeTurns.add(turnId);
     emit(server.root.id, { type: 'approval-requested', threadId, turnId, ...approval });
     return;
   }
@@ -918,6 +980,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
     const requestId = readString(params, 'requestId');
     const question = readString(params, 'question');
     if (!requestId || !question) return;
+    server.activeTurns.add(turnId);
     if (!answersUserInput()) {
       void requestOrNull(server, 'userInput/respond', {
         threadId,
@@ -937,6 +1000,7 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
 
   const outcome = turnOutcome(method);
   if (!outcome) return;
+  settle(server, () => server.activeTurns.delete(turnId));
   const unsentSteers = readNumber(params, 'unsentSteers') ?? 0;
   emit(server.root.id, {
     type: 'turn-finished',
@@ -993,7 +1057,7 @@ function request(
   const id = server.nextId++;
   return new Promise<unknown>((resolve, reject) => {
     const timer = setTimeout(() => {
-      server.pending.delete(id);
+      settle(server, () => server.pending.delete(id));
       reject(new Error(`The AGI CLI did not answer ${method} in time.`));
     }, timeoutMs);
     server.pending.set(id, { resolve, reject, timer });
@@ -1292,15 +1356,16 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
     throw new DeveloperAgentNotAllowedError(
       'Allow commands in this folder again to provide its current consent.',
     );
+  const location = !remote && source === 'bundled' ? worktreesRoot() : null;
   const localArgs =
-    source === 'bundled'
+    location !== null
       ? [
           'app-server',
           '--workspace-consent',
           root.path,
           '--workspace-consent-at-ms',
           String(consentAt),
-          ...worktreesRootArgs(worktreesRoot()),
+          ...worktreesRootArgs(location),
         ]
       : ['app-server'];
   let child: ChildProcessWithoutNullStreams;
@@ -1328,6 +1393,10 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
     features: { maxTurns: false, memory: false },
     exited: false,
     advertised: null,
+    worktreesRoot: location,
+    activeTurns: new Set(),
+    terminals: new Set(),
+    setups: new Map(),
   };
 
   servers.set(root.id, server);
@@ -1681,6 +1750,7 @@ export async function openDeveloperTerminal(
   const terminalId = isRecord(result) ? readString(result, 'terminalId') : null;
   if (!terminalId) throw new Error('The AGI CLI did not open a terminal.');
   terminalRoots.set(terminalId, rootId);
+  server.terminals.add(terminalId);
   return { terminalId };
 }
 
@@ -1717,9 +1787,9 @@ export async function resizeDeveloperTerminal(
 export async function closeDeveloperTerminal(rootId: string, terminalId: string): Promise<boolean> {
   if (terminalRoots.get(terminalId) !== rootId) return true;
   terminalRoots.delete(terminalId);
-  await requestOrNull(await readyServer(await resolveRoot(rootId)), 'terminal/close', {
-    terminalId,
-  });
+  const server = await readyServer(await resolveRoot(rootId));
+  await requestOrNull(server, 'terminal/close', { terminalId });
+  settle(server, () => server.terminals.delete(terminalId));
   return true;
 }
 
@@ -2450,7 +2520,13 @@ export async function applyDeveloperWorktree(
 export async function runDeveloperWorktreeSetup(rootId: string, sha256: string): Promise<boolean> {
   const { parent, worktreeId } = requireWorktree(rootId);
   const server = await readyServer(parent);
-  await request(server, 'worktree/managed/setup/run', { worktreeId, sha256 });
+  countSetup(server, worktreeId, 1);
+  try {
+    await request(server, 'worktree/managed/setup/run', { worktreeId, sha256 });
+  } catch (error) {
+    settle(server, () => countSetup(server, worktreeId, -1));
+    throw error;
+  }
   return true;
 }
 

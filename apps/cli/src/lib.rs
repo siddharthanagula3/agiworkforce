@@ -6453,7 +6453,7 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 if let Some(root) = worktrees_root {
                     host = host.with_checked_worktrees_root(root)?;
                 }
-                let host = std::sync::Arc::new(host);
+                let host = std::sync::Arc::new(host.with_recorded_worktrees_roots());
                 host.prepare().await;
                 let capabilities = host.capabilities();
                 let _heartbeat = device_registry::spawn_heartbeat_loop();
