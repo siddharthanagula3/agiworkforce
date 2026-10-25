@@ -31,6 +31,11 @@ interface TokenRow {
   expires_at: string;
 }
 
+interface UnredeemedCredentials {
+  deviceCodes: { user_id: string; status: string }[];
+  desktopGrants: { user_id: string; consumed_at: string | null }[];
+}
+
 function row(overrides: Partial<TokenRow> & Pick<TokenRow, 'id' | 'family_id'>): TokenRow {
   return {
     user_id: 'user-1',
@@ -48,7 +53,10 @@ function row(overrides: Partial<TokenRow> & Pick<TokenRow, 'id' | 'family_id'>):
  * Answers the two statements the way Postgres does: the same predicates and
  * the same coalesce.
  */
-function fakeDeviceRefreshTokens(rows: TokenRow[]): DatabaseAdapter {
+function fakeDeviceRefreshTokens(
+  rows: TokenRow[],
+  unredeemed: UnredeemedCredentials = { deviceCodes: [], desktopGrants: [] },
+): DatabaseAdapter {
   const scoped = (sql: string, params: unknown[]): TokenRow[] => {
     const byFamilyText = /family_id::text = \$1/.test(sql);
     const byEveryRow = /where user_id = \$1/.test(sql);
@@ -71,6 +79,18 @@ function fakeDeviceRefreshTokens(rows: TokenRow[]): DatabaseAdapter {
   };
 
   const run = (sql: string, params: unknown[]): TokenRow[] => {
+    if (/update public\.device_authorization_codes/.test(sql)) {
+      for (const code of unredeemed.deviceCodes) {
+        if (code.user_id === params[0] && code.status === 'approved') code.status = 'revoked';
+      }
+      return [];
+    }
+    if (/delete from public\.desktop_sign_in_grants/.test(sql)) {
+      unredeemed.desktopGrants = unredeemed.desktopGrants.filter(
+        (grant) => !(grant.user_id === params[0] && grant.consumed_at === null),
+      );
+      return [];
+    }
     if (/set compromised_at/.test(sql)) {
       const at = typeof params[2] === 'string' ? params[2] : new Date().toISOString();
       const reason = String(params[params.length - 1]);
@@ -95,7 +115,7 @@ function fakeDeviceRefreshTokens(rows: TokenRow[]): DatabaseAdapter {
       run(sql, params).map(({ id }) => ({ id }))) as DatabaseAdapter['query'],
     execute: async (sql: string, params: unknown[] = []) => run(sql, params).length,
     transaction: (async (callback: (tx: DatabaseAdapter) => unknown) =>
-      callback(fakeDeviceRefreshTokens(rows))) as DatabaseAdapter['transaction'],
+      callback(fakeDeviceRefreshTokens(rows, unredeemed))) as DatabaseAdapter['transaction'],
     withUser: () => {
       throw new Error('not used');
     },
@@ -224,5 +244,36 @@ describe('the other two ways a family ends', () => {
     expect(revoked).toBe(2);
     expect(rows[2]?.revoked_at).toBeNull();
     expect(rows.every((candidate) => candidate.compromised_at === null)).toBe(true);
+  });
+});
+
+describe('signing out everywhere also ends credentials nobody has redeemed yet', () => {
+  it('revokes the account approved device codes and deletes its unconsumed desktop grants', async () => {
+    const unredeemed: UnredeemedCredentials = {
+      deviceCodes: [
+        { user_id: 'user-1', status: 'approved' },
+        { user_id: 'user-1', status: 'pending' },
+        { user_id: 'user-1', status: 'consumed' },
+        { user_id: 'user-2', status: 'approved' },
+      ],
+      desktopGrants: [
+        { user_id: 'user-1', consumed_at: null },
+        { user_id: 'user-1', consumed_at: AT },
+        { user_id: 'user-2', consumed_at: null },
+      ],
+    };
+
+    await revokeEveryDeviceRefreshCredential(fakeDeviceRefreshTokens([], unredeemed), 'user-1');
+
+    expect(unredeemed.deviceCodes.map(({ status }) => status)).toEqual([
+      'revoked',
+      'pending',
+      'consumed',
+      'approved',
+    ]);
+    expect(unredeemed.desktopGrants).toEqual([
+      { user_id: 'user-1', consumed_at: AT },
+      { user_id: 'user-2', consumed_at: null },
+    ]);
   });
 });

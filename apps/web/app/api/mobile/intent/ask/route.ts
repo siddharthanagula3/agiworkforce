@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { MobileIntentAskRequestSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { isAppError } from '@/lib/errors';
+import { assertIpAllowList, isIpNotAllowedError } from '@/lib/ip-allow-list-gate';
 import { logger } from '@/lib/logger';
+import { assertMfaPolicy, isMfaRequiredError } from '@/lib/mfa-policy-gate';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
   MOBILE_INTENT_SIGN_IN_MESSAGE,
@@ -28,6 +30,17 @@ async function handleAsk(request: NextRequest) {
 
   const limited = await withRateLimit(request, 'mobile-intent-ask', `intent:${owner.tokenId}`);
   if (limited) return limited;
+
+  try {
+    await assertMfaPolicy(owner.userId);
+    await assertIpAllowList(owner.userId, request);
+  } catch (error) {
+    if (isMfaRequiredError(error)) return refusal(error.statusCode, 'mfa_required', error.message);
+    if (isIpNotAllowedError(error)) {
+      return refusal(error.statusCode, 'ip_not_allowed', error.message);
+    }
+    throw error;
+  }
 
   const parsed = MobileIntentAskRequestSchema.safeParse(await request.json().catch(() => null));
   if (!parsed.success) {

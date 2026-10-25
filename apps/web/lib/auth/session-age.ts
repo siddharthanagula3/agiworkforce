@@ -34,7 +34,8 @@ function remember(sessionId: string, startedAt: number | null): void {
 }
 
 // Null means the start is unknown, not young: the caller lets an unknown through rather than
-// sign everybody out when the provider is having a bad minute.
+// sign everybody out when the provider is having a bad minute. A failed lookup is never cached,
+// so the next request measures the age again instead of inheriting the gap.
 export async function sessionStartedAt(
   identity: SessionAgeOperations,
   sessionId: string,
@@ -49,10 +50,10 @@ export async function sessionStartedAt(
     startedAt = session && session.userId === userId ? session.createdAt : null;
   } catch (error) {
     logger.warn({ error, userId }, '[session-age] session start unreadable; age not measured');
+    unreadableStarts += 1;
+    return null;
   }
 
-  // Cached either way, so an unreadable start costs one lookup and one log line
-  // per session rather than one of each per request.
   remember(sessionId, startedAt);
   if (startedAt === null) unreadableStarts += 1;
   return startedAt;

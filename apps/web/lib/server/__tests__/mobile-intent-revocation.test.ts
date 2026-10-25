@@ -182,7 +182,7 @@ describe('Ask from Siri tokens end with the sessions they stand beside', () => {
   });
 
   it('the refresh-credential sweep revokes every intent token', async () => {
-    const db = { query: vi.fn().mockResolvedValue([]) };
+    const db = { query: vi.fn().mockResolvedValue([]), execute: vi.fn().mockResolvedValue(0) };
     await revokeEveryDeviceRefreshCredential(db as never, 'user-1');
     expect(mockRevokeTokens).toHaveBeenCalledWith(db, 'user-1', null);
   });

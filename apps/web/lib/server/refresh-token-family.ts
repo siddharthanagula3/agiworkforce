@@ -106,16 +106,31 @@ const REVOKE_EVERY = `
      and revoked_at is null
    returning id`;
 
+const REVOKE_APPROVED_DEVICE_CODES = `
+  update public.device_authorization_codes
+     set status = 'revoked', revoked_at = now(), updated_at = now()
+   where user_id = $1
+     and status = 'approved'`;
+
+const DELETE_UNCONSUMED_DESKTOP_GRANTS = `
+  delete from public.desktop_sign_in_grants
+   where user_id = $1
+     and consumed_at is null`;
+
 /**
  * Every device credential the account holds, for the acts that end every
  * session: signing out everywhere, and containing a compromise. A provider
  * session sweep leaves these alive, and a live refresh row mints a new one.
+ * An approved device code or a pending desktop sign-in grant is a credential
+ * not yet redeemed; left alone, either mints a fresh family after the sweep.
  */
 export async function revokeEveryDeviceRefreshCredential(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<number> {
   await revokeMobileIntentTokens(db, userId, null);
+  await db.execute(REVOKE_APPROVED_DEVICE_CODES, [userId]);
+  await db.execute(DELETE_UNCONSUMED_DESKTOP_GRANTS, [userId]);
   const revoked = await db.query<{ id: string }>(REVOKE_EVERY, [userId]);
   return revoked.length;
 }
