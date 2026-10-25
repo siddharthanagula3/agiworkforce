@@ -1,5 +1,6 @@
 import {
   finishAgentActivityLocally,
+  isLocalPlaceholderActivityEntry,
   type AgentActivityArtifactEntry,
   type AgentActivityEntry,
   type AgentActivityState,
@@ -1121,6 +1122,11 @@ function activityStatusIcon(activity: AgentActivityState, needsUser: boolean): s
   return Loader2;
 }
 
+function reportsActivity(activity: AgentActivityState): boolean {
+  if (activity.status !== 'completed' && activity.status !== 'cancelled') return true;
+  return activity.entries.some((entry) => !isLocalPlaceholderActivityEntry(entry));
+}
+
 function buildAgentActivityEl(
   storedActivity: AgentActivityState,
   options: BubbleInteractionOptions,
@@ -1203,7 +1209,7 @@ export function buildBubbleWithTools(
     );
   if (msg.role === 'assistant' && options.browserControls)
     wrapper.appendChild(options.browserControls);
-  if (msg.agentActivity)
+  if (msg.agentActivity && reportsActivity(msg.agentActivity))
     wrapper.appendChild(buildAgentActivityEl(msg.agentActivity, activityOptions));
   const leadingCards = buildInteractiveCardStack(msg, options, true);
   if (leadingCards) wrapper.appendChild(leadingCards);

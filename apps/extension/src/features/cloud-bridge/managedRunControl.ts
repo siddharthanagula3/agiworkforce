@@ -270,7 +270,6 @@ export async function cancelChromeManagedRun(
       const followed = await client.followRun(run.runId, {
         signal: confirmation.signal,
         afterSequence: requested.lastEventSequence,
-        pageSize: 1,
         onSnapshot: (snapshot) => {
           if (snapshot.run.id !== run.runId || snapshot.run.userId !== requested.userId)
             throw new Error('AGI Cloud changed the cancellation run or owner.');

@@ -463,6 +463,55 @@ describe('Chrome managed run control', () => {
 });
 
 describe('Chrome Stop authoritative terminal confirmation', () => {
+  it('reads the events a run emits after Stop in pages, not one request per event', async () => {
+    const requested = {
+      ...completedRun(),
+      state: 'running' as const,
+      lastEventSequence: 3,
+      completedAt: null,
+      cancellationRequestedAt: '2026-07-17T20:01:00.000Z',
+    };
+    const events = Array.from({ length: 40 }, (_, index) => ({
+      schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+      sessionId: 'session-1',
+      turnId: 'turn-1',
+      sequence: 4 + index,
+      emittedAtMs: 2_000 + index,
+      event: { type: 'text-delta' as const, delta: `chunk ${index}` },
+    }));
+    const stopped = { ...requested, state: 'cancelled' as const, lastEventSequence: 43 };
+    const fetchImpl = vi.fn(async (path: string, init?: RequestInit) => {
+      if (init?.method === 'POST') return Response.json({ run: requested }, { status: 202 });
+      const query = new URL(path, 'https://qa.example').searchParams;
+      const after = Number(query.get('after'));
+      const page = events
+        .filter((event) => event.sequence > after)
+        .slice(0, Number(query.get('limit')));
+      return Response.json({
+        run: stopped,
+        events: page,
+        nextAfterSequence: page.at(-1)?.sequence ?? after,
+      });
+    });
+
+    const result = await cancelChromeManagedRun(
+      { ...reference, lastSequence: 3 },
+      {
+        getAuthToken: vi.fn(async () => 'token-1'),
+        createClient: (token) =>
+          createManagedCloudAgentRunClient({
+            baseUrl: 'https://qa.example',
+            getAuthToken: async () => token,
+            fetchImpl,
+          }),
+      },
+    );
+
+    expect(result).toMatchObject({ status: 'success', run: { state: 'cancelled' } });
+    const reads = fetchImpl.mock.calls.filter(([, init]) => (init?.method ?? 'GET') === 'GET');
+    expect(reads.length).toBeLessThanOrEqual(2);
+  });
+
   function json(value: unknown): Response {
     return new Response(JSON.stringify(value), { headers: { 'Content-Type': 'application/json' } });
   }

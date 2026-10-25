@@ -16,10 +16,11 @@ import {
   PauseCircle,
   ShieldAlert,
 } from 'lucide-react-native';
-import type {
-  AgentActivityEntry,
-  AgentActivityState,
-  AgentActivityToolEntry,
+import {
+  isLocalPlaceholderActivityEntry,
+  type AgentActivityEntry,
+  type AgentActivityState,
+  type AgentActivityToolEntry,
 } from '@agiworkforce/client-runtime';
 import { TOOL_STATUS_PRESENTATION, normalizeToolStatus } from '@agiworkforce/types';
 import { CHAT_CODE_RUN_TOOL_NAME } from '@agiworkforce/cloud-contracts';
@@ -541,7 +542,11 @@ export function AgentActivityTimeline({
   const hiddenCount = Math.max(0, activity.entries.length - visibleCount);
   const visibleEntries = activity.entries.slice(hiddenCount);
 
-  if (activity.entries.length === 0 && activity.status === 'completed') return null;
+  if (
+    (activity.status === 'completed' || activity.status === 'cancelled') &&
+    activity.entries.every(isLocalPlaceholderActivityEntry)
+  )
+    return null;
 
   return (
     <View accessibilityLabel="Agent activity" style={{ width: '100%', marginBottom: 7 }}>

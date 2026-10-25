@@ -64,6 +64,20 @@ function activity(
   };
 }
 
+function readPageStep(): NonNullable<SidePanelChatMessage['agentActivity']>['entries'][number] {
+  return {
+    kind: 'tool',
+    id: 'tool-1',
+    toolCallId: 'call-1',
+    name: 'browser_read_page',
+    category: 'computer-use',
+    summary: 'Reading example.com',
+    status: 'completed',
+    startedAtMs: 1_000,
+    completedAtMs: 1_500,
+  };
+}
+
 const LOADER_2_PATH = 'M21 12a9 9 0 1 1-6.219-8.56';
 
 const MAP_CARD_ENVELOPE = {
@@ -176,8 +190,10 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
   ] as const)(
     'renders the %s agent run with explicit copy and the correct status icon',
     (status, label, iconSelector, usesLoader) => {
+      const run = activity(status);
+      if (status === 'completed' || status === 'cancelled') run.entries = [readPageStep()];
       const node = buildBubbleWithTools(
-        msg({ role: 'assistant', content: '', agentActivity: activity(status) }),
+        msg({ role: 'assistant', content: '', agentActivity: run }),
       );
       const summary = node.querySelector('.sp-agent-activity > summary');
       const icon = statusIcon(summary);
@@ -187,6 +203,32 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
       expect(icon?.querySelector(`path[d="${LOADER_2_PATH}"]`) !== null).toBe(usesLoader);
     },
   );
+
+  it.each(['completed', 'cancelled'] as const)(
+    'leaves out a %s run row that did no reportable work, as the web does',
+    (status) => {
+      const node = buildBubbleWithTools(
+        msg({
+          role: 'assistant',
+          content: 'It is less than 8 dollars.',
+          agentActivity: activity(status),
+        }),
+      );
+
+      expect(node.querySelector('.sp-agent-activity')).toBeNull();
+      expect(node.textContent).toContain('It is less than 8 dollars.');
+    },
+  );
+
+  it('keeps a finished run row that did work', () => {
+    const run = activity('completed');
+    run.entries = [readPageStep()];
+    const node = buildBubbleWithTools(
+      msg({ role: 'assistant', content: 'Done.', agentActivity: run }),
+    );
+
+    expect(node.querySelector('.sp-agent-activity > summary')?.textContent).toContain('1 step');
+  });
 
   it('renders a generated artifact as an authenticated AGI open/download action', () => {
     const messages: SidePanelChatMessage[] = [];
@@ -246,7 +288,7 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
         approvalId: 'approval-2',
         toolCallId: 'call-2',
         name: 'read_page',
-        category: 'browser',
+        category: 'computer-use',
         summary: 'Read the current page',
         input: {},
         riskLevel: 'low',
