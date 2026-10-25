@@ -294,6 +294,46 @@ export interface HostPreferences {
    * session it drives ends when the computer sleeps.
    */
   preventSleepWhileRunning?: boolean;
+  /**
+   * Put in front of the branch the shell creates when a pull request is opened
+   * from a worktree that has no branch of its own. Empty means no prefix.
+   */
+  worktreeBranchPrefix?: string;
+  /**
+   * The folder new worktrees are created in. Empty means the CLI's default.
+   * A page cannot name a folder: writing an empty string restores the default,
+   * and writing anything else opens the system folder picker, so the saved
+   * path is always one the user chose there.
+   */
+  worktreeLocation?: string;
+  /** Days without activity after which a local session is archived; 0 is off. */
+  autoArchiveIdleDays?: AutoArchiveIdleDays;
+}
+
+export const DEFAULT_WORKTREE_BRANCH_PREFIX = 'agi/';
+
+export const MAX_WORKTREE_BRANCH_PREFIX_LENGTH = 40;
+
+const WORKTREE_BRANCH_PREFIX_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
+
+export function isWorktreeBranchPrefix(value: string): boolean {
+  if (value === '') return true;
+  return (
+    value.length <= MAX_WORKTREE_BRANCH_PREFIX_LENGTH &&
+    WORKTREE_BRANCH_PREFIX_PATTERN.test(value) &&
+    !value.includes('..') &&
+    !value.includes('//') &&
+    !value.includes('/.') &&
+    !value.endsWith('.')
+  );
+}
+
+export const AUTO_ARCHIVE_IDLE_DAYS = [0, 7, 14, 30] as const;
+
+export type AutoArchiveIdleDays = (typeof AUTO_ARCHIVE_IDLE_DAYS)[number];
+
+export function isAutoArchiveIdleDays(value: unknown): value is AutoArchiveIdleDays {
+  return (AUTO_ARCHIVE_IDLE_DAYS as readonly unknown[]).includes(value);
 }
 
 /**

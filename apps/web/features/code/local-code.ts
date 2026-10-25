@@ -160,6 +160,9 @@ export const LOCAL_CODE_COPY = {
   pullRequestNotConnected:
     'The AGI GitHub App is not installed on this repository, so GitHub opens the compare page instead.',
   pullRequestOnBase: 'Switch to a branch other than the default branch to open a pull request.',
+  createBranchAndOpenPullRequest: 'Create branch and open pull request',
+  pullRequestDetached:
+    'These changes are not on a branch yet, so a new branch is created for them.',
   pullRequestNoBase: 'The remote has no default branch to open a pull request against.',
   pullRequestReadFailed: 'The pull request for this branch could not be read.',
   pullRequestOpenFailed: 'The pull request could not be opened.',
@@ -1474,6 +1477,18 @@ export const LOCAL_WORKTREE_SETTINGS_COPY = {
     'Start a coding session to change this. The count is kept by the AGI CLI, which is not running yet.',
   readFailed: 'The worktree count could not be read.',
   range: (max: number): string => `Choose a whole number from 1 to ${max}.`,
+  locationLabel: 'Location',
+  locationDefault: 'Default, inside the AGI CLI folder',
+  locationChange: 'Change…',
+  locationReset: 'Use default',
+  locationHelp: 'New worktrees are created here. Existing ones stay where they are.',
+  prefixLabel: 'Branch prefix',
+  prefixHelp: (example: string): string =>
+    `Used when a pull request needs a new branch, for example ${example}.`,
+  prefixInvalid: (max: number): string =>
+    `Use letters, numbers, dots, dashes and slashes, up to ${max} characters, starting with a letter or number.`,
+  prefixSaved: 'Branch prefix saved.',
+  preferencesFailed: 'This setting could not be saved.',
 } as const;
 
 export type LocalReviewCommentSide = 'new' | 'old';

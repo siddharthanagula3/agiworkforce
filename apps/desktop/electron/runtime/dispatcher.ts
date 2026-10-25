@@ -271,6 +271,7 @@ import { readShellLayout, writeShellLayout } from '../shellWindowStore';
 import { PathRefused, type PathRefusalReason } from './pathGuard';
 import { readRegularFile } from './regularFile';
 import { showsTrustedPage } from '../permissionPolicy';
+import { getPreferences } from '../settingsStore';
 import {
   consumeSingleUse,
   describePermission,
@@ -2445,8 +2446,13 @@ async function execute(
       return listLocalBranches(resolveRoot(args).path);
     case 'developer_branch_switch':
       return switchLocalBranch(resolveRoot(args).path, requireString(args, 'branch'));
-    case 'developer_branch_push':
-      return pushLocalBranch(resolveRoot(args).path);
+    case 'developer_branch_push': {
+      const title = optionalString(args, 'newBranchTitle', '').trim();
+      return pushLocalBranch(
+        resolveRoot(args).path,
+        title === '' ? undefined : { title, prefix: getPreferences().worktreeBranchPrefix },
+      );
+    }
     case 'developer_skills_list':
       return listDeveloperSkills(requireString(args, 'rootId'));
     case 'developer_skill_set_enabled':

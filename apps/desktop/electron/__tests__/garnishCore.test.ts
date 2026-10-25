@@ -250,6 +250,37 @@ describe('normalizePreferences appearance', () => {
   });
 });
 
+describe('normalizePreferences worktrees and archiving', () => {
+  it('defaults to the agi/ prefix, the CLI worktree folder and no archiving', () => {
+    const preferences = normalizePreferences({});
+    expect(preferences.worktreeBranchPrefix).toBe('agi/');
+    expect(preferences.worktreeLocation).toBe('');
+    expect(preferences.autoArchiveIdleDays).toBe(0);
+  });
+
+  it('keeps a valid prefix, an absolute folder and a listed day count', () => {
+    const preferences = normalizePreferences({
+      worktreeBranchPrefix: 'team/',
+      worktreeLocation: '/Users/me/worktrees',
+      autoArchiveIdleDays: 14,
+    });
+    expect(preferences.worktreeBranchPrefix).toBe('team/');
+    expect(preferences.worktreeLocation).toBe('/Users/me/worktrees');
+    expect(preferences.autoArchiveIdleDays).toBe(14);
+  });
+
+  it('drops a prefix git would refuse, a relative folder and an unlisted day count', () => {
+    const preferences = normalizePreferences({
+      worktreeBranchPrefix: '../escape',
+      worktreeLocation: 'relative/path',
+      autoArchiveIdleDays: 3,
+    });
+    expect(preferences.worktreeBranchPrefix).toBe('agi/');
+    expect(preferences.worktreeLocation).toBe('');
+    expect(preferences.autoArchiveIdleDays).toBe(0);
+  });
+});
+
 describe('normalizeWindowFrame', () => {
   it('answers null for anything that is not a complete frame', () => {
     expect(normalizeWindowFrame(undefined)).toBeNull();

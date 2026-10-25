@@ -10,6 +10,8 @@ import {
   describeHostPlatform,
   desktopDeepLink,
   hostKeepsSignInInWindow,
+  isAutoArchiveIdleDays,
+  isWorktreeBranchPrefix,
   parseDesktopDeepLink,
 } from '../host-bridge';
 
@@ -119,5 +121,36 @@ describe('hostKeepsSignInInWindow', () => {
     ]) {
       expect(hostKeepsSignInInWindow(new URL(url)), url).toBe(false);
     }
+  });
+});
+
+describe('worktree branch prefixes', () => {
+  it('accepts an empty prefix and the usual shapes', () => {
+    for (const prefix of ['', 'agi/', 'team/feature-', 'me.work/', 'a']) {
+      expect(isWorktreeBranchPrefix(prefix)).toBe(true);
+    }
+  });
+
+  it('refuses what git or a path would misread', () => {
+    for (const prefix of [
+      '/agi',
+      '-x',
+      'a..b',
+      'a//b',
+      'a/.hidden',
+      'ends.',
+      'has space',
+      'x'.repeat(41),
+    ]) {
+      expect(isWorktreeBranchPrefix(prefix)).toBe(false);
+    }
+  });
+});
+
+describe('auto-archive day counts', () => {
+  it('accepts only the listed counts', () => {
+    expect([0, 7, 14, 30].every(isAutoArchiveIdleDays)).toBe(true);
+    expect(isAutoArchiveIdleDays(5)).toBe(false);
+    expect(isAutoArchiveIdleDays('7')).toBe(false);
   });
 });

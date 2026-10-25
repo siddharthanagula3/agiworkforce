@@ -787,8 +787,11 @@ export function listLocalBranches(rootId: string): Promise<LocalBranches | null>
   return invoke<LocalBranches | null>('developer_branches_list', { rootId });
 }
 
-export function pushLocalBranch(rootId: string): Promise<LocalBranchPush> {
-  return invoke<LocalBranchPush>('developer_branch_push', { rootId });
+export function pushLocalBranch(rootId: string, newBranchTitle?: string): Promise<LocalBranchPush> {
+  return invoke<LocalBranchPush>(
+    'developer_branch_push',
+    newBranchTitle === undefined ? { rootId } : { rootId, newBranchTitle },
+  );
 }
 
 export function switchLocalBranch(rootId: string, branch: string): Promise<string> {

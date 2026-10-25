@@ -79,3 +79,42 @@ describe('the checks on a local session pull request', () => {
     expect(readLocalPullRequest).toHaveBeenCalledTimes(1);
   });
 });
+
+describe('a pull request from changes on no branch', () => {
+  it('offers to create a branch and passes the session title for its name', async () => {
+    const { pushLocalBranch } = await import('@/features/desktop-host');
+    const { openLocalPullRequest } = await import('../services/local-pull-request-api');
+    listLocalBranches.mockResolvedValue({
+      current: null,
+      baseBranch: 'main',
+      remoteUrl: 'https://github.com/acme/app.git',
+      branches: [],
+    });
+    vi.mocked(pushLocalBranch).mockResolvedValue({
+      branch: 'agi/fix-sign-in',
+      remoteUrl: 'https://github.com/acme/app.git',
+      baseBranch: 'main',
+    });
+    vi.mocked(openLocalPullRequest).mockResolvedValue({
+      number: 3,
+      url: 'https://github.com/acme/app/pull/3',
+      state: 'open',
+      checks: 'none',
+    } as never);
+
+    render(<LocalPullRequest rootId="root-1" title="Fix sign-in" refreshKey={0} />);
+    await settle();
+
+    const button = screen.getByRole('button', { name: 'Create branch and open pull request' });
+    await act(async () => {
+      button.click();
+      await vi.runOnlyPendingTimersAsync();
+    });
+
+    expect(pushLocalBranch).toHaveBeenCalledWith('root-1', 'Fix sign-in');
+    expect(readLocalPullRequest).not.toHaveBeenCalled();
+    expect(openLocalPullRequest).toHaveBeenCalledWith(
+      expect.objectContaining({ head: 'agi/fix-sign-in', base: 'main', title: 'Fix sign-in' }),
+    );
+  });
+});

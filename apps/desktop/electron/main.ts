@@ -9,6 +9,7 @@ import {
   app,
   clipboard,
   desktopCapturer,
+  dialog,
   ipcMain,
   nativeTheme,
   net,
@@ -61,6 +62,9 @@ import {
   type HostPreferences,
   type HostPreferencesState,
   type HostRestartOutcome,
+  MAX_WORKTREE_BRANCH_PREFIX_LENGTH,
+  isAutoArchiveIdleDays,
+  isWorktreeBranchPrefix,
 } from '@agiworkforce/local-runtime-contract';
 import {
   BrowserBridgeError,
@@ -1723,6 +1727,9 @@ function hostPreferencesState(): HostPreferencesState {
         ? { dictateIntoFocusedApp: preferences.dictateIntoFocusedApp }
         : {}),
       preventSleepWhileRunning: preferences.preventSleepWhileRunning,
+      worktreeBranchPrefix: preferences.worktreeBranchPrefix,
+      worktreeLocation: preferences.worktreeLocation,
+      autoArchiveIdleDays: preferences.autoArchiveIdleDays,
     },
     shortcutStatus: Object.fromEntries(
       SHORTCUT_KEYS.map((key) => [
@@ -1855,6 +1862,28 @@ async function confirmCliPath(
   return (await confirmPreference(window, `cli-path ${resolved}`, options)) ? resolved : null;
 }
 
+async function chooseWorktreeLocation(
+  window: BrowserWindow | null,
+  current: string,
+): Promise<string | null> {
+  const options = {
+    title: 'Choose where new worktrees go',
+    buttonLabel: 'Use This Folder',
+    properties: ['openDirectory' as const, 'createDirectory' as const],
+    ...(current === '' ? {} : { defaultPath: current }),
+  };
+  const result = window
+    ? await dialog.showOpenDialog(window, options)
+    : await dialog.showOpenDialog(options);
+  const selected = result.filePaths[0];
+  if (result.canceled || !selected) return null;
+  try {
+    return realpathSync(selected);
+  } catch {
+    return selected;
+  }
+}
+
 const STOP_SHORTCUT_REQUIRED =
   'Stop Agents keeps a shortcut: it is how you stop an agent that is controlling the screen, from whatever app is in front. Choose one of the listed shortcuts instead.';
 
@@ -1941,6 +1970,28 @@ async function writeHostPreferences(
 
   if (typeof patch.sessionApprovalAlerts === 'boolean') {
     saveSettings({ sessionApprovalAlerts: patch.sessionApprovalAlerts });
+  }
+
+  if (typeof patch.worktreeBranchPrefix === 'string') {
+    const prefix = patch.worktreeBranchPrefix.trim();
+    if (!isWorktreeBranchPrefix(prefix)) {
+      throw new Error(
+        `Use letters, numbers, dots, dashes and slashes, up to ${MAX_WORKTREE_BRANCH_PREFIX_LENGTH} characters, starting with a letter or number.`,
+      );
+    }
+    saveSettings({ worktreeBranchPrefix: prefix });
+  }
+
+  if (typeof patch.worktreeLocation === 'string') {
+    if (patch.worktreeLocation === '') saveSettings({ worktreeLocation: '' });
+    else {
+      const chosen = await chooseWorktreeLocation(window, before.worktreeLocation);
+      if (chosen !== null) saveSettings({ worktreeLocation: chosen });
+    }
+  }
+
+  if (isAutoArchiveIdleDays(patch.autoArchiveIdleDays)) {
+    saveSettings({ autoArchiveIdleDays: patch.autoArchiveIdleDays });
   }
 
   if (typeof patch.preventSleepWhileRunning === 'boolean') {
@@ -2267,6 +2318,7 @@ if (!hasSingleInstanceLock) {
       accountBridge: { readShellIdentity, approveDeviceCode },
       spawn: spawnTrackedDeveloperRuntime,
       answersUserInput: windowAnswersUserInput,
+      worktreesRoot: () => getPreferences().worktreeLocation,
     });
 
     void startLocalRoutines().catch((error: unknown) =>

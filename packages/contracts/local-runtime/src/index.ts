@@ -324,6 +324,11 @@ export {
   NO_HOST_NAVIGATION,
   isHostNavigationDirection,
   isHostNavigationState,
+  AUTO_ARCHIVE_IDLE_DAYS,
+  DEFAULT_WORKTREE_BRANCH_PREFIX,
+  MAX_WORKTREE_BRANCH_PREFIX_LENGTH,
+  isAutoArchiveIdleDays,
+  isWorktreeBranchPrefix,
 } from './host-bridge';
 export { agentNotificationsWrite, effectiveAgentNotifications } from './agent-notifications';
 export type {
@@ -349,6 +354,7 @@ export type {
   HostNavigationDirection,
   HostNavigationState,
   WindowLayoutCommand,
+  AutoArchiveIdleDays,
 } from './host-bridge';
 
 export {

@@ -226,6 +226,8 @@ export interface DeveloperSessionConfiguration {
   spawn?: SpawnDeveloperRuntime;
   /** Whether a page is there to answer the agent's questions. */
   answersUserInput?: () => boolean;
+  /** The folder the user chose for new worktrees; empty keeps the CLI's default. */
+  worktreesRoot?: () => string;
 }
 
 let emit: DeveloperSessionEmitter = () => undefined;
@@ -235,6 +237,7 @@ let spawnRuntime: SpawnDeveloperRuntime = nodeSpawn as SpawnDeveloperRuntime;
 let workspaceConsentAtMs: (root: WorkspaceRoot) => number | null = () => null;
 let accountBridge: DeveloperAccountBridge | null = null;
 let answersUserInput: () => boolean = () => true;
+let worktreesRoot: () => string = () => '';
 let accountSyncError: string | null = null;
 let accountSyncChain: Promise<void> = Promise.resolve();
 let cachedStatus: { binary: string; status: DeveloperRuntimeStatus } | null = null;
@@ -268,11 +271,16 @@ export function configureDeveloperSessions(configuration: DeveloperSessionConfig
   spawnRuntime = configuration.spawn ?? (nodeSpawn as SpawnDeveloperRuntime);
   accountBridge = configuration.accountBridge ?? null;
   answersUserInput = configuration.answersUserInput ?? (() => true);
+  worktreesRoot = configuration.worktreesRoot ?? (() => '');
   accountSyncError = null;
   accountSyncChain = Promise.resolve();
   cachedStatus = null;
   lastAdvertised = null;
   stopAllDeveloperRuntimes();
+}
+
+export function worktreesRootArgs(location: string): string[] {
+  return location !== '' && path.isAbsolute(location) ? ['--worktrees-root', location] : [];
 }
 
 function isExecutableFile(candidate: string): boolean {
@@ -1239,6 +1247,7 @@ async function launchServer(root: WorkspaceRoot, allowed: () => boolean): Promis
           root.path,
           '--workspace-consent-at-ms',
           String(consentAt),
+          ...worktreesRootArgs(worktreesRoot()),
         ]
       : ['app-server'];
   let child: ChildProcessWithoutNullStreams;

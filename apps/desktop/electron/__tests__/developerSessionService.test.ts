@@ -355,6 +355,16 @@ describe('developer session runtime', () => {
     }
   });
 
+  it('passes the worktree folder the user chose, and nothing for the default or a relative path', async () => {
+    const service = await import('../runtime/developerSessionService');
+    expect(service.worktreesRootArgs('/Users/me/worktrees')).toEqual([
+      '--worktrees-root',
+      '/Users/me/worktrees',
+    ]);
+    expect(service.worktreesRootArgs('')).toEqual([]);
+    expect(service.worktreesRootArgs('relative/worktrees')).toEqual([]);
+  });
+
   it('points the app-server at the origin the shell itself is signed in to', async () => {
     const { service, spawn } = await loadService();
 
