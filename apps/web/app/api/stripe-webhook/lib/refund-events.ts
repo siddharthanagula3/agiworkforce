@@ -6,6 +6,7 @@ import { topUpChargedCents } from '@agiworkforce/types';
 import { logger } from '@/lib/logger';
 import { recordAuditEvent } from '@/lib/security-audit';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
+import { CHARGE_REFUND_LEDGER_DESCRIPTION_PREFIX } from '@/lib/server/payments/domain';
 import type { Stripe } from '@/lib/stripe-types';
 import { duplicateRefundAmount, STRIPE_PAGE_SIZE } from './duplicate-subscription-settlement';
 import { stripeIdOf } from './stripe-ref';
@@ -266,7 +267,7 @@ export async function handleChargeRefunded(
     return;
   }
 
-  const description = `Refund for charge ${charge.id}`;
+  const description = `${CHARGE_REFUND_LEDGER_DESCRIPTION_PREFIX}${charge.id}`;
   if (isTopUp) {
     const revokedMicrousd = await revokeTopUpRefund(db, profile.id, charge, description);
     logger.info(
