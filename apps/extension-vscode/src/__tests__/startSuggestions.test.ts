@@ -3,12 +3,15 @@ import type * as vscode from 'vscode';
 import { resolveStartSuggestions } from '../features/sidebar-webview/startSuggestions';
 import type { CliCapabilityAdapter } from '../features/surfaces/cliCapabilities';
 
+type ProjectsClientModule = typeof import('../features/projects/projectsClient');
+type ConnectorsClientModule = typeof import('../features/connectors/connectorsClient');
+
 vi.mock('../features/projects/projectsClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../features/projects/projectsClient')>()),
+  ...(await importOriginal<ProjectsClientModule>()),
   resolveProjectsWorkspace: vi.fn().mockResolvedValue({ status: 'signed-out' }),
 }));
 vi.mock('../features/connectors/connectorsClient', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('../features/connectors/connectorsClient')>()),
+  ...(await importOriginal<ConnectorsClientModule>()),
   resolveConnectorsClient: vi.fn().mockResolvedValue({ status: 'signed-out' }),
 }));
 
