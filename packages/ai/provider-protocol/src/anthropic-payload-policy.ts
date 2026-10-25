@@ -151,11 +151,9 @@ function stripAnthropicSystemPromptBoundary(system: unknown): void {
   }
 }
 
-const MESSAGE_BREAKPOINT_BLOCK_TYPES: ReadonlySet<unknown> = new Set([
-  'text',
-  'image',
-  'tool_result',
-]);
+function acceptsMessageBreakpoint(type: unknown): boolean {
+  return type === 'text' || type === 'image' || type === 'tool_result';
+}
 
 function isTurnContextBlock(block: unknown): boolean {
   if (!block || typeof block !== 'object') return false;
@@ -193,7 +191,7 @@ function applyAnthropicCacheControlToMessages(
       if (isTurnContextBlock(block)) continue;
       if (!block || typeof block !== 'object') return;
       const blockRecord = block as Record<string, unknown>;
-      if (MESSAGE_BREAKPOINT_BLOCK_TYPES.has(blockRecord['type'])) {
+      if (acceptsMessageBreakpoint(blockRecord['type'])) {
         blockRecord['cache_control'] = cacheControl;
       }
       return;
