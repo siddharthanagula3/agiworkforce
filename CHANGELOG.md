@@ -2,9 +2,38 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-18
+Last updated: 2026-10-25
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased, desktop features both leaders ship], 2026-10-25
+
+### Added
+
+- **A real terminal in local coding sessions.** Each terminal tab is a shell
+  in the session folder that only you type into, with the same limits as the
+  agent's commands. Settings, Developer sets the cursor, blinking, copy on
+  select and scrollback. An older CLI keeps the command line.
+- **Local MCP servers on AGI Desktop.** Settings, Developer lists the servers
+  on this computer with their status, and adds, tests, turns on or off and
+  removes them, shows their logs and opens `mcp.json`. Project servers still
+  need your approval, and the Code composer's add menu links to the page.
+- **A browser pane in coding sessions.** It opens local addresses, and other
+  sites only after you allow them, with its own cookies and no access to your
+  account, files, camera or microphone. Settings, Browser lists allowed and
+  blocked sites and clears browsing data.
+- **Local session management.** Pin, rename, archive and restore local
+  sessions from the sidebar, and archive idle ones after 7, 14 or 30 days.
+- **Storage.** Settings, Storage shows what AGI Desktop keeps on disk and
+  clears caches, old logs, temporary command files and old archived sessions,
+  asking first.
+- **Worktree settings.** Choose where new worktrees go and the prefix of the
+  branch a pull request creates.
+
+### Changed
+
+- **Nothing an agent removes is lost.** A file AGI Desktop overwrites and a
+  file an agent's patch deletes go to the Trash first.
 
 ## [Unreleased, cleanup and Chrome extension parity], 2026-10-18
 
