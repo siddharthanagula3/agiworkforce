@@ -59,6 +59,7 @@ export type SettingsNavKey =
   | 'desktop'
   | 'computer-use'
   | 'browser-pane'
+  | 'local-mcp'
   | 'storage'
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer, see apps/desktop settings-ia contract test).
@@ -308,6 +309,12 @@ export const SETTINGS_NAV_GROUP_DESKTOP_APP: SettingsNavGroupResolved = {
       label: 'Browser',
       icon: Globe2,
       keywords: ['browser', 'sites', 'allowed sites', 'blocked sites', 'cookies', 'browsing data'],
+    },
+    {
+      key: 'local-mcp',
+      label: 'Developer',
+      icon: Terminal,
+      keywords: ['developer', 'mcp', 'mcp servers', 'local mcp', 'config', 'logs'],
     },
     {
       key: 'storage',

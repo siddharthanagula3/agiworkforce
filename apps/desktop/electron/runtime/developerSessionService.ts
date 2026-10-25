@@ -259,6 +259,8 @@ interface AdvertisedCapabilities {
   threadPin: boolean;
   mcpLogs: boolean;
   terminals: boolean;
+  mcp: boolean;
+  mcpSetEnabled: boolean;
 }
 
 /**
@@ -454,6 +456,9 @@ const CAPABILITY_FROM_HANDSHAKE: Record<
   thread_rename: (cli) => cli.threadRename,
   thread_unarchive: (cli) => cli.threadUnarchive,
   thread_pin: (cli) => cli.threadPin,
+  mcp_servers: (cli) => cli.mcp,
+  mcp_logs: (cli) => cli.mcpLogs,
+  terminals: (cli) => cli.terminals,
 };
 
 /**
@@ -1190,6 +1195,8 @@ async function handshake(server: RunningServer, binary: string): Promise<void> {
     threadPin: capabilities['threadPin'] === true,
     mcpLogs: capabilities['mcpLogs'] === true,
     terminals: capabilities['terminals'] === true,
+    mcp: capabilities['mcp'] === true,
+    mcpSetEnabled: capabilities['mcpSetEnabled'] === true,
   };
   lastAdvertised = server.advertised;
 }
@@ -1356,7 +1363,9 @@ function requireAdvertised(
     | 'threadUnarchive'
     | 'threadPin'
     | 'mcpLogs'
-    | 'terminals',
+    | 'terminals'
+    | 'mcp'
+    | 'mcpSetEnabled',
 ): void {
   if (!server.advertised?.[feature]) {
     const { binary, source } = selectRuntimeBinary();
@@ -1613,6 +1622,74 @@ async function serversAwaitingApproval(
 ): Promise<DeveloperMcpServerAwaitingApproval[]> {
   if (!server.advertised?.mcpApproval) return [];
   return toAwaitingApproval(await requestOrNull(server, 'mcp/list'));
+}
+
+/** Whether the CLI this shell last heard from serves MCP servers on this computer. */
+export function localMcpAvailable(): boolean {
+  return lastAdvertised?.mcp === true;
+}
+
+export interface DeveloperMcpServerInput {
+  name: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  transport?: 'http' | 'sse';
+  env?: Record<string, string>;
+}
+
+async function mcpServer(rootId: string): Promise<RunningServer> {
+  const server = await readyServer(await resolveRoot(rootId));
+  requireAdvertised(server, 'mcp');
+  return server;
+}
+
+export async function listDeveloperMcpServers(rootId: string): Promise<unknown[]> {
+  const result = await request(await mcpServer(rootId), 'mcp/list', {});
+  return isRecord(result) && Array.isArray(result['servers']) ? result['servers'] : [];
+}
+
+export async function addDeveloperMcpServer(
+  rootId: string,
+  input: DeveloperMcpServerInput,
+): Promise<unknown> {
+  return request(await mcpServer(rootId), 'mcp/add', { ...input });
+}
+
+export async function removeDeveloperMcpServer(rootId: string, name: string): Promise<unknown> {
+  return request(await mcpServer(rootId), 'mcp/remove', { name });
+}
+
+export async function setDeveloperMcpServerEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<unknown> {
+  const server = await mcpServer(rootId);
+  requireAdvertised(server, 'mcpSetEnabled');
+  return request(server, 'mcp/setEnabled', { name, enabled });
+}
+
+export async function testDeveloperMcpServer(rootId: string, name: string): Promise<unknown> {
+  const result = await request(await mcpServer(rootId), 'mcp/test', { name });
+  if (isRecord(result) && typeof result['elapsedMs'] === 'bigint') {
+    return { ...result, elapsedMs: Number(result['elapsedMs']) };
+  }
+  return result;
+}
+
+export async function developerMcpServerTools(rootId: string, name: string): Promise<unknown> {
+  return request(await mcpServer(rootId), 'mcp/tools', { name });
+}
+
+export async function developerMcpServerLogs(
+  rootId: string,
+  name: string,
+  limit: number,
+): Promise<unknown> {
+  const server = await mcpServer(rootId);
+  requireAdvertised(server, 'mcpLogs');
+  return request(server, 'mcp/logs', { name, limit });
 }
 
 /**

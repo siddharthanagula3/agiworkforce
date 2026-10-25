@@ -8,6 +8,7 @@ import {
   removeLocalRoutine,
 } from './localRoutineService';
 import { createHash } from 'node:crypto';
+import { promises as fs } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { app, dialog, session, shell, type BrowserWindow } from 'electron';
@@ -254,6 +255,15 @@ import {
   addDeveloperMemory,
   answerDeveloperApproval,
   archiveDeveloperThread,
+  addDeveloperMcpServer,
+  developerMcpServerLogs,
+  developerMcpServerTools,
+  listDeveloperMcpServers,
+  localMcpAvailable,
+  removeDeveloperMcpServer,
+  setDeveloperMcpServerEnabled,
+  testDeveloperMcpServer,
+  type DeveloperMcpServerInput,
   unarchiveDeveloperThread,
   renameDeveloperThread,
   pinDeveloperThread,
@@ -593,6 +603,9 @@ function workspaceScope(root: WorkspaceRoot): PermissionScope {
   return { kind: 'workspace', target: root.path };
 }
 
+const MCP_SERVERS_REASON =
+  'MCP servers are programs the AGI CLI starts on this computer with your account, so they can read files and reach the network. Listing, testing or changing them runs the CLI for this folder.';
+
 const DEVELOPER_SESSION_REASON =
   'A coding session runs the AGI CLI agent in this folder. It can read and change files here and run programs with your account.';
 
@@ -784,6 +797,34 @@ const CAPABILITY_BY_COMMAND: Record<string, CommandRequirement> = {
     orGranted: 'shell.execute',
     reason:
       'Pinning a coding session keeps it at the top of the list for this folder. Files in this folder stay as they are.',
+  },
+  developer_mcp_list: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_add: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_remove: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_set_enabled: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_test: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_tools: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
+  },
+  developer_mcp_logs: {
+    capability: 'shell.execute',
+    reason: MCP_SERVERS_REASON,
   },
   developer_thread_takeover: {
     capability: 'shell.execute',
@@ -1282,6 +1323,124 @@ async function pickRoot(window: BrowserWindow | null, args: Args): Promise<Works
 }
 
 class Cancelled extends Error {}
+
+const MCP_SERVER_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+const MAX_MCP_ARGS = 64;
+const MAX_MCP_ENV = 64;
+
+function requireMcpServerInput(args: Args): DeveloperMcpServerInput {
+  const name = requireString(args, 'name').trim();
+  if (!MCP_SERVER_NAME.test(name)) {
+    throw new InvalidArguments(
+      'Name the server with letters, numbers, dots, dashes or underscores, up to 64 characters.',
+    );
+  }
+  const command = optionalString(args, 'command', '').trim();
+  const url = optionalString(args, 'url', '').trim();
+  if ((command === '') === (url === '')) {
+    throw new InvalidArguments('Give either a command to run or a server address, not both.');
+  }
+  if (url !== '') {
+    let parsed: URL;
+    try {
+      parsed = new URL(url);
+    } catch {
+      throw new InvalidArguments('The server address is not a web address.');
+    }
+    if (parsed.protocol !== 'https:' && !localPreviewUrl(url)) {
+      throw new InvalidArguments('Use an https address, or http only on this computer.');
+    }
+    const transport = args['transport'] === 'sse' ? 'sse' : 'http';
+    return { name, url, transport };
+  }
+  const list = optionalStringList(args, 'args', MAX_MCP_ARGS) ?? [];
+  const rawEnv = args['env'];
+  const env: Record<string, string> = {};
+  if (rawEnv !== undefined && rawEnv !== null) {
+    if (typeof rawEnv !== 'object' || Array.isArray(rawEnv)) {
+      throw new InvalidArguments('"env" must map names to values.');
+    }
+    const entries = Object.entries(rawEnv as Record<string, unknown>);
+    if (entries.length > MAX_MCP_ENV) throw new InvalidArguments('Too many environment values.');
+    for (const [key, value] of entries) {
+      if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(key) || typeof value !== 'string') {
+        throw new InvalidArguments(`"${key}" is not a usable environment value.`);
+      }
+      env[key] = value;
+    }
+  }
+  return { name, command, args: list, ...(Object.keys(env).length > 0 ? { env } : {}) };
+}
+
+async function confirmMcpServer(
+  window: BrowserWindow | null,
+  input: DeveloperMcpServerInput,
+): Promise<void> {
+  const target =
+    input.url !== undefined
+      ? `Address: ${visibleInDialog(input.url)}`
+      : [
+          `Program: ${visibleInDialog(input.command ?? '')}`,
+          ...(input.args && input.args.length > 0
+            ? [`Arguments: ${visibleInDialog(input.args.join(' '))}`]
+            : []),
+          ...(input.env ? [`Environment: ${Object.keys(input.env).join(', ')}`] : []),
+        ].join('\n');
+  const allowed = await confirmInMain(
+    window,
+    { group: 'mcp-add', key: input.name },
+    {
+      type: 'warning',
+      buttons: ['Cancel', 'Add server'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Add this MCP server?',
+      message: `Add ${visibleInDialog(input.name)} as an MCP server for every folder?`,
+      detail: `${
+        input.url !== undefined
+          ? 'Coding sessions will send requests to this address, including what the agent reads from your files.'
+          : 'Coding sessions will start this program with your account. It can read and change files and reach the network.'
+      } Add it only if you set it up yourself.\n\n${target}`,
+      noLink: true,
+    },
+  );
+  if (!allowed) throw new Cancelled('The server was not added.');
+}
+
+async function confirmMcpServerEnable(window: BrowserWindow | null, name: string): Promise<void> {
+  const allowed = await confirmInMain(
+    window,
+    { group: 'mcp-enable', key: name },
+    {
+      type: 'warning',
+      buttons: ['Cancel', 'Turn on'],
+      defaultId: 0,
+      cancelId: 0,
+      title: 'Turn on this MCP server?',
+      message: `Turn on ${visibleInDialog(name)}?`,
+      detail:
+        'Coding sessions will start it again with your account, so it can read and change files and reach the network.',
+      noLink: true,
+    },
+  );
+  if (!allowed) throw new Cancelled('The server stays off.');
+}
+
+async function openMcpConfig(): Promise<boolean> {
+  const file = path.join(cliConfigRoot(), 'mcp.json');
+  await fs.mkdir(path.dirname(file), { recursive: true, mode: 0o700 });
+  await fs
+    .writeFile(file, `${JSON.stringify({ mcpServers: {} }, null, 2)}\n`, {
+      flag: 'wx',
+      mode: 0o600,
+    })
+    .catch((error: NodeJS.ErrnoException) => {
+      if (error.code !== 'EEXIST') throw error;
+    });
+  const failure = await shell.openPath(file);
+  if (failure !== '') throw new InvalidArguments(failure);
+  return true;
+}
 
 function requirePaneWindow(window: BrowserWindow | null): BrowserWindow {
   if (!window || window.isDestroyed()) {
@@ -2050,7 +2209,7 @@ function describeDeviceForRegistry(): DeviceRegistryProfile {
       browser: pairingState().paired,
       computerUse: computerUseEnabled() && computerUseAvailability().supported,
       localModels: false,
-      localMcp: false,
+      localMcp: localMcpAvailable(),
       remoteControl: remoteControlAvailable(),
     },
   };
@@ -2498,6 +2657,33 @@ async function execute(
         threadId: requireString(args, 'threadId'),
         throughTurnId: requireString(args, 'throughTurnId'),
       });
+    case 'developer_mcp_list':
+      return listDeveloperMcpServers(requireString(args, 'rootId'));
+    case 'developer_mcp_add': {
+      const input = requireMcpServerInput(args);
+      await confirmMcpServer(window, input);
+      return addDeveloperMcpServer(requireString(args, 'rootId'), input);
+    }
+    case 'developer_mcp_remove':
+      return removeDeveloperMcpServer(requireString(args, 'rootId'), requireString(args, 'name'));
+    case 'developer_mcp_set_enabled': {
+      const name = requireString(args, 'name');
+      const enabled = args['enabled'] === true;
+      if (enabled) await confirmMcpServerEnable(window, name);
+      return setDeveloperMcpServerEnabled(requireString(args, 'rootId'), name, enabled);
+    }
+    case 'developer_mcp_test':
+      return testDeveloperMcpServer(requireString(args, 'rootId'), requireString(args, 'name'));
+    case 'developer_mcp_tools':
+      return developerMcpServerTools(requireString(args, 'rootId'), requireString(args, 'name'));
+    case 'developer_mcp_logs':
+      return developerMcpServerLogs(
+        requireString(args, 'rootId'),
+        requireString(args, 'name'),
+        typeof args['limit'] === 'number' ? Math.min(Math.max(1, args['limit']), 1000) : 200,
+      );
+    case 'developer_mcp_open_config':
+      return openMcpConfig();
     case 'developer_thread_archive':
       return archiveDeveloperThread(requireString(args, 'rootId'), requireString(args, 'threadId'));
     case 'developer_thread_unarchive':
@@ -2843,6 +3029,7 @@ const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
  * read. A command is here because someone decided that, never by omission.
  */
 const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
+  'developer_mcp_open_config',
   'app_open_preview',
   'app_preview_errors',
   STORAGE_READ_COMMAND,

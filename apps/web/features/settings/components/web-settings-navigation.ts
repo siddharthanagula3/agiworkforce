@@ -113,6 +113,9 @@ export const HOSTED_SETTINGS_NAV_FIELDS: Partial<Record<SettingsNavKey, Settings
     { label: 'Blocked sites', keywords: ['block site'] },
     { label: 'Clear browsing data', keywords: ['cookies', 'sign out of sites'] },
   ],
+  'local-mcp': [
+    { label: 'Local MCP servers', keywords: ['add mcp server', 'mcp config', 'server logs'] },
+  ],
   storage: [
     { label: 'Web cache', keywords: ['clear cache'] },
     { label: 'Old logs', keywords: ['delete logs'] },

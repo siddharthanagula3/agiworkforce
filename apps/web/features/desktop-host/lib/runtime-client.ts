@@ -82,6 +82,9 @@ import type {
   SkillSummary,
   ThreadCompactResponse,
   ThreadDeleteResponse,
+  McpLogsResponse,
+  McpServerSummary,
+  McpServerToolsResponse,
 } from '@agiworkforce/types/protocol';
 
 const NO_HOST_MESSAGE = 'Local access is only available in AGI Desktop.';
@@ -988,4 +991,68 @@ export function browserPaneSupported(): Promise<boolean> {
     browserPaneSupport.set(host, probe);
   }
   return probe;
+}
+
+export interface DeveloperMcpServerInput {
+  name: string;
+  command?: string;
+  args?: string[];
+  url?: string;
+  transport?: 'http' | 'sse';
+  env?: Record<string, string>;
+}
+
+export function listDeveloperMcpServers(rootId: string): Promise<McpServerSummary[]> {
+  return invoke<McpServerSummary[]>('developer_mcp_list', { rootId });
+}
+
+export function addDeveloperMcpServer(
+  rootId: string,
+  input: DeveloperMcpServerInput,
+): Promise<unknown> {
+  return invoke<unknown>('developer_mcp_add', { rootId, ...input });
+}
+
+export function removeDeveloperMcpServer(rootId: string, name: string): Promise<unknown> {
+  return invoke<unknown>('developer_mcp_remove', { rootId, name });
+}
+
+export function setDeveloperMcpServerEnabled(
+  rootId: string,
+  name: string,
+  enabled: boolean,
+): Promise<unknown> {
+  return invoke<unknown>('developer_mcp_set_enabled', { rootId, name, enabled });
+}
+
+export function testDeveloperMcpServer(
+  rootId: string,
+  name: string,
+): Promise<{
+  name: string;
+  connected: boolean;
+  elapsedMs: number;
+  toolCount: number;
+  error?: string;
+}> {
+  return invoke('developer_mcp_test', { rootId, name });
+}
+
+export function developerMcpServerTools(
+  rootId: string,
+  name: string,
+): Promise<McpServerToolsResponse> {
+  return invoke<McpServerToolsResponse>('developer_mcp_tools', { rootId, name });
+}
+
+export function developerMcpServerLogs(
+  rootId: string,
+  name: string,
+  limit = 200,
+): Promise<McpLogsResponse> {
+  return invoke<McpLogsResponse>('developer_mcp_logs', { rootId, name, limit });
+}
+
+export function openDeveloperMcpConfig(): Promise<boolean> {
+  return invoke<boolean>('developer_mcp_open_config', {});
 }

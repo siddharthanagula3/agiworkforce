@@ -384,6 +384,8 @@ const deleteDeveloperThread = vi.fn(async () => ({
   releasedWorktrees: [],
 }));
 const forkDeveloperThread = vi.fn(async () => ({ id: 'thread-branch' }));
+const addDeveloperMcpServer = vi.fn(async () => ({ name: 'files' }));
+const setDeveloperMcpServerEnabled = vi.fn(async () => ({ name: 'files', enabled: true }));
 const compactDeveloperThread = vi.fn(async () => ({ threadId: 't-1', compacted: true }));
 vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
@@ -402,6 +404,8 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   deleteDeveloperThread,
   forkDeveloperThread,
   compactDeveloperThread,
+  addDeveloperMcpServer,
+  setDeveloperMcpServerEnabled,
   readPendingApproval,
   readWorktreeSetupScript,
   runDeveloperWorktreeSetup,
@@ -3534,4 +3538,76 @@ it('does not turn an SSH start requested on a local root into a local session', 
   });
   expect(result).toMatchObject({ ok: false, error: { code: 'invalid-arguments' } });
   expect(startDeveloperSession).not.toHaveBeenCalled();
+});
+
+describe('local MCP servers', () => {
+  beforeEach(() => {
+    getPermissionState.mockImplementation((() => 'granted') as () => PermissionState);
+  });
+
+  it('adds a program only after a native confirmation that names it', async () => {
+    showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+    const response = await dispatch(window, 'developer_mcp_add', {
+      rootId: root.id,
+      name: 'files',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem'],
+    });
+    expect(response).toMatchObject({ ok: true });
+    const options = showMessageBox.mock.calls.at(-1)?.at(-1) as { detail: string };
+    expect(options.detail).toContain('Program: npx');
+    expect(addDeveloperMcpServer).toHaveBeenCalledWith(root.id, {
+      name: 'files',
+      command: 'npx',
+      args: ['-y', '@modelcontextprotocol/server-filesystem'],
+    });
+  });
+
+  it('adds nothing when the confirmation is cancelled', async () => {
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    const response = await dispatch(window, 'developer_mcp_add', {
+      rootId: root.id,
+      name: 'files',
+      command: 'npx',
+    });
+    expect(response.ok).toBe(false);
+    expect(addDeveloperMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('refuses a malformed server before asking', async () => {
+    for (const args of [
+      { name: '../x', command: 'npx' },
+      { name: 'both', command: 'npx', url: 'https://example.com/mcp' },
+      { name: 'neither' },
+      { name: 'plain', url: 'http://example.com/mcp' },
+      { name: 'env', command: 'npx', env: { 'BAD KEY': 'x' } },
+    ]) {
+      const response = await dispatch(window, 'developer_mcp_add', { rootId: root.id, ...args });
+      expect(response, JSON.stringify(args)).toMatchObject({
+        ok: false,
+        error: { code: 'invalid-arguments' },
+      });
+    }
+    expect(showMessageBox).not.toHaveBeenCalled();
+    expect(addDeveloperMcpServer).not.toHaveBeenCalled();
+  });
+
+  it('asks before turning a server on, but not before turning it off', async () => {
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    const refused = await dispatch(window, 'developer_mcp_set_enabled', {
+      rootId: root.id,
+      name: 'files',
+      enabled: true,
+    });
+    expect(refused.ok).toBe(false);
+    expect(setDeveloperMcpServerEnabled).not.toHaveBeenCalled();
+
+    const off = await dispatch(window, 'developer_mcp_set_enabled', {
+      rootId: root.id,
+      name: 'files',
+      enabled: false,
+    });
+    expect(off).toMatchObject({ ok: true });
+    expect(setDeveloperMcpServerEnabled).toHaveBeenCalledWith(root.id, 'files', false);
+  });
 });

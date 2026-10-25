@@ -266,7 +266,7 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
 
     expect(config).toMatch(/This shell has no Local mode/u);
     expect(dispatcher).toMatch(/localModels: false/u);
-    expect(dispatcher).toMatch(/localMcp: false/u);
+    expect(dispatcher).toMatch(/localMcp: localMcpAvailable\(\)/u);
     expect(dispatcher).toMatch(
       /if \(localInferenceCommands\.has\(command\)\) \{\s*return runtimeFailure\('unsupported-platform'/u,
     );
@@ -418,7 +418,9 @@ describe('public Local and BYOK claims follow the shipping Electron enforcement'
       .join('\n');
 
     expect(currentDocs).toMatch(/Electron is the only public Desktop product/iu);
-    expect(currentDocs).toMatch(/public Electron Desktop reports `localMcp: false`/iu);
+    expect(currentDocs).toMatch(
+      /public Electron Desktop reports `localMcp: true` when its bundled CLI serves MCP/iu,
+    );
     expect(currentDocs).toMatch(/released CLI supports BYOK/iu);
 
     for (const [label, pattern] of [

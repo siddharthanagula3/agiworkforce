@@ -63,6 +63,14 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_thread_pin',
   'developer_thread_takeover',
   'developer_mcp_approval_review',
+  'developer_mcp_list',
+  'developer_mcp_add',
+  'developer_mcp_remove',
+  'developer_mcp_set_enabled',
+  'developer_mcp_test',
+  'developer_mcp_tools',
+  'developer_mcp_logs',
+  'developer_mcp_open_config',
   'developer_account_report',
 ] as const;
 
@@ -222,6 +230,9 @@ export const DEVELOPER_RUNTIME_CAPABILITIES = [
   'thread_rename',
   'thread_unarchive',
   'thread_pin',
+  'mcp_servers',
+  'mcp_logs',
+  'terminals',
 ] as const;
 
 export type DeveloperRuntimeCapability = (typeof DEVELOPER_RUNTIME_CAPABILITIES)[number];

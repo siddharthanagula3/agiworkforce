@@ -13,8 +13,8 @@ cloud, and conversations live in the cloud exactly as they do in a browser.
 What Desktop adds is a local device-capability runtime the same UI can call.
 “Local” in this document means privileged work on the device, not Local model
 inference. The public Electron dispatcher rejects every local-inference command,
-reports `localModels: false` and `localMcp: false`, and accepts no provider API
-key. Conversation inference remains Managed Cloud.
+reports `localModels: false`, reports `localMcp: true` when the bundled CLI
+serves MCP servers, and accepts no provider API key. Conversation inference remains Managed Cloud.
 
 ## Why the seam is `command()` and nothing else
 
