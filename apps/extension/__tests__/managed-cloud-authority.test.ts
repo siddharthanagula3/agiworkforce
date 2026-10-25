@@ -82,6 +82,25 @@ describe('Managed Cloud account/session authority', () => {
     expect(selectManagedCloudCancellationCredential(OWNER_B, null, ambientB)).toBe(ambientB);
   });
 
+  it('stops a long run with a fresh token of the same account, not an expired one', () => {
+    const capturedA = { owner: OWNER_A, token: 'admitted-token-a' };
+    const freshA = { owner: { ...OWNER_A }, token: 'fresh-token-a' };
+    const ambientB = { owner: OWNER_B, token: 'ambient-token-b' };
+
+    expect(selectManagedCloudCancellationCredential(OWNER_A, capturedA, freshA)).toBe(freshA);
+    expect(selectManagedCloudCancellationCredential(OWNER_A, capturedA, ambientB)).toBe(capturedA);
+    expect(selectManagedCloudCancellationCredential(OWNER_A, capturedA, null)).toBe(capturedA);
+
+    const stopCase = sourceBetween(
+      backgroundSource,
+      "case 'CANCEL_STREAM':",
+      "case 'OPEN_SIDE_PANEL':",
+    );
+    expect(stopCase).toMatch(
+      /const cancelCredential = active\s*\?\s*\(selectManagedCloudCancellationCredential\(\s*owner,\s*credential,\s*await getManagedCloudAuthContext\(\)/,
+    );
+  });
+
   it('wires owner invalidation to abort first and cancel with the admitted token', () => {
     const cancellationHelper = sourceBetween(
       backgroundSource,
@@ -269,7 +288,7 @@ describe('Managed Cloud account/session authority', () => {
     expect(cancelCase).toContain('const currentCredential = active ? null');
     expect(cancelCase).toContain('active ? { token: active.token, owner: active.owner } : null');
     expect(cancelCase).toContain('selectManagedCloudCancellationCredential(');
-    expect(cancelCase).toContain('getAuthToken: async () => credential.token');
+    expect(cancelCase).toContain('getAuthToken: async () => cancelCredential.token');
   });
 
   it('resets renderer state before exposing B and gates delayed A chunks', () => {

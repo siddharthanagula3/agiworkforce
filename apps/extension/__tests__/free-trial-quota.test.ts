@@ -491,11 +491,11 @@ describe('clearAuthToken', () => {
 });
 
 describe('streamFreeChat, network failure', () => {
-  it('yields server_error on network exception', async () => {
+  it('yields network_error on network exception, so the panel offers Retry rather than another model', async () => {
     fetchMock.mockRejectedValueOnce(new Error('Failed to fetch'));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
     expect(chunks).toHaveLength(1);
-    expect(chunks[0]).toMatchObject({ type: 'error', code: 'server_error' });
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'network_error' });
   });
 
   it('does not create the retired local prompt counter on network failure', async () => {
@@ -504,10 +504,10 @@ describe('streamFreeChat, network failure', () => {
     expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 
-  it('yields error with code server_error on AbortError', async () => {
+  it('yields network_error on an AbortError the panel did not ask for', async () => {
     fetchMock.mockRejectedValueOnce(Object.assign(new Error('AbortError'), { name: 'AbortError' }));
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'token'));
-    expect(chunks[0]).toMatchObject({ type: 'error', code: 'server_error' });
+    expect(chunks[0]).toMatchObject({ type: 'error', code: 'network_error' });
   });
 });
 
@@ -713,6 +713,12 @@ describe('quota warning header', () => {
     });
   });
 
+  it('reads the notice that a reply is being paid from usage credits', () => {
+    expect(parseQuotaWarningHeader('level=info; scope=usage_credits')).toEqual({
+      scope: 'usage_credits',
+    });
+  });
+
   it('ignores a header it cannot state honestly', () => {
     expect(parseQuotaWarningHeader(null)).toBeNull();
     expect(parseQuotaWarningHeader('')).toBeNull();
@@ -753,6 +759,15 @@ describe('streamFreeChat, 5xx server error', () => {
     expect(chromeMock._localStore[LEGACY_FREE_PROMPTS_USED_KEY]).toBeUndefined();
   });
 });
+
+function thinkingText(chunks: readonly FreeTrialChunk[]): string {
+  return chunks
+    .filter(
+      (chunk): chunk is Extract<FreeTrialChunk, { type: 'thinking' }> => chunk.type === 'thinking',
+    )
+    .map((chunk) => chunk.text)
+    .join('');
+}
 
 describe('streamFreeChat, SSE happy path', () => {
   it('keeps reading after a provider tool step until delayed final text and a terminal stop arrive', async () => {
@@ -835,7 +850,7 @@ describe('streamFreeChat, SSE happy path', () => {
       .map((chunk) => chunk.text)
       .join('');
     expect(publicText).toBe('BeforeAfter');
-    expect(JSON.stringify(chunks)).not.toContain('private reasoning');
+    expect(thinkingText(chunks)).toBe('private reasoning');
     expect(JSON.stringify(chunks)).not.toContain('<thinking>');
     expect(chunks.at(-1)).toEqual({ type: 'done' });
   });
@@ -854,7 +869,34 @@ describe('streamFreeChat, SSE happy path', () => {
     const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
     expect(chunks.some((chunk) => chunk.type === 'text')).toBe(false);
     expect(chunks.at(-1)).toMatchObject({ type: 'error', code: 'protocol_error' });
-    expect(JSON.stringify(chunks)).not.toContain('private reasoning');
+    expect(thinkingText(chunks)).toContain('private reasoning');
+  });
+
+  it('streams thinking text apart from the answer and keeps it out of the answer text', async () => {
+    fetchMock.mockResolvedValueOnce(
+      makeStreamResponse([
+        JSON.stringify({
+          choices: [
+            { delta: { content: '<thinking>Weighing the **options**' }, finish_reason: null },
+          ],
+        }),
+        JSON.stringify({
+          choices: [{ delta: { content: '</thinking>The answer.' }, finish_reason: null }],
+        }),
+        JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] }),
+      ]),
+    );
+    const chunks = await collectChunks(streamFreeChat(SAMPLE_MESSAGES, 'valid-token'));
+    expect(chunks.filter((chunk) => chunk.type === 'thinking')).toEqual([
+      { type: 'thinking', text: 'Weighing the **options**' },
+    ]);
+    expect(chunks.filter((chunk) => chunk.type === 'text')).toEqual([
+      { type: 'text', text: 'The answer.' },
+    ]);
+    expect(chunks.findIndex((chunk) => chunk.type === 'thinking')).toBeLessThan(
+      chunks.findIndex((chunk) => chunk.type === 'text'),
+    );
+    expect(chunks.at(-1)).toEqual({ type: 'done' });
   });
 
   it('preserves ordinary code text and a trailing partial tag at stream completion', async () => {

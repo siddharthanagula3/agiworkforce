@@ -72,6 +72,7 @@ import {
 } from '../src/features/cloud-bridge/conversationSync';
 import {
   getConversation,
+  updateConversationEntry,
   upsertConversation,
   type HistoryMessage,
 } from '../src/features/background/conversation-history';
@@ -513,6 +514,69 @@ describe('conversation cloud sync', () => {
     ).resolves.toBe(false);
     expect(_store[CLOUD_SYNC_TOMBSTONE_KEY]).toEqual(before);
   });
+  it('keeps the title the account writes for a new chat instead of sending the first message back over it', async () => {
+    const question =
+      'What does a loaf of sourdough cost at the bakery on the corner of Main Street today?';
+    respond = (request) => {
+      if (request.url.endsWith('/messages')) {
+        return jsonResponse({ message: { id: String(request.body['id'] ?? 'srv') } });
+      }
+      if (request.method === 'GET') {
+        const id = request.url.split('/api/chat/conversations/')[1]!.split('?')[0]!;
+        return jsonResponse({
+          conversation: { ...CONVERSATION_WIRE, id, title: 'Sourdough price on Main Street' },
+          messages: [],
+          total: 2,
+          hasMore: false,
+        });
+      }
+      return jsonResponse({
+        conversation: {
+          ...CONVERSATION_WIRE,
+          id: String(request.body['id']),
+          title: String(request.body['title']),
+        },
+      });
+    };
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      await upsertConversation(OWNER, 'conv-title', [
+        { role: 'user', content: question, timestamp: 6_000, runtime: 'managed-cloud' },
+        { role: 'assistant', content: 'About 7.40.', timestamp: 6_001, runtime: 'managed-cloud' },
+      ]);
+      await flushConversation(OWNER, 'conv-title');
+
+      expect(requests.filter((request) => request.method === 'PUT')).toHaveLength(0);
+      await vi.advanceTimersByTimeAsync(3_000);
+      await vi.waitFor(async () =>
+        expect((await getConversation(OWNER, 'conv-title'))?.title).toBe(
+          'Sourdough price on Main Street',
+        ),
+      );
+      const entry = await getConversation(OWNER, 'conv-title');
+      expect(entry?.cloudSync?.syncedTitle).toBe('Sourdough price on Main Street');
+
+      await flushConversation(OWNER, 'conv-title');
+      expect(requests.filter((request) => request.method === 'PUT')).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('leaves a chat the person renamed with the name they gave it', async () => {
+    await upsertConversation(OWNER, 'conv-renamed', cloudMessages(7_000));
+    await updateConversationEntry(OWNER, 'conv-renamed', { customTitle: 'Bakery notes' });
+    vi.useFakeTimers({ toFake: ['setTimeout'] });
+    try {
+      await flushConversation(OWNER, 'conv-renamed');
+      await vi.advanceTimersByTimeAsync(3_000);
+      expect(requests.filter((request) => request.method === 'GET')).toHaveLength(0);
+      expect((await getConversation(OWNER, 'conv-renamed'))?.title).toBe('Bakery notes');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('files the created cloud conversation under the project the panel selected', async () => {
     respond = (request) => {
       if (request.url.endsWith('/messages')) {

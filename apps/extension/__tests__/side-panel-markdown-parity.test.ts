@@ -158,6 +158,32 @@ describe('inline maths', () => {
   });
 });
 
+describe('citation markers', () => {
+  it('drops a marker the turn has no source for instead of showing a dangling [1]', async () => {
+    const { decorateCitations } = await import('../src/features/side-panel/sources');
+    const root = await render('Paris is the capital of France [1]. It sits on the Seine.[2]');
+    decorateCitations(root, []);
+    expect(root.textContent?.trim()).toBe('Paris is the capital of France. It sits on the Seine.');
+    expect(root.querySelector('.sp-citation')).toBeNull();
+  });
+
+  it('links a backed marker and drops one past the end of the source list', async () => {
+    const { decorateCitations } = await import('../src/features/side-panel/sources');
+    const root = await render('Bread costs 7.40 [1]. Butter costs 3 [4].');
+    decorateCitations(root, [{ url: 'https://shop.example.com/bread', title: 'Bread' }]);
+    expect(root.querySelectorAll('.sp-citation')).toHaveLength(1);
+    expect(root.textContent).not.toContain('[4]');
+    expect(root.textContent).not.toContain('[1]');
+  });
+
+  it('leaves an index written against a word, such as rows[1], as text', async () => {
+    const { decorateCitations } = await import('../src/features/side-panel/sources');
+    const root = await render('Read rows[1] first.');
+    decorateCitations(root, []);
+    expect(root.textContent?.trim()).toBe('Read rows[1] first.');
+  });
+});
+
 describe('code fences', () => {
   it('renders an unlabeled multiline fence as a code block', async () => {
     const root = await render('```\nfirst\nsecond\n```');

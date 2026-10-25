@@ -31,6 +31,19 @@ describe('side panel carries the visible model selection on every CHAT_MESSAGE',
     expect(sidePanelSource).not.toMatch(/dispatchTurn\([^;]*_ctx\.quickMode\)/);
   });
 
+  it('every browser task start carries the chosen reasoning effort', () => {
+    const startSites = sidePanelSource.match(/type:\s*'AGI_START_COMPUTER_USE'[\s\S]*?\}\)\)/g);
+    expect(startSites?.length).toBe(2);
+    expect(sidePanelSource).toMatch(
+      /modelSelection: _ctx\.selectedModel,\s*\.\.\.browserTaskEffortPayload\(_ctx\.selectedModel\),\s*startSent: false/,
+    );
+    for (const site of startSites ?? []) {
+      expect(stripComments(site)).toMatch(
+        /\.\.\.browserTaskEffortPayload\(_ctx\.selectedModel\)|effort: run\.effort/,
+      );
+    }
+  });
+
   it('omits prior route and effort from every Quick request envelope', () => {
     const start = sidePanelSource.indexOf('function managedOutboundRoutingPayload');
     const end = sidePanelSource.indexOf('// Provider display order', start);

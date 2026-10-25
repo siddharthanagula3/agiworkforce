@@ -231,6 +231,8 @@ function harness() {
     }),
     selectModelHistory: vi.fn(() => []),
     managedOutboundRoutingPayload: () => ({}),
+    browserTaskEffortPayload: (model: string) =>
+      model === 'catalog-selected-browser-model' ? { effort: 'medium' } : {},
     managedTurnPersistencePayload: () => ({}),
     PAGE_CONTEXT_EMPTY_REASON: 'No page context',
     SIDE_PANEL_CLIENT_INSTANCE_ID: 'panel-client',
@@ -324,6 +326,7 @@ describe('browser tasks from the real composer functions', () => {
       goal: 'Click the Update preview button',
       tabId: 7,
       modelSelection: 'catalog-selected-browser-model',
+      effort: 'medium',
       historyConversationId: 'conversation-a',
     });
     expect(h.context.messages[0]).toMatchObject({
@@ -362,6 +365,7 @@ describe('browser tasks from the real composer functions', () => {
       goal,
       tabId: 7,
       modelSelection: 'catalog-selected-browser-model',
+      effort: 'medium',
       historyConversationId: 'conversation-a',
     });
     expect(h.context.messages[0]?.content).toBe(goal);

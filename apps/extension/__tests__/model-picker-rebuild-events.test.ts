@@ -74,6 +74,8 @@ function harness() {
     modelSelectorWrap: wrap,
     modelSelectorBtn: trigger,
     modelDropdownEl: dropdown,
+    modelMenuListEl: dropdown,
+    modelMenuSettingsEl: dropdown,
     managedModelAccess: access,
     buildManagedModelPickerMenu,
     buildManagedModelPickerView,

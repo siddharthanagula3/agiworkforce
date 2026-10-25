@@ -138,6 +138,7 @@ const account = vi.hoisted(() => ({
   summarized: '',
   signedIn: true,
   uploadsAllowed: true,
+  connectorsComingSoon: false,
   ready: true,
   modelIds: [] as string[],
   onChange: undefined as (() => void) | undefined,
@@ -200,7 +201,17 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
     email: null,
     capabilityDocument: {
       granted: account.uploadsAllowed ? ['canUploadFiles'] : [],
-      deniedBy: account.uploadsAllowed ? {} : { canUploadFiles: ['settings'] },
+      deniedBy: {
+        ...(account.uploadsAllowed ? {} : { canUploadFiles: ['settings'] }),
+        ...(account.connectorsComingSoon ? { canUseConnectors: ['model'] } : {}),
+      },
+      ...(account.connectorsComingSoon
+        ? {
+            denialReasons: {
+              canUseConnectors: (await import('@agiworkforce/types')).CONNECTORS_COMING_SOON_REASON,
+            },
+          }
+        : {}),
       sources: {
         model: 'fixture-model',
         tier: 'fixture-tier',
@@ -210,7 +221,11 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
     },
   }),
 }));
-import { getRoutingSlotModel, parseManagedUsageSummaryResponse } from '@agiworkforce/types';
+import {
+  CONNECTORS_COMING_SOON_LABEL,
+  getRoutingSlotModel,
+  parseManagedUsageSummaryResponse,
+} from '@agiworkforce/types';
 import {
   deleteConversation,
   saveConversation,
@@ -330,6 +345,7 @@ beforeEach(async () => {
   account.owner = { accountId: 'account-fixture', authIncarnation: 'session-fixture' };
   account.signedIn = true;
   account.uploadsAllowed = true;
+  account.connectorsComingSoon = false;
   account.ready = true;
   account.modelIds = [];
   chromeMock.screenshotError = '';
@@ -482,6 +498,29 @@ async function refreshAccount(): Promise<void> {
 }
 
 describe('attachment account and capability admission', () => {
+  it('shows Connectors coming soon as a locked row that cannot be focused or clicked', async () => {
+    account.connectorsComingSoon = true;
+    account.onChange!();
+    const locked = (): HTMLElement | null => document.getElementById('sp-attach-connectors-locked');
+    await vi.waitFor(() => expect(locked()?.hidden).toBe(false));
+    const row = locked()!;
+    expect(row.tagName).toBe('DIV');
+    expect(row.getAttribute('role')).toBe('menuitem');
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    expect(row.getAttribute('tabindex')).toBe('-1');
+    expect(row.textContent).toContain(CONNECTORS_COMING_SOON_LABEL);
+    expect((document.getElementById('sp-attach-connectors-item') as HTMLButtonElement).hidden).toBe(
+      true,
+    );
+    row.click();
+    expect(chromeMock.tabs.create).not.toHaveBeenCalled();
+    const menu = document.getElementById('sp-attach-menu')!;
+    for (let step = 0; step < 12; step += 1) {
+      menu.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      expect(document.activeElement).not.toBe(row);
+    }
+  });
+
   it('refuses file intake when the signed-in account denies uploads', async () => {
     account.uploadsAllowed = false;
     account.onChange!();

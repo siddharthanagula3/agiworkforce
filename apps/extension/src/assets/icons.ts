@@ -21,6 +21,10 @@ export const ChevronDown = svg('<path d="m6 9 6 6 6-6"/>');
 
 export const Check = svg('<path d="M20 6 9 17l-5-5"/>');
 
+export const Lock = svg(
+  '<rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+);
+
 export const Terminal = svg(
   '<polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>',
 );

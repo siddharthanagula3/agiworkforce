@@ -71,6 +71,9 @@ export interface SidePanelChatMessage {
   sources?: SidePanelSource[];
   citations?: SidePanelSource[];
   durationMs?: number;
+  thinking?: string;
+  thinkingStartedAt?: number;
+  thinkingDurationMs?: number;
   runtime?: 'managed-cloud' | 'local';
   errorText?: string;
   streamCancellation?: 'pending' | 'unconfirmed';
@@ -111,6 +114,8 @@ export interface StoredSidePanelChatMessage {
   sources?: SidePanelSource[];
   citations?: SidePanelSource[];
   durationMs?: number;
+  thinking?: string;
+  thinkingDurationMs?: number;
   runtime?: 'managed-cloud' | 'local';
   error?: boolean;
   errorText?: string;
@@ -119,6 +124,32 @@ export interface StoredSidePanelChatMessage {
 }
 
 const MAX_PERSISTED_ACTIVITY_EVENTS = 1_000;
+export const MAX_THINKING_CHARS = 20_000;
+
+export function appendThinking(
+  message: SidePanelChatMessage,
+  text: string,
+  nowMs = Date.now(),
+): void {
+  if (!text) return;
+  if (message.thinkingStartedAt === undefined) {
+    message.thinkingStartedAt = nowMs;
+    if (message.thinking) message.thinking = `${message.thinking}\n\n`;
+  }
+  message.thinking = `${message.thinking ?? ''}${text}`.slice(0, MAX_THINKING_CHARS);
+}
+
+export function isThinkingLive(message: SidePanelChatMessage): boolean {
+  return message.thinkingStartedAt !== undefined;
+}
+
+export function settleThinking(message: SidePanelChatMessage, nowMs = Date.now()): boolean {
+  if (message.thinkingStartedAt === undefined) return false;
+  message.thinkingDurationMs =
+    (message.thinkingDurationMs ?? 0) + Math.max(0, nowMs - message.thinkingStartedAt);
+  delete message.thinkingStartedAt;
+  return true;
+}
 
 function isDisplaySafeActivityEvent(envelope: AgentEventEnvelope): boolean {
   switch (envelope.event.type) {
@@ -183,10 +214,37 @@ export function settleFailedAgentActivity(
   message: SidePanelChatMessage,
   completedAtMs = Date.now(),
 ): void {
+  settleThinking(message, completedAtMs);
   const activity = message.agentActivity;
   if (!activity || activityHasEnded(activity)) return;
   message.agentActivity = finishAgentActivityLocally(activity, {
     status: 'failed',
+    completedAtMs: Math.max(activity.updatedAtMs, completedAtMs),
+  });
+}
+
+export function settleStoppedAgentActivity(
+  message: SidePanelChatMessage,
+  completedAtMs = Date.now(),
+): void {
+  settleThinking(message, completedAtMs);
+  const activity = message.agentActivity;
+  if (!activity || activityHasEnded(activity)) return;
+  message.agentActivity = finishAgentActivityLocally(activity, {
+    status: 'cancelled',
+    completedAtMs: Math.max(activity.updatedAtMs, completedAtMs),
+  });
+}
+
+export function settleFinishedAgentActivity(
+  message: SidePanelChatMessage,
+  completedAtMs = Date.now(),
+): void {
+  settleThinking(message, completedAtMs);
+  const activity = message.agentActivity;
+  if (!activity || activity.status !== 'running' || message.cloudAgentRun) return;
+  message.agentActivity = finishAgentActivityLocally(activity, {
+    status: message.error ? 'failed' : 'completed',
     completedAtMs: Math.max(activity.updatedAtMs, completedAtMs),
   });
 }
@@ -324,6 +382,10 @@ export function hydrateStoredChatMessage(
       ? { citations: message.citations.map((citation) => ({ ...citation })) }
       : {}),
     ...(message.durationMs !== undefined ? { durationMs: message.durationMs } : {}),
+    ...(message.thinking ? { thinking: message.thinking } : {}),
+    ...(message.thinking && message.thinkingDurationMs !== undefined
+      ? { thinkingDurationMs: message.thinkingDurationMs }
+      : {}),
     ...(message.runtime ? { runtime: message.runtime } : {}),
     ...(message.error ? { error: true } : {}),
     ...(message.errorText ? { errorText: message.errorText } : {}),
@@ -527,6 +589,7 @@ export function applyStreamFailure(
 ): void {
   const existing = messages.find((message) => message.id === streamId);
   if (existing) {
+    settleThinking(existing, timestamp);
     existing.streaming = false;
     existing.error = true;
     existing.errorText = errorText;
@@ -546,13 +609,49 @@ export function applyStreamFailure(
   });
 }
 
+const ERRORS_ANOTHER_MODEL_CANNOT_FIX: ReadonlySet<string> = new Set([
+  'auth_required',
+  'account_suspended',
+  'terms_required',
+  'plan_required',
+  'quota_exceeded',
+  'cancelled',
+  'invalid_request',
+  'protocol_error',
+  'network_error',
+  'timeout',
+]);
+
+export function streamErrorOffersModelSwitch(
+  errorCode: string | undefined,
+  quotaSuggestsStandardModel: boolean,
+): boolean {
+  if (quotaSuggestsStandardModel) return true;
+  return errorCode !== undefined && !ERRORS_ANOTHER_MODEL_CANNOT_FIX.has(errorCode);
+}
+
+export interface ModelHistoryMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  fileAttachments?: Array<{ assetId: string; mimeType: string }>;
+}
+
 export function selectModelHistory(
   messages: readonly SidePanelChatMessage[],
   excludedMessageId?: string,
-): Array<{ role: 'user' | 'assistant'; content: string }> {
+): ModelHistoryMessage[] {
   return messages
     .filter((message) => !message.error && message.id !== excludedMessageId)
-    .map((message) => ({ role: message.role, content: message.content }));
+    .map((message) => {
+      const files = (message.attachments ?? []).flatMap((attachment) =>
+        attachment.assetId ? [{ assetId: attachment.assetId, mimeType: attachment.mimeType }] : [],
+      );
+      return {
+        role: message.role,
+        content: message.content,
+        ...(files.length > 0 ? { fileAttachments: files } : {}),
+      };
+    });
 }
 
 export function shouldRebuildMessageDom(input: {

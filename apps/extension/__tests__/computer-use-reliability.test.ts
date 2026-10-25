@@ -347,7 +347,9 @@ import {
   callCloud,
   DEFAULT_GATEWAY_BASE,
   BROWSER_TOOL_DEFINITIONS,
+  resolveComputerUseEffort,
 } from '../src/features/computer-use/cloudAgentClient';
+import { getPickerModels, resolveModelEffort } from '@agiworkforce/types';
 import * as browserControlConsent from '../src/features/computer-use/browserControlConsent';
 import { createCdpInspectionFixture } from './fixtures/cdp-inspection';
 
@@ -1551,5 +1553,30 @@ describe('P3-8: allowSubmitWithMissingRequired defaults to BLOCK', () => {
 
     expect(result['submitted']).toBe(false);
     expect((result['missingRequiredFields'] as string[]).length).toBeGreaterThan(0);
+  });
+});
+
+describe('browser actions run at the reasoning effort the person chose', () => {
+  function requestBody(index = 0): Record<string, unknown> {
+    return JSON.parse((fetchMock.mock.calls[index] as [string, RequestInit])[1].body as string);
+  }
+
+  it('sends the chosen effort on every browser step', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    await runAgentLoop('Read the page', 42, { maxSteps: 1, effort: 'medium' });
+    expect(requestBody()['effort']).toBe('medium');
+  });
+
+  it('leaves effort to the route when none was chosen', async () => {
+    fetchMock.mockResolvedValueOnce({ ok: true, status: 200, body: makeFinalSseStream() });
+    await runAgentLoop('Read the page', 42, { maxSteps: 1 });
+    expect(requestBody()).not.toHaveProperty('effort');
+  });
+
+  it('fits the chosen effort to the model that runs the browser task', () => {
+    const model = getPickerModels().find((entry) => resolveModelEffort(entry.id, undefined))!;
+    expect(resolveComputerUseEffort(model.id, undefined, 'pro')).toBeUndefined();
+    const chosen = resolveModelEffort(model.id, 'medium');
+    expect(resolveComputerUseEffort(model.id, 'medium', 'pro')).toBe(chosen);
   });
 });

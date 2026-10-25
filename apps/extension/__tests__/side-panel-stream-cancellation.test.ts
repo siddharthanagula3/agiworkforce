@@ -14,6 +14,7 @@ import {
   reconcileManagedRunActivity,
   resolveComposerPrompt,
   settleBrowserActivity,
+  settleStoppedAgentActivity,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 
@@ -86,6 +87,8 @@ function harness() {
     applyStreamFailure,
     reconcileManagedRunActivity,
     settleBrowserActivity,
+    settleStoppedAgentActivity,
+    releaseTurnSiteGrants: vi.fn(),
     saveMessages,
     renderMessages,
     updateSendButton: vi.fn(),

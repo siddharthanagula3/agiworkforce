@@ -29,12 +29,15 @@ export { getAuthToken };
 
 import {
   canAccessModelForSubscriptionTier,
+  clampEffortToEntitlement,
   classifyManagedQuotaErrorCode,
   getModelMetadataById,
   getRoutingSlotModel,
   isAutoModeModelId,
   isManagedTrafficPermitted,
   isModelLive,
+  resolveModelEffort,
+  type Effort,
 } from '@agiworkforce/types';
 
 export const COMPUTER_USE_MODEL: string = getRoutingSlotModel('browser_dom');
@@ -96,6 +99,19 @@ export function resolveManagedComputerUseModel(
     throw new Error(`${metadata.name} does not support browser tools, screenshots, and streaming.`);
   }
   return metadata.id;
+}
+
+export function resolveComputerUseEffort(
+  modelId: string,
+  requested: Effort | undefined,
+  subscriptionTier: string | undefined,
+): Effort | undefined {
+  if (requested === undefined) return undefined;
+  return clampEffortToEntitlement(
+    modelId,
+    resolveModelEffort(modelId, requested),
+    subscriptionTier,
+  );
 }
 
 export const DEFAULT_GATEWAY_BASE = configuredAgiWebOrigin() ?? '';
@@ -227,6 +243,7 @@ export async function callCloud(
   signal?: AbortSignal,
   model: string = COMPUTER_USE_MODEL,
   tools: readonly ToolDefinition[] = getBrowserToolDefinitions(false),
+  effort?: Effort,
 ): Promise<CloudAgentResponse> {
   const controller = new AbortController();
   const cancel = (): void => controller.abort(signal?.reason);
@@ -255,6 +272,7 @@ export async function callCloud(
       model,
       tools,
       resetTimeout,
+      effort,
     );
   } catch (error) {
     if (controller.signal.aborted && controller.signal.reason instanceof Error)
@@ -274,6 +292,7 @@ async function callCloudRequest(
   model: string,
   tools: readonly ToolDefinition[],
   resetTimeout: () => void,
+  effort: Effort | undefined,
 ): Promise<CloudAgentResponse> {
   const validatedBase = validateGatewayUrl(gatewayBase);
   if (!validatedBase) {
@@ -289,6 +308,7 @@ async function callCloudRequest(
     tool_choice: 'auto',
     stream: true,
     max_tokens: 2048,
+    ...(effort ? { effort } : {}),
   });
 
   const response = await fetch(endpoint, {

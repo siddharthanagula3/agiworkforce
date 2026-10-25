@@ -1453,6 +1453,24 @@
     "message": "Preparing",
     "description": "Status beside the thinking dots before the answer starts"
   },
+  "spThoughtLive": {
+    "message": "Thinking",
+    "description": "Label of the reasoning section while the model is still thinking"
+  },
+  "spThoughtFor": {
+    "message": "Thought for $DURATION$",
+    "description": "Label of the collapsed reasoning section once the answer has started",
+    "placeholders": {
+      "duration": {
+        "content": "$1",
+        "example": "4s"
+      }
+    }
+  },
+  "spThoughtProcess": {
+    "message": "Thought process",
+    "description": "Label of the collapsed reasoning section when its length was not measured"
+  },
   "spThinkingReadingPage": {
     "message": "Reading the page",
     "description": "Status beside the thinking dots while a page command reads the page"
@@ -4061,7 +4079,7 @@
     "description": "Body of the site access card when AGI only reads"
   },
   "spBrowserAccessActBody": {
-    "message": "AGI wants to act on this page for you. It controls the tab through Chrome's debugger, Chrome shows a banner while it works, and AGI asks before each action unless you chose Full access.",
+    "message": "AGI wants to act on this page for you. It controls the tab through Chrome's debugger, and Chrome shows a banner while it works.",
     "description": "Body of the site access card when AGI acts on the page"
   },
   "spBrowserAccessOnce": {

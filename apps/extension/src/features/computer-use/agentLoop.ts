@@ -44,6 +44,7 @@ import {
   type AutomationOutcome,
   type AutomationSettlement,
   type AutomationVerification,
+  type Effort,
 } from '@agiworkforce/types';
 import { recordAutomationAction } from '../observability/automationAudit';
 import type { ResolvedBrowserUpload } from './userFileUpload';
@@ -95,6 +96,7 @@ export interface AgentLoopOptions {
    */
   onDebuggerDetachedByUser?: (tabId: number) => void;
   model?: string;
+  effort?: Effort;
   pageContext?: string;
   /**
    * Hands the tab to the user and resolves when they hand it back. A run with
@@ -1143,6 +1145,7 @@ export async function runAgentLoop(
           ),
           ...siteTools,
         ],
+        options.effort,
       );
       await assertRunOwnership(options);
       totalTokens += tokensUsed;

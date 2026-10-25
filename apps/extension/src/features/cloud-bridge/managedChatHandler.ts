@@ -36,6 +36,7 @@ import {
   streamManagedChatToolInput,
   type FreeTrialChunk,
   type FreeTrialMessage,
+  ManagedNetworkError,
   type ManagedChatFileAttachment,
   type ManagedChatStreamOptions,
   type ManagedMemoryCommandTurn,
@@ -103,6 +104,7 @@ export interface ChromeManagedChatRequest {
     role: 'user' | 'assistant';
     content: string;
     uploadedAttachments?: ManagedCloudChatAttachment[];
+    fileAttachments?: ManagedChatFileAttachment[];
   }>;
   attachments?: string[];
   fileAttachments?: ManagedChatFileAttachment[];
@@ -168,6 +170,7 @@ export interface ChromeManagedChatDependencies {
   streamChat: typeof streamFreeChat;
   onRouting?: (routing: ChromeManagedRoutingResult) => void | Promise<void>;
   onText: (text: string) => void | Promise<void>;
+  onThinking?: (text: string) => void | Promise<void>;
   onCodeExecution?: (
     chunk: Extract<FreeTrialChunk, { type: 'code-execution' }>,
   ) => void | Promise<void>;
@@ -216,6 +219,7 @@ export interface ChromeManagedApprovalDependencies {
   getAuthToken: typeof getAuthToken;
   streamApproval: typeof streamManagedChatApproval;
   onText: (text: string) => void | Promise<void>;
+  onThinking?: (text: string) => void | Promise<void>;
   onCodeExecution?: (
     chunk: Extract<FreeTrialChunk, { type: 'code-execution' }>,
   ) => void | Promise<void>;
@@ -268,6 +272,36 @@ const DEFAULT_TOOL_INPUT_DEPENDENCIES: Omit<ChromeManagedToolInputDependencies, 
   getAuthToken,
   streamToolInput: streamManagedChatToolInput,
 };
+
+function validFileAttachments(files: unknown): files is ManagedChatFileAttachment[] {
+  return (
+    Array.isArray(files) &&
+    files.length <= MANAGED_CHAT_MAX_ATTACHMENTS &&
+    files.every(
+      (file: Partial<ManagedChatFileAttachment> | null) =>
+        !!file &&
+        typeof file.assetId === 'string' &&
+        MANAGED_CHAT_FILE_ASSET_ID.test(file.assetId) &&
+        typeof file.mimeType === 'string' &&
+        file.mimeType.length > 0 &&
+        file.mimeType.length <= 255,
+    )
+  );
+}
+
+/** Earlier turns' files, newest first kept, so a long chat stays within the file limit. */
+function retainedHistoryFiles(
+  history: NonNullable<ChromeManagedChatRequest['conversationHistory']>,
+): Set<ManagedChatFileAttachment> {
+  const retained = new Set<ManagedChatFileAttachment>();
+  for (const message of [...history].reverse()) {
+    for (const file of [...(message.fileAttachments ?? [])].reverse()) {
+      if (retained.size >= MANAGED_CHAT_MAX_ATTACHMENTS) return retained;
+      retained.add(file);
+    }
+  }
+  return retained;
+}
 
 function validateRequest(request: ChromeManagedChatRequest): string | null {
   if (typeof request.id !== 'string' || !STREAM_ID_PATTERN.test(request.id))
@@ -336,24 +370,12 @@ function validateRequest(request: ChromeManagedChatRequest): string | null {
         .success
     )
       return 'Conversation history contains invalid uploaded attachment references.';
+    if (!validFileAttachments(message.fileAttachments ?? []))
+      return 'Conversation history contains invalid file references.';
   }
   if (!Array.isArray(request.attachments ?? [])) return 'Attachments are malformed.';
   const fileAttachments = request.fileAttachments ?? [];
-  if (!Array.isArray(fileAttachments) || fileAttachments.length > MANAGED_CHAT_MAX_ATTACHMENTS) {
-    return 'Attachments are malformed.';
-  }
-  for (const file of fileAttachments) {
-    if (
-      !file ||
-      typeof file.assetId !== 'string' ||
-      !MANAGED_CHAT_FILE_ASSET_ID.test(file.assetId) ||
-      typeof file.mimeType !== 'string' ||
-      file.mimeType.length === 0 ||
-      file.mimeType.length > 255
-    ) {
-      return 'Attachments are malformed.';
-    }
-  }
+  if (!validFileAttachments(fileAttachments)) return 'Attachments are malformed.';
   const uploaded = ManagedCloudUploadedChatAttachmentsSchema.safeParse(
     request.uploadedAttachments ?? [],
   );
@@ -557,16 +579,23 @@ export async function executeChromeManagedChat(
   );
   const inlineAttachments = [...(request.attachments ?? [])];
   const historyAttachments: ManagedCloudChatAttachment[] = [];
+  const retainedFiles = retainedHistoryFiles(request.conversationHistory ?? []);
+  const historyFiles = [...retainedFiles];
   const history = (request.conversationHistory ?? []).map((message): FreeTrialMessage => {
     const uploaded = ManagedCloudUploadedChatAttachmentsSchema.parse(
       message.uploadedAttachments ?? [],
     );
     historyAttachments.push(...uploaded);
+    const files = (message.fileAttachments ?? []).filter((file) => retainedFiles.has(file));
     return {
       role: message.role,
       content:
-        uploaded.length > 0
-          ? [{ type: 'text', text: message.content }, ...uploaded.map(chatAttachmentContentPart)]
+        uploaded.length > 0 || files.length > 0
+          ? [
+              { type: 'text', text: message.content },
+              ...uploaded.map(chatAttachmentContentPart),
+              ...files.map((file) => ({ type: 'file' as const, file: { asset_id: file.assetId } })),
+            ]
           : message.content,
     };
   });
@@ -608,6 +637,9 @@ export async function executeChromeManagedChat(
     }
     if (error instanceof AccountUnavailableError) {
       return { status: 'error', code: 'account_suspended', message: error.message };
+    }
+    if (error instanceof ManagedNetworkError) {
+      return { status: 'error', code: 'server_error', message: error.message };
     }
     return {
       status: 'error',
@@ -685,7 +717,7 @@ export async function executeChromeManagedChat(
           mime: attachment.mimeType,
           type: attachment.type === 'image' ? 'image' : 'document',
         })),
-      ...(request.fileAttachments ?? []).map((file) => ({
+      ...[...(request.fileAttachments ?? []), ...historyFiles].map((file) => ({
         mime: file.mimeType,
         type: file.mimeType.startsWith('image/') ? 'image' : 'document',
       })),
@@ -710,7 +742,9 @@ export async function executeChromeManagedChat(
   const imageLimit = managedModelImageLimit(routing.modelKey);
   const imageCount =
     (request.attachments?.length ?? 0) +
-    (request.fileAttachments ?? []).filter((file) => file.mimeType.startsWith('image/')).length +
+    [...(request.fileAttachments ?? []), ...historyFiles].filter((file) =>
+      file.mimeType.startsWith('image/'),
+    ).length +
     [...uploadedAttachments, ...historyAttachments].filter((file) => file.type === 'image').length;
   if (imageLimit !== null && imageCount > imageLimit) {
     return {
@@ -802,6 +836,7 @@ type ManagedChatLegsDependencies = Pick<
   | 'streamChat'
   | 'onRouting'
   | 'onText'
+  | 'onThinking'
   | 'onCodeExecution'
   | 'onAgentEvent'
   | 'onGeneratedFiles'
@@ -889,6 +924,10 @@ async function runManagedChatLegs(
         if (chunk.type === 'text') {
           legText += chunk.text;
           await dependencies.onText(chunk.text);
+          continue;
+        }
+        if (chunk.type === 'thinking') {
+          await dependencies.onThinking?.(chunk.text);
           continue;
         }
         if (chunk.type === 'code-execution') {
@@ -1026,6 +1065,10 @@ async function relayManagedResume(
     if (chunk.type === 'text') {
       text += chunk.text;
       await dependencies.onText(chunk.text);
+      continue;
+    }
+    if (chunk.type === 'thinking') {
+      await dependencies.onThinking?.(chunk.text);
       continue;
     }
     if (chunk.type === 'code-execution') {
@@ -1236,6 +1279,7 @@ export function createChromeManagedChatDependencies(
   callbacks: Pick<
     ChromeManagedChatDependencies,
     | 'onRouting'
+    | 'onThinking'
     | 'onCodeExecution'
     | 'onAgentEvent'
     | 'onGeneratedFiles'
@@ -1254,6 +1298,7 @@ export function createChromeManagedApprovalDependencies(
   onText: ChromeManagedApprovalDependencies['onText'],
   callbacks: Pick<
     ChromeManagedApprovalDependencies,
+    | 'onThinking'
     | 'onCodeExecution'
     | 'onAgentEvent'
     | 'onGeneratedFiles'

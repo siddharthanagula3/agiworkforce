@@ -319,8 +319,9 @@ describe('Chrome side-panel feature surfaces', () => {
   });
 
   it('moves focus to the first available attach menu item when it opens', () => {
-    expect(source).toContain(
-      'attachMenuItems.find((item) => !item.hidden && !item.disabled)?.focus()',
+    expect(source).toContain('if (isOpen) focusableAttachItems()[0]?.focus();');
+    expect(source).toMatch(
+      /const focusableAttachItems = \(\): HTMLElement\[\] =>\s*attachMenuItems\.filter\(\s*\(item\) =>\s*!item\.hidden &&\s*!\(item instanceof HTMLButtonElement && item\.disabled\) &&\s*item\.getAttribute\('aria-disabled'\) !== 'true',/,
     );
   });
 

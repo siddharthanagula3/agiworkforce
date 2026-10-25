@@ -116,10 +116,8 @@ export interface ManagedQuotaBlock {
 
 export type ManagedQuotaWarningScope = 'billing_period' | 'rolling_five_hour' | 'rolling_weekly';
 
-export interface ManagedQuotaWarningSignal {
-  scope: ManagedQuotaWarningScope;
-  usedPercent: number;
-}
+export type ManagedQuotaWarningSignal =
+  { scope: ManagedQuotaWarningScope; usedPercent: number } | { scope: 'usage_credits' };
 
 const QUOTA_WARNING_SCOPES: ReadonlySet<string> = new Set<ManagedQuotaWarningScope>([
   'billing_period',
@@ -137,6 +135,7 @@ export function parseQuotaWarningHeader(value: string | null): ManagedQuotaWarni
     }
   }
   const scope = fields.get('scope');
+  if (scope === 'usage_credits') return { scope };
   const usedPercent = Number(fields.get('used_percent'));
   if (!scope || !QUOTA_WARNING_SCOPES.has(scope) || !Number.isFinite(usedPercent)) return null;
   return {
@@ -195,6 +194,16 @@ export class AccountUnavailableError extends Error {
   }
 }
 
+export const MANAGED_NETWORK_ERROR_MESSAGE =
+  'Network error reaching AGI cloud. Check your connection.';
+
+export class ManagedNetworkError extends Error {
+  constructor() {
+    super(MANAGED_NETWORK_ERROR_MESSAGE);
+    this.name = 'ManagedNetworkError';
+  }
+}
+
 export async function getManagedModelAccess(
   token: string,
   signal?: AbortSignal,
@@ -210,10 +219,17 @@ export async function getManagedModelAccess(
     },
     signal,
   };
-  const [response, usageResponse] = await Promise.all([
-    fetch(MANAGED_MODELS_ENDPOINT, requestOptions),
-    fetch(MANAGED_USAGE_ENDPOINT, requestOptions),
-  ]);
+  let response: Response;
+  let usageResponse: Response;
+  try {
+    [response, usageResponse] = await Promise.all([
+      fetch(MANAGED_MODELS_ENDPOINT, requestOptions),
+      fetch(MANAGED_USAGE_ENDPOINT, requestOptions),
+    ]);
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    throw new ManagedNetworkError();
+  }
   if (!response.ok || !usageResponse.ok) {
     const failed = !response.ok ? response : usageResponse;
     const status = failed.status;
@@ -677,6 +693,7 @@ export interface ManagedCodeExecution {
 
 export type FreeTrialChunk =
   | { type: 'text'; text: string }
+  | { type: 'thinking'; text: string }
   | { type: 'code-execution'; execution: ManagedCodeExecution }
   | { type: 'agent-event'; envelope: AgentEventEnvelope; durableReplay?: true }
   | { type: 'generated-files'; files: GeneratedFileWire[] }
@@ -700,7 +717,8 @@ export type FreeTrialChunk =
         | 'server_error'
         | 'protocol_error'
         | 'cancelled'
-        | 'timeout';
+        | 'timeout'
+        | 'network_error';
       /**
        * The wait the provider itself asked for, never a guess. The panel
        * states a time only when this is present, because a reader who sits
@@ -1385,8 +1403,8 @@ export async function* streamFreeChat(
       }
       yield {
         type: 'error',
-        message: 'Network error reaching AGI cloud. Check your connection.',
-        code: 'server_error',
+        message: MANAGED_NETWORK_ERROR_MESSAGE,
+        code: 'network_error',
       };
       return;
     }
@@ -1482,6 +1500,10 @@ export async function* streamFreeChat(
     const publicTextChunks = (parts: readonly ThinkingTagPart[]): FreeTrialChunk[] => {
       const chunks: FreeTrialChunk[] = [];
       for (const part of parts) {
+        if (part.type === 'thinking' && part.text) {
+          chunks.push({ type: 'thinking', text: part.text });
+          continue;
+        }
         if (part.type !== 'text' || !part.text) continue;
         sawVisibleText = true;
         unacknowledgedPublicText += part.text;
@@ -1808,7 +1830,7 @@ export async function* streamFreeChat(
       yield {
         type: 'error',
         message: 'The AGI Cloud response stream failed.',
-        code: 'server_error',
+        code: 'network_error',
       };
     } finally {
       reader.cancel().catch(() => {});

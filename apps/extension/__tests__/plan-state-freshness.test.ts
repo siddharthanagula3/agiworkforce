@@ -143,3 +143,32 @@ describe('the panel shows the plan the server has now', () => {
     }
   });
 });
+
+describe('model access while offline', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('says the network failed instead of repeating the browser error', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        throw new TypeError('Failed to fetch');
+      }),
+    );
+    await expect(getManagedModelAccess('token')).rejects.toThrow(
+      'Network error reaching AGI cloud. Check your connection.',
+    );
+  });
+
+  it('still reports a cancelled lookup as cancelled', async () => {
+    const controller = new AbortController();
+    const aborted = new DOMException('The operation was aborted.', 'AbortError');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => {
+        controller.abort();
+        throw aborted;
+      }),
+    );
+    await expect(getManagedModelAccess('token', controller.signal)).rejects.toBe(aborted);
+  });
+});

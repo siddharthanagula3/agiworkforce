@@ -66,6 +66,7 @@ describe('right-click Ask AGI about a selection', () => {
         type: 'ask',
         text: 'The loaf costs 7.40',
         url: 'https://example.com/a',
+        tabId: 4,
       }),
     });
     expect(open).toHaveBeenCalledWith({ tabId: 4, windowId: 2 });
@@ -125,27 +126,18 @@ describe('right-click Ask AGI about a selection', () => {
     expect(set).toHaveBeenCalledWith({ handoff: { tabId: 4 } });
   });
 
-  it('quotes the selection in the composer and waits for the question instead of sending it', () => {
-    const pending = {
-      type: 'ask',
-      text: '  The loaf costs 7.40  ',
-      url: 'https://example.com/a',
-      timestamp: Date.now(),
-    };
+  function pendingChatChecker(pending: Record<string, unknown>, ctx: Record<string, unknown>) {
     const remove = vi.fn(async () => undefined);
     const sendMessage = vi.fn();
-    const input = document.createElement('textarea');
-    input.id = 'sp-input';
-    document.body.appendChild(input);
     const check = run<() => void>(
-      `let composerContextNotice = null;\n${slice(
+      `let composerContextNotice = null;\nlet offeredSelectionKey = null;\nlet pendingSelectionText = null;\n${slice(
         panelSource,
         'async function attachPageForQuestion',
         'async function checkPendingContextHandoff',
       )}`,
       'checkPendingChat',
       {
-        _ctx: {},
+        _ctx: ctx,
         chrome: {
           runtime: {},
           storage: {
@@ -160,6 +152,14 @@ describe('right-click Ask AGI about a selection', () => {
         SLASH_COMMANDS: { '/summarize': { prompt: 'Summarize' } },
         canAdmitComposerMessage: () => true,
         capturePageContext: vi.fn(),
+        clearPendingPageContext: () => {
+          ctx['pendingPageContext'] = null;
+          ctx['pendingPageContextSource'] = null;
+        },
+        prepareSelectionContext: (selection: { text: string }, url: string) =>
+          url.startsWith('https:') ? { text: selection.text.trim(), truncated: false } : null,
+        pageChipLabel: (url: string) => new URL(url).hostname,
+        t: (key: string, substitutions: string[] = []) => `${key}:${substitutions.join(',')}`,
         updateAttachmentPreview: vi.fn(),
         updateContextButton: vi.fn(),
         sendMessage,
@@ -172,13 +172,66 @@ describe('right-click Ask AGI about a selection', () => {
         updateSendButton: vi.fn(),
       },
     );
+    return { check, remove, sendMessage };
+  }
+
+  it('attaches the selection once as the context chip and leaves the composer for the question', () => {
+    const input = document.createElement('textarea');
+    input.id = 'sp-input';
+    document.body.appendChild(input);
+    const ctx: Record<string, unknown> = {
+      pendingPageContext: null,
+      pendingPageContextSource: null,
+    };
+    const { check, remove, sendMessage } = pendingChatChecker(
+      {
+        type: 'ask',
+        text: '  The loaf costs 7.40  ',
+        url: 'https://example.com/a',
+        tabId: 4,
+        timestamp: Date.now(),
+      },
+      ctx,
+    );
 
     check();
 
-    expect(input.value).toBe('"The loaf costs 7.40"\n\n');
+    expect(input.value).toBe('');
+    expect(ctx['pendingPageContext']).toBe('The loaf costs 7.40');
+    expect(ctx['pendingPageContextSource']).toEqual({
+      tabId: 4,
+      url: 'https://example.com/a',
+      title: 'spSelectionChipTitle:example.com',
+    });
     expect(sendMessage).not.toHaveBeenCalled();
     expect(remove).toHaveBeenCalledWith('agi_pending_chat');
     expect(document.activeElement).toBe(input);
     input.remove();
+  });
+
+  it('quotes the selection in the composer only when the page cannot carry a context chip', () => {
+    const input = document.createElement('textarea');
+    input.id = 'sp-input';
+    document.body.appendChild(input);
+    const ctx: Record<string, unknown> = {
+      pendingPageContext: null,
+      pendingPageContextSource: null,
+    };
+    const { check } = pendingChatChecker(
+      { type: 'ask', text: 'local note', url: 'file:///a.txt', tabId: 4, timestamp: Date.now() },
+      ctx,
+    );
+
+    check();
+
+    expect(input.value).toBe('"local note"\n\n');
+    expect(ctx['pendingPageContext']).toBeNull();
+    input.remove();
+  });
+
+  it('shows a short preview of a long selection so the conversation stays in view', () => {
+    expect(panelSource).toMatch(
+      /\.sp-attachment-selection \.sp-attachment-doc-status \{[^}]*-webkit-line-clamp: 2;[^}]*overflow: hidden;/,
+    );
   });
 });

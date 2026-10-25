@@ -209,7 +209,9 @@ import {
   SITE_POLICY_ADMIN_UNAVAILABLE,
   evaluateSitePolicy,
   isBrowserCommandRequest,
+  isWorkspaceReasoningEffort,
   type BrowserCommand,
+  type Effort,
   type BrowserTabSummary,
   type SitePolicyAdminState,
 } from '@agiworkforce/types';
@@ -242,6 +244,7 @@ import { watchCloudMirroringEnabled } from './features/privacy/cloudMirroring';
 import { installBackgroundErrorReporting } from './features/observability/errorReporting';
 import {
   BROWSER_TOOL_DEFINITIONS,
+  resolveComputerUseEffort,
   resolveManagedComputerUseModel,
 } from './features/computer-use/cloudAgentClient';
 import {
@@ -2554,7 +2557,9 @@ function isRetryableScheduledResult(result: unknown): boolean {
   const record = result as Record<string, unknown>;
   return (
     record['status'] !== 'success' &&
-    (record['code'] === 'server_error' || record['code'] === 'auth_required')
+    (record['code'] === 'server_error' ||
+      record['code'] === 'network_error' ||
+      record['code'] === 'auth_required')
   );
 }
 
@@ -4363,11 +4368,18 @@ async function handleMessageAsync(
       const cancellationAttempt = (async (): Promise<ExtensionResponse> => {
         const controller = new AbortController();
         try {
+          const cancelCredential = active
+            ? (selectManagedCloudCancellationCredential(
+                owner,
+                credential,
+                await getManagedCloudAuthContext().catch(() => null),
+              ) ?? credential)
+            : credential;
           const cancellation = await withTimeout(
             cancelAndConfirmChromeManagedRun(
               cloudRun,
               {
-                getAuthToken: async () => credential.token,
+                getAuthToken: async () => cancelCredential.token,
               },
               controller.signal,
             ),
@@ -5136,12 +5148,21 @@ async function handleMessageAsync(
       }
 
       let computerUseModel: string;
+      let computerUseEffort: Effort | undefined;
       try {
         if (cuMsg.modelSelection !== undefined && typeof cuMsg.modelSelection !== 'string') {
           return failStart('AGI_START_COMPUTER_USE: valid model selection is required');
         }
+        if (cuMsg.effort !== undefined && !isWorkspaceReasoningEffort(cuMsg.effort)) {
+          return failStart('AGI_START_COMPUTER_USE: valid reasoning effort is required');
+        }
         const modelAccess = await getManagedModelAccess(authContext.token);
         computerUseModel = resolveManagedComputerUseModel(modelAccess, cuMsg.modelSelection);
+        computerUseEffort = resolveComputerUseEffort(
+          computerUseModel,
+          cuMsg.effort,
+          modelAccess.subscriptionTier,
+        );
       } catch (error) {
         return failStart(
           `AGI_START_COMPUTER_USE: ${error instanceof Error ? error.message : 'Cloud model access could not be verified'}`,
@@ -5422,6 +5443,7 @@ async function handleMessageAsync(
       computerUseGuidance.set(lease.runId, guidanceQueue);
       const completion = runAgentLoop(cuGoal, cuTabId, {
         model: computerUseModel,
+        ...(computerUseEffort ? { effort: computerUseEffort } : {}),
         siteTools,
         refreshSiteTools: async () => {
           const tab = await chrome.tabs.get(cuTabId).catch(() => null);
@@ -6062,6 +6084,7 @@ function handleContextMenuClick(
           type: 'ask',
           text: info.selectionText,
           url: info.pageUrl ?? '',
+          tabId: tab.id,
           timestamp: Date.now(),
         },
       })
@@ -6522,6 +6545,12 @@ async function handleChatMessage(
       },
       {
         ...createChromeManagedChatDependencies(onStreamText, {
+          onThinking: (thinking) =>
+            publishManagedChatChunk(streamKey, activeStream, id, {
+              text: '',
+              done: false,
+              thinking,
+            }),
           onCodeExecution: (chunk) =>
             publishManagedChatChunk(streamKey, activeStream, id, {
               text: '',
@@ -6851,6 +6880,12 @@ async function handleResolveChatApproval(
         done: false,
       });
     const callbacks: ChromeManagedResumeCallbacks = {
+      onThinking: (thinking) =>
+        publishManagedChatChunk(streamKey, activeStream, id, {
+          text: '',
+          done: false,
+          thinking,
+        }),
       onCodeExecution: (chunk) =>
         publishManagedChatChunk(streamKey, activeStream, id, {
           text: '',

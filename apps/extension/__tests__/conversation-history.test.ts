@@ -136,6 +136,33 @@ describe('conversation-history', () => {
     });
   });
 
+  it('keeps the thinking summary of an answer apart from its text, bounded and only on assistant turns', async () => {
+    const conversationId = await saveConversation([
+      {
+        role: 'assistant',
+        content: 'The answer.',
+        timestamp: Date.now(),
+        thinking: 'Weighing the options',
+        thinkingDurationMs: 4_000,
+      },
+      { role: 'assistant', content: 'Long.', timestamp: Date.now(), thinking: 'x'.repeat(30_000) },
+      {
+        role: 'user',
+        content: 'Question.',
+        timestamp: Date.now(),
+        thinking: 'not a user field',
+      },
+    ]);
+    const [answer, long, question] = (await getConversation(conversationId))!.messages;
+    expect(answer).toMatchObject({
+      content: 'The answer.',
+      thinking: 'Weighing the options',
+      thinkingDurationMs: 4_000,
+    });
+    expect(long?.thinking).toHaveLength(20_000);
+    expect(question?.thinking).toBeUndefined();
+  });
+
   it('keeps a video turn task id through storage so polling can resume, and drops a malformed one', async () => {
     const conversationId = await saveConversation([
       { role: 'user', content: 'a lighthouse at dusk', timestamp: 1 },

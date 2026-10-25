@@ -44,6 +44,20 @@ describe('reading the highlighted passage on a page', () => {
     expect(readVisibleSelection(1_000)?.text).toBe('First line.\nSecond line.');
   });
 
+  it('keeps the spaces and line breaks between highlighted code tokens', () => {
+    document.body.innerHTML =
+      '<pre id="root"><code><span>const</span> <span>max</span> = <span>1</span>;\n' +
+      '<span>let</span> <span>min</span> = <span>0</span>;</code></pre>';
+    selectContents(document.getElementById('root')!);
+    expect(readVisibleSelection(1_000)?.text).toBe('const max = 1;\nlet min = 0;');
+  });
+
+  it('keeps the space between two inline elements of a sentence', () => {
+    document.body.innerHTML = '<p id="root"><b>Bold</b> <i>italic</i> words.</p>';
+    selectContents(document.getElementById('root')!);
+    expect(readVisibleSelection(1_000)?.text).toBe('Bold italic words.');
+  });
+
   it('leaves out text the reader cannot see', () => {
     document.body.innerHTML =
       '<div id="root"><p>Shown.</p><p hidden>Hidden attribute.</p>' +

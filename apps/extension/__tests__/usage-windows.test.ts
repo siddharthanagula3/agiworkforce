@@ -14,6 +14,7 @@ import {
   purchasedCreditsView,
   quotaBlockWindow,
   quotaWarningFromSignal,
+  streamQuotaNotice,
   usageLimitNotice,
   usageWarning,
   usageWindowViews,
@@ -280,5 +281,19 @@ describe('limit recovery by plan', () => {
         href: '/settings/usage',
       });
     }
+  });
+
+  it('tells the person when a reply was paid from their usage credits', () => {
+    const views = usageWindowViews(summary());
+
+    expect(streamQuotaNotice(views, { scope: 'usage_credits' }, 'pro', NOW)).toEqual({
+      kind: 'usage-credits',
+    });
+    expect(
+      streamQuotaNotice(views, { scope: 'rolling_weekly', usedPercent: 92 }, 'pro', NOW),
+    ).toMatchObject({ kind: 'warning', warning: { bucket: 'weekly', severity: 'critical' } });
+    expect(
+      streamQuotaNotice(views, { scope: 'rolling_five_hour', usedPercent: 50 }, 'pro', NOW),
+    ).toBeNull();
   });
 });

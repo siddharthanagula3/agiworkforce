@@ -168,9 +168,23 @@ export function quotaBlockWindow(
   return named ?? blockingUsageWindow(views);
 }
 
-export function quotaWarningFromSignal(
+export type StreamQuotaNotice =
+  { kind: 'usage-credits' } | { kind: 'warning'; warning: ManagedUsageWarning };
+
+export function streamQuotaNotice(
   views: readonly UsageWindowView[],
   signal: ManagedQuotaWarningSignal,
+  planTier: string | null,
+  now: number = Date.now(),
+): StreamQuotaNotice | null {
+  if (signal.scope === 'usage_credits') return { kind: 'usage-credits' };
+  const warning = quotaWarningFromSignal(views, signal, planTier, now);
+  return warning ? { kind: 'warning', warning } : null;
+}
+
+export function quotaWarningFromSignal(
+  views: readonly UsageWindowView[],
+  signal: Extract<ManagedQuotaWarningSignal, { usedPercent: number }>,
   planTier: string | null,
   now: number = Date.now(),
 ): ManagedUsageWarning | null {

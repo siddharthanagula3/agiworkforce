@@ -12,9 +12,12 @@ import {
   buildBubbleWithTools,
   openInteractiveCardUrl,
   resolveManagedArtifactUrl,
+  updateThoughtSection,
 } from '../src/features/side-panel/bubbles';
 import {
+  appendThinking,
   applyCanonicalAgentEvent,
+  settleThinking,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 
@@ -457,5 +460,100 @@ describe('in-chat browser turns and read aloud', () => {
         '.sp-read-aloud-btn',
       ),
     ).toBeNull();
+  });
+});
+
+describe('thinking section', () => {
+  function thinkingTurn(overrides: Partial<SidePanelChatMessage> = {}): SidePanelChatMessage {
+    return msg({ role: 'assistant', content: '', streaming: true, ...overrides });
+  }
+
+  it('shows the streamed thinking open and apart from the answer bubble', () => {
+    const turn = thinkingTurn();
+    appendThinking(turn, 'Weighing the **options**', 1_000);
+    const bubble = buildBubbleWithTools(turn);
+
+    const section = bubble.querySelector<HTMLDetailsElement>('details.sp-thought');
+    expect(section?.open).toBe(true);
+    expect(section?.querySelector('.sp-thought__label')?.textContent).toBe('Thinking');
+    expect(section?.querySelector('.sp-thought__body')?.textContent).toContain(
+      'Weighing the options',
+    );
+    const answer = bubble.querySelector<HTMLElement>(`#sp-bubble-${turn.id}`);
+    expect(answer?.textContent).not.toContain('Weighing');
+    expect(answer?.hidden).toBe(true);
+  });
+
+  it('collapses with a duration once the answer starts and leaves the answer unchanged', () => {
+    const turn = thinkingTurn();
+    appendThinking(turn, 'Weighing the options', 1_000);
+    const host = document.createElement('div');
+    host.appendChild(buildBubbleWithTools(turn));
+    document.body.appendChild(host);
+    try {
+      expect(host.querySelector<HTMLDetailsElement>('details.sp-thought')?.open).toBe(true);
+
+      settleThinking(turn, 5_000);
+      turn.content = 'The answer is 42.';
+      expect(updateThoughtSection(turn)).toBe(true);
+
+      const section = host.querySelector<HTMLDetailsElement>('details.sp-thought');
+      expect(section?.open).toBe(false);
+      expect(section?.querySelector('.sp-thought__label')?.textContent).toBe('Thought for 4s');
+      expect(section?.querySelector('.sp-thought__body')?.textContent).toContain(
+        'Weighing the options',
+      );
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('keeps a section the person opened open when the answer starts', () => {
+    const turn = thinkingTurn();
+    appendThinking(turn, 'Weighing the options', 1_000);
+    const host = document.createElement('div');
+    host.appendChild(buildBubbleWithTools(turn));
+    document.body.appendChild(host);
+    try {
+      const section = host.querySelector<HTMLDetailsElement>('details.sp-thought')!;
+      section.querySelector('summary')!.click();
+      section.open = true;
+      settleThinking(turn, 5_000);
+      updateThoughtSection(turn);
+      expect(section.open).toBe(true);
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('shows a stored thought collapsed without inventing a duration', () => {
+    const bubble = buildBubbleWithTools(
+      msg({ role: 'assistant', content: 'Done.', thinking: 'Weighing the options' }),
+    );
+    const section = bubble.querySelector<HTMLDetailsElement>('details.sp-thought');
+    expect(section?.open).toBe(false);
+    expect(section?.querySelector('.sp-thought__label')?.textContent).toBe('Thought process');
+  });
+
+  it('renders nothing for an answer with no thinking', () => {
+    expect(
+      buildBubbleWithTools(msg({ role: 'assistant', content: 'Done.' })).querySelector(
+        '.sp-thought',
+      ),
+    ).toBeNull();
+  });
+
+  it('copies the answer without the thinking', async () => {
+    const writeText = vi.fn(async () => undefined);
+    vi.stubGlobal('navigator', { clipboard: { writeText } });
+    try {
+      const bubble = buildBubbleWithTools(
+        msg({ role: 'assistant', content: 'The answer is 42.', thinking: 'Weighing the options' }),
+      );
+      bubble.querySelector<HTMLButtonElement>('.sp-copy-btn')!.click();
+      expect(writeText).toHaveBeenCalledExactlyOnceWith('The answer is 42.');
+    } finally {
+      vi.unstubAllGlobals();
+    }
   });
 });

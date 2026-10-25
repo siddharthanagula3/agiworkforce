@@ -117,7 +117,12 @@ export function selectManagedCloudCancellationCredential(
   currentCredential: ManagedCloudCredential | null | undefined,
 ): ManagedCloudCredential | null {
   if (activeCredential) {
-    return sameManagedCloudOwner(activeCredential.owner, expectedOwner) ? activeCredential : null;
+    if (!sameManagedCloudOwner(activeCredential.owner, expectedOwner)) return null;
+    // A session token expires within minutes, so a long run is stopped with the
+    // same account and session's current token when there is one.
+    return currentCredential && sameManagedCloudOwner(currentCredential.owner, expectedOwner)
+      ? currentCredential
+      : activeCredential;
   }
   return currentCredential && sameManagedCloudOwner(currentCredential.owner, expectedOwner)
     ? currentCredential

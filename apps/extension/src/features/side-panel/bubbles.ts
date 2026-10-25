@@ -1,3 +1,4 @@
+import type { BrowserPermissionMode } from '../computer-use/askBeforeActing';
 import {
   finishAgentActivityLocally,
   isLocalPlaceholderActivityEntry,
@@ -57,8 +58,10 @@ import {
 import { t, tPlural } from '../../i18n';
 import { renderMarkdownInto } from './markdown';
 import { el, formatTime } from './dom';
+import { formatThinkingDuration } from '@agiworkforce/utils/reasoning';
 import {
   answerSourceLists,
+  isThinkingLive,
   shouldRenderTextBubble,
   type SidePanelChatMessage,
   type SidePanelSource,
@@ -116,10 +119,58 @@ export interface MessageArtifactsBinding {
   cards: HTMLElement | null;
 }
 
+function hasThought(msg: ChatMessage): boolean {
+  return msg.role === 'assistant' && Boolean(msg.thinking?.trim());
+}
+
 function hidesEmptyAnswer(msg: ChatMessage, prose: string, artifacts?: MessageArtifactsBinding) {
   return (
-    !prose.trim() && !msg.error && !msg.interrupted && (Boolean(artifacts?.cards) || !msg.streaming)
+    !prose.trim() &&
+    !msg.error &&
+    !msg.interrupted &&
+    (Boolean(artifacts?.cards) || !msg.streaming || hasThought(msg))
   );
+}
+
+function thoughtLabel(msg: ChatMessage): string {
+  if (isThinkingLive(msg)) return t('spThoughtLive');
+  const seconds = Math.round((msg.thinkingDurationMs ?? 0) / 1000);
+  return seconds > 0 ? t('spThoughtFor', [formatThinkingDuration(seconds)]) : t('spThoughtProcess');
+}
+
+function fillThoughtSection(details: HTMLElement, msg: ChatMessage): void {
+  const live = isThinkingLive(msg);
+  details.setAttribute('data-live', String(live));
+  const label = details.querySelector('.sp-thought__label');
+  if (label) label.textContent = thoughtLabel(msg);
+  const body = details.querySelector<HTMLElement>('.sp-thought__body');
+  if (body) {
+    void renderMarkdownInto(body, msg.thinking ?? '');
+    if (live) body.scrollTop = body.scrollHeight;
+  }
+  if (details instanceof HTMLDetailsElement && details.getAttribute('data-toggled') !== 'true') {
+    details.open = live;
+  }
+}
+
+function buildThoughtSection(msg: ChatMessage): HTMLElement | null {
+  if (!hasThought(msg)) return null;
+  const details = el('details', { class: 'sp-thought', id: `sp-thought-${msg.id}` });
+  const summary = document.createElement('summary');
+  summary.addEventListener('click', () => details.setAttribute('data-toggled', 'true'));
+  summary.appendChild(el('span', { class: 'sp-thought__label' }));
+  summary.appendChild(renderIcon(ChevronRight, 12, 'sp-thought__chevron'));
+  details.appendChild(summary);
+  details.appendChild(el('div', { class: 'sp-thought__body' }));
+  fillThoughtSection(details, msg);
+  return details;
+}
+
+export function updateThoughtSection(msg: ChatMessage): boolean {
+  const details = document.getElementById(`sp-thought-${msg.id}`);
+  if (!details) return false;
+  fillThoughtSection(details, msg);
+  return true;
 }
 
 export function openInteractiveCardUrl(value: string): void {
@@ -727,6 +778,8 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   );
   const { markers, all } = answerSourceLists(msg);
 
+  const thought = buildThoughtSection(msg);
+  if (thought) wrapper.appendChild(thought);
   if (isUser) {
     const context = buildUserContext(msg, options.imagePreviews);
     if (context) wrapper.appendChild(context);
@@ -1200,6 +1253,8 @@ export function buildBubbleWithTools(
   wrapper.setAttribute('data-id', msg.id);
   wrapper.appendChild(buildAuthorLabel(msg.role));
 
+  const thought = buildThoughtSection(msg);
+  if (thought) wrapper.appendChild(thought);
   if (msg.browserActivity)
     wrapper.appendChild(
       buildAgentActivityEl(msg.browserActivity, {
@@ -1255,9 +1310,16 @@ export function buildBubbleWithTools(
 export type SiteGrantScope = 'read' | 'act';
 export type SiteGrantChoice = 'once' | 'always' | 'decline';
 
+const PERMISSION_MODE_SUMMARY_KEY = {
+  ask: 'spAutonomyAskFirstTooltip',
+  auto: 'spAutonomyAutoDescription',
+  full: 'spAutonomyFullAccessTooltip',
+} as const satisfies Record<BrowserPermissionMode, string>;
+
 export function buildSiteGrantCard(options: {
   host: string;
   scope: SiteGrantScope;
+  permissionMode?: BrowserPermissionMode;
   onDecide: (choice: SiteGrantChoice) => void;
 }): HTMLElement {
   const titleId = `sp-browser-grant-${crypto.randomUUID()}`;
@@ -1273,6 +1335,10 @@ export function buildSiteGrantCard(options: {
   body.className = 'sp-browser-grant__body';
   body.textContent =
     options.scope === 'act' ? t('spBrowserAccessActBody') : t('spBrowserAccessReadBody');
+  const modeSummaryKey =
+    options.scope === 'act' && options.permissionMode
+      ? PERMISSION_MODE_SUMMARY_KEY[options.permissionMode]
+      : undefined;
   const actions = document.createElement('div');
   actions.className = 'sp-agent-approval__actions';
   const choices: Array<[SiteGrantChoice, string, boolean]> = [
@@ -1293,7 +1359,14 @@ export function buildSiteGrantCard(options: {
     });
     actions.appendChild(button);
   }
-  card.append(title, body, actions);
+  card.append(title, body);
+  if (modeSummaryKey) {
+    const modeSummary = document.createElement('div');
+    modeSummary.className = 'sp-browser-grant__body';
+    modeSummary.textContent = t(modeSummaryKey);
+    card.append(modeSummary);
+  }
+  card.append(actions);
   return card;
 }
 

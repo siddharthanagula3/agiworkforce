@@ -13,6 +13,7 @@ import {
   type SyncConversationRecord,
 } from '@agiworkforce/sync';
 import {
+  adoptCloudConversationTitle,
   blockCloudPersistence,
   claimCloudConversationBinding,
   cloudMessageSyncFingerprint,
@@ -253,6 +254,32 @@ function selectFlushableMessages(entry: ConversationEntry, streaming: boolean): 
   return bounded.slice(0, MAX_MESSAGES_PER_FLUSH);
 }
 
+const GENERATED_TITLE_READ_DELAYS_MS = [1_200, 3_000] as const;
+
+async function adoptGeneratedTitle(
+  owner: ManagedCloudOwner,
+  conversationId: string,
+  cloudConversationId: string,
+  organizationId: string | null,
+): Promise<void> {
+  let waited = 0;
+  for (const delay of GENERATED_TITLE_READ_DELAYS_MS) {
+    await new Promise((resolve) => setTimeout(resolve, delay - waited));
+    waited = delay;
+    try {
+      const detail = await createExtensionCloudChatClient(owner).getConversation(
+        cloudConversationId,
+        { limit: 1, offset: 0 },
+        { organizationId },
+      );
+      await adoptCloudConversationTitle(owner, conversationId, detail.conversation.title);
+    } catch (error) {
+      logger.debug('Generated conversation title was not read', error);
+      return;
+    }
+  }
+}
+
 async function flushEligibleConversation(
   owner: ManagedCloudOwner,
   candidate: ConversationEntry,
@@ -315,6 +342,7 @@ async function flushEligibleConversation(
         createAcknowledged: true,
         organizationId,
         syncedProjectId,
+        syncedTitle: created.title,
         syncedPinned: created.pinned,
         syncedStarred: created.starred,
         syncedArchived: created.archived,
@@ -386,6 +414,12 @@ async function flushEligibleConversation(
   }
 
   const messages = selectFlushableMessages(entry, streaming);
+  const awaitsGeneratedTitle =
+    entry.customTitle === undefined &&
+    !entry.messages.some(
+      (message) => message.role === 'user' && message.cloudSyncedAt !== undefined,
+    );
+  let savedFirstQuestion = false;
   for (const message of messages) {
     if (signal.aborted) return;
     const cloudMessageId = message.cloudMessageId;
@@ -431,6 +465,10 @@ async function flushEligibleConversation(
     await recordCloudMessagesSynced(owner, conversationId, [
       { cloudMessageId, syncedChars, syncedFingerprint },
     ]).catch(() => undefined);
+    if (message.role === 'user') savedFirstQuestion = awaitsGeneratedTitle;
+  }
+  if (savedFirstQuestion) {
+    void adoptGeneratedTitle(owner, conversationId, cloudConversationId, organizationId);
   }
 
   const metadataEntry = await getConversation(owner, conversationId);

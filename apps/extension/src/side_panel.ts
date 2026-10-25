@@ -197,6 +197,7 @@ import {
   type BrowserTurnControls,
   type SiteGrantScope,
   resolveManagedArtifactUrl,
+  updateThoughtSection,
   type MessageArtifactsBinding,
   type RegenerateModelOption,
 } from './features/side-panel/bubbles';
@@ -208,6 +209,7 @@ import {
 import type { AnswerFileAccess } from './features/side-panel/generatedFiles';
 import {
   answerSourceLists,
+  appendThinking,
   applyBrowserActivityEvent,
   applyCanonicalAgentEvent,
   applyStreamFailure,
@@ -220,6 +222,10 @@ import {
   requestsCurrentPageContext,
   settleBrowserActivity,
   settleFailedAgentActivity,
+  settleFinishedAgentActivity,
+  settleThinking,
+  streamErrorOffersModelSwitch,
+  settleStoppedAgentActivity,
   reopenBrowserActivity,
   pageContextStillDescribes,
   resolveComposerPrompt,
@@ -287,6 +293,7 @@ import {
   ChevronRight,
   Check,
   Plug,
+  Lock,
   Sparkles,
   Ellipsis,
   ChevronDown,
@@ -376,7 +383,7 @@ import {
   planQuotaRecovery,
   purchasedCreditsView,
   quotaBlockWindow,
-  quotaWarningFromSignal,
+  streamQuotaNotice,
   usageLimitNotice,
   usageWarning,
   usageWindowViews,
@@ -739,17 +746,22 @@ function managedPlanTier(access: ManagedModelAccess): string {
 function applyStreamQuotaWarning(signal: ManagedQuotaWarningSignal): void {
   if (!managedModelAccess || managedCloudChatState !== 'ready') return;
   if (isFreeBillingPlanTier(normalizeBillingPlanTier(managedPlanTier(managedModelAccess)))) return;
-  const warning = quotaWarningFromSignal(
+  const notice = streamQuotaNotice(
     usageWindowViews(managedModelAccess.usage),
     signal,
     managedPlanTier(managedModelAccess),
   );
-  if (!warning) return;
-  renderUsageBanner({
-    text: describeUsageNotice(warning),
-    severity: warning.severity,
-    recovery: planQuotaRecovery(managedPlanTier(managedModelAccess)),
-  });
+  if (!notice) return;
+  const recovery = planQuotaRecovery(managedPlanTier(managedModelAccess));
+  renderUsageBanner(
+    notice.kind === 'usage-credits'
+      ? { text: t('spQuotaUsingPurchased'), severity: 'warning', recovery }
+      : {
+          text: describeUsageNotice(notice.warning),
+          severity: notice.warning.severity,
+          recovery,
+        },
+  );
 }
 
 function quotaResetLabel(quotaCode: string): string | null {
@@ -767,6 +779,7 @@ interface ChatChunk {
   id: string;
   text: string;
   done: boolean;
+  thinking?: string;
   error?: string;
   errorCode?: string;
   errorRetryAfterSeconds?: number;
@@ -945,6 +958,10 @@ function managedOutboundEffortPayload(usePersistedSelection = false): { effort?:
   return effort === undefined ? {} : { effort };
 }
 
+function browserTaskEffortPayload(modelSelection: string): { effort?: Effort } {
+  return isAutoModeModelId(modelSelection) ? {} : managedOutboundEffortPayload(true);
+}
+
 function managedOutboundRoutingPayload(quickMode = managedQuickModeActive()): {
   effort?: Effort;
   currentModelKey?: string;
@@ -1082,6 +1099,9 @@ let activePageSource: PageContextSource | null = null;
 type SidePanelTab = 'chat' | 'computer-use';
 
 const MAX_STORED_MESSAGES = 50;
+const MODEL_MENU_MIN_HEIGHT = 160;
+const MODEL_MENU_MAX_HEIGHT = 440;
+const MODEL_MENU_SETTINGS_SHARE = 0.55;
 const MAX_STORED_GENERATED_FILES_PER_MESSAGE = 20;
 
 function pruneTurnPayloads(): void {
@@ -1153,6 +1173,10 @@ function serializeMessagesForHistory() {
     ...(message.role === 'assistant' && message.citations ? { citations: message.citations } : {}),
     ...(message.role === 'assistant' && message.durationMs !== undefined
       ? { durationMs: message.durationMs }
+      : {}),
+    ...(message.role === 'assistant' && message.thinking ? { thinking: message.thinking } : {}),
+    ...(message.role === 'assistant' && message.thinking && message.thinkingDurationMs !== undefined
+      ? { thinkingDurationMs: message.thinkingDurationMs }
       : {}),
     ...(message.role === 'user' && message.attachments ? { attachments: message.attachments } : {}),
     ...(message.role === 'user' && message.pages ? { pages: message.pages } : {}),
@@ -1377,13 +1401,7 @@ async function loadMessages(): Promise<void> {
   _ctx.selectedModel = normalizeModelId(active.routing.selectedModel) ?? 'auto';
   _ctx.currentModelKey = active.routing.currentModelKey;
   _ctx.previousTaskType = active.routing.previousTaskType;
-  const effortModel =
-    _ctx.selectedModel === 'auto' || _ctx.selectedModel.startsWith('auto-')
-      ? _ctx.currentModelKey
-      : _ctx.selectedModel;
-  _ctx.reasoningEffort = effortModel
-    ? resolveModelEffort(effortModel, active.routing.effort)
-    : undefined;
+  _ctx.reasoningEffort = restoredConversationEffort(active.routing.effort);
   refreshModelPickerUI();
   refreshEffortUI();
   _ctx.messages.push(
@@ -1530,6 +1548,13 @@ function effortForNewChat(): Effort | undefined {
   return resolveModelEffort(model, newChatEffortSelection);
 }
 
+function restoredConversationEffort(stored: Effort | undefined): Effort | undefined {
+  const autoSelected = _ctx.selectedModel === 'auto' || _ctx.selectedModel.startsWith('auto-');
+  const model = autoSelected ? _ctx.currentModelKey : _ctx.selectedModel;
+  if (!model) return undefined;
+  return resolveModelEffort(model, stored ?? (autoSelected ? undefined : newChatEffortSelection));
+}
+
 function advanceConversationGeneration(): void {
   _ctx.conversationGeneration += 1;
   cancelComposerImageIntake();
@@ -1652,7 +1677,7 @@ async function transitionManagedCloudOwner(nextOwner: ManagedCloudOwner | null):
   }
   _ctx.currentModelKey = undefined;
   _ctx.previousTaskType = undefined;
-  _ctx.reasoningEffort = undefined;
+  _ctx.reasoningEffort = effortForNewChat();
   cloudRunsByStreamId.clear();
   resolvedRouteByStreamId.clear();
   quickModeByStreamId.clear();
@@ -3107,6 +3132,38 @@ function injectStyles(): void {
       transition: transform var(--duration-quick) var(--curve-standard);
     }
     .sp-agent-activity[open] .sp-agent-activity__chevron { transform: rotate(90deg); }
+    .sp-thought {
+      width: min(100%, 420px);
+      color: var(--agi-ext-text-muted);
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+    }
+    .sp-thought > summary {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      min-height: 30px;
+      padding: 0 4px;
+      cursor: pointer;
+      list-style: none;
+      user-select: none;
+      border-radius: var(--corner-control);
+    }
+    .sp-thought > summary::-webkit-details-marker { display: none; }
+    .sp-thought > summary:hover { background: var(--agi-ext-hover); }
+    .sp-thought__chevron {
+      transition: transform var(--duration-quick) var(--curve-standard);
+    }
+    .sp-thought[open] .sp-thought__chevron { transform: rotate(90deg); }
+    .sp-thought__body {
+      border-left: 1px solid var(--agi-ext-border);
+      margin: 2px 0 6px 10px;
+      padding: 2px 0 2px 12px;
+      max-height: 40vh;
+      overflow-y: auto;
+    }
+    .sp-thought__body p { margin: 0 0 6px; }
+    .sp-thought__body p:last-child { margin-bottom: 0; }
     .sp-agent-activity__timeline {
       border-left: 1px solid var(--agi-ext-border);
       margin: 2px 0 6px 10px;
@@ -3825,6 +3882,13 @@ function injectStyles(): void {
       font-size: var(--type-caption-size);
       line-height: var(--type-caption-height);
     }
+    .sp-attachment-selection .sp-attachment-doc-status {
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+      overflow-wrap: anywhere;
+    }
     .sp-attachment-doc[data-phase='failed'] .sp-attachment-doc-status { color: var(--agi-ext-danger-text); white-space: normal; }
     .sp-attachment-doc-retry {
       padding: 2px 8px;
@@ -3999,7 +4063,10 @@ function injectStyles(): void {
     #sp-model-selector-btn:hover { background: color-mix(in srgb, var(--agi-ext-accent) 22%, transparent); border-color: var(--agi-ext-accent); }
     #sp-model-selector-btn:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 2px; }
     #sp-model-dropdown { display: none; position: absolute; top: 100%; left: 0; right: auto; margin-top: 4px; min-width: 200px; max-width: calc(100vw - 24px); max-height: 280px; overflow-y: auto; background: var(--agi-ext-surface); border: 1px solid var(--agi-ext-border); border-radius: var(--corner-field); padding: 4px; z-index: var(--z-popover); box-shadow: var(--agi-ext-elevation-3); }
-    #sp-model-dropdown.open { display: block; }
+    #sp-model-dropdown.open { display: flex; flex-direction: column; overflow: hidden; }
+    .sp-model-menu-list { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+    .sp-model-menu-settings { flex: 0 0 auto; overflow-y: auto; }
+    .sp-model-menu-settings:not(:empty) { border-top: 1px solid var(--agi-ext-border); margin-top: 4px; padding-top: 4px; }
     .sp-model-option { display: flex; align-items: center; gap: 8px; width: 100%; padding: 7px 9px; border: 0; border-radius: var(--corner-control); cursor: pointer; background: transparent; transition: background var(--duration-instant); font: inherit; font-size: var(--type-caption-size); line-height: var(--type-caption-height); color: var(--agi-ext-text-muted); text-align: left; }
     .sp-model-option:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
     .sp-model-option.selected { color: var(--agi-ext-accent-text); background: color-mix(in srgb, var(--agi-ext-accent) 12%, transparent); }
@@ -6291,6 +6358,7 @@ async function requestStreamCancellation(streamId: string): Promise<void> {
           cloudRunsByStreamId.set(streamId, { ...response.cloudRun });
         }
         reconcileManagedRunActivity(assistant);
+        settleStoppedAgentActivity(assistant);
         settleChatToolActivity(assistant, 'cancelled');
         delete assistant.streamCancellation;
         delete assistant.errorText;
@@ -6371,7 +6439,7 @@ function beginManagedStream(quickMode: boolean): string {
   const owner = _ctx.managedCloudOwner;
   if (!owner) throw new Error('Managed Cloud authority is unavailable.');
   const streamId = `stream-${crypto.randomUUID()}`;
-  turnGrantedOrigins.clear();
+  releaseTurnSiteGrants();
   ownerByStreamId.set(streamId, { ...owner });
   quickModeByStreamId.set(streamId, quickMode);
   assistantCloudIdByStreamId.set(streamId, crypto.randomUUID());
@@ -6466,6 +6534,7 @@ interface ComposerBrowserRun {
   conversationId: string;
   conversationGeneration: number;
   modelSelection: string;
+  effort?: Effort;
   startSent: boolean;
   cancelling: boolean;
   finalMessage: string | null;
@@ -6680,6 +6749,7 @@ function startComposerBrowserTask(
     conversationId: _ctx.conversationId,
     conversationGeneration: _ctx.conversationGeneration,
     modelSelection: _ctx.selectedModel,
+    ...browserTaskEffortPayload(_ctx.selectedModel),
     startSent: false,
     cancelling: false,
     finalMessage: null,
@@ -6742,6 +6812,7 @@ function startComposerBrowserTask(
         goal,
         tabId: tab.id,
         modelSelection: run.modelSelection,
+        ...(run.effort ? { effort: run.effort } : {}),
         ...(selectedTabs.length ? { selectedTabs, pageContext: pageContext ?? undefined } : {}),
         ...(_ctx.temporaryChat ? {} : { historyConversationId: run.conversationId }),
       })) as ComputerUseCommandResponse | undefined;
@@ -6953,11 +7024,16 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
       _ctx.isStreaming = false;
       _ctx.currentStreamId = null;
     }
-    if (stopped) stopped.streaming = false;
+    if (stopped) {
+      stopped.streaming = false;
+      settleStoppedAgentActivity(stopped);
+      settleChatToolActivity(stopped, 'cancelled');
+    }
     resolvedRouteByStreamId.delete(streamId);
     quickModeByStreamId.delete(streamId);
     ownerByStreamId.delete(streamId);
     streamStartedAtById.delete(streamId);
+    releaseTurnSiteGrants(streamId);
     removeThinking();
     updateSendButton();
   };
@@ -7056,7 +7132,42 @@ interface BrowserSiteAccess {
   release?: () => Promise<void>;
 }
 
-const turnGrantedOrigins = new Map<string, Set<string>>();
+interface TurnSiteGrant {
+  scope: SiteGrantScope;
+  releases: Array<() => Promise<void>>;
+}
+
+const turnSiteGrants = new Map<string, Map<string, TurnSiteGrant>>();
+
+function turnSiteGrantCovers(streamId: string, origin: string, scope: SiteGrantScope): boolean {
+  const grant = turnSiteGrants.get(streamId)?.get(origin);
+  return grant !== undefined && (grant.scope === 'act' || scope === 'read');
+}
+
+function recordTurnSiteGrant(
+  streamId: string,
+  origin: string,
+  scope: SiteGrantScope,
+  release: (() => Promise<void>) | undefined,
+): void {
+  const grants = turnSiteGrants.get(streamId) ?? new Map<string, TurnSiteGrant>();
+  const existing = grants.get(origin);
+  grants.set(origin, {
+    scope: existing?.scope === 'act' ? 'act' : scope,
+    releases: [...(existing?.releases ?? []), ...(release ? [release] : [])],
+  });
+  turnSiteGrants.set(streamId, grants);
+}
+
+function releaseTurnSiteGrants(streamId?: string): void {
+  const streamIds = streamId === undefined ? [...turnSiteGrants.keys()] : [streamId];
+  for (const id of streamIds) {
+    const grants = turnSiteGrants.get(id);
+    turnSiteGrants.delete(id);
+    for (const grant of grants?.values() ?? [])
+      for (const release of grant.releases) void release().catch(() => undefined);
+  }
+}
 const pendingSiteGrants = new Set<() => void>();
 
 function webTabOrigin(tab: chrome.tabs.Tab | undefined): string | null {
@@ -7077,7 +7188,7 @@ async function activeBrowserToolTier(streamId: string): Promise<ChatBrowserToolT
   }
   const origin = webTabOrigin(tab);
   if (!origin || (await isUserBlockedSite(origin))) return undefined;
-  if (turnGrantedOrigins.get(streamId)?.has(origin)) return 'act';
+  if (turnSiteGrants.get(streamId)?.has(origin)) return 'act';
   if (await originApprovedForBrowserControl(origin)) return 'act';
   const policy = await loadSitePolicyInput();
   return evaluateSitePolicy(
@@ -7135,6 +7246,7 @@ async function requestBrowserSiteAccess(
     }
     if (await originApprovedForBrowserControl(origin)) return { status: 'granted', origin, tabId };
   }
+  if (turnSiteGrantCovers(streamId, origin, scope)) return { status: 'granted', origin, tabId };
   const hadHostPermission = await originHasHostPermission(origin);
   const transientId = `site_once_${crypto.randomUUID()}`;
 
@@ -7151,6 +7263,7 @@ async function requestBrowserSiteAccess(
     },
   ]);
   const controls = browserTurnControlsFor(streamId);
+  const permissionMode = scope === 'act' ? await currentPermissionMode() : undefined;
   const access = await new Promise<BrowserSiteAccess>((resolve) => {
     let card: HTMLElement | null = null;
     const finish = (result: BrowserSiteAccess): void => {
@@ -7164,6 +7277,7 @@ async function requestBrowserSiteAccess(
     card = buildSiteGrantCard({
       host,
       scope,
+      ...(permissionMode ? { permissionMode } : {}),
       onDecide: (choice) => {
         if (choice === 'decline') {
           dismiss();
@@ -7253,11 +7367,6 @@ async function requestBrowserSiteAccess(
     card.querySelector('button')?.focus();
   });
   releaseBrowserTurnControls(streamId);
-  if (access.status === 'granted') {
-    const granted = turnGrantedOrigins.get(streamId) ?? new Set<string>();
-    granted.add(origin);
-    turnGrantedOrigins.set(streamId, granted);
-  }
   recordBrowserActivity(streamId, [
     {
       type: 'progress-update',
@@ -7266,7 +7375,14 @@ async function requestBrowserSiteAccess(
       status: 'completed',
     },
   ]);
-  return access;
+  if (access.status !== 'granted') return access;
+  const { release, ...turnAccess } = access;
+  if (_ctx.currentStreamId !== streamId) {
+    await release?.();
+    return turnAccess;
+  }
+  recordTurnSiteGrant(streamId, origin, scope, release);
+  return turnAccess;
 }
 
 function fencedToolResult(label: string, text: string): string {
@@ -8243,21 +8359,12 @@ function handleStreamError(
     ...detail,
     ...(resetLabel ? { resetLabel } : {}),
   });
-  const errorAction =
-    quotaPresentation?.suggestStandardModel === true ||
-    (errorCode !== undefined &&
-      ![
-        'auth_required',
-        'account_suspended',
-        'terms_required',
-        'plan_required',
-        'quota_exceeded',
-        'cancelled',
-        'invalid_request',
-        'protocol_error',
-      ].includes(errorCode))
-      ? 'switch-model'
-      : undefined;
+  const errorAction = streamErrorOffersModelSwitch(
+    errorCode,
+    quotaPresentation?.suggestStandardModel === true,
+  )
+    ? 'switch-model'
+    : undefined;
   const streamUsedQuick = quickModeByStreamId.get(id) === true;
   const assistantCloudId = assistantCloudIdByStreamId.get(id);
   const failedRoute = resolvedRouteByStreamId.get(id);
@@ -8266,6 +8373,7 @@ function handleStreamError(
   ownerByStreamId.delete(id);
   assistantCloudIdByStreamId.delete(id);
   streamStartedAtById.delete(id);
+  releaseTurnSiteGrants(id);
   stopManagedChatKeepalive();
   if (_ctx.streamTimeoutHandle) {
     clearTimeout(_ctx.streamTimeoutHandle);
@@ -8460,9 +8568,6 @@ function updateComposerAdmissionControls(): void {
     control.disabled = !controlsReady;
     control.setAttribute('aria-disabled', String(!controlsReady));
   }
-  const connectorsControl = document.getElementById('sp-attach-connectors-item');
-  if (connectorsControl && connectorsComingSoon(capabilityDocument))
-    connectorsControl.setAttribute('aria-disabled', 'true');
   for (const control of document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
     '#sp-attach-screenshot-item, #sp-attach-file-input',
   )) {
@@ -9286,6 +9391,9 @@ function buildUI(): void {
     role: 'menu',
     'aria-label': t('spModelsMenuLabel'),
   });
+  const modelMenuListEl = el('div', { class: 'sp-model-menu-list', role: 'none' });
+  const modelMenuSettingsEl = el('div', { class: 'sp-model-menu-settings', role: 'none' });
+  modelDropdownEl.append(modelMenuListEl, modelMenuSettingsEl);
   let modelCatalogueOpen = false;
   let modelSearchQuery = '';
   let modelCapabilityFilter: string | null = null;
@@ -9441,14 +9549,14 @@ function buildUI(): void {
 
   function appendModelRows(options: ManagedModelPickerOption[]): void {
     for (const option of options) {
-      modelDropdownEl.appendChild(buildModelOptionRow(option, _ctx.selectedModel === option.value));
+      modelMenuListEl.appendChild(buildModelOptionRow(option, _ctx.selectedModel === option.value));
     }
   }
 
   function appendEffortSection(): void {
     const state = currentEffortState();
     if (state.status !== 'ready' || state.effort === undefined) return;
-    modelDropdownEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spEffortHeading')));
+    modelMenuSettingsEl.appendChild(el('div', { class: 'sp-menu-heading' }, t('spEffortHeading')));
     const defaultEffort = state.modelId ? resolveModelEffort(state.modelId, undefined) : undefined;
     for (const option of state.options) {
       const isSelected = option === state.effort;
@@ -9473,7 +9581,7 @@ function buildUI(): void {
         refreshEffortUI();
         saveMessages();
       });
-      modelDropdownEl.appendChild(row);
+      modelMenuSettingsEl.appendChild(row);
     }
     const unlockPlanLabel = state.unlockPlanLabel;
     if (!unlockPlanLabel) return;
@@ -9487,7 +9595,7 @@ function buildUI(): void {
       });
       row.appendChild(el('span', { class: 'sp-effort-option-label' }, EFFORT_LABEL[option]));
       row.appendChild(el('span', { class: 'sp-effort-option-badge' }, unlockPlanLabel));
-      modelDropdownEl.appendChild(row);
+      modelMenuSettingsEl.appendChild(row);
     }
   }
 
@@ -9517,7 +9625,7 @@ function buildUI(): void {
     input.setAttribute('aria-label', label);
     input.addEventListener('change', () => onChange(input.checked));
     row.appendChild(input);
-    modelDropdownEl.appendChild(row);
+    modelMenuSettingsEl.appendChild(row);
   }
 
   function appendWorkModeRow(): void {
@@ -9549,7 +9657,7 @@ function buildUI(): void {
     copy.appendChild(el('span', { class: 'sp-menu-toggle-desc' }, gatedCopy));
     row.appendChild(copy);
     row.appendChild(el('span', { class: 'sp-effort-option-badge' }, unlockPlanLabel));
-    modelDropdownEl.appendChild(row);
+    modelMenuSettingsEl.appendChild(row);
   }
 
   function applyQuickMode(next: boolean): void {
@@ -9573,7 +9681,8 @@ function buildUI(): void {
   }
 
   function renderModelDropdown(): void {
-    clearChildren(modelDropdownEl);
+    clearChildren(modelMenuListEl);
+    clearChildren(modelMenuSettingsEl);
     const menu = buildManagedModelPickerMenu(managedModelAccess, _ctx.selectedModel);
     const lockedModels = managedModelAccess
       ? buildManagedModelPickerView(managedModelAccess, _ctx.selectedModel).more.filter(
@@ -9581,18 +9690,18 @@ function buildUI(): void {
         )
       : [];
     const catalogue = [...menu.all, ...lockedModels];
-    modelDropdownEl.appendChild(
+    modelMenuListEl.appendChild(
       buildModelOptionRow(menu.auto, _ctx.selectedModel === menu.auto.value),
     );
     if (menu.current) appendModelRows([menu.current]);
     if (menu.recommended.length > 0 && !modelCatalogueOpen) {
-      modelDropdownEl.appendChild(
+      modelMenuListEl.appendChild(
         el('div', { class: 'sp-menu-heading' }, t('spModelsRecommended')),
       );
       appendModelRows(menu.recommended);
     }
     if (managedModelAccess === null) {
-      modelDropdownEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsSignedOut')));
+      modelMenuListEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsSignedOut')));
     }
 
     if (catalogue.length > 0) {
@@ -9619,7 +9728,7 @@ function buildUI(): void {
         renderModelDropdown();
         modelDropdownEl.querySelector<HTMLInputElement>('#sp-model-search')?.focus();
       });
-      modelDropdownEl.appendChild(allButton);
+      modelMenuListEl.appendChild(allButton);
     }
 
     if (modelCatalogueOpen) {
@@ -9637,7 +9746,7 @@ function buildUI(): void {
         const replacement = modelDropdownEl.querySelector<HTMLInputElement>('#sp-model-search');
         replacement?.focus();
       });
-      modelDropdownEl.appendChild(search);
+      modelMenuListEl.appendChild(search);
       const capability = el('select', {
         class: 'sp-wf-form-select',
         'aria-label': t('spModelsCapability'),
@@ -9660,7 +9769,7 @@ function buildUI(): void {
         modelCapabilityFilter = capability.value || null;
         renderModelDropdown();
       });
-      modelDropdownEl.appendChild(capability);
+      modelMenuListEl.appendChild(capability);
     }
 
     const appendSettings = (): void => {
@@ -9701,7 +9810,7 @@ function buildUI(): void {
     }
     const allModels = filterManagedModelOptions(catalogue, modelSearchQuery, modelCapabilityFilter);
     if (allModels.length === 0) {
-      modelDropdownEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsNoMatch')));
+      modelMenuListEl.appendChild(el('div', { class: 'sp-menu-note' }, t('spModelsNoMatch')));
       appendSettings();
       return;
     }
@@ -9719,14 +9828,14 @@ function buildUI(): void {
       const options = grouped.get(providerKey);
       if (!options || options.length === 0) continue;
       rendered.add(providerKey);
-      modelDropdownEl.appendChild(
+      modelMenuListEl.appendChild(
         el('div', { class: 'sp-model-group-header' }, modelGroupHeading(providerKey)),
       );
       appendModelRows(options);
     }
     for (const [providerKey, options] of grouped.entries()) {
       if (rendered.has(providerKey)) continue;
-      modelDropdownEl.appendChild(
+      modelMenuListEl.appendChild(
         el('div', { class: 'sp-model-group-header' }, modelGroupHeading(providerKey)),
       );
       appendModelRows(options);
@@ -9781,7 +9890,12 @@ function buildUI(): void {
       : `${window.innerHeight - trigger.top + gap}px`;
     modelDropdownEl.style.left = `${left}px`;
     modelDropdownEl.style.marginTop = '0';
-    modelDropdownEl.style.maxHeight = `${Math.max(80, Math.min(280, available - gap))}px`;
+    const menuHeight = Math.max(
+      MODEL_MENU_MIN_HEIGHT,
+      Math.min(MODEL_MENU_MAX_HEIGHT, available - gap),
+    );
+    modelDropdownEl.style.maxHeight = `${menuHeight}px`;
+    modelMenuSettingsEl.style.maxHeight = `${Math.floor(menuHeight * MODEL_MENU_SETTINGS_SHARE)}px`;
   }
   modelSelectorBtn.addEventListener('click', (e) => {
     e.stopPropagation();
@@ -10100,13 +10214,7 @@ function buildUI(): void {
       _ctx.selectedModel = normalizeModelId(entry.routing.selectedModel) ?? 'auto';
       _ctx.currentModelKey = entry.routing.currentModelKey;
       _ctx.previousTaskType = entry.routing.previousTaskType;
-      const effortModel =
-        _ctx.selectedModel === 'auto' || _ctx.selectedModel.startsWith('auto-')
-          ? _ctx.currentModelKey
-          : _ctx.selectedModel;
-      _ctx.reasoningEffort = effortModel
-        ? resolveModelEffort(effortModel, entry.routing.effort)
-        : undefined;
+      _ctx.reasoningEffort = restoredConversationEffort(entry.routing.effort);
       _ctx.messages.push(
         ...entry.messages
           .slice(-MAX_STORED_MESSAGES)
@@ -12009,6 +12117,7 @@ function buildUI(): void {
         goal,
         tabId,
         modelSelection: _ctx.selectedModel,
+        ...browserTaskEffortPayload(_ctx.selectedModel),
       })) as typeof startResponse;
     } catch (error) {
       if (!cuPanel.ownsRun(requestedRunId)) return;
@@ -12706,14 +12815,21 @@ function buildUI(): void {
   });
   connectorsItem.appendChild(renderIcon(Plug, 16));
   connectorsItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spConnectors')));
-  const connectorsComingSoonTag = el(
-    'span',
-    { class: 'sp-attach-menu-hint' },
-    CONNECTORS_COMING_SOON_LABEL,
+  const connectorsLockedRow = el('div', {
+    class: 'sp-attach-menu-item',
+    id: 'sp-attach-connectors-locked',
+    role: 'menuitem',
+    'aria-disabled': 'true',
+    tabindex: '-1',
+    'aria-label': `${t('spConnectors')}, ${CONNECTORS_COMING_SOON_LABEL}`,
+    title: CONNECTORS_COMING_SOON_MESSAGE,
+  });
+  connectorsLockedRow.appendChild(renderIcon(Lock, 16));
+  connectorsLockedRow.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spConnectors')));
+  connectorsLockedRow.appendChild(
+    el('span', { class: 'sp-attach-menu-hint' }, CONNECTORS_COMING_SOON_LABEL),
   );
-  connectorsItem.appendChild(connectorsComingSoonTag);
   connectorsItem.addEventListener('click', () => {
-    if (connectorsComingSoon(capabilityDocument)) return;
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
     void chrome.tabs.create({ url: CONNECTORS_URL });
@@ -13048,18 +13164,24 @@ function buildUI(): void {
     videoItem,
     skillsItem,
     connectorsItem,
+    connectorsLockedRow,
     temporaryItem,
   ];
   for (const item of attachMenuItems) attachMenu.appendChild(item);
+  const focusableAttachItems = (): HTMLElement[] =>
+    attachMenuItems.filter(
+      (item) =>
+        !item.hidden &&
+        !(item instanceof HTMLButtonElement && item.disabled) &&
+        item.getAttribute('aria-disabled') !== 'true',
+    );
   applyCapabilityGates = () => {
     micBtn.hidden = !capabilityAllowed(capabilityDocument, 'canUseVoice');
     fileItem.hidden = !capabilityAllowed(capabilityDocument, 'canUploadFiles');
     const connectorsLocked = connectorsComingSoon(capabilityDocument);
+    connectorsLockedRow.hidden = !connectorsLocked;
     connectorsItem.hidden =
-      !connectorsLocked && !capabilityAllowed(capabilityDocument, 'canUseConnectors');
-    connectorsItem.setAttribute('aria-disabled', String(connectorsLocked));
-    connectorsItem.title = connectorsLocked ? CONNECTORS_COMING_SOON_MESSAGE : '';
-    connectorsComingSoonTag.hidden = !connectorsLocked;
+      connectorsLocked || !capabilityAllowed(capabilityDocument, 'canUseConnectors');
     skillsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseSkills');
     if (skillsItem.hidden && composerSkill) {
       composerSkill = null;
@@ -13077,10 +13199,10 @@ function buildUI(): void {
     renderVideoModeItem();
     const isOpen = attachMenu.classList.toggle('open');
     attachBtn.setAttribute('aria-expanded', String(isOpen));
-    if (isOpen) attachMenuItems.find((item) => !item.hidden && !item.disabled)?.focus();
+    if (isOpen) focusableAttachItems()[0]?.focus();
   });
   attachMenu.addEventListener('keydown', (event: KeyboardEvent) => {
-    const items = attachMenuItems.filter((item) => !item.hidden && !item.disabled);
+    const items = focusableAttachItems();
     if (event.key === 'Escape') {
       event.preventDefault();
       attachMenu.classList.remove('open');
@@ -13095,7 +13217,7 @@ function buildUI(): void {
     }
     if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return;
     event.preventDefault();
-    const current = Math.max(0, items.indexOf(document.activeElement as HTMLButtonElement));
+    const current = Math.max(0, items.indexOf(document.activeElement as HTMLElement));
     const nextIndex =
       event.key === 'Home'
         ? 0
@@ -13731,9 +13853,26 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
     saveMessages();
   }
 
+  if (chunk.thinking) {
+    removeThinking();
+    const assistant = ensureStreamingAssistant(chunk.id, streamUsedQuick);
+    stampResolvedRoute(chunk.id, assistant);
+    appendThinking(assistant, chunk.thinking);
+    if (!updateThoughtSection(assistant)) {
+      _ctx.needsMessageRebuild = true;
+      renderMessages();
+    }
+    const now = Date.now();
+    if (now - lastStreamPersistAtMs >= STREAM_TEXT_PERSIST_INTERVAL_MS) {
+      lastStreamPersistAtMs = now;
+      saveMessages();
+    }
+  }
+
   if (chunk.agentEvent) {
     removeThinking();
     const before = _ctx.messages.find((message) => message.id === chunk.id);
+    if (before) settleThinking(before);
     const approvalEventType =
       messageKindForAgentEvent(chunk.agentEvent.event.type) === 'approval'
         ? chunk.agentEvent.event.type
@@ -13837,11 +13976,14 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   } else {
     const existing = _ctx.messages.find((m) => m.id === chunk.id)!;
     stampResolvedRoute(chunk.id, existing);
+    const thoughtSettled = chunk.text.length > 0 && settleThinking(existing);
     existing.content += chunk.text;
     if (document.getElementById(`sp-bubble-${chunk.id}`)) {
       updateStreamingBubble(chunk.id, existing.content);
+      if (thoughtSettled) updateThoughtSection(existing);
     } else {
       removeThinking();
+      if (thoughtSettled) _ctx.needsMessageRebuild = true;
       renderMessages();
     }
     if (!chunk.done) {
@@ -13881,10 +14023,12 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
         existing.errorText = t('spEmptyResponse');
       }
       settleChatToolActivity(existing, existing.error ? 'error' : 'end-turn');
+      settleFinishedAgentActivity(existing);
     }
     streamStartedAtById.delete(chunk.id);
     assistantCloudIdByStreamId.delete(chunk.id);
     cloudRunsByStreamId.delete(chunk.id);
+    releaseTurnSiteGrants(chunk.id);
     removeThinking();
     _ctx.isStreaming = false;
     _ctx.currentStreamId = null;
@@ -14074,11 +14218,32 @@ function quoteSelectionForQuestion(selection: string): void {
   updateSendButton();
 }
 
+function attachSelectionForQuestion(pending: { text: string; url: string; tabId?: number }): void {
+  const prepared = prepareSelectionContext({ text: pending.text, truncated: false }, pending.url);
+  if (!prepared || typeof pending.tabId !== 'number') {
+    quoteSelectionForQuestion(pending.text);
+    return;
+  }
+  clearPendingPageContext();
+  offeredSelectionKey = `${pending.tabId}\n${pending.url}\n${prepared.text}`;
+  pendingSelectionText = prepared.text;
+  _ctx.pendingPageContext = prepared.text;
+  _ctx.pendingPageContextSource = {
+    tabId: pending.tabId,
+    url: pending.url,
+    title: t('spSelectionChipTitle', [pageChipLabel(pending.url)]),
+  };
+  composerContextNotice = null;
+  updateAttachmentPreview();
+  updateContextButton();
+  document.getElementById('sp-input')?.focus();
+}
+
 function checkPendingChat(): void {
   chrome.storage.session.get('agi_pending_chat', (result) => {
     if (chrome.runtime.lastError) return;
     const pending = result['agi_pending_chat'] as
-      { type: string; text: string; url: string; timestamp: number } | undefined;
+      { type: string; text: string; url: string; tabId?: number; timestamp: number } | undefined;
     if (!pending || Date.now() - pending.timestamp > PENDING_CHAT_TTL_MS) {
       if (pending) chrome.storage.session.remove('agi_pending_chat').catch(() => {});
       return;
@@ -14092,7 +14257,7 @@ function checkPendingChat(): void {
 
     if (pending.type === 'ask') {
       chrome.storage.session.remove('agi_pending_chat').catch(() => {});
-      quoteSelectionForQuestion(pending.text);
+      attachSelectionForQuestion(pending);
       return;
     }
 

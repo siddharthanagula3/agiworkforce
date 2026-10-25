@@ -252,7 +252,10 @@ export function readVisibleSelection(maxCharacters: number): PageSelection | nul
       const start = node === range.startContainer ? range.startOffset : 0;
       const end = node === range.endContainer ? range.endOffset : value.length;
       const piece = value.slice(start, end);
-      if (!piece.trim()) continue;
+      if (!piece.trim()) {
+        if (text && blockOf(parent) === previousBlock) text += piece;
+        continue;
+      }
       const block = blockOf(parent);
       if (previousBlock && block !== previousBlock && !text.endsWith('\n')) text += '\n';
       previousBlock = block;

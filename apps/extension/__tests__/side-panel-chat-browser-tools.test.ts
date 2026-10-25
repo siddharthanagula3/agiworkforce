@@ -68,6 +68,7 @@ interface Harness {
   handle(message: Record<string, unknown>): Promise<void>;
   dismissPendingSiteGrants(): void;
   activeBrowserToolTier(streamId: string): Promise<string | undefined>;
+  releaseTurnSiteGrants(streamId?: string): void;
 }
 
 function harness(
@@ -232,7 +233,7 @@ function harness(
     handleStreamError: vi.fn(),
   };
   const compiled = ts.transpileModule(
-    `${source.slice(start, end)}\nreturn { handle: handleChatToolHandoff, dismissPendingSiteGrants, activeBrowserToolTier };`,
+    `${source.slice(start, end)}\nreturn { handle: handleChatToolHandoff, dismissPendingSiteGrants, activeBrowserToolTier, releaseTurnSiteGrants };`,
     { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } },
   );
   // llm-guardrail-allow: executes repository-owned browser code inside this isolated test fixture.
@@ -270,12 +271,12 @@ function harness(
   };
 }
 
-function handoff(name: string, args: Record<string, unknown> = {}) {
+function handoff(name: string, args: Record<string, unknown> = {}, streamId = 'stream-1') {
   return {
     type: 'CHAT_TOOL_HANDOFF',
     owner: OWNER,
     clientInstanceId: 'panel-a',
-    id: 'stream-1',
+    id: streamId,
     handoffId: 'handoff_1',
     calls: [
       { id: 'call_1', type: 'function', function: { name, arguments: JSON.stringify(args) } },
@@ -328,7 +329,7 @@ describe('chat turns run browser tools the model chose', () => {
     expect(await h.api.activeBrowserToolTier('stream-1')).toBe('read');
   });
 
-  it('asks inline on an unapproved site, and Allow this time leaves no access behind', async () => {
+  it('asks inline on an unapproved site, and Allow this time leaves no access behind once the turn ends', async () => {
     const h = harness();
     const done = h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
     await flush();
@@ -337,6 +338,9 @@ describe('chat turns run browser tools the model chose', () => {
     await done;
     expect(h.requestHost).toHaveBeenCalledOnce();
     expect(h.resolved()!.results[0]!.content).toContain('Second table');
+    expect(h.removeHost).not.toHaveBeenCalled();
+    h.api.releaseTurnSiteGrants('stream-1');
+    await flush();
     expect(h.removeHost).toHaveBeenCalledOnce();
     expect(h.storageSet).not.toHaveBeenCalled();
     expect(h.allowlist).toEqual([]);
@@ -388,6 +392,8 @@ describe('chat turns run browser tools the model chose', () => {
     await flush();
     grantButton(h.controls, 'Allow this time').click();
     await done;
+    h.api.releaseTurnSiteGrants('stream-1');
+    await flush();
     expect(h.recordTransientHostPermission).toHaveBeenCalledWith(
       expect.stringMatching(/^site_once_/),
       ORIGIN,
@@ -434,6 +440,59 @@ describe('chat turns run browser tools the model chose', () => {
     expect(h.resolved()!.results.at(-1)!.content).toContain('Too many browser tool calls');
   });
 
+  it('asks once per site and scope in one turn, and asks again in the next turn', async () => {
+    const h = harness();
+    const accessCards = () =>
+      (h.controls.cards.textContent ?? '').split('AGI needs access to example.com').length - 1;
+
+    const firstRead = h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    await flush();
+    expect(accessCards()).toBe(1);
+    grantButton(h.controls, 'Allow this time').click();
+    await firstRead;
+
+    const secondRead = h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    await flush();
+    expect(accessCards()).toBe(0);
+    await secondRead;
+
+    const firstTask = h.api.handle(handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Click Update' }));
+    await flush();
+    grantButton(h.controls, 'Start task').click();
+    await flush();
+    expect(accessCards()).toBe(1);
+    grantButton(h.controls, 'Allow this time').click();
+    await firstTask;
+
+    const secondTask = h.api.handle(handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Click Save' }));
+    await flush();
+    grantButton(h.controls, 'Start task').click();
+    await flush();
+    expect(accessCards()).toBe(0);
+    await secondTask;
+    const thirdRead = h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
+    await flush();
+    expect(accessCards()).toBe(0);
+    await thirdRead;
+
+    expect(h.requestHost).toHaveBeenCalledTimes(2);
+    expect(h.startComposerBrowserTask).toHaveBeenCalledTimes(2);
+    expect(h.removeHost).not.toHaveBeenCalled();
+
+    h.api.releaseTurnSiteGrants('stream-1');
+    await flush();
+    expect(h.removeHost).toHaveBeenCalledOnce();
+    expect(h.runtimeMessages.filter((m) => m['type'] === 'REVOKE_SITE_ONCE')).toHaveLength(1);
+
+    h.context.currentStreamId = 'stream-2';
+    h.context.messages.push({ ...h.assistant, id: 'stream-2' });
+    const nextTurn = h.api.handle(handoff(CHAT_READ_PAGE_TOOL, {}, 'stream-2'));
+    await flush();
+    expect(accessCards()).toBe(1);
+    grantButton(h.controls, 'Decline').click();
+    await nextTurn;
+  });
+
   it('ends the step with a neutral Skipped receipt and no page text on Decline', async () => {
     const h = harness();
     const done = h.api.handle(handoff(CHAT_READ_PAGE_TOOL));
@@ -451,7 +510,7 @@ describe('chat turns run browser tools the model chose', () => {
     });
   });
 
-  it('acts only after an action grant, and a one-time action grant is revoked after the task', async () => {
+  it('acts only after an action grant, and a one-time action grant is revoked when the turn ends', async () => {
     const h = harness();
     const done = h.api.handle(
       handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Change the quantity to 3' }),
@@ -469,11 +528,11 @@ describe('chat turns run browser tools the model chose', () => {
     expect(h.startComposerBrowserTask).toHaveBeenCalledWith('Change the quantity to 3', {
       messageId: 'stream-1',
     });
+    expect(h.runtimeMessages.some((message) => message['type'] === 'REVOKE_SITE_ONCE')).toBe(false);
+    h.api.releaseTurnSiteGrants('stream-1');
+    await flush();
     const revoke = h.runtimeMessages.find((message) => message['type'] === 'REVOKE_SITE_ONCE');
     expect(revoke).toEqual({ type: 'REVOKE_SITE_ONCE', grantId: grant!['grantId'] });
-    expect(h.runtimeMessages.indexOf(revoke!)).toBeLessThan(
-      h.runtimeMessages.findIndex((message) => message['type'] === 'RESOLVE_CHAT_TOOLS'),
-    );
     expect(h.resolved()!.results[0]!.content).toContain('Changed the quantity to 3.');
     expect(h.allowlist).toEqual([]);
   });
@@ -685,6 +744,32 @@ describe('a browser task the model starts in Auto', () => {
     expect(h.controls.cards.textContent).not.toContain('AGI wants to start a browser task');
     expect(h.startComposerBrowserTask).toHaveBeenCalledOnce();
   });
+
+  it.each([
+    ['auto', 'spAutonomyAutoDescription'],
+    ['ask', 'spAutonomyAskFirstTooltip'],
+    ['full', 'spAutonomyFullAccessTooltip'],
+  ] as const)(
+    'tells the person what AGI asks before in %s mode on an action card',
+    async (mode, summaryKey) => {
+      const h = harness({ mode });
+      const done = h.api.handle(handoff(CHAT_BROWSER_TASK_TOOL, { goal: 'Click Update' }));
+      await flush();
+      const start = [...h.controls.cards.querySelectorAll('button')].find(
+        (button) => button.textContent === 'Start task',
+      );
+      if (start) {
+        start.click();
+        await flush();
+      }
+      const text = h.controls.cards.textContent ?? '';
+      expect(text).toContain('AGI needs access to example.com');
+      expect(text).toContain(getMessage(summaryKey));
+      expect(text).not.toContain('asks before each action');
+      grantButton(h.controls, 'Decline').click();
+      await done;
+    },
+  );
 
   it('still asks for site access on a site the task has not been given', async () => {
     const h = harness({ mode: 'auto' });

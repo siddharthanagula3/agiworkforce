@@ -208,7 +208,11 @@ vi.mock('../src/features/cloud-bridge/capabilityDocument', async (importOriginal
     },
   }),
 }));
-import { getRoutingSlotModel, parseManagedUsageSummaryResponse } from '@agiworkforce/types';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  getRoutingSlotModel,
+  parseManagedUsageSummaryResponse,
+} from '@agiworkforce/types';
 
 import catalog from '../_locales/en/messages.json';
 import '../src/side_panel';
@@ -499,6 +503,35 @@ describe('side panel Stop confirmation', () => {
       expect(chats()).toHaveLength(1);
     },
   );
+
+  it('settles a running step row once Stop is confirmed instead of leaving Working for', async () => {
+    const message = await startRun();
+    chunk(message, {
+      agentEvent: {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: 'run-stop',
+        turnId: 'run-stop',
+        sequence: 0,
+        emittedAtMs: Date.now(),
+        event: {
+          type: 'tool-execution-start',
+          toolCallId: 'call-stop',
+          name: 'web_search',
+          category: 'search',
+          summary: 'Searching the web',
+          input: null,
+        },
+      },
+    });
+    const summary = (): string =>
+      document.querySelector('.sp-agent-activity > summary')?.textContent ?? '';
+    await vi.waitFor(() => expect(summary()).toContain('Working for'));
+    chromeMock.cancellationReply = async () => ({ success: true });
+    sendButton().click();
+    await vi.waitFor(() => expect(sendButton().getAttribute('data-mode')).toBe('send'));
+    await vi.waitFor(() => expect(summary()).toContain('Cancelled after'));
+    expect(summary()).not.toContain('Working for');
+  });
 
   it('retains Stop retry after a deadline and ignores its later success', async () => {
     await startRun();

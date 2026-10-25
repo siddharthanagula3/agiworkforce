@@ -74,6 +74,7 @@ const MAX_STORED_LABEL_CHARS = 300;
 const MAX_STORED_SNIPPET_CHARS = 600;
 const MAX_STORED_URL_CHARS = 2_048;
 const MAX_STORED_DURATION_MS = 24 * 60 * 60 * 1000;
+const MAX_STORED_THINKING_CHARS = 20_000;
 
 export type ConversationRuntime = 'managed-cloud' | 'local';
 
@@ -104,6 +105,8 @@ export interface HistoryMessage {
   sources?: SidePanelSource[];
   citations?: SidePanelSource[];
   durationMs?: number;
+  thinking?: string;
+  thinkingDurationMs?: number;
   runtime?: ConversationRuntime;
   error?: boolean;
   errorText?: string;
@@ -416,6 +419,26 @@ function normalizeHistoryMessage(
       durationMs <= MAX_STORED_DURATION_MS
     ) {
       normalized.durationMs = durationMs;
+    }
+    const thinking = message['thinking'];
+    if (typeof thinking === 'string' && thinking.trim()) {
+      const text = thinking.slice(
+        0,
+        Math.min(MAX_STORED_THINKING_CHARS, budget.remainingContentChars),
+      );
+      budget.remainingContentChars -= text.length;
+      if (text) {
+        normalized.thinking = text;
+        const thinkingDurationMs = message['thinkingDurationMs'];
+        if (
+          typeof thinkingDurationMs === 'number' &&
+          Number.isFinite(thinkingDurationMs) &&
+          thinkingDurationMs >= 0 &&
+          thinkingDurationMs <= MAX_STORED_DURATION_MS
+        ) {
+          normalized.thinkingDurationMs = thinkingDurationMs;
+        }
+      }
     }
   }
   if (message['role'] === 'user') {
@@ -1758,6 +1781,35 @@ export async function updateConversationEntry(
     );
     await writeStore(store);
     return next;
+  });
+}
+
+export async function adoptCloudConversationTitle(
+  owner: ManagedCloudOwner,
+  id: string,
+  remoteTitle: string,
+): Promise<boolean> {
+  assertManagedCloudOwner(owner);
+  const title = normalizeConversationTitle(remoteTitle);
+  if (!title) return false;
+  return mutateStore(async (store) => {
+    const index = store.conversations.findIndex(
+      (entry) => entry.id === id && sameManagedCloudOwner(entry.owner, owner),
+    );
+    const current = store.conversations[index];
+    if (!current?.cloudSync || current.title !== current.cloudSync.syncedTitle) return false;
+    if (current.title === title) return false;
+    const next: ConversationEntry = {
+      ...current,
+      title,
+      customTitle: title,
+      cloudSync: { ...current.cloudSync, syncedTitle: title },
+    };
+    store.conversations = store.conversations.map((entry, position) =>
+      position === index ? next : entry,
+    );
+    await writeStore(store);
+    return true;
   });
 }
 

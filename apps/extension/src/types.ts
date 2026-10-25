@@ -445,6 +445,7 @@ export interface ChatMessageMessage extends BaseMessage {
     role: 'user' | 'assistant';
     content: string;
     uploadedAttachments?: ManagedCloudChatAttachment[];
+    fileAttachments?: Array<{ assetId: string; mimeType: string }>;
   }>;
   attachments?: string[];
   fileAttachments?: Array<{ assetId: string; mimeType: string }>;
@@ -572,6 +573,7 @@ export interface ChatChunkMessage {
   id: string;
   text: string;
   done: boolean;
+  thinking?: string;
   error?: string;
   errorCode?: string;
   errorRetryAfterSeconds?: number;
@@ -960,6 +962,7 @@ export interface StartComputerUseMessage {
   goal: string;
   tabId: number;
   modelSelection?: string;
+  effort?: Effort;
   selectedTabs?: readonly BrowserContextTabReference[];
   pageContext?: string;
   historyConversationId?: string;

@@ -1,9 +1,11 @@
 import { describe, expect, it, vi } from 'vitest';
 import { AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
+  appendThinking,
   applyBrowserActivityEvent,
   applyCanonicalAgentEvent,
   applyStreamFailure,
+  isThinkingLive,
   hydrateStoredChatMessage,
   pageContextStillDescribes,
   projectCanonicalAgentActivity,
@@ -14,6 +16,10 @@ import {
   selectModelHistory,
   settleBrowserActivity,
   settleFailedAgentActivity,
+  settleFinishedAgentActivity,
+  settleStoppedAgentActivity,
+  settleThinking,
+  streamErrorOffersModelSwitch,
   shouldRebuildMessageDom,
   shouldRenderTextBubble,
   trimChatMessages,
@@ -162,6 +168,60 @@ describe('in-chat browser activity', () => {
       'm5',
     );
     expect(stillRunning.agentActivity?.status).toBe('running');
+  });
+
+  it('settles a step row still running when the answer finishes, but not a live cloud run', () => {
+    const agentEvents = [
+      {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: 'run-2',
+        turnId: 'run-2',
+        sequence: 0,
+        emittedAtMs: 10,
+        event: {
+          type: 'tool-execution-start' as const,
+          toolCallId: 'call-2',
+          name: 'web_search',
+          category: 'search' as const,
+          summary: 'Searching the web',
+          input: null,
+        },
+      },
+    ];
+    const finished: SidePanelChatMessage = {
+      id: 'm8',
+      role: 'assistant',
+      content: 'Answer.',
+      timestamp: 5,
+      agentEvents,
+      agentActivity: projectCanonicalAgentActivity(agentEvents),
+    };
+    settleFinishedAgentActivity(finished, 60);
+    expect(finished.agentActivity?.status).toBe('completed');
+
+    const background: SidePanelChatMessage = {
+      ...finished,
+      id: 'm9',
+      agentActivity: projectCanonicalAgentActivity(agentEvents),
+      cloudAgentRun: {
+        runId: '11111111-1111-4111-8111-111111111111',
+        runPath: '/api/llm/v1/chat/completions/runs/11111111-1111-4111-8111-111111111111',
+        state: 'running',
+        lastSequence: -1,
+      },
+    };
+    settleFinishedAgentActivity(background, 60);
+    expect(background.agentActivity?.status).toBe('running');
+  });
+
+  it('offers another model only for a failure another model could fix', () => {
+    expect(streamErrorOffersModelSwitch('network_error', false)).toBe(false);
+    expect(streamErrorOffersModelSwitch('timeout', false)).toBe(false);
+    expect(streamErrorOffersModelSwitch('protocol_error', false)).toBe(false);
+    expect(streamErrorOffersModelSwitch('server_error', false)).toBe(true);
+    expect(streamErrorOffersModelSwitch('rate_limited', false)).toBe(true);
+    expect(streamErrorOffersModelSwitch(undefined, false)).toBe(false);
+    expect(streamErrorOffersModelSwitch('quota_exceeded', true)).toBe(true);
   });
 
   it('reopens the browser steps of a turn the panel takes back', () => {
@@ -546,6 +606,28 @@ describe('side-panel chat state', () => {
     ]);
   });
 
+  it('keeps the uploaded files of earlier turns in model history', () => {
+    const messages: SidePanelChatMessage[] = [
+      {
+        ...message(1),
+        attachments: [
+          { kind: 'file', name: 'invoice.pdf', mimeType: 'application/pdf', assetId: 'asset-1' },
+          { kind: 'image', name: 'pasted.png', mimeType: 'image/png' },
+        ],
+      },
+      message(2, 'assistant'),
+    ];
+
+    expect(selectModelHistory(messages)).toEqual([
+      {
+        role: 'user',
+        content: 'content-1',
+        fileAttachments: [{ assetId: 'asset-1', mimeType: 'application/pdf' }],
+      },
+      { role: 'assistant', content: 'content-2' },
+    ]);
+  });
+
   it('forces a DOM rebuild after trimming even when retained length is unchanged', () => {
     expect(
       shouldRebuildMessageDom({ forceRebuild: true, renderedCount: 50, messageCount: 50 }),
@@ -597,5 +679,71 @@ describe('attached page context', () => {
 
   it('stops describing the page when no tab can be resolved at all', () => {
     expect(pageContextStillDescribes(source, undefined, '')).toBe(false);
+  });
+});
+
+describe('thinking summary on an assistant turn', () => {
+  function thinkingTurn(): SidePanelChatMessage {
+    return { ...message(1, 'assistant'), content: '', streaming: true };
+  }
+
+  it('keeps thinking text apart from the answer and live until it is settled', () => {
+    const turn = thinkingTurn();
+    appendThinking(turn, 'Weighing ', 1_000);
+    appendThinking(turn, 'the options', 2_000);
+    expect(turn.thinking).toBe('Weighing the options');
+    expect(turn.content).toBe('');
+    expect(isThinkingLive(turn)).toBe(true);
+
+    expect(settleThinking(turn, 5_000)).toBe(true);
+    expect(isThinkingLive(turn)).toBe(false);
+    expect(turn.thinkingDurationMs).toBe(4_000);
+    expect(settleThinking(turn, 9_000)).toBe(false);
+    expect(turn.thinkingDurationMs).toBe(4_000);
+  });
+
+  it('separates a second thinking block and adds its time to the first', () => {
+    const turn = thinkingTurn();
+    appendThinking(turn, 'First.', 1_000);
+    settleThinking(turn, 2_000);
+    appendThinking(turn, 'Second.', 10_000);
+    settleThinking(turn, 13_000);
+    expect(turn.thinking).toBe('First.\n\nSecond.');
+    expect(turn.thinkingDurationMs).toBe(4_000);
+  });
+
+  it.each([
+    ['a stopped turn', (turn: SidePanelChatMessage) => settleStoppedAgentActivity(turn, 4_000)],
+    ['a failed activity', (turn: SidePanelChatMessage) => settleFailedAgentActivity(turn, 4_000)],
+    ['a finished turn', (turn: SidePanelChatMessage) => settleFinishedAgentActivity(turn, 4_000)],
+    [
+      'a failed stream',
+      (turn: SidePanelChatMessage) => applyStreamFailure([turn], turn.id, 'Network error', 4_000),
+    ],
+  ])('settles the thinking of %s', (_name, settle) => {
+    const turn = thinkingTurn();
+    appendThinking(turn, 'Weighing the options', 1_000);
+    settle(turn);
+    expect(isThinkingLive(turn)).toBe(false);
+    expect(turn.thinkingDurationMs).toBe(3_000);
+  });
+
+  it('restores stored thinking as settled and never as answer text', () => {
+    const restored = hydrateStoredChatMessage(
+      {
+        role: 'assistant',
+        content: 'The answer.',
+        timestamp: 1,
+        thinking: 'Weighing the options',
+        thinkingDurationMs: 4_000,
+      },
+      'restored',
+    );
+    expect(restored).toMatchObject({
+      content: 'The answer.',
+      thinking: 'Weighing the options',
+      thinkingDurationMs: 4_000,
+    });
+    expect(isThinkingLive(restored)).toBe(false);
   });
 });

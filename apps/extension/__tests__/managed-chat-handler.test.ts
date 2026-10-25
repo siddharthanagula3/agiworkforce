@@ -17,6 +17,7 @@ import {
 } from '../src/features/cloud-bridge/managedChatHandler';
 import {
   FREE_TRIAL_MODEL,
+  ManagedNetworkError,
   type FreeTrialChunk,
 } from '../src/features/cloud-bridge/freeTrialClient';
 
@@ -66,6 +67,77 @@ describe('executeChromeManagedChat', () => {
       createChromeManagedStreamKey('panel-a', 'b:stream-1'),
     );
     expect(() => createChromeManagedStreamKey('', 'stream-1')).toThrow('client instance');
+  });
+
+  it('tells the person the network failed when model access cannot be reached', async () => {
+    const deps = dependencies({
+      getModelAccess: vi.fn(async () => {
+        throw new ManagedNetworkError();
+      }),
+    });
+    const result = await executeChromeManagedChat(
+      { id: 'stream-1', text: 'Hello', modelSelection: 'auto' },
+      deps,
+    );
+
+    expect(result).toMatchObject({
+      status: 'error',
+      code: 'server_error',
+      message: 'Network error reaching AGI cloud. Check your connection.',
+    });
+  });
+
+  it('sends a file from an earlier turn again on a follow-up', async () => {
+    const assetId = '6f1c2d3e-4b5a-4c6d-8e7f-9a0b1c2d3e4f';
+    const deps = dependencies();
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-1',
+        text: 'And how many bags of flour?',
+        modelSelection: 'auto',
+        conversationHistory: [
+          {
+            role: 'user',
+            content: 'What is the total due?',
+            fileAttachments: [{ assetId, mimeType: 'application/pdf' }],
+          },
+          { role: 'assistant', content: 'The total due is 1,019.26 CAD.' },
+        ],
+      },
+      deps,
+    );
+
+    expect(result.status).toBe('success');
+    const [messages] = vi.mocked(deps.streamChat).mock.calls[0]!;
+    expect(messages[0]).toEqual({
+      role: 'user',
+      content: [
+        { type: 'text', text: 'What is the total due?' },
+        { type: 'file', file: { asset_id: assetId } },
+      ],
+    });
+  });
+
+  it('refuses an earlier-turn file reference that is not an uploaded file', async () => {
+    const deps = dependencies();
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-1',
+        text: 'Follow up',
+        modelSelection: 'auto',
+        conversationHistory: [
+          {
+            role: 'user',
+            content: 'Read this',
+            fileAttachments: [{ assetId: '../etc/passwd', mimeType: 'application/pdf' }],
+          },
+        ],
+      },
+      deps,
+    );
+
+    expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
+    expect(deps.streamChat).not.toHaveBeenCalled();
   });
 
   it('fails with auth_required before routing or inference when signed out', async () => {
@@ -657,6 +729,46 @@ describe('executeChromeManagedChat', () => {
     expect(result).toMatchObject({ status: 'error', code: 'protocol_error' });
     expect(deps.onText).toHaveBeenCalledWith('partial');
   });
+
+  it('hands thinking text to its own callback and keeps it out of the answer', async () => {
+    const deps = dependencies({
+      streamChat: vi.fn(() =>
+        stream(
+          { type: 'thinking', text: 'Weighing the options' },
+          { type: 'text', text: 'The answer.' },
+          { type: 'done' },
+        ),
+      ),
+      onThinking: vi.fn(),
+    });
+    const result = await executeChromeManagedChat(
+      { id: 'stream-8', text: 'Hello', modelSelection: 'auto' },
+      deps,
+    );
+
+    expect(result.status).toBe('success');
+    expect(deps.onThinking).toHaveBeenCalledExactlyOnceWith('Weighing the options');
+    expect(deps.onText).toHaveBeenCalledExactlyOnceWith('The answer.');
+  });
+
+  it('finishes a turn whose caller does not display thinking', async () => {
+    const deps = dependencies({
+      streamChat: vi.fn(() =>
+        stream(
+          { type: 'thinking', text: 'Hidden' },
+          { type: 'text', text: 'Shown' },
+          { type: 'done' },
+        ),
+      ),
+    });
+    const result = await executeChromeManagedChat(
+      { id: 'stream-9', text: 'Hello', modelSelection: 'auto' },
+      deps,
+    );
+
+    expect(result.status).toBe('success');
+    expect(deps.onText).toHaveBeenCalledExactlyOnceWith('Shown');
+  });
 });
 
 describe('executeChromeManagedApproval', () => {
@@ -690,6 +802,31 @@ describe('executeChromeManagedApproval', () => {
       },
     );
     expect(deps.onText).toHaveBeenCalledWith('continued');
+  });
+
+  it('hands the continued run its thinking text separately from the answer', async () => {
+    const deps = approvalDependencies({
+      streamApproval: vi.fn(() =>
+        stream(
+          { type: 'thinking', text: 'Checking the approval' },
+          { type: 'text', text: 'continued' },
+          { type: 'done' },
+        ),
+      ),
+      onThinking: vi.fn(),
+    });
+    const result = await executeChromeManagedApproval(
+      {
+        id: 'stream-approval',
+        run,
+        toolApprovals: [{ tool_call_id: 'call-1', decision: 'approved' }],
+      },
+      deps,
+    );
+
+    expect(result).toEqual({ status: 'success' });
+    expect(deps.onThinking).toHaveBeenCalledExactlyOnceWith('Checking the approval');
+    expect(deps.onText).toHaveBeenCalledExactlyOnceWith('continued');
   });
 
   it('derives a retry-stable approval identity from the run and decisions', async () => {

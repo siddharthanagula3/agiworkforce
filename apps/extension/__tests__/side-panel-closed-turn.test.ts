@@ -215,6 +215,7 @@ import { getRoutingSlotModel, parseManagedUsageSummaryResponse } from '@agiworkf
 import catalog from '../_locales/en/messages.json';
 import {
   getConversation,
+  listConversations,
   saveActiveConversation,
   settleDetachedAssistantTurn,
 } from '../src/features/background/conversation-history';
@@ -419,5 +420,87 @@ describe('reopening the side panel while a reply waits on a browser step', () =>
     expect(sentOfType('RESUME_CHAT_RUN')[0]).toMatchObject({
       cloudRun: expect.objectContaining({ runId }),
     });
+  });
+});
+
+describe('thinking summary while a reply streams', () => {
+  const streamId = 'stream-thinking';
+
+  async function adoptEmptyTurn(authIncarnation: string): Promise<{
+    send: (patch: Record<string, unknown>) => void;
+  }> {
+    document.getElementById('sp-new-chat-btn')!.click();
+    await vi.waitFor(() => expect(sendButton().getAttribute('data-mode')).toBe('send'));
+    await saveActiveConversation(OWNER, [
+      { role: 'user', content: 'Plan my week', timestamp: 4_000, runtime: 'managed-cloud' },
+      {
+        role: 'assistant',
+        content: '',
+        timestamp: 4_001,
+        runtime: 'managed-cloud',
+        streaming: true,
+      },
+    ]);
+    chromeMock.runtime.sendMessage.mockClear();
+    chromeMock.adoptReply = () =>
+      Promise.resolve({ success: true, adopted: { id: streamId, text: '' } });
+    account.owner = { ...OWNER, authIncarnation };
+    account.onChange!();
+    await vi.waitFor(() => expect(adoptRequests()).toHaveLength(1));
+    await vi.waitFor(() => expect(sendButton().getAttribute('data-mode')).toBe('stop'));
+    const client = adoptRequests()[0]!['clientInstanceId'];
+    const owner = { ...OWNER, authIncarnation };
+    return {
+      send: (patch) => chunk(client, { id: streamId, owner, ...patch }),
+    };
+  }
+
+  const section = (): HTMLDetailsElement | null =>
+    document.querySelector<HTMLDetailsElement>(`#sp-thought-${streamId}`);
+  const label = (): string | undefined =>
+    section()?.querySelector('.sp-thought__label')?.textContent ?? undefined;
+  const answer = (): string => document.getElementById(`sp-bubble-${streamId}`)?.textContent ?? '';
+
+  it('shows the thinking apart from the answer, then collapses it once the answer starts', async () => {
+    const { send } = await adoptEmptyTurn('session-thinking-collapse');
+
+    send({ text: '', thinking: 'Weighing the options' });
+    await vi.waitFor(() => expect(section()?.open).toBe(true));
+    expect(label()).toBe('Thinking');
+    expect(section()?.textContent).toContain('Weighing the options');
+    expect(answer()).not.toContain('Weighing');
+
+    send({ text: 'Monday is free.' });
+    await vi.waitFor(() => expect(answer().trim()).toBe('Monday is free.'));
+    expect(section()?.open).toBe(false);
+    expect(label()).toMatch(/^Thought/);
+    expect(section()?.textContent).toContain('Weighing the options');
+
+    send({ text: '', done: true });
+    await vi.waitFor(() => expect(sendButton().getAttribute('data-mode')).toBe('send'));
+    await vi.waitFor(async () => {
+      const saved = (
+        await listConversations({ ...OWNER, authIncarnation: 'session-thinking-collapse' })
+      )
+        .flatMap((entry) => entry.messages)
+        .find((message) => message.content === 'Monday is free.');
+      expect(saved).toMatchObject({
+        role: 'assistant',
+        thinking: 'Weighing the options',
+      });
+      expect(saved?.streaming).toBeUndefined();
+    });
+  });
+
+  it('settles the thinking of a turn that fails before any answer', async () => {
+    const { send } = await adoptEmptyTurn('session-thinking-failed');
+
+    send({ text: '', thinking: 'Weighing the options' });
+    await vi.waitFor(() => expect(label()).toBe('Thinking'));
+
+    send({ text: '', done: false, error: 'The reply stopped.' });
+    await vi.waitFor(() => expect(section()?.getAttribute('data-live')).toBe('false'));
+    expect(section()?.open).toBe(false);
+    expect(label()).not.toBe('Thinking');
   });
 });

@@ -74,6 +74,7 @@ const {
   hydrateStoredChatMessage,
   settleBrowserActivity,
   settleFailedAgentActivity,
+  streamErrorOffersModelSwitch,
 } = await import('../src/features/side-panel/chat-state');
 const { appendBackgroundTurn } = await import('../src/features/background/conversation-history');
 
@@ -338,6 +339,8 @@ describe('a reply that failed before streaming keeps the answered model', () => 
       applyStreamFailure,
       settleBrowserActivity,
       settleFailedAgentActivity,
+      streamErrorOffersModelSwitch,
+      releaseTurnSiteGrants: vi.fn(),
       composerBrowserRun: null,
       resolvedRouteByStreamId: new Map(),
       quickModeByStreamId: new Map(),
