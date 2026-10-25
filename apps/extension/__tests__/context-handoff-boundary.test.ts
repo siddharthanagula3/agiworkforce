@@ -7,13 +7,13 @@ const contentSource = readFileSync(resolve(process.cwd(), 'src/content.ts'), 'ut
 
 describe('Chrome explicit context-handoff boundary', () => {
   it('never transfers selected context directly from a context-menu click', () => {
-    const askBranch = backgroundSource.slice(
-      backgroundSource.indexOf("info.menuItemId === 'ask-agi-workforce'"),
+    const handoffBranch = backgroundSource.slice(
+      backgroundSource.indexOf('info.menuItemId === SEND_SELECTION_TO_DESKTOP_MENU_ID'),
       backgroundSource.indexOf("info.menuItemId === 'explain-selection'"),
     );
 
-    expect(askBranch).not.toContain('sendNativeMessage');
-    expect(askBranch).toContain('createSelectionContextHandoff');
+    expect(handoffBranch).not.toContain('sendNativeMessage');
+    expect(handoffBranch).toContain('createSelectionContextHandoff');
   });
 
   it('requires extension-page approval before the native selected-text request', () => {

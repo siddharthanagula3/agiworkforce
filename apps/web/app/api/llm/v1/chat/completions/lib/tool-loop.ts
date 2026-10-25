@@ -6198,6 +6198,12 @@ export async function* runToolLoop(
         );
       } catch (err) {
         if (options.shouldPropagateExecutionError?.(err)) throw err;
+        // A Stop aborts the provider stream mid-answer; that abort is the stop,
+        // not a provider failure, and must settle as cancelled.
+        if (await shouldStopForCancellation()) {
+          yield* flushTerminal('cancelled');
+          return;
+        }
         const msg = err instanceof Error ? err.message : String(err);
         const classified: ClassifiedError =
           err instanceof SharedProviderStreamDeadlineError

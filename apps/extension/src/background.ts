@@ -1103,6 +1103,7 @@ function setNativeReconnectGaveUp(gaveUp: boolean): void {
 
 function setDesktopPaired(paired: boolean): void {
   void storageUtils.setItem(DESKTOP_PAIRED_KEY, paired);
+  showDesktopSelectionMenu(paired);
 }
 
 /**
@@ -5991,9 +5992,17 @@ async function notifyConnectionStatusChange(): Promise<void> {
   }
 }
 
+const SEND_SELECTION_TO_DESKTOP_MENU_ID = 'send-selection-to-desktop';
+
 const CONTEXT_MENU_ITEMS: ReadonlyArray<chrome.contextMenus.CreateProperties> = [
   { id: 'ask-agi-workforce', title: t('menuAskAgi'), contexts: ['selection'] },
   { id: 'explain-selection', title: t('menuExplainSelection'), contexts: ['selection'] },
+  {
+    id: SEND_SELECTION_TO_DESKTOP_MENU_ID,
+    title: t('menuSendSelectionToDesktop'),
+    contexts: ['selection'],
+    visible: false,
+  },
   { id: 'translate-selection', title: t('menuTranslateSelection'), contexts: ['selection'] },
   { id: 'ask-page', title: t('menuAskAboutPage'), contexts: ['page'] },
   { id: 'summarize-page', title: t('menuSummarizePage'), contexts: ['page'] },
@@ -6028,6 +6037,16 @@ async function rebuildContextMenus(): Promise<void> {
       }
     });
   }
+  showDesktopSelectionMenu(
+    (await storageUtils.getItem<boolean>(DESKTOP_PAIRED_KEY, false)) === true,
+  );
+}
+
+function showDesktopSelectionMenu(visible: boolean): void {
+  if (!chrome.contextMenus?.update) return;
+  chrome.contextMenus.update(SEND_SELECTION_TO_DESKTOP_MENU_ID, { visible }, () => {
+    void chrome.runtime.lastError;
+  });
 }
 
 function handleContextMenuClick(
@@ -6037,6 +6056,24 @@ function handleContextMenuClick(
   if (!tab?.id) return;
 
   if (info.menuItemId === 'ask-agi-workforce' && info.selectionText && tab.id) {
+    chrome.storage.session
+      .set({
+        agi_pending_chat: {
+          type: 'ask',
+          text: info.selectionText,
+          url: info.pageUrl ?? '',
+          timestamp: Date.now(),
+        },
+      })
+      .catch((err) => {
+        logger.warn('Failed to store pending chat (ask)', err);
+      });
+    openAssistantPanel({ tabId: tab.id, windowId: tab.windowId }).catch(() => {});
+  } else if (
+    info.menuItemId === SEND_SELECTION_TO_DESKTOP_MENU_ID &&
+    info.selectionText &&
+    tab.id
+  ) {
     try {
       const pending = createSelectionContextHandoff({
         selectedText: info.selectionText,

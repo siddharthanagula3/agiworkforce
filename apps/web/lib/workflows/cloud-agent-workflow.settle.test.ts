@@ -427,6 +427,15 @@ describe('durable cloud agent workflow settlement', () => {
     );
   });
 
+  it('releases a failed turn the provider never billed, the way the inline stream does', async () => {
+    await settleWorkflowInvocation(makeInput(), 'failed');
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ cancelled: true }));
+
+    mocks.finalize.mockClear();
+    await settleWorkflowInvocation(makeInput(), 'completed');
+    expect(mocks.finalize).toHaveBeenCalledWith(expect.objectContaining({ cancelled: false }));
+  });
+
   it('never persists a Temporary Chat turn', async () => {
     await settleWorkflowInvocation(makeInput({ conversationIsTemporary: true }), 'completed');
 

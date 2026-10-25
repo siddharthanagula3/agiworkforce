@@ -46,6 +46,7 @@ vi.mock('@/lib/services/deprovision-service', () => ({
   })),
 }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(() => []),
   getRequestIdentity: vi.fn(async () => null),
   getIdentityProvider: vi.fn(() => ({})),
 }));

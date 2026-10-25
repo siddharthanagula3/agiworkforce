@@ -45,6 +45,7 @@ describe('right-click Ask AGI about this page', () => {
         logger: { warn: vi.fn() },
         createSelectionContextHandoff: vi.fn(),
         CONTEXT_HANDOFF_STORAGE_KEY: 'handoff',
+        SEND_SELECTION_TO_DESKTOP_MENU_ID: 'send-selection-to-desktop',
         showNotification: vi.fn(),
         ensureTabGroup: vi.fn(),
       },

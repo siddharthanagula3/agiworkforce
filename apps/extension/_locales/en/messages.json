@@ -19,6 +19,10 @@
     "message": "Translate this",
     "description": "Context menu on a text selection"
   },
+  "menuSendSelectionToDesktop": {
+    "message": "Send selection to AGI Desktop",
+    "description": "Context menu on a text selection, shown only while AGI Desktop is paired"
+  },
   "menuAskAboutPage": {
     "message": "Ask AGI about this page",
     "description": "Context menu on the page background that opens the side panel with the page attached"

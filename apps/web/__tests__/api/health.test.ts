@@ -38,6 +38,7 @@ vi.mock('@/lib/price-tier-mapping', () => ({
   isGrandfatheredPriceId: priceMocks.isGrandfathered,
 }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(() => []),
   getIdentityProvider: () => ({
     canVerifySessionTokens: () => Boolean(process.env['CLERK_SECRET_KEY']),
     checkReachable: async () => undefined,

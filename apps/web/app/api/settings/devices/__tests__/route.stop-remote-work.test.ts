@@ -18,6 +18,7 @@ vi.mock('@/lib/services/account-activity-notifications', () => ({
   notifyDeviceSignInApproved: vi.fn(async () => undefined),
 }));
 vi.mock('@/lib/server/identity', () => ({
+  getIdentityAuthorizedParties: vi.fn(() => []),
   getIdentityProvider: () => ({
     getSession: vi.fn(),
     revokeSession: vi.fn(),

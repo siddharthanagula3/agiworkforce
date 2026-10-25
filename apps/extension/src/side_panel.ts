@@ -14064,6 +14064,16 @@ async function attachPageForQuestion(): Promise<void> {
   document.getElementById('sp-input')?.focus();
 }
 
+function quoteSelectionForQuestion(selection: string): void {
+  const input = document.getElementById('sp-input') as HTMLTextAreaElement | null;
+  const quoted = selection.trim();
+  if (!input || !quoted) return;
+  const draft = input.value.trimEnd();
+  replaceComposerText(input, `${draft ? `${draft}\n\n` : ''}"${quoted}"\n\n`);
+  autoResizeInput(input);
+  updateSendButton();
+}
+
 function checkPendingChat(): void {
   chrome.storage.session.get('agi_pending_chat', (result) => {
     if (chrome.runtime.lastError) return;
@@ -14077,6 +14087,12 @@ function checkPendingChat(): void {
     if (pending.type === 'ask-page') {
       chrome.storage.session.remove('agi_pending_chat').catch(() => {});
       void attachPageForQuestion();
+      return;
+    }
+
+    if (pending.type === 'ask') {
+      chrome.storage.session.remove('agi_pending_chat').catch(() => {});
+      quoteSelectionForQuestion(pending.text);
       return;
     }
 
@@ -14100,7 +14116,6 @@ function checkPendingChat(): void {
 
     let prompt = '';
     switch (pending.type) {
-      case 'ask':
       case 'explain':
       case 'translate':
         prompt = pendingChatPrompt(pending);
