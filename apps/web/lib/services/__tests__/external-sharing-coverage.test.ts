@@ -27,29 +27,30 @@ const APP_ROOT = appRoot();
  * cannot ship without the gate.
  */
 const PUBLIC_LINK_ROUTES = [
-  'app/api/share/route.ts',
-  'app/api/artifacts/publish/route.ts',
+  { route: 'app/api/share/route.ts', writes: ['insert into'] },
+  { route: 'app/api/artifacts/publish/route.ts', writes: ['publishArtifactRecord('] },
+  { route: 'app/api/artifacts/publish/[token]/route.ts', writes: ['await moveToAudience('] },
+  { route: 'app/api/schedules/[id]/share/route.ts', writes: ['saveScheduleShare('] },
 ] as const;
 
+const GATE_CALL = 'buildExternalSharingGateResponse(';
+
 describe('external sharing policy covers every public-link route', () => {
-  for (const route of PUBLIC_LINK_ROUTES) {
+  for (const { route, writes } of PUBLIC_LINK_ROUTES) {
     it(`${route} asks the workspace before minting a link`, () => {
       const text = readFileSync(join(APP_ROOT, route), 'utf8');
       expect(
-        text.includes('buildExternalSharingGateResponse'),
+        text.includes(GATE_CALL),
         `${route} mints a public link without asking the workspace policy`,
       ).toBe(true);
     });
 
     it(`${route} refuses before it writes anything`, () => {
-      // A gate that runs after the insert has already published the link.
+      // A gate that runs after the insert has already published the link. The
+      // call is matched, not the name, which the import line already contains.
       const text = readFileSync(join(APP_ROOT, route), 'utf8');
-      const gate = text.indexOf('buildExternalSharingGateResponse');
-      const write = Math.min(
-        ...[text.indexOf('insert into'), text.indexOf('publishArtifactRecord(')].filter(
-          (i) => i >= 0,
-        ),
-      );
+      const gate = text.indexOf(GATE_CALL);
+      const write = Math.min(...writes.map((marker) => text.indexOf(marker)).filter((i) => i >= 0));
 
       expect(gate).toBeGreaterThan(-1);
       expect(Number.isFinite(write)).toBe(true);

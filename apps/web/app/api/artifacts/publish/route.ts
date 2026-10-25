@@ -72,6 +72,37 @@ async function describeWorkspaceAudience(
   return { memberCount: Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : 0 };
 }
 
+/**
+ * The workspaces this publication's content is stored under: the conversation
+ * it will be linked to (the request's, else the one an earlier publish kept)
+ * and any workspace it is already shared into.
+ */
+async function readPublicationOrganizationIds(
+  db: DatabaseAdapter,
+  input: { userId: string; artifactId: string; conversationId: string | null },
+): Promise<(string | null)[]> {
+  const rows = await db.query<{ organization_id: string | null }>(
+    `select conversation.organization_id
+       from public.web_conversations conversation
+      where conversation.user_id = $1
+        and conversation.id = coalesce(
+          $3::uuid,
+          (select publication.conversation_id
+             from public.published_artifacts publication
+            where publication.user_id = $1 and publication.artifact_id = $2
+            limit 1)
+        )
+     union all
+     select share.organization_id
+       from public.organization_shared_artifacts share
+       join public.published_artifacts publication
+         on publication.id = share.published_artifact_id
+      where publication.user_id = $1 and publication.artifact_id = $2`,
+    [input.userId, input.artifactId, input.conversationId],
+  );
+  return rows.map((row) => row.organization_id ?? null);
+}
+
 async function handlePublish(request: NextRequest): Promise<Response> {
   const csrfResponse = await requireCsrfToken(request);
   if (csrfResponse) return csrfResponse;
@@ -93,7 +124,15 @@ async function handlePublish(request: NextRequest): Promise<Response> {
 
   const { db, userId, organizationId } = await getUserScopedDb(request);
 
-  const sharingGateResponse = await buildExternalSharingGateResponse(userId, request);
+  const sharingGateResponse = await buildExternalSharingGateResponse(
+    userId,
+    request,
+    await readPublicationOrganizationIds(db, {
+      userId,
+      artifactId: parsed.data.artifactId,
+      conversationId: parsed.data.conversationId ?? null,
+    }),
+  );
   if (sharingGateResponse) return sharingGateResponse;
 
   refuseModeratedPublication(userId, parsed.data.title, parsed.data.content);

@@ -17,8 +17,13 @@ const mocks = vi.hoisted(() => {
     saveScheduleShare: vi.fn(),
     scheduleShareSnapshot: vi.fn(),
     unshareSchedule: vi.fn(),
+    buildExternalSharingGateResponse: vi.fn(),
   };
 });
+
+vi.mock('@/lib/managed-compute-gate', () => ({
+  buildExternalSharingGateResponse: mocks.buildExternalSharingGateResponse,
+}));
 
 vi.mock('@/lib/rate-limit', () => ({
   REDIS_OUTAGE_POLICY_ENV: 'AGI_RATE_LIMIT_REDIS_OUTAGE_POLICY',
@@ -131,6 +136,26 @@ describe('/api/schedules/[id]/share', () => {
     mocks.getUserScopedDb.mockResolvedValue({ db, userId: 'user-1', organizationId: null });
     mocks.getSchedule.mockResolvedValue(task);
     mocks.scheduleShareSnapshot.mockReturnValue(snapshot);
+    mocks.buildExternalSharingGateResponse.mockResolvedValue(null);
+    db.query.mockResolvedValue([{ organization_id: null }]);
+  });
+
+  it('POST refuses to publish a schedule stored under a workspace that turned external sharing off', async () => {
+    const storedOrganizationId = '22222222-2222-4222-8222-222222222222';
+    db.query.mockResolvedValue([{ organization_id: storedOrganizationId }]);
+    mocks.buildExternalSharingGateResponse.mockResolvedValue(
+      Response.json({ error: { code: 'external_sharing_disabled' } }, { status: 403 }),
+    );
+
+    const response = await call('POST');
+
+    expect(response.status).toBe(403);
+    expect(mocks.buildExternalSharingGateResponse).toHaveBeenCalledWith(
+      'user-1',
+      expect.anything(),
+      [storedOrganizationId],
+    );
+    expect(mocks.saveScheduleShare).not.toHaveBeenCalled();
   });
 
   it.each(['POST', 'DELETE'] as const)('%s returns 401 when signed out', async (method) => {

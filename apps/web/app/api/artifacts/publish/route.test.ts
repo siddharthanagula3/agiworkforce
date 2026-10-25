@@ -8,6 +8,7 @@ type CorsModule = typeof import('@/lib/cors');
 type LoggerModule = typeof import('@/lib/logger');
 type SecurityAuditModule = typeof import('@/lib/security-audit');
 type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
 
 type ScanModule0 = typeof import('@/lib/server/neon-db');
 type ScanModule1 = typeof import('@/lib/services/organization-policy-gate');
@@ -82,7 +83,16 @@ vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
   organizationCanShareArtifacts: (...a: unknown[]) => mocks.canShareArtifacts(...a),
 }));
 
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => {
+  const actual = await importOriginal<ManagedComputeGateModule>();
+  return {
+    ...actual,
+    buildExternalSharingGateResponse: vi.fn(actual.buildExternalSharingGateResponse),
+  };
+});
+
 const { POST, GET } = await import('./route');
+const { buildExternalSharingGateResponse } = await import('@/lib/managed-compute-gate');
 
 const TOKEN = 'aaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -143,6 +153,29 @@ describe('POST /api/artifacts/publish', () => {
       userId: 'user-1',
       organizationId: null,
     });
+  });
+
+  it('asks the workspace the published conversation is stored under, not only the selected one', async () => {
+    const storedOrganizationId = '22222222-2222-4222-8222-222222222222';
+    const conversationId = '44444444-4444-4444-8444-444444444444';
+    mocks.query.mockImplementation(async (sql: string) =>
+      String(sql).includes('web_conversations') && String(sql).includes('union all')
+        ? [{ organization_id: storedOrganizationId }]
+        : [publishRow()],
+    );
+    vi.mocked(buildExternalSharingGateResponse).mockResolvedValueOnce(
+      NextResponse.json({ error: { code: 'external_sharing_disabled' } }, { status: 403 }),
+    );
+
+    const response = await POST(postRequest({ ...VALID_BODY, conversationId }));
+
+    expect(response.status).toBe(403);
+    expect(buildExternalSharingGateResponse).toHaveBeenCalledWith('user-1', expect.anything(), [
+      storedOrganizationId,
+    ]);
+    const lookup = mocks.query.mock.calls.find(([sql]) => String(sql).includes('union all'));
+    expect(lookup?.[1]).toEqual(['user-1', 'artifact-1', conversationId]);
+    expect(mocks.query.mock.calls.some(([sql]) => isInsert(sql))).toBe(false);
   });
 
   it('returns a public URL and the token for a valid publish', async () => {
