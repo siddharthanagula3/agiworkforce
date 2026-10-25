@@ -427,6 +427,25 @@ describe('shareProject', () => {
     expect(params).toEqual([ORG, PROJECT, 'admin-1', 'read', 25]);
   });
 
+  it('never shares a project that belongs to another organization into this one', async () => {
+    const { db, issued } = makeDb(() => []);
+
+    await expect(
+      shareProject(db, {
+        organizationId: ORG,
+        projectId: PROJECT,
+        actorUserId: 'admin-1',
+        defaultAccess: 'read',
+      }),
+    ).rejects.toMatchObject({ statusCode: 404 });
+
+    const { sql, params } = issued[0]!;
+    expect(sql).toMatch(
+      /where id = \$2\s+and user_id = \$3\s+and \(organization_id is null or organization_id = \$1\)/i,
+    );
+    expect(params[0]).toBe(ORG);
+  });
+
   it('answers 404 when the project is not the actor’s, never a silent success', async () => {
     const { db } = makeDb(() => []);
     await expect(
