@@ -391,6 +391,24 @@ describe('desktop-issued browser commands', () => {
     expect((result.value as { console: unknown[] }).console).toHaveLength(1);
   });
 
+  it.each([
+    ['browser_console', 'READ_PAGE_CONSOLE'],
+    ['browser_network', 'READ_PAGE_NETWORK'],
+  ])('keeps %s on its own page verb whatever type the arguments carry', async (command, verb) => {
+    approveSite();
+    const send = vi.fn(async (_tabId: number, _message: Record<string, unknown>) => ({
+      success: true,
+      origin: SITE,
+    }));
+
+    await runDesktopBrowserCommand(
+      request(command, { type: 'ADD_MEMORY', limit: 5 }),
+      context(send),
+    );
+
+    expect(send).toHaveBeenCalledWith(TAB_ID, expect.objectContaining({ type: verb, limit: 5 }));
+  });
+
   describe('under the workspace website rules', () => {
     const blockSite = { allow: [], deny: ['allowed.example'] };
 
