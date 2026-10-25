@@ -46,6 +46,7 @@ function installHost(overrides: Record<string, (args: Record<string, unknown>) =
       onDeepLink: vi.fn(() => () => undefined),
       onVoiceHotkey: vi.fn(() => () => undefined),
       onHostCommand: vi.fn(() => () => undefined),
+      readPreferences: vi.fn(async () => ({ preferences: {} })),
       invokeRuntime,
     },
   });

@@ -30,6 +30,7 @@ import {
   DesktopSettingsGroup,
   DesktopSettingsHeading,
 } from './DesktopSettingsRow';
+import { TerminalSettings } from './TerminalSettings';
 
 const HEADING = 'Developer';
 const HEADING_HINT =
@@ -500,6 +501,7 @@ export function LocalMcpSettings() {
         </p>
       )}
       <AddServerDialog open={adding} onOpenChange={setAdding} onAdd={add} />
+      <TerminalSettings />
       {dialog}
     </div>
   );

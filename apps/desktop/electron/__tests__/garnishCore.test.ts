@@ -279,6 +279,30 @@ describe('normalizePreferences worktrees and archiving', () => {
     expect(preferences.worktreeLocation).toBe('');
     expect(preferences.autoArchiveIdleDays).toBe(0);
   });
+
+  it('keeps listed terminal choices and replaces anything else with the default', () => {
+    expect(normalizePreferences({}).terminal).toEqual({
+      cursorStyle: 'block',
+      cursorBlink: true,
+      copyOnSelect: false,
+      scrollback: 5_000,
+    });
+    expect(
+      normalizePreferences({
+        terminal: {
+          cursorStyle: 'bar',
+          cursorBlink: false,
+          copyOnSelect: true,
+          scrollback: 50_000,
+        },
+      }).terminal,
+    ).toEqual({ cursorStyle: 'bar', cursorBlink: false, copyOnSelect: true, scrollback: 50_000 });
+    expect(
+      normalizePreferences({
+        terminal: { cursorStyle: 'beam', cursorBlink: 'yes', scrollback: 1e9 },
+      }).terminal,
+    ).toEqual({ cursorStyle: 'block', cursorBlink: true, copyOnSelect: false, scrollback: 5_000 });
+  });
 });
 
 describe('normalizeWindowFrame', () => {

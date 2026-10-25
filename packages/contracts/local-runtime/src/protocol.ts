@@ -126,4 +126,11 @@ export type DesktopRuntimeEvent =
   | { kind: 'device-prompt-changed'; open: boolean }
   | { kind: 'computer-use-handed-back' }
   | { kind: 'browser-sign-in-expired' }
-  | { kind: 'browser-pane'; state: BrowserPaneState };
+  | { kind: 'browser-pane'; state: BrowserPaneState }
+  | {
+      kind: 'developer-terminal';
+      rootId: string;
+      terminalId: string;
+      data?: string;
+      exitCode?: number | null;
+    };

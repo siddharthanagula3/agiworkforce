@@ -71,6 +71,10 @@ export const DEVELOPER_SESSION_COMMANDS = [
   'developer_mcp_tools',
   'developer_mcp_logs',
   'developer_mcp_open_config',
+  'developer_terminal_open',
+  'developer_terminal_write',
+  'developer_terminal_resize',
+  'developer_terminal_close',
   'developer_account_report',
 ] as const;
 
@@ -888,3 +892,8 @@ export interface DeveloperThreadCompactRequest {
   threadId: string;
   fromTurnId?: string;
 }
+
+export const TERMINAL_WRITE_LIMIT = 65_536;
+export const TERMINAL_MIN_SIZE = 2;
+export const TERMINAL_MAX_COLUMNS = 1_000;
+export const TERMINAL_MAX_ROWS = 500;

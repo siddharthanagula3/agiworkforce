@@ -91,6 +91,10 @@ import {
   normalizeDeveloperAgentMode,
   parseWorktreeRootId,
   worktreeRootId,
+  TERMINAL_MAX_COLUMNS,
+  TERMINAL_MAX_ROWS,
+  TERMINAL_MIN_SIZE,
+  TERMINAL_WRITE_LIMIT,
 } from '@agiworkforce/local-runtime-contract';
 import type { DeveloperSessionActivity } from '@agiworkforce/utils/remote-control';
 import {
@@ -228,6 +232,15 @@ export interface DeveloperSessionConfiguration {
   answersUserInput?: () => boolean;
   /** The folder the user chose for new worktrees; empty keeps the CLI's default. */
   worktreesRoot?: () => string;
+  /** What a terminal the user opened printed, or that it ended. */
+  onTerminalEvent?: (event: DeveloperTerminalEvent) => void;
+}
+
+export interface DeveloperTerminalEvent {
+  rootId: string;
+  terminalId: string;
+  data?: string;
+  exitCode?: number | null;
 }
 
 let emit: DeveloperSessionEmitter = () => undefined;
@@ -238,6 +251,8 @@ let workspaceConsentAtMs: (root: WorkspaceRoot) => number | null = () => null;
 let accountBridge: DeveloperAccountBridge | null = null;
 let answersUserInput: () => boolean = () => true;
 let worktreesRoot: () => string = () => '';
+let terminalEmit: (event: DeveloperTerminalEvent) => void = () => undefined;
+const terminalRoots = new Map<string, string>();
 let accountSyncError: string | null = null;
 let accountSyncChain: Promise<void> = Promise.resolve();
 let cachedStatus: { binary: string; status: DeveloperRuntimeStatus } | null = null;
@@ -279,6 +294,7 @@ export function configureDeveloperSessions(configuration: DeveloperSessionConfig
   accountBridge = configuration.accountBridge ?? null;
   answersUserInput = configuration.answersUserInput ?? (() => true);
   worktreesRoot = configuration.worktreesRoot ?? (() => '');
+  terminalEmit = configuration.onTerminalEvent ?? (() => undefined);
   accountSyncError = null;
   accountSyncChain = Promise.resolve();
   cachedStatus = null;
@@ -850,6 +866,23 @@ function handleNotification(server: RunningServer, method: string, rawParams: un
   }
   if (method === 'worktree/managed/setup/log' || method === 'worktree/managed/setup/finished') {
     worktreeSetupEvent(server, method, params);
+    return;
+  }
+  if (method === 'terminal/output' || method === 'terminal/exited') {
+    const terminalId = readString(params, 'terminalId');
+    if (!terminalId || terminalRoots.get(terminalId) !== server.root.id) return;
+    if (method === 'terminal/output') {
+      const data = params['data'];
+      if (typeof data === 'string') terminalEmit({ rootId: server.root.id, terminalId, data });
+      return;
+    }
+    terminalRoots.delete(terminalId);
+    const code = params['code'];
+    terminalEmit({
+      rootId: server.root.id,
+      terminalId,
+      exitCode: typeof code === 'number' ? code : null,
+    });
     return;
   }
 
@@ -1622,6 +1655,72 @@ async function serversAwaitingApproval(
 ): Promise<DeveloperMcpServerAwaitingApproval[]> {
   if (!server.advertised?.mcpApproval) return [];
   return toAwaitingApproval(await requestOrNull(server, 'mcp/list'));
+}
+
+function terminalSize(cols: number, rows: number): { cols: number; rows: number } {
+  const clamp = (value: number, max: number) =>
+    Math.min(max, Math.max(TERMINAL_MIN_SIZE, Math.round(Number.isFinite(value) ? value : 0)));
+  return { cols: clamp(cols, TERMINAL_MAX_COLUMNS), rows: clamp(rows, TERMINAL_MAX_ROWS) };
+}
+
+export async function openDeveloperTerminal(
+  rootId: string,
+  cols: number,
+  rows: number,
+): Promise<{ terminalId: string }> {
+  const root = await resolveRoot(rootId);
+  if (hasSshEnvironment(rootId)) {
+    throw new DeveloperRuntimeUnavailableError('Terminals open only for folders on this computer.');
+  }
+  const server = await readyServer(root);
+  requireAdvertised(server, 'terminals');
+  const result = await request(server, 'terminal/open', {
+    cwd: root.path,
+    ...terminalSize(cols, rows),
+  });
+  const terminalId = isRecord(result) ? readString(result, 'terminalId') : null;
+  if (!terminalId) throw new Error('The AGI CLI did not open a terminal.');
+  terminalRoots.set(terminalId, rootId);
+  return { terminalId };
+}
+
+async function terminalServer(rootId: string, terminalId: string): Promise<RunningServer> {
+  if (terminalRoots.get(terminalId) !== rootId) {
+    throw new DeveloperRuntimeUnavailableError('That terminal has closed.');
+  }
+  return readyServer(await resolveRoot(rootId));
+}
+
+export async function writeDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  data: string,
+): Promise<boolean> {
+  if (data.length > TERMINAL_WRITE_LIMIT) throw new Error('That is too much to type at once.');
+  await request(await terminalServer(rootId, terminalId), 'terminal/write', { terminalId, data });
+  return true;
+}
+
+export async function resizeDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  cols: number,
+  rows: number,
+): Promise<boolean> {
+  await request(await terminalServer(rootId, terminalId), 'terminal/resize', {
+    terminalId,
+    ...terminalSize(cols, rows),
+  });
+  return true;
+}
+
+export async function closeDeveloperTerminal(rootId: string, terminalId: string): Promise<boolean> {
+  if (terminalRoots.get(terminalId) !== rootId) return true;
+  terminalRoots.delete(terminalId);
+  await requestOrNull(await readyServer(await resolveRoot(rootId)), 'terminal/close', {
+    terminalId,
+  });
+  return true;
 }
 
 /** Whether the CLI this shell last heard from serves MCP servers on this computer. */

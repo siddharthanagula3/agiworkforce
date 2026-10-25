@@ -18,8 +18,11 @@ import {
   type HostShortcutKey,
   type SessionCompletionAlerts,
   type AutoArchiveIdleDays,
+  type HostTerminalPreferences,
   DEFAULT_WORKTREE_BRANCH_PREFIX,
   isAutoArchiveIdleDays,
+  DEFAULT_TERMINAL_PREFERENCES,
+  normalizeTerminalPreferences,
   isWorktreeBranchPrefix,
 } from '@agiworkforce/local-runtime-contract';
 
@@ -388,6 +391,7 @@ export interface GarnishPreferences {
   worktreeBranchPrefix: string;
   worktreeLocation: string;
   autoArchiveIdleDays: AutoArchiveIdleDays;
+  terminal: HostTerminalPreferences;
 }
 
 export const DEFAULT_PREFERENCES: GarnishPreferences = {
@@ -406,6 +410,7 @@ export const DEFAULT_PREFERENCES: GarnishPreferences = {
   worktreeBranchPrefix: DEFAULT_WORKTREE_BRANCH_PREFIX,
   worktreeLocation: '',
   autoArchiveIdleDays: 0,
+  terminal: DEFAULT_TERMINAL_PREFERENCES,
 };
 
 export const ZOOM_LEVEL_STEP = 1;
@@ -474,6 +479,7 @@ export function normalizePreferences(raw: unknown): GarnishPreferences {
     autoArchiveIdleDays: isAutoArchiveIdleDays(source['autoArchiveIdleDays'])
       ? source['autoArchiveIdleDays']
       : DEFAULT_PREFERENCES.autoArchiveIdleDays,
+    terminal: normalizeTerminalPreferences(source['terminal']),
   };
 }
 

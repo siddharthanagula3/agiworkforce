@@ -64,6 +64,7 @@ import {
   type HostRestartOutcome,
   MAX_WORKTREE_BRANCH_PREFIX_LENGTH,
   isAutoArchiveIdleDays,
+  normalizeTerminalPreferences,
   isWorktreeBranchPrefix,
 } from '@agiworkforce/local-runtime-contract';
 import {
@@ -1732,6 +1733,7 @@ function hostPreferencesState(): HostPreferencesState {
       worktreeBranchPrefix: preferences.worktreeBranchPrefix,
       worktreeLocation: preferences.worktreeLocation,
       autoArchiveIdleDays: preferences.autoArchiveIdleDays,
+      terminal: preferences.terminal,
     },
     shortcutStatus: Object.fromEntries(
       SHORTCUT_KEYS.map((key) => [
@@ -1994,6 +1996,10 @@ async function writeHostPreferences(
 
   if (isAutoArchiveIdleDays(patch.autoArchiveIdleDays)) {
     saveSettings({ autoArchiveIdleDays: patch.autoArchiveIdleDays });
+  }
+
+  if (typeof patch.terminal === 'object' && patch.terminal !== null) {
+    saveSettings({ terminal: normalizeTerminalPreferences(patch.terminal, before.terminal) });
   }
 
   if (typeof patch.preventSleepWhileRunning === 'boolean') {
@@ -2323,6 +2329,7 @@ if (!hasSingleInstanceLock) {
       spawn: spawnTrackedDeveloperRuntime,
       answersUserInput: windowAnswersUserInput,
       worktreesRoot: () => getPreferences().worktreeLocation,
+      onTerminalEvent: (event) => sendRuntimeEvent({ kind: 'developer-terminal', ...event }),
     });
 
     void startLocalRoutines().catch((error: unknown) =>

@@ -329,6 +329,10 @@ export {
   MAX_WORKTREE_BRANCH_PREFIX_LENGTH,
   isAutoArchiveIdleDays,
   isWorktreeBranchPrefix,
+  DEFAULT_TERMINAL_PREFERENCES,
+  TERMINAL_CURSOR_STYLES,
+  TERMINAL_SCROLLBACK_LINES,
+  normalizeTerminalPreferences,
 } from './host-bridge';
 export { agentNotificationsWrite, effectiveAgentNotifications } from './agent-notifications';
 export type {
@@ -355,6 +359,9 @@ export type {
   HostNavigationState,
   WindowLayoutCommand,
   AutoArchiveIdleDays,
+  HostTerminalPreferences,
+  TerminalCursorStyle,
+  TerminalScrollbackLines,
 } from './host-bridge';
 
 export {
@@ -560,3 +567,9 @@ export type {
   BrowserPaneState,
   BrowserSites,
 } from './browser-pane';
+export {
+  TERMINAL_MAX_COLUMNS,
+  TERMINAL_MAX_ROWS,
+  TERMINAL_MIN_SIZE,
+  TERMINAL_WRITE_LIMIT,
+} from './developer-sessions';

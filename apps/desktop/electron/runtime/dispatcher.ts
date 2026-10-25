@@ -255,6 +255,10 @@ import {
   addDeveloperMemory,
   answerDeveloperApproval,
   archiveDeveloperThread,
+  openDeveloperTerminal,
+  writeDeveloperTerminal,
+  resizeDeveloperTerminal,
+  closeDeveloperTerminal,
   addDeveloperMcpServer,
   developerMcpServerLogs,
   developerMcpServerTools,
@@ -603,6 +607,9 @@ function workspaceScope(root: WorkspaceRoot): PermissionScope {
   return { kind: 'workspace', target: root.path };
 }
 
+const TERMINAL_REASON =
+  'A terminal runs your shell in this folder, inside the same sandbox as agent commands. Only you type into it; the agent cannot.';
+
 const MCP_SERVERS_REASON =
   'MCP servers are programs the AGI CLI starts on this computer with your account, so they can read files and reach the network. Listing, testing or changing them runs the CLI for this folder.';
 
@@ -825,6 +832,22 @@ const CAPABILITY_BY_COMMAND: Record<string, CommandRequirement> = {
   developer_mcp_logs: {
     capability: 'shell.execute',
     reason: MCP_SERVERS_REASON,
+  },
+  developer_terminal_open: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
+  },
+  developer_terminal_write: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
+  },
+  developer_terminal_resize: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
+  },
+  developer_terminal_close: {
+    capability: 'shell.execute',
+    reason: TERMINAL_REASON,
   },
   developer_thread_takeover: {
     capability: 'shell.execute',
@@ -2657,6 +2680,30 @@ async function execute(
         threadId: requireString(args, 'threadId'),
         throughTurnId: requireString(args, 'throughTurnId'),
       });
+    case 'developer_terminal_open':
+      return openDeveloperTerminal(
+        requireString(args, 'rootId'),
+        typeof args['cols'] === 'number' ? args['cols'] : 80,
+        typeof args['rows'] === 'number' ? args['rows'] : 24,
+      );
+    case 'developer_terminal_write':
+      return writeDeveloperTerminal(
+        requireString(args, 'rootId'),
+        requireString(args, 'terminalId'),
+        requireString(args, 'data'),
+      );
+    case 'developer_terminal_resize':
+      return resizeDeveloperTerminal(
+        requireString(args, 'rootId'),
+        requireString(args, 'terminalId'),
+        typeof args['cols'] === 'number' ? args['cols'] : 80,
+        typeof args['rows'] === 'number' ? args['rows'] : 24,
+      );
+    case 'developer_terminal_close':
+      return closeDeveloperTerminal(
+        requireString(args, 'rootId'),
+        requireString(args, 'terminalId'),
+      );
     case 'developer_mcp_list':
       return listDeveloperMcpServers(requireString(args, 'rootId'));
     case 'developer_mcp_add': {

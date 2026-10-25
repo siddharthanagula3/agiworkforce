@@ -387,6 +387,8 @@ const forkDeveloperThread = vi.fn(async () => ({ id: 'thread-branch' }));
 const addDeveloperMcpServer = vi.fn(async () => ({ name: 'files' }));
 const setDeveloperMcpServerEnabled = vi.fn(async () => ({ name: 'files', enabled: true }));
 const compactDeveloperThread = vi.fn(async () => ({ threadId: 't-1', compacted: true }));
+const openDeveloperTerminal = vi.fn(async () => ({ terminalId: 'term-1' }));
+const writeDeveloperTerminal = vi.fn(async () => true);
 vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   syncDeveloperAccounts,
@@ -406,6 +408,8 @@ vi.mock('../runtime/developerSessionService', async (importOriginal) => ({
   compactDeveloperThread,
   addDeveloperMcpServer,
   setDeveloperMcpServerEnabled,
+  openDeveloperTerminal,
+  writeDeveloperTerminal,
   readPendingApproval,
   readWorktreeSetupScript,
   runDeveloperWorktreeSetup,
@@ -3609,5 +3613,51 @@ describe('local MCP servers', () => {
     });
     expect(off).toMatchObject({ ok: true });
     expect(setDeveloperMcpServerEnabled).toHaveBeenCalledWith(root.id, 'files', false);
+  });
+});
+
+describe('the terminal the user types into', () => {
+  const TERMINAL_COMMANDS = DEVELOPER_SESSION_COMMANDS.filter((command) =>
+    command.startsWith('developer_terminal_'),
+  );
+
+  it('is out of reach of every step an agent can ask the desktop to take', () => {
+    expect(TERMINAL_COMMANDS).toHaveLength(4);
+    const agentCommands = new Set(DEVICE_STEP_TOOLS.map(deviceStepCommand));
+    for (const command of TERMINAL_COMMANDS) expect(agentCommands.has(command)).toBe(false);
+  });
+
+  it('needs the folder approved for commands', async () => {
+    getPermissionState.mockReturnValue('denied');
+    const response = await dispatch(window, 'developer_terminal_open', {
+      rootId: root.id,
+      cols: 120,
+      rows: 30,
+    });
+    expect(response).toMatchObject({
+      ok: false,
+      error: { code: 'permission-denied', capability: 'shell.execute' },
+    });
+    expect(openDeveloperTerminal).not.toHaveBeenCalled();
+  });
+
+  it('opens a shell in the folder and passes typing through unchanged', async () => {
+    getPermissionState.mockImplementation((() => 'granted') as () => PermissionState);
+    const opened = await dispatch(window, 'developer_terminal_open', {
+      rootId: root.id,
+      cols: 120,
+      rows: 30,
+    });
+    expect(opened).toEqual({ ok: true, value: { terminalId: 'term-1' } });
+    expect(openDeveloperTerminal).toHaveBeenCalledWith(root.id, 120, 30);
+
+    const typed = await dispatch(window, 'developer_terminal_write', {
+      rootId: root.id,
+      terminalId: 'term-1',
+      data: 'ls -la\r',
+    });
+    expect(typed).toEqual({ ok: true, value: true });
+    expect(writeDeveloperTerminal).toHaveBeenCalledWith(root.id, 'term-1', 'ls -la\r');
+    expect(showMessageBox).not.toHaveBeenCalled();
   });
 });

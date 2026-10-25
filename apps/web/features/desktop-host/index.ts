@@ -100,6 +100,11 @@ export {
   developerMcpServerTools,
   developerMcpServerLogs,
   openDeveloperMcpConfig,
+  openDeveloperTerminal,
+  writeDeveloperTerminal,
+  resizeDeveloperTerminal,
+  closeDeveloperTerminal,
+  onDeveloperTerminal,
   startLocalCommand,
   writeLocalCommandPolicy,
   writeWorkspaceText,
@@ -108,6 +113,7 @@ export {
   type LocalChatRun,
   type LocalCommandOutput,
   type LocalCommandRun,
+  type DeveloperTerminalOutput,
 } from './lib/runtime-client';
 export {
   executeDeviceStep,

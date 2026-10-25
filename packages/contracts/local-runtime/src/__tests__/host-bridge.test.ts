@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DEFAULT_TERMINAL_PREFERENCES,
+  TERMINAL_SCROLLBACK_LINES,
+  normalizeTerminalPreferences,
   HOST_IN_WINDOW_SIGN_IN_HOSTS,
   HOST_SHORTCUT_CHOICES,
   HOST_SHORTCUT_KEYS,
@@ -152,5 +155,21 @@ describe('auto-archive day counts', () => {
     expect([0, 7, 14, 30].every(isAutoArchiveIdleDays)).toBe(true);
     expect(isAutoArchiveIdleDays(5)).toBe(false);
     expect(isAutoArchiveIdleDays('7')).toBe(false);
+  });
+});
+
+describe('terminal preferences', () => {
+  it('merges a partial change onto what was saved, dropping anything unlisted', () => {
+    const saved = { ...DEFAULT_TERMINAL_PREFERENCES, cursorStyle: 'underline' as const };
+    expect(normalizeTerminalPreferences({ copyOnSelect: true, scrollback: 7 }, saved)).toEqual({
+      ...saved,
+      copyOnSelect: true,
+    });
+    expect(normalizeTerminalPreferences(null)).toEqual(DEFAULT_TERMINAL_PREFERENCES);
+  });
+
+  it('offers only scrollback sizes a shell can hold', () => {
+    expect(TERMINAL_SCROLLBACK_LINES).toContain(DEFAULT_TERMINAL_PREFERENCES.scrollback);
+    expect(Math.max(...TERMINAL_SCROLLBACK_LINES)).toBeLessThanOrEqual(50_000);
   });
 });

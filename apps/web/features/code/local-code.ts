@@ -1523,6 +1523,16 @@ export const LOCAL_WORKTREE_SETTINGS_COPY = {
   preferencesFailed: 'This setting could not be saved.',
 } as const;
 
+export const LOCAL_TERMINAL_COPY = {
+  starting: 'Starting the shell…',
+  failed: 'The terminal could not start.',
+  exited: (code: number | null): string =>
+    code === null ? 'The shell ended.' : `The shell ended with exit code ${code}.`,
+  restart: 'Start a new shell',
+  sandboxed:
+    "This shell has the same limits as the agent's commands in this folder, including no network while they are on.",
+} as const;
+
 export type LocalReviewCommentSide = 'new' | 'old';
 
 export interface LocalReviewComment {

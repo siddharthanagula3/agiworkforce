@@ -297,8 +297,8 @@ minute and three Cancels quiet the rest of that kind (`nativeQuestions.ts`).
 | Git write and destructive operations  | ⚠️ switch and push a session's branch, discard its changes, stage and revert agent checkpoints |
 | Filesystem watcher                    | ❌ not started                                                                                 |
 | Shell execution                       | ✅ one-shot and long-running commands, sandboxed, asked in main                                |
-| PTY terminal                          | ⚠️ a long-running command gets a pseudo-terminal on macOS, pipes elsewhere                     |
-| Embedded browser and CDP tools        | ❌ not started; a paired Chrome extension is used                                              |
+| PTY terminal                          | ✅ user-only shell from the CLI's `terminal/*`, sandboxed, network off; line runner before it  |
+| Embedded browser and CDP tools        | ⚠️ browser pane for local addresses and approved sites; agent tools use the paired Chrome      |
 | Computer use                          | ✅ opt-in; session grant, a native yes per run, asked per app                                  |
 | iOS simulator, Android emulator       | ❌ not started                                                                                 |
 | Worktree isolation, parallel sessions | ✅ worktrees the CLI makes, admitted per run                                                   |

@@ -976,6 +976,57 @@ export function onBrowserPaneState(listener: (state: BrowserPaneState) => void):
   });
 }
 
+export interface DeveloperTerminalOutput {
+  terminalId: string;
+  data?: string;
+  exitCode?: number | null;
+}
+
+export function openDeveloperTerminal(
+  rootId: string,
+  cols: number,
+  rows: number,
+): Promise<{ terminalId: string }> {
+  return invoke<{ terminalId: string }>('developer_terminal_open', { rootId, cols, rows });
+}
+
+export function writeDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  data: string,
+): Promise<boolean> {
+  return invoke<boolean>('developer_terminal_write', { rootId, terminalId, data });
+}
+
+export function resizeDeveloperTerminal(
+  rootId: string,
+  terminalId: string,
+  cols: number,
+  rows: number,
+): Promise<boolean> {
+  return invoke<boolean>('developer_terminal_resize', { rootId, terminalId, cols, rows });
+}
+
+export function closeDeveloperTerminal(rootId: string, terminalId: string): Promise<boolean> {
+  return invoke<boolean>('developer_terminal_close', { rootId, terminalId });
+}
+
+export function onDeveloperTerminal(
+  rootId: string,
+  listener: (output: DeveloperTerminalOutput) => void,
+): () => void {
+  const host = getHostBridge();
+  if (!host) return () => undefined;
+  return host.onRuntimeEvent((event) => {
+    if (event.kind !== 'developer-terminal' || event.rootId !== rootId) return;
+    listener({
+      terminalId: event.terminalId,
+      ...(event.data === undefined ? {} : { data: event.data }),
+      ...(event.exitCode === undefined ? {} : { exitCode: event.exitCode }),
+    });
+  });
+}
+
 const browserPaneSupport = new WeakMap<object, Promise<boolean>>();
 
 /** Whether this shell has the browser pane; one built before it answers "unknown command". */

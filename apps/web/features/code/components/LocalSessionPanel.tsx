@@ -1685,6 +1685,7 @@ export function LocalSessionPanel({
           rootId={session.rootId}
           folder={folder}
           open={terminalOpen}
+          pty={capabilities.has('terminals')}
           onClose={() => setTerminalOpen(false)}
           onCommandFinished={() => setTerminalRuns((count) => count + 1)}
           onBackgroundStarted={() => setBackgroundRuns((count) => count + 1)}

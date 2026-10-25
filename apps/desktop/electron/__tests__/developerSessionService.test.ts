@@ -2,10 +2,14 @@ import { EventEmitter } from 'node:events';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MINIMUM_SUPPORTED_RUNTIME_VERSION, AGENT_EVENT_SCHEMA_VERSION } from '@agiworkforce/types';
 import {
+  TERMINAL_MAX_COLUMNS,
+  TERMINAL_MIN_SIZE,
+  TERMINAL_WRITE_LIMIT,
   type DeveloperSessionEvent,
   type DeveloperSessionList,
   type WorkspaceRoot,
 } from '@agiworkforce/local-runtime-contract';
+import type { DeveloperTerminalEvent } from '../runtime/developerSessionService';
 
 const root: WorkspaceRoot = {
   id: 'root-1',
@@ -61,7 +65,8 @@ vi.mock('../runtime/workspaceStore', () => ({
   forgetWorktreeRoot,
   WorktreeRootRefused,
 }));
-vi.mock('../runtime/gitService', () => ({ readWorkspaceGit }));
+const readGitState = vi.fn(async () => null);
+vi.mock('../runtime/gitService', () => ({ readGitState, readWorkspaceGit }));
 vi.mock('../config', () => ({ CLOUD_APP_ORIGIN: 'http://localhost:3100' }));
 const shellSignedCliIn = vi.fn(() => false);
 const rememberShellSignedCliIn = vi.fn();
@@ -237,6 +242,7 @@ async function loadService(
   vi.resetModules();
   const children: FakeChild[] = [];
   const events: Array<{ rootId: string; event: DeveloperSessionEvent }> = [];
+  const terminalEvents: DeveloperTerminalEvent[] = [];
   const spawn = vi.fn((_command: string, args: readonly string[]) => {
     const child = new FakeChild(responder);
     children.push(child);
@@ -257,11 +263,12 @@ async function loadService(
     mayRunIn: (candidate) => agentAllowed(candidate),
     workspaceConsentAtMs: () => consentAtMs ?? null,
     spawn: spawn as never,
+    onTerminalEvent: (event) => terminalEvents.push(event),
     ...(accountBridge ? { accountBridge } : {}),
     ...(answersUserInput ? { answersUserInput } : {}),
   });
 
-  return { service, children, events, spawn };
+  return { service, children, events, spawn, terminalEvents };
 }
 
 beforeEach(() => {
@@ -761,6 +768,56 @@ describe('developer session runtime', () => {
     await expect(service.renameDeveloperThread(root.id, thread.id, '   ')).rejects.toThrow(
       'A session needs a name.',
     );
+  });
+
+  it('opens a shell the user types into and passes only its own output back', async () => {
+    const { service, children, terminalEvents } = await loadService((method) => {
+      if (method === 'initialize') {
+        return { ...HANDSHAKE, capabilities: { ...HANDSHAKE.capabilities, terminals: true } };
+      }
+      if (method === 'terminal/open') return { terminalId: 'term-1' };
+      if (method === 'terminal/write' || method === 'terminal/resize') return {};
+      return defaultResponder(method);
+    });
+    const sent = (method: string) =>
+      children.flatMap((child) => child.written).filter((entry) => entry.method === method);
+
+    await expect(service.openDeveloperTerminal(root.id, 5000, 0)).resolves.toEqual({
+      terminalId: 'term-1',
+    });
+    expect(sent('terminal/open')[0]?.params).toEqual({
+      cwd: root.path,
+      cols: TERMINAL_MAX_COLUMNS,
+      rows: TERMINAL_MIN_SIZE,
+    });
+    await service.writeDeveloperTerminal(root.id, 'term-1', 'echo hi\r');
+    expect(sent('terminal/write')[0]?.params).toEqual({ terminalId: 'term-1', data: 'echo hi\r' });
+    await expect(
+      service.writeDeveloperTerminal(root.id, 'term-1', 'x'.repeat(TERMINAL_WRITE_LIMIT + 1)),
+    ).rejects.toThrow('too much');
+
+    const server = children.find((child) =>
+      child.written.some((entry) => entry.method === 'terminal/open'),
+    );
+    server?.notify('terminal/output', { terminalId: 'term-1', data: 'hi\r\n' });
+    server?.notify('terminal/output', { terminalId: 'term-other', data: 'not yours' });
+    server?.notify('terminal/exited', { terminalId: 'term-1', code: 0 });
+    await vi.waitFor(() => expect(terminalEvents).toHaveLength(2));
+    expect(terminalEvents).toEqual([
+      { rootId: root.id, terminalId: 'term-1', data: 'hi\r\n' },
+      { rootId: root.id, terminalId: 'term-1', exitCode: 0 },
+    ]);
+    await expect(service.writeDeveloperTerminal(root.id, 'term-1', 'ls\r')).rejects.toThrow(
+      'That terminal has closed.',
+    );
+  });
+
+  it('asks for a CLI update before opening a terminal on one without them', async () => {
+    const { service, children } = await loadService();
+    await expect(service.openDeveloperTerminal(root.id, 80, 24)).rejects.toThrow(/Update/);
+    expect(
+      children.flatMap((child) => child.written).some((entry) => entry.method === 'terminal/open'),
+    ).toBe(false);
   });
 
   it('asks for a CLI update before pinning on one that cannot pin', async () => {

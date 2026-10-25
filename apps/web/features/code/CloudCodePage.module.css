@@ -2854,3 +2854,27 @@ svg + .menuRowLabel {
   font-size: 14px;
   line-height: 21px;
 }
+
+.ptyScreen {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--chat-bg);
+  color: var(--chat-text-primary);
+  font-family: var(--chat-font-mono);
+}
+
+.ptyViewport {
+  flex: 1;
+  min-height: 0;
+  padding: 4px 0 4px 16px;
+}
+
+.ptyStatus {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+}

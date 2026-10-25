@@ -308,6 +308,8 @@ export interface HostPreferences {
   worktreeLocation?: string;
   /** Days without activity after which a local session is archived; 0 is off. */
   autoArchiveIdleDays?: AutoArchiveIdleDays;
+  /** How the terminal in coding sessions draws its cursor, copies and keeps history. */
+  terminal?: HostTerminalPreferences;
 }
 
 export const DEFAULT_WORKTREE_BRANCH_PREFIX = 'agi/';
@@ -334,6 +336,49 @@ export type AutoArchiveIdleDays = (typeof AUTO_ARCHIVE_IDLE_DAYS)[number];
 
 export function isAutoArchiveIdleDays(value: unknown): value is AutoArchiveIdleDays {
   return (AUTO_ARCHIVE_IDLE_DAYS as readonly unknown[]).includes(value);
+}
+
+export const TERMINAL_CURSOR_STYLES = ['block', 'bar', 'underline'] as const;
+
+export type TerminalCursorStyle = (typeof TERMINAL_CURSOR_STYLES)[number];
+
+export const TERMINAL_SCROLLBACK_LINES = [1_000, 5_000, 10_000, 50_000] as const;
+
+export type TerminalScrollbackLines = (typeof TERMINAL_SCROLLBACK_LINES)[number];
+
+export interface HostTerminalPreferences {
+  cursorStyle: TerminalCursorStyle;
+  cursorBlink: boolean;
+  copyOnSelect: boolean;
+  scrollback: TerminalScrollbackLines;
+}
+
+export const DEFAULT_TERMINAL_PREFERENCES: HostTerminalPreferences = {
+  cursorStyle: 'block',
+  cursorBlink: true,
+  copyOnSelect: false,
+  scrollback: 5_000,
+};
+
+export function normalizeTerminalPreferences(
+  raw: unknown,
+  fallback: HostTerminalPreferences = DEFAULT_TERMINAL_PREFERENCES,
+): HostTerminalPreferences {
+  const source = typeof raw === 'object' && raw !== null ? (raw as Record<string, unknown>) : {};
+  const cursorStyle = source['cursorStyle'];
+  const scrollback = source['scrollback'];
+  return {
+    cursorStyle: (TERMINAL_CURSOR_STYLES as readonly unknown[]).includes(cursorStyle)
+      ? (cursorStyle as TerminalCursorStyle)
+      : fallback.cursorStyle,
+    cursorBlink:
+      typeof source['cursorBlink'] === 'boolean' ? source['cursorBlink'] : fallback.cursorBlink,
+    copyOnSelect:
+      typeof source['copyOnSelect'] === 'boolean' ? source['copyOnSelect'] : fallback.copyOnSelect,
+    scrollback: (TERMINAL_SCROLLBACK_LINES as readonly unknown[]).includes(scrollback)
+      ? (scrollback as TerminalScrollbackLines)
+      : fallback.scrollback,
+  };
 }
 
 /**
