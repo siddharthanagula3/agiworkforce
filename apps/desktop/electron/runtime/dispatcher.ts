@@ -77,6 +77,8 @@ import {
   STORAGE_CLEANUPS,
   STORAGE_READ_COMMAND,
   isStorageCleanup,
+  BROWSER_PANE_COMMANDS,
+  type BrowserPaneBounds,
 } from '@agiworkforce/local-runtime-contract';
 import {
   CLOUD_CODE_TURN_STEP_BOUNDS,
@@ -108,6 +110,21 @@ import {
 } from './applicationLaunch';
 import { openInEditor, openWithDefaultApplication, revealInFileManager } from './appsService';
 import { openLocalPreview, readPreviewConsoleErrors } from '../previewWindow';
+import {
+  BrowserPaneRefused,
+  blockBrowserSite,
+  browserPaneState,
+  clearBrowserPaneData,
+  closeBrowserPane,
+  hideBrowserPane,
+  navigateBrowserPane,
+  openBrowserPane,
+  readBrowserPaneConsole,
+  readBrowserSites,
+  removeBrowserSite,
+  setBrowserPaneBounds,
+  stepBrowserPane,
+} from '../browserPane';
 import { WORKSPACE_PICKER_COPY, grantPickedRoot } from './workspacePicker';
 import {
   ComputerUseRefused,
@@ -1240,6 +1257,38 @@ async function pickRoot(window: BrowserWindow | null, args: Args): Promise<Works
 
 class Cancelled extends Error {}
 
+function requirePaneWindow(window: BrowserWindow | null): BrowserWindow {
+  if (!window || window.isDestroyed()) {
+    throw new InvalidArguments('The browser pane opens inside an app window.');
+  }
+  return window;
+}
+
+function requireBounds(args: Args): BrowserPaneBounds {
+  const raw = args['bounds'];
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+    throw new InvalidArguments('"bounds" must give x, y, width and height.');
+  }
+  const value = raw as Record<string, unknown>;
+  const read = (key: string) => {
+    const n = value[key];
+    if (typeof n !== 'number' || !Number.isFinite(n)) {
+      throw new InvalidArguments(`"bounds.${key}" must be a number.`);
+    }
+    return n;
+  };
+  return { x: read('x'), y: read('y'), width: read('width'), height: read('height') };
+}
+
+async function paneCall<T>(work: () => T | Promise<T>): Promise<T> {
+  try {
+    return await work();
+  } catch (error) {
+    if (error instanceof BrowserPaneRefused) throw new InvalidArguments(error.message);
+    throw error;
+  }
+}
+
 function storageEnvironment(): StorageEnvironment {
   const cliHome = cliConfigRoot();
   const remote = session.fromPartition(REMOTE_SESSION_PARTITION);
@@ -2077,7 +2126,47 @@ async function execute(
       return openLocalPreview(url);
     }
     case 'app_preview_errors':
-      return readPreviewConsoleErrors(args['clear'] === true);
+      return (
+        (window ? readBrowserPaneConsole(window, args['clear'] === true) : null) ??
+        readPreviewConsoleErrors(args['clear'] === true)
+      );
+    case 'browser_pane_open':
+      return paneCall(() =>
+        openBrowserPane(
+          requirePaneWindow(window),
+          requireBounds(args),
+          args['address'] === undefined || args['address'] === null
+            ? null
+            : requireString(args, 'address'),
+        ),
+      );
+    case 'browser_pane_navigate':
+      return paneCall(() =>
+        navigateBrowserPane(requirePaneWindow(window), requireString(args, 'address')),
+      );
+    case 'browser_pane_back':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'back'));
+    case 'browser_pane_forward':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'forward'));
+    case 'browser_pane_reload':
+      return paneCall(() => stepBrowserPane(requirePaneWindow(window), 'reload'));
+    case 'browser_pane_bounds':
+      return paneCall(() => setBrowserPaneBounds(requirePaneWindow(window), requireBounds(args)));
+    case 'browser_pane_hide':
+      return hideBrowserPane(requirePaneWindow(window));
+    case 'browser_pane_close':
+      return closeBrowserPane(requirePaneWindow(window));
+    case 'browser_pane_state':
+      return browserPaneState(requirePaneWindow(window));
+    case 'browser_sites_read':
+      return readBrowserSites();
+    case 'browser_sites_remove':
+      return paneCall(() => removeBrowserSite(requireString(args, 'host')));
+    case 'browser_sites_block':
+      return paneCall(() => blockBrowserSite(requireString(args, 'host')));
+    case 'browser_pane_clear_data':
+      await clearBrowserPaneData();
+      return true;
     case 'desktop_storage_read':
       return readStorageUsage(storageEnvironment());
     case 'desktop_storage_clean': {
@@ -2659,6 +2748,7 @@ const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   'app_preview_errors',
   STORAGE_READ_COMMAND,
   STORAGE_CLEAN_COMMAND,
+  ...BROWSER_PANE_COMMANDS,
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
   BROWSER_SIGN_IN_STATE,

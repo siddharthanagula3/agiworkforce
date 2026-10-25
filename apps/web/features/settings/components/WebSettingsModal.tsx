@@ -30,6 +30,7 @@ import {
 import { DesktopSettingsSection, useDesktopHost } from '@/features/desktop-host';
 import { ComputerUseSettings } from '@/features/desktop-host/components/ComputerUseSettings';
 import { StorageSettings } from '@/features/desktop-host/components/StorageSettings';
+import { BrowserPaneSettings } from '@/features/desktop-host/components/BrowserPaneSettings';
 
 import { GeneralSection } from '../sections/GeneralSection';
 import { AccountSection } from '../sections/AccountSection';
@@ -91,6 +92,7 @@ const NAV_GROUP_LABEL_KEYS: Record<string, string> = {
 
 const ELECTRON_ONLY_SECTIONS: ReadonlySet<string> = new Set<WebSettingsHostedSection>([
   'computer-use',
+  'browser-pane',
   'storage',
 ]);
 
@@ -242,6 +244,7 @@ export function WebSettingsModal({
     Partial<Record<WebSettingsHostedSection | 'skills' | 'plugins', React.ReactNode>> = {
     ...(host ? { desktop: <DesktopSettingsSection /> } : {}),
     ...(electronHost ? { 'computer-use': <ComputerUseSettings /> } : {}),
+    ...(electronHost ? { 'browser-pane': <BrowserPaneSettings /> } : {}),
     ...(electronHost ? { storage: <StorageSettings /> } : {}),
     ...(skillsDecision?.allowed === false && skillsDecision.reason
       ? { skills: <CapabilityDeniedNotice reason={skillsDecision.reason} /> }

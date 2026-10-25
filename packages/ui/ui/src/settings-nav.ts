@@ -29,6 +29,7 @@ import {
   MessagesSquare,
   MousePointerClick,
   HardDrive,
+  Globe2,
 } from 'lucide-react';
 
 export type SettingsNavKey =
@@ -57,6 +58,7 @@ export type SettingsNavKey =
   // when it is running inside one.
   | 'desktop'
   | 'computer-use'
+  | 'browser-pane'
   | 'storage'
   // Web-only sections (not part of the desktop SETTINGS_NAV, which drives the
   // desktop panel renderer, see apps/desktop settings-ia contract test).
@@ -300,6 +302,12 @@ export const SETTINGS_NAV_GROUP_DESKTOP_APP: SettingsNavGroupResolved = {
       label: 'Computer use',
       icon: MousePointerClick,
       keywords: ['computer use', 'control', 'apps', 'mouse', 'keyboard', 'screen', 'chrome'],
+    },
+    {
+      key: 'browser-pane',
+      label: 'Browser',
+      icon: Globe2,
+      keywords: ['browser', 'sites', 'allowed sites', 'blocked sites', 'cookies', 'browsing data'],
     },
     {
       key: 'storage',

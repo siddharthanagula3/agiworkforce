@@ -543,3 +543,19 @@ export type {
   StorageCleanup,
   StorageUsage,
 } from './storage';
+export {
+  BROWSER_PANE_COMMANDS,
+  CLOSED_BROWSER_PANE,
+  MAX_BROWSER_ADDRESS_LENGTH,
+  MAX_BROWSER_SITES,
+  browserPaneAddress,
+  browserPaneDecision,
+  browserSiteHost,
+} from './browser-pane';
+export type {
+  BrowserPaneBounds,
+  BrowserPaneCommand,
+  BrowserPaneDecision,
+  BrowserPaneState,
+  BrowserSites,
+} from './browser-pane';

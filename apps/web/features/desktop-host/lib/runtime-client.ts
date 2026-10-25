@@ -71,6 +71,9 @@ import {
   STORAGE_READ_COMMAND,
   type StorageCleanup,
   type StorageUsage,
+  type BrowserPaneBounds,
+  type BrowserPaneState,
+  type BrowserSites,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary, BrowserTabSummary } from '@agiworkforce/types';
 import type {
@@ -897,4 +900,68 @@ export function readStorageUsage(): Promise<StorageUsage> {
 
 export function cleanStorage(cleanup: StorageCleanup): Promise<StorageUsage> {
   return invoke<StorageUsage>(STORAGE_CLEAN_COMMAND, { cleanup });
+}
+
+export function openBrowserPane(
+  bounds: BrowserPaneBounds,
+  address: string | null,
+): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>('browser_pane_open', { bounds, address });
+}
+
+export function navigateBrowserPane(address: string): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>('browser_pane_navigate', { address });
+}
+
+export function stepBrowserPane(step: 'back' | 'forward' | 'reload'): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>(`browser_pane_${step}`, {});
+}
+
+export function setBrowserPaneBounds(bounds: BrowserPaneBounds): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>('browser_pane_bounds', { bounds });
+}
+
+export function hideBrowserPane(): Promise<BrowserPaneState> {
+  return invoke<BrowserPaneState>('browser_pane_hide', {});
+}
+
+export function readBrowserSites(): Promise<BrowserSites> {
+  return invoke<BrowserSites>('browser_sites_read', {});
+}
+
+export function removeBrowserSite(host: string): Promise<BrowserSites> {
+  return invoke<BrowserSites>('browser_sites_remove', { host });
+}
+
+export function blockBrowserSite(host: string): Promise<BrowserSites> {
+  return invoke<BrowserSites>('browser_sites_block', { host });
+}
+
+export function clearBrowserPaneData(): Promise<boolean> {
+  return invoke<boolean>('browser_pane_clear_data', {});
+}
+
+export function onBrowserPaneState(listener: (state: BrowserPaneState) => void): () => void {
+  const host = getHostBridge();
+  if (!host) return () => undefined;
+  return host.onRuntimeEvent((event) => {
+    if (event.kind === 'browser-pane') listener(event.state);
+  });
+}
+
+const browserPaneSupport = new WeakMap<object, Promise<boolean>>();
+
+/** Whether this shell has the browser pane; one built before it answers "unknown command". */
+export function browserPaneSupported(): Promise<boolean> {
+  const host = getHostBridge();
+  if (!host || host.shell !== 'electron') return Promise.resolve(false);
+  let probe = browserPaneSupport.get(host);
+  if (!probe) {
+    probe = host
+      .invokeRuntime<BrowserPaneState>('browser_pane_state', {})
+      .then((response) => response.ok || response.error.code !== 'unknown-command')
+      .catch(() => false);
+    browserPaneSupport.set(host, probe);
+  }
+  return probe;
 }

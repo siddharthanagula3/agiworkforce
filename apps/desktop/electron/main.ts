@@ -97,6 +97,7 @@ import {
 } from './remote/remoteControlService';
 import { getRoot, listRoots } from './runtime/workspaceStore';
 import { configurePreviousVersions } from './runtime/filesystemService';
+import { configureBrowserPane } from './browserPane';
 import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { openOpenSourceNotices, openSourceNoticesPath } from './openSourceNoticesFile';
 import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
@@ -2303,6 +2304,7 @@ if (!hasSingleInstanceLock) {
       report: reportCodeSessionActivity,
     });
     configurePreviousVersions((copy) => shell.trashItem(copy));
+    configureBrowserPane({ emit: (state) => sendRuntimeEvent({ kind: 'browser-pane', state }) });
     configureDeveloperSessions({
       emit: (rootId, event) => {
         noteBackgroundSessionEvent(rootId, event);

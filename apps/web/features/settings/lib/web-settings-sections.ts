@@ -75,6 +75,7 @@ export const WEB_SETTINGS_BUILT_IN_SECTIONS = [
 export const WEB_SETTINGS_HOSTED_SECTIONS = [
   'desktop',
   'computer-use',
+  'browser-pane',
   'storage',
 ] as const satisfies readonly SettingsNavKey[];
 

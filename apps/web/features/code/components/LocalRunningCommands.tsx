@@ -31,6 +31,8 @@ export interface LocalRunningCommandsProps {
   refreshKey: number;
   /** Absent where the session cannot take a turn, which leaves preview errors unsent. */
   onSendToAgent?: (message: string) => void;
+  /** Present when the session has a browser pane to show the page in. */
+  onOpenPreview?: (url: string) => void;
   now?: () => number;
 }
 
@@ -38,6 +40,7 @@ export function LocalRunningCommands({
   rootId,
   refreshKey,
   onSendToAgent,
+  onOpenPreview,
   now = Date.now,
 }: LocalRunningCommandsProps) {
   const [runs, setRuns] = useState<BackgroundCommandRun[]>([]);
@@ -66,6 +69,10 @@ export function LocalRunningCommands({
   }, [load, refreshKey]);
 
   const preview = async (url: string) => {
+    if (onOpenPreview) {
+      onOpenPreview(url);
+      return;
+    }
     try {
       await openLocalPreview(url);
       setError(null);

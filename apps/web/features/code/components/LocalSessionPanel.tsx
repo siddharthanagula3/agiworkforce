@@ -17,6 +17,7 @@ import {
   GitBranch,
   ListChecks,
   FolderOpen,
+  Globe,
   PanelLeft,
   PanelsTopLeft,
   Square,
@@ -75,6 +76,7 @@ import {
   compactDeveloperThread,
   openWorkspaceInEditor,
   useDeveloperCapabilities,
+  browserPaneSupported,
 } from '@/features/desktop-host';
 import { toUserMessage } from '@/lib/user-error-message';
 import { getModelMetadata } from '@shared/config/llm';
@@ -134,6 +136,7 @@ import { UsageRing } from './CodeComposer';
 import { LocalChangesPanel } from './LocalChangesPanel';
 import { LocalTerminalDock } from './LocalTerminal';
 import { LocalFilesPanel } from './LocalFilesPanel';
+import { LocalBrowserPanel } from './LocalBrowserPanel';
 import { LocalExtensionsControl } from './LocalExtensionsControl';
 import { LocalMemoryControl } from './LocalMemoryControl';
 import { LocalModelChip } from './LocalModelChip';
@@ -403,6 +406,16 @@ export function LocalSessionPanel({
   const [loadsFinished, setLoadsFinished] = useState(0);
   const capabilities = useDeveloperCapabilities(loadsFinished);
   const remoteSsh = session.environment === 'ssh';
+  const [browserPaneAvailable, setBrowserPaneAvailable] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    void browserPaneSupported().then((supported) => {
+      if (!cancelled) setBrowserPaneAvailable(supported);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
   const canChooseMode = !remoteSsh && capabilities.has('agent_mode');
   const canChooseEffort = capabilities.has('reasoning_effort');
   const canAttachFiles = !remoteSsh && capabilities.has('context_files');
@@ -453,6 +466,9 @@ export function LocalSessionPanel({
   const [changesOpen, setChangesOpen] = useState(false);
   const [editorDirty, setEditorDirty] = useState(false);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [browserOpen, setBrowserOpen] = useState(false);
+  const [browserAddress, setBrowserAddress] = useState<string | null>(null);
+  const [browserKey, setBrowserKey] = useState(0);
   const [filesDirty, setFilesDirty] = useState(false);
   const [filesFocusKey, setFilesFocusKey] = useState(0);
   useEffect(() => {
@@ -502,6 +518,7 @@ export function LocalSessionPanel({
       setReviewOpen(false);
       return;
     }
+    setBrowserOpen(false);
     if (changesOpen) closeChanges(() => setReviewOpen(true));
     else if (filesOpen) closeFiles(() => setReviewOpen(true));
     else setReviewOpen(true);
@@ -513,6 +530,7 @@ export function LocalSessionPanel({
     }
     const show = () => {
       setReviewOpen(false);
+      setBrowserOpen(false);
       setChangesOpen(true);
     };
     if (filesOpen) closeFiles(show);
@@ -521,6 +539,7 @@ export function LocalSessionPanel({
   const openFiles = (focusSearch: boolean) => {
     const show = () => {
       setReviewOpen(false);
+      setBrowserOpen(false);
       setFilesOpen(true);
       if (focusSearch) setFilesFocusKey((key) => key + 1);
     };
@@ -535,8 +554,23 @@ export function LocalSessionPanel({
     if (filesOpen) closeFiles();
     else openFiles(false);
   };
+  const openBrowser = (address: string | null) => {
+    const show = () => {
+      setReviewOpen(false);
+      setBrowserAddress(address);
+      setBrowserKey((key) => key + 1);
+      setBrowserOpen(true);
+    };
+    if (changesOpen) closeChanges(show);
+    else if (filesOpen) closeFiles(show);
+    else show();
+  };
+  const toggleBrowser = () => {
+    if (browserOpen) setBrowserOpen(false);
+    else openBrowser(null);
+  };
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const sidePanelOpen = shortcutsOpen || changesOpen || filesOpen || reviewOpen;
+  const sidePanelOpen = shortcutsOpen || changesOpen || filesOpen || reviewOpen || browserOpen;
   const toggleSidePanel = () => {
     if (!sidePanelOpen) {
       setShortcutsOpen(true);
@@ -545,6 +579,7 @@ export function LocalSessionPanel({
     const hide = () => {
       setShortcutsOpen(false);
       setReviewOpen(false);
+      setBrowserOpen(false);
     };
     if (changesOpen) closeChanges(hide);
     else if (filesOpen) closeFiles(hide);
@@ -608,7 +643,7 @@ export function LocalSessionPanel({
         ]
       : []),
   ];
-  const showShortcuts = shortcutsOpen && !changesOpen && !filesOpen && !reviewOpen;
+  const showShortcuts = shortcutsOpen && !changesOpen && !filesOpen && !reviewOpen && !browserOpen;
   const folder = localFolderName(session.cwd, group.name);
   const toggleReviewRef = useRef(toggleReview);
   toggleReviewRef.current = toggleReview;
@@ -878,6 +913,18 @@ export function LocalSessionPanel({
               onClick={toggleFiles}
             >
               <FolderOpen size={HEADER_GLYPH_SIZE} aria-hidden="true" />
+            </button>
+          )}
+          {!remoteSsh && browserPaneAvailable && (
+            <button
+              type="button"
+              className={`${styles['headerButton']} ${browserOpen ? styles['headerButtonActive'] : ''}`}
+              aria-label={LOCAL_CODE_COPY.browser}
+              aria-pressed={browserOpen}
+              title={LOCAL_CODE_COPY.browser}
+              onClick={toggleBrowser}
+            >
+              <Globe size={HEADER_GLYPH_SIZE} aria-hidden="true" />
             </button>
           )}
           <button
@@ -1584,6 +1631,14 @@ export function LocalSessionPanel({
             }}
             onDirtyChange={setEditorDirty}
             onSendToAgent={sendTextToAgent}
+            {...(browserPaneAvailable ? { onOpenPreview: (url: string) => openBrowser(url) } : {})}
+          />
+        )}
+        {browserOpen && (
+          <LocalBrowserPanel
+            address={browserAddress}
+            addressKey={browserKey}
+            onClose={() => setBrowserOpen(false)}
           />
         )}
         {filesOpen && (
