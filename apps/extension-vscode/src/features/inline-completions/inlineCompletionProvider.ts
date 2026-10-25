@@ -10,6 +10,7 @@ import {
 import { Config } from '../../platform/config';
 import { isCredentialPath } from '../../utils/pathSafety';
 import { limitResetAt, showCloudUtilityErrorActions } from '../../core/cloudUtilityErrorActions';
+import { describeOutboundRefusal } from '../../core/outboundContentGuard';
 
 const SECRETY_NAME_PATTERN =
   /(secret|credential|password|passwd|apikey|api[_-]key|token|private[_-]key)/i;
@@ -102,6 +103,7 @@ export class AgiInlineCompletionProvider implements vscode.InlineCompletionItemP
       this.limitPausedUntilMs = undefined;
     }
 
+    if (describeOutboundRefusal(document) !== null) return [];
     const fsPath = document.uri.fsPath;
     if (isCredentialPath(fsPath) || SECRETY_NAME_PATTERN.test(fsPath)) {
       return [];

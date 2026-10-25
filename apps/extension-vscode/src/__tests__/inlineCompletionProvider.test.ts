@@ -92,6 +92,17 @@ afterEach(() => {
 });
 
 describe('inline completions, real provider extraction', () => {
+  it('sends nothing from an untrusted workspace, even when its settings turn completions on', async () => {
+    const trust = vscode.workspace as { isTrusted: boolean };
+    trust.isTrusted = false;
+    try {
+      expect(await complete('const value = 42;')).toBeUndefined();
+      expect(chatCompletion).not.toHaveBeenCalled();
+    } finally {
+      trust.isTrusted = true;
+    }
+  });
+
   it('suggests nothing when the model returns blank text', async () => {
     expect(await complete('')).toBeUndefined();
     expect(await complete('   \n  ')).toBeUndefined();
