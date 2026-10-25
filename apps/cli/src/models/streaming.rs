@@ -1082,6 +1082,13 @@ pub async fn stream_completion(
             let base_url = config
                 .base_url("ollama-cloud")
                 .unwrap_or_else(|| "https://ollama.com/v1".to_string());
+            if !super::provider_dispatch::is_safe_provider_base_url(base_url.trim_end_matches('/'))
+            {
+                return Err(CliError::config(format!(
+                    "ollama-cloud base_url must be https:// or a loopback http:// address without credentials: {base_url}"
+                ))
+                .into());
+            }
             let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
             run_spec(
                 &client,

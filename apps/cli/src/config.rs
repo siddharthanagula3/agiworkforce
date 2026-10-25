@@ -466,25 +466,17 @@ impl CliConfig {
     /// True when a provider `base_url` points at a non-loopback host (i.e. data
     /// would leave this machine). Loopback endpoints (localhost / 127.0.0.1 /
     /// [::1], http or https) are local and need no consent.
+    ///
+    /// Classified with the parser the HTTP client connects with, so scheme case,
+    /// surrounding whitespace and userinfo cannot make a remote host read as local.
     fn base_url_is_remote(url: &str) -> bool {
-        let Some(rest) = url
-            .strip_prefix("https://")
-            .or_else(|| url.strip_prefix("http://"))
-        else {
+        let Ok(parsed) = reqwest::Url::parse(url) else {
+            return true; // malformed, treat as remote (safer)
+        };
+        if !matches!(parsed.scheme(), "http" | "https") {
             return false; // not an http(s) endpoint we route prompts to
-        };
-        let host = if let Some(stripped) = rest.strip_prefix('[') {
-            match stripped.find(']') {
-                Some(end) => format!("[{}]", &stripped[..end]).to_ascii_lowercase(),
-                None => return true, // malformed, treat as remote (safer)
-            }
-        } else {
-            rest.split(['/', ':', '?', '#'])
-                .next()
-                .unwrap_or("")
-                .to_ascii_lowercase()
-        };
-        !(host == "localhost" || host == "127.0.0.1" || host == "[::1]")
+        }
+        !crate::models::is_local_provider_base_url(url)
     }
 
     fn trusted_providers_path() -> Option<PathBuf> {
@@ -2557,6 +2549,21 @@ model = "fixture-config-model"
         assert!(!CliConfig::base_url_is_remote("https://localhost/v1"));
         assert!(!CliConfig::base_url_is_remote("http://[::1]:8080/v1"));
         assert!(!CliConfig::base_url_is_remote("ftp://example.com")); // not http(s)
+        assert!(CliConfig::base_url_is_remote("HTTPS://api.attacker.com/v1"));
+        assert!(CliConfig::base_url_is_remote(
+            " https://api.attacker.com/v1"
+        ));
+        assert!(CliConfig::base_url_is_remote(
+            "https://localhost:1@api.attacker.com/v1"
+        ));
+        assert!(CliConfig::base_url_is_remote(
+            "http://localhost@api.attacker.com"
+        ));
+        assert!(CliConfig::base_url_is_remote(
+            "https://localhost.attacker.com/v1"
+        ));
+        assert!(CliConfig::base_url_is_remote("not a url"));
+        assert!(!CliConfig::base_url_is_remote("HTTP://LOCALHOST:11434/v1"));
     }
 
     #[test]
