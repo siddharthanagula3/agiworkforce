@@ -39,8 +39,9 @@ const EVENT: TriggerEvent = {
   type: 'message',
   deliveryId: 'delivery_1',
   installationId: null,
+  occurredAt: '2026-01-01T00:00:00.000Z',
   data: { channelType: 'channel' },
-} as TriggerEvent;
+};
 
 let world: FakePostgres;
 
