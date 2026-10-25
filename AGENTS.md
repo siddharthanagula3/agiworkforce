@@ -166,9 +166,11 @@ the button's label seems.
 
 An agent never destroys a user's data on its own. A file it removes or
 overwrites goes to the operating system's Trash first (the desktop's
-`configurePreviousVersions`, the CLI's trash helper), a chat or session is
-archived or moved to Recently deleted, and code gets a checkpoint. Permanent
-removal happens only from an explicit user action that names what is lost.
+`configurePreviousVersions`, the CLI's `trash::move_to_trash`), a chat or
+session is archived or moved to Recently deleted, and code gets a checkpoint.
+Permanent removal happens only from an explicit user action that names what is
+lost. `apps/cli/tests/agent_file_removal_guard.rs` fails a removal in agent
+tool code that bypasses the trash.
 
 ## 10. Current-competitor product policy
 

@@ -143,6 +143,7 @@ pub(crate) mod terminals;
 pub mod tier_cache;
 pub(crate) mod tool_filters;
 pub mod tool_search;
+pub mod trash;
 pub mod trust;
 pub mod update_check;
 pub mod usage_summary;

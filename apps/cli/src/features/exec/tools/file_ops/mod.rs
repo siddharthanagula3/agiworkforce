@@ -1276,6 +1276,10 @@ pub(super) async fn execute_apply_patch(
             if !r.conflicted.is_empty() {
                 out.push_str(&format!("Conflicted: {}\n", r.conflicted.join(", ")));
             }
+            if let Some(note) = r.trash_note() {
+                out.push_str(&note);
+                out.push('\n');
+            }
             Ok(ToolResult {
                 tool_name: "apply_patch".into(),
                 success: r.exit_code == 0,

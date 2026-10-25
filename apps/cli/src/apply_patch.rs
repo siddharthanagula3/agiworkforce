@@ -4,8 +4,14 @@ use colored::Colorize;
 use std::path::{Component, Path, PathBuf};
 
 use crate::terminal_style as ts;
+use crate::trash::TrashLocation;
 
 const GIT_APPLY_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
+
+/// The most a patch's files are copied aside for, in total, before it is
+/// applied. A file deleted past this is deleted without a copy in the Trash,
+/// and the result says so.
+const MAX_STAGED_BYTES: u64 = 128 * 1024 * 1024;
 
 #[derive(Debug)]
 pub struct PatchResult {
@@ -16,6 +22,144 @@ pub struct PatchResult {
     /// The patch as a structure: which files, in which direction, with which
     /// hunks. `applied` is the display projection of this.
     pub diff: crate::diff_model::Diff,
+    /// Files the patch deleted, each moved to the Trash.
+    pub trashed: Vec<TrashedFile>,
+    /// Files the patch deleted that could not be moved to the Trash, each
+    /// with what the user needs to find it or why there is no copy.
+    pub unkept: Vec<String>,
+}
+
+/// A file a patch deleted and the place its copy went.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TrashedFile {
+    pub name: String,
+    pub landed: PathBuf,
+    /// The platform's Trash could not take it, so it went to the CLI's own
+    /// trash folder, which the note names.
+    pub in_fallback: bool,
+}
+
+impl PatchResult {
+    /// Where the files this patch deleted went, as the lines a tool result
+    /// or a terminal shows; `None` when it deleted nothing.
+    pub fn trash_note(&self) -> Option<String> {
+        let mut lines = Vec::new();
+        let (kept_aside, in_trash): (Vec<&TrashedFile>, Vec<&TrashedFile>) =
+            self.trashed.iter().partition(|file| file.in_fallback);
+        if !in_trash.is_empty() {
+            let names: Vec<&str> = in_trash.iter().map(|file| file.name.as_str()).collect();
+            lines.push(format!("Moved to the Trash: {}", names.join(", ")));
+        }
+        for file in kept_aside {
+            lines.push(format!("Moved {} to {}", file.name, file.landed.display()));
+        }
+        if !self.unkept.is_empty() {
+            lines.push(format!(
+                "Deleted without a copy in the Trash: {}",
+                self.unkept.join(", ")
+            ));
+        }
+        (!lines.is_empty()).then(|| lines.join("\n"))
+    }
+}
+
+/// Copies of the files a patch is about to change, so that the ones it
+/// deletes can be moved to the Trash rather than lost.
+struct StagedFiles {
+    folder: Option<tempfile::TempDir>,
+    copies: Vec<StagedFile>,
+    uncovered: Vec<(String, PathBuf)>,
+}
+
+struct StagedFile {
+    name: String,
+    original: PathBuf,
+    copy: PathBuf,
+}
+
+impl StagedFiles {
+    /// Copies each regular file among `names` that exists in `cwd`, up to
+    /// `limit` bytes in all. A file that is not copied is remembered by
+    /// name, so that the result can say so if the patch deletes it.
+    fn stage(cwd: &Path, names: &[String], limit: u64) -> Self {
+        let folder = tempfile::Builder::new().prefix("agi-patch-").tempdir().ok();
+        let mut staged = Self {
+            folder,
+            copies: Vec::new(),
+            uncovered: Vec::new(),
+        };
+        let mut total: u64 = 0;
+        for name in names {
+            let original = cwd.join(name);
+            let Ok(metadata) = std::fs::symlink_metadata(&original) else {
+                continue;
+            };
+            if !metadata.is_file() {
+                continue;
+            }
+            let copy = staged
+                .folder
+                .as_ref()
+                .filter(|_| total.saturating_add(metadata.len()) <= limit)
+                .map(|folder| folder.path().join(staged.copies.len().to_string()))
+                .filter(|copy| std::fs::copy(&original, copy).is_ok());
+            match copy {
+                Some(copy) => {
+                    total += metadata.len();
+                    staged.copies.push(StagedFile {
+                        name: name.clone(),
+                        original,
+                        copy,
+                    });
+                }
+                None => staged.uncovered.push((name.clone(), original)),
+            }
+        }
+        staged
+    }
+
+    /// Moves the copy of every file the patch deleted to the Trash. A copy
+    /// that cannot be moved is kept where it is, and named in `unkept`.
+    fn settle(mut self, trash: &TrashLocation) -> (Vec<TrashedFile>, Vec<String>) {
+        let gone = |path: &Path| {
+            std::fs::symlink_metadata(path)
+                .is_err_and(|error| error.kind() == std::io::ErrorKind::NotFound)
+        };
+        let mut trashed = Vec::new();
+        let mut unkept: Vec<String> = self
+            .uncovered
+            .iter()
+            .filter(|(_, original)| gone(original))
+            .map(|(name, _)| name.clone())
+            .collect();
+        let mut keep_folder = false;
+        for file in &self.copies {
+            if !gone(&file.original) {
+                continue;
+            }
+            match trash.trash(&file.copy, &file.original) {
+                Ok(landed) => trashed.push(TrashedFile {
+                    name: file.name.clone(),
+                    in_fallback: trash.in_fallback(&landed),
+                    landed,
+                }),
+                Err(_) => {
+                    keep_folder = true;
+                    unkept.push(format!(
+                        "{} (copy kept at {})",
+                        file.name,
+                        file.copy.display()
+                    ));
+                }
+            }
+        }
+        if keep_folder {
+            if let Some(folder) = self.folder.take() {
+                let _ = folder.keep();
+            }
+        }
+        (trashed, unkept)
+    }
 }
 
 /// One file a patch changes.
@@ -323,6 +467,17 @@ pub(crate) async fn patch_targets(
 /// has to be the one that was checked: a patch that applied to other files,
 /// or to none, is an error and never a success with the wrong names on it.
 pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchResult> {
+    apply_git_patch_with(patch, cwd, &TrashLocation::system()).await
+}
+
+/// [`apply_git_patch`], with the Trash that the files it deletes go to named.
+/// A file the patch deletes is copied aside first and moved to that Trash once
+/// git has applied the patch; a patch that fails to apply leaves nothing in it.
+async fn apply_git_patch_with(
+    patch: &str,
+    cwd: Option<&Path>,
+    trash: &TrashLocation,
+) -> Result<PatchResult> {
     let cwd = cwd.unwrap_or_else(|| Path::new("."));
 
     crate::platform::runtime::git::check_repository_config(
@@ -339,6 +494,7 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
             .map_err(|reason| anyhow!(reason))?;
     }
     let parsed = crate::diff_model::Diff::parse(patch);
+    let staged = StagedFiles::stage(&cwd, &expected, MAX_STAGED_BYTES);
     let mut apply_command = git_apply(&cwd);
     apply_command.args(["--apply", "--numstat", "-z", "--verbose", "-"]);
     let apply = crate::process_tree::output(
@@ -346,7 +502,16 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
         Some(patch.as_bytes().to_vec()),
         Some(GIT_APPLY_TIMEOUT),
     )
-    .await?;
+    .await;
+    let refused = apply
+        .as_ref()
+        .is_ok_and(|applied| !applied.status.success());
+    let (trashed, unkept) = if refused {
+        (Vec::new(), Vec::new())
+    } else {
+        staged.settle(trash)
+    };
+    let apply = apply?;
     let code = apply.status.code().unwrap_or(1);
     let mut applied = Vec::new();
     let mut conflicted = Vec::new();
@@ -390,6 +555,8 @@ pub async fn apply_git_patch(patch: &str, cwd: Option<&Path>) -> Result<PatchRes
         conflicted,
         exit_code: code,
         diff: parsed,
+        trashed,
+        unkept,
     })
 }
 
@@ -425,6 +592,9 @@ pub fn print_patch_result(result: &PatchResult) {
     for f in &result.conflicted {
         println!("  {} {}", ts::danger("!"), f);
     }
+    if let Some(note) = result.trash_note() {
+        println!("  {note}");
+    }
     if result.exit_code == 0 {
         // `applied`/`skipped`/`conflicted` are only ever populated from a
         // real successful `git apply` on this path (see `apply_git_patch`),
@@ -442,8 +612,46 @@ pub fn print_patch_result(result: &PatchResult) {
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
+mod trash_note_tests {
+    use super::{PatchResult, TrashedFile};
+    use std::path::PathBuf;
+
+    #[test]
+    fn names_the_trash_for_files_the_system_took_and_the_folder_for_the_rest() {
+        let result = PatchResult {
+            applied: Vec::new(),
+            skipped: Vec::new(),
+            conflicted: Vec::new(),
+            exit_code: 0,
+            diff: crate::diff_model::Diff::parse(""),
+            trashed: vec![
+                TrashedFile {
+                    name: "a.rs".into(),
+                    landed: PathBuf::from("/home/u/.Trash/a.rs"),
+                    in_fallback: false,
+                },
+                TrashedFile {
+                    name: "b.rs".into(),
+                    landed: PathBuf::from("/home/u/.agiworkforce/trash/b.rs"),
+                    in_fallback: true,
+                },
+            ],
+            unkept: vec!["big.bin".into()],
+        };
+        assert_eq!(
+            result.trash_note().as_deref(),
+            Some(
+                "Moved to the Trash: a.rs\n\
+                 Moved b.rs to /home/u/.agiworkforce/trash/b.rs\n\
+                 Deleted without a copy in the Trash: big.bin"
+            )
+        );
+    }
+}
+
+#[cfg(test)]
 mod patch_validation_tests {
-    use super::{apply_git_patch, patch_targets};
+    use super::{apply_git_patch, apply_git_patch_with, patch_targets, TrashLocation};
     use std::path::Path;
 
     /// The names git gives the files of `patch`, in a folder of its own.
@@ -903,12 +1111,31 @@ deleted file mode 100644\n\
 -one\n\
 -two\n";
 
-        let result = apply_git_patch(patch, Some(workspace.path()))
+        let trash = tempfile::tempdir().expect("trash");
+        let location = TrashLocation::fallback_only(trash.path().to_path_buf());
+
+        let result = apply_git_patch_with(patch, Some(workspace.path()), &location)
             .await
             .expect("apply deletion patch");
 
         assert_eq!(result.exit_code, 0, "conflicted: {:?}", result.conflicted);
         assert!(!target.exists(), "deletion hunk must remove the file");
+        assert_eq!(
+            std::fs::read_to_string(trash.path().join("doomed.txt")).expect("trashed copy"),
+            "one\ntwo\n"
+        );
+        assert_eq!(result.trashed.len(), 1);
+        assert_eq!(result.trashed[0].name, "doomed.txt");
+        assert_eq!(result.trashed[0].landed, trash.path().join("doomed.txt"));
+        assert!(result.unkept.is_empty());
+        assert!(result.trashed[0].in_fallback);
+        assert_eq!(
+            result.trash_note(),
+            Some(format!(
+                "Moved doomed.txt to {}",
+                trash.path().join("doomed.txt").display()
+            ))
+        );
         assert_eq!(result.diff.files.len(), 1);
         assert_eq!(
             result.diff.files[0].kind,
@@ -922,6 +1149,83 @@ deleted file mode 100644\n\
             "expected a deletion row, got {:?}",
             result.applied
         );
+    }
+
+    const DELETE_DOOMED: &str = "diff --git a/doomed.txt b/doomed.txt\n\
+deleted file mode 100644\n\
+--- a/doomed.txt\n\
++++ /dev/null\n\
+@@ -1,2 +0,0 @@\n\
+-one\n\
+-two\n";
+
+    fn trash_entries(trash: &Path) -> Vec<std::path::PathBuf> {
+        std::fs::read_dir(trash)
+            .map(|entries| entries.map(|entry| entry.expect("entry").path()).collect())
+            .unwrap_or_default()
+    }
+
+    /// The patch is refused whole, so the file it would have deleted stays
+    /// and nothing is put in the Trash.
+    #[tokio::test]
+    async fn a_failed_apply_leaves_nothing_in_the_trash() {
+        let workspace = seeded_repo();
+        let target = workspace.path().join("doomed.txt");
+        std::fs::write(&target, "changed since\n").expect("seed file");
+        let trash = tempfile::tempdir().expect("trash");
+        let location = TrashLocation::fallback_only(trash.path().to_path_buf());
+
+        let result = apply_git_patch_with(DELETE_DOOMED, Some(workspace.path()), &location)
+            .await
+            .expect("a refused patch is a result");
+
+        assert_ne!(result.exit_code, 0);
+        assert_eq!(
+            std::fs::read_to_string(&target).expect("file kept"),
+            "changed since\n"
+        );
+        assert!(trash_entries(trash.path()).is_empty());
+        assert!(result.trashed.is_empty() && result.unkept.is_empty());
+        assert_eq!(result.trash_note(), None);
+    }
+
+    #[tokio::test]
+    async fn a_patch_that_only_edits_puts_nothing_in_the_trash() {
+        let workspace = seeded_repo();
+        std::fs::write(workspace.path().join("example.txt"), "old\n").expect("seed file");
+        let patch = "--- a/example.txt\n+++ b/example.txt\n@@ -1 +1 @@\n-old\n+new\n";
+        let trash = tempfile::tempdir().expect("trash");
+        let location = TrashLocation::fallback_only(trash.path().to_path_buf());
+
+        let result = apply_git_patch_with(patch, Some(workspace.path()), &location)
+            .await
+            .expect("apply patch");
+
+        assert_eq!(result.exit_code, 0);
+        assert!(trash_entries(trash.path()).is_empty());
+        assert_eq!(result.trash_note(), None);
+    }
+
+    #[test]
+    fn a_deleted_file_too_large_to_keep_is_reported_without_a_copy() {
+        let workspace = tempfile::tempdir().expect("workspace");
+        let small = workspace.path().join("small.txt");
+        let large = workspace.path().join("large.txt");
+        std::fs::write(&small, "abc").expect("seed file");
+        std::fs::write(&large, "abcdef").expect("seed file");
+        let trash = tempfile::tempdir().expect("trash");
+        let location = TrashLocation::fallback_only(trash.path().to_path_buf());
+        let names = vec!["small.txt".to_string(), "large.txt".to_string()];
+        let staged = super::StagedFiles::stage(workspace.path(), &names, 4);
+        std::fs::remove_file(&small).expect("the patch's deletion");
+        std::fs::remove_file(&large).expect("the patch's deletion");
+
+        let (trashed, unkept) = staged.settle(&location);
+
+        assert_eq!(trashed.len(), 1);
+        assert_eq!(trashed[0].name, "small.txt");
+        assert_eq!(unkept, ["large.txt"]);
+        assert_eq!(trash_entries(trash.path()).len(), 1);
     }
 
     #[tokio::test]
