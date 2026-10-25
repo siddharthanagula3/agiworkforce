@@ -96,6 +96,7 @@ import {
   stopRemoteControl,
 } from './remote/remoteControlService';
 import { getRoot, listRoots } from './runtime/workspaceStore';
+import { configurePreviousVersions } from './runtime/filesystemService';
 import { agentAllowedIn, agentConsentAt } from './runtime/agentAccess';
 import { openOpenSourceNotices, openSourceNoticesPath } from './openSourceNoticesFile';
 import { NOT_THIS_APP, shownValue } from './runtime/dialogText';
@@ -2301,6 +2302,7 @@ if (!hasSingleInstanceLock) {
       mayReportRoot: (rootId) => agentAllowedIn(rootId),
       report: reportCodeSessionActivity,
     });
+    configurePreviousVersions((copy) => shell.trashItem(copy));
     configureDeveloperSessions({
       emit: (rootId, event) => {
         noteBackgroundSessionEvent(rootId, event);
