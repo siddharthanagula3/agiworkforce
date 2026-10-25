@@ -2,13 +2,18 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('server-only', () => ({}));
 
-const { mockAuth, mockOptionalUser, mockQuery, mockRateLimit, mockCsrf } = vi.hoisted(() => ({
-  mockAuth: vi.fn(),
-  mockOptionalUser: vi.fn(async (): Promise<{ userId: string } | null> => null),
-  mockQuery: vi.fn(),
-  mockRateLimit: vi.fn(async () => null),
-  mockCsrf: vi.fn(async () => null),
-}));
+const { mockAuth, mockOptionalUser, mockQuery, mockRateLimit, mockCsrf, mockEmailState } =
+  vi.hoisted(() => ({
+    mockAuth: vi.fn(),
+    mockOptionalUser: vi.fn(async (): Promise<{ userId: string } | null> => null),
+    mockQuery: vi.fn(),
+    mockRateLimit: vi.fn(async () => null),
+    mockCsrf: vi.fn(async () => null),
+    mockEmailState: vi.fn(async (): Promise<{ confirmed: boolean; email: string | null }> => ({
+      confirmed: true,
+      email: 'ada@account.example',
+    })),
+  }));
 
 vi.mock('@clerk/nextjs/server', () => ({ auth: mockAuth }));
 vi.mock('@/lib/api-auth', () => ({
@@ -18,6 +23,7 @@ vi.mock('@/lib/api-auth', () => ({
   assertAccountActive: vi.fn(),
   getClerkAuthorizedParties: vi.fn(() => []),
 }));
+vi.mock('@/lib/auth/email-confirmation', () => ({ readPrimaryEmailState: mockEmailState }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: () => ({ query: mockQuery }) }));
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: mockRateLimit }));
 vi.mock('@/lib/csrf', () => ({ requireCsrfToken: mockCsrf }));
@@ -51,6 +57,7 @@ beforeEach(() => {
   mockRateLimit.mockResolvedValue(null);
   mockCsrf.mockResolvedValue(null);
   mockQuery.mockResolvedValue([{ status: 'pending' }]);
+  mockEmailState.mockResolvedValue({ confirmed: true, email: 'ada@account.example' });
 });
 
 describe('beta application intake', () => {
@@ -64,12 +71,69 @@ describe('beta application intake', () => {
     expect(params[0]).toBe('ada@example.com');
   });
 
-  it('upserts on email so a resubmission does not create a duplicate to reconcile', async () => {
+  it('upserts on email for a signed-in applicant so a resubmission does not create a duplicate', async () => {
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
+
     await POST(post(VALID));
-    expect(String(mockQuery.mock.calls[0]?.[0])).toContain('on conflict (lower(email))');
+
+    expect(String(mockQuery.mock.calls[0]?.[0])).toContain('on conflict (lower(email)) do update');
   });
 
-  it('tells a returning applicant their earlier decision still stands', async () => {
+  it('never replaces the account an application is bound to, or updates another account', async () => {
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
+
+    await POST(post(VALID));
+
+    const sql = String(mockQuery.mock.calls[0]?.[0]);
+    expect(sql).toContain(
+      'user_id       = coalesce(public.beta_applications.user_id, excluded.user_id)',
+    );
+    expect(sql).toMatch(
+      /where public\.beta_applications\.user_id is null\s+or public\.beta_applications\.user_id = excluded\.user_id/,
+    );
+  });
+
+  it('only creates the row for an anonymous submission and never overwrites an existing one', async () => {
+    const response = await POST(post(VALID));
+
+    expect(response.status).toBe(200);
+    const sql = String(mockQuery.mock.calls[0]?.[0]);
+    expect(sql).toContain('on conflict (lower(email)) do nothing');
+    expect(sql).not.toContain('do update');
+  });
+
+  it('does not tell an anonymous caller whether the address has a reviewed application', async () => {
+    mockQuery.mockResolvedValue([{ status: 'rejected' }]);
+
+    const response = await POST(post(VALID));
+
+    await expect(response.json()).resolves.toEqual({ recorded: true, alreadyReviewed: false });
+  });
+
+  it("files a signed-in applicant's application under the account's verified address", async () => {
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
+
+    await POST(post({ ...VALID, email: 'victim@example.com' }));
+
+    const params = mockQuery.mock.calls[0]?.[1] as unknown[];
+    expect(params[0]).toBe('ada@account.example');
+    expect(params[7]).toBe('user-1');
+  });
+
+  it('treats a signed-in caller without a confirmed address as anonymous', async () => {
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
+    mockEmailState.mockResolvedValue({ confirmed: false, email: 'ada@account.example' });
+
+    await POST(post({ ...VALID, email: 'victim@example.com' }));
+
+    const params = mockQuery.mock.calls[0]?.[1] as unknown[];
+    expect(params[0]).toBe('victim@example.com');
+    expect(params[7]).toBeNull();
+    expect(String(mockQuery.mock.calls[0]?.[0])).toContain('do nothing');
+  });
+
+  it('tells a returning signed-in applicant their earlier decision still stands', async () => {
+    mockOptionalUser.mockResolvedValue({ userId: 'user-1' });
     mockQuery.mockResolvedValue([{ status: 'rejected' }]);
 
     const response = await POST(post(VALID));
