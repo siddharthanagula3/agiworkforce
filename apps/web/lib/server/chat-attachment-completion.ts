@@ -11,6 +11,7 @@ import {
   type SyncedAppSurface,
 } from '@agiworkforce/types';
 import type { NextRequest } from 'next/server';
+import { randomUUID } from 'node:crypto';
 import { createError, isAppError } from '@/lib/errors';
 import {
   copyPrivateObjectIfUnchanged,
@@ -41,8 +42,13 @@ import { sealedChatAttachmentPathname } from '@/lib/server/media-storage';
 import { assertFileStorageAvailable } from '@/lib/server/file-storage';
 import { isChatImageMimeType, isSupportedChatAttachment } from '@/lib/chat-attachment-policy';
 import { trackProductAnalyticsEvent } from '@/lib/server/product-analytics';
+import { readSignedUploadClaims, signUploadClaims } from '@/lib/server/upload-signing';
 
 const UPLOAD_INSPECTION_BYTES = 256_000;
+const SEALED_CHAT_ATTACHMENT_SUFFIX = sealedChatAttachmentPathname('');
+const RELAY_AUTHORIZATION_VERSION = 1;
+const RELAY_AUTHORIZATION_PURPOSE = `agi-chat-attachment-relay-authorization-v${RELAY_AUTHORIZATION_VERSION}`;
+const RELAY_AUTHORIZATION_TTL_MS = 5 * 60 * 1000;
 
 const UNSUPPORTED_CHAT_ATTACHMENT_MESSAGE =
   'Chat supports images, PDFs, Word, Excel, PowerPoint, and text or code files.';
@@ -135,9 +141,93 @@ export function isOwnedChatAttachmentUploadKey(storageKey: string, userId: strin
     storageKey.startsWith(expectedPrefix) &&
     storageKey.length > expectedPrefix.length &&
     /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(storageKey) &&
+    !storageKey.endsWith(SEALED_CHAT_ATTACHMENT_SUFFIX) &&
     !storageKey.includes('//') &&
     !storageKey.split('/').some((segment) => segment === '.' || segment === '..')
   );
+}
+
+export interface ChatAttachmentRelayClaims {
+  v: number;
+  userId: string;
+  key: string;
+  contentType: string;
+  byteCount: number;
+  expiresAt: number;
+  nonce: string;
+}
+
+function baseContentType(contentType: string): string {
+  return contentType.split(';', 1)[0]!.trim().toLowerCase();
+}
+
+/**
+ * The same-origin relay writes only the key, type and size an admitted presign
+ * issued. A caller-chosen key would let the sealed copy of an inspected
+ * attachment be overwritten, and would skip the plan's upload admission.
+ */
+export async function createChatAttachmentRelayAuthorization(input: {
+  userId: string;
+  key: string;
+  contentType: string;
+  byteCount: number;
+}): Promise<string> {
+  if (!isOwnedChatAttachmentUploadKey(input.key, input.userId)) {
+    throw new Error('The chat attachment upload destination is invalid.');
+  }
+  const claims: ChatAttachmentRelayClaims = {
+    v: RELAY_AUTHORIZATION_VERSION,
+    userId: input.userId,
+    key: input.key,
+    contentType: baseContentType(input.contentType),
+    byteCount: input.byteCount,
+    expiresAt: Date.now() + RELAY_AUTHORIZATION_TTL_MS,
+    nonce: randomUUID(),
+  };
+  return signUploadClaims(RELAY_AUTHORIZATION_PURPOSE, claims);
+}
+
+function parseRelayClaims(value: unknown, userId: string): ChatAttachmentRelayClaims | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const claims = value as Record<string, unknown>;
+  if (
+    claims['v'] !== RELAY_AUTHORIZATION_VERSION ||
+    claims['userId'] !== userId ||
+    typeof claims['key'] !== 'string' ||
+    !isOwnedChatAttachmentUploadKey(claims['key'], userId) ||
+    typeof claims['contentType'] !== 'string' ||
+    !claims['contentType'] ||
+    typeof claims['byteCount'] !== 'number' ||
+    !Number.isSafeInteger(claims['byteCount']) ||
+    claims['byteCount'] <= 0 ||
+    typeof claims['expiresAt'] !== 'number' ||
+    !Number.isSafeInteger(claims['expiresAt']) ||
+    typeof claims['nonce'] !== 'string'
+  ) {
+    return null;
+  }
+  return claims as unknown as ChatAttachmentRelayClaims;
+}
+
+export async function verifyChatAttachmentRelayUpload(
+  token: string,
+  userId: string,
+  body: { contentType: string; byteLength: number },
+): Promise<ChatAttachmentRelayClaims> {
+  const claims = parseRelayClaims(
+    await readSignedUploadClaims(RELAY_AUTHORIZATION_PURPOSE, token),
+    userId,
+  );
+  if (!claims || claims.expiresAt < Date.now()) {
+    throw new Error('This upload authorization is invalid or expired.');
+  }
+  if (baseContentType(body.contentType) !== claims.contentType) {
+    throw new Error('The uploaded content type does not match its authorization.');
+  }
+  if (body.byteLength !== claims.byteCount) {
+    throw new Error('The uploaded byte count does not match its authorization.');
+  }
+  return claims;
 }
 
 function attachmentFrom(

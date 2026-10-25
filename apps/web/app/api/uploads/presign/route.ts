@@ -32,6 +32,7 @@ import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
 import { uploadNeedsSameOriginRelay } from '@/lib/server/upload-transport';
 import { uploadObjectKey } from '@/lib/server/upload-keys';
 import { PROJECT_KNOWLEDGE_UPLOAD_PROTOCOL_VERSION } from '@agiworkforce/cloud-contracts';
+import { createChatAttachmentRelayAuthorization } from '@/lib/server/chat-attachment-completion';
 
 const PresignRequestSchema = z.object({
   kind: z.enum(['avatar', 'knowledge-file', 'chat-attachment']),
@@ -156,7 +157,14 @@ async function handlePresign(request: NextRequest): Promise<NextResponse> {
     : proxyChatAttachmentUpload
       ? {
           uploadUrl: new URL(
-            `/api/uploads/chat-attachment/put?key=${encodeURIComponent(key)}`,
+            `/api/uploads/chat-attachment/put?token=${encodeURIComponent(
+              await createChatAttachmentRelayAuthorization({
+                userId,
+                key,
+                contentType: mimeType,
+                byteCount,
+              }),
+            )}`,
             request.nextUrl.origin,
           ).toString(),
         }
