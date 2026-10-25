@@ -180,6 +180,37 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
     }
 }
 
+/// What the user was shown of a stopped turn that its recorded steps do not
+/// already hold. The shown text runs across every step of the turn, and the
+/// steps before a tool call were recorded with that call, so keeping all of it
+/// repeated those lines in the transcript.
+fn unrecorded_partial<'a>(messages: &[Message], partial: &'a str) -> &'a str {
+    let turn_start = messages
+        .iter()
+        .rposition(|message| {
+            message.role == "user"
+                && !matches!(&message.content, models::MessageContent::Blocks(blocks)
+                    if blocks.iter().any(|block| matches!(block, ContentBlock::ToolResult { .. })))
+        })
+        .map_or(0, |prompt| prompt + 1);
+    let mut rest = partial;
+    for message in messages[turn_start..]
+        .iter()
+        .filter(|message| message.role == "assistant")
+    {
+        let recorded = message.text_content();
+        let recorded = recorded.trim();
+        if recorded.is_empty() {
+            continue;
+        }
+        match rest.trim_start().strip_prefix(recorded) {
+            Some(after) => rest = after,
+            None => break,
+        }
+    }
+    rest
+}
+
 fn stopped_turn_output_tokens(partial: &str) -> u32 {
     u32::try_from(crate::compaction::estimate_tokens(partial)).unwrap_or(u32::MAX)
 }
@@ -538,10 +569,11 @@ impl AgentSession {
     pub fn finalize_cancelled_turn(&mut self, partial: &str) {
         self.close_unanswered_tool_calls();
         if self.messages.last().map(|m| m.role.as_str()) == Some("user") {
+            let partial = unrecorded_partial(&self.messages, partial);
             let text = if partial.trim().is_empty() {
                 "[stopped]".to_string()
             } else {
-                format!("{}\n\n[stopped]", partial.trim_end())
+                format!("{}\n\n[stopped]", partial.trim())
             };
             self.messages.push(Message::text("assistant", text));
         }
@@ -1291,6 +1323,10 @@ team, not from the user:\n",
                 prefix.push_str(&format!("[workspace] {git_state}\n\n"));
             }
         }
+        for attached in std::mem::take(&mut self.attached_turn_context) {
+            prefix.push_str(attached.trim_end());
+            prefix.push_str("\n\n");
+        }
         if let Some(feedback) = self.plan_rejection_feedback.take() {
             prefix.push_str(&format!(
                 "USER REJECTED THE PREVIOUS PLAN. FEEDBACK: {feedback}\n\n"
@@ -1361,9 +1397,8 @@ message -- revise and call `update_plan` again. ",
         let max_tokens = config.effective_max_tokens(&self.model);
 
         let mut tool_defs = self.effective_tool_definitions();
-        if self.privacy_mode == super::PrivacyMode::Managed
-            && (search_turn || self.offers_hosted_search())
-        {
+        let offer_search = self.offers_hosted_search();
+        if self.privacy_mode == super::PrivacyMode::Managed && (search_turn || offer_search) {
             tool_defs.retain(|tool| tool.name != models::WEB_SEARCH_TOOL);
         }
         let callable_tool_defs = self.callable_tool_definitions(&tool_defs);
@@ -1448,6 +1483,7 @@ message -- revise and call `update_plan` again. ",
                 plan_mode_mutating_names,
                 max_tokens,
                 search_turn,
+                offer_search,
                 first_on_chunk: Some(on_chunk),
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
@@ -1760,6 +1796,9 @@ struct TurnHostAdapter<'a> {
     plan_mode_mutating_names: HashSet<String>,
     max_tokens: u32,
     search_turn: bool,
+    /// Decided once per turn: the model Auto serves can change after the first
+    /// call, and the search tool must not leave the request part way through.
+    offer_search: bool,
     /// The caller's stream callback, used for the first completion only (the
     /// continuation turns use `continuation_sink()`), matching the historical
     /// first-vs-continuation text routing.
@@ -2095,6 +2134,15 @@ impl TurnHostAdapter<'_> {
     /// fallback rotation) with the privacy-boundary re-validated first, the
     /// provider may have been mutated by the first call's fallback loop, and a
     /// Local session must never stream its history to a cloud provider.
+    fn search_scope(&self, phase: TurnPhase) -> models::SearchScope {
+        match (phase, self.search_turn) {
+            (TurnPhase::First, true) => models::SearchScope::Required,
+            (TurnPhase::Continuation, true) => models::SearchScope::RequiredContinued,
+            _ if self.offer_search => models::SearchScope::Offered,
+            _ => models::SearchScope::Off,
+        }
+    }
+
     async fn complete_continuation(&mut self) -> Result<Completion> {
         self.session.validate_privacy_boundary()?;
         let continuation = match models::stream_completion(
@@ -2543,34 +2591,31 @@ impl TurnHost for TurnHostAdapter<'_> {
             );
         }
         let routing_profile = self.session.request_routing_profile();
-        let offer_search = self.session.offers_hosted_search();
+        let scope = self.search_scope(phase);
         let completion = match phase {
-            TurnPhase::First if self.search_turn => {
-                models::routed(routing_profile, models::searching(self.complete_first())).await
-            }
-            TurnPhase::First if offer_search => {
+            TurnPhase::First => {
                 models::routed(
                     routing_profile,
-                    models::offering_search(self.complete_first()),
-                )
-                .await
-            }
-            TurnPhase::First => models::routed(routing_profile, self.complete_first()).await,
-            TurnPhase::Continuation if offer_search => {
-                models::routed(
-                    routing_profile,
-                    models::offering_search(self.complete_continuation()),
+                    models::search_scoped(scope, self.complete_first()),
                 )
                 .await
             }
             TurnPhase::Continuation => {
-                models::routed(routing_profile, self.complete_continuation()).await
+                models::routed(
+                    routing_profile,
+                    models::search_scoped(scope, self.complete_continuation()),
+                )
+                .await
             }
         };
         if let Ok(completion) = &completion {
             self.record_completion_usage(completion);
         }
-        models::routed(routing_profile, self.settle_generation(completion?)).await
+        models::routed(
+            routing_profile,
+            models::search_scoped(scope, self.settle_generation(completion?)),
+        )
+        .await
     }
 
     fn record_assistant(&mut self, completion: &Completion) {
@@ -4091,6 +4136,7 @@ mod tests {
             max_tokens: 1_024,
             first_on_chunk: None,
             search_turn: false,
+            offer_search: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -4124,6 +4170,7 @@ mod tests {
             max_tokens: 1_024,
             first_on_chunk: None,
             search_turn: false,
+            offer_search: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -4342,6 +4389,7 @@ mod tests {
             max_tokens: 1_024,
             first_on_chunk: None,
             search_turn: false,
+            offer_search: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -4393,6 +4441,48 @@ mod tests {
         let last = session.messages.last().unwrap();
         assert_eq!(last.role, "assistant");
         assert_eq!(last.text_content(), "partial answ\n\n[stopped]");
+    }
+
+    #[test]
+    fn a_turn_stopped_after_a_tool_call_does_not_repeat_the_text_it_recorded() {
+        let mut session = make_local_session();
+        session.messages.push(Message::text("user", "add remove"));
+        let said = "I'll read the tests and check git status first.";
+        session.messages.push(Message::blocks(
+            "assistant",
+            vec![
+                ContentBlock::Text {
+                    text: said.to_string(),
+                },
+                ContentBlock::ToolUse {
+                    id: "call-1".to_string(),
+                    name: "read_file".to_string(),
+                    input: serde_json::json!({ "path": "test/store.test.js" }),
+                },
+            ],
+        ));
+        session.messages.push(Message::blocks(
+            "user",
+            vec![ContentBlock::ToolResult {
+                tool_use_id: "call-1".to_string(),
+                content: "test('add', ...)".to_string(),
+                is_error: false,
+            }],
+        ));
+
+        session.finalize_cancelled_turn(&format!("{said}\n\nNow the edit"));
+
+        let last = session.messages.last().unwrap();
+        assert_eq!(last.role, "assistant");
+        assert_eq!(last.text_content(), "Now the edit\n\n[stopped]");
+
+        let mut repeated = make_local_session();
+        repeated.messages = session.messages[..3].to_vec();
+        repeated.finalize_cancelled_turn(said);
+        assert_eq!(
+            repeated.messages.last().unwrap().text_content(),
+            "[stopped]"
+        );
     }
 
     #[tokio::test]
@@ -4752,6 +4842,7 @@ mod tests {
                 max_tokens: 1_024,
                 first_on_chunk: None,
                 search_turn: false,
+                offer_search: false,
                 hook_additional_contexts: Vec::new(),
                 completion_usage: Vec::new(),
                 managed_request_ids: Vec::new(),
@@ -5472,6 +5563,7 @@ mod tests {
             max_tokens: 64,
             first_on_chunk: None,
             search_turn: false,
+            offer_search: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -5608,6 +5700,7 @@ mod tests {
             max_tokens: 64,
             first_on_chunk: None,
             search_turn: false,
+            offer_search: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),
@@ -5655,6 +5748,7 @@ mod tests {
             max_tokens: 64,
             first_on_chunk: None,
             search_turn: false,
+            offer_search: false,
             hook_additional_contexts: Vec::new(),
             completion_usage: Vec::new(),
             managed_request_ids: Vec::new(),

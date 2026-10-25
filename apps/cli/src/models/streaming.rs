@@ -40,24 +40,51 @@ pub const WEB_SEARCH_TOOL: &str = "web_search";
 
 const REQUIRED_SEARCH_NUDGE: &str = "This turn requires live web results. Call the web search tool before you answer, base the answer on what it returns, and cite the pages you used. Do not answer from memory alone, and do not tell the user to search for themselves. If a search returns nothing usable, say so plainly instead of substituting your own recollection.";
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum SearchStep {
+    First,
+    Continuation,
+}
+
 tokio::task_local! {
-    static SEARCH_TURN: ();
-}
-
-pub(crate) async fn searching<F: std::future::Future>(future: F) -> F::Output {
-    SEARCH_TURN.scope((), future).await
-}
-
-fn search_turn() -> bool {
-    SEARCH_TURN.try_with(|_| ()).is_ok()
+    static SEARCH_TURN: SearchStep;
 }
 
 tokio::task_local! {
     static SEARCH_OFFERED: ();
 }
 
-pub async fn offering_search<F: std::future::Future>(future: F) -> F::Output {
-    SEARCH_OFFERED.scope((), future).await
+/// How web search reaches one provider call. Every call of a turn carries the
+/// same tools and the same user message, so a search turn's later calls keep
+/// the search tool and the nudge its first call sent; only the first call
+/// forces the search.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SearchScope {
+    Required,
+    RequiredContinued,
+    Offered,
+    Off,
+}
+
+pub async fn search_scoped<F: std::future::Future>(scope: SearchScope, future: F) -> F::Output {
+    match scope {
+        SearchScope::Required => SEARCH_TURN.scope(SearchStep::First, future).await,
+        SearchScope::RequiredContinued => SEARCH_TURN.scope(SearchStep::Continuation, future).await,
+        SearchScope::Offered => SEARCH_OFFERED.scope((), future).await,
+        SearchScope::Off => future.await,
+    }
+}
+
+fn search_step() -> Option<SearchStep> {
+    SEARCH_TURN.try_with(|step| *step).ok()
+}
+
+fn search_turn() -> bool {
+    search_step() == Some(SearchStep::First)
+}
+
+fn within_search_turn() -> bool {
+    search_step().is_some()
 }
 
 fn search_offered() -> bool {
@@ -104,12 +131,18 @@ fn routing_profile() -> Option<&'static str> {
     ROUTING_PROFILE.try_with(|profile| *profile).ok()
 }
 
+fn carries_only_tool_results(message: &Message) -> bool {
+    matches!(&message.content, MessageContent::Blocks(blocks)
+        if !blocks.is_empty()
+            && blocks.iter().all(|block| matches!(block, ContentBlock::ToolResult { .. })))
+}
+
 fn with_search_nudge(messages: &[Message]) -> Vec<Message> {
     let mut nudged = messages.to_vec();
     if let Some(last_user) = nudged
         .iter_mut()
         .rev()
-        .find(|message| message.role == "user")
+        .find(|message| message.role == "user" && !carries_only_tool_results(message))
     {
         match &mut last_user.content {
             MessageContent::Text(text) => {
@@ -500,7 +533,7 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
             })
             .into_iter()
             .chain(
-                (search_turn() || search_offered())
+                (within_search_turn() || search_offered())
                     .then(|| ("web_search".to_string(), serde_json::Value::Bool(true))),
             )
             .chain(search_turn().then(|| {
@@ -732,7 +765,7 @@ async fn run_spec_observing(
         messages_reasoning_controls(&spec.dialect, model, effort, thinking_budget);
     let (anthropic_thinking, thinking_display) =
         with_thinking_display(&spec.dialect, model, anthropic_thinking, thinking_budget);
-    let searching = search_turn()
+    let searching = within_search_turn()
         && spec.id != super::provider_name(&Provider::ManagedCloud)
         && tools.is_some_and(|tools| tools.iter().any(|tool| tool.name == WEB_SEARCH_TOOL));
     let forced_search = searching
@@ -753,7 +786,8 @@ async fn run_spec_observing(
         temperature: effective_temperature(model, temperature),
         tools,
         thinking_budget,
-        tool_choice: forced_search.then(|| ToolChoice::Specific(WEB_SEARCH_TOOL.to_string())),
+        tool_choice: (forced_search && search_turn())
+            .then(|| ToolChoice::Specific(WEB_SEARCH_TOOL.to_string())),
         anthropic_thinking,
         thinking_display,
         effort: anthropic_effort,
@@ -871,17 +905,62 @@ fn managed_visible(mut result: CompletionResult, managed: bool) -> CompletionRes
     result
 }
 
+const AGENT_EVENT: &str = "x_agent_event";
+const REASONING_DELTA: &str = "reasoning-delta";
+
+/// The reasoning summary an `x_agent_event` frame carries, if it is one.
+fn agent_reasoning_delta(data: &serde_json::Value) -> Option<&str> {
+    let event = data.get("event")?;
+    if event.get("type").and_then(serde_json::Value::as_str) != Some(REASONING_DELTA) {
+        return None;
+    }
+    event.get("delta").and_then(serde_json::Value::as_str)
+}
+
+/// The managed gateway can send one reasoning summary twice: inline between
+/// thinking tags in the answer text and as its own agent event. Each copy is
+/// followed on its own, and only what neither has shown yet is passed on.
+#[derive(Default)]
+struct ReasoningRelay {
+    inline: String,
+    events: String,
+}
+
+enum ReasoningSource {
+    Inline,
+    Event,
+}
+
+impl ReasoningRelay {
+    fn unseen(&mut self, source: ReasoningSource, text: &str) -> String {
+        let (mine, other) = match source {
+            ReasoningSource::Inline => (&mut self.inline, self.events.as_str()),
+            ReasoningSource::Event => (&mut self.events, self.inline.as_str()),
+        };
+        let before = mine.len();
+        mine.push_str(text);
+        if other.starts_with(mine.as_str()) {
+            return String::new();
+        }
+        if mine.starts_with(other) {
+            return mine[before.max(other.len())..].to_string();
+        }
+        text.to_string()
+    }
+}
+
 fn stream_event_handler<'a>(
     on_chunk: &'a mut StreamCallback,
     mut pause: Option<&'a mut ManagedApprovalPause>,
     resolved_model: &'a mut Option<String>,
     mut thinking: Option<&'a mut InlineThinking>,
 ) -> impl FnMut(StreamEvent) + Send + 'a {
+    let mut relay = ReasoningRelay::default();
     move |event| match event {
         StreamEvent::TextDelta { text } => match thinking.as_deref_mut() {
             Some(thinking) => {
                 let (visible, reasoning) = thinking.split(&text);
-                show_reasoning(&reasoning);
+                show_reasoning(&relay.unseen(ReasoningSource::Inline, &reasoning));
                 if !visible.is_empty() {
                     on_chunk(&visible);
                 }
@@ -889,6 +968,14 @@ fn stream_event_handler<'a>(
             None => on_chunk(&text),
         },
         StreamEvent::ReasoningDelta { text } => show_reasoning(&text),
+        StreamEvent::Vendor { event, data } if event == AGENT_EVENT => {
+            if let Some(delta) = agent_reasoning_delta(&data) {
+                show_reasoning(&relay.unseen(ReasoningSource::Event, delta));
+            }
+            if let Some(pause) = pause.as_deref_mut() {
+                pause.observe(&event, &data);
+            }
+        }
         StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
             notify_quota_warning(&data)
         }
@@ -1865,6 +1952,83 @@ mod tests {
         );
     }
 
+    fn reasoning_frame(delta: &str) -> StreamEvent {
+        StreamEvent::Vendor {
+            event: "x_agent_event".to_string(),
+            data: serde_json::json!({
+                "schemaVersion": 1,
+                "sequence": 0,
+                "event": { "type": "reasoning-delta", "delta": delta }
+            }),
+        }
+    }
+
+    async fn shown_by_managed_stream(events: Vec<StreamEvent>) -> (String, String) {
+        let shown = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let answer = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let sink_shown = shown.clone();
+        let sink: ReasoningSink = std::sync::Arc::new(move |text: &str| {
+            sink_shown.lock().expect("shown lock").push_str(text);
+        });
+        let answer_sink = answer.clone();
+        showing_reasoning(sink, async move {
+            let mut on_chunk: StreamCallback = Box::new(move |text: &str| {
+                answer_sink.lock().expect("answer lock").push_str(text);
+            });
+            let mut resolved_model = None;
+            let mut inline = InlineThinking::default();
+            let mut pause = ManagedApprovalPause::default();
+            let mut managed = stream_event_handler(
+                &mut on_chunk,
+                Some(&mut pause),
+                &mut resolved_model,
+                Some(&mut inline),
+            );
+            for event in events {
+                managed(event);
+            }
+        })
+        .await;
+        let shown = shown.lock().expect("shown lock").clone();
+        let answer = answer.lock().expect("answer lock").clone();
+        (shown, answer)
+    }
+
+    #[tokio::test]
+    async fn the_gateway_reasoning_event_reaches_the_sink_and_stays_out_of_the_answer() {
+        let (shown, answer) = shown_by_managed_stream(vec![
+            reasoning_frame("Comparing the two sort keys. "),
+            reasoning_frame("Ties keep insertion order."),
+            StreamEvent::TextDelta {
+                text: "It returns the high task first.".to_string(),
+            },
+        ])
+        .await;
+        assert_eq!(
+            shown,
+            "Comparing the two sort keys. Ties keep insertion order."
+        );
+        assert_eq!(answer, "It returns the high task first.");
+    }
+
+    #[tokio::test]
+    async fn reasoning_sent_both_inline_and_as_an_event_is_shown_once() {
+        let (shown, answer) = shown_by_managed_stream(vec![
+            StreamEvent::TextDelta {
+                text: "<thinking>Check the ".to_string(),
+            },
+            reasoning_frame("Check the "),
+            StreamEvent::TextDelta {
+                text: "store.</thinking>Done.".to_string(),
+            },
+            reasoning_frame("store."),
+            reasoning_frame(" Then the CLI."),
+        ])
+        .await;
+        assert_eq!(shown, "Check the store. Then the CLI.");
+        assert_eq!(answer, "Done.");
+    }
+
     #[test]
     fn a_managed_effort_asks_the_server_to_think_on_a_reasoning_model() {
         let (model, _) = catalog_model_with_messages_effort();
@@ -1942,6 +2106,74 @@ mod tests {
         assert!(spec
             .extra_headers
             .contains(&("X-Requested-With".to_string(), "XMLHttpRequest".to_string(),)));
+    }
+
+    fn body_flag(spec: &ProviderSpec, key: &str) -> Option<serde_json::Value> {
+        spec.extra_body
+            .iter()
+            .find(|(name, _)| name == key)
+            .map(|(_, value)| value.clone())
+    }
+
+    #[tokio::test]
+    async fn a_search_turn_keeps_web_search_on_every_call_and_requires_it_only_first() {
+        let spec_in = |scope| {
+            search_scoped(scope, async {
+                managed_cloud_spec_for_base("test-jwt", "https://agiworkforce.com").unwrap()
+            })
+        };
+        let first = spec_in(SearchScope::Required).await;
+        let later = spec_in(SearchScope::RequiredContinued).await;
+        let offered = spec_in(SearchScope::Offered).await;
+        let off = spec_in(SearchScope::Off).await;
+
+        for spec in [&first, &later, &offered] {
+            assert_eq!(body_flag(spec, "web_search"), Some(serde_json::json!(true)));
+        }
+        assert_eq!(
+            body_flag(&first, "search_requested"),
+            Some(serde_json::json!(true))
+        );
+        assert_eq!(body_flag(&later, "search_requested"), None);
+        assert_eq!(body_flag(&off, "web_search"), None);
+    }
+
+    #[test]
+    fn the_search_nudge_lands_on_the_same_user_message_on_every_call_of_a_turn() {
+        let first_call = vec![
+            Message::text("system", "You are a coding agent."),
+            Message::text("user", "What changed in Rust 1.90?"),
+        ];
+        let mut later_call = first_call.clone();
+        later_call.push(Message::blocks(
+            "assistant",
+            vec![ContentBlock::ToolUse {
+                id: "call-1".to_string(),
+                name: WEB_SEARCH_TOOL.to_string(),
+                input: serde_json::json!({ "query": "Rust 1.90" }),
+            }],
+        ));
+        later_call.push(Message::blocks(
+            "user",
+            vec![ContentBlock::ToolResult {
+                tool_use_id: "call-1".to_string(),
+                content: "Rust 1.90 release notes".to_string(),
+                is_error: false,
+            }],
+        ));
+
+        let first = with_search_nudge(&first_call);
+        let later = with_search_nudge(&later_call);
+
+        assert!(first[1].text_content().ends_with(REQUIRED_SEARCH_NUDGE));
+        assert_eq!(
+            serde_json::to_string(&later[..first.len()]).unwrap(),
+            serde_json::to_string(&first).unwrap(),
+            "a later call resends the first call's messages byte for byte"
+        );
+        assert!(!serde_json::to_string(&later[3])
+            .unwrap()
+            .contains(REQUIRED_SEARCH_NUDGE));
     }
 
     #[test]

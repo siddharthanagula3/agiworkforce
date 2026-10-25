@@ -155,6 +155,18 @@ pub fn current_machine() -> String {
     hostname().unwrap_or_else(|| "unknown-host".to_string())
 }
 
+/// The machine a new grant is recorded against. A grant is a decision the
+/// user just made, so the device id is created here when it is missing: a
+/// grant recorded under the host name before anything had minted the id
+/// stopped matching the moment the device registry minted it, and the
+/// workspace fell back to asking for every command.
+pub fn machine_for_grant() -> String {
+    if let Some(path) = device_id_file() {
+        let _ = crate::device_registry::install_id_at(&path);
+    }
+    current_machine()
+}
+
 fn device_id_file() -> Option<PathBuf> {
     #[cfg(test)]
     if let Some(path) = crate::native_process_test_fixture::device_id_file() {

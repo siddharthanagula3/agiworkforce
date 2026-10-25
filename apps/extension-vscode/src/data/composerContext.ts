@@ -322,6 +322,12 @@ export interface EditorContextSnapshot {
   contextFiles: string[];
   texts: string[];
   source?: { filePath: string; relativePath: string; untitled?: boolean };
+  /**
+   * What the selection and the problems in the editor are right now, sent or
+   * not. Once a message has carried them they are not attached again until
+   * they change, as Claude Code drops a selection after it was sent.
+   */
+  current?: string[];
 }
 
 const EMPTY_EDITOR_CONTEXT: EditorContextSnapshot = { chips: [], contextFiles: [], texts: [] };
@@ -408,6 +414,7 @@ export async function withholdGitIgnoredContext(
 
 export async function captureEditorContext(
   dismissed: ReadonlySet<string>,
+  alreadySent: ReadonlySet<string> = new Set(),
 ): Promise<EditorContextSnapshot> {
   const editor = vscode.window.activeTextEditor;
   if (editor === undefined || !Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
@@ -416,7 +423,7 @@ export async function captureEditorContext(
   try {
     const resolved = await resolveContextEditor(editor);
     if (typeof resolved === 'string') return pathOnlyContext(keepFile, relative, resolved);
-    return withholdGitIgnoredContext(resolveEditorContext(dismissed, resolved));
+    return withholdGitIgnoredContext(resolveEditorContext(dismissed, resolved, alreadySent));
   } catch {
     return pathOnlyContext(keepFile, relative, 'unavailable');
   }
@@ -425,6 +432,7 @@ export async function captureEditorContext(
 export function resolveEditorContext(
   dismissed: ReadonlySet<string>,
   editor: EditorContextSource | undefined = vscode.window.activeTextEditor,
+  alreadySent: ReadonlySet<string> = new Set(),
 ): EditorContextSnapshot {
   if (!Config.editorContextAutoAttach()) return EMPTY_EDITOR_CONTEXT;
   const context = getContextBuilder().getActiveFileContext(editor);
@@ -448,9 +456,17 @@ export function resolveEditorContext(
     else snapshot.texts.push(buffer);
   }
 
+  const current: string[] = [];
   const selection = activeSelection(editor);
   const selectionId = editorContextChipId('selection', context.relativePath);
-  if (selection !== undefined && !dismissed.has(selectionId)) {
+  const selectionState = selection === undefined ? undefined : `${selectionId}\n${selection.text}`;
+  if (selectionState !== undefined) current.push(selectionState);
+  if (
+    selection !== undefined &&
+    selectionState !== undefined &&
+    !alreadySent.has(selectionState) &&
+    !dismissed.has(selectionId)
+  ) {
     snapshot.chips.push({
       id: selectionId,
       kind: 'selection',
@@ -461,7 +477,13 @@ export function resolveEditorContext(
 
   const reported = problems(editor);
   const problemsId = editorContextChipId('problems', context.relativePath);
-  if (reported.count > 0 && !dismissed.has(problemsId)) {
+  const problemsState = reported.count > 0 ? `${problemsId}\n${reported.text}` : undefined;
+  if (problemsState !== undefined) current.push(problemsState);
+  if (
+    problemsState !== undefined &&
+    !alreadySent.has(problemsState) &&
+    !dismissed.has(problemsId)
+  ) {
     snapshot.chips.push({
       id: problemsId,
       kind: 'problems',
@@ -470,6 +492,7 @@ export function resolveEditorContext(
     snapshot.texts.push(reported.text);
   }
 
+  if (current.length > 0) snapshot.current = current;
   if (snapshot.contextFiles.length > 0 || snapshot.texts.length > 0) {
     snapshot.source = {
       filePath: context.filePath,

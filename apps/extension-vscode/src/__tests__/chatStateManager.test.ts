@@ -4787,6 +4787,38 @@ describe('ChatStateManager session compaction', () => {
     vscode.window.activeTextEditor = undefined;
   });
 
+  it('runs an approved plan in the execution mode chosen with it and shows the turn running', async () => {
+    const harness = await startedHarness();
+    const decidePlan = vi.fn().mockResolvedValue(undefined);
+    Object.assign(harness.runtime, { decidePlan, offers: vi.fn().mockResolvedValue(true) });
+
+    const approve = harness.manager.handleMessage({
+      type: 'planDecision',
+      payload: { decision: 'approve', then: 'ask' },
+    });
+
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledTimes(2));
+    expect(decidePlan).toHaveBeenCalledWith('thread-1', 'approve');
+    expect(vi.mocked(harness.runtime.startTurn).mock.calls[1]?.[0]).toMatchObject({
+      agentMode: 'ask',
+    });
+    expect(harness.posted).toContainEqual({ type: 'modeChanged', payload: { mode: 'ask' } });
+    expect(harness.posted).toContainEqual({
+      type: 'addUserMessage',
+      payload: { text: 'Go ahead with the plan.', startsTurn: true },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Done.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await approve;
+  });
+
   it('changes nothing when the user does not confirm', async () => {
     const harness = await startedHarness();
     const compactThread = vi.fn();

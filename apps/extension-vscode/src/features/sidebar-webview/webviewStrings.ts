@@ -56,6 +56,7 @@ export function webviewStrings() {
     branchFromMessage: t('webview.branchFromMessage'),
     branchFromMessageLabel: t('webview.branchFromMessageLabel'),
     approvePlan: t('webview.approvePlan'),
+    approvePlanAskEdits: t('webview.approvePlanAskEdits'),
     revisePlan: t('webview.revisePlan'),
     revisePlanPlaceholder: t('webview.revisePlanPlaceholder'),
     sendRevision: t('webview.sendRevision'),

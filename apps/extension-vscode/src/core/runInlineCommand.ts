@@ -26,6 +26,11 @@ export interface InlineCommandContext {
   before: string;
   after: string;
   problems: readonly string[];
+  /**
+   * The lines the user asked about, 1-based, when the selection was widened
+   * to the function around them so a fix can change what the problem needs.
+   */
+  widenedFrom?: { startLine: number; endLine: number };
 }
 
 export function inlineCommandPrompt(
@@ -45,6 +50,13 @@ export function inlineCommandPrompt(
     docs: 'Add clear, accurate documentation comments (JSDoc/TSDoc/docstrings as appropriate) to the selected lines.',
   };
   const sections = [task[command]];
+  if (context.widenedFrom !== undefined) {
+    const { startLine, endLine } = context.widenedFrom;
+    const lines = startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`;
+    sections.push(
+      `The problem is on ${lines}. The selected lines are the whole function around it, so change any of them a correct fix needs, not only ${lines}.`,
+    );
+  }
   if (context.problems.length > 0) {
     sections.push(
       `Problems the editor reports in the selection:\n${context.problems.map((problem) => `- ${problem}`).join('\n')}`,
@@ -67,6 +79,7 @@ const SURROUNDING_LINES = 30;
 function inlineCommandContext(
   document: vscode.TextDocument,
   range: vscode.Range,
+  asked: vscode.Range = range,
 ): InlineCommandContext {
   const beforeStart = Math.max(0, range.start.line - SURROUNDING_LINES);
   const afterEnd = Math.min(document.lineCount - 1, range.end.line + SURROUNDING_LINES);
@@ -82,9 +95,92 @@ function inlineCommandContext(
       : '';
   const problems = vscode.languages
     .getDiagnostics(document.uri)
-    .filter((diagnostic) => diagnostic.range.intersection(range) !== undefined)
+    .filter((diagnostic) => diagnostic.range.intersection(asked) !== undefined)
     .map((diagnostic) => `line ${diagnostic.range.start.line + 1}: ${diagnostic.message}`);
-  return { before, after, problems };
+  const widened = asked.start.line !== range.start.line || asked.end.line !== range.end.line;
+  return {
+    before,
+    after,
+    problems,
+    ...(widened
+      ? { widenedFrom: { startLine: asked.start.line + 1, endLine: asked.end.line + 1 } }
+      : {}),
+  };
+}
+
+const FIX_SCOPE_KINDS: ReadonlySet<vscode.SymbolKind> = new Set([
+  vscode.SymbolKind.Function,
+  vscode.SymbolKind.Method,
+  vscode.SymbolKind.Constructor,
+  vscode.SymbolKind.Variable,
+  vscode.SymbolKind.Constant,
+  vscode.SymbolKind.Property,
+  vscode.SymbolKind.Field,
+]);
+const MAX_FIX_SCOPE_LINES = 200;
+
+type OutlineSymbol = vscode.DocumentSymbol | vscode.SymbolInformation;
+
+function symbolRange(symbol: OutlineSymbol): vscode.Range {
+  return 'location' in symbol ? symbol.location.range : symbol.range;
+}
+
+function symbolChildren(symbol: OutlineSymbol): readonly OutlineSymbol[] {
+  return 'children' in symbol ? symbol.children : [];
+}
+
+function before(a: vscode.Position, b: vscode.Position): boolean {
+  return a.line < b.line || (a.line === b.line && a.character <= b.character);
+}
+
+function encloses(outer: vscode.Range, inner: vscode.Range): boolean {
+  return before(outer.start, inner.start) && before(inner.end, outer.end);
+}
+
+/**
+ * The innermost function or method around `asked`, from the editor's own
+ * outline. A fix confined to the diagnostic's lines could only patch those
+ * lines, so an accepted fix that needed a change one line up was wrong.
+ */
+export function enclosingFixScope(
+  symbols: readonly OutlineSymbol[],
+  asked: vscode.Range,
+): vscode.Range | undefined {
+  let innermost: vscode.Range | undefined;
+  const visit = (list: readonly OutlineSymbol[]): void => {
+    for (const symbol of list) {
+      const range = symbolRange(symbol);
+      if (!encloses(range, asked)) continue;
+      const callable =
+        FIX_SCOPE_KINDS.has(symbol.kind) &&
+        range.end.line > range.start.line &&
+        range.end.line - range.start.line < MAX_FIX_SCOPE_LINES;
+      if (callable) innermost = range;
+      visit(symbolChildren(symbol));
+    }
+  };
+  visit(symbols);
+  return innermost;
+}
+
+async function fixRange(document: vscode.TextDocument, asked: vscode.Range): Promise<vscode.Range> {
+  const symbols = await vscode.commands
+    .executeCommand<OutlineSymbol[] | undefined>(
+      'vscode.executeDocumentSymbolProvider',
+      document.uri,
+    )
+    .then(
+      (found) => found ?? [],
+      () => [],
+    );
+  const scope = enclosingFixScope(symbols, asked);
+  if (scope === undefined) return asked;
+  return new vscode.Range(
+    scope.start.line,
+    0,
+    scope.end.line,
+    document.lineAt(scope.end.line).range.end.character,
+  );
 }
 
 export async function runInlineCommand(
@@ -99,9 +195,9 @@ export async function runInlineCommand(
   }
 
   const selection = editor.selection;
-  const explicitRange = targetRange ?? (selection.isEmpty ? undefined : selection);
+  const askedRange = targetRange ?? (selection.isEmpty ? undefined : selection);
 
-  if (explicitRange === undefined) {
+  if (askedRange === undefined) {
     vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Select some code first.`);
     return;
   }
@@ -112,27 +208,20 @@ export async function runInlineCommand(
     return;
   }
 
-  const selectedText = editor.document.getText(explicitRange);
-
-  if (selectedText.trim() === '') {
+  if (editor.document.getText(askedRange).trim() === '') {
     vscode.window.showWarningMessage(`${PRODUCT_NAMES.code}: Select some code first.`);
     return;
   }
 
+  const explicitRange =
+    command === 'fix' ? await fixRange(editor.document, askedRange) : askedRange;
+  const selectedText = editor.document.getText(explicitRange);
   const lang = editor.document.languageId;
-  const planModeEnabled = Config.planModeActive();
-  const autoApplyFixes = Config.autoApplyFixes();
-
-  if (planModeEnabled) {
-    const choice = await vscode.window.showInformationMessage(
-      `${PRODUCT_NAMES.code} plan mode is enabled. Proceed with ${commandLabel(command)}?`,
-      'Proceed',
-      'Cancel',
-    );
-    if (choice !== 'Proceed') {
-      return;
-    }
-  }
+  // An inline command is the user's own request on code they picked, and its
+  // result is a diff they review, so plan mode does not stop it with a
+  // notification that can land unseen. It only keeps a fix from applying
+  // itself without that review.
+  const autoApplyFixes = Config.autoApplyFixes() && !Config.planModeActive();
 
   const messages: LlmChatMessage[] = [
     {
@@ -147,7 +236,7 @@ export async function runInlineCommand(
         command,
         lang,
         selectedText,
-        inlineCommandContext(editor.document, explicitRange),
+        inlineCommandContext(editor.document, explicitRange, askedRange),
       ),
     },
   ];

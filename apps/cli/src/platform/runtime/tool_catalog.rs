@@ -512,7 +512,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         def(
             "run_command",
             &format!(
-                "Execute a shell command and return stdout/stderr. Use for system commands, builds, tests, git operations, etc. A command is stopped after {} seconds unless it runs in the background: set run_in_background for dev servers, watchers, interactive programs and long builds.",
+                "Execute a shell command and return stdout/stderr. Use for system commands, builds, tests, git operations, etc. To create or change a file use write_file or edit_file, not a heredoc, echo or cat redirection. A command is stopped after {} seconds unless it runs in the background: set run_in_background for dev servers, watchers, interactive programs and long builds.",
                 crate::tools::COMMAND_TIMEOUT.as_secs()
             ),
             serde_json::json!({
@@ -564,7 +564,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         ).with_size_cap(50_000),
         def(
             "search_files",
-            "Search a regex pattern across files in a directory (like grep -rn), returning file:line matches. Use this to locate code, symbols, definitions, or usages before assuming something does not exist.",
+            "Search an extended regular expression (grep -E syntax, so `a|b` alternates and `\\(` is a literal parenthesis) across files in a directory, returning file:line matches. Use this to locate code, symbols, definitions, or usages before assuming something does not exist.",
             serde_json::json!({
                 "type": "object",
                 "properties": {

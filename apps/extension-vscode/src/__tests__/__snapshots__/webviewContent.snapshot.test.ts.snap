@@ -3119,7 +3119,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -3277,6 +3277,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     // ThreadSummary.trustMode from the CLI proves whether this developer session is Local,
     // BYOK, or Managed Cloud. Keep the header neutral until that summary arrives.
     var sessionBoundaryAuthoritative = false;
+    // The route this workspace last confirmed, shown after a reload until the
+    // CLI confirms it again, so the header never goes blank while it starts.
+    var sessionBoundaryProvisional = false;
     var webSearchDenial = null;
     var webSearchNeedsKey = false;
     var activeAccountIdentity = null;
@@ -3499,7 +3502,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         renderBlockedWorkspaceIdentity();
         return;
       }
-      if (!sessionBoundaryAuthoritative) {
+      if (!sessionBoundaryAuthoritative && !sessionBoundaryProvisional) {
         // Naming a route the CLI has not confirmed would be a claim about where
         // the prompt goes. Say nothing until the session summary arrives.
         sessionBoundaryLabel.textContent = '';
@@ -3520,6 +3523,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       sessionIdentitySeparator.hidden = !showProviderIdentity || !activeProviderIdentity;
       sessionIdentity.setAttribute('data-boundary', spec.boundary);
       var title = spec.title;
+      if (!sessionBoundaryAuthoritative) title += ' · Last known, confirming with the AGI CLI';
       if (activeProviderIdentity && activeRuntimeSource !== 'runtime-unavailable') {
         title += ' · Provider: ' + activeProviderIdentity;
       }
@@ -3590,8 +3594,24 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       setup.disabled = !show;
     }
 
+    function sourceForTrustMode(trustMode) {
+      return trustMode === 'local'
+        ? 'unbounded'
+        : trustMode === 'byok'
+          ? 'user-api-key'
+          : 'managed-plan';
+    }
+
+    function applyProvisionalSessionBoundary(trustMode, provider) {
+      if (sessionBoundaryAuthoritative) return;
+      sessionBoundaryProvisional = true;
+      activeProviderIdentity = provider || '';
+      updateRuntimePill(sourceForTrustMode(trustMode));
+    }
+
     function applyAuthoritativeSessionBoundary(trustMode, provider) {
       sessionBoundaryAuthoritative = true;
+      sessionBoundaryProvisional = false;
       activeProviderIdentity = provider || '';
       updateRuntimePill(trustMode === 'local'
         ? 'unbounded'
@@ -3603,6 +3623,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     function resetAuthoritativeSessionBoundary() {
       sessionBoundaryAuthoritative = false;
+      sessionBoundaryProvisional = false;
       renderSessionIdentity();
       renderBrowseAvailability();
     }
@@ -3696,7 +3717,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         else updateRuntimePill('runtime-unavailable');
         return;
       }
-      if (!sessionBoundaryAuthoritative && activeAccountStatus !== 'expired') {
+      if (!sessionBoundaryAuthoritative && !sessionBoundaryProvisional && activeAccountStatus !== 'expired') {
         updateRuntimePill(payload.managedDeveloperEligible === false
           ? 'managed-unavailable'
           : payload.source);
@@ -7040,7 +7061,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
 
       else if (msg.type === 'sessionBoundary') {
-        applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        if (msg.payload.provisional) {
+          applyProvisionalSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        } else {
+          applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        }
       }
 
       else if (msg.type === 'mcpAuthRequired') {
@@ -7251,6 +7276,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
       else if (msg.type === 'addUserMessage') {
         addMessage('user', msg.payload.text);
+        if (msg.payload.startsTurn && !streaming) {
+          showTyping();
+          setStreaming(true);
+          currentAssistantEl = null;
+          accumulatedContent = '';
+          activePlanCard = null;
+        }
       }
 
       else if (msg.type === 'modeChanged') {
@@ -7622,10 +7654,17 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
       var actions = document.createElement('div');
       actions.className = 'approval-card__actions';
+      // As in Claude Code, approving a plan also chooses how it runs: edits
+      // accepted as they come, or each one asked about first.
       actions.appendChild(planDecisionButton(L10N.approvePlan, true, function() {
         planCard.decided = true;
         renderPlanDecision();
-        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve' } });
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve', then: 'auto' } });
+      }));
+      actions.appendChild(planDecisionButton(L10N.approvePlanAskEdits, false, function() {
+        planCard.decided = true;
+        renderPlanDecision();
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve', then: 'ask' } });
       }));
       actions.appendChild(planDecisionButton(L10N.revisePlan, false, function() {
         planCard.revising = true;
@@ -11489,7 +11528,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -11647,6 +11686,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     // ThreadSummary.trustMode from the CLI proves whether this developer session is Local,
     // BYOK, or Managed Cloud. Keep the header neutral until that summary arrives.
     var sessionBoundaryAuthoritative = false;
+    // The route this workspace last confirmed, shown after a reload until the
+    // CLI confirms it again, so the header never goes blank while it starts.
+    var sessionBoundaryProvisional = false;
     var webSearchDenial = null;
     var webSearchNeedsKey = false;
     var activeAccountIdentity = null;
@@ -11869,7 +11911,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         renderBlockedWorkspaceIdentity();
         return;
       }
-      if (!sessionBoundaryAuthoritative) {
+      if (!sessionBoundaryAuthoritative && !sessionBoundaryProvisional) {
         // Naming a route the CLI has not confirmed would be a claim about where
         // the prompt goes. Say nothing until the session summary arrives.
         sessionBoundaryLabel.textContent = '';
@@ -11890,6 +11932,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       sessionIdentitySeparator.hidden = !showProviderIdentity || !activeProviderIdentity;
       sessionIdentity.setAttribute('data-boundary', spec.boundary);
       var title = spec.title;
+      if (!sessionBoundaryAuthoritative) title += ' · Last known, confirming with the AGI CLI';
       if (activeProviderIdentity && activeRuntimeSource !== 'runtime-unavailable') {
         title += ' · Provider: ' + activeProviderIdentity;
       }
@@ -11960,8 +12003,24 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       setup.disabled = !show;
     }
 
+    function sourceForTrustMode(trustMode) {
+      return trustMode === 'local'
+        ? 'unbounded'
+        : trustMode === 'byok'
+          ? 'user-api-key'
+          : 'managed-plan';
+    }
+
+    function applyProvisionalSessionBoundary(trustMode, provider) {
+      if (sessionBoundaryAuthoritative) return;
+      sessionBoundaryProvisional = true;
+      activeProviderIdentity = provider || '';
+      updateRuntimePill(sourceForTrustMode(trustMode));
+    }
+
     function applyAuthoritativeSessionBoundary(trustMode, provider) {
       sessionBoundaryAuthoritative = true;
+      sessionBoundaryProvisional = false;
       activeProviderIdentity = provider || '';
       updateRuntimePill(trustMode === 'local'
         ? 'unbounded'
@@ -11973,6 +12032,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     function resetAuthoritativeSessionBoundary() {
       sessionBoundaryAuthoritative = false;
+      sessionBoundaryProvisional = false;
       renderSessionIdentity();
       renderBrowseAvailability();
     }
@@ -12066,7 +12126,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         else updateRuntimePill('runtime-unavailable');
         return;
       }
-      if (!sessionBoundaryAuthoritative && activeAccountStatus !== 'expired') {
+      if (!sessionBoundaryAuthoritative && !sessionBoundaryProvisional && activeAccountStatus !== 'expired') {
         updateRuntimePill(payload.managedDeveloperEligible === false
           ? 'managed-unavailable'
           : payload.source);
@@ -15410,7 +15470,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
 
       else if (msg.type === 'sessionBoundary') {
-        applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        if (msg.payload.provisional) {
+          applyProvisionalSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        } else {
+          applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        }
       }
 
       else if (msg.type === 'mcpAuthRequired') {
@@ -15621,6 +15685,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
       else if (msg.type === 'addUserMessage') {
         addMessage('user', msg.payload.text);
+        if (msg.payload.startsTurn && !streaming) {
+          showTyping();
+          setStreaming(true);
+          currentAssistantEl = null;
+          accumulatedContent = '';
+          activePlanCard = null;
+        }
       }
 
       else if (msg.type === 'modeChanged') {
@@ -15992,10 +16063,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
       var actions = document.createElement('div');
       actions.className = 'approval-card__actions';
+      // As in Claude Code, approving a plan also chooses how it runs: edits
+      // accepted as they come, or each one asked about first.
       actions.appendChild(planDecisionButton(L10N.approvePlan, true, function() {
         planCard.decided = true;
         renderPlanDecision();
-        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve' } });
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve', then: 'auto' } });
+      }));
+      actions.appendChild(planDecisionButton(L10N.approvePlanAskEdits, false, function() {
+        planCard.decided = true;
+        renderPlanDecision();
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve', then: 'ask' } });
       }));
       actions.appendChild(planDecisionButton(L10N.revisePlan, false, function() {
         planCard.revising = true;
@@ -19859,7 +19937,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -20017,6 +20095,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     // ThreadSummary.trustMode from the CLI proves whether this developer session is Local,
     // BYOK, or Managed Cloud. Keep the header neutral until that summary arrives.
     var sessionBoundaryAuthoritative = false;
+    // The route this workspace last confirmed, shown after a reload until the
+    // CLI confirms it again, so the header never goes blank while it starts.
+    var sessionBoundaryProvisional = false;
     var webSearchDenial = null;
     var webSearchNeedsKey = false;
     var activeAccountIdentity = null;
@@ -20239,7 +20320,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         renderBlockedWorkspaceIdentity();
         return;
       }
-      if (!sessionBoundaryAuthoritative) {
+      if (!sessionBoundaryAuthoritative && !sessionBoundaryProvisional) {
         // Naming a route the CLI has not confirmed would be a claim about where
         // the prompt goes. Say nothing until the session summary arrives.
         sessionBoundaryLabel.textContent = '';
@@ -20260,6 +20341,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       sessionIdentitySeparator.hidden = !showProviderIdentity || !activeProviderIdentity;
       sessionIdentity.setAttribute('data-boundary', spec.boundary);
       var title = spec.title;
+      if (!sessionBoundaryAuthoritative) title += ' · Last known, confirming with the AGI CLI';
       if (activeProviderIdentity && activeRuntimeSource !== 'runtime-unavailable') {
         title += ' · Provider: ' + activeProviderIdentity;
       }
@@ -20330,8 +20412,24 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       setup.disabled = !show;
     }
 
+    function sourceForTrustMode(trustMode) {
+      return trustMode === 'local'
+        ? 'unbounded'
+        : trustMode === 'byok'
+          ? 'user-api-key'
+          : 'managed-plan';
+    }
+
+    function applyProvisionalSessionBoundary(trustMode, provider) {
+      if (sessionBoundaryAuthoritative) return;
+      sessionBoundaryProvisional = true;
+      activeProviderIdentity = provider || '';
+      updateRuntimePill(sourceForTrustMode(trustMode));
+    }
+
     function applyAuthoritativeSessionBoundary(trustMode, provider) {
       sessionBoundaryAuthoritative = true;
+      sessionBoundaryProvisional = false;
       activeProviderIdentity = provider || '';
       updateRuntimePill(trustMode === 'local'
         ? 'unbounded'
@@ -20343,6 +20441,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     function resetAuthoritativeSessionBoundary() {
       sessionBoundaryAuthoritative = false;
+      sessionBoundaryProvisional = false;
       renderSessionIdentity();
       renderBrowseAvailability();
     }
@@ -20436,7 +20535,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         else updateRuntimePill('runtime-unavailable');
         return;
       }
-      if (!sessionBoundaryAuthoritative && activeAccountStatus !== 'expired') {
+      if (!sessionBoundaryAuthoritative && !sessionBoundaryProvisional && activeAccountStatus !== 'expired') {
         updateRuntimePill(payload.managedDeveloperEligible === false
           ? 'managed-unavailable'
           : payload.source);
@@ -23780,7 +23879,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
 
       else if (msg.type === 'sessionBoundary') {
-        applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        if (msg.payload.provisional) {
+          applyProvisionalSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        } else {
+          applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        }
       }
 
       else if (msg.type === 'mcpAuthRequired') {
@@ -23991,6 +24094,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
       else if (msg.type === 'addUserMessage') {
         addMessage('user', msg.payload.text);
+        if (msg.payload.startsTurn && !streaming) {
+          showTyping();
+          setStreaming(true);
+          currentAssistantEl = null;
+          accumulatedContent = '';
+          activePlanCard = null;
+        }
       }
 
       else if (msg.type === 'modeChanged') {
@@ -24362,10 +24472,17 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
       var actions = document.createElement('div');
       actions.className = 'approval-card__actions';
+      // As in Claude Code, approving a plan also chooses how it runs: edits
+      // accepted as they come, or each one asked about first.
       actions.appendChild(planDecisionButton(L10N.approvePlan, true, function() {
         planCard.decided = true;
         renderPlanDecision();
-        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve' } });
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve', then: 'auto' } });
+      }));
+      actions.appendChild(planDecisionButton(L10N.approvePlanAskEdits, false, function() {
+        planCard.decided = true;
+        renderPlanDecision();
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve', then: 'ask' } });
       }));
       actions.appendChild(planDecisionButton(L10N.revisePlan, false, function() {
         planCard.revising = true;

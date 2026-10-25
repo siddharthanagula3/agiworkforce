@@ -117,12 +117,25 @@ pub(crate) fn shell_invocation(command: &str) -> Option<(String, Vec<String>)> {
         .map(|arg| arg.to_string())
         .collect();
     args.push("-c".to_string());
-    args.push(format!(
-        ". {} >/dev/null 2>&1; eval {}",
-        crate::sandbox::shell_quote(&snapshot.file.to_string_lossy()),
-        crate::sandbox::shell_quote(command)
-    ));
+    args.push(snapshot_script(snapshot.kind, &snapshot.file, command));
     Some((snapshot.shell.to_string_lossy().into_owned(), args))
+}
+
+/// The script that loads the snapshot and then runs `command`. zsh writes a
+/// here-document to a file under `TMPPREFIX`, which is `/tmp/zsh` unless set,
+/// and the sandbox lets a command write only its own `TMPDIR`. Without this
+/// every `cat > file <<'EOF'` failed with "can't create temp file for here
+/// document" and wrote nothing.
+fn snapshot_script(kind: ShellKind, file: &Path, command: &str) -> String {
+    let heredoc_dir = match kind {
+        ShellKind::Zsh => r#"TMPPREFIX="${TMPDIR:-/tmp}/zsh"; "#,
+        ShellKind::Bash => "",
+    };
+    format!(
+        ". {} >/dev/null 2>&1; {heredoc_dir}eval {}",
+        crate::sandbox::shell_quote(&file.to_string_lossy()),
+        crate::sandbox::shell_quote(command)
+    )
 }
 
 pub(crate) fn program_invocation(program: String, args: Vec<String>) -> (String, Vec<String>) {
@@ -417,6 +430,47 @@ mod tests {
                 .map(|(k, v)| format!("{k}={v}\n"))
                 .collect::<String>(),
         )
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn a_zsh_heredoc_writes_when_only_the_sandbox_scratch_is_writable() {
+        let zsh = Path::new("/bin/zsh");
+        let sandbox = Path::new("/usr/bin/sandbox-exec");
+        let scratch_root = std::env::temp_dir().canonicalize().expect("temp dir");
+        if !zsh.is_file() || !sandbox.is_file() || scratch_root.starts_with("/private/tmp") {
+            return;
+        }
+        let scratch = tempfile::tempdir().expect("scratch");
+        let workspace = tempfile::tempdir().expect("workspace");
+        let snapshot = workspace.path().join("snapshot.zsh");
+        std::fs::write(&snapshot, "").expect("snapshot");
+        let target = workspace.path().join("written.txt");
+        let command = format!(
+            "cat > {} <<'EOF'\nfrom a heredoc\nEOF",
+            crate::sandbox::shell_quote(&target.to_string_lossy())
+        );
+        let profile = "(version 1)(allow default)(deny file-write* (subpath \"/private/tmp\"))";
+        let output = std::process::Command::new(sandbox)
+            .arg("-p")
+            .arg(profile)
+            .arg("/usr/bin/env")
+            .arg(format!("TMPDIR={}", scratch.path().display()))
+            .arg(zsh)
+            .arg("-f")
+            .arg("-c")
+            .arg(snapshot_script(ShellKind::Zsh, &snapshot, &command))
+            .output()
+            .expect("run zsh");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            std::fs::read_to_string(&target).expect("heredoc output"),
+            "from a heredoc\n"
+        );
     }
 
     #[test]

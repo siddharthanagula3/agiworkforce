@@ -211,6 +211,32 @@ mod tests {
     }
 
     #[test]
+    fn a_pipeline_of_reads_that_silences_its_errors_only_reads() {
+        for command in [
+            "git ls-files | head -100; cat package.json README* 2>/dev/null | head -80",
+            "cat notes.txt 2>&1 | head",
+            "ls missing >/dev/null 2>&1",
+        ] {
+            assert_eq!(
+                classify_filesystem_effect(command),
+                FilesystemEffect::Read,
+                "{command}"
+            );
+        }
+        for command in [
+            "cat a 2> errors.log",
+            "echo hi >> notes.txt",
+            "cat a >&b.txt",
+        ] {
+            assert_eq!(
+                classify_filesystem_effect(command),
+                FilesystemEffect::Write,
+                "{command}"
+            );
+        }
+    }
+
+    #[test]
     fn a_compound_command_takes_the_strongest_effect_of_its_segments() {
         assert_eq!(
             classify_filesystem_effect("ls -la && cat README.md"),

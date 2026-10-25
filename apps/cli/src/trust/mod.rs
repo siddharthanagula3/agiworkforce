@@ -363,7 +363,7 @@ impl ProcessTrustGrant {
             root,
             identity,
             actor: identity::current_actor(),
-            machine: identity::current_machine(),
+            machine: identity::machine_for_grant(),
             granted_at: chrono::Utc::now().to_rfc3339(),
             registry_stamp: stamp,
         }
@@ -609,7 +609,7 @@ pub fn grant(root: &Path) -> Result<TrustStatus> {
         &scope,
         &identity.key,
         &identity::current_actor(),
-        &identity::current_machine(),
+        &identity::machine_for_grant(),
     )?;
     registry.save(&config_dir)?;
     invalidate();

@@ -54,6 +54,11 @@ export interface CloudUtilityChatCompletionRequest {
   stream: true;
   thinking_mode: boolean;
   effort: ExtensionAgentEffort;
+  /**
+   * Editor utilities send one self-contained request that nothing reuses, so
+   * writing its prefix to the prompt cache is paid for and never read back.
+   */
+  use_prompt_cache: false;
 }
 
 interface ChatCompletionChunk {
@@ -476,6 +481,7 @@ export function buildCloudUtilityChatCompletionRequest(
     stream: true,
     thinking_mode: Config.agentThinking(),
     effort: Config.agentEffort(),
+    use_prompt_cache: false,
   };
 }
 

@@ -249,6 +249,7 @@ impl CloudClient {
             .map_err(|error| CloudError::Transport(error.to_string()))?;
         let status = response.status().as_u16();
         let minimum_api_version = crate::cloud::handshake::minimum_api_version(response.headers());
+        let rate_budget = rate_budget_of(response.headers());
         let body = response
             .text()
             .await
@@ -262,10 +263,20 @@ impl CloudClient {
             tier_cache::invalidate_tier_cache();
             return Err(CloudError::SessionExpired);
         }
-        Ok(Reply { status, body })
+        Ok(Reply {
+            status,
+            body,
+            rate_budget,
+        })
     }
 
     async fn send<T: DeserializeOwned>(builder: reqwest::RequestBuilder) -> Result<T, CloudError> {
+        Self::send_observed(builder).await.map(|(value, _)| value)
+    }
+
+    async fn send_observed<T: DeserializeOwned>(
+        builder: reqwest::RequestBuilder,
+    ) -> Result<(T, Option<RateBudget>), CloudError> {
         let reply = Self::exchange(builder).await?;
         if !reply.is_success() {
             return Err(CloudError::Api {
@@ -273,7 +284,9 @@ impl CloudClient {
                 message: api_error_message(&reply.body),
             });
         }
-        serde_json::from_str(&reply.body).map_err(|error| CloudError::Decode(error.to_string()))
+        serde_json::from_str(&reply.body)
+            .map(|value| (value, reply.rate_budget))
+            .map_err(|error| CloudError::Decode(error.to_string()))
     }
 
     /// Send, and on a 401 renew the session once and send again. A token the
@@ -286,7 +299,16 @@ impl CloudClient {
         &self,
         build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
     ) -> Result<T, CloudError> {
-        match Self::send(build(self)).await {
+        self.send_renewing_observed(build)
+            .await
+            .map(|(value, _)| value)
+    }
+
+    async fn send_renewing_observed<T: DeserializeOwned>(
+        &self,
+        build: impl Fn(&CloudClient) -> reqwest::RequestBuilder,
+    ) -> Result<(T, Option<RateBudget>), CloudError> {
+        match Self::send_observed(build(self)).await {
             Err(CloudError::SessionExpired) => {}
             other => return other,
         }
@@ -296,7 +318,7 @@ impl CloudClient {
         match recover_rejected_session(&self.jwt).await {
             RejectedSessionRecovery::Renewed => {
                 let renewed = CloudClient::connect_managed()?;
-                match Self::send(build(&renewed)).await {
+                match Self::send_observed(build(&renewed)).await {
                     Err(CloudError::SessionExpired) => {
                         forget_refused_session();
                         Err(CloudError::SessionExpired)
@@ -320,6 +342,16 @@ impl CloudClient {
         query: &[(&str, String)],
     ) -> Result<T, CloudError> {
         self.send_renewing(|client| client.request(reqwest::Method::GET, path).query(query))
+            .await
+    }
+
+    /// A read that also reports what is left of the bucket it spent from, so a
+    /// background sync can stop well short of the limit.
+    pub async fn get_observed<T: DeserializeOwned>(
+        &self,
+        path: &str,
+    ) -> Result<(T, Option<RateBudget>), CloudError> {
+        self.send_renewing_observed(|client| client.request(reqwest::Method::GET, path))
             .await
     }
 
@@ -396,6 +428,16 @@ impl CloudClient {
         path: &str,
         header: Option<&str>,
     ) -> Result<(Vec<u8>, Option<String>), CloudError> {
+        self.get_bytes_observed(path, header)
+            .await
+            .map(|(bytes, value, _)| (bytes, value))
+    }
+
+    pub async fn get_bytes_observed(
+        &self,
+        path: &str,
+        header: Option<&str>,
+    ) -> Result<(Vec<u8>, Option<String>, Option<RateBudget>), CloudError> {
         let response = self
             .request(reqwest::Method::GET, path)
             .header("Accept", "*/*")
@@ -418,10 +460,11 @@ impl CloudClient {
             .and_then(|name| response.headers().get(name))
             .and_then(|value| value.to_str().ok())
             .map(str::to_string);
+        let rate_budget = rate_budget_of(response.headers());
         response
             .bytes()
             .await
-            .map(|bytes| (bytes.to_vec(), value))
+            .map(|bytes| (bytes.to_vec(), value, rate_budget))
             .map_err(|error| CloudError::Transport(error.to_string()))
     }
 
@@ -543,6 +586,22 @@ fn local_file_error(target: &std::path::Path, error: &std::io::Error) -> CloudEr
 pub struct Reply {
     pub status: u16,
     pub body: String,
+    pub rate_budget: Option<RateBudget>,
+}
+
+/// What the server says is left of the rate-limit bucket a call spent from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RateBudget {
+    pub limit: u64,
+    pub remaining: u64,
+}
+
+fn rate_budget_of(headers: &reqwest::header::HeaderMap) -> Option<RateBudget> {
+    let read = |name: &str| headers.get(name)?.to_str().ok()?.trim().parse::<u64>().ok();
+    Some(RateBudget {
+        limit: read("x-ratelimit-limit")?,
+        remaining: read("x-ratelimit-remaining")?,
+    })
 }
 
 impl Reply {

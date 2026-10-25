@@ -311,6 +311,26 @@ describe('editor context chips', () => {
     expect(snapshot.texts[0]).toContain('- error at src/app.ts:2:10 (ts): b is not defined');
   });
 
+  it('does not attach a selection or problems again once a message carried them', () => {
+    setActiveEditor({ empty: false, from: 19, to: 20 });
+    activeFile('}');
+    builder.getDiagnosticsContext.mockReturnValue([
+      { severity: 'error', message: 'store is any', line: 3, column: 20, source: 'ts' },
+    ]);
+
+    const first = resolveEditorContext(new Set());
+    expect(first.chips.map((chip) => chip.kind)).toEqual(['active-file', 'selection', 'problems']);
+
+    const next = resolveEditorContext(new Set(), undefined, new Set(first.current));
+    expect(next.chips.map((chip) => chip.kind)).toEqual(['active-file']);
+    expect(next.texts).toEqual([]);
+
+    setActiveEditor({ empty: false, from: 3, to: 5 });
+    activeFile('function summary(store) {');
+    const changed = resolveEditorContext(new Set(), undefined, new Set(first.current));
+    expect(changed.chips.map((chip) => chip.kind)).toEqual(['active-file', 'selection']);
+  });
+
   it('drops a dismissed chip and everything it would have sent', () => {
     setActiveEditor({ empty: false, from: 1, to: 3 });
     activeFile('const a = 1;');

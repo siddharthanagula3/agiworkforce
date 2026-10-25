@@ -77,7 +77,7 @@ const messageAction = z.object({
 const planDecision = z.object({
   type: z.literal('planDecision'),
   payload: z.discriminatedUnion('decision', [
-    z.object({ decision: z.literal('approve') }),
+    z.object({ decision: z.literal('approve'), then: z.enum(['auto', 'ask']).optional() }),
     z.object({ decision: z.literal('reject'), feedback: z.string().trim().min(1).max(4_000) }),
   ]),
 });

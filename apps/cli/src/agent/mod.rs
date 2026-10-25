@@ -397,6 +397,10 @@ pub struct AgentSession {
     /// both the images and the text prompt in a single multipart user turn.
     /// Consumed (drained) by `send()` and empty thereafter.
     pub pending_image_blocks: Vec<models::ContentBlock>,
+    /// Context a client attached to the next turn (an editor selection, the
+    /// problems in a file) rather than typed. It reaches the model inside
+    /// the turn context, so a resumed transcript shows the words as typed.
+    pub(crate) attached_turn_context: Vec<String>,
     pub search_next_turn: bool,
     /// When `true`, all streaming chunks (including continuation/retry/fallback
     /// turns) are emitted as `MessageDelta` JSONL events to stdout instead of
@@ -854,6 +858,7 @@ impl AgentSession {
             allowed_mcp_servers: None,
             cloud_project: None,
             pending_image_blocks: Vec::new(),
+            attached_turn_context: Vec::new(),
             search_next_turn: false,
             json_events: false,
             json_session_id: String::new(),

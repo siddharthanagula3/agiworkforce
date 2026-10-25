@@ -99,8 +99,12 @@ fn install_id_path() -> Option<PathBuf> {
 }
 
 fn install_id() -> Option<String> {
-    let path = install_id_path()?;
-    if let Ok(existing) = std::fs::read_to_string(&path) {
+    install_id_at(&install_id_path()?)
+}
+
+/// The install id stored at `path`, created there first when it is missing.
+pub(crate) fn install_id_at(path: &std::path::Path) -> Option<String> {
+    if let Ok(existing) = std::fs::read_to_string(path) {
         let existing = existing.trim().to_string();
         if is_valid_install_id(&existing) {
             return Some(existing);
@@ -110,11 +114,11 @@ fn install_id() -> Option<String> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).ok()?;
     }
-    std::fs::write(&path, &created).ok()?;
+    std::fs::write(path, &created).ok()?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        let _ = std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o600));
+        let _ = std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600));
     }
     Some(created)
 }

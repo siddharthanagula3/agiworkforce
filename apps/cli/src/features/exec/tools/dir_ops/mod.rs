@@ -116,7 +116,7 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
 
     let result = match search_program("grep") {
         Ok(mut command) => {
-            command.arg("-rn").arg("--include=*").arg("-m").arg("200");
+            command.arg("-rnE").arg("--include=*").arg("-m").arg("200");
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 command.arg(format!("--exclude-dir={directory}"));
             }
@@ -141,6 +141,9 @@ pub(super) async fn execute_search_files(args: &HashMap<String, String>) -> Resu
                     success: true,
                     output: format!("No matches found for pattern: {}", pattern),
                 });
+            }
+            if stdout.is_empty() && !output.status.success() {
+                return Ok(search_failed("search_files", pattern, &stderr, GREP_SYNTAX));
             }
 
             let mut result = searched("search_files", stdout);
@@ -326,6 +329,14 @@ pub(super) async fn execute_grep_files(
     match found {
         Ok(o) => {
             let stdout = String::from_utf8_lossy(&o.stdout).to_string();
+            if stdout.is_empty() && !o.status.success() && o.status.code() != Some(1) {
+                return Ok(search_failed(
+                    "grep_files",
+                    pattern,
+                    &String::from_utf8_lossy(&o.stderr),
+                    RIPGREP_SYNTAX,
+                ));
+            }
             if stdout.is_empty() {
                 return Ok(ToolResult {
                     tool_name: "grep_files".into(),
@@ -346,7 +357,10 @@ pub(super) async fn execute_grep_files(
                     })
                 }
             };
-            fb.arg("-rn").arg("--max-count=100");
+            fb.arg("-rnE").arg("--max-count=100");
+            if let Some(glob) = include {
+                fb.arg(format!("--include={glob}"));
+            }
             for directory in crate::repo::index_policy::excluded_directory_names() {
                 fb.arg(format!("--exclude-dir={directory}"));
             }
@@ -356,10 +370,7 @@ pub(super) async fn execute_grep_files(
             }
             fb.arg("--").arg(pattern).arg(&validated_path);
             match crate::process_tree::output(fb, None, Some(COMMAND_TIMEOUT)).await {
-                Ok(o) => Ok(searched(
-                    "grep_files",
-                    String::from_utf8_lossy(&o.stdout).to_string(),
-                )),
+                Ok(o) => Ok(grep_fallback_answer(pattern, &o)),
                 Err(e) if e.kind() != std::io::ErrorKind::TimedOut => Ok(ToolResult {
                     tool_name: "grep_files".into(),
                     success: false,
@@ -384,6 +395,44 @@ pub(super) async fn execute_grep_files(
             ),
         }),
     }
+}
+
+/// A search that could not run, with the reason the search program gave,
+/// rather than an empty answer the model reads as "nothing matched".
+const GREP_SYNTAX: &str = "extended regular expressions (grep -E)";
+const RIPGREP_SYNTAX: &str = "ripgrep's regular expression syntax";
+
+fn search_failed(tool_name: &str, pattern: &str, stderr: &str, syntax: &str) -> ToolResult {
+    ToolResult {
+        tool_name: tool_name.to_string(),
+        success: false,
+        output: format!(
+            "The search for {pattern} could not run: {}. Patterns use {syntax}.",
+            stderr.trim()
+        ),
+    }
+}
+
+/// What `grep -rnE` answered when ripgrep was not available: its matches,
+/// "no matches" for exit status 1, or the reason it refused the pattern.
+fn grep_fallback_answer(pattern: &str, output: &std::process::Output) -> ToolResult {
+    let stdout = String::from_utf8_lossy(&output.stdout).to_string();
+    if !stdout.is_empty() {
+        return searched("grep_files", stdout);
+    }
+    if output.status.code() == Some(1) || output.status.success() {
+        return ToolResult {
+            tool_name: "grep_files".into(),
+            success: true,
+            output: format!("No matches for: {}", pattern),
+        };
+    }
+    search_failed(
+        "grep_files",
+        pattern,
+        &String::from_utf8_lossy(&output.stderr),
+        GREP_SYNTAX,
+    )
 }
 
 const MAX_BRACE_EXPANSIONS: usize = 64;
@@ -704,6 +753,80 @@ mod tests {
         let (kept, withheld) = withhold_credential_matches(".env:TOKEN=x\nsrc/a.rs:fn main()");
         assert_eq!(withheld, 1);
         assert_eq!(kept, "src/a.rs:fn main()");
+    }
+
+    #[tokio::test]
+    async fn a_search_finds_an_alternation_and_a_class_the_model_writes_in_regex_syntax() {
+        let root = tempfile::tempdir().expect("temp dir");
+        let root_path = root.path().canonicalize().expect("canonical root");
+        std::fs::create_dir_all(root_path.join("src")).expect("src");
+        std::fs::write(
+            root_path.join("src/store.js"),
+            "function run(argv) {\n  return save(tmp);\n}\nmodule.exports = { run };\n",
+        )
+        .expect("store");
+        let src = root_path.join("src").display().to_string();
+        let search = |pattern: &str| {
+            HashMap::from([
+                ("pattern".to_string(), pattern.to_string()),
+                ("path".to_string(), src.clone()),
+            ])
+        };
+        let (searched, grepped) = crate::path_security::scope_workspace_paths(
+            Some(root_path.clone()),
+            Vec::new(),
+            async {
+                let searched = execute_search_files(&search(r"run\s*\(|exports"))
+                    .await
+                    .expect("search_files");
+                let mut grep_args = search("tmp|renameSync|writeFileSync");
+                grep_args.insert("include".to_string(), "*.js".to_string());
+                let grepped = execute_grep_files(&grep_args, true)
+                    .await
+                    .expect("grep_files");
+                (searched, grepped)
+            },
+        )
+        .await;
+        assert!(searched.success, "{}", searched.output);
+        assert!(
+            searched.output.contains(":1:function run(argv)"),
+            "{}",
+            searched.output
+        );
+        assert!(
+            searched.output.contains(":4:module.exports"),
+            "{}",
+            searched.output
+        );
+        assert!(grepped.success, "{}", grepped.output);
+        assert!(
+            grepped.output.contains(":2:  return save(tmp);"),
+            "{}",
+            grepped.output
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_pattern_grep_refuses_is_reported_rather_than_read_as_no_matches() {
+        use std::os::unix::process::ExitStatusExt;
+        let output = |code: i32, stdout: &str, stderr: &str| std::process::Output {
+            status: std::process::ExitStatus::from_raw(code << 8),
+            stdout: stdout.as_bytes().to_vec(),
+            stderr: stderr.as_bytes().to_vec(),
+        };
+        let refused =
+            grep_fallback_answer("run(", &output(2, "", "grep: parentheses not balanced"));
+        assert!(!refused.success);
+        assert!(
+            refused.output.contains("parentheses not balanced"),
+            "{}",
+            refused.output
+        );
+        let none = grep_fallback_answer("absent", &output(1, "", ""));
+        assert!(none.success);
+        assert_eq!(none.output, "No matches for: absent");
     }
 
     #[test]

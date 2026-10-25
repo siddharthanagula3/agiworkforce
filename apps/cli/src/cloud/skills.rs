@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 
-use super::client::{CloudClient, CloudError};
+use super::client::{CloudClient, CloudError, RateBudget};
 
 pub const SKILLS_PATH: &str = "/api/skills";
 pub const ACCOUNT_SKILLS_DIR: &str = "account-skills";
@@ -94,6 +94,26 @@ fn holds_package(held: &Path, tree_hash: Option<&str>) -> bool {
             .is_ok_and(|held_hash| held_hash.trim() == tree_hash)
 }
 
+/// A background mirror stops once it has left less than half of the bucket the
+/// server reports, so the skills page and the next sync never find it spent.
+#[derive(Debug, Default)]
+struct Pacer {
+    budget: Option<RateBudget>,
+}
+
+impl Pacer {
+    fn note(&mut self, budget: Option<RateBudget>) {
+        if budget.is_some() {
+            self.budget = budget;
+        }
+    }
+
+    fn spent(&self) -> bool {
+        self.budget
+            .is_some_and(|budget| budget.remaining.saturating_mul(2) < budget.limit)
+    }
+}
+
 pub fn account_skills_dir(config_dir: &Path) -> PathBuf {
     config_dir.join(ACCOUNT_SKILLS_DIR)
 }
@@ -138,10 +158,16 @@ async fn fetch_skill(
     client: &CloudClient,
     skill: &AccountSkill,
     held: &Path,
-) -> Result<SyncedSkill, CloudError> {
+    pacer: &mut Pacer,
+) -> Result<Option<SyncedSkill>, CloudError> {
     let base = format!("{SKILLS_PATH}/{}", path_segment(&skill.name));
-    let body: SkillBody = client.get(&base, &[]).await?;
-    let listed: SkillFiles = client.get(&format!("{base}/files"), &[]).await?;
+    let (body, budget): (SkillBody, _) = client.get_observed(&base).await?;
+    pacer.note(budget);
+    if pacer.spent() {
+        return Ok(None);
+    }
+    let (listed, budget): (SkillFiles, _) = client.get_observed(&format!("{base}/files")).await?;
+    pacer.note(budget);
     let mut files = Vec::new();
     for entry in listed
         .files
@@ -155,37 +181,44 @@ async fn fetch_skill(
             files.push((entry.path.clone(), bytes));
             continue;
         }
+        if pacer.spent() {
+            return Ok(None);
+        }
         let path = entry
             .path
             .split('/')
             .map(path_segment)
             .collect::<Vec<_>>()
             .join("/");
-        let (bytes, _) = client
-            .get_bytes_with_header(&format!("{base}/files/{path}?download=1"), None)
+        let (bytes, _, budget) = client
+            .get_bytes_observed(&format!("{base}/files/{path}?download=1"), None)
             .await?;
+        pacer.note(budget);
         if bytes.len() as u64 <= MAX_SKILL_FILE_BYTES {
             files.push((entry.path.clone(), bytes));
         }
     }
-    Ok(SyncedSkill {
+    Ok(Some(SyncedSkill {
         name: skill.name.clone(),
         document: skill_document(skill, &body.body),
         files,
         tree_hash: skill.tree_hash.clone(),
-    })
+    }))
 }
 
 /// A draft is its author's work in progress and is not offered to sessions.
 /// A file already held in `dir` with the listed hash is kept, not downloaded.
 /// A skill already held from the same package is kept as it is. When the
 /// server stops answering for a while, what came down so far is kept and the
-/// rest waits for the next sync.
+/// rest waits for the next sync, as it does once the sync has spent its share
+/// of the rate-limit bucket the server reports.
 pub async fn fetch_account_skills(
     client: &CloudClient,
     dir: &Path,
 ) -> Result<SkillSync, CloudError> {
-    let list: SkillList = client.get(SKILLS_PATH, &[]).await?;
+    let mut pacer = Pacer::default();
+    let (list, budget): (SkillList, _) = client.get_observed(SKILLS_PATH).await?;
+    pacer.note(budget);
     let offered: Vec<&AccountSkill> = list
         .skills
         .iter()
@@ -198,8 +231,12 @@ pub async fn fetch_account_skills(
         if holds_package(&held, skill.tree_hash.as_deref()) {
             continue;
         }
-        match fetch_skill(client, skill, &held).await {
-            Ok(skill) => fetched.push(skill),
+        if pacer.spent() {
+            break;
+        }
+        match fetch_skill(client, skill, &held, &mut pacer).await {
+            Ok(Some(skill)) => fetched.push(skill),
+            Ok(None) => break,
             Err(CloudError::Api { status: 404, .. }) => {}
             Err(CloudError::Api { status: 429, .. }) => break,
             Err(error) => return Err(error),
@@ -455,8 +492,9 @@ mod tests {
                         (200, br#"{"body":"Use it."}"#.to_vec())
                     };
                     let head = format!(
-                        "HTTP/1.1 {status} X\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
-                        body.len()
+                        "HTTP/1.1 {status} X\r\ncontent-length: {}\r\nx-ratelimit-limit: 60\r\nx-ratelimit-remaining: {}\r\nconnection: close\r\n\r\n",
+                        body.len(),
+                        60usize.saturating_sub(seen)
                     );
                     let _ = socket.write_all(head.as_bytes()).await;
                     let _ = socket.write_all(&body).await;
@@ -466,34 +504,42 @@ mod tests {
         (base, served)
     }
 
-    /// Before the package hash, every sync asked for every skill again, and a
-    /// catalogue past the web's budget never finished: each session start
-    /// spent the budget and kept nothing.
+    /// Before pacing, a first sync spent the whole bucket and was refused
+    /// with a 429 part way; each sync now takes at most half of what the
+    /// server reports is left and the rest lands on the following syncs.
     #[tokio::test]
-    async fn a_catalogue_past_the_request_budget_lands_over_syncs_and_then_costs_one_request() {
+    async fn a_catalogue_past_the_request_budget_lands_over_paced_syncs_and_then_costs_one_request()
+    {
         use std::sync::atomic::Ordering;
         let dir = tempfile::tempdir().unwrap();
         let (base, served) = catalogue(30, true).await;
         let client = CloudClient::for_test_server(&base);
 
-        let first = fetch_account_skills(&client, dir.path()).await.unwrap();
-        write_account_skills(dir.path(), &first).unwrap();
-        let first_requests = served.load(Ordering::SeqCst);
-        assert_eq!(first.listed.len(), 30);
+        let mut per_sync = Vec::new();
+        let mut settled_requests = None;
+        for _ in 0..10 {
+            served.store(0, Ordering::SeqCst);
+            let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
+            write_account_skills(dir.path(), &sync).unwrap();
+            let requests = served.load(Ordering::SeqCst);
+            assert_eq!(sync.listed.len(), 30);
+            if sync.fetched.is_empty() {
+                settled_requests = Some(requests);
+                break;
+            }
+            per_sync.push(requests);
+        }
+
         assert!(
-            first_requests <= 61,
-            "first sync asked {first_requests} times"
+            per_sync.len() > 1,
+            "a paced first sync leaves work for the next"
         );
-        assert!(!first.fetched.is_empty() && first.fetched.len() < 30);
-
-        served.store(0, Ordering::SeqCst);
-        let second = fetch_account_skills(&client, dir.path()).await.unwrap();
-        write_account_skills(dir.path(), &second).unwrap();
-        served.store(0, Ordering::SeqCst);
-        let settled = fetch_account_skills(&client, dir.path()).await.unwrap();
-        write_account_skills(dir.path(), &settled).unwrap();
-        let settled_requests = served.load(Ordering::SeqCst);
-
+        for requests in &per_sync {
+            assert!(
+                *requests <= 31,
+                "a sync asked {requests} times of a 60-request bucket"
+            );
+        }
         for index in 0..30 {
             assert!(dir.path().join(format!("skill-{index}/SKILL.md")).is_file());
             assert_eq!(
@@ -505,14 +551,12 @@ mod tests {
                 b"Reference text"
             );
         }
-        assert!(settled.fetched.is_empty());
         assert_eq!(
-            settled_requests, 1,
+            settled_requests,
+            Some(1),
             "a catalogue held in full costs only its listing"
         );
-        eprintln!(
-            "skills sync requests: first {first_requests}, settled {settled_requests} (30 skills, 1 file each)"
-        );
+        eprintln!("skills sync requests per paced sync: {per_sync:?}, then 1 (30 skills)");
     }
 
     #[tokio::test]

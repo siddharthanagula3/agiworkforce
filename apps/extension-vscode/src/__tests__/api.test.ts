@@ -783,7 +783,7 @@ describe('billed credits for a settled turn', () => {
 });
 
 describe('cloud utility completion contract', () => {
-  it('sends only the canonical Web effort and thinking fields', () => {
+  it('sends only the canonical Web effort and thinking fields, uncached', () => {
     vi.spyOn(Config, 'agentThinking').mockReturnValue(true);
     vi.spyOn(Config, 'agentEffort').mockReturnValue('high');
     const messages = [
@@ -799,6 +799,7 @@ describe('cloud utility completion contract', () => {
       stream: true,
       thinking_mode: true,
       effort: 'high',
+      use_prompt_cache: false,
     });
     expect(request).not.toHaveProperty('thinking');
     expect(request).not.toHaveProperty('metadata');

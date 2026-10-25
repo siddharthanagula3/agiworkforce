@@ -3285,6 +3285,9 @@ export function getWebviewContent(
     // ThreadSummary.trustMode from the CLI proves whether this developer session is Local,
     // BYOK, or Managed Cloud. Keep the header neutral until that summary arrives.
     var sessionBoundaryAuthoritative = false;
+    // The route this workspace last confirmed, shown after a reload until the
+    // CLI confirms it again, so the header never goes blank while it starts.
+    var sessionBoundaryProvisional = false;
     var webSearchDenial = null;
     var webSearchNeedsKey = false;
     var activeAccountIdentity = null;
@@ -3507,7 +3510,7 @@ export function getWebviewContent(
         renderBlockedWorkspaceIdentity();
         return;
       }
-      if (!sessionBoundaryAuthoritative) {
+      if (!sessionBoundaryAuthoritative && !sessionBoundaryProvisional) {
         // Naming a route the CLI has not confirmed would be a claim about where
         // the prompt goes. Say nothing until the session summary arrives.
         sessionBoundaryLabel.textContent = '';
@@ -3528,6 +3531,7 @@ export function getWebviewContent(
       sessionIdentitySeparator.hidden = !showProviderIdentity || !activeProviderIdentity;
       sessionIdentity.setAttribute('data-boundary', spec.boundary);
       var title = spec.title;
+      if (!sessionBoundaryAuthoritative) title += ' · Last known, confirming with the AGI CLI';
       if (activeProviderIdentity && activeRuntimeSource !== 'runtime-unavailable') {
         title += ' · Provider: ' + activeProviderIdentity;
       }
@@ -3598,8 +3602,24 @@ export function getWebviewContent(
       setup.disabled = !show;
     }
 
+    function sourceForTrustMode(trustMode) {
+      return trustMode === 'local'
+        ? 'unbounded'
+        : trustMode === 'byok'
+          ? 'user-api-key'
+          : 'managed-plan';
+    }
+
+    function applyProvisionalSessionBoundary(trustMode, provider) {
+      if (sessionBoundaryAuthoritative) return;
+      sessionBoundaryProvisional = true;
+      activeProviderIdentity = provider || '';
+      updateRuntimePill(sourceForTrustMode(trustMode));
+    }
+
     function applyAuthoritativeSessionBoundary(trustMode, provider) {
       sessionBoundaryAuthoritative = true;
+      sessionBoundaryProvisional = false;
       activeProviderIdentity = provider || '';
       updateRuntimePill(trustMode === 'local'
         ? 'unbounded'
@@ -3611,6 +3631,7 @@ export function getWebviewContent(
 
     function resetAuthoritativeSessionBoundary() {
       sessionBoundaryAuthoritative = false;
+      sessionBoundaryProvisional = false;
       renderSessionIdentity();
       renderBrowseAvailability();
     }
@@ -3704,7 +3725,7 @@ export function getWebviewContent(
         else updateRuntimePill('runtime-unavailable');
         return;
       }
-      if (!sessionBoundaryAuthoritative && activeAccountStatus !== 'expired') {
+      if (!sessionBoundaryAuthoritative && !sessionBoundaryProvisional && activeAccountStatus !== 'expired') {
         updateRuntimePill(payload.managedDeveloperEligible === false
           ? 'managed-unavailable'
           : payload.source);
@@ -7048,7 +7069,11 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'sessionBoundary') {
-        applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        if (msg.payload.provisional) {
+          applyProvisionalSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        } else {
+          applyAuthoritativeSessionBoundary(msg.payload.trustMode, msg.payload.provider);
+        }
       }
 
       else if (msg.type === 'mcpAuthRequired') {
@@ -7259,6 +7284,13 @@ export function getWebviewContent(
 
       else if (msg.type === 'addUserMessage') {
         addMessage('user', msg.payload.text);
+        if (msg.payload.startsTurn && !streaming) {
+          showTyping();
+          setStreaming(true);
+          currentAssistantEl = null;
+          accumulatedContent = '';
+          activePlanCard = null;
+        }
       }
 
       else if (msg.type === 'modeChanged') {
@@ -7630,10 +7662,17 @@ export function getWebviewContent(
       }
       var actions = document.createElement('div');
       actions.className = 'approval-card__actions';
+      // As in Claude Code, approving a plan also chooses how it runs: edits
+      // accepted as they come, or each one asked about first.
       actions.appendChild(planDecisionButton(L10N.approvePlan, true, function() {
         planCard.decided = true;
         renderPlanDecision();
-        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve' } });
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve', then: 'auto' } });
+      }));
+      actions.appendChild(planDecisionButton(L10N.approvePlanAskEdits, false, function() {
+        planCard.decided = true;
+        renderPlanDecision();
+        vscode.postMessage({ type: 'planDecision', payload: { decision: 'approve', then: 'ask' } });
       }));
       actions.appendChild(planDecisionButton(L10N.revisePlan, false, function() {
         planCard.revising = true;

@@ -180,8 +180,33 @@ fn account_response(snapshot: account::AccountSnapshot) -> AccountStatusResponse
 #[derive(Clone, Debug)]
 struct PreparedInput {
     text: String,
+    /// Text the client attached rather than the user typed: one input item
+    /// whose single text element spans all of it, the way a chip is sent.
+    attached: Vec<String>,
     images: Vec<ContentBlock>,
     search: bool,
+}
+
+impl PreparedInput {
+    /// Everything this input says, typed words first, for a path that has no
+    /// separate place for attached context.
+    fn joined_text(&self) -> String {
+        std::iter::once(self.text.as_str())
+            .chain(self.attached.iter().map(String::as_str))
+            .filter(|part| !part.trim().is_empty())
+            .collect::<Vec<_>>()
+            .join("\n\n")
+    }
+}
+
+/// Whether a text input is one attached element rather than typed words.
+fn is_attached_text(
+    text: &str,
+    elements: &[agiworkforce_protocol::user_input::TextElement],
+) -> bool {
+    !text.trim().is_empty()
+        && matches!(elements, [element]
+            if element.byte_range.start == 0 && element.byte_range.end == text.len())
 }
 
 struct TurnSetupSnapshot {
@@ -437,7 +462,7 @@ fn steer_source(
             .unwrap_or_default()
             .into_iter()
             .map(|input| crate::agent::SteeredInput {
-                text: input.text,
+                text: input.joined_text(),
                 images: input.images,
             })
             .collect()
@@ -1519,8 +1544,15 @@ impl CliDeveloperSessionHost {
         let mut image_bytes = 0usize;
 
         let mut typed_parts = Vec::new();
+        let mut attached = Vec::new();
         for item in input {
             match item {
+                UserInput::Text {
+                    text,
+                    text_elements,
+                } if is_attached_text(&text, &text_elements) => {
+                    push_bounded_text_part(&mut attached, text, &mut text_chars, &mut text_bytes)?
+                }
                 UserInput::Text { text, .. } => {
                     typed_parts.push(text_parts.len());
                     push_bounded_text_part(&mut text_parts, text, &mut text_chars, &mut text_bytes)?
@@ -1580,13 +1612,14 @@ impl CliDeveloperSessionHost {
             }
         }
         let text = text_parts.join("\n\n");
-        if text.trim().is_empty() && images.is_empty() {
+        if text.trim().is_empty() && attached.is_empty() && images.is_empty() {
             return Err(DeveloperSessionHostError::invalid_request(
                 "turn input must contain text, an image, a skill, or a mention",
             ));
         }
         Ok(PreparedInput {
             text,
+            attached,
             images,
             search,
         })
@@ -3817,6 +3850,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 }
                 follow_up = true;
                 agent.pending_image_blocks = input.images;
+                agent.attached_turn_context = input.attached;
                 agent.search_next_turn = input.search;
                 agent.quiet = true;
                 agent.plan_approval_control = Some(PLAN_APPROVAL_CONTROL);
@@ -8007,6 +8041,40 @@ mod tests {
         for (index, prepared) in queued.iter().enumerate() {
             assert_eq!(prepared.text, format!("follow-up-{index}"));
         }
+    }
+
+    #[test]
+    fn an_attached_editor_selection_stays_out_of_the_words_the_user_typed() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = CliDeveloperSessionHost::new_with_store(
+            CliConfig::default(),
+            workspace.path().to_path_buf(),
+            ManagedSessionStore::new(store.path().to_path_buf()),
+            false,
+        )
+        .expect("host");
+        let selection = "Selected from src/stats.js (javascript), lines 19-20:\n}";
+        let attached = UserInput::Text {
+            text: selection.to_string(),
+            text_elements: vec![agiworkforce_protocol::user_input::TextElement::new(
+                (0..selection.len()).into(),
+                Some("stats.js selection".to_string()),
+            )],
+        };
+
+        let prepared = host
+            .prepare_input(vec![text_input("Add a remove command"), attached])
+            .expect("prepared");
+
+        assert_eq!(prepared.text, "Add a remove command");
+        assert_eq!(prepared.attached, vec![selection.to_string()]);
+        assert_eq!(
+            prepared.joined_text(),
+            format!("Add a remove command\n\n{selection}")
+        );
+        let sent = crate::agent::with_turn_context(&prepared.attached.join("\n\n"), &prepared.text);
+        assert_eq!(crate::agent::user_words(&sent), "Add a remove command");
     }
 
     #[test]

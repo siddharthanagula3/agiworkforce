@@ -172,6 +172,26 @@ describe('header trust-boundary pill', () => {
     },
   );
 
+  it('shows the last confirmed route after a reload until the CLI confirms it', () => {
+    executeWebviewScript();
+    window.dispatchEvent(
+      new MessageEvent('message', {
+        data: { type: 'sessionBoundary', payload: { trustMode: 'managed', provisional: true } },
+      }),
+    );
+
+    expect(pill().label?.textContent).toBe('Managed');
+    expect(pill().root?.style.display).toBe('inline-flex');
+    expect(pill().root?.title).toContain('Last known');
+
+    postUsageMeter('unbounded');
+    expect(pill().label?.textContent).toBe('Managed');
+
+    postSessionBoundary('managed');
+    expect(pill().label?.textContent).toBe('Managed');
+    expect(pill().root?.title).not.toContain('Last known');
+  });
+
   it('never spells the trust boundary as an acronym or a model id', () => {
     executeWebviewScript();
     postSessionBoundary('byok', 'DeepSeek');

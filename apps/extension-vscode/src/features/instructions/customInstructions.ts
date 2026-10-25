@@ -1,5 +1,6 @@
 import type * as vscode from 'vscode';
 import type { UserInput } from '@agiworkforce/types';
+import { attachedTextInput } from '../../protocol/attachedTextInput';
 
 import {
   loadProjectInstructionSources,
@@ -106,7 +107,7 @@ export function buildCustomInstructionInput(
   options: TurnPreludeOptions = {},
 ): UserInput | undefined {
   const text = buildTurnPrelude(context, options);
-  return text === '' ? undefined : { type: 'text', text, text_elements: [] };
+  return text === '' ? undefined : attachedTextInput(text);
 }
 
 function projectSourceSnapshot(source: ProjectInstructionSource): InstructionSourceSnapshot {

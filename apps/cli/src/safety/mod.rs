@@ -187,6 +187,9 @@ pub(crate) fn split_segments(command: &str) -> Vec<String> {
                     current.clear();
                     continue;
                 }
+                // `>&` and `&>` are one redirection operator, not a background
+                // `&`: `2>&1` names a descriptor, it does not start a command.
+                '&' if current.ends_with('>') || chars.peek() == Some(&'>') => {}
                 '&' => {
                     // Split on both `&&` (logical AND) AND a lone `&` (background
                     // operator). A backgrounded command (`echo ok & rm -rf x`) is a
@@ -219,15 +222,21 @@ pub(crate) fn split_segments(command: &str) -> Vec<String> {
 
 /// Detect shell redirection operators outside quotes.
 ///
-/// Any redirection/heredoc prevents a command from being auto-classified as
-/// safe because it can write files, feed hidden input, or alter stderr/stdout
-/// flow in ways the base command allowlist does not capture.
+/// A redirection or heredoc prevents a command from being auto-classified as
+/// safe because it can write files or feed hidden input in ways the base
+/// command allowlist does not capture. Discarding a stream into `/dev/null`
+/// or pointing it at another descriptor (`2>/dev/null`, `2>&1`) touches no
+/// file, so a read-only command that silences its errors stays read-only.
 fn contains_unquoted_shell_redirection(command: &str) -> bool {
+    let chars: Vec<char> = command.chars().collect();
     let mut in_single_quote = false;
     let mut in_double_quote = false;
     let mut escaped = false;
+    let mut index = 0;
 
-    for ch in command.chars() {
+    while index < chars.len() {
+        let ch = chars[index];
+        index += 1;
         if escaped {
             escaped = false;
             continue;
@@ -252,12 +261,49 @@ fn contains_unquoted_shell_redirection(command: &str) -> bool {
             continue;
         }
 
-        if ch == '<' || ch == '>' {
+        if ch == '<' {
             return true;
+        }
+        if ch == '>' {
+            match harmless_output_redirection(&chars[index..]) {
+                Some(consumed) => index += consumed,
+                None => return true,
+            }
         }
     }
 
     false
+}
+
+/// How many characters after a `>` belong to a redirection that writes no
+/// file, or `None` when the redirection may write one.
+fn harmless_output_redirection(after: &[char]) -> Option<usize> {
+    let mut index = usize::from(matches!(after.first(), Some('>') | Some('|')));
+    if after.get(index) == Some(&'&') {
+        index += 1;
+        let start = index;
+        while after
+            .get(index)
+            .is_some_and(|ch| ch.is_ascii_digit() || *ch == '-')
+        {
+            index += 1;
+        }
+        let ends_word = after
+            .get(index)
+            .is_none_or(|ch| ch.is_whitespace() || matches!(ch, ';' | '|' | '&' | ')'));
+        return (index > start && ends_word).then_some(index);
+    }
+    while after.get(index).is_some_and(|ch| *ch == ' ' || *ch == '\t') {
+        index += 1;
+    }
+    let start = index;
+    while after.get(index).is_some_and(|ch| {
+        !ch.is_whitespace() && !matches!(ch, ';' | '|' | '&' | '<' | '>' | '(' | ')')
+    }) {
+        index += 1;
+    }
+    let target: String = after[start..index].iter().collect();
+    (target == "/dev/null").then_some(index)
 }
 
 /// Downgrade a `Safe` verdict to `Unknown` when the segment carries shell
@@ -1453,7 +1499,12 @@ mod tests {
         );
         assert_eq!(classify_command("cat <<EOF"), CommandSafety::Unknown);
         assert_eq!(classify_command("cat <<< hello"), CommandSafety::Unknown);
-        assert_eq!(classify_command("ls 2>&1"), CommandSafety::Unknown);
+        assert_eq!(classify_command("ls 2> err.txt"), CommandSafety::Unknown);
+        assert_eq!(classify_command("ls >&out.txt"), CommandSafety::Unknown);
+        assert_eq!(
+            classify_command("cat notes.txt > /dev/nullx"),
+            CommandSafety::Unknown
+        );
         assert_eq!(
             classify_command("grep 'a > b' notes.txt"),
             CommandSafety::Safe
@@ -1462,6 +1513,19 @@ mod tests {
             classify_command("grep \"a >> b\" notes.txt"),
             CommandSafety::Safe
         );
+    }
+
+    #[test]
+    fn silencing_or_merging_a_stream_keeps_a_read_only_command_safe() {
+        for command in [
+            "ls 2>&1",
+            "cat package.json 2>/dev/null",
+            "cat package.json README* 2>/dev/null | head -80",
+            "git ls-files | head -100; cat package.json README* 2>/dev/null | head -80",
+            "grep -rn TODO src >/dev/null 2>&1",
+        ] {
+            assert_eq!(classify_command(command), CommandSafety::Safe, "{command}");
+        }
     }
 
     #[test]

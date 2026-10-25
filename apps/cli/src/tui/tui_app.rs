@@ -479,6 +479,7 @@ struct TuiApp {
     mode_banner_shown_at: Option<Instant>,
     // Streaming
     stream_buffer: String,
+    thinking_buffer: String,
     stream_start: Option<Instant>,
     // Git branch
     git_branch: Option<String>,
@@ -691,6 +692,7 @@ impl TuiApp {
             theme_choice,
             mode_banner_shown_at: None,
             stream_buffer: String::new(),
+            thinking_buffer: String::new(),
             stream_start: None,
             git_branch,
             workspace_pane: None,
@@ -1954,6 +1956,9 @@ struct FrameCtx<'a> {
     is_loading: bool,
     stream_start: Option<Instant>,
     stream_buffer: &'a str,
+    /// The model's reasoning summary for the turn in flight, shown dimmed
+    /// under the spinner while it thinks.
+    thinking: &'a str,
     spinner_char: &'a str,
     loading_verb: &'a str,
     awaiting_approval: bool,
@@ -2144,6 +2149,7 @@ impl<'a> FrameCtx<'a> {
             is_loading: app.is_loading,
             stream_start: app.stream_start,
             stream_buffer: &app.stream_buffer,
+            thinking: &app.thinking_buffer,
             spinner_char: app.spinner_char(),
             loading_verb: LOADING_VERB,
             awaiting_approval: false,
@@ -2702,6 +2708,10 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         )];
         spinner_line.extend(super::shimmer::shimmer_spans(&status));
         lines.push(Line::from(spinner_line));
+
+        if ctx.stream_buffer.is_empty() {
+            lines.extend(thinking_tail_lines(ctx.thinking));
+        }
 
         // Live streamed output. During a turn this is redrawn each tick, so show
         // a generous tail (not just 5 lines) for a real streaming feel.
@@ -5038,6 +5048,62 @@ const ADD_CONTEXT_MENU: &str = "Ways to add context to your next message:
 
 const STREAM_SOURCE_TAIL_LINES: usize = 200;
 const STREAM_RENDERED_TAIL_LINES: usize = 40;
+
+const THINKING_TAIL_LINES: usize = 3;
+
+/// The reasoning summary a turn has streamed so far, and when it arrived.
+#[derive(Default)]
+struct TurnThinking {
+    text: String,
+    last_at: Option<Duration>,
+}
+
+impl TurnThinking {
+    fn duration(&self) -> Option<Duration> {
+        self.last_at.filter(|_| !self.text.trim().is_empty())
+    }
+}
+
+fn thinking_sink(
+    thinking: Arc<Mutex<TurnThinking>>,
+    turn_started: Instant,
+) -> crate::models::ReasoningSink {
+    Arc::new(move |delta: &str| {
+        if let Ok(mut thought) = thinking.lock() {
+            thought
+                .text
+                .push_str(sanitize_terminal_text(delta).as_ref());
+            thought.last_at = Some(turn_started.elapsed());
+        }
+    })
+}
+
+fn thought_for_label(thought_for: Duration) -> String {
+    format!("∴ Thought for {}s", thought_for.as_secs().max(1))
+}
+
+/// The last few lines of the reasoning summary, dimmed under the spinner the
+/// way a terminal agent shows that it is thinking before it answers.
+fn thinking_tail_lines(thinking: &str) -> Vec<Line<'static>> {
+    let lines: Vec<&str> = thinking
+        .lines()
+        .map(str::trim_end)
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+    if lines.is_empty() {
+        return Vec::new();
+    }
+    let style = Style::default()
+        .fg(crate::tui::terminal_palette::ui_muted())
+        .add_modifier(Modifier::ITALIC);
+    let mut rendered = vec![Line::from(Span::styled("  ∴ Thinking…".to_string(), style))];
+    rendered.extend(
+        lines[lines.len().saturating_sub(THINKING_TAIL_LINES)..]
+            .iter()
+            .map(|line| Line::from(Span::styled(format!("    {line}"), style))),
+    );
+    rendered
+}
 
 fn streaming_markdown_tail(buffer: &str) -> Vec<Line<'static>> {
     let source: Vec<&str> = buffer.lines().collect();
@@ -7502,11 +7568,14 @@ async fn send_message_with_prompt(
     app.is_loading = true;
     app.scroll_offset = 0;
     app.stream_buffer.clear();
+    app.thinking_buffer.clear();
     app.tool_cells.clear();
     app.stream_start = Some(Instant::now());
     render(terminal, app)?;
 
     let response_buf = Arc::new(Mutex::new(String::new()));
+    let thinking = Arc::new(Mutex::new(TurnThinking::default()));
+    let thinking_for_display = Arc::clone(&thinking);
     let buf_for_callback = Arc::clone(&response_buf);
     let buf_for_display = Arc::clone(&response_buf);
 
@@ -7604,7 +7673,10 @@ async fn send_message_with_prompt(
             }
         });
 
-        let send_fut = app.session.send(&config_clone, user_text, callback);
+        let send_fut = crate::models::showing_reasoning(
+            thinking_sink(Arc::clone(&thinking), turn_started),
+            app.session.send(&config_clone, user_text, callback),
+        );
         tokio::pin!(send_fut);
 
         loop {
@@ -7635,6 +7707,7 @@ async fn send_message_with_prompt(
                             is_loading: app.is_loading,
                             stream_start: app.stream_start,
                             stream_buffer: &app.stream_buffer,
+                            thinking: &app.thinking_buffer,
                             spinner_char: spinner_frame(app.spinner_tick),
                             loading_verb: LOADING_VERB,
                             awaiting_approval: true,
@@ -7820,6 +7893,9 @@ async fn send_message_with_prompt(
                     if let Ok(b) = buf_for_display.lock() {
                         app.stream_buffer = b.clone();
                     }
+                    if let Ok(thought) = thinking_for_display.lock() {
+                        app.thinking_buffer.clone_from(&thought.text);
+                    }
                     if let Some(host) = &remote_host {
                         host.output(&app.stream_buffer);
                     }
@@ -7842,6 +7918,7 @@ async fn send_message_with_prompt(
                         is_loading: app.is_loading,
                         stream_start: app.stream_start,
                         stream_buffer: &app.stream_buffer,
+                        thinking: &app.thinking_buffer,
                         spinner_char: spinner_frame(app.spinner_tick),
                         loading_verb: if preparing {
                             "Preparing context"
@@ -7914,6 +7991,8 @@ async fn send_message_with_prompt(
 
     app.is_loading = false;
     app.stream_start = None;
+    app.thinking_buffer.clear();
+    let thought_for = thinking.lock().ok().and_then(|thought| thought.duration());
 
     if let Some(host) = &remote_host {
         host.output(&app.stream_buffer);
@@ -7945,6 +8024,12 @@ async fn send_message_with_prompt(
                 app.stream_buffer.clone()
             };
 
+            if let Some(thought_for) = thought_for {
+                app.chat_messages.push(ChatMessage {
+                    role: ChatRole::Detail,
+                    text: thought_for_label(thought_for),
+                });
+            }
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::Assistant,
                 text: response_text,
@@ -10350,6 +10435,7 @@ mod tests {
             is_loading: true,
             stream_start: None,
             stream_buffer: "",
+            thinking: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
@@ -10438,6 +10524,7 @@ mod tests {
             is_loading: false,
             stream_start: None,
             stream_buffer: "",
+            thinking: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
@@ -10850,6 +10937,7 @@ mod tests {
             is_loading: true,
             stream_start: None,
             stream_buffer: &stream_buffer,
+            thinking: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
@@ -10875,6 +10963,77 @@ mod tests {
         assert!(
             rendered.contains("streaming") && rendered.contains("tokens"),
             "streamed text must still be shown: {rendered:?}"
+        );
+    }
+
+    #[test]
+    fn a_turn_that_is_still_thinking_shows_its_reasoning_dimmed_under_the_spinner() {
+        use ratatui::backend::TestBackend;
+
+        let chat_messages: Vec<ChatMessage> = Vec::new();
+        let tool_cells: Vec<ToolCell> = Vec::new();
+        let statusline_cfg = crate::tui::widgets::statusline_setup::StatusLineConfig::default();
+        let draw = |stream_buffer: &str| {
+            let ctx = FrameCtx {
+                workspace_pane: None,
+                model_name: "fixture-local-model:latest",
+                statusline: &statusline_cfg,
+                provider_name: "ollama",
+                git_branch: None,
+                context_window: None,
+                working_path: String::new(),
+                total_input_tokens: 0,
+                total_output_tokens: 0,
+                turn_count: 1,
+                context: ContextSnapshot {
+                    percent: 0,
+                    used_tokens: 0,
+                    limit_tokens: 0,
+                },
+                chrome: quiet_chrome(),
+                chat_messages: &chat_messages,
+                tool_cells: &tool_cells,
+                is_loading: true,
+                stream_start: None,
+                stream_buffer,
+                thinking: "Reading the store first.\nTies keep insertion order.",
+                spinner_char: "⠋",
+                loading_verb: LOADING_VERB,
+                awaiting_approval: false,
+                scroll_offset: 0,
+                access_mode: crate::design_system::AccessMode::Local,
+                privacy_mode: crate::agent::PrivacyMode::Local,
+                mode: InteractionMode::Chat,
+                effort_label: "Medium",
+                cost_str: "0 credits".to_string(),
+                notice: None,
+                quit_key: Some("ctrl+d"),
+            };
+            let mut terminal = Terminal::new(TestBackend::new(120, 40)).expect("terminal");
+            terminal
+                .draw(|frame| {
+                    draw_turn_chrome(frame, &ctx);
+                })
+                .expect("draw");
+            rendered_symbols(&terminal)
+        };
+
+        let thinking = draw("");
+        assert!(thinking.contains("Thinking…"), "{thinking:?}");
+        assert!(
+            thinking.contains("Ties keep insertion order."),
+            "{thinking:?}"
+        );
+
+        let answering = draw("The high task comes first.");
+        assert!(answering.contains("The high task comes first."));
+        assert!(
+            !answering.contains("Ties keep insertion order."),
+            "reasoning gives way to the answer once it streams: {answering:?}"
+        );
+        assert_eq!(
+            thought_for_label(Duration::from_millis(300)),
+            "∴ Thought for 1s"
         );
     }
 
@@ -10911,6 +11070,7 @@ mod tests {
             is_loading: false,
             stream_start: None,
             stream_buffer: "",
+            thinking: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,
@@ -11145,6 +11305,7 @@ mod tests {
             is_loading: true,
             stream_start: None,
             stream_buffer: "",
+            thinking: "",
             spinner_char: "⠋",
             loading_verb: "Reasoning",
             awaiting_approval: false,

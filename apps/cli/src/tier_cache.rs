@@ -229,10 +229,52 @@ fn cache_is_fresh(cached_at: u64, now: u64) -> bool {
     now.saturating_sub(cached_at) <= TIER_CACHE_TTL.as_secs()
 }
 
-fn read_fresh_envelope() -> Option<TierCacheEnvelope> {
+fn read_envelope() -> Option<TierCacheEnvelope> {
     let content = std::fs::read_to_string(tier_cache_path()?).ok()?;
-    let envelope: TierCacheEnvelope = toml::from_str(&content).ok()?;
-    cache_is_fresh(envelope.cached_at, now_secs()).then_some(envelope)
+    toml::from_str(&content).ok()
+}
+
+fn read_fresh_envelope() -> Option<TierCacheEnvelope> {
+    read_envelope().filter(|envelope| cache_is_fresh(envelope.cached_at, now_secs()))
+}
+
+/// The capabilities the account was last known to have, and whether to ask
+/// the server again. An expired answer is still the best one there is:
+/// dropping it would take hosted tools such as web search out of the request,
+/// which changes the tool list and rewrites the whole prompt cache. No answer
+/// at all (a 401 cleared it) asks too, or the tool stays out of every request
+/// until the next start.
+fn last_known_capabilities(
+    envelope: Option<TierCacheEnvelope>,
+    now: u64,
+) -> (Option<CapabilityDocumentWire>, bool) {
+    match envelope {
+        Some(envelope) => {
+            let stale = !cache_is_fresh(envelope.cached_at, now);
+            (envelope.capability_handshake, stale)
+        }
+        None => (None, true),
+    }
+}
+
+static TIER_REFRESH_RUNNING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// Re-read the account from the server without holding up the caller. Until
+/// it answers, and if it fails, the last known capabilities stay in force.
+fn refresh_tier_in_background() {
+    use std::sync::atomic::Ordering;
+    let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+        return;
+    };
+    if TIER_REFRESH_RUNNING.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    runtime.spawn(async {
+        let jwt = load_jwt();
+        let _ = resolve_user_tier(jwt.as_deref()).await;
+        TIER_REFRESH_RUNNING.store(false, Ordering::Release);
+    });
 }
 
 /// Read the cached tier from disk, returning `None` if absent or expired.
@@ -242,7 +284,11 @@ pub fn read_tier_cache() -> Option<CachedTier> {
 }
 
 pub fn cached_capabilities() -> Option<CapabilityDocumentWire> {
-    read_fresh_envelope()?.capability_handshake
+    let (capabilities, stale) = last_known_capabilities(read_envelope(), now_secs());
+    if stale {
+        refresh_tier_in_background();
+    }
+    capabilities
 }
 
 pub fn capability_refusal(capability: &str, feature: &str) -> Option<String> {
@@ -1157,6 +1203,39 @@ mod tests {
         assert!(cache_is_fresh(now, now));
         assert!(cache_is_fresh(now - TIER_CACHE_TTL.as_secs(), now));
         assert!(!cache_is_fresh(now - TIER_CACHE_TTL.as_secs() - 1, now));
+    }
+
+    #[test]
+    fn expired_capabilities_stay_in_force_until_a_refresh_replaces_them() {
+        let now = 1_746_000_000;
+        let granted = CapabilityDocumentWire {
+            granted: vec![WEB_SEARCH_CAPABILITY.to_string()],
+            ..CapabilityDocumentWire::default()
+        };
+        let envelope = |cached_at| TierCacheEnvelope {
+            tier: "max".to_string(),
+            cached_at,
+            capability_handshake: Some(granted.clone()),
+        };
+
+        let (fresh, fresh_is_stale) = last_known_capabilities(Some(envelope(now - 10)), now);
+        assert!(fresh.is_some_and(|document| document.allows(WEB_SEARCH_CAPABILITY)));
+        assert!(!fresh_is_stale);
+
+        let (expired, expired_is_stale) =
+            last_known_capabilities(Some(envelope(now - TIER_CACHE_TTL.as_secs() - 1)), now);
+        assert!(
+            expired.is_some_and(|document| document.allows(WEB_SEARCH_CAPABILITY)),
+            "web search must not drop out of the request when the cache ages past its TTL"
+        );
+        assert!(expired_is_stale, "an expired answer asks for a refresh");
+
+        let (cleared, cleared_asks) = last_known_capabilities(None, now);
+        assert!(cleared.is_none());
+        assert!(
+            cleared_asks,
+            "a cache a 401 cleared asks the server again rather than leaving web search out until the next start"
+        );
     }
 
     #[test]
