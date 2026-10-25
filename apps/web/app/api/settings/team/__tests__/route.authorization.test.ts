@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { OrganizationPermission } from '@agiworkforce/types';
 import {
   bypassProfileLookup,
   rlsScopedProfileLookup,
@@ -9,7 +10,7 @@ vi.mock('server-only', () => ({}));
 
 const permissionRole = vi.hoisted(() => ({
   value: 'admin' as string | null,
-  grants: [] as readonly string[],
+  grants: [] as readonly OrganizationPermission[],
 }));
 vi.mock('@/lib/services/organization-permission-service', async () =>
   (
@@ -324,8 +325,8 @@ describe('GET /api/settings/team authorization invariants', () => {
       members: Array<{ userId: string; email: string; name: string }>;
     };
     expect(body.members).toHaveLength(2);
-    expect(body.members.map((m) => m.email)).toEqual(['', '']);
-    expect(JSON.stringify(body)).not.toContain('@example.com');
+    expect(body.members.map((m) => m.email)).toEqual(['me@example.com', '']);
+    expect(JSON.stringify(body)).not.toContain('colleague@example.com');
   });
 
   it('returns emails to a caller whose permissions show them on the shared roster', async () => {

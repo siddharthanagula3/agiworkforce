@@ -112,7 +112,10 @@ async function handleList(request: NextRequest) {
 
   return NextResponse.json({
     members: members.map((member) =>
-      formatMember(rosterShowsEmail ? member : { ...member, email: null }, userId),
+      formatMember(
+        rosterShowsEmail || member.user_id === userId ? member : { ...member, email: null },
+        userId,
+      ),
     ),
   });
 }
