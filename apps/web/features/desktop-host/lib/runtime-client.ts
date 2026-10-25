@@ -67,6 +67,10 @@ import {
   type WorkingTreeChanges,
   type WorkspaceRoot,
   type WorkspaceRootKind,
+  STORAGE_CLEAN_COMMAND,
+  STORAGE_READ_COMMAND,
+  type StorageCleanup,
+  type StorageUsage,
 } from '@agiworkforce/local-runtime-contract';
 import type { BrowserPageSummary, BrowserTabSummary } from '@agiworkforce/types';
 import type {
@@ -885,4 +889,12 @@ export function cancelBrowserSignIn(): Promise<{ cancelled: true }> {
 
 export function readBrowserSignInState(): Promise<PendingBrowserSignIn> {
   return invoke<PendingBrowserSignIn>(BROWSER_SIGN_IN_STATE);
+}
+
+export function readStorageUsage(): Promise<StorageUsage> {
+  return invoke<StorageUsage>(STORAGE_READ_COMMAND, {});
+}
+
+export function cleanStorage(cleanup: StorageCleanup): Promise<StorageUsage> {
+  return invoke<StorageUsage>(STORAGE_CLEAN_COMMAND, { cleanup });
 }

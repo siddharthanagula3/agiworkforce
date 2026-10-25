@@ -108,6 +108,11 @@ export const HOSTED_SETTINGS_NAV_FIELDS: Partial<Record<SettingsNavKey, Settings
     { label: 'Allowed apps', keywords: ['app permissions'] },
     { label: 'Refused apps', keywords: ['denied apps', 'block app', 'add app'] },
   ],
+  storage: [
+    { label: 'Web cache', keywords: ['clear cache'] },
+    { label: 'Old logs', keywords: ['delete logs'] },
+    { label: 'Temporary command files', keywords: ['scratch', 'temp files'] },
+  ],
 };
 
 function withFields(

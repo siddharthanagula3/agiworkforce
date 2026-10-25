@@ -9,7 +9,8 @@ import {
 } from './localRoutineService';
 import { createHash } from 'node:crypto';
 import os from 'node:os';
-import { app, dialog, shell, type BrowserWindow } from 'electron';
+import path from 'node:path';
+import { app, dialog, session, shell, type BrowserWindow } from 'electron';
 import {
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
@@ -72,6 +73,10 @@ import {
   type DeviceKeyModifier,
   type DeviceMouseButton,
   type DeviceStepRegion,
+  STORAGE_CLEAN_COMMAND,
+  STORAGE_CLEANUPS,
+  STORAGE_READ_COMMAND,
+  isStorageCleanup,
 } from '@agiworkforce/local-runtime-contract';
 import {
   CLOUD_CODE_TURN_STEP_BOUNDS,
@@ -158,6 +163,7 @@ import {
 import { recordDesktopEvent } from './desktopTelemetryService';
 import { readClipboard } from './clipboardService';
 import {
+  activeShellRunCount,
   cancelShellRun,
   readBackgroundCommand,
   runShellCommand,
@@ -272,6 +278,15 @@ import { PathRefused, type PathRefusalReason } from './pathGuard';
 import { readRegularFile } from './regularFile';
 import { showsTrustedPage } from '../permissionPolicy';
 import { getPreferences } from '../settingsStore';
+import { REMOTE_SESSION_PARTITION } from '../config';
+import { cliConfigRoot } from '../browser/localClient';
+import {
+  StorageCleanupRefused,
+  cleanStorage,
+  defaultTempParents,
+  readStorageUsage,
+  type StorageEnvironment,
+} from './storageService';
 import {
   consumeSingleUse,
   describePermission,
@@ -1225,6 +1240,22 @@ async function pickRoot(window: BrowserWindow | null, args: Args): Promise<Works
 
 class Cancelled extends Error {}
 
+function storageEnvironment(): StorageEnvironment {
+  const cliHome = cliConfigRoot();
+  const remote = session.fromPartition(REMOTE_SESSION_PARTITION);
+  return {
+    cliHome,
+    worktreesRoot: getPreferences().worktreeLocation || path.join(cliHome, 'worktrees'),
+    userData: app.getPath('userData'),
+    logs: app.getPath('logs'),
+    tempParents: defaultTempParents(),
+    webCacheBytes: () => remote.getCacheSize(),
+    clearWebCache: () => remote.clearCache(),
+    shellRunsActive: activeShellRunCount,
+    now: Date.now,
+  };
+}
+
 /**
  * A yes or no asked in main. `subject` says what it is about, which is what
  * keeps a page from stacking the same question or raising it again the
@@ -2047,6 +2078,20 @@ async function execute(
     }
     case 'app_preview_errors':
       return readPreviewConsoleErrors(args['clear'] === true);
+    case 'desktop_storage_read':
+      return readStorageUsage(storageEnvironment());
+    case 'desktop_storage_clean': {
+      const cleanup = args['cleanup'];
+      if (!isStorageCleanup(cleanup)) {
+        throw new InvalidArguments(`"cleanup" must be one of ${STORAGE_CLEANUPS.join(', ')}.`);
+      }
+      try {
+        return await cleanStorage(storageEnvironment(), cleanup);
+      } catch (error) {
+        if (error instanceof StorageCleanupRefused) throw new InvalidArguments(error.message);
+        throw error;
+      }
+    }
     case 'app_open_in_editor':
       return openInEditor(resolveRoot(args));
     case 'clipboard_read':
@@ -2612,6 +2657,8 @@ const localInferenceCommands = new Set<string>(LOCAL_INFERENCE_COMMANDS);
 const UNGATED_COMMANDS: ReadonlySet<string> = new Set([
   'app_open_preview',
   'app_preview_errors',
+  STORAGE_READ_COMMAND,
+  STORAGE_CLEAN_COMMAND,
   BROWSER_SIGN_IN_START,
   BROWSER_SIGN_IN_CANCEL,
   BROWSER_SIGN_IN_STATE,

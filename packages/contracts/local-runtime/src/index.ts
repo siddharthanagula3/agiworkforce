@@ -528,3 +528,18 @@ export { LOCAL_ROUTINE_COMMANDS } from './local-routines';
 
 export { SSH_ENVIRONMENT_COMMANDS, isSshEnvironmentId } from './ssh-environments';
 export type { SshEnvironment, SshEnvironmentInput } from './ssh-environments';
+export {
+  OLD_LOG_AGE_DAYS,
+  STORAGE_CATEGORIES,
+  STORAGE_CLEAN_COMMAND,
+  STORAGE_CLEANUPS,
+  STORAGE_COMMANDS,
+  STORAGE_READ_COMMAND,
+  isStorageCleanup,
+} from './storage';
+export type {
+  StorageCategory,
+  StorageCategoryUsage,
+  StorageCleanup,
+  StorageUsage,
+} from './storage';
