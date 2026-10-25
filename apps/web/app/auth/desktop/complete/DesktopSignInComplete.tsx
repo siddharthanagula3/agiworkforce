@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { getHostBridge, hostSupportsBrowserSignIn } from '@agiworkforce/local-runtime-contract';
 import { Spinner } from '@agiworkforce/ui';
 import { beginBrowserSignIn } from '@/features/desktop-host/lib/browser-sign-in';
 import { AuthStepFrame } from '@/features/auth/AuthStepFrame';
@@ -67,6 +68,9 @@ export function DesktopSignInComplete({
     const grant = takeGrantFromLocation();
     const finish = async (): Promise<string | null> => {
       if (!grant) return INCOMPLETE;
+      // Only the desktop window that started this sign-in holds its verifier, so
+      // a grant opened anywhere else was minted for someone else's account.
+      if (!hostSupportsBrowserSignIn(getHostBridge())) return REDEEM_FAILED;
       try {
         return await signInWithTicket(await redeemGrant(grant), completeUrl);
       } catch (cause) {
