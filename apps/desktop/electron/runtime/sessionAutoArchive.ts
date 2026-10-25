@@ -38,10 +38,21 @@ export interface AutoArchiveOptions {
   archive: (session: LocalDeveloperSession) => Promise<unknown>;
 }
 
-let lastSweepAt = Number.NEGATIVE_INFINITY;
+const lastSweepAt = new Map<string, number>();
 
 export function resetAutoArchiveSweep(): void {
-  lastSweepAt = Number.NEGATIVE_INFINITY;
+  lastSweepAt.clear();
+}
+
+/**
+ * A folder whose sessions were not read, because the person has not allowed
+ * commands there since the app started or its CLI is unavailable, has nothing
+ * to sweep yet. Its interval starts only once its sessions are listed, or the
+ * first list after every launch would use up the sweep.
+ */
+function dueForSweep(group: DeveloperSessionGroup, now: number): boolean {
+  if (group.sessionsWithheld === true || group.unavailable !== undefined) return false;
+  return now - (lastSweepAt.get(group.rootId) ?? Number.NEGATIVE_INFINITY) >= SWEEP_INTERVAL_MS;
 }
 
 /**
@@ -54,10 +65,12 @@ export async function archiveIdleSessions(
   list: DeveloperSessionList,
   options: AutoArchiveOptions,
 ): Promise<DeveloperSessionList> {
-  if (options.days <= 0 || options.now - lastSweepAt < SWEEP_INTERVAL_MS) return list;
-  lastSweepAt = options.now;
+  if (options.days <= 0) return list;
+  const due = list.groups.filter((group) => dueForSweep(group, options.now));
+  if (due.length === 0) return list;
+  for (const group of due) lastSweepAt.set(group.rootId, options.now);
   const archived = new Map<string, number>();
-  for (const session of idleSessionsToArchive(list.groups, options.days, options.now)) {
+  for (const session of idleSessionsToArchive(due, options.days, options.now)) {
     try {
       await options.archive(session);
       archived.set(session.id, options.now);

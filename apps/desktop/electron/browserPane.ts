@@ -101,10 +101,15 @@ export function blockBrowserSite(host: string): BrowserSites {
   if (current.blocked.length >= MAX_BROWSER_SITES && !current.blocked.includes(site)) {
     throw new BrowserPaneRefused(`Up to ${MAX_BROWSER_SITES} sites can be blocked.`);
   }
-  return saveBrowserSites({
+  const saved = saveBrowserSites({
     allowed: current.allowed.filter((entry) => entry !== site),
     blocked: [...current.blocked.filter((entry) => entry !== site), site],
   });
+  for (const pane of panes.values()) {
+    const url = stateOf(pane).url;
+    if (url !== null && browserPaneDecision(url, saved) === 'blocked') refuse(pane, hostOf(url));
+  }
+  return saved;
 }
 
 function allowBrowserSite(site: string): void {
@@ -120,6 +125,17 @@ function ensureSession(): Session {
   created.setPermissionCheckHandler(() => false);
   created.setDevicePermissionHandler(() => false);
   created.setDisplayMediaRequestHandler((_request, callback) => callback({}));
+  created.webRequest.onBeforeRequest((details, callback) => {
+    if (details.resourceType !== 'mainFrame' || mayLoadNow(details.url)) {
+      callback({});
+      return;
+    }
+    callback({ cancel: true });
+    const pane = [...panes.values()].find(
+      (entry) => entry.view.webContents === details.webContents,
+    );
+    if (pane) refuse(pane, hostOf(details.url));
+  });
   paneSession = created;
   return created;
 }
@@ -141,6 +157,12 @@ function stateOf(pane: Pane | undefined): BrowserPaneState {
 
 function report(pane: Pane): void {
   emit(stateOf(pane));
+}
+
+function refuse(pane: Pane, host: string): void {
+  pane.refusedHost = host;
+  if (!pane.view.webContents.isDestroyed()) pane.view.setVisible(false);
+  report(pane);
 }
 
 function hostOf(url: string): string {
@@ -176,14 +198,12 @@ async function navigate(pane: Pane, url: string): Promise<void> {
   const decision = browserPaneDecision(url, readBrowserSites());
   const host = hostOf(url);
   if (decision === 'blocked') {
-    pane.refusedHost = host;
-    report(pane);
+    refuse(pane, host);
     return;
   }
   if (decision === 'ask') {
     if (!(await askToAllow(pane, host))) {
-      pane.refusedHost = host;
-      report(pane);
+      refuse(pane, host);
       return;
     }
     allowBrowserSite(host);
@@ -309,8 +329,10 @@ export async function openBrowserPane(
     const url = browserPaneAddress(address);
     if (!url) throw new BrowserPaneRefused('Enter a web address such as example.com.');
     await navigate(pane, url);
-  } else if (stateOf(pane).url !== null) {
-    pane.view.setVisible(true);
+  } else {
+    const shown = stateOf(pane).url;
+    if (shown !== null && pane.refusedHost === null && mayLoadNow(shown))
+      pane.view.setVisible(true);
   }
   return stateOf(pane);
 }
@@ -331,10 +353,25 @@ export function stepBrowserPane(
   step: 'back' | 'forward' | 'reload',
 ): BrowserPaneState {
   const pane = requirePane(window);
-  const history = pane.view.webContents.navigationHistory;
-  if (step === 'back' && history.canGoBack()) history.goBack();
-  if (step === 'forward' && history.canGoForward()) history.goForward();
-  if (step === 'reload') pane.view.webContents.reload();
+  const contents = pane.view.webContents;
+  const history = contents.navigationHistory;
+  const offset = step === 'back' ? -1 : step === 'forward' ? 1 : 0;
+  if ((step === 'back' && !history.canGoBack()) || (step === 'forward' && !history.canGoForward()))
+    return stateOf(pane);
+  const target =
+    offset === 0
+      ? contents.getURL()
+      : history.getEntryAtIndex(history.getActiveIndex() + offset)?.url;
+  if (!target) return stateOf(pane);
+  if (!mayLoadNow(target)) {
+    refuse(pane, hostOf(target));
+    return stateOf(pane);
+  }
+  pane.refusedHost = null;
+  pane.view.setVisible(true);
+  if (step === 'back') history.goBack();
+  if (step === 'forward') history.goForward();
+  if (step === 'reload') contents.reload();
   return stateOf(pane);
 }
 

@@ -624,7 +624,8 @@ const PREVIOUS_COMPARE_LIMIT = 1_048_576;
 function previousVersionName(absolute: string, now: Date): string {
   const extension = path.extname(absolute);
   const base = path.basename(absolute, extension);
-  const stamp = now.toISOString().slice(0, 19).replace('T', ' ').replace(/:/g, '.');
+  const two = (value: number) => String(value).padStart(2, '0');
+  const stamp = `${now.getFullYear()}-${two(now.getMonth() + 1)}-${two(now.getDate())} ${two(now.getHours())}.${two(now.getMinutes())}.${two(now.getSeconds())}`;
   return `${base} (before ${PRODUCT_BRAND} edit ${stamp})${extension}`;
 }
 

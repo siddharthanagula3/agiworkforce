@@ -16,13 +16,18 @@ class FakeContents {
   openHandler: ((details: { url: string }) => { action: string }) | null = null;
   loadURL = vi.fn(async (url: string) => {
     this.url = url;
+    this.entries.push(url);
   });
   reload = vi.fn();
+  entries: string[] = [];
   navigationHistory = {
-    canGoBack: () => false,
+    canGoBack: () => this.entries.length > 1,
     canGoForward: () => false,
     goBack: vi.fn(),
     goForward: vi.fn(),
+    getActiveIndex: () => this.entries.length - 1,
+    getEntryAtIndex: (index: number) =>
+      this.entries[index] === undefined ? null : { url: this.entries[index] },
   };
   on(name: string, listener: (...args: unknown[]) => void) {
     this.listeners.set(name, [...(this.listeners.get(name) ?? []), listener]);
@@ -74,6 +79,9 @@ vi.mock('electron', () => ({
       setPermissionCheckHandler: (handler: unknown) => (sessionHandlers['check'] = handler),
       setDevicePermissionHandler: (handler: unknown) => (sessionHandlers['device'] = handler),
       setDisplayMediaRequestHandler: (handler: unknown) => (sessionHandlers['display'] = handler),
+      webRequest: {
+        onBeforeRequest: (handler: unknown) => (sessionHandlers['beforeRequest'] = handler),
+      },
       clearStorageData: vi.fn(async () => undefined),
       clearCache: vi.fn(async () => undefined),
     }),
@@ -163,6 +171,65 @@ describe('the browser pane', () => {
     const frame = { url: 'https://cdn.example/', isMainFrame: false, preventDefault: vi.fn() };
     contents.emit('will-navigate', frame);
     expect(frame.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('keeps a blocked site out however the pane would reach it', async () => {
+    const pane = await load();
+    const window = fakeWindow();
+    showMessageBox.mockResolvedValueOnce({ response: 1 });
+    await pane.openBrowserPane(window as never, BOUNDS, 'localhost:3000');
+    await pane.navigateBrowserPane(window as never, 'example.com');
+    const view = views[0] as FakeView;
+    expect(view.visible).toBe(true);
+
+    pane.blockBrowserSite('example.com');
+    expect(view.visible).toBe(false);
+    expect(pane.browserPaneState(window as never).refusedHost).toBe('example.com');
+
+    const reloaded = pane.stepBrowserPane(window as never, 'reload');
+    expect(view.webContents.reload).not.toHaveBeenCalled();
+    expect(reloaded.refusedHost).toBe('example.com');
+
+    const back = pane.stepBrowserPane(window as never, 'back');
+    expect(view.webContents.navigationHistory.goBack).toHaveBeenCalled();
+    expect(back.refusedHost).toBeNull();
+    expect(view.visible).toBe(true);
+
+    const decide = sessionHandlers['beforeRequest'] as (
+      details: { url: string; resourceType: string; webContents: unknown },
+      callback: (response: { cancel?: boolean }) => void,
+    ) => void;
+    const answer = vi.fn();
+    decide(
+      { url: 'https://example.com/', resourceType: 'mainFrame', webContents: view.webContents },
+      answer,
+    );
+    expect(answer).toHaveBeenCalledWith({ cancel: true });
+    expect(view.visible).toBe(false);
+    const asset = vi.fn();
+    decide(
+      { url: 'https://example.com/a.png', resourceType: 'image', webContents: view.webContents },
+      asset,
+    );
+    expect(asset).toHaveBeenCalledWith({});
+    const local = vi.fn();
+    decide(
+      { url: 'http://localhost:3000/', resourceType: 'mainFrame', webContents: view.webContents },
+      local,
+    );
+    expect(local).toHaveBeenCalledWith({});
+  });
+
+  it('hides the last page when a site is refused, so the refusal is what shows', async () => {
+    const pane = await load();
+    const window = fakeWindow();
+    await pane.openBrowserPane(window as never, BOUNDS, 'localhost:3000');
+    const view = views[0] as FakeView;
+    showMessageBox.mockResolvedValueOnce({ response: 0 });
+    await pane.navigateBrowserPane(window as never, 'example.com');
+    expect(view.visible).toBe(false);
+    await pane.openBrowserPane(window as never, BOUNDS, null);
+    expect(view.visible).toBe(false);
   });
 
   it('opens no new windows: a link that wants one is shown in the pane', async () => {

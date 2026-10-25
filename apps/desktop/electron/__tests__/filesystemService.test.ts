@@ -1076,6 +1076,18 @@ describe('keeping what an overwrite replaced', () => {
     expect(kept[0]?.name).toMatch(/^notes \(before AGI edit .+\)\.md$/);
   });
 
+  it('names the copy with the time on this computer, as the Trash shows it', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 25, 6, 2, 38));
+    try {
+      await fs.writeFile(path.join(root.path, 'clock.md'), 'before\n');
+      await writeTextFile(root, 'clock.md', 'after\n');
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(kept[0]?.name).toBe('clock (before AGI edit 2026-10-25 06.02.38).md');
+  });
+
   it('keeps the previous text of an edit too', async () => {
     await fs.writeFile(path.join(root.path, 'edit.txt'), 'alpha beta\n');
     await editTextFile(root, 'edit.txt', 'beta', 'gamma', false);

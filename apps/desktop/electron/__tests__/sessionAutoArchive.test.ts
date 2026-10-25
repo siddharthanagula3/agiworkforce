@@ -82,6 +82,38 @@ describe('the sweep', () => {
     expect(archive).toHaveBeenCalledTimes(1);
   });
 
+  it('does not spend the sweep on a folder whose sessions were not listed yet', async () => {
+    const archive = vi.fn(async () => true);
+    const withheld = {
+      groups: [
+        {
+          rootId: 'root-1',
+          name: 'work',
+          path: '/work',
+          branch: null,
+          sessions: [],
+          sessionsWithheld: true,
+        },
+      ],
+    };
+    await archiveIdleSessions(withheld as never, {
+      days: 7,
+      now: NOW,
+      includeArchived: false,
+      archive,
+    });
+    expect(archive).not.toHaveBeenCalled();
+
+    const listed = { groups: groups([session('old', 30)]) };
+    await archiveIdleSessions(listed as never, {
+      days: 7,
+      now: NOW + 60_000,
+      includeArchived: false,
+      archive,
+    });
+    expect(archive).toHaveBeenCalledTimes(1);
+  });
+
   it('keeps a session listed, marked archived, when archived ones are shown', async () => {
     const list = { groups: groups([session('old', 30)]) };
     const swept = await archiveIdleSessions(list as never, {
