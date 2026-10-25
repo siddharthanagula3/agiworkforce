@@ -111,4 +111,25 @@ describe('GET /api/connectors/directory/icon', () => {
     const bytes = new Uint8Array(await response.arrayBuffer());
     expect(Array.from(bytes)).toEqual([1, 2, 3]);
   });
+
+  it('serves a registry SVG so that opening it as a page cannot render markup on this origin', async () => {
+    mocks.getDirectoryIconUrl.mockResolvedValueOnce('https://attacker.example/icon.svg');
+    mocks.getIconForUrl.mockResolvedValueOnce({
+      contentType: 'image/svg+xml',
+      base64: Buffer.from(
+        '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>',
+      ).toString('base64'),
+    });
+
+    const response = await GET(request('?id=io.github.attacker/server'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('content-type')).toBe('image/svg+xml');
+    expect(response.headers.get('content-disposition')).toBe('attachment');
+    expect(response.headers.get('x-content-type-options')).toBe('nosniff');
+    const policy = response.headers.get('content-security-policy') ?? '';
+    expect(policy).toContain("default-src 'none'");
+    expect(policy).toContain('sandbox');
+    expect(policy).not.toContain('script-src');
+  });
 });

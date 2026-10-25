@@ -13,6 +13,12 @@ import { getDirectoryIconUrl } from '@/lib/connectors/directory/memory-cache';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
+// Registry icons are third-party bytes, SVG included, served from the app's own
+// origin. They are only ever embedded as images, so opening one as a page must
+// download it rather than render attacker markup on this origin.
+const ICON_DISPOSITION = 'attachment';
+const ICON_DOCUMENT_POLICY = "default-src 'none'; style-src 'unsafe-inline'; sandbox";
+
 async function handleGet(request: NextRequest): Promise<NextResponse> {
   const rateLimited = await withRateLimit(
     request,
@@ -34,6 +40,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
     status: 200,
     headers: {
       'Content-Type': icon.contentType,
+      'Content-Disposition': ICON_DISPOSITION,
+      'Content-Security-Policy': ICON_DOCUMENT_POLICY,
+      'X-Content-Type-Options': 'nosniff',
       'Cache-Control': 'public, max-age=2592000, immutable',
       'Vercel-CDN-Cache-Control': 'max-age=2592000',
       Vary: 'Origin',
