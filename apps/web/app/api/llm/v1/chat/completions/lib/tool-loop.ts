@@ -170,6 +170,7 @@ import {
   listConversationToolResults,
   readStoredToolResult,
   referenceOversizedToolResult,
+  toolResultOwnerForTurn,
   toolResultReaderToolDef,
   trimmedToolResultNotice,
   type ToolResultOwner,
@@ -3617,10 +3618,11 @@ export async function* runToolLoop(
   });
   const loadedToolNames = new Set(toolSchemaSelection.tools.map((tool) => tool.qualifiedName));
   let deferredToolSchemas = toolSchemaSelection.deferred;
-  const toolResultOwner: ToolResultOwner = {
+  const toolResultOwner = toolResultOwnerForTurn({
     userId: options.userId,
     conversationId: processed.conversationId,
-  };
+    requestId: processed.requestId,
+  });
   const earlierStoredResults = await listConversationToolResults(toolResultOwner);
   const offeredMcpToolDefs = (): WebMcpToolDef[] => {
     const loaded = mcpTools.filter((tool) => loadedToolNames.has(tool.qualifiedName));

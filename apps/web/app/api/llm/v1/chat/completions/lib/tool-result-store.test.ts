@@ -24,6 +24,7 @@ import {
   keepTrimmedToolResult,
   readStoredToolResult,
   referenceOversizedToolResult,
+  toolResultOwnerForTurn,
   trimmedToolResultNotice,
 } from './tool-result-store';
 
@@ -77,6 +78,32 @@ describe('trimmed tool results', () => {
     await expect(
       keepTrimmedToolResult({ ...OWNER, toolCallId: 'call_3', content: 'data' }),
     ).resolves.toBe(false);
+  });
+
+  it('keeps a turn without a conversation readable within that turn alone', async () => {
+    const turn = toolResultOwnerForTurn({
+      userId: USER_ID,
+      conversationId: undefined,
+      requestId: 'request-1',
+    });
+    const content = 'row\n'.repeat(5_000);
+    await expect(keepTrimmedToolResult({ ...turn, toolCallId: 'call_7', content })).resolves.toBe(
+      true,
+    );
+
+    expect((await readStoredToolResult(turn, { reference: 'call_7', offset: 0 })).isError).toBe(
+      false,
+    );
+    for (const other of [
+      { userId: USER_ID, conversationId: undefined, requestId: 'request-2' },
+      { userId: USER_ID, conversationId: CONVERSATION_ID, requestId: 'request-1' },
+    ]) {
+      const read = await readStoredToolResult(toolResultOwnerForTurn(other), {
+        reference: 'call_7',
+        offset: 0,
+      });
+      expect(read.isError).toBe(true);
+    }
   });
 
   it('keeps nothing without a conversation to scope it to', async () => {

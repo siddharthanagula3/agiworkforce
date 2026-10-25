@@ -31,6 +31,19 @@ export interface ToolResultOwner {
   conversationId?: string | null;
 }
 
+// A turn with no conversation keeps what it trims for itself, never for a later
+// turn that happens to reuse a provider tool-call id.
+export function toolResultOwnerForTurn(input: {
+  userId: string | undefined;
+  conversationId: string | undefined;
+  requestId: string;
+}): ToolResultOwner {
+  return {
+    userId: input.userId,
+    conversationId: input.conversationId ?? `request:${input.requestId}`,
+  };
+}
+
 export interface StoredToolResultSummary {
   reference: string;
   toolName: string | null;
