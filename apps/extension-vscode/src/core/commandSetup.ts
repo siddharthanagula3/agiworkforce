@@ -204,7 +204,11 @@ import { planDisplayLabel } from '../features/account-auth/planLabel';
 import { ONBOARDING_SEEN_KEY } from '../features/onboarding/onboardingState';
 import { getExtensionVersion } from '../platform/version';
 import { Config } from '../platform/config';
-import { isEntitledSubscriptionStatus, isFreeBillingPlanTier } from '@agiworkforce/types';
+import {
+  connectorsReleased,
+  isEntitledSubscriptionStatus,
+  isFreeBillingPlanTier,
+} from '@agiworkforce/types';
 import {
   normalizeConfiguredModelId,
   buildGroupedQuickPickItems,
@@ -2312,11 +2316,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
                   : 'Invoices, payment method, and subscription controls',
             action: 'manage-billing',
           });
-        items.push({
-          label: '$(plug) Manage Cloud connectors on Web',
-          description: "Cloud connectors do not replace this workspace's local MCP configuration",
-          action: 'connectors',
-        });
+        if (connectorsReleased())
+          items.push({
+            label: '$(plug) Manage Cloud connectors on Web',
+            description: "Cloud connectors do not replace this workspace's local MCP configuration",
+            action: 'connectors',
+          });
       } else if (cliAccount?.source === 'cli') {
         const cliPlan = planDisplayLabel(cliAccount.cli?.tier);
         items.push(

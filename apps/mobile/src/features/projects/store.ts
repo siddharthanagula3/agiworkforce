@@ -27,6 +27,7 @@ import { API_URL } from '@/lib/constants';
 import { guardedFetch } from '@/lib/egressGuard';
 import { api } from '@/services/api';
 import { getAuthHeaders } from '@/services/authSession';
+import { uploadDestinationHeaders } from '@/services/uploadDestination';
 import { useChatAppModeStore } from '@/src/features/chat/store/appModeStore';
 import { useCloudProjectStore } from '@/stores/projects/cloudProjectStore';
 import { markProjectForSync } from '@/services/cloudSyncEngine';
@@ -209,7 +210,7 @@ export const cloudProjectSources = {
       {
         httpMethod: 'PUT',
         uploadType: FileSystemUploadType.BINARY_CONTENT,
-        headers: presign.uploadHeaders,
+        headers: uploadDestinationHeaders(uploadUrl, presign.uploadHeaders, await getAuthHeaders()),
       },
       (data) =>
         onProgress?.({

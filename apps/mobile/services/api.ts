@@ -36,6 +36,7 @@ import {
   rateLimitErrorFrom,
 } from './apiErrors';
 import { platformRequestHeaders } from '../src/platform/platformHeaders';
+import { uploadDestinationHeaders } from './uploadDestination';
 
 export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
 export type { ApiPaywallRecoveryAction } from './apiErrors';
@@ -663,7 +664,7 @@ export const api = {
         {
           httpMethod: 'PUT',
           uploadType: FileSystemUploadType.BINARY_CONTENT,
-          headers: presign.uploadHeaders,
+          headers: uploadDestinationHeaders(uploadUrl, presign.uploadHeaders, authHeaders),
         },
         onProgress
           ? (progress) =>

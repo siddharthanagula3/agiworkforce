@@ -288,6 +288,71 @@ describe('Cloud account request isolation', () => {
   });
 });
 
+describe('attachment upload destination', () => {
+  function presignTo(uploadUrl: string): Response {
+    return makeResponse(200, {
+      storageKey: 'chat-attachments/account-a/attachment.txt',
+      uploadUrl,
+      uploadMethod: 'PUT',
+      uploadHeaders: { 'Content-Type': 'text/plain' },
+    });
+  }
+
+  const completed = () =>
+    makeResponse(200, {
+      attachment: {
+        id: '128db2b5-2967-4e55-b99b-44822727c8ea',
+        url: '/api/files/128db2b5-2967-4e55-b99b-44822727c8ea',
+        mimeType: 'text/plain',
+        name: 'attachment.txt',
+        byteCount: 32,
+        type: 'file',
+      },
+    });
+
+  it('signs an upload the API relays on its own origin', async () => {
+    mockUploadAsync.mockResolvedValueOnce({ status: 200, body: '', headers: {} });
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(
+        presignTo('https://api.test.local/api/uploads/chat-attachment/put?key=k'),
+      )
+      .mockResolvedValueOnce(completed());
+
+    await api.uploadFile({
+      name: 'attachment.txt',
+      type: 'text/plain',
+      uri: 'file:///attachment.txt',
+    });
+
+    expect(mockCreateUploadTask.mock.calls[0]).toEqual([
+      'https://api.test.local/api/uploads/chat-attachment/put?key=k',
+      'file:///attachment.txt',
+      expect.objectContaining({
+        headers: { 'Content-Type': 'text/plain', Authorization: 'Bearer test-token' },
+      }),
+    ]);
+  });
+
+  it('never sends the sign-in token to a storage host', async () => {
+    mockUploadAsync.mockResolvedValueOnce({ status: 200, body: '', headers: {} });
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(presignTo('https://storage.example.test/upload'))
+      .mockResolvedValueOnce(completed());
+
+    await api.uploadFile({
+      name: 'attachment.txt',
+      type: 'text/plain',
+      uri: 'file:///attachment.txt',
+    });
+
+    expect(mockCreateUploadTask.mock.calls[0]?.[2]).toEqual(
+      expect.objectContaining({ headers: { 'Content-Type': 'text/plain' } }),
+    );
+  });
+});
+
 describe('429 with paywall payload', () => {
   it('throws ApiPaywallError with correct fields', async () => {
     const paywallBody = {

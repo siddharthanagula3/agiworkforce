@@ -664,6 +664,16 @@ describe('AddToChatSheet', () => {
       expect(queryByText('Study and learn')).toBeNull();
     });
 
+    it('shows Connectors locked as Coming soon in Cloud mode while they are unreleased', () => {
+      useChatAppModeStore.setState({ appMode: 'cloud' });
+      useTierStore.setState({ grantedCapabilities: [] });
+
+      const { getByLabelText } = renderSheet();
+
+      const row = getByLabelText('Connectors, Coming soon');
+      expect(row.props.accessibilityState).toMatchObject({ disabled: true });
+    });
+
     it('shows current values on config links', () => {
       const { getByText } = renderSheet();
 

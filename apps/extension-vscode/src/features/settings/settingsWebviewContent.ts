@@ -1,6 +1,9 @@
 import type * as vscode from 'vscode';
 import {
   BILLING_PLAN_PRICING,
+  CONNECTORS_COMING_SOON_DETAIL,
+  CONNECTORS_COMING_SOON_LABEL,
+  connectorsReleased,
   getSurfaceCapabilityAvailability,
   isFreeBillingPlanTier,
   type DiscoverableSurfaceCapability,
@@ -2059,13 +2062,18 @@ ${capabilityTabs}
           </div>
           <div class="card capability-group">
             <div class="empty-capability">
-              <h3>Cloud connectors</h3>
+              ${
+                connectorsReleased()
+                  ? `<h3>Cloud connectors</h3>
               <p>Managed Cloud connectors are set up on Web and never reach this workspace on their own.</p>
               <div class="action-row">
                 <button class="secondary-button" type="button" data-command="manageConnectors">
                   Manage Cloud connectors <span aria-hidden="true">↗</span>
                 </button>
-              </div>
+              </div>`
+                  : `<h3>Cloud connectors · ${escapeHtml(CONNECTORS_COMING_SOON_LABEL)}</h3>
+              <p>${escapeHtml(CONNECTORS_COMING_SOON_DETAIL)}</p>`
+              }
             </div>
           </div>
         </section>
@@ -2106,13 +2114,18 @@ ${capabilityAvailabilityRows}
           </div>
           <div class="card">
             <div class="empty-capability">
-              <h3>Cloud directory</h3>
+              ${
+                connectorsReleased()
+                  ? `<h3>Cloud directory</h3>
               <p>Managed Cloud connectors are set up on Web and never reach this workspace on their own.</p>
               <div class="action-row">
                 <button class="secondary-button" type="button" data-command="manageConnectors">
                   Open Cloud directory <span aria-hidden="true">↗</span>
                 </button>
-              </div>
+              </div>`
+                  : `<h3>Cloud directory · ${escapeHtml(CONNECTORS_COMING_SOON_LABEL)}</h3>
+              <p>${escapeHtml(CONNECTORS_COMING_SOON_DETAIL)}</p>`
+              }
             </div>
           </div>
         </section>

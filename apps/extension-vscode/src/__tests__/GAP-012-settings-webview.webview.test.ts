@@ -6,6 +6,7 @@ import { getSettingsWebviewContent } from '../features/settings/settingsWebviewC
 import { SETTINGS_SECTIONS, type SettingsPanelState } from '../features/settings/settingsProtocol';
 import { SETTINGS_PANEL_SETTING_KEYS } from '../platform/config';
 import { vscodeApiStub } from './vscodeApiStub';
+import { CONNECTORS_COMING_SOON_LABEL } from '@agiworkforce/types';
 import {
   DEVELOPER_AGENT_MODES,
   DEVELOPER_AGENT_MODE_LABELS,
@@ -198,6 +199,15 @@ describe('settings webview', () => {
         DEVELOPER_REASONING_EFFORT_LABELS[effort],
       ]),
     );
+  });
+
+  it('shows Cloud connectors as Coming soon with nothing to open while they are unreleased', () => {
+    const doc = parse();
+    const headings = [...doc.querySelectorAll('h3')].map((heading) => heading.textContent ?? '');
+
+    expect(headings).toContain(`Cloud connectors · ${CONNECTORS_COMING_SOON_LABEL}`);
+    expect(headings).toContain(`Cloud directory · ${CONNECTORS_COMING_SOON_LABEL}`);
+    expect(doc.querySelector('[data-command="manageConnectors"]')).toBeNull();
   });
 
   it('links the account section to the web account page, marked as leaving the editor', () => {

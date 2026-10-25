@@ -709,6 +709,47 @@ describe('cloud send: canonical agent activity', () => {
     expect(JSON.stringify(activity)).not.toContain('provider-secret-diagnostic');
   });
 
+  it('finishes a step left working when the reply ends without a stop event', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      const base = {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION as const,
+        sessionId: 'session-mobile-unstopped',
+        turnId: 'turn-mobile-unstopped',
+      };
+      callbacks.onDelta({
+        x_agent_event: {
+          ...base,
+          sequence: 0,
+          emittedAtMs: 4_000,
+          event: { type: 'lifecycle', phase: 'started' },
+        },
+      });
+      callbacks.onDelta({
+        x_agent_event: {
+          ...base,
+          sequence: 1,
+          emittedAtMs: 4_100,
+          event: {
+            type: 'tool-execution-start',
+            toolCallId: 'read-1',
+            name: 'read_page',
+            category: 'web-fetch',
+            summary: 'Reading the page',
+            input: {},
+          },
+        },
+      });
+      callbacks.onDelta({ content: 'Here is the page summary.' });
+      callbacks.onDone();
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'read this', CLOUD_MODEL);
+
+    const activity = lastAssistantMessage()?.metadata?.agentActivity;
+    expect(activity).toMatchObject({ status: 'completed' });
+    expect(JSON.stringify(activity)).not.toContain('"status":"running"');
+  });
+
   it('keeps the gateway sentence and code when the request is refused before the stream opens', async () => {
     const sentence =
       'This model is unavailable right now because of a problem on our side, not with your request. Choose another model, or try again shortly.';
@@ -790,6 +831,19 @@ describe('cloud send: the connection drops mid-answer', () => {
       expect(['succeeded', 'failed', 'partial', 'canceled']).toContain(tool.status);
       expect(tool.requiresApproval).not.toBe(true);
     }
+  });
+
+  it('keeps why a partial answer failed on the message, so it survives a reload', async () => {
+    mockStreamChat.mockImplementation(async (_body, callbacks: StreamCallbacks) => {
+      callbacks.onDelta({ content: 'The first half of the answer' });
+      callbacks.onError(new Error('Network request failed'));
+    });
+
+    await useChatExecutionStore.getState().sendMessage(CONV_ID, 'hi', CLOUD_MODEL);
+
+    expect(lastAssistantMessage()?.metadata?.streamError).toEqual({
+      message: 'Something went wrong. Please try again.',
+    });
   });
 
   it('leaves no conversation marked as streaming, so the composer is usable again', async () => {

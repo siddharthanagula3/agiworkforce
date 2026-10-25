@@ -25,8 +25,11 @@ import {
 } from 'lucide-react-native';
 import * as Haptics from 'expo-haptics';
 import {
+  CONNECTORS_COMING_SOON_DETAIL,
+  CONNECTORS_COMING_SOON_LABEL,
   MICROUSD_PER_USD,
   canUseBillingPlanCapability,
+  connectorsReleased,
   chargeCreditsForMicrousd,
   formatCredits,
   getImageAspectOptionsForModel,
@@ -1171,7 +1174,17 @@ export const AddToChatSheet = forwardRef<BottomSheet, AddToChatSheetProps>(funct
               onPress={handleStudy}
             />
           ) : null}
-          {appMode === 'cloud' && FEATURES.connectors && canUseConnectors ? (
+          {appMode === 'cloud' && FEATURES.connectors && !connectorsReleased() ? (
+            <CapabilityRow
+              icon={<Link size={18} color={themeColors.textMuted} />}
+              label="Connectors"
+              description={CONNECTORS_COMING_SOON_DETAIL}
+              status={CONNECTORS_COMING_SOON_LABEL}
+              enabled={false}
+              textColor={themeColors.textPrimary}
+              mutedColor={themeColors.textMuted}
+            />
+          ) : appMode === 'cloud' && FEATURES.connectors && canUseConnectors ? (
             <ConfigLink
               icon={<Link size={18} color={themeColors.textMuted} />}
               label="Connectors"

@@ -210,7 +210,10 @@ import type { ChatMessage as LocalLlmMessage } from '@agiworkforce/local-llm';
 import { getConversationMessageStore } from './conversationRepository';
 import { useChatCloudMessageStore } from './chatCloudMessageStore';
 import { deleteCloudMessagesRemote } from '@/src/features/chat/services/cloudMessageMutations';
-import { readAgentActivityState } from '@/src/features/chat/utils/agentActivityState';
+import {
+  readAgentActivityState,
+  settleAgentActivityAtStreamEnd,
+} from '@/src/features/chat/utils/agentActivityState';
 import {
   EMPTY_RESPONSE_FAILURE,
   parseStreamFailure,
@@ -2682,6 +2685,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             if (isFreeQuotaChat && turnStreamError !== undefined) {
               useFreeQuotaCatalogueStore.getState().clear();
             }
+            agentActivity = settleAgentActivityAtStreamEnd(agentActivity, turnStreamError);
             const completedAt = new Date().toISOString();
             const convTitle =
               currentMsgStore.getState().conversations.find((c) => c.id === conversationId)
@@ -2928,6 +2932,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             }
             turnResearch =
               settleResearchRun(turnResearch, 'error', failure.message) ?? turnResearch;
+            const partialReplyFailure: StreamFailure | undefined = currentContent
+              ? { message: failure.message, ...(failure.code ? { code: failure.code } : {}) }
+              : undefined;
             const updatedMsgs = msgs.map((m) => {
               if (m.id !== assistantMessageId) return m;
               const toolCalls = settleToolCalls(m.toolCalls, 'failed');
@@ -2936,13 +2943,14 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                 content: currentContent || failure.message,
                 isStreaming: false,
                 ...(toolCalls === m.toolCalls ? {} : { toolCalls }),
-                ...(agentActivity || cloudAgentRun || turnResearch
+                ...(agentActivity || cloudAgentRun || turnResearch || partialReplyFailure
                   ? {
                       metadata: {
                         ...m.metadata,
                         ...(agentActivity ? { agentActivity } : {}),
                         ...(cloudAgentRun ? { cloudAgentRun: { ...cloudAgentRun } } : {}),
                         ...(turnResearch ? { research: { ...turnResearch } } : {}),
+                        ...(partialReplyFailure ? { streamError: partialReplyFailure } : {}),
                       },
                     }
                   : {}),
@@ -3443,6 +3451,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               approvalArtifactProvenance,
             );
 
+            agentActivity = settleAgentActivityAtStreamEnd(agentActivity, turnStreamError);
             const phoneStepsPaused = pendingPhoneSteps(turnPendingApprovals);
             const hasTurnMetadata =
               turnFinishReason !== undefined ||
