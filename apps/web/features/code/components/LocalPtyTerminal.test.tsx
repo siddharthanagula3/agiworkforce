@@ -59,7 +59,7 @@ vi.mock('@xterm/addon-fit', () => ({
     proposeDimensions() {
       return { cols: 80, rows: 24 };
     }
-    fit() {}
+    fit = (): void => undefined;
   },
 }));
 vi.mock('@xterm/addon-web-links', () => ({ WebLinksAddon: class {} }));
