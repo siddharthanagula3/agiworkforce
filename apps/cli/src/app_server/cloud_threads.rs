@@ -64,6 +64,12 @@ fn summary(session: &CodeSession) -> ThreadSummary {
         repository: session.repository_url.clone(),
         writer: None,
         location: Some(ThreadLocation::Cloud),
+        pinned: false,
+        archived_at: session
+            .archived_at
+            .as_deref()
+            .and_then(|at| chrono::DateTime::parse_from_rfc3339(at).ok())
+            .map(|at| at.timestamp_millis()),
     }
 }
 

@@ -129,6 +129,8 @@ fn thread_response_keeps_cli_and_vscode_on_one_session_identity() {
         repository: None,
         writer: None,
         location: None,
+        pinned: false,
+        archived_at: None,
     };
     let response = AppServerResponse::success(
         10,
@@ -167,6 +169,8 @@ fn thread_read_reports_when_only_a_bounded_transcript_window_is_returned() {
             repository: None,
             writer: None,
             location: None,
+            pinned: false,
+            archived_at: None,
         },
         messages: vec![DeveloperMessage {
             role: "assistant".to_string(),
@@ -220,6 +224,8 @@ fn the_wider_thread_summary_stays_additive() {
         repository: None,
         writer: None,
         location: None,
+        pinned: false,
+        archived_at: None,
     };
     let value = serde_json::to_value(&bare).expect("serialize bare summary");
     for absent in [
@@ -849,4 +855,164 @@ fn a_stored_message_without_a_turn_still_reads() {
         serde_json::to_value(&old).expect("serialize"),
         serde_json::json!({ "role": "user", "text": "hi" })
     );
+}
+
+#[test]
+fn pin_and_archive_state_ride_on_the_thread_summary_with_older_hosts_reading_as_unpinned() {
+    let older: ThreadSummary = serde_json::from_value(serde_json::json!({
+        "id": "session-1",
+        "title": "Older host",
+        "trustMode": "local",
+        "createdAt": "2026-07-14T12:00:00Z",
+        "updatedAt": "2026-07-14T12:01:00Z",
+        "createdBy": "cli",
+        "status": "idle"
+    }))
+    .expect("a summary without the newer fields");
+    assert!(!older.pinned);
+    assert_eq!(older.archived_at, None);
+
+    let wire = serde_json::to_value(&older).expect("serialize");
+    assert_eq!(wire["pinned"], serde_json::json!(false));
+    assert!(wire.get("archivedAt").is_none());
+
+    let archived = ThreadSummary {
+        pinned: true,
+        archived_at: Some(1_790_000_000_000),
+        ..older
+    };
+    let wire = serde_json::to_value(&archived).expect("serialize");
+    assert_eq!(wire["pinned"], serde_json::json!(true));
+    assert_eq!(wire["archivedAt"], serde_json::json!(1_790_000_000_000_i64));
+}
+
+#[test]
+fn thread_pin_shapes_and_capabilities_are_stable() {
+    use agiworkforce_protocol::developer_session::{
+        AppServerCapabilities, ThreadPinParams, ThreadPinResponse, ThreadPinnedNotification, method,
+    };
+
+    assert_eq!(method::THREAD_PIN, "thread/pin");
+    assert_eq!(method::THREAD_PINNED, "thread/pinned");
+    let params: ThreadPinParams =
+        serde_json::from_value(serde_json::json!({ "threadId": "t", "pinned": true })).unwrap();
+    assert_eq!((params.thread_id.as_str(), params.pinned), ("t", true));
+    assert!(
+        serde_json::from_value::<ThreadPinParams>(serde_json::json!({ "threadId": "t" })).is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadPinResponse {
+            thread_id: "t".into(),
+            pinned: false
+        })
+        .unwrap(),
+        serde_json::json!({ "threadId": "t", "pinned": false })
+    );
+    assert_eq!(
+        serde_json::to_value(ThreadPinnedNotification {
+            thread_id: "t".into(),
+            pinned: true
+        })
+        .unwrap(),
+        serde_json::json!({ "threadId": "t", "pinned": true })
+    );
+
+    let older: AppServerCapabilities = serde_json::from_value(serde_json::json!({
+        "threads": true, "turns": true, "streaming": true, "approvals": true,
+        "tools": true, "mcp": true, "checkpoints": true, "worktrees": true,
+        "models": true
+    }))
+    .unwrap();
+    assert!(!older.thread_pin && !older.mcp_logs && !older.terminals);
+    let current = AppServerCapabilities {
+        thread_pin: true,
+        mcp_logs: true,
+        terminals: true,
+        ..older
+    };
+    let wire = serde_json::to_value(&current).unwrap();
+    for key in ["threadPin", "mcpLogs", "terminals"] {
+        assert_eq!(wire[key], serde_json::json!(true), "{key}");
+    }
+}
+
+#[test]
+fn mcp_logs_and_terminal_shapes_are_stable() {
+    use agiworkforce_protocol::developer_session::{
+        McpLogsParams, McpLogsResponse, TERMINAL_CHUNK_MAX_BYTES, TerminalExitedNotification,
+        TerminalOpenParams, TerminalOpenResponse, TerminalOutputNotification, TerminalResizeParams,
+        TerminalWriteParams, method,
+    };
+
+    let bare: McpLogsParams = serde_json::from_value(serde_json::json!({ "name": "s" })).unwrap();
+    assert_eq!(bare.limit, None);
+    assert!(serde_json::to_value(&bare).unwrap().get("limit").is_none());
+    let limited: McpLogsParams =
+        serde_json::from_value(serde_json::json!({ "name": "s", "limit": 5 })).unwrap();
+    assert_eq!(limited.limit, Some(5));
+    assert!(
+        serde_json::from_value::<McpLogsParams>(serde_json::json!({ "name": "s", "limit": -1 }))
+            .is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(McpLogsResponse {
+            name: "s".into(),
+            lines: vec!["a".into()],
+            truncated: true
+        })
+        .unwrap(),
+        serde_json::json!({ "name": "s", "lines": ["a"], "truncated": true })
+    );
+
+    let open: TerminalOpenParams =
+        serde_json::from_value(serde_json::json!({ "cwd": "/w", "cols": 80, "rows": 24 })).unwrap();
+    assert_eq!((open.cols, open.rows), (80, 24));
+    assert!(
+        serde_json::from_value::<TerminalOpenParams>(
+            serde_json::json!({ "cwd": "/w", "cols": 70000, "rows": 24 })
+        )
+        .is_err()
+    );
+    assert_eq!(
+        serde_json::to_value(TerminalOpenResponse {
+            terminal_id: "t".into()
+        })
+        .unwrap(),
+        serde_json::json!({ "terminalId": "t" })
+    );
+    let write: TerminalWriteParams =
+        serde_json::from_value(serde_json::json!({ "terminalId": "t", "data": "ls\n" })).unwrap();
+    assert_eq!(write.data, "ls\n");
+    let resize: TerminalResizeParams =
+        serde_json::from_value(serde_json::json!({ "terminalId": "t", "cols": 1, "rows": 2 }))
+            .unwrap();
+    assert_eq!((resize.cols, resize.rows), (1, 2));
+    assert_eq!(
+        serde_json::to_value(TerminalOutputNotification {
+            terminal_id: "t".into(),
+            data: "x".into()
+        })
+        .unwrap(),
+        serde_json::json!({ "terminalId": "t", "data": "x" })
+    );
+    assert_eq!(
+        serde_json::to_value(TerminalExitedNotification {
+            terminal_id: "t".into(),
+            code: None
+        })
+        .unwrap(),
+        serde_json::json!({ "terminalId": "t", "code": null })
+    );
+    assert_eq!(TERMINAL_CHUNK_MAX_BYTES, 65_536);
+    for (name, value) in [
+        (method::MCP_LOGS, "mcp/logs"),
+        (method::TERMINAL_OPEN, "terminal/open"),
+        (method::TERMINAL_WRITE, "terminal/write"),
+        (method::TERMINAL_RESIZE, "terminal/resize"),
+        (method::TERMINAL_CLOSE, "terminal/close"),
+        (method::TERMINAL_OUTPUT, "terminal/output"),
+        (method::TERMINAL_EXITED, "terminal/exited"),
+    ] {
+        assert_eq!(name, value);
+    }
 }

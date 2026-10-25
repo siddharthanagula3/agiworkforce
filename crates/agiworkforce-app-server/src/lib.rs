@@ -9,7 +9,7 @@ mod developer_sessions;
 pub use developer_sessions::{
     method_effect, run_developer_session_stdio, runs_detached, serve_developer_session_io,
     DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError,
-    DeveloperSessionProcessor, MethodEffect, TurnClient, METHOD_EFFECTS,
+    DeveloperSessionProcessor, MethodEffect, TerminalEvents, TurnClient, METHOD_EFFECTS,
 };
 
 use agiworkforce_protocol::developer_session::{
@@ -373,6 +373,11 @@ async fn handle_developer_session_ws(
                     Message::Close(_) => break,
                 }
             }
+            Some(event) = processor.next_terminal_event(), if initialized => {
+                if send_developer_ws_json(&mut sender, &event).await.is_err() {
+                    break;
+                }
+            }
             notification = notifications.recv(), if initialized => {
                 match notification {
                     Ok(notification) => {
@@ -407,6 +412,7 @@ async fn handle_developer_session_ws(
     // A request still running belongs to the host now; its git is left to
     // finish rather than cut off with the connection.
     detached.detach_all();
+    processor.close_connection().await;
     let _ = futures_util::SinkExt::close(&mut sender).await;
 }
 

@@ -1261,6 +1261,8 @@ impl CodeSession {
                 .map(|remote| remote.url.clone()),
             writer: None,
             location: None,
+            pinned: false,
+            archived_at: self.archived_at.map(|at| at.timestamp_millis()),
         }
     }
 

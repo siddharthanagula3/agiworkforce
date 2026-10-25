@@ -1329,7 +1329,7 @@ pub struct McpConnection {
     client: McpClient,
     timeouts: McpTimeouts,
     notifications: Option<tokio::sync::mpsc::Receiver<agiworkforce_mcp::McpNotification>>,
-    recent_logs: std::sync::Mutex<std::collections::VecDeque<String>>,
+    logs: SharedLogRing,
     /// The sandboxed server's scratch directory, removed when the
     /// connection is dropped.
     _scratch: Option<tempfile::TempDir>,
@@ -1338,6 +1338,77 @@ pub struct McpConnection {
 }
 
 const RECENT_LOG_LINES: usize = 200;
+const SERVER_LOG_LINES: usize = 1000;
+
+#[derive(Default)]
+pub(crate) struct LogRing {
+    lines: std::collections::VecDeque<String>,
+    evicted: bool,
+}
+
+impl LogRing {
+    pub(crate) fn push_all(&mut self, incoming: impl IntoIterator<Item = String>) {
+        self.lines.extend(incoming);
+        while self.lines.len() > SERVER_LOG_LINES {
+            self.lines.pop_front();
+            self.evicted = true;
+        }
+    }
+
+    fn newest(&self, limit: usize) -> (Vec<String>, bool) {
+        let skipped = self.lines.len().saturating_sub(limit);
+        (
+            self.lines.iter().skip(skipped).cloned().collect(),
+            skipped > 0 || self.evicted,
+        )
+    }
+}
+
+pub(crate) type SharedLogRing = Arc<std::sync::Mutex<LogRing>>;
+
+/// Every live connection's log ring by server name, so a client can read a
+/// server's stderr while the session that owns the connection is mid-turn and
+/// its connection unreachable. A name can have several: a session's, and the
+/// short-lived one a test or inspect opens.
+static SERVER_LOGS: std::sync::LazyLock<
+    std::sync::Mutex<HashMap<String, Vec<std::sync::Weak<std::sync::Mutex<LogRing>>>>>,
+> = std::sync::LazyLock::new(Default::default);
+
+pub(crate) fn register_log_ring(server_name: &str) -> SharedLogRing {
+    let ring = SharedLogRing::default();
+    let mut registry = SERVER_LOGS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let rings = registry.entry(server_name.to_string()).or_default();
+    rings.retain(|ring| ring.strong_count() > 0);
+    rings.push(Arc::downgrade(&ring));
+    ring
+}
+
+/// The newest `limit` stderr lines a live connection to `server_name` has
+/// kept, oldest first, and whether older ones exist. The most recent
+/// connection that has written anything answers; `None` when no connection to
+/// the server is open.
+pub fn server_logs(server_name: &str, limit: usize) -> Option<(Vec<String>, bool)> {
+    let rings: Vec<SharedLogRing> = SERVER_LOGS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .get(server_name)?
+        .iter()
+        .filter_map(std::sync::Weak::upgrade)
+        .collect();
+    let newest = |ring: &SharedLogRing| {
+        ring.lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+            .newest(limit)
+    };
+    rings
+        .iter()
+        .rev()
+        .map(newest)
+        .find(|(lines, _)| !lines.is_empty())
+        .or_else(|| rings.last().map(newest))
+}
 
 #[derive(Default)]
 struct ListChanges {
@@ -1405,7 +1476,7 @@ impl McpConnection {
             client,
             timeouts,
             notifications,
-            recent_logs: std::sync::Mutex::new(std::collections::VecDeque::new()),
+            logs: register_log_ring(name),
             _scratch: scratch,
             _workspace: workspace,
         })
@@ -1417,13 +1488,11 @@ impl McpConnection {
 
     pub fn recent_logs(&self) -> Vec<String> {
         let mut kept = self
-            .recent_logs
+            .logs
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        kept.extend(self.client.drain_stderr());
-        let excess = kept.len().saturating_sub(RECENT_LOG_LINES);
-        kept.drain(..excess);
-        kept.iter().cloned().collect()
+        kept.push_all(self.client.drain_stderr());
+        kept.newest(RECENT_LOG_LINES).0
     }
 
     pub async fn responding(&mut self) -> bool {
@@ -3765,6 +3834,71 @@ while True:
             .expect("a deferred MCP tool still resolves to its server");
         assert_eq!(server_name, "files");
         assert_eq!(tool_name, "tool_16");
+    }
+}
+
+#[cfg(test)]
+mod log_tests {
+    use super::*;
+
+    fn lines(range: std::ops::Range<usize>) -> Vec<String> {
+        range.map(|index| format!("line {index}")).collect()
+    }
+
+    #[test]
+    fn a_ring_keeps_the_newest_lines_and_says_when_older_ones_exist() {
+        let mut ring = LogRing::default();
+        ring.push_all(lines(0..10));
+        assert_eq!(ring.newest(3), (lines(7..10), true));
+        assert_eq!(ring.newest(10), (lines(0..10), false));
+
+        ring.push_all(lines(10..SERVER_LOG_LINES + 5));
+        assert_eq!(ring.lines.len(), SERVER_LOG_LINES);
+        let (kept, truncated) = ring.newest(SERVER_LOG_LINES);
+        assert_eq!(kept.first().map(String::as_str), Some("line 5"));
+        assert_eq!(
+            kept.last().map(String::as_str),
+            Some(format!("line {}", SERVER_LOG_LINES + 4).as_str())
+        );
+        assert!(truncated, "the first five lines were evicted");
+    }
+
+    #[test]
+    fn reading_the_logs_of_a_server_never_consumes_them() {
+        let ring = register_log_ring("log-fixture-read");
+        ring.lock().unwrap().push_all(lines(0..4));
+        let first = server_logs("log-fixture-read", 200);
+        assert_eq!(first, Some((lines(0..4), false)));
+        assert_eq!(server_logs("log-fixture-read", 200), first);
+        assert_eq!(
+            server_logs("log-fixture-read", 2),
+            Some((lines(2..4), true))
+        );
+        assert_eq!(server_logs("log-fixture-unknown", 200), None);
+    }
+
+    #[test]
+    fn the_most_recent_connection_that_wrote_answers_and_a_closed_one_is_forgotten() {
+        let session = register_log_ring("log-fixture-many");
+        session.lock().unwrap().push_all(lines(0..3));
+        let probe = register_log_ring("log-fixture-many");
+        assert_eq!(
+            server_logs("log-fixture-many", 200),
+            Some((lines(0..3), false)),
+            "a connection with nothing yet does not hide one that has output"
+        );
+        probe.lock().unwrap().push_all(vec!["probe".to_string()]);
+        assert_eq!(
+            server_logs("log-fixture-many", 200),
+            Some((vec!["probe".to_string()], false))
+        );
+        drop(probe);
+        assert_eq!(
+            server_logs("log-fixture-many", 200),
+            Some((lines(0..3), false))
+        );
+        drop(session);
+        assert_eq!(server_logs("log-fixture-many", 200), None);
     }
 }
 

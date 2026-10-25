@@ -17,6 +17,8 @@ mod developer_host;
 mod pull_request;
 mod review;
 pub(crate) mod surfaces;
+#[cfg(unix)]
+mod terminal_sessions;
 mod threads;
 
 pub use developer_host::CliDeveloperSessionHost;

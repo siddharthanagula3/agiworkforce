@@ -10,28 +10,29 @@ use agiworkforce_protocol::developer_session::{
     GitPullRequestResponse, HandoffAdmission, HookAddParams, HookListResponse, HookRemoveParams,
     InitializeParams, InitializeResponse, LocalModelListResponse, ManagedWorktreeCreateParams,
     ManagedWorktreeListResponse, ManagedWorktreeSummary, McpAddParams, McpApprovalGrantParams,
-    McpApprovalReadParams, McpApprovalRequest, McpLoginParams, McpLoginResponse,
-    McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerTestResponse,
-    McpServerToolsResponse, McpSetEnabledParams, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
-    PermissionsRemoveParams, PlanDecideParams, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    McpApprovalReadParams, McpApprovalRequest, McpLoginParams, McpLoginResponse, McpLogsParams,
+    McpLogsResponse, McpServerInspectResponse, McpServerListResponse, McpServerParams,
+    McpServerTestResponse, McpServerToolsResponse, McpSetEnabledParams, MemoryAddParams,
+    MemoryAddResponse, ModelListParams, PermissionRulesResponse, PermissionsAddParams,
+    PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
     ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
     SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
     SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, TerminalCloseParams,
+    TerminalOpenParams, TerminalOpenResponse, TerminalResizeParams, TerminalWriteParams,
     ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
     ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
-    ThreadReconnectResponse, ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams,
-    ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
-    ThreadSearchResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse, ThreadStartParams,
-    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TrustListResponse,
-    TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams,
-    TurnSummary, UserInputResponseParams, WorktreeApplyParams, WorktreeApplyResponse,
-    WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams,
-    WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams,
-    WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPinParams, ThreadPinResponse,
+    ThreadReadResponse, ThreadReconnectResponse, ThreadRenameParams, ThreadRenameResponse,
+    ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse,
+    ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse,
+    ThreadStartParams, ThreadStartResponse, ThreadSummary, ThreadWriterConflictData,
+    TrustListResponse, TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse,
+    TurnSteerParams, TurnSummary, UserInputResponseParams, WorktreeApplyParams,
+    WorktreeApplyResponse, WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse,
+    WorktreeIdParams, WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse,
+    WorktreePinParams, WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MCP_APPROVAL_STALE_ERROR_CODE,
     MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
     SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
@@ -41,14 +42,21 @@ use async_trait::async_trait;
 use futures_util::FutureExt;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::fmt;
 use std::panic::AssertUnwindSafe;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Arc, Mutex as StdMutex};
 use tokio::io::{AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, BufReader};
 use tokio::sync::broadcast;
 use tokio::sync::{Semaphore, SemaphorePermit};
 use tokio::task::JoinSet;
 
+const NOT_FOUND_CODE: i32 = -32004;
+const TERMINAL_EVENT_QUEUE: usize = 16;
+
+/// Where a host sends one connection's terminal notifications.
+pub type TerminalEvents = tokio::sync::mpsc::Sender<AppServerNotification>;
 const SERVER_NAME: &str = "agiworkforce-app-server";
 const SERVER_TITLE: &str = "AGI CLI App Server";
 
@@ -188,6 +196,13 @@ pub trait DeveloperSessionHost: Send + Sync {
         _params: ThreadRenameParams,
     ) -> Result<ThreadRenameResponse, DeveloperSessionHostError> {
         Err(unsupported(method::THREAD_RENAME))
+    }
+
+    async fn pin_thread(
+        &self,
+        _params: ThreadPinParams,
+    ) -> Result<ThreadPinResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::THREAD_PIN))
     }
 
     async fn rewind_thread(
@@ -530,6 +545,52 @@ pub trait DeveloperSessionHost: Send + Sync {
         Err(unsupported(method::MCP_INSPECT))
     }
 
+    /// The newest stderr lines a server has written. Reading never consumes
+    /// them, so a second call returns the history the first did.
+    async fn mcp_logs(
+        &self,
+        _params: McpLogsParams,
+    ) -> Result<McpLogsResponse, DeveloperSessionHostError> {
+        Err(unsupported(method::MCP_LOGS))
+    }
+
+    /// Start a shell for the caller to type into. `terminal_id` is the name
+    /// the connection chose for it. Its `terminal/output` and
+    /// `terminal/exited` notifications go to `events` and nowhere else, so
+    /// another connection never reads what a shell prints; the host waits for
+    /// room in it, which holds the shell back from a client that reads slowly,
+    /// and ends the shell when the receiver is dropped.
+    async fn open_terminal(
+        &self,
+        _terminal_id: String,
+        _params: TerminalOpenParams,
+        _events: TerminalEvents,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_OPEN))
+    }
+
+    async fn write_terminal(
+        &self,
+        _params: TerminalWriteParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_WRITE))
+    }
+
+    async fn resize_terminal(
+        &self,
+        _params: TerminalResizeParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_RESIZE))
+    }
+
+    /// End the shell and everything it started. Returns once they are gone.
+    async fn close_terminal(
+        &self,
+        _params: TerminalCloseParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        Err(unsupported(method::TERMINAL_CLOSE))
+    }
+
     async fn remove_permission(
         &self,
         _params: PermissionsRemoveParams,
@@ -826,6 +887,15 @@ pub const METHOD_EFFECTS: &[(&str, MethodEffect)] = &[
     ),
     (method::THREAD_RENAME, MethodEffect::ChangesState),
     (method::THREAD_RENAMED, MethodEffect::Notification),
+    (method::THREAD_PIN, MethodEffect::ChangesState),
+    (method::THREAD_PINNED, MethodEffect::Notification),
+    (method::MCP_LOGS, MethodEffect::ReadsForOwner),
+    (method::TERMINAL_OPEN, MethodEffect::ChangesState),
+    (method::TERMINAL_WRITE, MethodEffect::ChangesState),
+    (method::TERMINAL_RESIZE, MethodEffect::ChangesState),
+    (method::TERMINAL_CLOSE, MethodEffect::ChangesState),
+    (method::TERMINAL_OUTPUT, MethodEffect::Notification),
+    (method::TERMINAL_EXITED, MethodEffect::Notification),
     (method::THREAD_SEARCH, MethodEffect::ReadOnly),
     (method::WORKTREE_LIST, MethodEffect::ReadOnly),
     (method::GIT_PULL_REQUEST_PLAN, MethodEffect::ReadOnly),
@@ -886,7 +956,7 @@ impl DeveloperSessionHostError {
     }
 
     pub fn not_found(message: impl Into<String>) -> Self {
-        Self::new(-32004, message)
+        Self::new(NOT_FOUND_CODE, message)
     }
 
     pub fn conflict(message: impl Into<String>) -> Self {
@@ -929,6 +999,10 @@ impl DeveloperSessionHostError {
 
     pub fn data(&self) -> Option<&serde_json::Value> {
         self.data.as_ref()
+    }
+
+    pub fn is_not_found(&self) -> bool {
+        self.code == NOT_FOUND_CODE
     }
 
     pub fn code(&self) -> i32 {
@@ -984,6 +1058,7 @@ pub fn runs_detached(method: &str) -> bool {
             | method::CHECKPOINT_STAGE
             | method::THREAD_REVERT
             | method::THREAD_COMPACT
+            | method::TERMINAL_CLOSE
     )
 }
 
@@ -1104,7 +1179,12 @@ pub struct DeveloperSessionProcessor {
     trust: DeveloperConnectionTrust,
     negotiated_version: u32,
     turn_client: TurnClient,
+    terminals: Arc<StdMutex<HashSet<String>>>,
+    terminal_events: TerminalEvents,
+    terminal_queue: Arc<tokio::sync::Mutex<tokio::sync::mpsc::Receiver<AppServerNotification>>>,
 }
+
+static NEXT_TERMINAL: AtomicU64 = AtomicU64::new(1);
 
 /// What the client that starts a turn has said it can do for that turn.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
@@ -1128,6 +1208,7 @@ impl DeveloperSessionProcessor {
         capabilities: AppServerCapabilities,
         trust: DeveloperConnectionTrust,
     ) -> Self {
+        let (terminal_events, terminal_queue) = tokio::sync::mpsc::channel(TERMINAL_EVENT_QUEUE);
         Self {
             host,
             capabilities,
@@ -1136,11 +1217,62 @@ impl DeveloperSessionProcessor {
             trust,
             negotiated_version: LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION,
             turn_client: TurnClient::default(),
+            terminals: Arc::new(StdMutex::new(HashSet::new())),
+            terminal_events,
+            terminal_queue: Arc::new(tokio::sync::Mutex::new(terminal_queue)),
         }
     }
 
     pub fn subscribe(&self) -> broadcast::Receiver<AppServerNotification> {
         self.host.subscribe()
+    }
+
+    /// The next `terminal/output` or `terminal/exited` of a terminal this
+    /// connection opened, for the transport to send. A terminal that has
+    /// exited is released here, so a request naming it is refused from then
+    /// on. Pends while there is none.
+    pub async fn next_terminal_event(&self) -> Option<AppServerNotification> {
+        let event = self.terminal_queue.lock().await.recv().await?;
+        if event.method == method::TERMINAL_EXITED {
+            if let Some(id) = event
+                .params
+                .get("terminalId")
+                .and_then(serde_json::Value::as_str)
+            {
+                self.owned_terminals().remove(id);
+            }
+        }
+        Some(event)
+    }
+
+    /// End every terminal this connection opened. Called when the connection
+    /// ends, however it ends: a shell nobody can type into or read must not
+    /// outlive the client that asked for it.
+    pub async fn close_connection(&self) {
+        let opened: Vec<String> = self.owned_terminals().drain().collect();
+        futures_util::future::join_all(opened.into_iter().map(|terminal_id| async move {
+            let _ = self
+                .host
+                .close_terminal(TerminalCloseParams { terminal_id })
+                .await;
+        }))
+        .await;
+    }
+
+    fn owned_terminals(&self) -> std::sync::MutexGuard<'_, HashSet<String>> {
+        self.terminals
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    fn owned_terminal(&self, terminal_id: &str) -> Result<(), DeveloperSessionHostError> {
+        if self.owned_terminals().contains(terminal_id) {
+            Ok(())
+        } else {
+            Err(DeveloperSessionHostError::not_found(format!(
+                "This connection has no terminal {terminal_id}"
+            )))
+        }
     }
 
     /// Wire version agreed during `initialize`. Before the handshake this is
@@ -1185,6 +1317,19 @@ impl DeveloperSessionProcessor {
                     | method::WORKTREE_KEEP
                     | method::WORKTREE_APPLY_TO_LOCAL
                     | method::WORKTREE_SETUP_RUN
+            )
+        {
+            let error = unsupported(&request.method);
+            return AppServerResponse::failure(request.id, error.code(), error.message());
+        }
+
+        if !self.capabilities.terminals
+            && matches!(
+                request.method.as_str(),
+                method::TERMINAL_OPEN
+                    | method::TERMINAL_WRITE
+                    | method::TERMINAL_RESIZE
+                    | method::TERMINAL_CLOSE
             )
         {
             let error = unsupported(&request.method);
@@ -1356,6 +1501,86 @@ impl DeveloperSessionProcessor {
                     .rename_thread(params)
                     .await
                     .map(serde_json::to_value)
+            }
+            method::THREAD_PIN => {
+                let params = match parse_params::<ThreadPinParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host.pin_thread(params).await.map(serde_json::to_value)
+            }
+            method::MCP_LOGS => {
+                let params = match parse_params::<McpLogsParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                self.host.mcp_logs(params).await.map(serde_json::to_value)
+            }
+            method::TERMINAL_OPEN => {
+                let params = match parse_params::<TerminalOpenParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                let terminal_id =
+                    format!("terminal_{}", NEXT_TERMINAL.fetch_add(1, Ordering::Relaxed));
+                self.owned_terminals().insert(terminal_id.clone());
+                let events = self.terminal_events.clone();
+                match self
+                    .host
+                    .open_terminal(terminal_id.clone(), params, events)
+                    .await
+                {
+                    Ok(()) => Ok(serde_json::to_value(TerminalOpenResponse { terminal_id })),
+                    Err(error) => {
+                        self.owned_terminals().remove(&terminal_id);
+                        Err(error)
+                    }
+                }
+            }
+            method::TERMINAL_WRITE => {
+                let params = match parse_params::<TerminalWriteParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                match self.owned_terminal(&params.terminal_id) {
+                    Ok(()) => self.host.write_terminal(params).await.map(|()| {
+                        serde_json::to_value(AcknowledgedResponse { acknowledged: true })
+                    }),
+                    Err(error) => Err(error),
+                }
+            }
+            method::TERMINAL_RESIZE => {
+                let params = match parse_params::<TerminalResizeParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                match self.owned_terminal(&params.terminal_id) {
+                    Ok(()) => self.host.resize_terminal(params).await.map(|()| {
+                        serde_json::to_value(AcknowledgedResponse { acknowledged: true })
+                    }),
+                    Err(error) => Err(error),
+                }
+            }
+            method::TERMINAL_CLOSE => {
+                let params = match parse_params::<TerminalCloseParams>(&request) {
+                    Ok(params) => params,
+                    Err(response) => return *response,
+                };
+                let acknowledged =
+                    || serde_json::to_value(AcknowledgedResponse { acknowledged: true });
+                if self.owned_terminal(&params.terminal_id).is_err() {
+                    Ok(acknowledged())
+                } else {
+                    let terminal_id = params.terminal_id.clone();
+                    match self.host.close_terminal(params).await {
+                        Err(error) if error.is_not_found() => {
+                            self.owned_terminals().remove(&terminal_id);
+                            Ok(acknowledged())
+                        }
+                        Err(error) => Err(error),
+                        Ok(()) => Ok(acknowledged()),
+                    }
+                }
             }
             method::THREAD_SIDE_QUESTION => {
                 let params = match parse_params::<ThreadSideQuestionParams>(&request) {
@@ -2219,6 +2444,9 @@ where
                         return Ok(());
                     }
                 }
+                Some(event) = processor.next_terminal_event(), if initialized => {
+                    write_json_line(&mut writer, &event).await?;
+                }
                 notification = notifications.recv(), if initialized => {
                     match notification {
                         Ok(notification) => write_json_line(&mut writer, &notification).await?,
@@ -2243,6 +2471,7 @@ where
     // A request still running belongs to the host now: its git is left to
     // finish rather than cut off, and shutdown below waits for it.
     detached.detach_all();
+    processor.close_connection().await;
     if !host_shutdown {
         processor
             .host

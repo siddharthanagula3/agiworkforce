@@ -234,6 +234,35 @@ fn metadata_path(base_dir: &Path, session_id: &str) -> PathBuf {
     metadata_dir(base_dir).join(format!("{session_id}.json"))
 }
 
+/// A pin is a file of its own beside the metadata, not a field in it: a running
+/// turn rewrites the whole metadata file and would take back a pin set
+/// meanwhile, and a pin must be settable while a turn runs.
+fn pin_marker_path(base_dir: &Path, session_id: &str) -> PathBuf {
+    metadata_dir(base_dir).join(format!("{session_id}.pinned"))
+}
+
+pub(crate) fn is_pinned(base_dir: &Path, session_id: &str) -> bool {
+    validate_managed_session_id(session_id).is_ok()
+        && pin_marker_path(base_dir, session_id).is_file()
+}
+
+pub(crate) fn set_pinned(base_dir: &Path, session_id: &str, pinned: bool) -> Result<()> {
+    validate_managed_session_id(session_id)?;
+    let path = pin_marker_path(base_dir, session_id);
+    if pinned {
+        fs::create_dir_all(metadata_dir(base_dir))
+            .context("Failed to create managed session metadata directory")?;
+        fs::write(&path, b"").with_context(|| format!("Failed to pin {}", path.display()))
+    } else {
+        match fs::remove_file(&path) {
+            Err(error) if error.kind() != std::io::ErrorKind::NotFound => {
+                Err(error).with_context(|| format!("Failed to unpin {}", path.display()))
+            }
+            _ => Ok(()),
+        }
+    }
+}
+
 fn managed_sessions_dir(base_dir: &Path) -> PathBuf {
     base_dir.join(MANAGED_SESSION_DIR_NAME)
 }

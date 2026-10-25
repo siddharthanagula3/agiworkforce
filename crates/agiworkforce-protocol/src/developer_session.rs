@@ -149,6 +149,15 @@ pub mod method {
     pub const THREAD_RENAME: &str = "thread/rename";
     pub const THREAD_RENAMED: &str = "thread/renamed";
     pub const THREAD_SIDE_QUESTION_DELTA: &str = "thread/sideQuestion/delta";
+    pub const THREAD_PIN: &str = "thread/pin";
+    pub const THREAD_PINNED: &str = "thread/pinned";
+    pub const MCP_LOGS: &str = "mcp/logs";
+    pub const TERMINAL_OPEN: &str = "terminal/open";
+    pub const TERMINAL_WRITE: &str = "terminal/write";
+    pub const TERMINAL_RESIZE: &str = "terminal/resize";
+    pub const TERMINAL_CLOSE: &str = "terminal/close";
+    pub const TERMINAL_OUTPUT: &str = "terminal/output";
+    pub const TERMINAL_EXITED: &str = "terminal/exited";
 }
 
 /// Build a canonical, ordered agent-activity notification for developer-session
@@ -488,6 +497,17 @@ pub struct AppServerCapabilities {
     /// servers it loads, so a client shows no switch.
     #[serde(default, skip_serializing_if = "is_false")]
     pub mcp_set_enabled: bool,
+    /// `thread/pin` keeps a thread at the top of a client's list, and
+    /// `thread/list` reports `pinned` for each.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub thread_pin: bool,
+    /// `mcp/logs` returns the stderr a server has written.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub mcp_logs: bool,
+    /// `terminal/*` runs a shell on a pseudo-terminal in the workspace for a
+    /// person typing into it. Absent where the host has no pseudo-terminals.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub terminals: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -586,6 +606,13 @@ pub struct ThreadSummary {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub location: Option<ThreadLocation>,
+    /// Set by `thread/pin`; a host without `threadPin` reports false.
+    #[serde(default)]
+    pub pinned: bool,
+    /// When the thread was archived, in milliseconds since the Unix epoch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub archived_at: Option<i64>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -1173,6 +1200,32 @@ pub struct ThreadRenameParams {
 #[ts(rename_all = "camelCase")]
 pub struct ThreadRenameResponse {
     pub thread: ThreadSummary,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadPinParams {
+    pub thread_id: String,
+    pub pinned: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadPinResponse {
+    pub thread_id: String,
+    pub pinned: bool,
+}
+
+/// `thread/pinned`: sent when a thread is pinned or unpinned, to every
+/// connection, the one that asked included.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct ThreadPinnedNotification {
+    pub thread_id: String,
+    pub pinned: bool,
 }
 
 /// A question about a thread that is answered and then forgotten: neither the
@@ -2475,6 +2528,32 @@ pub struct McpLoginResponse {
 #[ts(rename_all = "camelCase")]
 pub struct McpServerParams {
     pub name: String,
+}
+
+pub const MCP_LOGS_DEFAULT_LINES: u32 = 200;
+pub const MCP_LOGS_MAX_LINES: u32 = 1000;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+#[ts(rename_all = "camelCase")]
+pub struct McpLogsParams {
+    pub name: String,
+    /// The newest lines to return: 200 when absent, at most 1000.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub limit: Option<u32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct McpLogsResponse {
+    pub name: String,
+    /// Oldest first.
+    pub lines: Vec<String>,
+    /// Older lines exist than the ones returned, because of `limit` or
+    /// because the host keeps only the newest.
+    pub truncated: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
@@ -4064,6 +4143,72 @@ pub struct WorktreeSetupLogNotification {
     pub thread_id: Option<String>,
     pub stream: WorktreeSetupStream,
     pub text: String,
+}
+
+/// The most bytes of terminal text one `terminal/write` carries or one
+/// `terminal/output` delivers.
+pub const TERMINAL_CHUNK_MAX_BYTES: usize = 64 * 1024;
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TerminalOpenParams {
+    /// A folder inside the workspace this host serves.
+    pub cwd: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TerminalOpenResponse {
+    pub terminal_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TerminalWriteParams {
+    pub terminal_id: String,
+    pub data: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TerminalResizeParams {
+    pub terminal_id: String,
+    pub cols: u16,
+    pub rows: u16,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TerminalCloseParams {
+    pub terminal_id: String,
+}
+
+/// Params of `terminal/output`: what the terminal printed, decoded as UTF-8
+/// with undecodable bytes replaced, in chunks of at most
+/// [`TERMINAL_CHUNK_MAX_BYTES`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TerminalOutputNotification {
+    pub terminal_id: String,
+    pub data: String,
+}
+
+/// Params of `terminal/exited`, sent once after the last `terminal/output`.
+/// `code` is null when a signal ended the shell.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct TerminalExitedNotification {
+    pub terminal_id: String,
+    pub code: Option<i32>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

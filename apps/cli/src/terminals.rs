@@ -326,13 +326,27 @@ pub(crate) fn start(
 }
 
 #[cfg(unix)]
-fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result<Spawned> {
+struct OpenedPty {
+    child: std::process::Child,
+    master: std::fs::File,
+    reader: std::fs::File,
+    device: std::path::PathBuf,
+    scratch: Option<tempfile::TempDir>,
+}
+
+#[cfg(unix)]
+fn open_pty(
+    rows: u16,
+    columns: u16,
+    environment: &[(&str, &str)],
+    build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>,
+) -> Result<OpenedPty> {
     use nix::fcntl::{fcntl, FcntlArg, FdFlag};
     use std::process::Stdio;
 
     let size = nix::pty::Winsize {
-        ws_row: TERMINAL_ROWS,
-        ws_col: TERMINAL_COLUMNS,
+        ws_row: rows,
+        ws_col: columns,
         ws_xpixel: 0,
         ws_ypixel: 0,
     };
@@ -350,14 +364,39 @@ fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result
         .stdin(Stdio::from(pty.slave.try_clone()?))
         .stdout(Stdio::from(pty.slave.try_clone()?))
         .stderr(Stdio::from(pty.slave))
-        .env("TERM", "xterm-256color")
-        .env("PAGER", "cat")
-        .env("GIT_PAGER", "cat");
+        .envs(environment.iter().copied());
     attach_terminal(&mut command);
     let master = std::fs::File::from(pty.master);
     let reader = master.try_clone().context("reading the pseudo-terminal")?;
     let child = command.spawn().context("starting the command")?;
     drop(command);
+    Ok(OpenedPty {
+        child,
+        master,
+        reader,
+        device,
+        scratch,
+    })
+}
+
+#[cfg(unix)]
+fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result<Spawned> {
+    let OpenedPty {
+        child,
+        master,
+        reader,
+        scratch,
+        ..
+    } = open_pty(
+        TERMINAL_ROWS,
+        TERMINAL_COLUMNS,
+        &[
+            ("TERM", "xterm-256color"),
+            ("PAGER", "cat"),
+            ("GIT_PAGER", "cat"),
+        ],
+        build,
+    )?;
     Ok(Spawned {
         child,
         input: Some(Box::new(master)),
@@ -365,6 +404,60 @@ fn spawn(build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>) -> Result
         terminal: true,
         scratch,
     })
+}
+
+/// A shell for a person to type into: the pseudo-terminal's master end, which
+/// is written to and read from, and the child. It is registered nowhere, so
+/// no agent tool can list, read or type into it.
+#[cfg(unix)]
+pub(crate) struct InteractivePty {
+    pub(crate) child: std::process::Child,
+    pub(crate) master: std::fs::File,
+    pub(crate) reader: std::fs::File,
+    pub(crate) device: std::path::PathBuf,
+    pub(crate) scratch: Option<tempfile::TempDir>,
+}
+
+#[cfg(unix)]
+pub(crate) fn spawn_interactive(
+    rows: u16,
+    columns: u16,
+    build: impl FnOnce(Option<&Path>) -> Result<PreparedCommand>,
+) -> Result<InteractivePty> {
+    let OpenedPty {
+        child,
+        master,
+        reader,
+        device,
+        scratch,
+    } = open_pty(rows, columns, &[("TERM", "xterm-256color")], build)?;
+    Ok(InteractivePty {
+        child,
+        master,
+        reader,
+        device,
+        scratch,
+    })
+}
+
+#[cfg(unix)]
+#[allow(unsafe_code)]
+pub(crate) fn resize_pty(master: &std::fs::File, rows: u16, columns: u16) -> std::io::Result<()> {
+    use std::os::fd::AsRawFd;
+
+    let size = nix::pty::Winsize {
+        ws_row: rows,
+        ws_col: columns,
+        ws_xpixel: 0,
+        ws_ypixel: 0,
+    };
+    let resized =
+        unsafe { nix::libc::ioctl(master.as_raw_fd(), nix::libc::TIOCSWINSZ as _, &size) };
+    if resized == -1 {
+        Err(std::io::Error::last_os_error())
+    } else {
+        Ok(())
+    }
 }
 
 #[cfg(unix)]

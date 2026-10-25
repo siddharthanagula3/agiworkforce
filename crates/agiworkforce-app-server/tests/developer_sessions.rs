@@ -1,6 +1,6 @@
 use agiworkforce_app_server::{
     DeveloperConnectionTrust, DeveloperSessionHost, DeveloperSessionHostError,
-    DeveloperSessionProcessor, TurnClient,
+    DeveloperSessionProcessor, TerminalEvents, TurnClient,
 };
 use agiworkforce_protocol::agent_events::{
     AgentEventApprovalRiskLevel, AGENT_EVENT_SCHEMA_VERSION,
@@ -23,7 +23,8 @@ use agiworkforce_protocol::developer_session::{
     PluginSummary, ProtocolVersionUnsupportedData, SettingsReadResponse, SettingsWriteParams,
     SkillCatalogScope, SkillConsentParams, SkillConsentResponse, SkillListResponse,
     SkillSetEnabledParams, SkillSummary, SlashCommandListResponse, SlashCommandResultKind,
-    SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary, ThreadDeleteParams,
+    SlashCommandRunParams, SlashCommandRunResponse, SlashCommandSummary, TerminalCloseParams,
+    TerminalOpenParams, TerminalResizeParams, TerminalWriteParams, ThreadDeleteParams,
     ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
     ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadReadResponse,
     ThreadReconnectResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse,
@@ -71,6 +72,8 @@ struct FakeHost {
     worktree_gate: Mutex<Option<oneshot::Receiver<()>>>,
     worktree_panics: std::sync::atomic::AtomicBool,
     managed_worktree_calls: std::sync::atomic::AtomicUsize,
+    terminal_calls: Mutex<Vec<String>>,
+    terminal_sinks: Mutex<Vec<(String, TerminalEvents)>>,
 }
 
 impl FakeHost {
@@ -84,6 +87,8 @@ impl FakeHost {
             worktree_gate: Mutex::new(None),
             worktree_panics: std::sync::atomic::AtomicBool::new(false),
             managed_worktree_calls: std::sync::atomic::AtomicUsize::new(0),
+            terminal_calls: Mutex::new(Vec::new()),
+            terminal_sinks: Mutex::new(Vec::new()),
         }
     }
 }
@@ -106,6 +111,8 @@ fn thread(id: &str) -> ThreadSummary {
         created_by: DeveloperSessionSource::Vscode,
         status: ThreadStatus::Idle,
         location: None,
+        pinned: false,
+        archived_at: None,
     }
 }
 
@@ -344,6 +351,59 @@ impl DeveloperSessionHost for FakeHost {
         Ok(())
     }
 
+    async fn open_terminal(
+        &self,
+        terminal_id: String,
+        params: TerminalOpenParams,
+        events: TerminalEvents,
+    ) -> Result<(), DeveloperSessionHostError> {
+        if params.cwd == "/refused" {
+            return Err(DeveloperSessionHostError::invalid_request("refused"));
+        }
+        self.terminal_sinks
+            .lock()
+            .await
+            .push((terminal_id.clone(), events));
+        self.terminal_calls.lock().await.push(format!(
+            "open {terminal_id} {}x{}",
+            params.cols, params.rows
+        ));
+        Ok(())
+    }
+
+    async fn write_terminal(
+        &self,
+        params: TerminalWriteParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        self.terminal_calls
+            .lock()
+            .await
+            .push(format!("write {} {}", params.terminal_id, params.data));
+        Ok(())
+    }
+
+    async fn resize_terminal(
+        &self,
+        params: TerminalResizeParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        self.terminal_calls.lock().await.push(format!(
+            "resize {} {}x{}",
+            params.terminal_id, params.cols, params.rows
+        ));
+        Ok(())
+    }
+
+    async fn close_terminal(
+        &self,
+        params: TerminalCloseParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        self.terminal_calls
+            .lock()
+            .await
+            .push(format!("close {}", params.terminal_id));
+        Ok(())
+    }
+
     async fn shutdown(&self) -> Result<(), DeveloperSessionHostError> {
         self.calls.lock().await.push(Call::Shutdown);
         if let Some(gate) = self.shutdown_gate.lock().await.take() {
@@ -434,6 +494,9 @@ fn capabilities() -> AppServerCapabilities {
         thread_rename: true,
         reasoning_effort_ladder: false,
         mcp_set_enabled: false,
+        thread_pin: false,
+        mcp_logs: false,
+        terminals: true,
     }
 }
 
@@ -3123,4 +3186,330 @@ fn a_stale_mcp_approval_has_its_own_code_and_carries_the_launch_as_it_is_now() {
         serde_json::from_value(stale.data().cloned().expect("the launch as it is now"))
             .expect("typed");
     assert_eq!(carried, current);
+}
+
+async fn host_says(host: &FakeHost, terminal_id: &str, name: &str, params: serde_json::Value) {
+    let sink = host
+        .terminal_sinks
+        .lock()
+        .await
+        .iter()
+        .find(|(id, _)| id == terminal_id)
+        .map(|(_, sink)| sink.clone())
+        .expect("the host was given a sink for this terminal");
+    sink.send(AppServerNotification::new(name, params).expect("notification"))
+        .await
+        .expect("the connection still reads");
+}
+
+async fn nothing_for(processor: &DeveloperSessionProcessor) -> bool {
+    tokio::time::timeout(
+        std::time::Duration::from_millis(100),
+        processor.next_terminal_event(),
+    )
+    .await
+    .is_err()
+}
+
+#[tokio::test]
+async fn a_terminal_belongs_to_the_connection_that_opened_it() {
+    let host = Arc::new(FakeHost::new());
+    let mut owner = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    let mut other = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    owner.process(initialize()).await;
+    other.process(initialize()).await;
+
+    let opened = result_of(
+        owner
+            .process(request(
+                2,
+                method::TERMINAL_OPEN,
+                serde_json::json!({ "cwd": "/workspace", "cols": 100, "rows": 30 }),
+            ))
+            .await,
+    );
+    let terminal_id = opened["terminalId"]
+        .as_str()
+        .expect("terminal id")
+        .to_string();
+
+    let ack = |response| result_of(response)["acknowledged"].clone();
+    assert_eq!(
+        ack(owner
+            .process(request(
+                3,
+                method::TERMINAL_WRITE,
+                serde_json::json!({ "terminalId": terminal_id, "data": "ls\n" }),
+            ))
+            .await),
+        serde_json::json!(true)
+    );
+    assert_eq!(
+        ack(owner
+            .process(request(
+                4,
+                method::TERMINAL_RESIZE,
+                serde_json::json!({ "terminalId": terminal_id, "cols": 90, "rows": 20 }),
+            ))
+            .await),
+        serde_json::json!(true)
+    );
+
+    for (id, name, params) in [
+        (
+            5,
+            method::TERMINAL_WRITE,
+            serde_json::json!({ "terminalId": terminal_id, "data": "rm -rf ~\n" }),
+        ),
+        (
+            6,
+            method::TERMINAL_RESIZE,
+            serde_json::json!({ "terminalId": terminal_id, "cols": 1, "rows": 1 }),
+        ),
+    ] {
+        let refused = other.process(request(id, name, params)).await;
+        assert_eq!(
+            refused.error.expect("another connection's terminal").code,
+            -32004,
+            "{name}"
+        );
+    }
+    let foreign_close = other
+        .process(request(
+            7,
+            method::TERMINAL_CLOSE,
+            serde_json::json!({ "terminalId": terminal_id }),
+        ))
+        .await;
+    assert!(
+        foreign_close.error.is_none(),
+        "closing what is not open here is a no-op"
+    );
+    assert_eq!(
+        host.terminal_calls.lock().await.clone(),
+        [
+            format!("open {terminal_id} 100x30"),
+            format!("write {terminal_id} ls\n"),
+            format!("resize {terminal_id} 90x20"),
+        ],
+        "only the owner reached the host"
+    );
+
+    host_says(
+        &host,
+        &terminal_id,
+        method::TERMINAL_OUTPUT,
+        serde_json::json!({ "terminalId": terminal_id, "data": "secret from a shell" }),
+    )
+    .await;
+    assert!(
+        nothing_for(&other).await,
+        "another connection reads a shell's output"
+    );
+    let output = owner.next_terminal_event().await.expect("output");
+    assert_eq!(output.method, method::TERMINAL_OUTPUT);
+    assert_eq!(output.params["data"], "secret from a shell");
+
+    host_says(
+        &host,
+        &terminal_id,
+        method::TERMINAL_EXITED,
+        serde_json::json!({ "terminalId": terminal_id, "code": 0 }),
+    )
+    .await;
+    let exited = owner.next_terminal_event().await.expect("exited");
+    assert_eq!(exited.method, method::TERMINAL_EXITED);
+    let after = owner
+        .process(request(
+            8,
+            method::TERMINAL_WRITE,
+            serde_json::json!({ "terminalId": terminal_id, "data": "x" }),
+        ))
+        .await;
+    assert_eq!(
+        after.error.expect("an exited terminal is released").code,
+        -32004
+    );
+    let closed_after = owner
+        .process(request(
+            9,
+            method::TERMINAL_CLOSE,
+            serde_json::json!({ "terminalId": terminal_id }),
+        ))
+        .await;
+    assert!(closed_after.error.is_none(), "{closed_after:?}");
+    assert!(
+        !host
+            .terminal_calls
+            .lock()
+            .await
+            .iter()
+            .any(|call| call.starts_with("close ")),
+        "a close of an exited terminal never reaches the host"
+    );
+}
+
+#[tokio::test]
+async fn closing_a_live_terminal_reaches_the_host_and_its_exit_still_arrives() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    processor.process(initialize()).await;
+    let opened = result_of(
+        processor
+            .process(request(
+                2,
+                method::TERMINAL_OPEN,
+                serde_json::json!({ "cwd": "/workspace", "cols": 80, "rows": 24 }),
+            ))
+            .await,
+    );
+    let terminal_id = opened["terminalId"].as_str().unwrap().to_string();
+    let closed = processor
+        .process(request(
+            3,
+            method::TERMINAL_CLOSE,
+            serde_json::json!({ "terminalId": terminal_id }),
+        ))
+        .await;
+    assert!(closed.error.is_none(), "{closed:?}");
+    assert_eq!(
+        host.terminal_calls.lock().await.last().cloned(),
+        Some(format!("close {terminal_id}"))
+    );
+    host_says(
+        &host,
+        &terminal_id,
+        method::TERMINAL_EXITED,
+        serde_json::json!({ "terminalId": terminal_id, "code": null }),
+    )
+    .await;
+    let exited = processor
+        .next_terminal_event()
+        .await
+        .expect("a close does not swallow the exit");
+    assert_eq!(exited.method, method::TERMINAL_EXITED);
+}
+
+#[tokio::test]
+async fn a_connection_that_ends_takes_its_terminals_with_it() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new(host.clone(), capabilities());
+    processor.process(initialize()).await;
+    let mut opened = Vec::new();
+    for id in 2..5 {
+        let response = result_of(
+            processor
+                .process(request(
+                    id,
+                    method::TERMINAL_OPEN,
+                    serde_json::json!({ "cwd": "/workspace", "cols": 80, "rows": 24 }),
+                ))
+                .await,
+        );
+        opened.push(response["terminalId"].as_str().unwrap().to_string());
+    }
+    let refused = processor
+        .process(request(
+            9,
+            method::TERMINAL_OPEN,
+            serde_json::json!({ "cwd": "/refused", "cols": 80, "rows": 24 }),
+        ))
+        .await;
+    assert!(refused.error.is_some());
+
+    processor.close_connection().await;
+    let mut closed: Vec<String> = host
+        .terminal_calls
+        .lock()
+        .await
+        .iter()
+        .filter_map(|call| call.strip_prefix("close ").map(str::to_string))
+        .collect();
+    closed.sort();
+    opened.sort();
+    assert_eq!(
+        closed, opened,
+        "every terminal it opened, and no refused one"
+    );
+}
+
+#[tokio::test]
+async fn a_connection_that_only_reads_cannot_use_or_see_terminals() {
+    let host = Arc::new(FakeHost::new());
+    let mut reader = DeveloperSessionProcessor::new_with_trust(
+        host.clone(),
+        capabilities(),
+        DeveloperConnectionTrust::Untrusted,
+    );
+    reader.process(initialize()).await;
+    for (id, name) in [
+        (2, method::TERMINAL_OPEN),
+        (3, method::TERMINAL_WRITE),
+        (4, method::TERMINAL_RESIZE),
+        (5, method::TERMINAL_CLOSE),
+    ] {
+        let refused = reader
+            .process(request(id, name, serde_json::json!({})))
+            .await;
+        assert_eq!(refused.error.expect("refused").code, -32006, "{name}");
+    }
+    assert!(nothing_for(&reader).await);
+    assert!(host.terminal_calls.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn a_host_without_terminals_answers_unavailable() {
+    let host = Arc::new(FakeHost::new());
+    let mut processor = DeveloperSessionProcessor::new(
+        host.clone(),
+        AppServerCapabilities {
+            terminals: false,
+            ..capabilities()
+        },
+    );
+    processor.process(initialize()).await;
+    let response = processor
+        .process(request(
+            2,
+            method::TERMINAL_OPEN,
+            serde_json::json!({ "cwd": "/workspace", "cols": 80, "rows": 24 }),
+        ))
+        .await;
+    assert_eq!(response.error.expect("unsupported").code, -32010);
+    assert!(host.terminal_calls.lock().await.is_empty());
+}
+
+#[tokio::test]
+async fn a_terminal_close_runs_detached_so_a_slow_reap_holds_nothing_else() {
+    assert!(agiworkforce_app_server::runs_detached(
+        method::TERMINAL_CLOSE
+    ));
+    assert!(!agiworkforce_app_server::runs_detached(
+        method::TERMINAL_WRITE
+    ));
+}
+
+#[tokio::test]
+async fn pin_and_logs_are_unavailable_on_a_host_that_does_not_implement_them() {
+    let mut processor = DeveloperSessionProcessor::new(Arc::new(FakeHost::new()), capabilities());
+    processor.process(initialize()).await;
+    for (id, name, params) in [
+        (
+            2,
+            method::THREAD_PIN,
+            serde_json::json!({ "threadId": "t", "pinned": true }),
+        ),
+        (3, method::MCP_LOGS, serde_json::json!({ "name": "s" })),
+    ] {
+        let response = processor.process(request(id, name, params)).await;
+        assert_eq!(response.error.expect("unsupported").code, -32010, "{name}");
+    }
+    let malformed = processor
+        .process(request(
+            4,
+            method::THREAD_PIN,
+            serde_json::json!({ "threadId": "t" }),
+        ))
+        .await;
+    assert_eq!(malformed.error.expect("missing pinned").code, -32602);
 }

@@ -857,6 +857,10 @@ enum Command {
         /// Run without saved memory: sessions neither read memories nor save new ones.
         #[arg(long)]
         no_memory: bool,
+        /// Absolute folder managed worktrees are made under, instead of the CLI config
+        /// root's `worktrees/`. Created when missing; refused unless it is a writable directory.
+        #[arg(long, value_name = "DIRECTORY")]
+        worktrees_root: Option<std::path::PathBuf>,
     },
     /// Let AGI Mobile list, start, follow and steer sessions in this folder.
     #[command(alias = "rc")]
@@ -6427,11 +6431,12 @@ async fn run_cli(cli: Cli) -> Result<()> {
                 allowed_origin,
                 allow_query_token,
                 no_memory,
+                worktrees_root,
             } => {
                 crate::tools::forbid_terminal_questions();
                 cli_options::set_memory_enabled(!no_memory);
                 let workspace_root = std::env::current_dir()?;
-                let host = std::sync::Arc::new(
+                let mut host =
                     app_server::CliDeveloperSessionHost::new(app_config.clone(), workspace_root)?
                         .with_bypass_permissions_available(
                             cli.allow_dangerously_skip_permissions
@@ -6443,8 +6448,11 @@ async fn run_cli(cli: Cli) -> Result<()> {
                                         None,
                                     )
                                     .skip_permissions,
-                        ),
-                );
+                        );
+                if let Some(root) = worktrees_root {
+                    host = host.with_checked_worktrees_root(root)?;
+                }
+                let host = std::sync::Arc::new(host);
                 host.prepare().await;
                 let capabilities = host.capabilities();
                 let _heartbeat = device_registry::spawn_heartbeat_loop();
@@ -9419,6 +9427,26 @@ mod tests {
         let system_prompt = Cli::try_parse_from(["agi", "--dump-system-prompt"])
             .expect("read-only system prompt flag should parse");
         assert!(!invocation_requires_project_trust(&system_prompt));
+    }
+
+    #[test]
+    fn app_server_takes_an_optional_worktrees_root() {
+        let named = Cli::try_parse_from(["agi", "app-server", "--worktrees-root", "/tmp/agi-wt"])
+            .expect("--worktrees-root should parse");
+        match named.command {
+            Some(Command::AppServer { worktrees_root, .. }) => {
+                assert_eq!(
+                    worktrees_root,
+                    Some(std::path::PathBuf::from("/tmp/agi-wt"))
+                );
+            }
+            other => panic!("expected app-server, got {other:?}"),
+        }
+        let unnamed = Cli::try_parse_from(["agi", "app-server"]).expect("bare app-server");
+        match unnamed.command {
+            Some(Command::AppServer { worktrees_root, .. }) => assert_eq!(worktrees_root, None),
+            other => panic!("expected app-server, got {other:?}"),
+        }
     }
 
     #[test]

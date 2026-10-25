@@ -64,6 +64,49 @@ pub(super) fn worktrees_root(
     }
 }
 
+/// A folder named for managed worktrees, made when missing and checked before
+/// the host serves a request: a worktree that cannot be made later would fail
+/// the session that asked for it.
+pub(super) fn prepare_worktrees_root(root: &Path) -> Result<PathBuf, DeveloperSessionHostError> {
+    if !root.is_absolute() {
+        return Err(invalid(format!(
+            "The worktrees folder must be an absolute path, not {}",
+            root.display()
+        )));
+    }
+    match std::fs::metadata(root) {
+        Ok(metadata) if !metadata.is_dir() => {
+            return Err(invalid(format!(
+                "The worktrees folder {} is not a directory",
+                root.display()
+            )));
+        }
+        Ok(_) => {}
+        Err(_) => std::fs::create_dir_all(root).map_err(|error| {
+            invalid(format!(
+                "The worktrees folder {} could not be created: {error}",
+                root.display()
+            ))
+        })?,
+    }
+    let root = root.canonicalize().map_err(|error| {
+        invalid(format!(
+            "The worktrees folder {} could not be resolved: {error}",
+            root.display()
+        ))
+    })?;
+    tempfile::Builder::new()
+        .prefix(".agi-write-check-")
+        .tempfile_in(&root)
+        .map_err(|error| {
+            invalid(format!(
+                "The worktrees folder {} is not writable: {error}",
+                root.display()
+            ))
+        })?;
+    Ok(root)
+}
+
 /// The worktrees of `workspace`'s repository, with every git pinned to the
 /// repository resolved for it first, like checkpoints.
 pub(super) async fn manager(

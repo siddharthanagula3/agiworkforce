@@ -10,18 +10,19 @@ use agiworkforce_protocol::developer_session::{
     CommandSourceKind, ContextInstructionsResponse, DeveloperAgentMode, DeveloperReasoningEffort,
     HookAddParams, HookConfigScope, HookListResponse, HookRemoveParams, HookSummary,
     InstructionFile, InstructionFileKind, LocalModelProvider, LocalServerHealth, LocalServerStatus,
-    McpAddParams, McpPromptArgumentSummary, McpPromptSummary, McpRemoteTransport,
-    McpResourceSummary, McpServerConfiguredStatus, McpServerInspectResponse, McpServerListResponse,
-    McpServerParams, McpServerScope, McpServerSummary, McpServerTestResponse,
-    McpServerToolsResponse, McpToolSummary, MemoryAddParams, MemoryAddResponse, MemoryScope,
-    PermissionRule, PermissionRuleDecision, PermissionRuleKind, PermissionRulesResponse,
-    PermissionsAddParams, PermissionsListResponse, PluginInstallParams, PluginListResponse,
-    PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse, ProviderKeySummary,
-    ProvidersListResponse, SavedPermission, SavedPermissionDecision, SavedPermissionKind,
-    SettingsReadResponse, SettingsWriteParams, SkillCatalogScope, SkillConsentParams,
-    SkillConsentResponse, SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSummary,
-    SlashCommandListResponse, SlashCommandResultKind, SlashCommandRunResponse, SlashCommandSummary,
-    TrustListResponse, TrustedFolder,
+    McpAddParams, McpLogsParams, McpLogsResponse, McpPromptArgumentSummary, McpPromptSummary,
+    McpRemoteTransport, McpResourceSummary, McpServerConfiguredStatus, McpServerInspectResponse,
+    McpServerListResponse, McpServerParams, McpServerScope, McpServerSummary,
+    McpServerTestResponse, McpServerToolsResponse, McpToolSummary, MemoryAddParams,
+    MemoryAddResponse, MemoryScope, PermissionRule, PermissionRuleDecision, PermissionRuleKind,
+    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginScope, PluginSummary, PluginUpdateResponse,
+    ProviderKeySummary, ProvidersListResponse, SavedPermission, SavedPermissionDecision,
+    SavedPermissionKind, SettingsReadResponse, SettingsWriteParams, SkillCatalogScope,
+    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
+    SkillRemoveParams, SkillSummary, SlashCommandListResponse, SlashCommandResultKind,
+    SlashCommandRunResponse, SlashCommandSummary, TrustListResponse, TrustedFolder,
+    MCP_LOGS_DEFAULT_LINES, MCP_LOGS_MAX_LINES,
 };
 use std::path::{Path, PathBuf};
 
@@ -710,6 +711,32 @@ async fn startable_server(
         return Err(DeveloperSessionHostError::conflict(reason));
     }
     Ok(server)
+}
+
+pub fn mcp_logs(
+    workspace_root: &Path,
+    params: &McpLogsParams,
+) -> Result<McpLogsResponse, DeveloperSessionHostError> {
+    if !crate::mcp::discover_servers(workspace_root)
+        .iter()
+        .any(|server| server.name == params.name)
+    {
+        return Err(DeveloperSessionHostError::not_found(format!(
+            "No MCP server named '{}' is configured for this workspace",
+            params.name
+        )));
+    }
+    let limit = params
+        .limit
+        .unwrap_or(MCP_LOGS_DEFAULT_LINES)
+        .clamp(1, MCP_LOGS_MAX_LINES);
+    let (lines, truncated) =
+        crate::mcp::server_logs(&params.name, limit as usize).unwrap_or_default();
+    Ok(McpLogsResponse {
+        name: params.name.clone(),
+        lines,
+        truncated,
+    })
 }
 
 fn elapsed_ms(started: std::time::Instant) -> u64 {
@@ -1758,6 +1785,79 @@ mod tests {
             read_project_instruction_file(project.path(), &path).as_deref(),
             Some("be brief")
         );
+    }
+}
+
+#[cfg(test)]
+mod mcp_logs_tests {
+    use super::*;
+    use crate::mcp::{with_test_configs, McpServerConfig};
+    use std::collections::HashMap;
+
+    fn configured() -> HashMap<String, McpServerConfig> {
+        ["logs-idle", "logs-busy"]
+            .into_iter()
+            .map(|name| {
+                (
+                    name.to_string(),
+                    McpServerConfig::stdio(
+                        "/nonexistent/agi-mcp-logs-fixture",
+                        Vec::new(),
+                        HashMap::new(),
+                    ),
+                )
+            })
+            .collect()
+    }
+
+    fn ask(name: &str, limit: Option<u32>) -> Result<McpLogsResponse, DeveloperSessionHostError> {
+        with_test_configs(configured(), || {
+            mcp_logs(
+                Path::new("/unused"),
+                &McpLogsParams {
+                    name: name.to_string(),
+                    limit,
+                },
+            )
+        })
+    }
+
+    #[test]
+    fn a_server_nobody_configured_is_a_typed_not_found() {
+        let error = ask("no-such-server", None).expect_err("unknown server");
+        assert!(error.is_not_found());
+        assert!(error.message().contains("no-such-server"));
+    }
+
+    #[test]
+    fn a_configured_server_with_no_open_connection_has_no_lines_and_nothing_cut() {
+        let response = ask("logs-idle", None).expect("configured");
+        assert_eq!(response.name, "logs-idle");
+        assert!(response.lines.is_empty() && !response.truncated);
+    }
+
+    #[test]
+    fn the_limit_defaults_to_200_is_capped_at_1000_and_repeat_reads_agree() {
+        let ring = crate::mcp::register_log_ring("logs-busy");
+        ring.lock()
+            .unwrap()
+            .push_all((0..1500).map(|index| format!("stderr {index}")));
+
+        let default = ask("logs-busy", None).expect("default");
+        assert_eq!(default.lines.len(), MCP_LOGS_DEFAULT_LINES as usize);
+        assert_eq!(
+            default.lines.last().map(String::as_str),
+            Some("stderr 1499")
+        );
+        assert!(default.truncated);
+
+        let capped = ask("logs-busy", Some(5000)).expect("capped");
+        assert_eq!(capped.lines.len(), MCP_LOGS_MAX_LINES as usize);
+        assert_eq!(capped.lines.first().map(String::as_str), Some("stderr 500"));
+
+        let few = ask("logs-busy", Some(3)).expect("few");
+        assert_eq!(few.lines, ["stderr 1497", "stderr 1498", "stderr 1499"]);
+        assert_eq!(ask("logs-busy", Some(3)).expect("again"), few);
     }
 }
 

@@ -524,6 +524,9 @@ fn delete_managed_session_in(base_dir: &Path, reference: ManagedSessionReference
         fs::remove_dir_all(&checkpoints)
             .with_context(|| format!("Failed to delete {}", checkpoints.display()))?;
     }
+    if let Err(error) = crate::sessions::set_pinned(base_dir, &resolved.summary.session_id, false) {
+        tracing::warn!(session = %resolved.summary.session_id, %error, "the pin of a deleted session was not removed");
+    }
     let Some(file_name) = resolved.path.file_name().and_then(|name| name.to_str()) else {
         return Ok(());
     };

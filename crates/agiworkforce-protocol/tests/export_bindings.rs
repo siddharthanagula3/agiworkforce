@@ -166,6 +166,30 @@ fn export_typescript_bindings() {
         .expect("export developer-session thread rename params graph");
     agiworkforce_protocol::developer_session::ThreadRenameResponse::export_all_to(dir)
         .expect("export developer-session thread rename graph");
+    agiworkforce_protocol::developer_session::ThreadPinParams::export_all_to(dir)
+        .expect("export developer-session thread pin params graph");
+    agiworkforce_protocol::developer_session::ThreadPinResponse::export_all_to(dir)
+        .expect("export developer-session thread pin graph");
+    agiworkforce_protocol::developer_session::ThreadPinnedNotification::export_all_to(dir)
+        .expect("export developer-session thread pinned notification graph");
+    agiworkforce_protocol::developer_session::McpLogsParams::export_all_to(dir)
+        .expect("export developer-session mcp logs params graph");
+    agiworkforce_protocol::developer_session::McpLogsResponse::export_all_to(dir)
+        .expect("export developer-session mcp logs graph");
+    agiworkforce_protocol::developer_session::TerminalOpenParams::export_all_to(dir)
+        .expect("export developer-session terminal open params graph");
+    agiworkforce_protocol::developer_session::TerminalOpenResponse::export_all_to(dir)
+        .expect("export developer-session terminal open graph");
+    agiworkforce_protocol::developer_session::TerminalWriteParams::export_all_to(dir)
+        .expect("export developer-session terminal write params graph");
+    agiworkforce_protocol::developer_session::TerminalResizeParams::export_all_to(dir)
+        .expect("export developer-session terminal resize params graph");
+    agiworkforce_protocol::developer_session::TerminalCloseParams::export_all_to(dir)
+        .expect("export developer-session terminal close params graph");
+    agiworkforce_protocol::developer_session::TerminalOutputNotification::export_all_to(dir)
+        .expect("export developer-session terminal output notification graph");
+    agiworkforce_protocol::developer_session::TerminalExitedNotification::export_all_to(dir)
+        .expect("export developer-session terminal exited notification graph");
     agiworkforce_protocol::developer_session::ThreadSideQuestionParams::export_all_to(dir)
         .expect("export developer-session side question params graph");
     agiworkforce_protocol::developer_session::ThreadSideQuestionResponse::export_all_to(dir)

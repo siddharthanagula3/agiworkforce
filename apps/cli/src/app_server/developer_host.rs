@@ -25,20 +25,21 @@ use agiworkforce_protocol::developer_session::{
     HostModelSummary, LocalModelListResponse, LocalModelProvider, LocalModelSummary,
     ManagedWorktreeCreateParams, ManagedWorktreeListResponse, ManagedWorktreeSummary, McpAddParams,
     McpApprovalGrantParams, McpApprovalReadParams, McpApprovalRequest, McpAuthRequiredNotification,
-    McpLoginParams, McpLoginResponse, McpServerConfiguredStatus, McpServerInspectResponse,
-    McpServerListResponse, McpServerParams, McpServerScope, McpServerTestResponse,
-    McpServerToolsResponse, McpSetEnabledParams, MemoryAddParams, MemoryAddResponse,
-    ModelListParams, PendingApprovalSnapshot, PendingUserInputSnapshot, PermissionRulesResponse,
-    PermissionsAddParams, PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams,
-    PlanDecision, PluginInstallParams, PluginListResponse, PluginRemoveParams,
-    PluginSetEnabledParams, PluginUpdateResponse, ProviderParams, ProviderSetKeyParams,
-    ProvidersListResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
-    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
-    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
-    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadCompactParams,
-    ThreadCompactResponse, ThreadDeleteParams, ThreadDeleteResponse, ThreadForkParams,
-    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
-    ThreadListResponse, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
+    McpLoginParams, McpLoginResponse, McpLogsParams, McpLogsResponse, McpServerConfiguredStatus,
+    McpServerInspectResponse, McpServerListResponse, McpServerParams, McpServerScope,
+    McpServerTestResponse, McpServerToolsResponse, McpSetEnabledParams, MemoryAddParams,
+    MemoryAddResponse, ModelListParams, PendingApprovalSnapshot, PendingUserInputSnapshot,
+    PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
+    PermissionsRemoveParams, PlanDecideParams, PlanDecision, PluginInstallParams,
+    PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
+    ProviderParams, ProviderSetKeyParams, ProvidersListResponse, RewindSkippedFile,
+    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
+    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
+    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
+    ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
+    ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
+    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPinParams, ThreadPinResponse,
+    ThreadPinnedNotification, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
     ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams, ThreadRevertResponse,
     ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
     ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionDelta, ThreadSideQuestionParams,
@@ -73,6 +74,8 @@ use uuid::Uuid;
 use super::account;
 use super::review;
 use super::surfaces;
+#[cfg(unix)]
+use super::terminal_sessions;
 use super::threads;
 use crate::agent::{
     AgentSession, ContinuationSink, ToolApprovalSink, ToolEventSink, UserInputSink,
@@ -581,6 +584,10 @@ pub struct CliDeveloperSessionHost {
     /// call. An interrupt of the thread or a shutdown raises it, and the
     /// summary ends with the thread as it was.
     compactions: Arc<StdMutex<HashMap<String, Arc<tokio::sync::Notify>>>>,
+    /// Shells a client is typing into. Client requests only: nothing here is
+    /// reachable from a turn.
+    #[cfg(unix)]
+    terminals: terminal_sessions::Terminals,
 }
 
 /// One thread's entry in the host's table of running summaries, taken out
@@ -659,6 +666,8 @@ impl CliDeveloperSessionHost {
         let worktree_checkout =
             agiworkforce_worktree::managed::checkout_containing(&workspace_root);
         Ok(Self {
+            #[cfg(unix)]
+            terminals: terminal_sessions::Terminals::default(),
             config: Arc::new(config),
             workspace_root,
             workspace_file_authority,
@@ -741,6 +750,16 @@ impl CliDeveloperSessionHost {
     pub fn with_worktrees_root(mut self, root: PathBuf) -> Self {
         self.worktrees_root = Some(root);
         self
+    }
+
+    /// [`Self::with_worktrees_root`] for a folder a user named: it must be an
+    /// absolute path, is made when missing, and is refused when it is not a
+    /// writable directory.
+    pub fn with_checked_worktrees_root(
+        self,
+        root: &Path,
+    ) -> Result<Self, DeveloperSessionHostError> {
+        Ok(self.with_worktrees_root(review::prepare_worktrees_root(root)?))
     }
 
     fn worktrees_root(&self) -> Result<PathBuf, DeveloperSessionHostError> {
@@ -990,6 +1009,9 @@ impl CliDeveloperSessionHost {
             thread_rename: true,
             reasoning_effort_ladder: true,
             mcp_set_enabled: true,
+            thread_pin: true,
+            mcp_logs: self.load_integrations,
+            terminals: cfg!(unix),
         }
     }
 
@@ -1423,6 +1445,8 @@ impl CliDeveloperSessionHost {
             writer: writer_lease::read(&summary.path)
                 .map(|lease| writer_summary(self.writer, lease)),
             location: None,
+            pinned: crate::sessions::is_pinned(self.store.base_dir(), &summary.session_id),
+            archived_at: summary.archived_at.map(|at| at.timestamp_millis()),
         }
     }
 
@@ -2784,6 +2808,38 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             serde_json::json!({ "threadId": params.thread_id, "title": title }),
         );
         Ok(ThreadRenameResponse { thread })
+    }
+
+    async fn pin_thread(
+        &self,
+        params: ThreadPinParams,
+    ) -> Result<ThreadPinResponse, DeveloperSessionHostError> {
+        let _admission = self.admit_request().await?;
+        self.validate_thread_ownership(&params.thread_id).await?;
+        let _thread_files = self.thread_files(&params.thread_id).lock_owned().await;
+        let base_dir = self.store.base_dir().to_path_buf();
+        let thread_id = params.thread_id.clone();
+        let pinned = params.pinned;
+        tokio::task::spawn_blocking(move || {
+            crate::sessions::set_pinned(&base_dir, &thread_id, pinned)
+        })
+        .await
+        .map_err(internal_error)?
+        .map_err(internal_error)?;
+        let response = ThreadPinResponse {
+            thread_id: params.thread_id,
+            pinned,
+        };
+        if let Ok(notification) = AppServerNotification::new(
+            agiworkforce_protocol::developer_session::method::THREAD_PINNED,
+            ThreadPinnedNotification {
+                thread_id: response.thread_id.clone(),
+                pinned,
+            },
+        ) {
+            let _ = self.notifications.send(notification);
+        }
+        Ok(response)
     }
 
     async fn archive_thread(
@@ -4718,6 +4774,57 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         .await
     }
 
+    async fn mcp_logs(
+        &self,
+        params: McpLogsParams,
+    ) -> Result<McpLogsResponse, DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        surfaces::mcp_logs(&self.workspace_root, &params)
+    }
+
+    #[cfg(unix)]
+    async fn open_terminal(
+        &self,
+        terminal_id: String,
+        params: agiworkforce_protocol::developer_session::TerminalOpenParams,
+        events: agiworkforce_app_server::TerminalEvents,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        let cwd = canonical_directory(Path::new(&params.cwd))?;
+        let launch = terminal_sessions::Launch::for_workspace(&self.workspace_root, cwd)?;
+        self.terminals
+            .open(terminal_id, params.rows, params.cols, &launch, events)
+    }
+
+    #[cfg(unix)]
+    async fn write_terminal(
+        &self,
+        params: agiworkforce_protocol::developer_session::TerminalWriteParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        self.terminals
+            .write(&params.terminal_id, &params.data)
+            .await
+    }
+
+    #[cfg(unix)]
+    async fn resize_terminal(
+        &self,
+        params: agiworkforce_protocol::developer_session::TerminalResizeParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        let _guard = self.admit_request().await?;
+        self.terminals
+            .resize(&params.terminal_id, params.rows, params.cols)
+    }
+
+    #[cfg(unix)]
+    async fn close_terminal(
+        &self,
+        params: agiworkforce_protocol::developer_session::TerminalCloseParams,
+    ) -> Result<(), DeveloperSessionHostError> {
+        self.terminals.close(&params.terminal_id).await
+    }
+
     async fn list_mcp_server_tools(
         &self,
         params: McpServerParams,
@@ -5514,6 +5621,8 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         // returns at once and shutdown does not wait on the model.
         self.stop_every_compaction();
         let _exclusive = self.lifecycle.write().await;
+        #[cfg(unix)]
+        let terminal_shutdown_error = self.terminals.shutdown().await.err();
 
         let running_turns = {
             let mut running = self.running_turns.lock().await;
@@ -5625,6 +5734,10 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
 
         if let Some(error) = process_shutdown_error {
             return Err(internal_error(error));
+        }
+        #[cfg(unix)]
+        if let Some(error) = terminal_shutdown_error {
+            return Err(error);
         }
         if let Some(error) = first_persist_error {
             return Err(internal_error(error));
@@ -10477,6 +10590,285 @@ mod tests {
         }
     }
 
+    async fn two_threads(host: &CliDeveloperSessionHost) -> (ThreadSummary, ThreadSummary) {
+        let client = AppServerClientInfo {
+            name: "agi_desktop_test".to_string(),
+            title: String::new(),
+            version: String::new(),
+        };
+        let start = |title: &str| {
+            host.start_thread(
+                ThreadStartParams {
+                    model: None,
+                    provider: None,
+                    cwd: None,
+                    title: Some(title.to_string()),
+                },
+                client.clone(),
+            )
+        };
+        let first = start("First").await.expect("first thread");
+        let second = start("Second").await.expect("second thread");
+        (first, second)
+    }
+
+    async fn summaries(host: &CliDeveloperSessionHost) -> HashMap<String, ThreadSummary> {
+        host.list_threads(ThreadListParams {
+            include_archived: true,
+            ..ThreadListParams::default()
+        })
+        .await
+        .expect("list")
+        .threads
+        .into_iter()
+        .map(|thread| (thread.title.clone(), thread))
+        .collect()
+    }
+
+    #[tokio::test]
+    async fn a_pin_is_kept_with_the_thread_and_reported_in_every_summary() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let (first, second) = two_threads(&host).await;
+        let mut events = host.subscribe();
+
+        let before = summaries(&host).await;
+        assert!(!before["First"].pinned && !before["Second"].pinned);
+        assert_eq!(before["First"].archived_at, None);
+        assert!(!first.pinned, "a new thread is not pinned");
+
+        let pinned = host
+            .pin_thread(ThreadPinParams {
+                thread_id: first.id.clone(),
+                pinned: true,
+            })
+            .await
+            .expect("pin");
+        assert_eq!(
+            pinned,
+            ThreadPinResponse {
+                thread_id: first.id.clone(),
+                pinned: true
+            }
+        );
+        let announced = events.try_recv().expect("thread/pinned");
+        assert_eq!(announced.method, "thread/pinned");
+        assert_eq!(
+            announced.params,
+            serde_json::json!({ "threadId": first.id, "pinned": true })
+        );
+        let after = summaries(&host).await;
+        assert!(after["First"].pinned);
+        assert!(!after["Second"].pinned, "{}", second.id);
+
+        let reloaded = boundary_host(workspace.path(), store.path());
+        assert!(
+            summaries(&reloaded).await["First"].pinned,
+            "a pin survives a new host over the same store"
+        );
+
+        reloaded
+            .pin_thread(ThreadPinParams {
+                thread_id: first.id.clone(),
+                pinned: false,
+            })
+            .await
+            .expect("unpin");
+        reloaded
+            .pin_thread(ThreadPinParams {
+                thread_id: first.id.clone(),
+                pinned: false,
+            })
+            .await
+            .expect("unpinning twice is not an error");
+        assert!(!summaries(&boundary_host(workspace.path(), store.path())).await["First"].pinned);
+    }
+
+    #[tokio::test]
+    async fn a_pin_is_allowed_while_a_turn_runs_and_survives_the_archive_and_the_delete_removes_it()
+    {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let (first, _) = two_threads(&host).await;
+        host.running_turns.lock().await.insert(
+            first.id.clone(),
+            RunningTurn {
+                turn_id: "turn-1".to_string(),
+                handle: tokio::spawn(async {}),
+                partial: Arc::new(StdMutex::new(PartialOutput::default())),
+                event_sequence: Arc::new(StdMutex::new(0)),
+                process_owner: crate::process_tree::ProcessTreeOwner::new(),
+            },
+        );
+        assert!(host
+            .rename_thread(ThreadRenameParams {
+                thread_id: first.id.clone(),
+                title: "Renamed".to_string(),
+            })
+            .await
+            .is_err());
+        host.pin_thread(ThreadPinParams {
+            thread_id: first.id.clone(),
+            pinned: true,
+        })
+        .await
+        .expect("a running turn does not stop a pin");
+        host.running_turns.lock().await.remove(&first.id);
+
+        host.archive_thread(ThreadIdParams {
+            thread_id: first.id.clone(),
+        })
+        .await
+        .expect("archive");
+        let archived = summaries(&host).await;
+        assert!(archived["First"].pinned);
+        assert_eq!(archived["First"].status, ThreadStatus::Archived);
+        assert!(archived["First"].archived_at.is_some_and(|at| at > 0));
+
+        host.delete_thread(ThreadDeleteParams {
+            thread_id: first.id.clone(),
+            discard_worktree_archives: false,
+        })
+        .await
+        .expect("delete");
+        assert!(!crate::sessions::is_pinned(store.path(), &first.id));
+    }
+
+    #[tokio::test]
+    async fn pinning_a_thread_the_host_does_not_have_is_an_error_that_leaves_no_pin() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        for thread_id in ["no-such-thread", "../escape", "cloud:abc"] {
+            let error = host
+                .pin_thread(ThreadPinParams {
+                    thread_id: thread_id.to_string(),
+                    pinned: true,
+                })
+                .await
+                .expect_err(thread_id);
+            assert!(error.is_not_found(), "{thread_id}: {}", error.message());
+        }
+        assert!(!crate::sessions::is_pinned(store.path(), "no-such-thread"));
+        assert!(host.capabilities().thread_pin);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_terminal_opens_only_inside_the_workspace_and_only_where_it_is_trusted() {
+        let workspace = tempdir().expect("workspace");
+        let outside = tempdir().expect("outside");
+        let store = tempdir().expect("store");
+        let host = boundary_host(workspace.path(), store.path());
+        let (events, _unread) = tokio::sync::mpsc::channel(1);
+        let open = |cwd: &Path| {
+            host.open_terminal(
+                "terminal_test".to_string(),
+                agiworkforce_protocol::developer_session::TerminalOpenParams {
+                    cwd: cwd.display().to_string(),
+                    cols: 80,
+                    rows: 24,
+                },
+                events.clone(),
+            )
+        };
+
+        let elsewhere = open(outside.path())
+            .await
+            .expect_err("outside the workspace");
+        assert!(
+            elsewhere.message().contains("opens inside"),
+            "{}",
+            elsewhere.message()
+        );
+
+        std::os::unix::fs::symlink(outside.path(), workspace.path().join("link")).unwrap();
+        let through_a_link = open(&workspace.path().join("link"))
+            .await
+            .expect_err("a link out of the workspace");
+        assert!(
+            through_a_link.message().contains("opens inside"),
+            "{}",
+            through_a_link.message()
+        );
+
+        assert!(open(&workspace.path().join("missing")).await.is_err());
+
+        let untrusted = open(workspace.path())
+            .await
+            .expect_err("no consent for this folder");
+        assert!(
+            untrusted.message().contains("not a trusted folder"),
+            "{}",
+            untrusted.message()
+        );
+        assert!(host.capabilities().terminals);
+        assert_eq!(host.terminals.open_count(), 0);
+    }
+
+    #[test]
+    fn no_agent_tool_is_a_terminal_request_or_maps_to_one() {
+        use crate::platform::runtime::tool_catalog;
+        use agiworkforce_protocol::developer_session::method;
+
+        let methods = [
+            method::TERMINAL_OPEN,
+            method::TERMINAL_WRITE,
+            method::TERMINAL_RESIZE,
+            method::TERMINAL_CLOSE,
+            method::TERMINAL_OUTPUT,
+            method::TERMINAL_EXITED,
+        ];
+        let mut definitions = tool_catalog::all_builtin_tool_definitions();
+        definitions.extend(tool_catalog::git_tool_definitions());
+        definitions.extend(tool_catalog::browser_tool_definitions());
+        definitions.extend(tool_catalog::team_tool_definitions());
+        definitions.extend(tool_catalog::image_tool_definitions(None));
+        definitions.extend(test_agent().effective_tool_definitions());
+        assert!(definitions.len() > 20, "{}", definitions.len());
+
+        let names: HashSet<String> = definitions.iter().map(|d| d.name.clone()).collect();
+        for method in methods {
+            let spelled = [
+                method.to_string(),
+                method.replace('/', "_"),
+                method.replace('/', "."),
+                method
+                    .split('/')
+                    .map(|part| {
+                        let mut letters = part.chars();
+                        letters
+                            .next()
+                            .map(|first| first.to_uppercase().chain(letters).collect::<String>())
+                            .unwrap_or_default()
+                    })
+                    .collect::<String>(),
+            ];
+            for name in spelled {
+                assert!(!names.contains(&name), "{name} is an agent tool");
+                let canonical = tool_catalog::canonical_tool_name(&name);
+                assert_eq!(canonical, name, "{name} maps to the agent tool {canonical}");
+            }
+        }
+        for definition in &definitions {
+            let name = definition.name.to_ascii_lowercase();
+            assert!(!name.starts_with("terminal"), "{}", definition.name);
+            assert!(
+                !definition.description.contains("terminal/"),
+                "{} describes a terminal request",
+                definition.name
+            );
+            for alias in tool_catalog::tool_aliases(&definition.name) {
+                assert!(
+                    !alias.to_ascii_lowercase().starts_with("terminal"),
+                    "{alias}"
+                );
+            }
+        }
+    }
+
     #[tokio::test]
     async fn workspace_identity_is_bound_to_the_held_directory_and_refuses_replacement() {
         let parent = tempdir().expect("owned parent");
@@ -12173,6 +12565,77 @@ mod tests {
             ["ask 1", "answer 1", "ask 2", "answer 2"],
             "turns 1 and 2 in their original wording, and nothing after"
         );
+    }
+
+    #[tokio::test]
+    async fn a_named_worktrees_root_is_made_when_missing_and_holds_the_worktrees() {
+        let _serial = crate::process_tree::CHILD_SPAWNING_TESTS.lock().await;
+        let workspace = tempdir().expect("workspace");
+        git_repo(workspace.path());
+        let store = tempdir().expect("store");
+        let parent = tempdir().expect("parent");
+        let named = parent.path().join("not").join("yet").join("there");
+        let host = boundary_host(workspace.path(), store.path())
+            .with_checked_worktrees_root(&named)
+            .expect("a missing folder is made");
+        assert!(named.is_dir());
+
+        let created = host
+            .create_managed_worktree(ManagedWorktreeCreateParams {
+                start: agiworkforce_protocol::developer_session::WorktreeStartPoint::Ref {
+                    name: "HEAD".to_string(),
+                },
+                label: None,
+            })
+            .await
+            .expect("create");
+        let checkout = PathBuf::from(&created.worktree.path);
+        assert!(
+            checkout.starts_with(named.canonicalize().unwrap()),
+            "{} is not under {}",
+            checkout.display(),
+            named.display()
+        );
+        assert!(checkout.join("README.md").is_file());
+    }
+
+    #[test]
+    fn a_worktrees_root_that_cannot_hold_worktrees_is_refused() {
+        let workspace = tempdir().expect("workspace");
+        let store = tempdir().expect("store");
+        let scratch = tempdir().expect("scratch");
+        let refused = |root: &Path| {
+            boundary_host(workspace.path(), store.path())
+                .with_checked_worktrees_root(root)
+                .err()
+                .map(|error| error.message().to_string())
+        };
+
+        let relative = refused(Path::new("worktrees")).expect("relative path refused");
+        assert!(relative.contains("absolute"), "{relative}");
+
+        let file = scratch.path().join("a-file");
+        std::fs::write(&file, "x").unwrap();
+        let not_a_directory = refused(&file).expect("a file refused");
+        assert!(
+            not_a_directory.contains("not a directory"),
+            "{not_a_directory}"
+        );
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let locked = scratch.path().join("locked");
+            std::fs::create_dir(&locked).unwrap();
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o555)).unwrap();
+            let writable_anyway = std::fs::File::create(locked.join("probe")).is_ok();
+            let result = refused(&locked);
+            std::fs::set_permissions(&locked, std::fs::Permissions::from_mode(0o755)).unwrap();
+            if !writable_anyway {
+                let message = result.expect("a read-only folder refused");
+                assert!(message.contains("not writable"), "{message}");
+            }
+        }
     }
 
     #[tokio::test]

@@ -1309,6 +1309,8 @@ mod tests {
             created_by: DeveloperSessionSource::Cli,
             status: ThreadStatus::Idle,
             location: None,
+            pinned: false,
+            archived_at: None,
         }
     }
 

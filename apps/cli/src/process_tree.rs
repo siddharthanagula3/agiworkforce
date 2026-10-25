@@ -252,7 +252,7 @@ pub(crate) async fn terminate_owners_and_wait(
 /// A zombie still answers signal 0 until its parent reaps it, so this waits for
 /// genuine `ESRCH` rather than treating "doomed" as "gone".
 #[cfg(unix)]
-async fn await_process_groups_reaped(
+pub(crate) async fn await_process_groups_reaped(
     groups: &std::collections::HashSet<u32>,
     deadline: Instant,
 ) -> io::Result<()> {
@@ -283,7 +283,7 @@ async fn await_process_groups_reaped(
 /// already returned by the time the registry drains, so there is no equivalent
 /// window to wait out.
 #[cfg(not(unix))]
-async fn await_process_groups_reaped(
+pub(crate) async fn await_process_groups_reaped(
     _groups: &std::collections::HashSet<u32>,
     _deadline: Instant,
 ) -> io::Result<()> {
