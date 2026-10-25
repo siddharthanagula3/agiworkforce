@@ -717,10 +717,8 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
                 "additionalProperties": false
             }),
         ).with_size_cap(20_000).deferred(),
-        // Sprint B4: real plan mode -- model writes plan via this tool, user
-        // approves it, then mutating tools unlock. Deferred
-        // because it is plan-mode-only; normal sessions don't need it in the
-        // initial schema list.
+        // Always loaded: the tool list is the same in every mode, so plan mode
+        // must find the one tool it requires without a tool_search round trip.
         def(
             "update_plan",
             "Write or revise the execution plan. REQUIRED in plan mode before any mutating tool call (bash, edit_file, write_file, apply_patch, MCP tools). Each step is one discrete action. After calling, await user approval -- do NOT call mutating tools yet. The user reviews the plan and approves or revises it.",
@@ -743,7 +741,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
                 },
                 "required": ["steps"]
             }),
-        ).control().with_size_cap(2_000).deferred(),
+        ).control().with_size_cap(2_000),
         def(
             "glob",
             "Find files by glob pattern (e.g. `**/*.rs`). Returns matching file paths.",
@@ -1197,7 +1195,7 @@ pub fn team_tool_definitions() -> Vec<ToolDefinition> {
 
 /// Return all built-in tool definitions whose schema the model sees in the
 /// initial system-prompt tool list (i.e. `should_defer == false`). These are
-/// the ~11 core tools. Niche tools (apply_patch, update_plan, glob, batch,
+/// the core tools. Niche tools (apply_patch, glob, batch,
 /// multiedit, todo_*, ask_user, read_many_files) are deferred and loaded on
 /// demand via the `tool_search` tool.
 ///
@@ -1237,8 +1235,7 @@ pub fn image_tool_definitions(allowed_tools: Option<&[String]>) -> Vec<ToolDefin
 }
 
 /// Return all built-in tool definitions regardless of `should_defer`. Used by
-/// `tool_search` to answer on-demand schema requests, and by the plan-mode
-/// filter which needs to inspect the full set.
+/// `tool_search` to answer on-demand schema requests.
 pub fn all_builtin_tool_definitions() -> Vec<ToolDefinition> {
     built_in_tool_definitions()
 }
@@ -1246,9 +1243,8 @@ pub fn all_builtin_tool_definitions() -> Vec<ToolDefinition> {
 /// Assemble the effective tool definitions for a session.
 ///
 /// Behavior:
-/// - built-in tools: always-loaded set (should_defer=false). In plan mode,
-///   filtered to read-only only; `update_plan` is force-included even though
-///   it is normally deferred.
+/// - built-in tools: always-loaded set (should_defer=false), the same in
+///   every permission mode
 /// - team tools are appended when team mode is enabled
 /// - MCP tools are appended last when present
 /// - `allowed_tools`, when provided, filters the final tool list by canonical
@@ -1257,18 +1253,11 @@ pub fn all_builtin_tool_definitions() -> Vec<ToolDefinition> {
 /// Phase E: deferred tools are excluded from the initial schema list here.
 /// They remain executable; the model loads their schema via `tool_search`.
 pub fn effective_tool_definitions(
-    plan_mode: bool,
     team_mode: bool,
     allowed_tools: Option<&[String]>,
     mcp_tool_definitions: Option<&[ToolDefinition]>,
 ) -> Vec<ToolDefinition> {
-    effective_tool_definitions_with_browser(
-        plan_mode,
-        team_mode,
-        false,
-        allowed_tools,
-        mcp_tool_definitions,
-    )
+    effective_tool_definitions_with_browser(team_mode, false, allowed_tools, mcp_tool_definitions)
 }
 
 /// As above, plus the browser family when a paired browser is reachable.
@@ -1278,28 +1267,19 @@ pub fn effective_tool_definitions(
 /// and an HTTP round trip to the shell on each one would put a stall in front
 /// of every turn.
 pub fn effective_tool_definitions_with_browser(
-    plan_mode: bool,
     team_mode: bool,
     browser_available: bool,
     allowed_tools: Option<&[String]>,
     mcp_tool_definitions: Option<&[ToolDefinition]>,
 ) -> Vec<ToolDefinition> {
-    let mut tool_definitions = if plan_mode {
-        filter_read_only_builtin_tool_definitions()
-    } else {
-        // Phase E: only send non-deferred tools in the initial schema list.
-        // The model calls tool_search to load deferred schemas on demand.
-        always_loaded_tool_definitions()
-    };
+    // One list in every mode: plan mode is carried as a message and enforced
+    // when a call arrives, so the schema prefix stays cached across a switch.
+    // Phase E: only send non-deferred tools in the initial schema list.
+    // The model calls tool_search to load deferred schemas on demand.
+    let mut tool_definitions = always_loaded_tool_definitions();
 
     if browser_available {
-        // Plan mode sees only the reads, like every other family: a plan is
-        // written before anything is allowed to act.
-        tool_definitions.extend(
-            browser_tool_definitions()
-                .into_iter()
-                .filter(|definition| !plan_mode || definition.is_read_only),
-        );
+        tool_definitions.extend(browser_tool_definitions());
     }
 
     if team_mode {
@@ -1330,18 +1310,13 @@ pub fn effective_tool_definitions_with_browser(
 }
 
 pub fn deferred_executable_tool_definitions(
-    plan_mode: bool,
     allowed_tools: Option<&[String]>,
     mcp_tool_definitions: Option<&[ToolDefinition]>,
 ) -> Vec<ToolDefinition> {
-    let mut deferred: Vec<ToolDefinition> = if plan_mode {
-        Vec::new()
-    } else {
-        all_builtin_tool_definitions()
-            .into_iter()
-            .filter(|definition| definition.should_defer)
-            .collect()
-    };
+    let mut deferred: Vec<ToolDefinition> = all_builtin_tool_definitions()
+        .into_iter()
+        .filter(|definition| definition.should_defer)
+        .collect();
     if let Some(mcp_tool_definitions) = mcp_tool_definitions {
         deferred.extend(
             mcp_tool_definitions
@@ -1408,18 +1383,6 @@ fn summarize_for_index(description: &str, max_chars: usize) -> String {
     let mut summary: String = line.chars().take(max_chars).collect();
     summary.push_str("...");
     summary
-}
-
-fn filter_read_only_builtin_tool_definitions() -> Vec<ToolDefinition> {
-    // Use all_builtin_tool_definitions (includes deferred) so read-only
-    // exploration tools remain visible in plan mode. `update_plan` is a
-    // special non-read-only control tool that must also be visible there.
-    all_builtin_tool_definitions()
-        .into_iter()
-        .filter(|tool_definition| {
-            tool_definition.is_read_only || tool_definition.name == "update_plan"
-        })
-        .collect()
 }
 
 #[cfg(test)]
@@ -1503,7 +1466,7 @@ mod tests {
     /// browser is actually paired.
     #[test]
     fn the_browser_family_is_offered_only_when_a_browser_is_paired() {
-        let without = effective_tool_definitions_with_browser(false, false, false, None, None);
+        let without = effective_tool_definitions_with_browser(false, false, None, None);
         assert!(
             !tool_names(&without)
                 .iter()
@@ -1511,7 +1474,7 @@ mod tests {
             "an unpaired session must not advertise browser tools"
         );
 
-        let with = effective_tool_definitions_with_browser(false, false, true, None, None);
+        let with = effective_tool_definitions_with_browser(false, true, None, None);
         for expected in [
             "browser_read_page",
             "browser_click",
@@ -1528,23 +1491,30 @@ mod tests {
         // The default entry point is unchanged for every caller that has not
         // resolved availability.
         assert_eq!(
-            tool_names(&effective_tool_definitions(false, false, None, None)),
+            tool_names(&effective_tool_definitions(false, None, None)),
             tool_names(&without)
         );
     }
 
-    /// Plan mode sees the reads and nothing else, like every other family: a
-    /// plan is written before anything is allowed to act in the user's browser.
+    /// The browser family is offered whole in every mode; plan mode refuses
+    /// the acting calls when they arrive instead of changing the schema list.
     #[test]
-    fn plan_mode_offers_only_the_browser_reads() {
-        let planning = effective_tool_definitions_with_browser(true, false, true, None, None);
-        let names = tool_names(&planning);
-        assert!(names.contains(&"browser_read_page"));
-        assert!(names.contains(&"browser_screenshot"));
+    fn plan_mode_classifies_the_acting_browser_tools_as_mutating() {
+        let names = tool_names(&effective_tool_definitions_with_browser(
+            false, true, None, None,
+        ))
+        .into_iter()
+        .map(str::to_string)
+        .collect::<Vec<_>>();
         for mutating in ["browser_click", "browser_type", "browser_navigate"] {
+            assert!(names.iter().any(|name| name == mutating), "{mutating}");
+            let definition = browser_tool_definitions()
+                .into_iter()
+                .find(|definition| definition.name == mutating)
+                .expect("browser tool");
             assert!(
-                !names.contains(&mutating),
-                "{mutating} acts in the user's browser and must not be offered while planning"
+                is_plan_mode_mutating_tool_definition(&definition),
+                "{mutating}"
             );
         }
     }
@@ -1719,50 +1689,11 @@ mod tests {
     }
 
     #[test]
-    fn built_in_plan_mode_keeps_only_read_only_tools_and_appends_team_and_mcp() {
-        let mcp_tool_definitions = vec![test_tool_definition("mcp_alpha")];
-
-        let tool_definitions =
-            effective_tool_definitions(true, true, None, Some(&mcp_tool_definitions));
-
-        assert_eq!(
-            tool_names(&tool_definitions),
-            vec![
-                "read_file",
-                "search_files",
-                "list_directory",
-                "web_search",
-                "web_fetch",
-                "grep_files",
-                "tool_search",
-                "skill",
-                "update_plan",
-                "glob",
-                "todo_read",
-                "read_many_files",
-                "cron_list",
-                "advisor",
-                "list_worktrees",
-                "lsp_definition",
-                "lsp_hover",
-                "lsp_completion",
-                "lsp_document_symbols",
-                "lsp_format",
-                "git_status",
-                "git_show",
-                "git_log",
-                "git_diff",
-                "git_branches",
-                "git_worktrees",
-                "git_stash_list",
-                "spawn_teammate",
-                "send_message",
-                "team_task",
-                "read_messages",
-                "list_teammates",
-                "mcp_alpha",
-            ]
-        );
+    fn update_plan_is_always_loaded_so_plan_mode_needs_no_other_list() {
+        let loaded = always_loaded_tool_definitions();
+        let names = tool_names(&loaded);
+        assert!(names.contains(&"update_plan"));
+        assert!(names.contains(&"run_command"));
     }
 
     #[test]
@@ -1774,12 +1705,8 @@ mod tests {
             "mcp_alpha".to_string(),
         ];
 
-        let tool_definitions = effective_tool_definitions(
-            false,
-            true,
-            Some(&allowed_tools),
-            Some(&mcp_tool_definitions),
-        );
+        let tool_definitions =
+            effective_tool_definitions(true, Some(&allowed_tools), Some(&mcp_tool_definitions));
 
         assert_eq!(
             tool_names(&tool_definitions),
@@ -1796,7 +1723,7 @@ mod tests {
             "Skill".to_string(),
         ];
 
-        let tool_definitions = effective_tool_definitions(false, false, Some(&allowed_tools), None);
+        let tool_definitions = effective_tool_definitions(false, Some(&allowed_tools), None);
 
         assert_eq!(
             tool_names(&tool_definitions),
@@ -1821,15 +1748,6 @@ mod tests {
         assert!(properties.contains_key("action"));
         assert!(properties.contains_key("name"));
         assert!(!properties.contains_key("path"));
-    }
-
-    #[test]
-    fn plan_mode_applies_before_allowed_tools() {
-        let allowed_tools = vec!["run_command".to_string(), "read_file".to_string()];
-
-        let tool_definitions = effective_tool_definitions(true, false, Some(&allowed_tools), None);
-
-        assert_eq!(tool_names(&tool_definitions), vec!["read_file"]);
     }
 
     #[test]
@@ -2159,8 +2077,7 @@ mod tests {
             deferred_test_tool_definition("mcp__files__archive_note"),
         ];
 
-        let tool_definitions =
-            effective_tool_definitions(false, false, None, Some(&mcp_tool_definitions));
+        let tool_definitions = effective_tool_definitions(false, None, Some(&mcp_tool_definitions));
         let names = tool_names(&tool_definitions);
 
         assert!(names.contains(&"mcp__files__read_note"));
@@ -2181,8 +2098,8 @@ mod tests {
     fn no_deferred_mcp_tool_leaves_tool_search_description_untouched() {
         let mcp_tool_definitions = vec![test_tool_definition("mcp__files__read_note")];
 
-        let with_mcp = effective_tool_definitions(false, false, None, Some(&mcp_tool_definitions));
-        let without_mcp = effective_tool_definitions(false, false, None, None);
+        let with_mcp = effective_tool_definitions(false, None, Some(&mcp_tool_definitions));
+        let without_mcp = effective_tool_definitions(false, None, None);
 
         let description = |definitions: &[ToolDefinition]| {
             definitions

@@ -4,7 +4,11 @@ import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { type ThreadReadResponse, type ThreadSummary } from '@agiworkforce/types';
+import {
+  AGENT_EVENT_SCHEMA_VERSION,
+  type ThreadReadResponse,
+  type ThreadSummary,
+} from '@agiworkforce/types';
 import {
   ChatStateManager,
   type ExtToWebviewMessage,
@@ -3250,6 +3254,180 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('counts and lists the changes the CLI recorded for the turn, not only the writes seen live', async () => {
+    const harness = makeHarness();
+    const listTurnCheckpoints = vi.fn().mockResolvedValue({
+      available: true,
+      turns: [
+        {
+          turnId: 'turn-1',
+          files: [
+            { path: 'src/math.ts', status: 'modified', binary: false },
+            { path: 'src/new.ts', status: 'added', binary: false },
+            { path: 'README.md', status: 'modified', binary: false },
+          ],
+        },
+      ],
+    });
+    const revertCheckpointSections = vi.fn(
+      async (params: { sections: Array<{ path: string }> }) => ({
+        applied: params.sections.map((section) => section.path),
+        conflicted: [],
+      }),
+    );
+    Object.assign(harness.runtime, {
+      listTurnCheckpoints,
+      revertCheckpointSections,
+      offers: vi.fn(async (capability: string) => capability === 'checkpoints'),
+    });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      category: 'filesystem',
+      summary: 'Edit src/math.ts',
+      input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'Successfully edited src/math.ts',
+      isError: false,
+      elapsedMs: 1,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Fixed.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    const done = harness.posted.find((message) => message.type === 'done');
+    expect(done?.payload).toMatchObject({ turnId: 'turn-1', changedFiles: 3 });
+    const files = (done?.payload as { files?: Array<{ path: string; label: string }> }).files;
+    expect(files?.map((file) => file.label)).toEqual(['src/math.ts', 'src/new.ts', 'README.md']);
+    const [math, created, readme] = (files ?? []).map((file) => file.path);
+
+    await harness.manager.handleMessage({
+      type: 'keepTurnFile',
+      payload: { turnId: 'turn-1', path: readme ?? '' },
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'turnFileSettled',
+      payload: { turnId: 'turn-1', path: readme, outcome: 'kept' },
+    });
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Undo changes' as never);
+    await harness.manager.handleMessage({
+      type: 'undoTurnFile',
+      payload: { turnId: 'turn-1', path: math ?? '' },
+    });
+    expect(revertCheckpointSections).toHaveBeenLastCalledWith({
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sections: [{ path: 'src/math.ts' }],
+    });
+    expect(harness.posted).toContainEqual({
+      type: 'turnFileSettled',
+      payload: { turnId: 'turn-1', path: math, outcome: 'undone' },
+    });
+
+    vi.mocked(vscode.window.showWarningMessage).mockResolvedValueOnce('Undo changes' as never);
+    await harness.manager.handleMessage({ type: 'undoTurn', payload: { turnId: 'turn-1' } });
+    expect(revertCheckpointSections).toHaveBeenLastCalledWith({
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sections: [{ path: 'src/new.ts' }],
+    });
+    expect(created).toBeDefined();
+    expect(harness.posted).toContainEqual({
+      type: 'turnChangesUndone',
+      payload: { turnId: 'turn-1' },
+    });
+  });
+
+  it('starts the usage meter compact and remembers when it was opened', async () => {
+    const harness = makeHarness();
+    expect(harness.manager.meterCollapsed).toBe(true);
+
+    await harness.manager.handleMessage({ type: 'restoreUsageMeter' });
+    expect(harness.manager.meterCollapsed).toBe(false);
+    expect(harness.context.workspaceState.get('agiWorkforce.usageMeterExpanded')).toBe(true);
+  });
+
+  it('remembers a running session so a window reload reopens it and its live run', async () => {
+    const running = {
+      thread: threadSummary({ id: 'thread-live', title: 'Long task', status: 'running' }),
+      messages: [{ role: 'user', text: 'Refactor the module' }],
+      transcriptTruncated: false,
+    } satisfies ThreadReadResponse;
+    const before = makeHarness();
+    const send = before.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Refactor the module' },
+    });
+    await vi.waitFor(() => expect(before.runtime.startTurn).toHaveBeenCalledOnce());
+    await vi.waitFor(() =>
+      expect(before.context.workspaceState.get('agiWorkforce.inFlightSession')).toBe('thread-1'),
+    );
+    before.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Done.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    expect(before.context.workspaceState.get('agiWorkforce.inFlightSession')).toBeUndefined();
+
+    const after = makeHarness({ resolvedConversation: running });
+    await after.context.workspaceState.update('agiWorkforce.inFlightSession', 'thread-live');
+    const reconnectThread = vi.fn().mockResolvedValue({
+      turnId: 'turn-live',
+      partialResponse: 'Reading the module',
+      pendingApprovals: [],
+    });
+    Object.assign(after.runtime, {
+      reconnectThread,
+      offers: vi.fn(async (capability: string) => capability === 'reconnect'),
+    });
+
+    await after.manager.handleMessage({ type: 'ready' });
+
+    expect(after.runtime.resumeThread).toHaveBeenCalledWith('thread-live');
+    expect(after.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'conversationLoaded',
+        payload: expect.objectContaining({ threadId: 'thread-live' }),
+      }),
+    );
+    await vi.waitFor(() => expect(after.posted).toContainEqual({ type: 'turnResumed' }));
+    expect(after.posted).toContainEqual({
+      type: 'token',
+      payload: { text: 'Reading the module' },
+    });
+  });
+
   it('does not offer review or undo for a write that failed or was denied', async () => {
     const harness = makeHarness();
     const send = harness.manager.handleMessage({
@@ -4267,6 +4445,105 @@ describe('ChatStateManager context usage reporting', () => {
       );
     },
   );
+
+  it('forwards the reasoning summary the runtime streams to the webview', async () => {
+    const harness = makeHarness();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    harness.posted.length = 0;
+    harness.emit({
+      type: 'agent_event',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      envelope: {
+        schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+        sessionId: 'thread-1',
+        turnId: 'turn-1',
+        sequence: 0,
+        emittedAtMs: 1,
+        event: { type: 'reasoning-delta', delta: 'Reading the config first.' },
+      },
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).toContainEqual({
+      type: 'reasoning',
+      payload: { text: 'Reading the config first.' },
+    });
+  });
+
+  it('counts and shows the output a stopped turn streamed before it was interrupted', async () => {
+    const harness = makeHarness();
+    const counter = getTokenCounter();
+    counter.reset();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    harness.posted.length = 0;
+    harness.emit({
+      type: 'turn_interrupted',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'interrupted',
+      outputTokens: 37,
+    });
+    await send;
+
+    expect(counter.promptTokens).toBe(0);
+    expect(counter.completionTokens).toBe(37);
+    expect(counter.requestCount).toBe(1);
+    const done = harness.posted.find((message) => message.type === 'done');
+    expect(done).toMatchObject({ payload: { stopped: true, outputTokens: 37 } });
+    expect((done as { payload: { modelLabel?: string } }).payload.modelLabel).toEqual(
+      expect.any(String),
+    );
+  });
+
+  it('leaves the token counter alone when a stopped turn streamed nothing', async () => {
+    const harness = makeHarness();
+    const counter = getTokenCounter();
+    counter.reset();
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    harness.posted.length = 0;
+    harness.emit({
+      type: 'turn_interrupted',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'interrupted',
+      outputTokens: 0,
+    });
+    await send;
+
+    expect(counter.requestCount).toBe(0);
+    expect(harness.posted.find((message) => message.type === 'done')).toEqual({
+      type: 'done',
+      payload: { stopped: true },
+    });
+  });
 
   it('feeds the session token counter the runtime-measured counts, not a char estimate', async () => {
     const harness = makeHarness();

@@ -91,10 +91,14 @@ fn value_patterns() -> &'static Vec<(Regex, &'static str)> {
                 .expect("camelCase secret key regex"),
                 "$1$2$3$4[REDACTED]$5",
             ),
-            // `-p` only counts as a flag when it is a whole argument: an
-            // unanchored match mangles every hyphenated word (`raw-parallel`).
+            // `-p` means a password only to the clients that read it so; to
+            // `tsc`, `mkdir`, `ssh` or `psql` it is a project, parent or port.
+            // It counts only as a whole argument of one of those clients.
             (
-                Regex::new(r"(?im)(^|[ \t])(-p)[ \t]+\S+").expect("password short flag regex"),
+                Regex::new(
+                    r"(?im)(^|[ \t;&|(])((?:\S*/)?(?:mysql|mysqldump|mysqladmin|mysqlimport|mysqlshow|mariadb|mariadb-dump|mariadb-admin|sshpass)(?:[ \t]+[^ \t\n;&|]+)*?[ \t]+-p)[ \t]*([^ \t\n;&|]+)",
+                )
+                .expect("password short flag regex"),
                 "${1}${2} [REDACTED]",
             ),
             (
@@ -260,7 +264,14 @@ mod tests {
             redact_tool_output("mysql -u root -p hunter2"),
             "mysql -u root -p [REDACTED]"
         );
-        assert_eq!(redact_tool_output("-p hunter2"), "-p [REDACTED]");
+        assert_eq!(
+            redact_tool_output("mysql -uroot -phunter2 app"),
+            "mysql -uroot -p [REDACTED] app"
+        );
+        assert_eq!(
+            redact_tool_output("sshpass -p hunter2 ssh deploy@host"),
+            "sshpass -p [REDACTED] ssh deploy@host"
+        );
         assert_eq!(
             redact_tool_output("curl --password=hunter2 https://example.com"),
             "curl --password=[REDACTED] https://example.com"
@@ -269,6 +280,20 @@ mod tests {
             redact_tool_output("curl --password hunter2"),
             "curl --password [REDACTED]"
         );
+    }
+
+    #[test]
+    fn a_dash_p_that_is_not_a_password_keeps_its_value() {
+        for line in [
+            "tsc -p tsconfig.json --noEmit",
+            "pnpm exec tsc -p apps/web/tsconfig.json",
+            "mkdir -p build/out",
+            "ssh -p 2222 deploy@host",
+            "psql -h localhost -p 5432 app",
+            "cargo test -p agiworkforce-cli --lib",
+        ] {
+            assert_eq!(redact_tool_output(line), line, "mangled: {line}");
+        }
     }
 
     #[test]

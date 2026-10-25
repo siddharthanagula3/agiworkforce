@@ -53,7 +53,7 @@ function serializeForInlineScript(value: unknown): string {
 const DEVELOPER_MODE_DESCRIPTIONS: Record<DeveloperAgentMode, string> = {
   plan: 'Generate a plan; no edits until approved',
   ask: 'Confirm every edit before it runs',
-  auto: 'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
+  auto: "Reads and edits files without asking. Asks before commands it can't confirm are read-only.",
   bypass: 'Skip all approval prompts (dangerous)',
 };
 
@@ -1480,16 +1480,6 @@ export function getWebviewContent(
       opacity: 0.7;
     }
 
-    .usage-meter-collapsed {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      padding: 4px 12px;
-      background: var(--bg-elevated);
-      border-bottom: 1px solid var(--border);
-      flex-shrink: 0;
-    }
-
     .usage-meter-bar-wrap {
       flex: 1;
       min-width: 0;
@@ -1558,7 +1548,7 @@ export function getWebviewContent(
     }
     .upgrade-btn:hover { opacity: 0.85; }
 
-    .meter-dismiss-btn, .meter-restore-btn {
+    .meter-details-btn {
       background: none;
       border: none;
       color: var(--text-secondary);
@@ -1576,7 +1566,9 @@ export function getWebviewContent(
       transition: color var(--duration-instant);
       flex-shrink: 0;
     }
-    .meter-dismiss-btn:hover, .meter-restore-btn:hover { color: var(--text-primary); }
+    .meter-details-btn:hover { color: var(--text-primary); }
+    .meter-details-btn[hidden] { display: none; }
+    .usage-meter-banner { cursor: pointer; }
 
 
     /* ── @mention dropdown ── */
@@ -1859,6 +1851,50 @@ export function getWebviewContent(
     }
     .turn-changes__review:hover,
     .turn-changes__undo:hover { background: var(--hover); }
+    .turn-changes__files {
+      flex-basis: 100%;
+      list-style: none;
+      margin: 0;
+      padding: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .turn-changes__file {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      min-width: 0;
+    }
+    .turn-changes__file-name {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      padding: 0 4px;
+      border: none;
+      background: none;
+      color: var(--link);
+      cursor: pointer;
+      font: inherit;
+      text-align: start;
+    }
+    .turn-changes__file-name:hover,
+    .turn-changes__file-name:focus-visible { color: var(--link-active); }
+    .turn-changes__file-action {
+      flex-shrink: 0;
+      min-height: var(--control-sm);
+      padding: 0 8px;
+      border: none;
+      border-radius: var(--corner-pill);
+      background: transparent;
+      color: var(--text-secondary);
+      cursor: pointer;
+      font: inherit;
+    }
+    .turn-changes__file-action:hover { background: var(--hover); color: var(--text-primary); }
+    .turn-changes__file-state { flex-shrink: 0; padding: 0 8px; }
 
     .progress-event .tool-call__label {
       flex: 1;
@@ -2480,11 +2516,6 @@ export function getWebviewContent(
       .controls-summary { max-width: 70px; }
     }
 
-    @media (max-width: 400px) {
-      /* Effort is one click away in the same popover; the model name is not. */
-      .model-pill-effort { display: none; }
-    }
-
     @media (max-width: 340px) {
       .context-usage.visible { display: none; }
       .header { padding-inline: 8px; }
@@ -2507,6 +2538,14 @@ export function getWebviewContent(
       /* Both chips stay reachable: min-width keeps each clickable and the mode
          chip gives up its width four times faster than the model name. */
       .controls-summary { max-width: 46px; }
+      .model-pill-effort { display: none; }
+    }
+
+    @media (max-width: 230px) {
+      /* VS Code's narrowest sidebar leaves the row ~140 px. Typing "/" opens
+         the same command menu, so its button gives way and Send stays on-screen. */
+      #slashBtn { display: none; }
+      .model-pill { min-width: 40px; }
     }
 
     @media (prefers-reduced-motion: reduce) {
@@ -2862,15 +2901,10 @@ export function getWebviewContent(
     <span class="usage-text" id="meterText"></span>
     <span class="usage-reset" id="meterReset"></span>
     <button class="upgrade-btn" id="upgradeBtn" style="display:none">Upgrade</button>
-    <button class="meter-dismiss-btn" id="meterDismissBtn" title="Collapse meter" aria-label="Collapse usage meter">&#215;</button>
+    <button class="meter-details-btn" id="meterDetailsBtn" title="${escapeHtml(t('webview.showUsageDetails'))}" aria-label="${escapeHtml(t('webview.showUsageDetails'))}" aria-controls="meterBuckets" aria-expanded="false"><span class="codicon codicon-chevron-down" aria-hidden="true"></span></button>
   </div>
   <!-- ── Per-limit usage breakdown ── -->
   <ul class="usage-bucket-list" id="meterBuckets" style="display:none" aria-label="Managed Cloud usage limits"></ul>
-  <!-- ── Usage meter collapsed pill ── -->
-  <div class="usage-meter-collapsed" id="usageMeterCollapsed" style="display:none">
-    <button class="meter-restore-btn" id="meterRestoreBtn" title="Show usage details">&#9660; <span id="meterCollapsedLabel">Usage</span></button>
-  </div>
-
   <!-- ── Messages ── -->
   <h2 class="visually-hidden">Conversation</h2>
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
@@ -3233,16 +3267,13 @@ export function getWebviewContent(
 
     // ── Usage meter DOM refs ──────────────────────────────────────────────────
     const usageMeterBanner = document.getElementById('usageMeterBanner');
-    const usageMeterCollapsed = document.getElementById('usageMeterCollapsed');
     const meterFill = document.getElementById('meterFill');
     const meterText = document.getElementById('meterText');
     const meterReset = document.getElementById('meterReset');
     const upgradeBtn = document.getElementById('upgradeBtn');
-    const meterDismissBtn = document.getElementById('meterDismissBtn');
-    const meterRestoreBtn = document.getElementById('meterRestoreBtn');
+    const meterDetailsBtn = document.getElementById('meterDetailsBtn');
     const meterBarWrap = document.getElementById('meterBarWrap');
     const meterProgress = document.getElementById('meterProgress');
-    const meterCollapsedLabel = document.getElementById('meterCollapsedLabel');
     const meterCloudIcon = document.getElementById('meterCloudIcon');
     const meterBuckets = document.getElementById('meterBuckets');
 
@@ -3303,7 +3334,7 @@ export function getWebviewContent(
         document.querySelector('.header-actions'),
         runtimeStatusEl,
         usageMeterBanner,
-        usageMeterCollapsed,
+        meterBuckets,
       ].forEach(function(element) {
         if (element) element.inert = visible;
       });
@@ -3442,15 +3473,14 @@ export function getWebviewContent(
       if (meterBuckets && meterBuckets.childElementCount > 0) {
         meterBuckets.style.display = collapsed ? 'none' : 'block';
       }
-      if (!usageMeterBanner || !usageMeterCollapsed) return;
-      if (collapsed) {
-        usageMeterBanner.style.display = 'none';
-        usageMeterCollapsed.style.display = 'flex';
-      } else {
-        usageMeterCollapsed.style.display = 'none';
-        // banner display is controlled by renderUsageMeter; show it
-        usageMeterBanner.style.display = 'flex';
-      }
+      if (!meterDetailsBtn) return;
+      meterDetailsBtn.hidden = !meterBuckets || meterBuckets.childElementCount === 0;
+      var detailsLabel = collapsed ? L10N.showUsageDetails : L10N.hideUsageDetails;
+      meterDetailsBtn.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+      meterDetailsBtn.setAttribute('aria-label', detailsLabel);
+      meterDetailsBtn.title = detailsLabel;
+      var chevron = meterDetailsBtn.querySelector('.codicon');
+      if (chevron) chevron.className = 'codicon codicon-chevron-' + (collapsed ? 'down' : 'up');
     }
 
     // Trust boundary shown in the header pill. Local / BYOK / Managed Cloud are
@@ -3658,7 +3688,7 @@ export function getWebviewContent(
         creditItem.appendChild(creditLabel);
         creditItem.appendChild(creditBalance);
         creditItem.appendChild(creditSpendability);
-        creditItem.appendChild(creditTopUp);
+        if (credits.topUpLabel) creditItem.appendChild(creditTopUp);
         meterBuckets.appendChild(creditItem);
       }
       meterBuckets.style.display = meterCollapsed ? 'none' : 'block';
@@ -3668,7 +3698,6 @@ export function getWebviewContent(
       lastUsageMeterPayload = payload;
       if (runtimeBlock !== null) {
         if (usageMeterBanner) usageMeterBanner.style.display = 'none';
-        if (usageMeterCollapsed) usageMeterCollapsed.style.display = 'none';
         renderUsageBuckets(null);
         if (runtimeBlock === 'workspace-required') renderNoWorkspaceIdentity();
         else if (runtimeBlock === 'workspace-untrusted') renderBlockedWorkspaceIdentity();
@@ -3693,7 +3722,6 @@ export function getWebviewContent(
       usageMeterBanner.classList.remove('warn');
       upgradeBtn.textContent = 'Upgrade';
       upgradeBtn.dataset.action = 'upgrade';
-      if (meterCollapsedLabel) meterCollapsedLabel.textContent = 'Usage';
 
       if (activeAccountStatus === 'expired') {
         meterText.textContent = L10N.cloudSessionExpired;
@@ -3702,7 +3730,6 @@ export function getWebviewContent(
         upgradeBtn.dataset.action = 'account';
         upgradeBtn.style.display = 'inline-block';
         usageMeterBanner.classList.add('warn');
-        if (meterCollapsedLabel) meterCollapsedLabel.textContent = L10N.accountNeedsAttention;
       } else if (payload.managedDeveloperEligible === false && payload.accountPlanTier) {
         meterCloudIcon.style.display = 'inline';
         var planLabel = payload.accountPlanLabel || payload.accountPlanTier;
@@ -3717,15 +3744,11 @@ export function getWebviewContent(
         upgradeBtn.dataset.action = paidPlanNeedsAttention ? 'billing' : 'upgrade';
         upgradeBtn.style.display = 'inline-block';
         usageMeterBanner.classList.add('warn');
-        if (meterCollapsedLabel) meterCollapsedLabel.textContent = paidPlanNeedsAttention
-          ? 'Billing needs attention'
-          : 'Upgrade for Cloud';
       } else if (payload.source === 'unbounded' || payload.source === 'user-api-key') {
         // Neither route has an AGI quota, so the meter has nothing to meter.
         // The route itself is named in the header chip and the composer status
         // line, and the billing consequence lives in Account & usage.
         usageMeterBanner.style.display = 'none';
-        usageMeterCollapsed.style.display = 'none';
         renderUsageBuckets(null);
         return;
       } else {
@@ -3742,11 +3765,13 @@ export function getWebviewContent(
           meterProgress.setAttribute('aria-valuetext', Math.round(usedPct) + '% of plan usage used');
         }
         var exhausted = payload.remaining !== null && payload.remaining <= 0;
-        meterText.textContent = exhausted
-          ? 'Managed Cloud quota exhausted'
-          : 'Usage: ' + (payload.usageLabel || 'Managed Cloud usage unavailable');
+        var onCredits = exhausted && typeof payload.creditsInUseLabel === 'string';
+        meterText.textContent = onCredits
+          ? payload.creditsInUseLabel
+          : exhausted
+            ? 'Managed Cloud quota exhausted'
+            : 'Usage: ' + (payload.usageLabel || 'Managed Cloud usage unavailable');
         meterReset.textContent = payload.resetsIn ? '· ' + payload.resetsIn : '';
-        if (exhausted && meterCollapsedLabel) meterCollapsedLabel.textContent = 'Quota exhausted';
         if (payload.showUpgrade) {
           upgradeBtn.style.display = 'inline-block';
           usageMeterBanner.classList.add('warn');
@@ -3755,29 +3780,27 @@ export function getWebviewContent(
 
       renderUsageBuckets(bucketsPayload);
 
-      // Apply collapsed state without hiding the banner if it should be visible
-      if (meterCollapsed) {
-        usageMeterBanner.style.display = 'none';
-        usageMeterCollapsed.style.display = 'flex';
-      } else {
-        usageMeterBanner.style.display = 'flex';
-        usageMeterCollapsed.style.display = 'none';
-      }
+      usageMeterBanner.style.display = 'flex';
+      applyMeterCollapsed(meterCollapsed);
     }
 
-    // Dismiss (collapse) button
-    if (meterDismissBtn) {
-      meterDismissBtn.addEventListener('click', function() {
-        applyMeterCollapsed(true);
-        vscode.postMessage({ type: 'dismissUsageMeter' });
+    function toggleMeterDetails() {
+      var collapse = !meterCollapsed;
+      applyMeterCollapsed(collapse);
+      vscode.postMessage({ type: collapse ? 'dismissUsageMeter' : 'restoreUsageMeter' });
+    }
+
+    if (meterDetailsBtn) {
+      meterDetailsBtn.addEventListener('click', function(event) {
+        event.stopPropagation();
+        toggleMeterDetails();
       });
     }
 
-    // Restore (expand) button
-    if (meterRestoreBtn) {
-      meterRestoreBtn.addEventListener('click', function() {
-        applyMeterCollapsed(false);
-        vscode.postMessage({ type: 'restoreUsageMeter' });
+    if (usageMeterBanner) {
+      usageMeterBanner.addEventListener('click', function(event) {
+        if (event.target && event.target.closest && event.target.closest('button')) return;
+        toggleMeterDetails();
       });
     }
 
@@ -3917,7 +3940,6 @@ export function getWebviewContent(
             ? 'Project context and tools stay disabled until you trust this workspace.'
             : 'AGI starts the AGI CLI in this folder to read files and run commands. Chat is ready once it connects.';
         if (usageMeterBanner) usageMeterBanner.style.display = 'none';
-        if (usageMeterCollapsed) usageMeterCollapsed.style.display = 'none';
         renderUsageBuckets(null);
         if (workspaceRequired) renderNoWorkspaceIdentity();
         if (workspaceUntrusted) renderBlockedWorkspaceIdentity();
@@ -6773,9 +6795,18 @@ export function getWebviewContent(
         activePlanCard = null;
       }
 
+      else if (msg.type === 'reasoning') {
+        removeTyping();
+        settleSending('');
+        reasoningText += msg.payload.text;
+        reasoningRunning = true;
+        upsertProgressEl(REASONING_PROGRESS_ID, L10N.reasoning, reasoningText, 'running');
+      }
+
       else if (msg.type === 'token') {
         removeTyping();
         settleSending('');
+        settleReasoning();
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
           accumulatedContent = '';
@@ -6792,6 +6823,8 @@ export function getWebviewContent(
       else if (msg.type === 'done') {
         removeTyping();
         settleSending('');
+        settleReasoning();
+        reasoningText = '';
         if (currentAssistantEl && accumulatedContent) {
           // Content is already rendered; re-render once to ensure the final
           // token is flushed, then bind actions on any code blocks.
@@ -6804,7 +6837,12 @@ export function getWebviewContent(
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
           if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
           if (msg.payload && msg.payload.turnId && msg.payload.changedFiles > 0) {
-            appendTurnChanges(currentAssistantEl, msg.payload.turnId, msg.payload.changedFiles);
+            appendTurnChanges(
+              currentAssistantEl,
+              msg.payload.turnId,
+              msg.payload.changedFiles,
+              Array.isArray(msg.payload.files) ? msg.payload.files : null
+            );
           }
         }
         turnSources = [];
@@ -6819,6 +6857,24 @@ export function getWebviewContent(
         }
         currentAssistantEl = null;
         accumulatedContent = '';
+      }
+
+      else if (msg.type === 'turnFileSettled') {
+        var settledRows = messagesEl.querySelectorAll(
+          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"] .turn-changes__file'
+        );
+        for (var settledIndex = 0; settledIndex < settledRows.length; settledIndex++) {
+          if (settledRows[settledIndex].dataset.path === msg.payload.path) {
+            settleTurnFile(settledRows[settledIndex], msg.payload.outcome);
+          }
+        }
+        var settledTurn = messagesEl.querySelector(
+          '.turn-changes[data-turn-id="' + msg.payload.turnId + '"]'
+        );
+        if (settledTurn && !settledTurn.querySelector('.turn-changes__file-action')) {
+          var settledUndo = settledTurn.querySelector('.turn-changes__undo');
+          if (settledUndo) settledUndo.remove();
+        }
       }
 
       else if (msg.type === 'turnChangesUndone') {
@@ -6864,6 +6920,7 @@ export function getWebviewContent(
       else if (msg.type === 'toolCallStart') {
         removeTyping();
         settleSending('');
+        settleReasoning();
         createToolCallEl(
           msg.payload.toolUseId,
           msg.payload.name,
@@ -6894,6 +6951,8 @@ export function getWebviewContent(
 
       else if (msg.type === 'error') {
         removeTyping();
+        settleReasoning();
+        reasoningText = '';
         if (toolCallStack) {
           toolCallStackHasError = true;
           finalizeToolCallStack();
@@ -7638,8 +7697,30 @@ export function getWebviewContent(
     var TOOL_WRITE_NAMES = ${JSON.stringify(Object.fromEntries(FILE_WRITE_TOOL_NAMES.map((name) => [name, 1])))};
     var TOOL_SNIPPET_LINES = 40;
 
-    function appendTurnChanges(container, turnId, count) {
-      var earlier = messagesEl.querySelectorAll('.turn-changes__undo');
+    function settleTurnFile(fileRow, outcome) {
+      var actions = fileRow.querySelectorAll('.turn-changes__file-action');
+      for (var a = 0; a < actions.length; a++) actions[a].remove();
+      var state = document.createElement('span');
+      state.className = 'turn-changes__file-state';
+      state.textContent = outcome === 'undone' ? L10N.turnUndone : L10N.turnKept;
+      fileRow.appendChild(state);
+    }
+
+    function turnFileAction(label, title, type, turnId, filePath) {
+      var button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'turn-changes__file-action';
+      button.textContent = label;
+      button.title = title;
+      button.setAttribute('aria-label', title);
+      button.addEventListener('click', function () {
+        vscode.postMessage({ type: type, payload: { turnId: turnId, path: filePath } });
+      });
+      return button;
+    }
+
+    function appendTurnChanges(container, turnId, count, files) {
+      var earlier = messagesEl.querySelectorAll('.turn-changes__undo, .turn-changes__file-action');
       for (var u = 0; u < earlier.length; u++) earlier[u].remove();
       var row = document.createElement('div');
       row.className = 'turn-changes';
@@ -7660,12 +7741,35 @@ export function getWebviewContent(
       var undo = document.createElement('button');
       undo.type = 'button';
       undo.className = 'turn-changes__undo';
-      undo.textContent = 'Undo';
+      undo.textContent = files ? L10N.undoAll : L10N.undo;
       undo.title = 'Put the files this reply changed back to how they were before it.';
       undo.addEventListener('click', function () {
         vscode.postMessage({ type: 'undoTurn', payload: { turnId: turnId } });
       });
       row.appendChild(undo);
+      if (files && files.length > 0) {
+        var list = document.createElement('ul');
+        list.className = 'turn-changes__files';
+        list.setAttribute('aria-label', L10N.turnFilesLabel);
+        files.forEach(function (file) {
+          var item = document.createElement('li');
+          item.className = 'turn-changes__file';
+          item.dataset.path = file.path;
+          var name = document.createElement('button');
+          name.type = 'button';
+          name.className = 'turn-changes__file-name';
+          name.textContent = file.label;
+          name.title = fillText(file.status === 'deleted' ? L10N.fileDeleted : L10N.reviewFile, { file: file.label });
+          name.addEventListener('click', function () {
+            vscode.postMessage({ type: 'reviewTurnFile', payload: { turnId: turnId, path: file.path } });
+          });
+          item.appendChild(name);
+          item.appendChild(turnFileAction(L10N.keep, fillText(L10N.keepFileChanges, { file: file.label }), 'keepTurnFile', turnId, file.path));
+          item.appendChild(turnFileAction(L10N.undo, fillText(L10N.undoFileChanges, { file: file.label }), 'undoTurnFile', turnId, file.path));
+          list.appendChild(item);
+        });
+        row.appendChild(list);
+      }
       container.appendChild(row);
     }
 
@@ -8086,6 +8190,18 @@ export function getWebviewContent(
       updateActivitySummary(summary, false);
       messagesEl.scrollTop = messagesEl.scrollHeight;
       return existing;
+    }
+
+    var REASONING_PROGRESS_ID = 'reasoning';
+    var reasoningText = '';
+    var reasoningRunning = false;
+
+    function settleReasoning() {
+      if (!reasoningRunning) return;
+      reasoningRunning = false;
+      if (progressMap[REASONING_PROGRESS_ID]) {
+        upsertProgressEl(REASONING_PROGRESS_ID, L10N.reasoning, reasoningText, 'completed');
+      }
     }
 
     function finalizeToolCallStack(stopped) {

@@ -4,8 +4,8 @@ use agiworkforce_app_server::{
 use agiworkforce_protocol::agent_events::{
     AgentEvent, AgentEventApprovalDecision, AgentEventApprovalResolved, AgentEventArtifactProduced,
     AgentEventCommandStarted, AgentEventError, AgentEventFileChangeKind, AgentEventFileChanged,
-    AgentEventProgressStatus, AgentEventProgressUpdate, AgentEventSource, AgentEventSourceList,
-    AgentEventStop, AgentEventStopReason, AgentEventToolExecutionEnd,
+    AgentEventProgressStatus, AgentEventProgressUpdate, AgentEventReasoningDelta, AgentEventSource,
+    AgentEventSourceList, AgentEventStop, AgentEventStopReason, AgentEventToolExecutionEnd,
     AgentEventToolExecutionQueued, AgentEventToolExecutionStart, AgentEventTurnDiff,
 };
 use agiworkforce_protocol::developer_session::{
@@ -3877,11 +3877,19 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                     ),
                 );
                 let turn_config = turn_config_pinned_to_session_route(&task_config, &agent);
-                let (result, reconnects) =
-                    crate::cloud::connectors::collecting(crate::mcp::collect_sign_in_required(
+                let reasoning = reasoning_delta_callback(
+                    task_thread_id.clone(),
+                    task_turn_id.clone(),
+                    task_event_sequence.clone(),
+                    task_notifications.clone(),
+                );
+                let (result, reconnects) = crate::cloud::connectors::collecting(
+                    crate::mcp::collect_sign_in_required(crate::models::showing_reasoning(
+                        reasoning,
                         agent.send(&turn_config, &input.text, on_chunk),
-                    ))
-                    .await;
+                    )),
+                )
+                .await;
                 for reconnect in reconnects {
                     if let Ok(notification) = AppServerNotification::new(
                         agiworkforce_protocol::developer_session::method::MCP_AUTH_REQUIRED,
@@ -4328,6 +4336,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             TurnStatus::Interrupted,
         );
         let mut persist_error = None;
+        let mut output_tokens = 0;
         let held = self.sessions.lock().await.get(&params.thread_id).cloned();
         if let Some(session) = held {
             let partial = match running.partial.lock() {
@@ -4335,7 +4344,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 Err(poisoned) => poisoned.into_inner().text.clone(),
             };
             let mut session = session.lock().await;
-            session.cancel_turn(&partial).await;
+            output_tokens = session.cancel_turn(&partial).await;
             leave_bypass(&mut session);
             persist_error = session.persist_managed_session().err();
         }
@@ -4364,6 +4373,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 "turnId": params.turn_id,
                 "status": TurnStatus::Interrupted,
                 "unsentSteers": unsent_steers,
+                "outputTokens": output_tokens,
             }),
         );
         Ok(())
@@ -6440,6 +6450,26 @@ fn output_delta_callback(
         ) {
             let _ = notifications.send(notification);
         }
+    })
+}
+
+fn reasoning_delta_callback(
+    thread_id: String,
+    turn_id: String,
+    sequence: Arc<StdMutex<u64>>,
+    notifications: broadcast::Sender<AppServerNotification>,
+) -> crate::models::ReasoningSink {
+    Arc::new(move |delta: &str| {
+        emit_agent_event(
+            &thread_id,
+            &turn_id,
+            &sequence,
+            &notifications,
+            AgentEvent::ReasoningDelta(AgentEventReasoningDelta {
+                delta: delta.to_string(),
+                signature: None,
+            }),
+        );
     })
 }
 

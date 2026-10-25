@@ -570,6 +570,15 @@ fn carries_project_instructions(text: &str) -> bool {
     text.contains(&format!("\"source\": \"{PROJECT_INSTRUCTIONS_SOURCE}\""))
 }
 
+/// Whether the conversation may be told about its workspace. A reviewed
+/// continuation withheld the source workspace's metadata on purpose.
+pub(super) fn carries_workspace_context(messages: &[Message]) -> bool {
+    messages
+        .first()
+        .filter(|message| message.role == "system")
+        .is_none_or(|message| !message.text_content().contains(WITHHELD_FROM_LOCAL_SOURCE))
+}
+
 /// The system message that brings the conversation up to date when the
 /// workspace's instruction files are no longer the ones it last delivered, or
 /// `None` when they still are. A reviewed continuation never inherited the

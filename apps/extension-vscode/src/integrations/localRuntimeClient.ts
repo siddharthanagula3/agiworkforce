@@ -46,6 +46,7 @@ import type {
   SkillListResponse,
   SlashCommandListResponse,
   SlashCommandRunResponse,
+  CheckpointSectionsParams,
   ThreadCompactResponse,
   ThreadRewindParams,
   ThreadSideQuestionParams,
@@ -403,6 +404,37 @@ const threadCheckpointsResponseSchema = z.object({
 });
 
 export type ThreadCheckpointList = z.infer<typeof threadCheckpointsResponseSchema>;
+
+const turnCheckpointListResponseSchema = z.object({
+  available: z.boolean(),
+  turns: z
+    .array(
+      z.object({
+        turnId: z.string().min(1).max(256),
+        files: z
+          .array(
+            z.object({
+              path: z.string().min(1).max(16_384),
+              status: z.enum(['added', 'modified', 'deleted']),
+              binary: z.boolean(),
+            }),
+          )
+          .max(10_000),
+      }),
+    )
+    .max(10_000),
+});
+
+export type TurnCheckpointList = z.infer<typeof turnCheckpointListResponseSchema>;
+
+const checkpointSectionsResponseSchema = z.object({
+  applied: z.array(z.string().max(16_384)).max(10_000),
+  conflicted: z
+    .array(z.object({ path: z.string().max(16_384), reason: z.string().max(8_192) }))
+    .max(10_000),
+});
+
+export type CheckpointSectionsOutcome = z.infer<typeof checkpointSectionsResponseSchema>;
 
 const threadSearchResponseSchema = z.object({
   hits: z
@@ -987,6 +1019,7 @@ const turnInterruptedEventSchema = z.object({
   threadId: z.string().min(1),
   turnId: z.string().min(1),
   status: z.literal('interrupted'),
+  outputTokens: z.number().int().nonnegative().optional(),
 });
 const mcpStatusEventSchema = z.object({
   threadId: z.string().min(1),
@@ -1707,6 +1740,32 @@ export class LocalRuntimeClient {
     }
     return threadCheckpointsResponseSchema.parse(
       await connection.request('thread/checkpoints', { threadId }),
+    );
+  }
+
+  async listTurnCheckpoints(threadId: string): Promise<TurnCheckpointList> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('checkpoints'))) {
+      throw new Error(
+        'The installed AGI CLI keeps no checkpoints. Update the AGI CLI to review changes.',
+      );
+    }
+    return turnCheckpointListResponseSchema.parse(
+      await connection.request('checkpoint/list', { threadId }),
+    );
+  }
+
+  async revertCheckpointSections(
+    params: CheckpointSectionsParams,
+  ): Promise<CheckpointSectionsOutcome> {
+    const connection = await this.readyConnection();
+    if (!(await this.offers('checkpoints'))) {
+      throw new Error(
+        'The installed AGI CLI keeps no checkpoints. Update the AGI CLI to undo changes.',
+      );
+    }
+    return checkpointSectionsResponseSchema.parse(
+      await connection.request('checkpoint/revert', params),
     );
   }
 

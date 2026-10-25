@@ -17,6 +17,7 @@ import {
 import { AgiDiagnosticsProvider } from '../providers/diagnosticsProvider';
 import { resolveReviewEffort } from '../providers/reviewEffort';
 import { DiffDecorationProvider, type DiffSession } from '../providers/diffDecorationProvider';
+import { INLINE_PROPOSAL_SCHEME, getInlineProposals } from '../platform/inlineProposal';
 import {
   ConversationTreeProvider,
   ConversationTreeItem,
@@ -992,6 +993,20 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
       await prefillFirstPartyReference(target);
     }),
 
+    vscode.workspace.registerTextDocumentContentProvider(
+      INLINE_PROPOSAL_SCHEME,
+      getInlineProposals(),
+    ),
+    getInlineProposals(),
+    register('agi-workforce.acceptInlineProposal', async (uri?: unknown) => {
+      await getInlineProposals().accept(uri instanceof vscode.Uri ? uri : undefined);
+    }),
+    register('agi-workforce.rejectInlineProposal', async (uri?: unknown) => {
+      await getInlineProposals().reject(uri instanceof vscode.Uri ? uri : undefined);
+    }),
+    register('agi-workforce.showInlineProposalResponse', async (uri?: unknown) => {
+      await getInlineProposals().showResponse(uri instanceof vscode.Uri ? uri : undefined);
+    }),
     register('agi-workforce.acceptDiff', async (sessionId?: string) => {
       if (typeof sessionId === 'string' && sessionId !== '') {
         await diffDecorationProvider.acceptDiff(sessionId);
@@ -1806,7 +1821,7 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         {
           label: `$(symbol-misc) ${DEVELOPER_AGENT_MODE_LABELS.auto}`,
           description:
-            'Reads and edits files without asking. Asks before running commands or changing git hooks and MCP settings.',
+            "Reads and edits files without asking. Asks before commands it can't confirm are read-only.",
           detail:
             'Example: reading and editing files run on their own; npm install still asks first.',
           mode: 'auto',
@@ -2095,6 +2110,8 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         await import('../data/tokenCounter');
       const {
         CREDIT_BALANCE_LABEL,
+        creditBalanceCredits,
+        creditsSelfServe,
         formatCreditBalance,
         formatCreditSpendability,
         formatUsageMeterFallbackLabel,
@@ -2230,12 +2247,15 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         }
       }
 
-      if (!freePlan && tierInfo?.creditBalanceCents !== undefined) {
+      const creditBalance =
+        tierInfo === undefined || tierInfo === null ? undefined : creditBalanceCredits(tierInfo);
+      if (!freePlan && creditBalance !== undefined) {
         items.push({
-          label: `$(credit-card) ${CREDIT_BALANCE_LABEL}: ${formatCreditBalance(tierInfo.creditBalanceCents)}`,
+          label: `$(credit-card) ${CREDIT_BALANCE_LABEL}: ${formatCreditBalance(creditBalance)}`,
           description: formatCreditSpendability(
-            tierInfo.creditBalanceCents,
-            tierInfo.overageEnabled === true,
+            creditBalance,
+            tierInfo?.overageEnabled === true,
+            tierInfo === undefined || tierInfo === null || creditsSelfServe(tierInfo),
           ),
         });
       }
@@ -2310,7 +2330,13 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
             action: 'compare-plans',
           });
         }
-        if (!freePlan && tierInfo?.creditBalanceCents !== undefined) {
+        if (
+          !freePlan &&
+          tierInfo !== undefined &&
+          tierInfo !== null &&
+          creditBalanceCredits(tierInfo) !== undefined &&
+          creditsSelfServe(tierInfo)
+        ) {
           items.push({
             label: '$(add) Add credits',
             description: 'Buy credits in Settings > Billing on Web',

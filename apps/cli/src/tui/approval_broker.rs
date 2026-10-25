@@ -109,7 +109,8 @@ impl ApprovalRequestKind {
         use AgentEventApprovalRiskLevel as Level;
         let (level, reversible) = match self {
             Self::Exec { command } => {
-                let level = match crate::safety::classify_command(command) {
+                let safety = crate::safety::classify_command(command);
+                let level = match safety {
                     CommandSafety::Safe => Level::Low,
                     CommandSafety::Unknown => Level::Medium,
                     CommandSafety::Dangerous => Level::High,
@@ -117,7 +118,8 @@ impl ApprovalRequestKind {
                 let effect = crate::safety::classify_filesystem_effect(command);
                 (
                     level,
-                    matches!(effect, FilesystemEffect::None | FilesystemEffect::Read),
+                    safety == CommandSafety::Safe
+                        || matches!(effect, FilesystemEffect::None | FilesystemEffect::Read),
                 )
             }
             // Nothing outside the conversation moves, so there is nothing to
@@ -630,6 +632,26 @@ mod tests {
         assert!(exec("echo hello").reversible);
         assert!(!exec("tee out.txt").reversible);
         assert!(!exec("rm build/app").reversible);
+    }
+
+    /// A command the classifier clears as read-only changed nothing, so its
+    /// card never says it cannot be undone.
+    #[test]
+    fn a_read_only_command_is_never_reported_as_irreversible() {
+        for command in [
+            "pwd",
+            "uname -a",
+            "ps aux",
+            "git ls-files",
+            "git rev-parse HEAD",
+        ] {
+            assert!(exec(command).reversible, "{command}");
+            assert_eq!(
+                exec(command).level,
+                AgentEventApprovalRiskLevel::Low,
+                "{command}"
+            );
+        }
     }
 
     /// A push is the one operation that can put work somewhere the user

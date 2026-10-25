@@ -193,7 +193,7 @@ export interface SettingsPlanUsage {
     label: string;
     balance: string;
     spendability: string;
-    topUpLabel: string;
+    topUpLabel: string | null;
   } | null;
 }
 

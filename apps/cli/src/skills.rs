@@ -1154,9 +1154,14 @@ fn escape_xml_attribute(value: &str) -> String {
         .replace('>', "&gt;")
 }
 
-/// Format a lightweight skill catalog for the system prompt. Skill bodies are
-/// deliberately withheld until the model calls the read-only `skill` tool.
-/// This keeps the base prompt small and makes skill activation observable.
+/// Characters of a skill's description the always-sent catalog carries. The
+/// whole description is one `skill` call away (`action=list`), and every
+/// character here is resent on every request of every session.
+const CATALOG_DESCRIPTION_CHARS: usize = 80;
+
+/// Format a lightweight skill catalog for the system prompt: each skill's name
+/// and the start of its description. Bodies and full descriptions are withheld
+/// until the model calls the read-only `skill` tool.
 pub fn format_skill_catalog_for_prompt(skills: &[Skill]) -> String {
     if skills.is_empty() {
         return String::new();
@@ -1170,18 +1175,37 @@ pub fn format_skill_catalog_for_prompt(skills: &[Skill]) -> String {
     }
 
     let mut out = String::from(
-        "\n\n<available_skills>\nSkill bodies are lazy-loaded. Call the skill tool with action=load and an exact skill name before using one.\n",
+        "\n\n<available_skills>\nSkill bodies are lazy-loaded. Call the skill tool with action=list for full descriptions, and action=load with an exact skill name before using one.\n",
     );
     for skill in unique.values() {
-        let description = skill.description.replace(['\n', '\r'], " ");
         out.push_str(&format!(
             "- {}: {}\n",
-            escape_xml_attribute(&skill.name),
-            escape_xml_attribute(&description)
+            single_line(&skill.name),
+            catalog_description(&skill.description)
         ));
     }
     out.push_str("</available_skills>");
     out
+}
+
+fn single_line(text: &str) -> String {
+    text.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+fn catalog_description(description: &str) -> String {
+    let flat = single_line(description);
+    if flat.chars().count() <= CATALOG_DESCRIPTION_CHARS {
+        return flat;
+    }
+    let cut: String = flat.chars().take(CATALOG_DESCRIPTION_CHARS).collect();
+    let at_word = match cut.rfind(' ') {
+        Some(space) if space > cut.len() / 2 => &cut[..space],
+        _ => cut.as_str(),
+    };
+    format!(
+        "{}\u{2026}",
+        at_word.trim_end_matches(|c: char| c.is_ascii_punctuation() || c.is_whitespace())
+    )
 }
 
 pub(crate) fn missing_tool_dependencies(skill: &Skill, available_tools: &[String]) -> Vec<String> {
@@ -1895,6 +1919,71 @@ mod tests {
         assert!(formatted.contains("Create and verify Word documents"));
         assert!(!formatted.contains("SECRET BODY"));
         assert!(formatted.contains("skill tool"));
+    }
+
+    #[test]
+    fn the_catalog_carries_a_short_unescaped_description_and_lists_the_rest() {
+        let long = "When the user wants to plan an \"A/B test\" & compare <variants>, or build a growth experimentation program with ICE scores and an experiment backlog.";
+        let formatted = format_skill_catalog_for_prompt(&[skill("ab-testing", long)]);
+        let line = formatted
+            .lines()
+            .find(|line| line.starts_with("- ab-testing: "))
+            .expect("catalog line");
+        let description = line.trim_start_matches("- ab-testing: ");
+
+        assert!(
+            description.chars().count() <= CATALOG_DESCRIPTION_CHARS + 1,
+            "{line}"
+        );
+        assert!(description
+            .starts_with("When the user wants to plan an \"A/B test\" & compare <variants>"));
+        assert!(description.ends_with('\u{2026}'), "{line}");
+        assert!(
+            !formatted.contains("&quot;")
+                && !formatted.contains("&amp;")
+                && !formatted.contains("&lt;")
+        );
+        assert!(formatted.contains("action=list"));
+        assert_eq!(
+            format_skill_catalog_for_prompt(&[skill("docx", "Create Word\ndocuments")])
+                .lines()
+                .filter(|line| line.starts_with("- "))
+                .collect::<Vec<_>>(),
+            ["- docx: Create Word documents"]
+        );
+    }
+
+    #[test]
+    fn the_repository_skill_catalog_stays_small_enough_to_send_every_request() {
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../.agents/skills");
+        let mut skills = Vec::new();
+        load_skills_from_dir(&dir, &mut skills);
+        assert!(
+            skills.len() > 50,
+            "loaded {} skills from {}",
+            skills.len(),
+            dir.display()
+        );
+
+        let catalog = format_skill_catalog_for_prompt(&skills);
+        let tokens = crate::compaction::estimate_tokens(&catalog);
+        let full_descriptions: usize = skills
+            .iter()
+            .map(|skill| crate::compaction::estimate_tokens(&skill.description))
+            .sum();
+        eprintln!(
+            "skill catalog: {} skills, {tokens} tokens sent (descriptions alone were {full_descriptions})",
+            skills.len()
+        );
+        assert!(
+            tokens < full_descriptions / 3,
+            "{tokens} vs {full_descriptions}"
+        );
+        assert!(
+            tokens <= skills.len() * 32,
+            "{tokens} tokens for {} skills",
+            skills.len()
+        );
     }
 
     #[test]

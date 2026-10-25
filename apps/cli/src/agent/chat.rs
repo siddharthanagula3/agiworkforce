@@ -180,9 +180,33 @@ impl ContextSummarizer for CliContextSummarizer<'_> {
     }
 }
 
+fn stopped_turn_output_tokens(partial: &str) -> u32 {
+    u32::try_from(crate::compaction::estimate_tokens(partial)).unwrap_or(u32::MAX)
+}
+
 /// Build a short, single-line summary of a tool call for the TUI tool cell
 /// (e.g. the command for `run_command`, the path for file tools). Carries no
 /// full output, capped to one line of <=80 chars.
+/// The tool input a client sees when the tool starts. A plan tool's input is
+/// the plan itself, which the host parses from this event and also serves
+/// unredacted from `thread/read`, so the keyword redaction that guards other
+/// tools would only replace the plan with a string no client can render.
+fn tool_event_input(name: &str, args: &serde_json::Value) -> serde_json::Value {
+    if matches!(
+        crate::runtime::tool_catalog::canonical_tool_name(name),
+        "update_plan" | "todo_write"
+    ) {
+        return args.clone();
+    }
+    let raw_input = args.to_string();
+    let redacted_input = crate::agent_events::redact_args(&raw_input);
+    if redacted_input == raw_input {
+        args.clone()
+    } else {
+        serde_json::Value::String(redacted_input)
+    }
+}
+
 fn tool_event_summary(name: &str, args: &serde_json::Value) -> String {
     let raw = crate::runtime::tool_catalog::tool_status_line(name, |key| {
         args.get(key).and_then(|value| value.as_str()).map(|value| {
@@ -474,15 +498,23 @@ impl AgentSession {
     /// push a second consecutive user message and corrupt the alternation. Append
     /// the partial assistant text (or a `[stopped]` marker) so history stays a
     /// valid user→assistant sequence for the next turn.
-    pub async fn cancel_turn(&mut self, partial: &str) {
+    ///
+    /// Returns the output tokens settled for the stopped turn. A stream cut
+    /// short never reports its usage, so what the user was shown is counted
+    /// with the shared estimator rather than recorded as nothing.
+    pub async fn cancel_turn(&mut self, partial: &str) -> u32 {
         self.interrupt_child_tasks(true);
         self.close_unanswered_tool_calls();
         let was_running = self.messages.last().map(|m| m.role.as_str()) == Some("user");
         self.finalize_cancelled_turn(partial);
-        if was_running {
-            self.fire_turn_hook(hooks::HookEvent::TurnCancelled, Some(partial.to_string()))
-                .await;
+        if !was_running {
+            return 0;
         }
+        let received = stopped_turn_output_tokens(partial);
+        self.total_output_tokens = self.total_output_tokens.saturating_add(received);
+        self.fire_turn_hook(hooks::HookEvent::TurnCancelled, Some(partial.to_string()))
+            .await;
+        received
     }
 
     async fn fire_turn_hook(&self, event: hooks::HookEvent, message: Option<String>) {
@@ -1249,16 +1281,22 @@ team, not from the user:\n",
                 prefix.push('\n');
             }
         }
+        if let Some(root) = self
+            .workspace_root()
+            .filter(|_| super::prompt::carries_workspace_context(&self.messages))
+        {
+            if let Ok(Some(git_state)) =
+                tokio::task::spawn_blocking(move || crate::context::git_state_line(&root)).await
+            {
+                prefix.push_str(&format!("[workspace] {git_state}\n\n"));
+            }
+        }
         if let Some(feedback) = self.plan_rejection_feedback.take() {
             prefix.push_str(&format!(
                 "USER REJECTED THE PREVIOUS PLAN. FEEDBACK: {feedback}\n\n"
             ));
         }
-        if matches!(
-            self.governed_permission_mode(),
-            crate::cli_options::PermissionMode::Plan
-        ) && !self.plan_approved
-        {
+        if self.planning_locked() {
             prefix.push_str(
                 "[plan-mode] You must call the `update_plan` tool with a complete, ordered plan \
 of steps before any mutating action (run_command, edit_file, write_file, apply_patch, MCP tools, \
@@ -2205,12 +2243,8 @@ impl TurnHostAdapter<'_> {
     }
 
     /// Shared per-tool pre-dispatch check (availability, invalid args, plan-mode
-    /// gate on the sequential path, `PreToolUse` hooks, and tool-filters).
-    async fn prepare_tool_inner(
-        &mut self,
-        call: &ToolCallResponse,
-        mode: DispatchMode,
-    ) -> Prepared {
+    /// gate, `PreToolUse` hooks, and tool-filters).
+    async fn prepare_tool_inner(&mut self, call: &ToolCallResponse) -> Prepared {
         if !self.available_tool_names.contains(call.name.as_str()) {
             return Prepared::PreEmpted {
                 block: ResultBlock {
@@ -2226,14 +2260,7 @@ impl TurnHostAdapter<'_> {
             };
         }
 
-        // Plan-mode mutating-tool gate applies to the sequential path (the
-        // concurrent read-only batch never contains mutating tools).
-        if mode == DispatchMode::Sequential
-            && matches!(
-                self.session.governed_permission_mode(),
-                crate::cli_options::PermissionMode::Plan
-            )
-            && !self.session.plan_approved
+        if self.session.planning_locked()
             && self.plan_mode_mutating_names.contains(call.name.as_str())
         {
             let payload = serde_json::json!({
@@ -3002,8 +3029,8 @@ impl TurnHost for TurnHostAdapter<'_> {
         result_blocks
     }
 
-    async fn prepare_tool(&mut self, call: &ToolCallResponse, mode: DispatchMode) -> Prepared {
-        self.prepare_tool_inner(call, mode).await
+    async fn prepare_tool(&mut self, call: &ToolCallResponse, _mode: DispatchMode) -> Prepared {
+        self.prepare_tool_inner(call).await
     }
 
     fn parallel_future(&self, prepared: PreparedCall) -> ExecFuture {
@@ -3395,19 +3422,13 @@ impl TurnHost for TurnHostAdapter<'_> {
                 }
                 self.session
                     .note_file_edit_started(id, name, args, workspace_root.as_deref());
-                let raw_input = args.to_string();
-                let redacted_input = crate::agent_events::redact_args(&raw_input);
                 emit_tool_event(
                     self.session.on_tool_event.as_ref(),
                     crate::tui::app_event::TuiAppEvent::ToolStarted {
                         call_id: id.clone(),
                         name: name.clone(),
                         summary: tool_event_summary(name, args),
-                        input: if redacted_input == raw_input {
-                            args.clone()
-                        } else {
-                            serde_json::Value::String(redacted_input)
-                        },
+                        input: tool_event_input(name, args),
                     },
                 );
                 if self.session.json_events {
@@ -3864,6 +3885,29 @@ mod tests {
     }
 
     #[test]
+    fn a_plan_that_mentions_a_key_still_reaches_the_client_as_a_plan() {
+        let plan = serde_json::json!({
+            "steps": [
+                {"description": "Read the API key from LINKSHORT_TOKEN instead of the config file", "status": "pending"},
+                {"description": "Only set the `data` key when the flag is given", "status": "pending"}
+            ]
+        });
+        let input = tool_event_input("update_plan", &plan);
+        assert_eq!(input, plan);
+        serde_json::from_value::<crate::plan_mode::Plan>(input)
+            .expect("the host parses the plan from the start event");
+        let todos =
+            serde_json::json!({"todos": [{"content": "rotate the token", "status": "pending"}]});
+        assert_eq!(tool_event_input("todo_write", &todos), todos);
+
+        let command = serde_json::json!({"command": "export API_KEY=sk-live-0123456789"});
+        assert_eq!(
+            tool_event_input("run_command", &command),
+            serde_json::Value::String("<redacted>".to_string())
+        );
+    }
+
+    #[test]
     fn tool_event_summary_falls_back_for_dynamic_tools() {
         assert_eq!(
             tool_event_summary("custom_connector", &serde_json::json!({})),
@@ -4305,17 +4349,14 @@ mod tests {
         };
 
         let prepared = adapter
-            .prepare_tool_inner(
-                &tool_call(
-                    "edit_file",
-                    serde_json::json!({
-                        "path": "README.md",
-                        "old_string": "old",
-                        "new_string": "new"
-                    }),
-                ),
-                DispatchMode::Sequential,
-            )
+            .prepare_tool_inner(&tool_call(
+                "edit_file",
+                serde_json::json!({
+                    "path": "README.md",
+                    "old_string": "old",
+                    "new_string": "new"
+                }),
+            ))
             .await;
 
         let Prepared::PreEmpted { block } = prepared else {
@@ -4369,6 +4410,24 @@ mod tests {
         let logged = std::fs::read_to_string(&marker).unwrap();
         assert_eq!(logged.matches("\"event\":\"TurnCancelled\"").count(), 1);
         assert!(logged.contains("\"message\":\"partial\""), "{logged}");
+    }
+
+    #[tokio::test]
+    async fn a_stopped_turn_settles_the_output_the_user_was_shown() {
+        let mut session = live_session();
+        session
+            .messages
+            .push(Message::text("user", "write a long answer"));
+        let shown = "word ".repeat(700);
+        let before = session.total_output_tokens;
+
+        let settled = session.cancel_turn(&shown).await;
+
+        assert_eq!(settled as usize, crate::compaction::estimate_tokens(&shown));
+        assert!(settled > 0);
+        assert_eq!(session.total_output_tokens, before + settled);
+        assert_eq!(session.cancel_turn("late straggler").await, 0);
+        assert_eq!(session.total_output_tokens, before + settled);
     }
 
     #[test]

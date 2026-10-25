@@ -3,6 +3,7 @@ import * as vscode from 'vscode';
 
 import { catalogFor, DEFAULT_LOCALE, resolveLocale, SUPPORTED_LOCALES, t } from '../l10n';
 import { applyLlmEdit } from '../platform/applyEdit';
+import { INLINE_PROPOSAL_SCHEME, getInlineProposals } from '../platform/inlineProposal';
 
 const mockEnv = vscode.env as unknown as { language: string };
 
@@ -114,47 +115,56 @@ describe('t', () => {
 });
 
 describe('applyLlmEdit in a translated editor', () => {
-  const editor = {
-    document: { languageId: 'typescript', uri: { fsPath: '/mock/workspace/a.ts' } },
-  } as unknown as vscode.TextEditor;
-  const selection = { isEmpty: false } as unknown as vscode.Selection;
+  const uri = vscode.Uri.file('/mock/workspace/a.ts');
+  const text = 'const x = 0;\n';
+  const document = {
+    languageId: 'typescript',
+    uri,
+    getText: (range?: { start: number; end: number }) =>
+      range === undefined ? text : text.slice(range.start, range.end),
+    offsetAt: (position: number) => position,
+  };
+  const editor = { document } as unknown as vscode.TextEditor;
+  const selection = { isEmpty: false, start: 0, end: 12 } as unknown as vscode.Selection;
   const response = '```typescript\nconst x = 1;\n```';
 
-  it('prompts in the editor language', async () => {
-    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(undefined);
-
-    await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
-
-    expect(vscode.window.showInformationMessage).toHaveBeenCalledWith(
-      'AGI Code: Refactor の結果を適用しますか？',
-      { modal: false },
-      'その場に適用',
-      '新しいタブで表示',
+  it('previews the edit as a diff instead of asking to apply it', async () => {
+    void withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
+    await vi.waitFor(() =>
+      expect(vscode.commands.executeCommand).toHaveBeenCalledWith(
+        'vscode.diff',
+        uri,
+        expect.objectContaining({ scheme: INLINE_PROPOSAL_SCHEME }),
+        expect.any(String),
+        { preview: false },
+      ),
     );
+    expect(vscode.window.showInformationMessage).not.toHaveBeenCalled();
+    expect(vscode.workspace.applyEdit).not.toHaveBeenCalled();
+    await getInlineProposals().reject(proposalUri());
   });
 
-  it('applies the edit when the translated button is clicked', async () => {
-    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
-      'その場に適用' as unknown as undefined,
-    );
-    vi.mocked(vscode.workspace.applyEdit).mockResolvedValue(true);
-
-    await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
-
-    expect(vscode.workspace.applyEdit).toHaveBeenCalledTimes(1);
-    expect(vscode.workspace.openTextDocument).not.toHaveBeenCalled();
-  });
-
-  it('warns in the editor language when the document moved under the edit', async () => {
-    vi.mocked(vscode.window.showInformationMessage).mockResolvedValue(
-      'その場に適用' as unknown as undefined,
-    );
+  it('warns in the editor language when the accepted edit cannot apply', async () => {
+    vi.mocked(vscode.workspace.openTextDocument).mockResolvedValue(document as never);
     vi.mocked(vscode.workspace.applyEdit).mockResolvedValue(false);
+    const outcome = withLanguageAsync('ja', async () => {
+      const pending = applyLlmEdit(editor, selection, response, 'Refactor');
+      await vi.waitFor(() => expect(proposalUri()).toBeDefined());
+      await getInlineProposals().accept(proposalUri());
+      await getInlineProposals().reject(proposalUri());
+      return pending;
+    });
 
-    await withLanguageAsync('ja', () => applyLlmEdit(editor, selection, response, 'Refactor'));
-
+    await expect(outcome).resolves.toBe('dismissed');
     expect(vscode.window.showWarningMessage).toHaveBeenCalledWith(
       'AGI Code: 編集を適用できませんでした, ドキュメントが変更された可能性があります。',
     );
   });
 });
+
+function proposalUri(): vscode.Uri {
+  const calls = vi
+    .mocked(vscode.commands.executeCommand)
+    .mock.calls.filter(([command]) => command === 'vscode.diff');
+  return calls[calls.length - 1]?.[2] as vscode.Uri;
+}

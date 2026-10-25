@@ -212,6 +212,9 @@ import { formatCreditAmount, formatUnsettledRequests } from '../../data/usagePre
 import {
   CREDIT_BALANCE_LABEL,
   CREDIT_TOP_UP_LABEL,
+  USAGE_CREDITS_IN_USE_LABEL,
+  creditBalanceCredits,
+  creditsSelfServe,
   daysUntilReset,
   formatBucketCreditsLeft,
   formatCreditBalance,
@@ -255,6 +258,28 @@ const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch
 
 const MANAGE_TRUST_LABEL = 'Manage Trust';
 const REWIND = 'Rewind';
+const IN_FLIGHT_SESSION_KEY = 'agiWorkforce.inFlightSession';
+const USAGE_METER_EXPANDED_KEY = 'agiWorkforce.usageMeterExpanded';
+
+export interface TurnChangedFileRow {
+  path: string;
+  label: string;
+  status?: 'added' | 'modified' | 'deleted';
+}
+
+interface ChangedTurnFile {
+  path: string;
+  checkpointPath?: string;
+  status?: 'added' | 'modified' | 'deleted';
+}
+
+interface ChangedTurn {
+  threadId: string;
+  turnId: string;
+  files: readonly ChangedTurnFile[];
+  durable: boolean;
+  settled: Map<string, 'kept' | 'undone'>;
+}
 const COMPACT = 'Summarize';
 const PLAN_FEEDBACK_LIMIT = 4_000;
 
@@ -333,6 +358,9 @@ export type WebviewToExtMessage =
   | { type: 'openToolDiff'; payload: { path: string } }
   | { type: 'reviewTurnChanges'; payload: { turnId: string } }
   | { type: 'undoTurn'; payload: { turnId: string } }
+  | { type: 'reviewTurnFile'; payload: { turnId: string; path: string } }
+  | { type: 'keepTurnFile'; payload: { turnId: string; path: string } }
+  | { type: 'undoTurnFile'; payload: { turnId: string; path: string } }
   | {
       type: 'resolveTurnFailure';
       payload: {
@@ -393,6 +421,7 @@ export type WebviewToExtMessage =
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
+  | { type: 'reasoning'; payload: { text: string } }
   | { type: 'answerRating'; payload: { key: string; rating: AnswerRating | null } }
   | {
       type: 'done';
@@ -406,6 +435,7 @@ export type ExtToWebviewMessage =
         stopped?: true;
         turnId?: string;
         changedFiles?: number;
+        files?: TurnChangedFileRow[];
       };
     }
   | { type: 'error'; payload: ChatErrorPresentation }
@@ -416,6 +446,10 @@ export type ExtToWebviewMessage =
       payload: { requestId: string; answer: string } | { requestId: string; error: string };
     }
   | { type: 'turnChangesUndone'; payload: { turnId: string } }
+  | {
+      type: 'turnFileSettled';
+      payload: { turnId: string; path: string; outcome: 'kept' | 'undone' };
+    }
   | {
       type: 'conversationBoundaryChanged';
       payload: { message: string; clientMessageId: string; text: string };
@@ -684,7 +718,7 @@ export interface UsageMeterCreditsRow {
   label: string;
   balanceLabel: string;
   spendabilityLabel: string;
-  topUpLabel: string;
+  topUpLabel: string | null;
 }
 
 export interface UsageMeterWebviewPayload {
@@ -697,6 +731,7 @@ export interface UsageMeterWebviewPayload {
   buckets: UsageMeterBucketRow[];
   bucketsEmptyLabel: string | null;
   credits: UsageMeterCreditsRow | null;
+  creditsInUseLabel: string | null;
   accountPlanTier?: string;
   accountPlanLabel?: string;
   accountPlanNeedsBilling?: boolean;
@@ -754,15 +789,17 @@ function buildUsageMeterBuckets(meter: ExtensionUsageMeter, nowMs: number): Usag
 }
 
 function buildUsageMeterCredits(meter: ExtensionUsageMeter): UsageMeterCreditsRow | null {
-  if (meter.source !== 'managed-plan' || meter.creditBalanceCents === undefined) return null;
+  const balance = meter.source === 'managed-plan' ? creditBalanceCredits(meter) : undefined;
+  if (balance === undefined) return null;
   return {
     label: CREDIT_BALANCE_LABEL,
-    balanceLabel: formatCreditBalance(meter.creditBalanceCents),
+    balanceLabel: formatCreditBalance(balance),
     spendabilityLabel: formatCreditSpendability(
-      meter.creditBalanceCents,
+      balance,
       meter.overageEnabled === true,
+      creditsSelfServe(meter),
     ),
-    topUpLabel: CREDIT_TOP_UP_LABEL,
+    topUpLabel: creditsSelfServe(meter) ? CREDIT_TOP_UP_LABEL : null,
   };
 }
 
@@ -797,6 +834,14 @@ export function buildUsageMeterPayload(
     bucketsEmptyLabel:
       meter.source === 'managed-plan' && buckets.length === 0 ? USAGE_BUCKETS_EMPTY_LABEL : null,
     credits: buildUsageMeterCredits(meter),
+    creditsInUseLabel:
+      meter.source === 'managed-plan' &&
+      meter.remaining !== null &&
+      meter.remaining <= 0 &&
+      meter.overageEnabled === true &&
+      (creditBalanceCredits(meter) ?? 0) > 0
+        ? USAGE_CREDITS_IN_USE_LABEL
+        : null,
     showUpgrade:
       meter.source === 'managed-plan' &&
       meter.remaining !== null &&
@@ -884,15 +929,15 @@ export class ChatStateManager {
   private _mode: AgentMode | undefined;
   private _effort: DeveloperReasoningEffort | undefined;
   private _effortLadder: readonly DeveloperReasoningEffort[] = developerEffortLadder(false);
-  private _meterCollapsed = false;
+  private _meterCollapsed = true;
+  private _inFlightReopenAttempted = false;
   private _activeModel: string;
   private _accountPresentationSeq = 0;
   private _lastMeterBoundary: string | undefined;
   private readonly _servedModelByTurn = new Map<string, string>();
   private readonly _writtenFilesByTurn = new Map<string, Set<string>>();
   private readonly _pendingWritesByToolCall = new Map<string, { turnId: string; path: string }>();
-  private _lastChangedTurn:
-    { threadId: string; turnId: string; files: readonly string[] } | undefined;
+  private _lastChangedTurn: ChangedTurn | undefined;
   private readonly _pendingAttachments: PendingAttachment[] = [];
   private _attachmentSeq = 0;
   private _clientMessageSeq = 0;
@@ -957,10 +1002,7 @@ export class ChatStateManager {
       onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
     );
     if (this._workspaceState !== undefined) {
-      this._meterCollapsed = this._workspaceState.get<boolean>(
-        'agiWorkforce.usageMeterCollapsed',
-        false,
-      );
+      this._meterCollapsed = !this._workspaceState.get<boolean>(USAGE_METER_EXPANDED_KEY, false);
     }
   }
 
@@ -1101,6 +1143,8 @@ export class ChatStateManager {
           );
           this._postSessionBoundary(this._thread.trustMode, this._thread.provider);
           void this.syncStoredTranscript();
+        } else {
+          await this._reopenInFlightSession();
         }
         break;
       }
@@ -1440,7 +1484,30 @@ export class ChatStateManager {
       case 'reviewTurnChanges': {
         const changed = this._lastChangedTurn;
         if (changed?.turnId !== msg.payload.turnId) break;
-        await openTurnChanges(changed.files);
+        await openTurnChanges(changed.files.map((file) => file.path));
+        break;
+      }
+
+      case 'reviewTurnFile': {
+        const file = this._changedTurnFile(msg.payload.turnId, msg.payload.path);
+        if (file !== undefined) await openTurnChanges([file.path]);
+        break;
+      }
+
+      case 'keepTurnFile': {
+        const changed = this._lastChangedTurn;
+        const file = this._changedTurnFile(msg.payload.turnId, msg.payload.path);
+        if (changed === undefined || file === undefined) break;
+        changed.settled.set(file.path, 'kept');
+        this._post({
+          type: 'turnFileSettled',
+          payload: { turnId: changed.turnId, path: file.path, outcome: 'kept' },
+        });
+        break;
+      }
+
+      case 'undoTurnFile': {
+        await this._undoTurnFile(msg.payload.turnId, msg.payload.path);
         break;
       }
 
@@ -1493,7 +1560,7 @@ export class ChatStateManager {
       case 'dismissUsageMeter': {
         this._meterCollapsed = true;
         if (this._workspaceState !== undefined) {
-          await this._workspaceState.update('agiWorkforce.usageMeterCollapsed', true);
+          await this._workspaceState.update(USAGE_METER_EXPANDED_KEY, false);
         }
         break;
       }
@@ -1501,7 +1568,7 @@ export class ChatStateManager {
       case 'restoreUsageMeter': {
         this._meterCollapsed = false;
         if (this._workspaceState !== undefined) {
-          await this._workspaceState.update('agiWorkforce.usageMeterCollapsed', false);
+          await this._workspaceState.update(USAGE_METER_EXPANDED_KEY, true);
         }
         await this.pushUsageMeter();
         break;
@@ -2259,7 +2326,10 @@ export class ChatStateManager {
     });
   }
 
-  public async resumeConversation(threadId: string): Promise<boolean> {
+  public async resumeConversation(
+    threadId: string,
+    options: { reattachInFlight?: boolean } = {},
+  ): Promise<boolean> {
     const attempt = ++this._resumeAttemptSeq;
     const startingEpoch = this._conversationEpoch;
     const isCurrentAttempt = (): boolean =>
@@ -2290,7 +2360,10 @@ export class ChatStateManager {
         void showCloudSession(resolved.response);
         return false;
       }
-      const statusError = resumeStatusError(listed);
+      const reattaching =
+        options.reattachInFlight === true && (await resolved.runtime.offers('reconnect'));
+      if (!isCurrentAttempt()) return false;
+      const statusError = resumeStatusError(listed, reattaching);
       if (statusError !== undefined) return this._rejectResume(statusError, RUNTIME_REFUSAL);
       if (listed.trustMode === 'unknown') {
         return this._rejectResume(unknownBoundaryMessage(), PERMISSION_REFUSAL);
@@ -2304,7 +2377,7 @@ export class ChatStateManager {
       if (!isSameWorkspacePath(resolved.cwd, resumed.cwd)) {
         return this._rejectResume(t('chatNotice.workspaceMismatch'), RUNTIME_REFUSAL);
       }
-      const resumedStatusError = resumeStatusError(resumed);
+      const resumedStatusError = resumeStatusError(resumed, reattaching);
       if (resumedStatusError !== undefined) {
         return this._rejectResume(resumedStatusError, RUNTIME_REFUSAL);
       }
@@ -2397,6 +2470,9 @@ export class ChatStateManager {
       await this.pushUsageMeter(isCommittedAttempt);
       if (!isCommittedAttempt()) return false;
       this._postSessionBoundary(resumed.trustMode, resumed.provider);
+      if (this._context.workspaceState.get<string>(IN_FLIGHT_SESSION_KEY) !== resumed.id) {
+        this._settleInFlightSession();
+      }
       void this._reattachRunningTurn(resolved.runtime, resumed.id, committedEpoch);
       return true;
     } catch (error) {
@@ -2476,6 +2552,7 @@ export class ChatStateManager {
         complete,
         isUiSettled: () => uiSettled,
       };
+      this._noteInFlightSession(threadId);
       this._post({ type: 'turnResumed' });
       if (active.partialResponse !== '') {
         this._post({ type: 'token', payload: { text: active.partialResponse } });
@@ -2612,33 +2689,177 @@ export class ChatStateManager {
     }
   }
 
-  /** Puts back the files the latest reply changed, from the checkpoint taken with its prompt. */
+  private _noteInFlightSession(threadId: string): void {
+    void this._context.workspaceState.update(IN_FLIGHT_SESSION_KEY, threadId);
+  }
+
+  private _settleInFlightSession(threadId?: string): void {
+    const stored = this._context.workspaceState.get<string>(IN_FLIGHT_SESSION_KEY);
+    if (stored === undefined || (threadId !== undefined && stored !== threadId)) return;
+    void this._context.workspaceState.update(IN_FLIGHT_SESSION_KEY, undefined);
+  }
+
+  private async _reopenInFlightSession(): Promise<void> {
+    if (this._thread !== undefined || this._inFlightReopenAttempted) return;
+    this._inFlightReopenAttempted = true;
+    const threadId = this._context.workspaceState.get<string>(IN_FLIGHT_SESSION_KEY);
+    if (threadId === undefined) return;
+    if (!(await this.resumeConversation(threadId, { reattachInFlight: true }))) {
+      this._settleInFlightSession(threadId);
+    }
+  }
+
+  private async _durableTurnFiles(
+    runtime: LocalRuntimeClient,
+    threadId: string,
+    turnId: string,
+  ): Promise<ChangedTurnFile[] | undefined> {
+    const cwd = this._thread?.id === threadId ? this._thread.cwd : undefined;
+    if (cwd === undefined) return undefined;
+    try {
+      if (!(await runtime.offers('checkpoints'))) return undefined;
+      const listed = await runtime.listTurnCheckpoints(threadId);
+      const turn = listed.available
+        ? listed.turns.find((candidate) => candidate.turnId === turnId)
+        : undefined;
+      if (turn === undefined) return undefined;
+      return turn.files.map((file) => ({
+        path: path.resolve(cwd, file.path),
+        checkpointPath: file.path,
+        status: file.status,
+      }));
+    } catch (error) {
+      console.warn(`[${PRODUCT_NAMES.code}] could not read the changes of turn ${turnId}`, error);
+      return undefined;
+    }
+  }
+
+  private _changedFileRow(file: ChangedTurnFile): TurnChangedFileRow {
+    return {
+      path: file.path,
+      label: file.checkpointPath ?? path.basename(file.path),
+      ...(file.status === undefined ? {} : { status: file.status }),
+    };
+  }
+
+  private _changedTurnFile(turnId: string, filePath: string): ChangedTurnFile | undefined {
+    const changed = this._lastChangedTurn;
+    if (changed?.turnId !== turnId || changed.threadId !== this._thread?.id) return undefined;
+    return changed.files.find((file) => file.path === filePath);
+  }
+
+  private _refuseUndoWhileRunning(threadId: string): boolean {
+    if (this._activeTurn?.threadId !== threadId) return false;
+    void vscode.window.showWarningMessage(t('turnChanges.stopFirst'));
+    return true;
+  }
+
+  private async _revertTurnFiles(
+    thread: DeveloperThreadState,
+    changed: ChangedTurn,
+    files: readonly ChangedTurnFile[],
+  ): Promise<string[]> {
+    const outcome = await thread.runtime.revertCheckpointSections({
+      threadId: thread.id,
+      turnId: changed.turnId,
+      sections: files.map((file) => ({ path: file.checkpointPath ?? file.path })),
+    });
+    if (outcome.conflicted.length > 0) {
+      void vscode.window.showWarningMessage(
+        `${PRODUCT_NAMES.code}: ${outcome.conflicted.map((conflict) => `${conflict.path} was left as it is (${conflict.reason})`).join('; ')}`,
+      );
+    }
+    const applied = new Set(outcome.applied);
+    return files
+      .filter((file) => applied.has(file.checkpointPath ?? file.path))
+      .map((file) => file.path);
+  }
+
+  /** Puts back one file the latest reply changed, leaving its other files as they are. */
+  private async _undoTurnFile(turnId: string, filePath: string): Promise<void> {
+    const thread = this._thread;
+    const changed = this._lastChangedTurn;
+    const file = this._changedTurnFile(turnId, filePath);
+    if (thread === undefined || changed === undefined || file === undefined || !changed.durable) {
+      return;
+    }
+    if (changed.settled.has(file.path) || this._refuseUndoWhileRunning(thread.id)) return;
+    const name = path.basename(file.path);
+    const undoChanges = t('turnChanges.undoAction');
+    const confirmed = await vscode.window.showWarningMessage(
+      t('turnChanges.undoFileTitle', { file: name }),
+      {
+        modal: true,
+        detail:
+          file.status === 'added'
+            ? t('turnChanges.undoFileAdded', { file: name })
+            : t('turnChanges.undoFileModified', { file: name }),
+      },
+      undoChanges,
+    );
+    if (confirmed !== undoChanges || this._thread !== thread || this._lastChangedTurn !== changed) {
+      return;
+    }
+    try {
+      const reverted = await this._revertTurnFiles(thread, changed, [file]);
+      if (!reverted.includes(file.path)) return;
+      changed.settled.set(file.path, 'undone');
+      this._post({
+        type: 'turnFileSettled',
+        payload: { turnId, path: file.path, outcome: 'undone' },
+      });
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `${PRODUCT_NAMES.code}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+  }
+
+  /** Puts back the files the latest reply changed that were not already kept or undone. */
   private async _undoTurn(turnId: string): Promise<void> {
     const thread = this._thread;
     const changed = this._lastChangedTurn;
     if (thread === undefined || changed?.turnId !== turnId || changed.threadId !== thread.id) {
-      void vscode.window.showInformationMessage(
-        `${PRODUCT_NAMES.code}: only the latest reply in this session can be undone here. Use Checkpoints to go back further.`,
-      );
+      void vscode.window.showInformationMessage(t('turnChanges.onlyLatest'));
       return;
     }
-    if (this._activeTurn?.threadId === thread.id) {
-      void vscode.window.showWarningMessage(
-        `${PRODUCT_NAMES.code}: stop the current response before undoing a reply.`,
-      );
-      return;
-    }
-    const undo = 'Undo changes';
+    if (this._refuseUndoWhileRunning(thread.id)) return;
+    const pending = changed.files.filter((file) => !changed.settled.has(file.path));
+    if (pending.length === 0) return;
+    const undoChanges = t('turnChanges.undoAction');
     const confirmed = await vscode.window.showWarningMessage(
-      'Undo the changes from the latest reply?',
+      t('turnChanges.undoTurnTitle'),
       {
         modal: true,
-        detail: `${changed.files.length === 1 ? 'The file it changed goes back to how it was' : `The ${changed.files.length} files it changed go back to how they were`} before that prompt. The conversation stays as it is.`,
+        detail: t(
+          pending.length === 1 ? 'turnChanges.undoTurnDetailOne' : 'turnChanges.undoTurnDetailMany',
+        ),
       },
-      undo,
+      undoChanges,
     );
-    if (confirmed !== undo || this._thread !== thread) return;
+    if (confirmed !== undoChanges || this._thread !== thread) return;
     try {
+      if (changed.durable) {
+        const reverted = await this._revertTurnFiles(thread, changed, pending);
+        for (const revertedPath of reverted) changed.settled.set(revertedPath, 'undone');
+        if (reverted.length === pending.length) {
+          this._lastChangedTurn = undefined;
+          this._post({ type: 'turnChangesUndone', payload: { turnId } });
+        } else {
+          for (const revertedPath of reverted) {
+            this._post({
+              type: 'turnFileSettled',
+              payload: { turnId, path: revertedPath, outcome: 'undone' },
+            });
+          }
+        }
+        if (reverted.length > 0) {
+          void vscode.window.showInformationMessage(
+            tPlural('checkpoints.filesRestored', reverted.length),
+          );
+        }
+        return;
+      }
       const { checkpoints } = await thread.runtime.listCheckpoints(thread.id);
       const latest = checkpoints[checkpoints.length - 1];
       if (latest === undefined) {
@@ -3331,6 +3552,7 @@ export class ChatStateManager {
     this._dropInFlightSend('Message cancelled when the conversation was reset.');
     this._dropSteeringSends('Steer cancelled when the conversation was reset.');
     void this._interruptActiveTurn();
+    this._settleInFlightSession();
     delete this._thread;
     delete this._loadedConversation;
     this._pendingAttachments.splice(0);
@@ -4188,6 +4410,7 @@ export class ChatStateManager {
         const { turn } = startOutcome;
         thread.model = requestedModel;
         activeTurnId = turn.id;
+        this._noteInFlightSession(thread.id);
         this._activeTurn = {
           threadId: thread.id,
           turnId: turn.id,
@@ -4782,6 +5005,9 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'agent_event') {
+      if (event.envelope.event.type === 'reasoning-delta' && event.envelope.event.delta) {
+        this._post({ type: 'reasoning', payload: { text: event.envelope.event.delta } });
+      }
       this._foldAgentEvent(event.envelope);
       return;
     }
@@ -4922,21 +5148,32 @@ export class ChatStateManager {
       });
       return;
     }
+    if (
+      event.type === 'turn_completed' ||
+      event.type === 'turn_interrupted' ||
+      event.type === 'turn_failed'
+    ) {
+      this._settleInFlightSession(event.threadId);
+    }
     if (event.type === 'turn_completed') {
       this._expirePendingApprovals(event.turnId);
       const servedModel = this._servedModelByTurn.get(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
       const writtenFiles = [...(this._writtenFilesByTurn.get(event.turnId) ?? [])];
       this._forgetTurnToolState(event.turnId);
-      if (writtenFiles.length > 0) {
+      const durableFiles = await this._durableTurnFiles(runtime, event.threadId, event.turnId);
+      const changedFiles: readonly ChangedTurnFile[] =
+        durableFiles ?? writtenFiles.map((file) => ({ path: file }));
+      if (changedFiles.length > 0) {
         this._lastChangedTurn = {
           threadId: event.threadId,
           turnId: event.turnId,
-          files: writtenFiles,
+          files: changedFiles,
+          durable: durableFiles !== undefined,
+          settled: new Map(),
         };
       }
-      const resolvedModel =
-        servedModel ?? (this._thread?.id === event.threadId ? this._activeModel : Config.model());
+      const resolvedModel = this._resolvedTurnModel(event.threadId, servedModel);
       const localProvider = this._localModelProviders.get(resolvedModel);
       const { providerLabel, brandColor } = isAutoRoutingModel(resolvedModel)
         ? {
@@ -4958,8 +5195,14 @@ export class ChatStateManager {
           outputTokens: event.outputTokens,
           providerLabel,
           brandColor,
-          ...(writtenFiles.length > 0
-            ? { turnId: event.turnId, changedFiles: writtenFiles.length }
+          ...(changedFiles.length > 0
+            ? {
+                turnId: event.turnId,
+                changedFiles: changedFiles.length,
+                ...(durableFiles === undefined
+                  ? {}
+                  : { files: durableFiles.map((file) => this._changedFileRow(file)) }),
+              }
             : {}),
         },
       });
@@ -4977,10 +5220,26 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'turn_interrupted') {
+      const servedModel = this._servedModelByTurn.get(event.turnId);
       this._expirePendingApprovals(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
       this._forgetTurnToolState(event.turnId);
-      this._post({ type: 'done', payload: { stopped: true } });
+      const outputTokens = event.outputTokens ?? 0;
+      if (outputTokens > 0) {
+        const model = this._resolvedTurnModel(event.threadId, servedModel);
+        getTokenCounter().addMeasuredUsage(model, 0, outputTokens);
+        this._post({
+          type: 'done',
+          payload: {
+            stopped: true,
+            model,
+            modelLabel: modelDisplayNameById(model) ?? model,
+            outputTokens,
+          },
+        });
+      } else {
+        this._post({ type: 'done', payload: { stopped: true } });
+      }
       void this.pushUsageMeter();
       complete();
       return;
@@ -5001,6 +5260,10 @@ export class ChatStateManager {
     }
     void this.pushUsageMeter();
     complete();
+  }
+
+  private _resolvedTurnModel(threadId: string, servedModel: string | undefined): string {
+    return servedModel ?? (this._thread?.id === threadId ? this._activeModel : Config.model());
   }
 
   private _cancelBeforeTurnStart(): boolean {
@@ -5043,8 +5306,11 @@ function catalogContextWindow(model: string): number | undefined {
   return MODEL_CONTEXT_LIMITS[model];
 }
 
-function resumeStatusError(thread: ThreadSummary): string | undefined {
+function resumeStatusError(thread: ThreadSummary, reattaching = false): string | undefined {
   if (thread.status === 'idle' || thread.status === 'failed') return undefined;
+  if (reattaching && (thread.status === 'running' || thread.status === 'awaiting_approval')) {
+    return undefined;
+  }
   if (thread.status === 'running') {
     return t('chatNotice.sessionRunningElsewhere');
   }
@@ -5058,16 +5324,51 @@ function unknownBoundaryMessage(): string {
   return t('chatNotice.unverifiedBoundary');
 }
 
-function normalizeTranscriptMessages(
+const STOPPED_MARKER = '[stopped]';
+
+/** The CLI keeps `[stopped]` on a stopped answer so the model knows it was cut short. */
+function withStoppedLabel(text: string): string {
+  const trimmed = text.trimEnd();
+  if (!trimmed.endsWith(STOPPED_MARKER)) return text;
+  const partial = trimmed.slice(0, -STOPPED_MARKER.length).trimEnd();
+  const label = `_${t('webview.stopped')}_`;
+  return partial === '' ? label : `${partial}\n\n${label}`;
+}
+
+export function normalizeTranscriptMessages(
   messages: ReadonlyArray<{ role: string; text: string; index?: number }>,
 ): Array<{ role: 'user' | 'assistant'; text: string; index?: number }> {
   const normalized: Array<{ role: 'user' | 'assistant'; text: string; index?: number }> = [];
+  let replyTexts = new Set<string>();
+  let previousReplyText: string | undefined;
   for (const message of messages) {
     const role = message.role.toLowerCase();
     if (role !== 'user' && role !== 'assistant') continue;
+    if (role === 'user') {
+      replyTexts = new Set();
+      previousReplyText = undefined;
+      normalized.push({
+        role,
+        text: message.text,
+        ...(message.index === undefined ? {} : { index: message.index }),
+      });
+      continue;
+    }
+    let text = withStoppedLabel(message.text);
+    const repeated =
+      previousReplyText !== undefined && text.trim().startsWith(`${previousReplyText}\n`);
+    if (repeated)
+      text = text
+        .trim()
+        .slice(previousReplyText?.length ?? 0)
+        .trim();
+    const key = text.trim();
+    if (key === '' || replyTexts.has(key)) continue;
+    replyTexts.add(key);
+    previousReplyText = key;
     normalized.push({
       role,
-      text: message.text,
+      text,
       ...(message.index === undefined ? {} : { index: message.index }),
     });
   }

@@ -9,7 +9,7 @@ export const CODE_ACTION_KINDS = [
 
 export class AgiCodeActionProvider implements vscode.CodeActionProvider {
   provideCodeActions(
-    _document: vscode.TextDocument,
+    document: vscode.TextDocument,
     range: vscode.Range | vscode.Selection,
     context: vscode.CodeActionContext,
     _token: vscode.CancellationToken,
@@ -28,6 +28,7 @@ export class AgiCodeActionProvider implements vscode.CodeActionProvider {
       fixAction.command = {
         command: 'agi-workforce.fix',
         title: `Fix with ${PRODUCT_NAMES.code}`,
+        arguments: [diagnosticLines(document, context.diagnostics)],
       };
       fixAction.diagnostics = [...context.diagnostics];
       fixAction.isPreferred = false;
@@ -68,4 +69,13 @@ export class AgiCodeActionProvider implements vscode.CodeActionProvider {
 
     return actions;
   }
+}
+
+function diagnosticLines(
+  document: vscode.TextDocument,
+  diagnostics: readonly vscode.Diagnostic[],
+): vscode.Range {
+  const startLine = Math.min(...diagnostics.map((diagnostic) => diagnostic.range.start.line));
+  const endLine = Math.max(...diagnostics.map((diagnostic) => diagnostic.range.end.line));
+  return new vscode.Range(startLine, 0, endLine, document.lineAt(endLine).range.end.character);
 }

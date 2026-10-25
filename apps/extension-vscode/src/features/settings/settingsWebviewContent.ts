@@ -2554,7 +2554,9 @@ ${capabilityTabs}
           document.getElementById('planCreditsLabel').textContent = credits.label;
           document.getElementById('planCreditsCopy').textContent =
             credits.balance + ' · ' + credits.spendability;
-          document.getElementById('planCreditsButton').textContent = credits.topUpLabel;
+          var topUp = document.getElementById('planCreditsButton');
+          topUp.hidden = !credits.topUpLabel;
+          topUp.textContent = credits.topUpLabel || '';
         }
 
         function appendUsageHistoryList(body, caption, rows) {

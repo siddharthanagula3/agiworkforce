@@ -22,6 +22,71 @@ export function commandLabel(command: string): string {
   return labels[command] ?? command;
 }
 
+export interface InlineCommandContext {
+  before: string;
+  after: string;
+  problems: readonly string[];
+}
+
+export function inlineCommandPrompt(
+  command: InlineCommand,
+  lang: string,
+  selectedText: string,
+  context: InlineCommandContext,
+): string {
+  const fence = (code: string) => `\`\`\`${lang}\n${code}\n\`\`\``;
+  if (command === 'tests') {
+    return `Generate comprehensive unit tests for the following ${lang} code. Cover edge cases, error paths, and happy paths:\n\n${fence(selectedText)}`;
+  }
+  const task: Record<Exclude<InlineCommand, 'tests'>, string> = {
+    fix: 'Fix the bugs and reported problems in the selected lines.',
+    refactor:
+      'Refactor the selected lines to improve readability, maintainability, and performance.',
+    docs: 'Add clear, accurate documentation comments (JSDoc/TSDoc/docstrings as appropriate) to the selected lines.',
+  };
+  const sections = [task[command]];
+  if (context.problems.length > 0) {
+    sections.push(
+      `Problems the editor reports in the selection:\n${context.problems.map((problem) => `- ${problem}`).join('\n')}`,
+    );
+  }
+  if (context.before !== '')
+    sections.push(`Code just before the selection, unchanged:\n${fence(context.before)}`);
+  sections.push(`Selected lines:\n${fence(selectedText)}`);
+  if (context.after !== '')
+    sections.push(`Code just after the selection, unchanged:\n${fence(context.after)}`);
+  sections.push(
+    'Your first code block replaces exactly the selected lines in the file, so it must fit between the code before and after it. ' +
+      'Do not repeat the surrounding code, keep the original indentation, then briefly explain each change.',
+  );
+  return sections.join('\n\n');
+}
+
+const SURROUNDING_LINES = 30;
+
+function inlineCommandContext(
+  document: vscode.TextDocument,
+  range: vscode.Range,
+): InlineCommandContext {
+  const beforeStart = Math.max(0, range.start.line - SURROUNDING_LINES);
+  const afterEnd = Math.min(document.lineCount - 1, range.end.line + SURROUNDING_LINES);
+  const before =
+    range.start.line > 0
+      ? document.getText(new vscode.Range(beforeStart, 0, range.start.line, 0)).replace(/\n$/u, '')
+      : '';
+  const after =
+    range.end.line < document.lineCount - 1
+      ? document.getText(
+          new vscode.Range(range.end.line + 1, 0, afterEnd, document.lineAt(afterEnd).text.length),
+        )
+      : '';
+  const problems = vscode.languages
+    .getDiagnostics(document.uri)
+    .filter((diagnostic) => diagnostic.range.intersection(range) !== undefined)
+    .map((diagnostic) => `line ${diagnostic.range.start.line + 1}: ${diagnostic.message}`);
+  return { before, after, problems };
+}
+
 export async function runInlineCommand(
   context: vscode.ExtensionContext,
   command: InlineCommand,
@@ -69,13 +134,6 @@ export async function runInlineCommand(
     }
   }
 
-  const prompts: Record<string, string> = {
-    fix: `Find and fix any bugs or issues in the following ${lang} code. Provide the corrected code and explain each fix:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-    refactor: `Refactor the following ${lang} code to improve readability, maintainability, and performance. Explain each change:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-    tests: `Generate comprehensive unit tests for the following ${lang} code. Cover edge cases, error paths, and happy paths:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-    docs: `Generate clear, accurate documentation comments (JSDoc/TSDoc/docstrings as appropriate) for the following ${lang} code:\n\n\`\`\`${lang}\n${selectedText}\n\`\`\``,
-  };
-
   const messages: LlmChatMessage[] = [
     {
       role: 'system',
@@ -83,7 +141,15 @@ export async function runInlineCommand(
         `You are ${PRODUCT_NAMES.code}, a model-agnostic AI coding assistant. ` +
         'Be concise and produce production-ready Markdown output.',
     },
-    { role: 'user', content: prompts[command] ?? selectedText },
+    {
+      role: 'user',
+      content: inlineCommandPrompt(
+        command,
+        lang,
+        selectedText,
+        inlineCommandContext(editor.document, explicitRange),
+      ),
+    },
   ];
 
   const outcome = await vscode.window.withProgress(

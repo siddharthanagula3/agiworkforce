@@ -2,7 +2,11 @@ import { EventEmitter } from 'node:events';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { LocalRuntimeClient, type SpawnLocalRuntime } from '../integrations/localRuntimeClient';
+import {
+  LocalRuntimeClient,
+  type LocalRuntimeEvent,
+  type SpawnLocalRuntime,
+} from '../integrations/localRuntimeClient';
 import { AGENT_EVENT_SCHEMA_VERSION, MINIMUM_SUPPORTED_RUNTIME_VERSION } from '@agiworkforce/types';
 import {
   SYNTHETIC_LOCAL_MODEL_ID,
@@ -952,6 +956,66 @@ describe('LocalRuntimeClient', () => {
     );
     await new Promise((resolve) => setImmediate(resolve));
     expect(events).toEqual(['turn_interrupted']);
+    await client.dispose();
+  });
+
+  it('passes a reasoning summary through as an agent event', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const deltas: string[] = [];
+    client.onEvent((event) => {
+      if (event.type === 'agent_event' && event.envelope.event.type === 'reasoning-delta') {
+        deltas.push(event.envelope.event.delta);
+      }
+    });
+    await client.initialize();
+    runtime.stdout.write(
+      `${JSON.stringify({
+        method: 'turn/agent_event',
+        params: {
+          schemaVersion: AGENT_EVENT_SCHEMA_VERSION,
+          sessionId: 'thread-1',
+          turnId: 'turn-1',
+          sequence: 0,
+          emittedAtMs: 1_784_335_200_000,
+          event: { type: 'reasoning-delta', delta: 'Reading the config first.' },
+        },
+      })}\n`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(deltas).toEqual(['Reading the config first.']);
+    await client.dispose();
+  });
+
+  it('reads the output tokens the runtime counted for a stopped turn', async () => {
+    const runtime = fakeRuntime();
+    const client = new LocalRuntimeClient({
+      cliPath: 'agi',
+      cwd: '/workspace',
+      clientVersion: '0.3.0',
+      spawn: runtime.spawn,
+    });
+    const events: LocalRuntimeEvent[] = [];
+    client.onEvent((event) => events.push(event));
+    await client.initialize();
+    runtime.stdout.write(
+      `${JSON.stringify({ method: 'turn/interrupted', params: { threadId: 't', turnId: 'r', status: 'interrupted', unsentSteers: [], outputTokens: 42 } })}\n`,
+    );
+    await new Promise((resolve) => setImmediate(resolve));
+    expect(events).toEqual([
+      {
+        type: 'turn_interrupted',
+        threadId: 't',
+        turnId: 'r',
+        status: 'interrupted',
+        outputTokens: 42,
+      },
+    ]);
     await client.dispose();
   });
 

@@ -461,6 +461,80 @@ struct SharedModelReasoning {
     capable: Option<bool>,
     #[serde(default, rename = "supportedEfforts")]
     supported_efforts: Vec<String>,
+    #[serde(default, rename = "thinkingDefault")]
+    thinking_default: Option<String>,
+    #[serde(default, rename = "supportsManualThinking")]
+    supports_manual_thinking: Option<bool>,
+    #[serde(default, rename = "canDisableThinking")]
+    can_disable_thinking: Option<bool>,
+    #[serde(default, rename = "thinkingDisplay")]
+    thinking_display: Option<String>,
+    #[serde(default)]
+    request: Option<SharedReasoningRequest>,
+}
+
+#[derive(Debug, Deserialize)]
+struct SharedReasoningRequest {
+    #[serde(default, rename = "effortPath")]
+    effort_path: Option<String>,
+}
+
+/// How a model on the Anthropic Messages API takes the effort the user chose,
+/// as models.json declares it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessagesEffort {
+    /// The catalog names no `output_config.effort` control for this model.
+    NotControlled,
+    /// Effort travels as `output_config.effort` at one of `levels`;
+    /// `adaptive_thinking` says thinking itself is adaptive, so a token budget
+    /// is refused and the request asks for `thinking.type: adaptive` instead.
+    OutputConfig {
+        levels: &'static [String],
+        adaptive_thinking: bool,
+    },
+}
+
+pub fn messages_effort(model_id: &str) -> MessagesEffort {
+    let Some(reasoning) = shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id))
+        .and_then(|model| model.reasoning.as_ref())
+        .filter(|reasoning| reasoning.capable == Some(true))
+    else {
+        return MessagesEffort::NotControlled;
+    };
+    let output_config = reasoning
+        .request
+        .as_ref()
+        .and_then(|request| request.effort_path.as_deref())
+        == Some("output_config.effort");
+    if !output_config || reasoning.supported_efforts.is_empty() {
+        return MessagesEffort::NotControlled;
+    }
+    MessagesEffort::OutputConfig {
+        levels: &reasoning.supported_efforts,
+        adaptive_thinking: reasoning.thinking_default.as_deref() == Some("adaptive")
+            || reasoning.supports_manual_thinking == Some(false),
+    }
+}
+
+/// The `thinking.display` models.json declares for a model whose thinking
+/// blocks stream empty without it, and whether that model thinks when the
+/// request names no thinking mode.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ThinkingDisplay {
+    pub value: &'static str,
+    pub thinks_by_default: bool,
+}
+
+pub fn thinking_display(model_id: &str) -> Option<ThinkingDisplay> {
+    let reasoning = shared_catalog()
+        .and_then(|catalog| shared_model_for_any(catalog, model_id))
+        .and_then(|model| model.reasoning.as_ref())?;
+    Some(ThinkingDisplay {
+        value: reasoning.thinking_display.as_deref()?,
+        thinks_by_default: reasoning.thinking_default.as_deref() == Some("adaptive")
+            || reasoning.can_disable_thinking == Some(false),
+    })
 }
 
 static SHARED_CATALOG: OnceLock<Option<SharedModelsCatalog>> = OnceLock::new();

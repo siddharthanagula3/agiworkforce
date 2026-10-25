@@ -125,10 +125,12 @@ describe('Config DEFAULTS ↔ package.json parity', () => {
     );
 
     expect(description).toContain('reads and edits files without asking');
-    expect(description).toContain(
-      'running commands and changing git hooks or MCP settings still ask first',
-    );
+    expect(description).toContain("asks before commands it can't confirm are read-only");
+    expect(description).not.toContain('running commands and changing git hooks');
     expect(description).not.toContain('writes and commands still require approval');
+    expect(commandSetup).toContain(
+      "Reads and edits files without asking. Asks before commands it can't confirm are read-only.",
+    );
     expect(commandSetup).not.toContain('Edits run without confirmation');
   });
 

@@ -232,6 +232,32 @@ describe('sidebar action status', () => {
     expect(group.classList.contains('activity-group--collapsed')).toBe(true);
   });
 
+  it('streams the reasoning summary into one Thinking entry that settles when the answer starts', () => {
+    boot();
+    post({ type: 'reasoning', payload: { text: 'Checking the config ' } });
+    post({ type: 'reasoning', payload: { text: 'before the tests.' } });
+
+    const entry = document.querySelector<HTMLElement>('.progress-event[data-id="reasoning"]');
+    expect(entry).not.toBeNull();
+    expect(entry?.querySelector('.tool-call__label')?.textContent).toBe('Thinking');
+    expect(entry?.querySelector('.progress-event__body')?.textContent).toBe(
+      'Checking the config before the tests.',
+    );
+    expect(entry?.classList.contains('tool-call--pending')).toBe(true);
+
+    post({ type: 'token', payload: { text: 'All green.' } });
+    expect(entry?.classList.contains('tool-call--done')).toBe(true);
+    expect(document.querySelector('.message.assistant')?.textContent).not.toContain(
+      'Checking the config',
+    );
+
+    post({ type: 'done', payload: {} });
+    post({ type: 'reasoning', payload: { text: 'A new turn.' } });
+    const entries = document.querySelectorAll('.progress-event[data-id="reasoning"]');
+    expect(entries).toHaveLength(2);
+    expect(entries.item(1).querySelector('.progress-event__body')?.textContent).toBe('A new turn.');
+  });
+
   it('names a turn the user stopped as stopped, not completed', () => {
     boot();
     post({

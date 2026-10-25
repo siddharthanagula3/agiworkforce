@@ -7,10 +7,15 @@ const token = { isCancellationRequested: false } as vscode.CancellationToken;
 const document = {
   uri: vscode.Uri.file('/workspace/src/app.ts'),
   languageId: 'typescript',
+  lineAt: (line: number) => ({ text: '', range: new vscode.Range(line, 0, line, 0) }),
 } as unknown as vscode.TextDocument;
 
 function diagnostic(message: string): vscode.Diagnostic {
-  return { message, severity: vscode.DiagnosticSeverity.Error } as unknown as vscode.Diagnostic;
+  return {
+    message,
+    severity: vscode.DiagnosticSeverity.Error,
+    range: new vscode.Range(0, 0, 0, 0),
+  } as unknown as vscode.Diagnostic;
 }
 
 function actionsFor(
@@ -38,6 +43,37 @@ describe('AgiCodeActionProvider', () => {
     expect(actions[0]!.title).toBe('Fix with AGI Code');
     expect(actions[0]!.command?.command).toBe('agi-workforce.fix');
     expect(actions[0]!.kind).toBe(vscode.CodeActionKind.QuickFix);
+  });
+
+  it('hands the fix the lines its diagnostics cover, so a caret quick fix has code to fix', () => {
+    const lines = ['const a = 1;', '  if (x) args.port = rest[++i];', '  else other();', 'end'];
+    const lined = {
+      ...document,
+      lineAt: (line: number) => ({
+        text: lines[line]!,
+        range: new vscode.Range(line, 0, line, lines[line]!.length),
+      }),
+    } as unknown as vscode.TextDocument;
+    const reported = [
+      {
+        ...diagnostic('string is not assignable to number'),
+        range: new vscode.Range(1, 14, 1, 23),
+      },
+      { ...diagnostic('unused'), range: new vscode.Range(2, 2, 2, 6) },
+    ] as vscode.Diagnostic[];
+
+    const [fix] = new AgiCodeActionProvider().provideCodeActions(
+      lined,
+      new vscode.Range(1, 18, 1, 18),
+      {
+        diagnostics: reported,
+        only: undefined,
+        triggerKind: 1,
+      } as unknown as vscode.CodeActionContext,
+      token,
+    );
+
+    expect(fix!.command?.arguments).toEqual([new vscode.Range(1, 0, 2, lines[2]!.length)]);
   });
 
   it('attaches the reported diagnostics to the quick fix without claiming preference', () => {

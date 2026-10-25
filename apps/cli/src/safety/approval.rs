@@ -384,6 +384,37 @@ mod tests {
     }
 
     #[test]
+    fn read_only_git_queries_are_cleared_and_project_scripts_are_not() {
+        for command in [
+            "git ls-files",
+            "git ls-files -- src",
+            "git rev-parse --show-toplevel",
+            "git blame -L 1,20 README.md",
+            "git ls-tree -r HEAD --name-only",
+            "git for-each-ref --format='%(refname)' refs/heads",
+            "git ls-files | wc -l",
+        ] {
+            assert_eq!(
+                super::super::classify_command(command),
+                CommandSafety::Safe,
+                "{command}"
+            );
+        }
+        for command in [
+            "npm test",
+            "pnpm test",
+            "cargo test",
+            "git ls-files --output=x",
+        ] {
+            assert_ne!(
+                super::super::classify_command(command),
+                CommandSafety::Safe,
+                "{command} runs project code or writes and must ask in Auto"
+            );
+        }
+    }
+
+    #[test]
     fn force_push_text_in_operands_does_not_change_classification() {
         for command in [
             "git push origin main",

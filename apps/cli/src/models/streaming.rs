@@ -64,6 +64,28 @@ fn search_offered() -> bool {
     SEARCH_OFFERED.try_with(|_| ()).is_ok()
 }
 
+pub(crate) type ReasoningSink = std::sync::Arc<dyn Fn(&str) + Send + Sync>;
+
+tokio::task_local! {
+    static REASONING_SINK: ReasoningSink;
+}
+
+/// Runs `future` with the model's reasoning summary streamed to `sink`, apart
+/// from the answer text `on_chunk` receives.
+pub(crate) async fn showing_reasoning<F: std::future::Future>(
+    sink: ReasoningSink,
+    future: F,
+) -> F::Output {
+    REASONING_SINK.scope(sink, future).await
+}
+
+fn show_reasoning(text: &str) {
+    if text.is_empty() {
+        return;
+    }
+    let _ = REASONING_SINK.try_with(|sink| sink(text));
+}
+
 tokio::task_local! {
     static ROUTING_PROFILE: &'static str;
 }
@@ -493,8 +515,41 @@ fn managed_cloud_spec_for_base(jwt: &str, raw_base: &str) -> Result<ProviderSpec
                     serde_json::Value::String(profile.to_string()),
                 )
             }))
+            .chain([(
+                "use_prompt_cache".to_string(),
+                serde_json::Value::Bool(true),
+            )])
             .collect(),
     })
+}
+
+/// The `effort` field Managed Cloud reads. The OpenAI-compatible body carries
+/// no effort of its own, so without this the picker never reaches the server.
+fn managed_effort_field(
+    model: &str,
+    effort: Option<crate::design_system::Effort>,
+) -> Vec<(String, serde_json::Value)> {
+    let Some(requested) = effort.map(crate::design_system::Effort::wire_value) else {
+        return Vec::new();
+    };
+    let (value, reasons) = match crate::model_catalog::effort_support(model) {
+        crate::model_catalog::EffortSupport::Unsupported => return Vec::new(),
+        crate::model_catalog::EffortSupport::Levels(levels) => {
+            match crate::model_catalog::nearest_supported_effort(requested, &levels) {
+                Some(level) => (level.to_string(), true),
+                None => return Vec::new(),
+            }
+        }
+        crate::model_catalog::EffortSupport::Any => (requested.to_string(), true),
+        crate::model_catalog::EffortSupport::NotInCatalog => (requested.to_string(), false),
+    };
+    let mut fields = vec![("effort".to_string(), serde_json::Value::String(value))];
+    // The server leaves Anthropic thinking unset unless asked, so a chosen
+    // effort reached the model without thinking switched on.
+    if reasons && !matches!(requested, "none" | "minimal") {
+        fields.push(("thinking_mode".to_string(), serde_json::Value::Bool(true)));
+    }
+    fields
 }
 
 fn managed_cloud_spec(jwt: &str) -> Result<ProviderSpec> {
@@ -575,6 +630,69 @@ async fn run_spec(
     .await
 }
 
+/// The Messages API thinking mode, `output_config.effort` and legacy budget
+/// for one request. A model the catalog gives an effort control reasons at the
+/// chosen level; a token budget is the 400 such a model returns.
+fn messages_reasoning_controls(
+    dialect: &Dialect,
+    model: &str,
+    effort: Option<crate::design_system::Effort>,
+    thinking_budget: Option<u32>,
+) -> (
+    Option<agiworkforce_llm::AnthropicThinking>,
+    Option<&'static str>,
+    Option<u32>,
+) {
+    match (
+        dialect,
+        crate::model_catalog::messages_effort(model),
+        effort,
+    ) {
+        (
+            Dialect::Anthropic,
+            crate::model_catalog::MessagesEffort::OutputConfig {
+                levels,
+                adaptive_thinking,
+            },
+            Some(effort),
+        ) => (
+            adaptive_thinking.then_some(agiworkforce_llm::AnthropicThinking::Adaptive),
+            crate::model_catalog::nearest_supported_effort(effort.wire_value(), levels),
+            None,
+        ),
+        _ => (None, None, thinking_budget),
+    }
+}
+
+/// The `thinking.display` the catalog declares for a Messages API model, so a
+/// model whose thinking blocks stream empty by default returns a readable
+/// summary. A model that thinks unasked is asked for adaptive thinking, the
+/// mode it already runs, so the display has a mode to ride on.
+fn with_thinking_display(
+    dialect: &Dialect,
+    model: &str,
+    thinking: Option<agiworkforce_llm::AnthropicThinking>,
+    thinking_budget: Option<u32>,
+) -> (
+    Option<agiworkforce_llm::AnthropicThinking>,
+    Option<&'static str>,
+) {
+    let display = match dialect {
+        Dialect::Anthropic => crate::model_catalog::thinking_display(model),
+        _ => None,
+    };
+    let Some(display) = display else {
+        return (thinking, None);
+    };
+    let thinking = match thinking {
+        None if thinking_budget.is_none() && display.thinks_by_default => {
+            Some(agiworkforce_llm::AnthropicThinking::Adaptive)
+        }
+        requested => requested,
+    };
+    (thinking, Some(display.value))
+}
+
 #[allow(clippy::too_many_arguments)]
 async fn run_spec_observing(
     client: &Client,
@@ -610,12 +728,17 @@ async fn run_spec_observing(
         }
         (_, effort) => effort.map(|e| e.openai_effort_str()),
     };
+    let (anthropic_thinking, anthropic_effort, thinking_budget) =
+        messages_reasoning_controls(&spec.dialect, model, effort, thinking_budget);
+    let (anthropic_thinking, thinking_display) =
+        with_thinking_display(&spec.dialect, model, anthropic_thinking, thinking_budget);
     let searching = search_turn()
         && spec.id != super::provider_name(&Provider::ManagedCloud)
         && tools.is_some_and(|tools| tools.iter().any(|tool| tool.name == WEB_SEARCH_TOOL));
     let forced_search = searching
         && crate::model_catalog::accepts_forced_tool_choice(model)
-        && !(matches!(spec.dialect, Dialect::Anthropic) && thinking_budget.is_some());
+        && !(matches!(spec.dialect, Dialect::Anthropic)
+            && (thinking_budget.is_some() || anthropic_thinking.is_some()));
     let nudged;
     let messages = if searching && !forced_search {
         nudged = with_search_nudge(messages);
@@ -631,8 +754,9 @@ async fn run_spec_observing(
         tools,
         thinking_budget,
         tool_choice: forced_search.then(|| ToolChoice::Specific(WEB_SEARCH_TOOL.to_string())),
-        anthropic_thinking: None,
-        effort: None,
+        anthropic_thinking,
+        thinking_display,
+        effort: anthropic_effort,
         top_p: None,
         top_k: None,
         metadata: None,
@@ -690,8 +814,14 @@ fn partial_tag_len(text: &str, tag: &str) -> usize {
 
 impl InlineThinking {
     fn push(&mut self, chunk: &str) -> String {
+        self.split(chunk).0
+    }
+
+    /// The answer text and the reasoning summary in `chunk`, in that order.
+    fn split(&mut self, chunk: &str) -> (String, String) {
         self.held.push_str(chunk);
         let mut visible = String::new();
+        let mut reasoning = String::new();
         loop {
             let tag = if self.inside {
                 THINKING_CLOSE
@@ -699,7 +829,9 @@ impl InlineThinking {
                 THINKING_OPEN
             };
             if let Some(at) = self.held.find(tag) {
-                if !self.inside {
+                if self.inside {
+                    reasoning.push_str(&self.held[..at]);
+                } else {
                     visible.push_str(&self.held[..at]);
                 }
                 self.held.drain(..at + tag.len());
@@ -708,11 +840,13 @@ impl InlineThinking {
             }
             let keep = partial_tag_len(&self.held, tag);
             let cut = self.held.len() - keep;
-            if !self.inside {
+            if self.inside {
+                reasoning.push_str(&self.held[..cut]);
+            } else {
                 visible.push_str(&self.held[..cut]);
             }
             self.held.drain(..cut);
-            return visible;
+            return (visible, reasoning);
         }
     }
 
@@ -746,13 +880,15 @@ fn stream_event_handler<'a>(
     move |event| match event {
         StreamEvent::TextDelta { text } => match thinking.as_deref_mut() {
             Some(thinking) => {
-                let visible = thinking.push(&text);
+                let (visible, reasoning) = thinking.split(&text);
+                show_reasoning(&reasoning);
                 if !visible.is_empty() {
                     on_chunk(&visible);
                 }
             }
             None => on_chunk(&text),
         },
+        StreamEvent::ReasoningDelta { text } => show_reasoning(&text),
         StreamEvent::Vendor { event, data } if event == QUOTA_WARNING_EVENT => {
             notify_quota_warning(&data)
         }
@@ -818,6 +954,7 @@ fn absorb_continuation(completed: &mut CompletionResult, next: CompletionResult)
 async fn run_managed_cloud(
     client: &Client,
     jwt: &str,
+    raw_base: &str,
     model: &str,
     messages: &[Message],
     max_tokens: u32,
@@ -827,8 +964,17 @@ async fn run_managed_cloud(
     thinking_budget: Option<u32>,
     effort: Option<crate::design_system::Effort>,
 ) -> Result<CompletionResult> {
-    let mut spec = managed_cloud_spec(jwt)?;
+    let effort_field = managed_effort_field(model, effort);
+    let mut spec = managed_cloud_spec_for_base(jwt, raw_base)?;
+    spec.extra_body.extend(effort_field.clone());
     let mut pause = ManagedApprovalPause::default();
+    let abandoned = AbandonedRunCancel {
+        client: client.clone(),
+        jwt: jwt.to_string(),
+        raw_base: raw_base.to_string(),
+        run: pause.announced_run(),
+        armed: true,
+    };
     let mut completed = match run_spec_observing(
         client,
         &spec,
@@ -854,8 +1000,9 @@ async fn run_managed_cloud(
             if let Some(conversation_id) = crate::cloud::bound_conversation() {
                 crate::cloud::forget_hosted_conversation(&conversation_id);
             }
-            spec = managed_cloud_spec(jwt)?;
+            spec = managed_cloud_spec_for_base(jwt, raw_base)?;
             spec.extra_body.retain(|(key, _)| key != "conversation_id");
+            spec.extra_body.extend(effort_field);
             run_spec_observing(
                 client,
                 &spec,
@@ -908,7 +1055,75 @@ async fn run_managed_cloud(
             },
         );
     }
+    abandoned.disarm();
     Ok(completed)
+}
+
+/// Stops the server's run when a managed turn ends without completing, as a
+/// Stop does on web and mobile. Dropping the stream alone leaves the run
+/// generating, and billing, up to its output cap.
+struct AbandonedRunCancel {
+    client: Client,
+    jwt: String,
+    raw_base: String,
+    run: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    armed: bool,
+}
+
+impl AbandonedRunCancel {
+    fn disarm(mut self) {
+        self.armed = false;
+    }
+}
+
+impl Drop for AbandonedRunCancel {
+    fn drop(&mut self) {
+        if !self.armed {
+            return;
+        }
+        let Some(run_id) = self.run.lock().ok().and_then(|run| run.clone()) else {
+            return;
+        };
+        if run_id.is_empty()
+            || !run_id
+                .chars()
+                .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        {
+            tracing::warn!("managed run id is not a path segment; the run was not cancelled");
+            return;
+        }
+        let Ok(runtime) = tokio::runtime::Handle::try_current() else {
+            return;
+        };
+        let url = match managed_cloud_url_for_base(
+            &self.raw_base,
+            &format!("llm/v1/chat/completions/runs/{run_id}"),
+        ) {
+            Ok(url) => url,
+            Err(error) => {
+                tracing::warn!(%error, "could not address the managed run to cancel it");
+                return;
+            }
+        };
+        let client = self.client.clone();
+        let jwt = self.jwt.clone();
+        runtime.spawn(async move {
+            let request = managed_cloud_client_headers()
+                .into_iter()
+                .fold(client.post(&url).bearer_auth(jwt), |request, (name, value)| {
+                    request.header(name, value)
+                });
+            match request.send().await {
+                Ok(response) if response.status().is_success() => {}
+                Ok(response) => {
+                    tracing::warn!(status = %response.status(), "the server refused to cancel an abandoned managed run");
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "could not reach the server to cancel an abandoned managed run");
+                }
+            }
+        });
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -971,6 +1186,7 @@ pub async fn stream_completion(
             match run_managed_cloud(
                 &client,
                 key,
+                &managed_cloud_raw_base(),
                 model,
                 messages,
                 max_tokens,
@@ -1320,6 +1536,359 @@ mod tests {
         );
         assert_eq!(model_hits.load(Ordering::SeqCst), 1);
         assert_eq!(chat_hits.load(Ordering::SeqCst), 1);
+    }
+
+    async fn managed_turn_body(effort: Option<crate::design_system::Effort>) -> serde_json::Value {
+        let captured = Arc::new(Mutex::new(serde_json::Value::Null));
+        let captured_for_route = Arc::clone(&captured);
+        let cancels = Arc::new(AtomicUsize::new(0));
+        let cancels_for_route = Arc::clone(&cancels);
+        let router = Router::new()
+            .route(
+                "/api/llm/v1/chat/completions/runs/{run_id}",
+                post(move || {
+                    let cancels = Arc::clone(&cancels_for_route);
+                    async move {
+                        cancels.fetch_add(1, Ordering::SeqCst);
+                        axum::http::StatusCode::ACCEPTED
+                    }
+                }),
+            )
+            .route(
+            "/api/llm/v1/chat/completions",
+            post(move |Json(body): Json<serde_json::Value>| {
+                let captured = Arc::clone(&captured_for_route);
+                async move {
+                    *captured.lock().expect("captured body lock") = body;
+                    (
+                        [
+                            (header::CONTENT_TYPE, "text/event-stream"),
+                            (
+                                header::HeaderName::from_static("x-agi-agent-run-id"),
+                                "run_0190a000-completed",
+                            ),
+                        ],
+                        concat!(
+                            "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"ok\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":1,\"completion_tokens\":1}}\n\n",
+                            "data: [DONE]\n\n"
+                        ),
+                    )
+                        .into_response()
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind managed fixture");
+        let address = listener.local_addr().expect("fixture address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router)
+                .await
+                .expect("serve managed fixture");
+        });
+        let mut on_chunk: StreamCallback = Box::new(|_| {});
+        run_managed_cloud(
+            &Client::new(),
+            "test-jwt",
+            &format!("http://{address}"),
+            "agi-e2e-managed-fixture",
+            &[Message::text("user", "which effort reached the server")],
+            64,
+            None,
+            None,
+            &mut on_chunk,
+            None,
+            effort,
+        )
+        .await
+        .expect("managed fixture turn");
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        server.abort();
+        assert_eq!(
+            cancels.load(Ordering::SeqCst),
+            0,
+            "a completed turn must not cancel its run"
+        );
+        let body = captured.lock().expect("captured body lock").clone();
+        body
+    }
+
+    #[tokio::test]
+    async fn stopping_a_managed_turn_cancels_the_server_run_it_started() {
+        use futures_util::StreamExt;
+
+        let cancels = Arc::new(Mutex::new(Vec::<String>::new()));
+        let cancels_for_route = Arc::clone(&cancels);
+        let router = Router::new()
+            .route(
+                "/api/llm/v1/chat/completions",
+                post(|| async {
+                    let first = futures_util::stream::iter([Ok::<_, std::io::Error>(
+                        "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"partial\"},\"finish_reason\":null}]}\n\n",
+                    )]);
+                    (
+                        [
+                            (header::CONTENT_TYPE, "text/event-stream"),
+                            (
+                                header::HeaderName::from_static("x-agi-agent-run-id"),
+                                "run_0190a000-abandoned",
+                            ),
+                        ],
+                        axum::body::Body::from_stream(first.chain(futures_util::stream::pending())),
+                    )
+                        .into_response()
+                }),
+            )
+            .route(
+                "/api/llm/v1/chat/completions/runs/{run_id}",
+                post(
+                    move |axum::extract::Path(run_id): axum::extract::Path<String>,
+                          headers: axum::http::HeaderMap| {
+                        let cancels = Arc::clone(&cancels_for_route);
+                        async move {
+                            let bearer = headers
+                                .get(header::AUTHORIZATION)
+                                .and_then(|value| value.to_str().ok())
+                                .unwrap_or_default()
+                                .to_string();
+                            cancels
+                                .lock()
+                                .expect("cancel log lock")
+                                .push(format!("{run_id} {bearer}"));
+                            axum::http::StatusCode::ACCEPTED
+                        }
+                    },
+                ),
+            );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind managed fixture");
+        let address = listener.local_addr().expect("fixture address");
+        let server = tokio::spawn(async move {
+            axum::serve(listener, router)
+                .await
+                .expect("serve managed fixture");
+        });
+
+        let streamed = Arc::new(AtomicUsize::new(0));
+        let streamed_for_turn = Arc::clone(&streamed);
+        let turn = tokio::spawn(async move {
+            let mut on_chunk: StreamCallback = Box::new(move |_| {
+                streamed_for_turn.fetch_add(1, Ordering::SeqCst);
+            });
+            let _ = run_managed_cloud(
+                &Client::new(),
+                "test-jwt",
+                &format!("http://{address}"),
+                "agi-e2e-managed-fixture",
+                &[Message::text("user", "a long answer the user stops")],
+                64,
+                None,
+                None,
+                &mut on_chunk,
+                None,
+                None,
+            )
+            .await;
+        });
+        for _ in 0..200 {
+            if streamed.load(Ordering::SeqCst) > 0 {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        assert!(
+            streamed.load(Ordering::SeqCst) > 0,
+            "the turn never streamed"
+        );
+        turn.abort();
+        let _ = turn.await;
+        for _ in 0..200 {
+            if !cancels.lock().expect("cancel log lock").is_empty() {
+                break;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        server.abort();
+        assert_eq!(
+            cancels.lock().expect("cancel log lock").as_slice(),
+            ["run_0190a000-abandoned Bearer test-jwt".to_string()]
+        );
+    }
+
+    fn catalog_model_with_messages_effort() -> (String, &'static [String]) {
+        crate::model_catalog::anthropic_primary_models()
+            .into_iter()
+            .find_map(
+                |(id, _, _)| match crate::model_catalog::messages_effort(&id) {
+                    crate::model_catalog::MessagesEffort::OutputConfig {
+                        levels,
+                        adaptive_thinking: true,
+                    } => Some((id, levels)),
+                    _ => None,
+                },
+            )
+            .expect("the catalog has an adaptive-thinking Claude model")
+    }
+
+    #[test]
+    fn a_chosen_effort_reaches_claude_as_adaptive_thinking_at_that_level() {
+        let (model, levels) = catalog_model_with_messages_effort();
+        for effort in [
+            crate::design_system::Effort::Medium,
+            crate::design_system::Effort::High,
+        ] {
+            let (thinking, sent, budget) = messages_reasoning_controls(
+                &Dialect::Anthropic,
+                &model,
+                Some(effort),
+                effort.thinking_budget_for_anthropic(),
+            );
+            assert_eq!(
+                thinking,
+                Some(agiworkforce_llm::AnthropicThinking::Adaptive),
+                "{effort:?}"
+            );
+            assert_eq!(sent, Some(effort.wire_value()), "{effort:?} of {levels:?}");
+            assert_eq!(budget, None, "{effort:?} sent a manual budget");
+        }
+        let (thinking, sent, budget) =
+            messages_reasoning_controls(&Dialect::Anthropic, &model, None, None);
+        assert_eq!((thinking, sent, budget), (None, None, None));
+    }
+
+    fn catalog_model_with_thinking_display() -> String {
+        crate::model_catalog::anthropic_primary_models()
+            .into_iter()
+            .map(|(id, _, _)| id)
+            .find(|id| {
+                crate::model_catalog::thinking_display(id)
+                    .is_some_and(|display| display.thinks_by_default)
+            })
+            .expect("the catalog has a Claude model that needs a thinking display")
+    }
+
+    #[test]
+    fn a_claude_request_asks_for_the_thinking_summary_the_catalog_declares() {
+        let model = catalog_model_with_thinking_display();
+        let (thinking, display) = with_thinking_display(&Dialect::Anthropic, &model, None, None);
+        assert_eq!(
+            thinking,
+            Some(agiworkforce_llm::AnthropicThinking::Adaptive)
+        );
+        assert_eq!(display, Some("summarized"));
+
+        let (thinking, sent, budget) = messages_reasoning_controls(
+            &Dialect::Anthropic,
+            &model,
+            Some(crate::design_system::Effort::High),
+            None,
+        );
+        let (thinking, display) =
+            with_thinking_display(&Dialect::Anthropic, &model, thinking, budget);
+        let messages = [Message::text("user", "Plan.")];
+        let request = ChatRequest {
+            model: &model,
+            messages: &messages,
+            max_tokens: 1024,
+            temperature: None,
+            tools: None,
+            thinking_budget: budget,
+            tool_choice: None,
+            anthropic_thinking: thinking,
+            thinking_display: display,
+            effort: sent,
+            top_p: None,
+            top_k: None,
+            metadata: None,
+            reasoning_effort: None,
+            gemini_thinking_budget: None,
+            num_ctx: None,
+            ollama_think: None,
+            idle_timeout: STREAM_IDLE_TIMEOUT,
+        };
+        let body = agiworkforce_llm::build_anthropic_request_body(&request);
+        assert_eq!(
+            body["thinking"],
+            serde_json::json!({"type": "adaptive", "display": "summarized"})
+        );
+    }
+
+    #[test]
+    fn a_non_anthropic_dialect_never_carries_a_thinking_display() {
+        let model = catalog_model_with_thinking_display();
+        let (thinking, display) = with_thinking_display(&Dialect::OllamaNative, &model, None, None);
+        assert_eq!((thinking, display), (None, None));
+    }
+
+    #[tokio::test]
+    async fn streamed_reasoning_reaches_the_sink_and_stays_out_of_the_answer() {
+        let shown = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let answer = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let sink_shown = shown.clone();
+        let sink: ReasoningSink = std::sync::Arc::new(move |text: &str| {
+            sink_shown.lock().expect("shown lock").push_str(text);
+        });
+        let answer_sink = answer.clone();
+        showing_reasoning(sink, async move {
+            let mut on_chunk: StreamCallback = Box::new(move |text: &str| {
+                answer_sink.lock().expect("answer lock").push_str(text);
+            });
+            let mut resolved_model = None;
+            let mut inline = InlineThinking::default();
+            {
+                let mut direct =
+                    stream_event_handler(&mut on_chunk, None, &mut resolved_model, None);
+                direct(StreamEvent::ReasoningDelta {
+                    text: "Checking the config first. ".to_string(),
+                });
+                direct(StreamEvent::TextDelta {
+                    text: "Done.".to_string(),
+                });
+            }
+            let mut managed =
+                stream_event_handler(&mut on_chunk, None, &mut resolved_model, Some(&mut inline));
+            for text in ["<thinking>Then the te", "sts.</thinking>", " All green."] {
+                managed(StreamEvent::TextDelta {
+                    text: text.to_string(),
+                });
+            }
+        })
+        .await;
+        assert_eq!(
+            shown.lock().expect("shown lock").as_str(),
+            "Checking the config first. Then the tests."
+        );
+        assert_eq!(
+            answer.lock().expect("answer lock").as_str(),
+            "Done. All green."
+        );
+    }
+
+    #[test]
+    fn a_managed_effort_asks_the_server_to_think_on_a_reasoning_model() {
+        let (model, _) = catalog_model_with_messages_effort();
+        let fields = managed_effort_field(&model, Some(crate::design_system::Effort::Medium));
+        assert!(fields.contains(&("effort".to_string(), serde_json::json!("medium"))));
+        assert!(fields.contains(&("thinking_mode".to_string(), serde_json::json!(true))));
+        assert!(managed_effort_field(&model, None).is_empty());
+        assert!(!managed_effort_field(
+            "agi-e2e-managed-fixture",
+            Some(crate::design_system::Effort::High)
+        )
+        .iter()
+        .any(|(key, _)| key == "thinking_mode"));
+    }
+
+    #[tokio::test]
+    async fn a_managed_turn_sends_the_chosen_reasoning_effort_to_the_server() {
+        let body = managed_turn_body(Some(crate::design_system::Effort::Medium)).await;
+        assert_eq!(body["effort"], "medium", "{body}");
+        assert_eq!(body["use_prompt_cache"], true, "{body}");
+        let body = managed_turn_body(Some(crate::design_system::Effort::High)).await;
+        assert_eq!(body["effort"], "high", "{body}");
+        let body = managed_turn_body(None).await;
+        assert!(body.get("effort").is_none(), "{body}");
     }
 
     #[test]

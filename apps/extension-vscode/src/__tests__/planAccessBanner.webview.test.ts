@@ -95,13 +95,13 @@ function postUsageMeter(payload: unknown): void {
   window.dispatchEvent(new MessageEvent('message', { data: { type: 'usageMeter', payload } }));
 }
 
-function banner(): { text: string; action: string | undefined; button: string; collapsed: string } {
+function banner(): { text: string; action: string | undefined; button: string; shown: string } {
   const button = document.getElementById('upgradeBtn');
   return {
     text: document.getElementById('meterText')?.textContent ?? '',
     action: button?.dataset['action'],
     button: button?.textContent ?? '',
-    collapsed: document.getElementById('meterCollapsedLabel')?.textContent ?? '',
+    shown: document.getElementById('usageMeterBanner')?.style.display ?? '',
   };
 }
 
@@ -135,7 +135,7 @@ describe('plan access banner in the VS Code meter', () => {
       text: `${BILLING_PLAN_PRICING.basic.label} account · Managed developer access requires ${BILLING_PLAN_PRICING[FIRST_DEVELOPER_PLAN].label} or above`,
       action: 'upgrade',
       button: 'Upgrade',
-      collapsed: 'Upgrade for Cloud',
+      shown: 'flex',
     });
   });
 
@@ -156,7 +156,7 @@ describe('plan access banner in the VS Code meter', () => {
       text: 'Max 20x subscription needs attention · Managed Cloud paused',
       action: 'billing',
       button: 'Manage billing',
-      collapsed: 'Billing needs attention',
+      shown: 'flex',
     });
     expect(banner().text).not.toContain('max_15x');
     expect(banner().text).not.toContain('Max 15x');

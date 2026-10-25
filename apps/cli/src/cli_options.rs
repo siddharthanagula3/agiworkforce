@@ -473,6 +473,18 @@ mod tests {
         }
 
         #[tokio::test]
+        async fn a_test_run_asks_in_auto_because_it_runs_project_code() {
+            let (callback, seen) = answering(ApprovalDecision::Deny);
+
+            let result = execute_tool_with_opts(&shell("npm test"), &auto_options(callback, None))
+                .await
+                .expect("tool result");
+
+            assert!(!result.success, "{}", result.output);
+            assert_eq!(exec_requests(&seen).len(), 1, "npm test ran without asking");
+        }
+
+        #[tokio::test]
         async fn a_dangerous_command_asks_with_a_warning_and_is_refused_when_declined() {
             let workspace = tempfile::tempdir().expect("workspace");
             let keep = workspace.path().join("keep");

@@ -36,15 +36,24 @@ pub(super) struct PendingCall {
 #[derive(Default)]
 pub(super) struct ManagedApprovalPause {
     run_id: Option<String>,
+    announced_run: std::sync::Arc<std::sync::Mutex<Option<String>>>,
     calls: Vec<PendingCall>,
 }
 
 impl ManagedApprovalPause {
+    /// The run the server last announced, readable after the stream is gone.
+    pub(super) fn announced_run(&self) -> std::sync::Arc<std::sync::Mutex<Option<String>>> {
+        std::sync::Arc::clone(&self.announced_run)
+    }
+
     pub(super) fn observe(&mut self, event: &str, data: &Value) {
         match event {
             agiworkforce_llm::AGENT_RUN_ID_EVENT => {
                 if let Some(run_id) = data.get("value").and_then(Value::as_str) {
                     self.run_id = Some(run_id.to_string());
+                    if let Ok(mut announced) = self.announced_run.lock() {
+                        *announced = Some(run_id.to_string());
+                    }
                 }
             }
             TOOL_APPROVAL_REQUEST_EVENT => {

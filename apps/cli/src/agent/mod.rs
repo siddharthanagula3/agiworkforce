@@ -998,18 +998,15 @@ impl AgentSession {
             .mcp_manager
             .as_ref()
             .map(|mcp_manager| self.permitted_mcp_definitions(mcp_manager));
-        let planning_locked = self.plan_mode && !self.plan_approved;
         let mut tool_definitions =
             crate::runtime::tool_catalog::effective_tool_definitions_with_browser(
-                planning_locked,
                 self.team_manager.is_some(),
                 self.browser_available.unwrap_or(false),
                 self.allowed_tools.as_deref(),
                 mcp_tool_definitions.as_deref(),
             );
 
-        if !planning_locked
-            && self.privacy_mode == PrivacyMode::Managed
+        if self.privacy_mode == PrivacyMode::Managed
             && crate::tier_cache::capability_allowed(crate::tier_cache::IMAGES_CAPABILITY)
                 .unwrap_or_else(|| crate::plans::cached_plan_allows("image_generation"))
         {
@@ -1046,11 +1043,9 @@ impl AgentSession {
             .mcp_manager
             .as_ref()
             .map(|mcp_manager| self.permitted_mcp_definitions(mcp_manager));
-        let planning_locked = self.plan_mode && !self.plan_approved;
         let mut callable = offered.to_vec();
         callable.extend(
             crate::runtime::tool_catalog::deferred_executable_tool_definitions(
-                planning_locked,
                 self.allowed_tools.as_deref(),
                 mcp_tool_definitions.as_deref(),
             )
@@ -2272,6 +2267,14 @@ impl AgentSession {
         }
     }
 
+    /// Whether mutating calls are refused because a plan still awaits
+    /// approval. The tool list is the same either way; this is the gate.
+    pub(crate) fn planning_locked(&self) -> bool {
+        (self.plan_mode
+            || self.governed_permission_mode() == crate::cli_options::PermissionMode::Plan)
+            && !self.plan_approved
+    }
+
     pub(crate) fn governed_permission_mode(&self) -> crate::cli_options::PermissionMode {
         self.permission_mode.within(self.pinned_permission_mode)
     }
@@ -3306,6 +3309,35 @@ mod tests {
         assert_eq!(session.checkpoint_count(), 0);
 
         assert!(!session.restore_checkpoint());
+    }
+
+    #[test]
+    fn plan_mode_offers_the_same_tools_and_refuses_mutation_at_the_gate() {
+        let ctx = test_context();
+        let mut session = AgentSession::new("test-model", &ctx, None);
+        let acting = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert!(!session.planning_locked());
+
+        session.plan_mode = true;
+        session.plan_approved = false;
+        let planning = session
+            .effective_tool_definitions()
+            .into_iter()
+            .map(|tool| tool.name)
+            .collect::<Vec<_>>();
+        assert_eq!(planning, acting);
+        assert!(planning.iter().any(|name| name == "update_plan"));
+        assert!(session.planning_locked());
+
+        session.plan_mode = false;
+        session.permission_mode = crate::cli_options::PermissionMode::Plan;
+        assert!(session.planning_locked());
+        session.plan_approved = true;
+        assert!(!session.planning_locked());
     }
 
     #[test]
@@ -4407,30 +4439,6 @@ mod tests {
 
         assert!(session.allowed_tools.is_none());
         assert_eq!(session.disallowed_tools, vec!["WebFetch(*)"]);
-    }
-
-    #[test]
-    fn effective_tool_definitions_restore_mutating_tools_after_plan_approval() {
-        let ctx = test_context();
-        let mut session = AgentSession::new("test-model", &ctx, None);
-        session.plan_mode = true;
-
-        let locked_names = session
-            .effective_tool_definitions()
-            .into_iter()
-            .map(|tool| tool.name)
-            .collect::<Vec<_>>();
-        assert!(!locked_names.iter().any(|name| name == "run_command"));
-        assert!(locked_names.iter().any(|name| name == "update_plan"));
-
-        session.plan_approved = true;
-        let approved_names = session
-            .effective_tool_definitions()
-            .into_iter()
-            .map(|tool| tool.name)
-            .collect::<Vec<_>>();
-        assert!(approved_names.iter().any(|name| name == "run_command"));
-        assert!(!approved_names.iter().any(|name| name == "update_plan"));
     }
 
     // -----------------------------------------------------------------------

@@ -354,6 +354,21 @@
         "icon": "$(pulse)"
       },
       {
+        "command": "agi-workforce.acceptInlineProposal",
+        "title": "AGI Code: Accept Proposed Edit",
+        "icon": "$(check)"
+      },
+      {
+        "command": "agi-workforce.rejectInlineProposal",
+        "title": "AGI Code: Reject Proposed Edit",
+        "icon": "$(close)"
+      },
+      {
+        "command": "agi-workforce.showInlineProposalResponse",
+        "title": "AGI Code: Show Explanation",
+        "icon": "$(comment)"
+      },
+      {
         "command": "agi-workforce.acceptDiff",
         "title": "AGI Code: Accept Diff",
         "icon": "$(check)"
@@ -1016,6 +1031,21 @@
       ],
       "editor/title": [
         {
+          "command": "agi-workforce.acceptInlineProposal",
+          "when": "resourceScheme == agi-proposal",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agi-workforce.rejectInlineProposal",
+          "when": "resourceScheme == agi-proposal",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agi-workforce.showInlineProposalResponse",
+          "when": "resourceScheme == agi-proposal",
+          "group": "navigation@3"
+        },
+        {
           "command": "agi-workforce.openChatInEditor",
           "when": "resourceScheme == file || resourceScheme == untitled",
           "group": "navigation@100"
@@ -1033,6 +1063,18 @@
         }
       ],
       "commandPalette": [
+        {
+          "command": "agi-workforce.acceptInlineProposal",
+          "when": "resourceScheme == agi-proposal"
+        },
+        {
+          "command": "agi-workforce.rejectInlineProposal",
+          "when": "resourceScheme == agi-proposal"
+        },
+        {
+          "command": "agi-workforce.showInlineProposalResponse",
+          "when": "resourceScheme == agi-proposal"
+        },
         {
           "command": "agi-workforce.revisePlanFromDocument",
           "when": "agi-workforce.planDocumentOpen"
@@ -1294,13 +1336,13 @@
           ],
           "enumDescriptions": [
             "Ask before edits and commands.",
-            "Read and edit files without asking; running commands and changing git hooks or MCP settings still ask first.",
+            "Read and edit files without asking; asks before commands it can't confirm are read-only.",
             "Propose a plan before making edits.",
             "Skip approval prompts for workspace/additional-directory, terminal, network-capable command, and configured MCP tool access. Selecting this requires a modal risk confirmation."
           ],
           "default": "auto",
           "scope": "machine",
-          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking while running commands and changing git hooks or MCP settings still ask first, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is machine-scoped, and Bypass Permissions is confirmed per workspace."
+          "description": "Default agent mode for new conversations. 'ask' confirms writes and commands, 'auto' reads and edits files without asking and asks before commands it can't confirm are read-only, 'plan' proposes a plan before any edits, and 'bypass' skips all approval prompts only after explicit risk confirmation. A repository cannot set this: it is machine-scoped, and Bypass Permissions is confirmed per workspace."
         },
         "agiWorkforce.agent.effort": {
           "type": "string",

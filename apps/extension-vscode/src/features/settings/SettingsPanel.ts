@@ -27,6 +27,8 @@ import {
 import {
   CREDIT_BALANCE_LABEL,
   CREDIT_TOP_UP_LABEL,
+  creditBalanceCredits,
+  creditsSelfServe,
   formatCreditBalance,
   formatCreditSpendability,
 } from '../../data/usageMeter';
@@ -84,23 +86,27 @@ const EXTERNAL_DESTINATION_PATHS: Partial<Record<SettingsCommand, string>> = {
   openSubprocessors: '/subprocessors?from=vscode-extension',
 };
 
+function creditsRow(tierInfo: TierInfo): SettingsPlanUsage['credits'] {
+  const balance = creditBalanceCredits(tierInfo);
+  if (balance === undefined) return null;
+  return {
+    label: CREDIT_BALANCE_LABEL,
+    balance: formatCreditBalance(balance),
+    spendability: formatCreditSpendability(
+      balance,
+      tierInfo.overageEnabled === true,
+      creditsSelfServe(tierInfo),
+    ),
+    topUpLabel: creditsSelfServe(tierInfo) ? CREDIT_TOP_UP_LABEL : null,
+  };
+}
+
 function buildPlanUsage(tierInfo: TierInfo, accountPlanName?: string): SettingsPlanUsage {
   const planTier = tierInfo.accountPlanTier ?? tierInfo.tier;
   return {
     planLabel: accountPlanName ?? planDisplayLabel(planTier) ?? planTier,
     windows: tierInfo.credits === undefined ? [] : creditWindowRows(tierInfo.credits),
-    credits:
-      tierInfo.creditBalanceCents === undefined
-        ? null
-        : {
-            label: CREDIT_BALANCE_LABEL,
-            balance: formatCreditBalance(tierInfo.creditBalanceCents),
-            spendability: formatCreditSpendability(
-              tierInfo.creditBalanceCents,
-              tierInfo.overageEnabled === true,
-            ),
-            topUpLabel: CREDIT_TOP_UP_LABEL,
-          },
+    credits: creditsRow(tierInfo),
   };
 }
 

@@ -1,6 +1,7 @@
 import { PRODUCT_NAMES } from '@agiworkforce/types';
 import * as vscode from 'vscode';
 import { t } from '../l10n';
+import { getInlineProposals } from './inlineProposal';
 
 export function extractCodeBlock(text: string, lang: string): string | undefined {
   const escapedLang = lang.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -48,26 +49,13 @@ export async function applyLlmEdit(
     return 'accepted';
   }
 
-  const applyInline = t('applyEdit.applyInline');
-  const viewInNewTab = t('applyEdit.viewInNewTab');
-  const choice = await vscode.window.showInformationMessage(
-    t('applyEdit.prompt', { command: commandLabel }),
-    { modal: false },
-    applyInline,
-    viewInNewTab,
+  return getInlineProposals().propose(
+    editor.document,
+    selection,
+    codeBlock,
+    llmResponse,
+    commandLabel,
   );
-
-  if (choice === applyInline) {
-    const edit = new vscode.WorkspaceEdit();
-    edit.replace(editor.document.uri, selection, codeBlock);
-    const applied = await vscode.workspace.applyEdit(edit);
-    if (applied) return 'accepted';
-    vscode.window.showWarningMessage(t('applyEdit.applyFailed'));
-    await openInNewTab(llmResponse, commandLabel);
-    return undefined;
-  }
-  if (choice === viewInNewTab) await openInNewTab(llmResponse, commandLabel);
-  return 'dismissed';
 }
 
 async function openInNewTab(content: string, label: string): Promise<void> {

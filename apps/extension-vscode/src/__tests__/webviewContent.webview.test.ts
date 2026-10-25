@@ -239,6 +239,17 @@ describe('getWebviewContent, structural smoke', () => {
     expect(scriptBody).toContain(": 'openSettings'");
   });
 
+  it('keeps the effort beside the model name at the default sidebar width', () => {
+    const css = render().match(/<style[^>]*>([\s\S]*?)<\/style>/u)?.[1] ?? '';
+    const hidingWidths = [...css.matchAll(/@media \(max-width: (\d+)px\) \{([\s\S]*?)\n {4}\}/gu)]
+      .filter(([, , body]) => /\.model-pill-effort \{ display: none; \}/u.test(body ?? ''))
+      .map(([, width]) => Number(width));
+
+    expect(css).toContain('.model-pill-effort');
+    expect(hidingWidths.length).toBeGreaterThan(0);
+    expect(hidingWidths.every((width) => width < 300)).toBe(true);
+  });
+
   it('keeps async chat updates announced and exposes keyboard-native popup controls', () => {
     const html = render();
     const doc = new DOMParser().parseFromString(html, 'text/html');
@@ -249,8 +260,11 @@ describe('getWebviewContent, structural smoke', () => {
     expect(doc.querySelector('#plusMenuBrowse')?.tagName).toBe('BUTTON');
     expect(doc.querySelector('#plusMenuPlanMode')?.tagName).toBe('BUTTON');
     expect(doc.querySelector('#plusBtn')?.getAttribute('aria-label')).toBe('Attach or use tools');
-    expect(doc.querySelector('#meterDismissBtn')?.getAttribute('aria-label')).toBe(
-      'Collapse usage meter',
+    expect(doc.querySelector('#meterDetailsBtn')?.getAttribute('aria-label')).toBe(
+      'Show usage details',
+    );
+    expect(doc.querySelector('#meterDetailsBtn')?.getAttribute('aria-controls')).toBe(
+      'meterBuckets',
     );
     expect(doc.querySelector('#plusMenuPlanMode')?.textContent).toContain('Plan mode');
     expect(doc.querySelector('#plusMenuPlanMode')?.textContent).not.toContain('Add context');
@@ -311,6 +325,20 @@ describe('getWebviewContent, structural smoke', () => {
     expect(styles).toContain('.model-pill-effort { display: none; }');
     expect(doc.querySelector('#controlsSummary')).not.toBeNull();
     expect(doc.querySelector('#plusMenuActions')).toBeNull();
+  });
+
+  it('keeps Send inside the composer at the narrowest sidebar VS Code allows', () => {
+    const html = render();
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    const styles = Array.from(doc.querySelectorAll('style'))
+      .map((style) => style.textContent ?? '')
+      .join('\n');
+    const narrowest = /@media \(max-width: 230px\) \{([\s\S]*?)\n {4}\}/.exec(styles)?.[1] ?? '';
+    // Typing "/" opens the same command menu, so the button is the one control
+    // that can give way; the model, controls and Send chips all stay.
+    expect(narrowest).toMatch(/#slashBtn \{ display: none; \}/);
+    expect(narrowest).toMatch(/\.model-pill \{ min-width: 40px; \}/);
+    expect(narrowest).not.toMatch(/#sendBtn|\.controls-summary \{ display: none/);
   });
 
   it('submits an attachment-only turn with a visible trusted prompt', () => {

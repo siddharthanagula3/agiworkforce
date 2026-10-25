@@ -48,74 +48,11 @@ pub(super) fn print_tool_status(tool_name: &str, display: &str) {
     );
 }
 
+/// The command as it will run, for an approval prompt: whole and in order,
+/// with only credential values redacted. A paraphrase that splits operands or
+/// cuts the line asks the user to approve something they cannot read.
 pub(super) fn describe_command(command: &str) -> String {
-    redact_tool_output(&describe_command_shape(command))
-}
-
-fn describe_command_shape(command: &str) -> String {
-    let trimmed = command.trim();
-    let first_word = trimmed.split_whitespace().next().unwrap_or("");
-    let base = first_word.rsplit('/').next().unwrap_or(first_word);
-
-    match base {
-        "rm" => {
-            let targets: Vec<&str> = trimmed
-                .split_whitespace()
-                .filter(|a| !a.starts_with('-'))
-                .skip(1)
-                .collect();
-            if trimmed.contains("-rf") || trimmed.contains("-fr") {
-                format!("Force-delete {} recursively", targets.join(", "))
-            } else if trimmed.contains("-r") {
-                format!("Delete {} recursively", targets.join(", "))
-            } else {
-                format!("Delete {}", targets.join(", "))
-            }
-        }
-        "mv" => {
-            let args: Vec<&str> = trimmed
-                .split_whitespace()
-                .filter(|a| !a.starts_with('-'))
-                .skip(1)
-                .collect();
-            if args.len() >= 2 {
-                format!(
-                    "Move {} -> {}",
-                    args[..args.len() - 1].join(", "),
-                    args[args.len() - 1]
-                )
-            } else {
-                format!("Move files: {}", trimmed)
-            }
-        }
-        "chmod" => format!("Change permissions: {}", cap_chars(trimmed, 200)),
-        "chown" | "chgrp" => format!("Change ownership: {}", cap_chars(trimmed, 200)),
-        "sudo" => format!(
-            "Run as root: {}",
-            cap_chars(skip_chars(trimmed, 5).trim(), 200)
-        ), // AUDIT-FIX: H-6
-        "kill" | "killall" | "pkill" => {
-            format!("Send signal to processes: {}", cap_chars(trimmed, 200))
-        }
-        "git" => format!("Git: {}", cap_chars(skip_chars(trimmed, 4).trim(), 200)), // AUDIT-FIX: H-6
-        "npm" | "pnpm" | "yarn" | "cargo" | "pip" => {
-            format!("Package manager: {}", cap_chars(trimmed, 200))
-        }
-        "curl" | "wget" => format!("Download/fetch: {}", cap_chars(trimmed, 200)),
-        "docker" => format!("Docker: {}", cap_chars(skip_chars(trimmed, 7).trim(), 200)), // AUDIT-FIX: H-6
-        _ => cap_chars(trimmed, 200),
-    }
-}
-
-fn skip_chars(s: &str, n: usize) -> &str {
-    match s.char_indices().nth(n) {
-        Some((i, _)) => &s[i..],
-        None => "",
-    }
-}
-
-fn cap_chars(s: &str, max: usize) -> String {
-    s.chars().take(max).collect()
+    redact_tool_output(command.trim())
 }
 
 #[allow(dead_code)]
@@ -324,6 +261,23 @@ pub(super) fn truncate_line(line: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::{describe_command, truncate_output_with_save};
+
+    #[test]
+    fn an_approval_shows_the_command_whole_with_only_secrets_redacted() {
+        for command in [
+            "pnpm exec tsc -p apps/web/tsconfig.json --noEmit",
+            "rm -rf build dist coverage",
+            "git ls-files -- src docs",
+        ] {
+            assert_eq!(describe_command(command), command);
+        }
+        assert_eq!(
+            describe_command(
+                "curl -H 'Authorization: Bearer abcdefgh12345678' https://api.example.com"
+            ),
+            "curl -H 'Authorization: Bearer [REDACTED_TOKEN]' https://api.example.com"
+        );
+    }
 
     #[test]
     fn every_tools_output_is_redacted_before_it_reaches_the_model_or_the_saved_file() {

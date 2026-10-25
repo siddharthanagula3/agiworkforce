@@ -386,6 +386,83 @@ pub(super) async fn execute_grep_files(
     }
 }
 
+const MAX_BRACE_EXPANSIONS: usize = 64;
+
+/// Every path `pattern` matches, `{a,b}` alternatives included, which the
+/// `glob` crate on its own reads as literal braces and so matches nothing.
+fn glob_matches(pattern: &str) -> std::result::Result<Vec<std::path::PathBuf>, glob::PatternError> {
+    let mut seen = std::collections::HashSet::new();
+    let mut matches = Vec::new();
+    for expanded in expand_braces(pattern) {
+        for path in glob::glob(&expanded)?.filter_map(|entry| entry.ok()) {
+            if seen.insert(path.clone()) {
+                matches.push(path);
+            }
+        }
+    }
+    Ok(matches)
+}
+
+fn expand_braces(pattern: &str) -> Vec<String> {
+    let mut pending = vec![pattern.to_string()];
+    let mut expanded = Vec::new();
+    while let Some(current) = pending.pop() {
+        match brace_alternatives(&current) {
+            Some(alternatives) => {
+                if pending.len() + expanded.len() + alternatives.len() > MAX_BRACE_EXPANSIONS {
+                    return vec![pattern.to_string()];
+                }
+                pending.extend(alternatives.into_iter().rev());
+            }
+            None => expanded.push(current),
+        }
+    }
+    expanded
+}
+
+/// The pattern once per alternative of its first `{a,b}` group, or `None`
+/// when no group offers a choice.
+fn brace_alternatives(pattern: &str) -> Option<Vec<String>> {
+    let bytes = pattern.as_bytes();
+    let mut search_from = 0;
+    while let Some(offset) = pattern[search_from..].find('{') {
+        let open = search_from + offset;
+        let mut depth = 0usize;
+        let mut commas = Vec::new();
+        let mut close = None;
+        for (index, &byte) in bytes.iter().enumerate().skip(open) {
+            match byte {
+                b'{' => depth += 1,
+                b'}' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        close = Some(index);
+                        break;
+                    }
+                }
+                b',' if depth == 1 => commas.push(index),
+                _ => {}
+            }
+        }
+        let close = close?;
+        if commas.is_empty() {
+            search_from = open + 1;
+            continue;
+        }
+        let mut bounds = vec![open];
+        bounds.extend(commas);
+        bounds.push(close);
+        let (head, tail) = (&pattern[..open], &pattern[close + 1..]);
+        return Some(
+            bounds
+                .windows(2)
+                .map(|edge| format!("{head}{}{tail}", &pattern[edge[0] + 1..edge[1]]))
+                .collect(),
+        );
+    }
+    None
+}
+
 pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolResult> {
     let pattern = match args.get("pattern") {
         Some(p) => p,
@@ -431,7 +508,7 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
     let cwd = std::env::current_dir().unwrap_or_else(|_| std::path::PathBuf::from("."));
     let cwd_canonical = cwd.canonicalize().unwrap_or(cwd);
 
-    let paths = match glob::glob(&full_pattern) {
+    let paths = match glob_matches(&full_pattern) {
         Ok(paths) => paths,
         Err(err) => {
             return Ok(ToolResult {
@@ -444,7 +521,7 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
 
     let mut matches = Vec::new();
     let mut truncated = false;
-    for path in paths.filter_map(|p| p.ok()) {
+    for path in paths {
         if crate::path_security::is_checkpoint_internal_path(&path) {
             continue;
         }
@@ -488,6 +565,47 @@ pub(super) async fn execute_glob(args: &HashMap<String, String>) -> Result<ToolR
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_brace_pattern_matches_each_of_its_alternatives() {
+        let root = tempfile::tempdir().expect("temp dir");
+        for file in [
+            "src/a.js",
+            "src/b.json",
+            "src/c.md",
+            "test/d.js",
+            "notes/e.js",
+        ] {
+            let path = root.path().join(file);
+            std::fs::create_dir_all(path.parent().expect("parent")).expect("dir");
+            std::fs::write(path, "").expect("file");
+        }
+        let names = |pattern: &str| {
+            let mut names = glob_matches(&format!("{}/{pattern}", root.path().display()))
+                .expect("valid pattern")
+                .into_iter()
+                .map(|path| {
+                    path.strip_prefix(root.path())
+                        .expect("under root")
+                        .display()
+                        .to_string()
+                })
+                .collect::<Vec<_>>();
+            names.sort();
+            names
+        };
+
+        assert_eq!(
+            names("**/*.{js,json}"),
+            ["notes/e.js", "src/a.js", "src/b.json", "test/d.js"]
+        );
+        assert_eq!(names("{src,test}/*.js"), ["src/a.js", "test/d.js"]);
+        assert_eq!(
+            names("{src,{test,notes}}/*.js"),
+            ["notes/e.js", "src/a.js", "test/d.js"]
+        );
+        assert_eq!(names("src/*.{js,js}"), ["src/a.js"]);
+    }
 
     const WITHHELD_VALUE: &str = "EXAMPLE-NOT-A-REAL-BILLING-KEY";
 
