@@ -1367,6 +1367,35 @@ pub struct ModelListParams {
     pub refresh: bool,
 }
 
+/// A trust boundary this host's configuration holds every session to, and
+/// where that is set, so a client can name the place to change it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PrivacyPin {
+    pub trust_mode: DeveloperSessionTrustMode,
+    /// The config file that sets it. Absent when an organization's managed
+    /// policy sets it instead.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub config_path: Option<String>,
+}
+
+/// `data` of a `thread/start` refused because the model would run outside the
+/// boundary the configuration pins. Nothing falls back to another model.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "camelCase")]
+#[ts(rename_all = "camelCase")]
+pub struct PrivacyBoundaryRefusalData {
+    pub model: String,
+    pub requested: DeveloperSessionTrustMode,
+    pub pin: PrivacyPin,
+}
+
+/// JSON-RPC error code for a session refused because its model crosses the
+/// configured privacy boundary.
+pub const PRIVACY_BOUNDARY_ERROR_CODE: i32 = -32013;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(rename_all = "camelCase")]
@@ -1377,6 +1406,10 @@ pub struct LocalModelListResponse {
     pub host_models: Vec<HostModelSummary>,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub local_servers: Vec<LocalServerStatus>,
+    /// Present when the configuration holds every session to one boundary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub privacy_pin: Option<PrivacyPin>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, JsonSchema, TS)]

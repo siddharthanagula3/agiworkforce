@@ -163,6 +163,7 @@ impl DeveloperSessionHost for FakeHost {
             }],
             host_models: Vec::new(),
             local_servers: Vec::new(),
+            privacy_pin: None,
         })
     }
 
@@ -1318,6 +1319,7 @@ impl DeveloperSessionHost for SurfaceHost {
             models: Vec::new(),
             host_models: Vec::new(),
             local_servers: Vec::new(),
+            privacy_pin: None,
         })
     }
 
@@ -2868,6 +2870,7 @@ impl DeveloperSessionHost for HandoffHost {
             models: Vec::new(),
             host_models: Vec::new(),
             local_servers: Vec::new(),
+            privacy_pin: None,
         })
     }
 

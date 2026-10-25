@@ -9,6 +9,14 @@ pub struct ConfigSource {
     pub global_path: Option<PathBuf>,
     pub project_path: Option<PathBuf>,
     pub env_overrides: Vec<String>,
+    pub privacy_mode_origin: Option<PrivacyModeOrigin>,
+}
+
+/// Which layer set `ui.privacy_mode`, so a refusal can say where to change it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PrivacyModeOrigin {
+    File(PathBuf),
+    ManagedPolicy,
 }
 
 /// Top-level CLI configuration, loaded from ~/.agiworkforce/config.toml
@@ -436,6 +444,9 @@ impl CliConfig {
         loaded.default.model_chosen = names_default_model(&contents);
         let mut config = Self::with_builtin_defaults(loaded);
         config.source.global_path = Some(path.to_path_buf());
+        if config.ui.privacy_mode.is_some() {
+            config.source.privacy_mode_origin = Some(PrivacyModeOrigin::File(path.to_path_buf()));
+        }
         Ok(config)
     }
 
@@ -693,6 +704,7 @@ impl CliConfig {
         }
         if let Some(mode) = &managed.privacy_mode {
             self.ui.privacy_mode = Some(mode.clone());
+            self.source.privacy_mode_origin = Some(PrivacyModeOrigin::ManagedPolicy);
         }
     }
 
@@ -774,6 +786,14 @@ impl CliConfig {
         }
         if other.ui.privacy_mode.is_some() {
             self.ui.privacy_mode = other.ui.privacy_mode.clone();
+            if let Some(path) = other
+                .source
+                .project_path
+                .clone()
+                .or_else(|| other.source.global_path.clone())
+            {
+                self.source.privacy_mode_origin = Some(PrivacyModeOrigin::File(path));
+            }
         }
         if other.ui.edit_mode.is_some() {
             self.ui.edit_mode = other.ui.edit_mode.clone();
@@ -943,7 +963,29 @@ impl CliConfig {
 
     pub fn persist_privacy_mode_project(&mut self, mode: &str) -> Result<PathBuf> {
         self.ui.privacy_mode = Some(mode.to_ascii_lowercase());
-        self.save_project_ui_settings()
+        let path = self.save_project_ui_settings()?;
+        self.source.privacy_mode_origin = Some(PrivacyModeOrigin::File(path.clone()));
+        Ok(path)
+    }
+
+    /// The boundary every session is held to when the configuration names one,
+    /// with the layer that names it. `None` when nothing pins it.
+    pub fn privacy_pin(
+        &self,
+    ) -> Option<(
+        crate::platform::runtime::session::PrivacyMode,
+        Option<&PathBuf>,
+    )> {
+        let mode = self
+            .ui
+            .privacy_mode
+            .as_deref()
+            .and_then(crate::platform::runtime::session::PrivacyMode::from_arg)?;
+        let path = match &self.source.privacy_mode_origin {
+            Some(PrivacyModeOrigin::File(path)) => Some(path),
+            Some(PrivacyModeOrigin::ManagedPolicy) | None => None,
+        };
+        Some((mode, path))
     }
 
     /// Persist the chosen terminal theme so it survives a restart. Without this
@@ -2214,6 +2256,33 @@ privacy_mode = "local"
         assert_eq!(
             base.source.project_path.as_deref(),
             Some(std::path::Path::new("/project/.agiworkforce/config.toml"))
+        );
+    }
+
+    #[test]
+    fn a_privacy_pin_names_the_layer_that_set_it() {
+        let mut base = CliConfig::default();
+        assert!(base.privacy_pin().is_none());
+        let mut project = CliConfig::default();
+        project.ui.privacy_mode = Some("local".to_string());
+        project.source.project_path = Some(PathBuf::from("/repo/.agiworkforce/config.toml"));
+        base.merge_from(&project);
+        let (mode, path) = base.privacy_pin().expect("pinned");
+        assert_eq!(mode, crate::platform::runtime::session::PrivacyMode::Local);
+        assert_eq!(
+            path.map(PathBuf::as_path),
+            Some(std::path::Path::new("/repo/.agiworkforce/config.toml"))
+        );
+
+        base.apply_managed_config(&crate::platform::policy::managed::ManagedConfigSection {
+            privacy_mode: Some("byok".to_string()),
+            ..Default::default()
+        });
+        let (mode, path) = base.privacy_pin().expect("pinned by policy");
+        assert_eq!(mode, crate::platform::runtime::session::PrivacyMode::Byok);
+        assert!(
+            path.is_none(),
+            "a managed policy is not a file the user edits"
         );
     }
 

@@ -41,6 +41,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 --agi-vscode-diff-added-gutter: var(--vscode-diffEditor-insertedTextBorder, #4caf50);
 --agi-vscode-diff-removed-gutter: var(--vscode-diffEditor-removedTextBorder, #f44336);
 --agi-vscode-diff-modified-gutter: #ff9800;
+--agi-vscode-qr-quiet-zone: #ffffff;
       --bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));
       --bg-elevated: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background, var(--agi-vscode-surface)));
       --bg-overlay: var(--vscode-dropdown-background, var(--agi-vscode-overlay));
@@ -8272,6 +8273,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 --agi-vscode-diff-added-gutter: var(--vscode-diffEditor-insertedTextBorder, #4caf50);
 --agi-vscode-diff-removed-gutter: var(--vscode-diffEditor-removedTextBorder, #f44336);
 --agi-vscode-diff-modified-gutter: #ff9800;
+--agi-vscode-qr-quiet-zone: #ffffff;
       --bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));
       --bg-elevated: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background, var(--agi-vscode-surface)));
       --bg-overlay: var(--vscode-dropdown-background, var(--agi-vscode-overlay));
@@ -16503,6 +16505,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 --agi-vscode-diff-added-gutter: var(--vscode-diffEditor-insertedTextBorder, #4caf50);
 --agi-vscode-diff-removed-gutter: var(--vscode-diffEditor-removedTextBorder, #f44336);
 --agi-vscode-diff-modified-gutter: #ff9800;
+--agi-vscode-qr-quiet-zone: #ffffff;
       --bg-base: var(--vscode-sideBar-background, var(--agi-vscode-bg));
       --bg-elevated: var(--vscode-sideBarSectionHeader-background, var(--vscode-editorWidget-background, var(--agi-vscode-surface)));
       --bg-overlay: var(--vscode-dropdown-background, var(--agi-vscode-overlay));

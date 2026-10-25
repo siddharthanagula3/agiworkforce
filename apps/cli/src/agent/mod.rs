@@ -25,7 +25,7 @@ mod tools;
 
 pub use crate::runtime::session::PrivacyMode;
 pub use chat::SideQuery;
-pub(crate) use checkpoints::CheckpointLog;
+pub(crate) use checkpoints::{restorable as checkpoint_restorable, CheckpointLog};
 pub use checkpoints::{CheckpointSummary, RestoreReport, RewindMode, RewindOutcome};
 pub(crate) use executor::value_to_legacy_args;
 pub use executor::ToolCall;

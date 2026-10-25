@@ -220,6 +220,12 @@ export class ChatEditorPanel {
     this.disposables.length = 0;
   }
 
+  static pushAgentControls(): void {
+    for (const instance of ChatEditorPanel.instances) {
+      instance.stateManager.pushAgentControls();
+    }
+  }
+
   static pushFollowUpBehavior(): void {
     for (const instance of ChatEditorPanel.instances) {
       instance.stateManager.pushFollowUpBehavior();

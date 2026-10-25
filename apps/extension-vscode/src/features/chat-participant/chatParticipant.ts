@@ -22,7 +22,11 @@ import { buildCustomInstructionInput } from '../instructions';
 import { getActiveCloudProject } from '../projects/activeProject';
 import { buildPromptReferenceInputs } from './promptReferences';
 import { rateParticipantAnswer } from '../feedback/answerRating';
-import { parsePlanVisualization, renderPlanMarkdown } from '../../integrations/planVisualization';
+import {
+  parsePlanVisualization,
+  renderPlanMarkdown,
+  type PlanVisualization,
+} from '../../integrations/planVisualization';
 import { assertRunnableStartedThread } from '../../integrations/developerSessionValidation';
 
 interface EditorContext {
@@ -355,6 +359,7 @@ export function createChatHandler(
       requestedAuthorityDiffers(historicalAuthority, requestedModel);
     if (boundaryChanged) threadId = undefined;
     let turnId: string | undefined;
+    const proposedPlans = new Map<string, PlanVisualization>();
     let terminal = false;
     let cancelled = token.isCancellationRequested;
     let cancellationError: string | undefined;
@@ -419,9 +424,12 @@ export function createChatHandler(
       } else if (event.type === 'tool_execution_start') {
         const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
         if (plan === undefined) stream.progress(event.summary);
-        else stream.markdown(renderPlanMarkdown(plan));
+        else proposedPlans.set(event.toolCallId, plan);
       } else if (event.type === 'tool_execution_end') {
+        const plan = proposedPlans.get(event.toolCallId);
+        proposedPlans.delete(event.toolCallId);
         if (event.isError) stream.progress(`${event.name.replaceAll('_', ' ')} failed`);
+        else if (plan !== undefined) stream.markdown(renderPlanMarkdown(plan));
       } else if (event.type === 'source_list') {
         for (const source of event.sources) {
           if (/^https?:\/\//iu.test(source.url)) stream.reference(vscode.Uri.parse(source.url));

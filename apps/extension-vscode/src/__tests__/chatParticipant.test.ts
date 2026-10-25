@@ -483,6 +483,18 @@ describe('chat participant approval lifecycle', () => {
         },
       });
       listener({
+        type: 'tool_execution_end',
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        sequence: 1,
+        emittedAtMs: 1_784_335_200_010,
+        toolCallId: 'plan-1',
+        name: 'update_plan',
+        output: 'Plan updated',
+        isError: false,
+        elapsedMs: 10,
+      });
+      listener({
         type: 'turn_completed',
         threadId: 'thread-1',
         turnId: 'turn-1',

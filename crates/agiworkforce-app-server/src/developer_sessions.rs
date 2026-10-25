@@ -16,26 +16,28 @@ use agiworkforce_protocol::developer_session::{
     MemoryAddResponse, ModelListParams, PermissionRulesResponse, PermissionsAddParams,
     PermissionsListResponse, PermissionsRemoveParams, PlanDecideParams, PluginInstallParams,
     PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    ProtocolVersionUnsupportedData, ProviderParams, ProviderSetKeyParams, ProvidersListResponse,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, TerminalCloseParams,
-    TerminalOpenParams, TerminalOpenResponse, TerminalResizeParams, TerminalWriteParams,
-    ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
-    ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPinParams, ThreadPinResponse,
-    ThreadReadResponse, ThreadReconnectResponse, ThreadRenameParams, ThreadRenameResponse,
-    ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse,
-    ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse,
-    ThreadStartParams, ThreadStartResponse, ThreadSummary, ThreadWriterConflictData,
-    TrustListResponse, TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse,
-    TurnSteerParams, TurnSummary, UserInputResponseParams, WorktreeApplyParams,
-    WorktreeApplyResponse, WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse,
-    WorktreeIdParams, WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse,
-    WorktreePinParams, WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
+    PrivacyBoundaryRefusalData, ProtocolVersionUnsupportedData, ProviderParams,
+    ProviderSetKeyParams, ProvidersListResponse, SettingsReadResponse, SettingsWriteParams,
+    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
+    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, TerminalCloseParams, TerminalOpenParams, TerminalOpenResponse,
+    TerminalResizeParams, TerminalWriteParams, ThreadCheckpointsResponse, ThreadCompactParams,
+    ThreadCompactResponse, ThreadDeleteParams, ThreadDeleteResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadPinParams, ThreadPinResponse, ThreadReadResponse,
+    ThreadReconnectResponse, ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams,
+    ThreadRevertResponse, ThreadRewindParams, ThreadRewindResponse, ThreadSearchParams,
+    ThreadSearchResponse, ThreadSideQuestionParams, ThreadSideQuestionResponse, ThreadStartParams,
+    ThreadStartResponse, ThreadSummary, ThreadWriterConflictData, TrustListResponse,
+    TrustRevokeParams, TurnInterruptParams, TurnStartParams, TurnStartResponse, TurnSteerParams,
+    TurnSummary, UserInputResponseParams, WorktreeApplyParams, WorktreeApplyResponse,
+    WorktreeArchive, WorktreeCreateParams, WorktreeCreateResponse, WorktreeIdParams,
+    WorktreeKeepParams, WorktreeKeepResponse, WorktreeListResponse, WorktreePinParams,
+    WorktreeRemoveParams, WorktreeSetupRunParams, WorktreeSummary,
     LEGACY_DEVELOPER_SESSION_PROTOCOL_VERSION, MCP_APPROVAL_STALE_ERROR_CODE,
-    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE,
-    SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS, THREAD_WRITER_CONFLICT_ERROR_CODE,
+    MINIMUM_DEVELOPER_SESSION_PROTOCOL_VERSION, PRIVACY_BOUNDARY_ERROR_CODE,
+    PROTOCOL_VERSION_UNSUPPORTED_ERROR_CODE, SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
+    THREAD_WRITER_CONFLICT_ERROR_CODE,
 };
 use anyhow::Result;
 use async_trait::async_trait;
@@ -985,6 +987,15 @@ impl DeveloperSessionHostError {
         Self {
             data: serde_json::to_value(current).ok(),
             ..Self::new(MCP_APPROVAL_STALE_ERROR_CODE, message)
+        }
+    }
+
+    /// The model would run outside the trust boundary the configuration pins,
+    /// so no session started.
+    pub fn privacy_boundary(message: impl Into<String>, data: PrivacyBoundaryRefusalData) -> Self {
+        Self {
+            data: serde_json::to_value(data).ok(),
+            ..Self::new(PRIVACY_BOUNDARY_ERROR_CODE, message)
         }
     }
 

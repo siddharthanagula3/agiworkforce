@@ -86,47 +86,46 @@ export async function runInlineCommand(
     { role: 'user', content: prompts[command] ?? selectedText },
   ];
 
-  const failure = await vscode.window.withProgress(
+  const outcome = await vscode.window.withProgress(
     {
       location: vscode.ProgressLocation.Notification,
       title: `${PRODUCT_NAMES.code}: ${commandLabel(command)}…`,
       cancellable: true,
     },
-    async (progress, progressToken): Promise<unknown> => {
+    async (progress, progressToken): Promise<{ result: string } | { failure: unknown }> => {
       const cancelSource = new vscode.CancellationTokenSource();
       progressToken.onCancellationRequested(() => cancelSource.cancel());
-
       try {
         progress.report({ increment: 0 });
         const result = await chatCompletion(context.secrets, messages, cancelSource.token);
-        cancelSource.dispose();
-
         progress.report({ increment: 100 });
-
-        const resolution = await applyLlmEdit(
-          editor,
-          new vscode.Selection(explicitRange.start, explicitRange.end),
-          result,
-          commandLabel(command),
-          { autoApply: autoApplyFixes && command === 'fix' },
-        );
-        if (resolution) {
-          trackProductEvent('code_suggestion_resolved', 'managed', {
-            outcome: resolution,
-            properties: { kind: command, source: 'inline_command' },
-          });
-        }
-        return undefined;
-      } catch (err) {
+        return { result };
+      } catch (failure) {
+        return { failure };
+      } finally {
         cancelSource.dispose();
-        return err;
       }
     },
   );
 
-  if (failure === undefined) return;
-  if (classifyCloudUtilityFailure(failure) === 'cancelled') return;
-  await showCloudUtilityErrorActions(failure, {
+  if ('result' in outcome) {
+    const resolution = await applyLlmEdit(
+      editor,
+      new vscode.Selection(explicitRange.start, explicitRange.end),
+      outcome.result,
+      commandLabel(command),
+      { autoApply: autoApplyFixes && command === 'fix' },
+    );
+    if (resolution) {
+      trackProductEvent('code_suggestion_resolved', 'managed', {
+        outcome: resolution,
+        properties: { kind: command, source: 'inline_command' },
+      });
+    }
+    return;
+  }
+  if (classifyCloudUtilityFailure(outcome.failure) === 'cancelled') return;
+  await showCloudUtilityErrorActions(outcome.failure, {
     title: `${PRODUCT_NAMES.code}: ${commandLabel(command)} failed`,
     retry: () => runInlineCommand(context, command, targetRange),
     secrets: context.secrets,

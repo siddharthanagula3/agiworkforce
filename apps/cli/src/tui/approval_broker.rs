@@ -8,7 +8,7 @@
 #![allow(dead_code)]
 
 use std::collections::{HashMap, VecDeque};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use agiworkforce_protocol::agent_events::AgentEventApprovalRiskLevel;
@@ -129,9 +129,11 @@ impl ApprovalRequestKind {
             // A trust grant widens what may run without asking again, and the
             // user withdraws it the same way they gave it.
             Self::TrustDirectory { .. } => (Level::Medium, true),
-            // AGI keeps no copy of what a file held before it wrote to it, so
-            // it cannot offer to put the file back. A file that chooses what
-            // runs on this machine is the most a write can reach.
+            // Without a session checkpoint nothing keeps what a file held
+            // before the write, so nothing can put it back; see
+            // `risk_with_restorable` for a host that checkpoints writes. A file
+            // that chooses what runs on this machine is the most a write can
+            // reach.
             Self::FileWrite { path } | Self::FileEdit { path } => (
                 if crate::path_security::controls_what_runs(None, path) {
                     Level::High
@@ -166,6 +168,19 @@ impl ApprovalRequestKind {
             }
         };
         ApprovalRisk { level, reversible }
+    }
+
+    /// The rating inside a session that copies each file before writing it:
+    /// a write is reversible exactly when every file it touches would leave a
+    /// copy that Undo or rewind can restore.
+    pub fn risk_with_restorable(&self, restorable: impl Fn(&Path) -> bool) -> ApprovalRisk {
+        let risk = self.risk();
+        let reversible = match self {
+            Self::FileWrite { path } | Self::FileEdit { path } => restorable(path),
+            Self::Patch { files } => !files.is_empty() && files.iter().all(|path| restorable(path)),
+            _ => risk.reversible,
+        };
+        ApprovalRisk { reversible, ..risk }
     }
 }
 
@@ -653,6 +668,35 @@ mod tests {
         .risk();
         assert_eq!(driving.level, AgentEventApprovalRiskLevel::High);
         assert!(!driving.reversible);
+    }
+
+    /// A session that copies a file before writing it can put the file back,
+    /// so the write is reversible only when every file it touches is copied.
+    #[test]
+    fn a_checkpointed_write_is_reversible_and_an_uncopied_one_is_not() {
+        let inside = |path: &Path| path.starts_with("/work");
+        let edit = ApprovalRequestKind::FileEdit {
+            path: PathBuf::from("/work/src/app.ts"),
+        };
+        assert!(!edit.risk().reversible);
+        assert!(edit.risk_with_restorable(inside).reversible);
+        let outside = ApprovalRequestKind::FileWrite {
+            path: PathBuf::from("/etc/hosts"),
+        };
+        assert!(!outside.risk_with_restorable(inside).reversible);
+        let patch = ApprovalRequestKind::Patch {
+            files: vec![
+                PathBuf::from("/work/a.rs"),
+                PathBuf::from("/elsewhere/b.rs"),
+            ],
+        };
+        assert!(!patch.risk_with_restorable(inside).reversible);
+        let push = ApprovalRequestKind::GitPush {
+            remote: "origin".to_string(),
+            branch: "main".to_string(),
+            force: false,
+        };
+        assert!(!push.risk_with_restorable(|_| true).reversible);
     }
 
     /// A prompt that only asks the user something moves nothing, so it is the

@@ -39,7 +39,10 @@ export function effectiveAgentNotifications(
  */
 export function agentNotificationsWrite(
   next: HostAgentNotificationPreferences,
-): Pick<HostPreferences, 'agentNotifications' | 'sessionCompletionAlerts' | 'sessionApprovalAlerts'> {
+): Pick<
+  HostPreferences,
+  'agentNotifications' | 'sessionCompletionAlerts' | 'sessionApprovalAlerts'
+> {
   return {
     agentNotifications: next,
     sessionCompletionAlerts: DEFAULT_SESSION_COMPLETION_ALERTS,

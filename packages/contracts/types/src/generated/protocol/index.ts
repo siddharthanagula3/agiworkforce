@@ -308,6 +308,8 @@ export * from './PluginScope';
 export * from './PluginSetEnabledParams';
 export * from './PluginSummary';
 export * from './PluginUpdateResponse';
+export * from './PrivacyBoundaryRefusalData';
+export * from './PrivacyPin';
 export * from './ProtocolVersionUnsupportedData';
 export * from './RateLimitReachedType';
 export * from './RateLimitSnapshot';

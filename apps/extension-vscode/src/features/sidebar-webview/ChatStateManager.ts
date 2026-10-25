@@ -80,6 +80,7 @@ import {
   CLI_NOT_FOUND_MARKER,
   LocalRuntimeProtocolError,
   readMcpAuthRequired,
+  privacyBoundaryRefusal,
   writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
@@ -204,6 +205,8 @@ import {
   planFromThread,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
+import { privacyPinReason, privacyPinRefuses, type PrivacyPin } from '../model-picker/privacyPin';
+import type { ModelTrustMode } from '../model-picker/reachability';
 import { getTokenCounter } from '../../data/tokenCounter';
 import { formatCreditAmount, formatUnsettledRequests } from '../../data/usagePresentation';
 import {
@@ -245,6 +248,7 @@ const PERMISSION_REFUSAL: ChatErrorHint = { category: 'permission' };
 const RUNTIME_REFUSAL: ChatErrorHint = { category: 'runtime' };
 const RUNTIME_FAILURE: ChatErrorHint = { category: 'runtime', retryable: true };
 const RUNTIME_SETUP_REFUSAL: ChatErrorHint = { category: 'runtime', action: 'open-settings' };
+const PRIVACY_PIN_REFUSAL: ChatErrorHint = { category: 'runtime', retryable: false };
 const PLAN_REFUSAL: ChatErrorHint = { category: 'subscription', action: 'upgrade-plan' };
 const SIGN_IN_REFUSAL: ChatErrorHint = { category: 'sign-in', action: 'sign-in-account' };
 const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch-model' };
@@ -885,6 +889,7 @@ export class ChatStateManager {
   private _lastMeterBoundary: string | undefined;
   private readonly _servedModelByTurn = new Map<string, string>();
   private readonly _writtenFilesByTurn = new Map<string, Set<string>>();
+  private readonly _pendingWritesByToolCall = new Map<string, { turnId: string; path: string }>();
   private _lastChangedTurn:
     { threadId: string; turnId: string; files: readonly string[] } | undefined;
   private readonly _pendingAttachments: PendingAttachment[] = [];
@@ -896,6 +901,16 @@ export class ChatStateManager {
   private readonly _cliCapabilities: CliCapabilityAdapter;
   private _slashEntries: ReadonlyMap<string, SlashMenuEntry> | undefined;
   private _latestPlan: { threadId: string; plan: PlanVisualization } | undefined;
+  private _privacyPin: PrivacyPin | undefined;
+  private readonly _proposedPlansByToolCall = new Map<
+    string,
+    {
+      threadId: string;
+      turnId: string;
+      plan: PlanVisualization;
+      start: { name: string; category: AgentEventToolCategory; summary: string; input: unknown };
+    }
+  >();
   private _planDocument: { uri: string; threadId: string; original: string } | undefined;
   private _planDocumentListener: vscode.Disposable | undefined;
   private _contextUsage:
@@ -1629,6 +1644,21 @@ export class ChatStateManager {
                   : manualModelUnlockText();
         }
 
+        const pin = this._privacyPin;
+        if (pin !== undefined) {
+          for (const group of groups) {
+            const boundary: ModelTrustMode | undefined =
+              group.boundary === 'cloud'
+                ? 'managed'
+                : group.boundary === 'byok'
+                  ? 'byok'
+                  : undefined;
+            if (boundary === undefined || !privacyPinRefuses(pin, boundary)) continue;
+            group.description = privacyPinReason(pin);
+            group.models = group.models.map((model) => ({ ...model, disabled: true }));
+          }
+        }
+
         this._post({ type: 'modelPickerData', payload: { groups, currentModel } });
         break;
       }
@@ -2185,6 +2215,19 @@ export class ChatStateManager {
     }
   }
 
+  public pushAgentControls(): void {
+    const model = this._activeModel;
+    this._post({ type: 'modeChanged', payload: { mode: this.sessionAgentMode() } });
+    this._post({
+      type: 'effortChanged',
+      payload: {
+        effort: this._shownEffort(),
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
+    });
+  }
+
   public pushFollowUpBehavior(): void {
     this._post({
       type: 'followUpBehavior',
@@ -2516,21 +2559,36 @@ export class ChatStateManager {
     this._followDefaultModel();
   }
 
-  /**
-   * Push the usage meter for the model the next turn will actually dispatch.
-   *
-   * `source` doubles as the header trust-boundary pill (Local / BYOK / Cloud),
-   * so it is derived from {@link _providerBoundaryForModel}, the same
-   * classification that decides when a thread must be restarted on a boundary
-   * change, and never from a fixed literal.
-   */
-  private _noteWrittenFile(turnId: string, toolName: string, input: unknown): void {
+  private _notePendingWrite(
+    turnId: string,
+    toolCallId: string,
+    toolName: string,
+    input: unknown,
+  ): void {
     const filePath = writtenFilePath(toolName, input);
     const cwd = this._thread?.cwd;
     if (filePath === undefined || cwd === undefined) return;
-    const written = this._writtenFilesByTurn.get(turnId) ?? new Set<string>();
-    written.add(path.resolve(cwd, filePath));
-    this._writtenFilesByTurn.set(turnId, written);
+    this._pendingWritesByToolCall.set(toolCallId, { turnId, path: path.resolve(cwd, filePath) });
+  }
+
+  private _settlePendingWrite(toolCallId: string, succeeded: boolean): void {
+    const pending = this._pendingWritesByToolCall.get(toolCallId);
+    if (pending === undefined) return;
+    this._pendingWritesByToolCall.delete(toolCallId);
+    if (!succeeded) return;
+    const written = this._writtenFilesByTurn.get(pending.turnId) ?? new Set<string>();
+    written.add(pending.path);
+    this._writtenFilesByTurn.set(pending.turnId, written);
+  }
+
+  private _forgetTurnToolState(turnId: string): void {
+    this._writtenFilesByTurn.delete(turnId);
+    for (const [toolCallId, pending] of this._pendingWritesByToolCall) {
+      if (pending.turnId === turnId) this._pendingWritesByToolCall.delete(toolCallId);
+    }
+    for (const [toolCallId, proposed] of this._proposedPlansByToolCall) {
+      if (proposed.turnId === turnId) this._proposedPlansByToolCall.delete(toolCallId);
+    }
   }
 
   /** Puts back the files the latest reply changed, from the checkpoint taken with its prompt. */
@@ -2616,6 +2674,14 @@ export class ChatStateManager {
     this._postError(t('chatNotice.modelNotOnPlan'), PLAN_REFUSAL);
   }
 
+  /**
+   * Push the usage meter for the model the next turn will actually dispatch.
+   *
+   * `source` doubles as the header trust-boundary pill (Local / BYOK / Cloud),
+   * so it is derived from {@link _providerBoundaryForModel}, the same
+   * classification that decides when a thread must be restarted on a boundary
+   * change, and never from a fixed literal.
+   */
   async pushUsageMeter(shouldPost: () => boolean = () => true): Promise<void> {
     const modelId = this._activeModel;
     const boundary = this._providerBoundaryForModel(modelId);
@@ -3411,6 +3477,7 @@ export class ChatStateManager {
         this._localModelProviders.set(model.id, model.provider);
       }
       this._localServers = response.localServers ?? [];
+      this._privacyPin = response.privacyPin;
       const wasReady = this._runtimeReady;
       this._runtimeReady = true;
       this._post({ type: 'runtimeStatus', payload: { status: 'ready' } });
@@ -4153,6 +4220,10 @@ export class ChatStateManager {
       }
       return true;
     } catch (error) {
+      if (privacyBoundaryRefusal(error) !== undefined && error instanceof Error) {
+        this._postError(error.message, PRIVACY_PIN_REFUSAL);
+        return false;
+      }
       const holder = writerConflictHolder(error);
       this._postError(
         holder !== undefined
@@ -4687,35 +4758,51 @@ export class ChatStateManager {
       return;
     }
     if (event.type === 'tool_execution_start') {
-      this._noteWrittenFile(event.turnId, event.name, event.input);
+      this._notePendingWrite(event.turnId, event.toolCallId, event.name, event.input);
+      const entry = this._activityEntry('tool', event.toolCallId);
+      const start = {
+        name: entry?.name ?? event.name,
+        category: entry?.category ?? event.category,
+        summary: entry?.summary ?? event.summary,
+        input: entry?.input ?? event.input,
+      };
       const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
       if (plan !== undefined) {
-        this._latestPlan = { threadId: event.threadId, plan };
-        this._post({ type: 'planUpdate', payload: plan });
+        this._proposedPlansByToolCall.set(event.toolCallId, {
+          threadId: event.threadId,
+          turnId: event.turnId,
+          plan,
+          start,
+        });
         return;
       }
-      const entry = this._activityEntry('tool', event.toolCallId);
-      this._post({
-        type: 'toolCallStart',
-        payload: {
-          toolUseId: event.toolCallId,
-          name: entry?.name ?? event.name,
-          category: entry?.category ?? event.category,
-          summary: entry?.summary ?? event.summary,
-          input: entry?.input ?? event.input,
-        },
-      });
+      this._post({ type: 'toolCallStart', payload: { toolUseId: event.toolCallId, ...start } });
       return;
     }
     if (event.type === 'tool_execution_end') {
       const entry = this._activityEntry('tool', event.toolCallId);
       const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
+      const isError = entry === undefined ? event.isError : entry.status === 'failed';
+      this._settlePendingWrite(event.toolCallId, !isError);
+      const proposed = this._proposedPlansByToolCall.get(event.toolCallId);
+      this._proposedPlansByToolCall.delete(event.toolCallId);
+      if (proposed !== undefined && !isError) {
+        this._latestPlan = { threadId: proposed.threadId, plan: proposed.plan };
+        this._post({ type: 'planUpdate', payload: proposed.plan });
+        return;
+      }
+      if (proposed !== undefined) {
+        this._post({
+          type: 'toolCallStart',
+          payload: { toolUseId: event.toolCallId, ...proposed.start },
+        });
+      }
       this._post({
         type: 'toolCallEnd',
         payload: {
           toolUseId: event.toolCallId,
           output: entry?.output ?? event.output,
-          isError: entry === undefined ? event.isError : entry.status === 'failed',
+          isError,
           ...(elapsedMs === undefined ? {} : { elapsedMs }),
         },
       });
@@ -4784,7 +4871,7 @@ export class ChatStateManager {
       const servedModel = this._servedModelByTurn.get(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
       const writtenFiles = [...(this._writtenFilesByTurn.get(event.turnId) ?? [])];
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._forgetTurnToolState(event.turnId);
       if (writtenFiles.length > 0) {
         this._lastChangedTurn = {
           threadId: event.threadId,
@@ -4836,14 +4923,14 @@ export class ChatStateManager {
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
-      this._writtenFilesByTurn.delete(event.turnId);
+      this._forgetTurnToolState(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
     this._expirePendingApprovals(event.turnId);
     this._servedModelByTurn.delete(event.turnId);
-    this._writtenFilesByTurn.delete(event.turnId);
+    this._forgetTurnToolState(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
       this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });

@@ -1757,6 +1757,43 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('offers no model the configured privacy pin would refuse in the inline picker', async () => {
+    const harness = makeHarness({
+      localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
+    });
+    harness.runtime.listLocalModels.mockResolvedValue({
+      models: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
+      privacyPin: { trustMode: 'local', configPath: '/home/me/.agiworkforce/config.toml' },
+    });
+
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+
+    const data = harness.posted.find((message) => message.type === 'modelPickerData') as
+      | {
+          payload: {
+            groups: Array<{
+              boundary: string;
+              description: string;
+              models: Array<{ disabled?: boolean }>;
+            }>;
+          };
+        }
+      | undefined;
+    const groups = data?.payload.groups ?? [];
+    const crossing = groups.filter(
+      (group) => group.boundary === 'cloud' || group.boundary === 'byok',
+    );
+    expect(crossing.length).toBeGreaterThan(0);
+    for (const group of crossing) {
+      expect(group.description).toBe(
+        'Off while privacy_mode = "local" is set in /home/me/.agiworkforce/config.toml',
+      );
+      expect(group.models.every((model) => model.disabled === true)).toBe(true);
+    }
+    const local = groups.find((group) => group.boundary === 'local');
+    expect(local?.models.some((model) => model.disabled !== true)).toBe(true);
+  });
+
   it('shows an honest setup state when the local CLI runtime is unavailable', async () => {
     const harness = makeHarness({ localModelError: new Error('spawn agi ENOENT') });
 
@@ -2309,6 +2346,57 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.posted).toContainEqual({
       type: 'modeChanged',
       payload: { mode: 'auto' },
+    });
+  });
+
+  it('shows a mode changed outside the chat, unless this chat chose its own', async () => {
+    const harness = makeHarness();
+    const original = vi.mocked(vscode.workspace.getConfiguration).getMockImplementation();
+    let configuredMode = 'plan';
+    vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
+      () =>
+        ({
+          get: vi.fn(<T>(key: string, defaultValue?: T) =>
+            key === 'agent.mode' ? (configuredMode as T) : defaultValue,
+          ),
+          update: vi.fn().mockResolvedValue(undefined),
+          has: vi.fn().mockReturnValue(false),
+          inspect: vi.fn().mockReturnValue(undefined),
+        }) as unknown as vscode.WorkspaceConfiguration,
+    );
+    try {
+      harness.manager.pushAgentControls();
+      expect(harness.posted).toContainEqual({ type: 'modeChanged', payload: { mode: 'plan' } });
+
+      await harness.manager.handleMessage({ type: 'setMode', payload: { mode: 'ask' } });
+      configuredMode = 'auto';
+      harness.posted.length = 0;
+      harness.manager.pushAgentControls();
+      expect(harness.posted).toContainEqual({ type: 'modeChanged', payload: { mode: 'ask' } });
+      expect(harness.posted).toContainEqual(expect.objectContaining({ type: 'effortChanged' }));
+    } finally {
+      vi.mocked(vscode.workspace.getConfiguration).mockImplementation(original!);
+    }
+  });
+
+  it('says why a model outside the configured privacy pin did not start, with no retry', async () => {
+    const harness = makeHarness();
+    const message =
+      'cloud-model runs on the Managed boundary, and privacy_mode = "local" in /home/me/.agiworkforce/config.toml keeps sessions Local. Choose a Local model or change that setting.';
+    harness.runtime.startThread.mockRejectedValueOnce(
+      new LocalRuntimeProtocolError(message, -32013, {
+        model: 'cloud-model',
+        requested: 'managed',
+        pin: { trustMode: 'local', configPath: '/home/me/.agiworkforce/config.toml' },
+      }),
+    );
+
+    await harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'hello' } });
+
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: expect.objectContaining({ headline: message, retryable: false }),
     });
   });
 
@@ -2991,6 +3079,18 @@ describe('ChatStateManager local turn lifecycle', () => {
       input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
     });
     harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'Successfully edited src/math.ts',
+      isError: false,
+      elapsedMs: 1,
+    });
+    harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',
       turnId: 'turn-1',
@@ -3018,6 +3118,53 @@ describe('ChatStateManager local turn lifecycle', () => {
       type: 'turnChangesUndone',
       payload: { turnId: 'turn-1' },
     });
+  });
+
+  it('does not offer review or undo for a write that failed or was denied', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Fix the bug' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      category: 'filesystem',
+      summary: 'Edit src/math.ts',
+      input: { path: 'src/math.ts', old_string: '<=', new_string: '<' },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-1',
+      name: 'edit_file',
+      output: 'File has not been read yet. Read it first before writing to it.',
+      isError: true,
+      elapsedMs: 1,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Could not edit.',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    const done = harness.posted.find((message) => message.type === 'done');
+    expect(done).toBeDefined();
+    expect(done?.payload).not.toHaveProperty('changedFiles');
   });
 
   it('forwards dropped image attachments as image turn input', async () => {
@@ -3769,6 +3916,18 @@ describe('ChatStateManager local turn lifecycle', () => {
       },
     });
     harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1_784_335_200_010,
+      toolCallId: 'plan-1',
+      name: 'update_plan',
+      output: 'Plan updated',
+      isError: false,
+      elapsedMs: 10,
+    });
+    harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',
       turnId: 'turn-1',
@@ -3794,6 +3953,57 @@ describe('ChatStateManager local turn lifecycle', () => {
       expect.objectContaining({
         type: 'toolCallStart',
         payload: expect.objectContaining({ name: 'update_plan' }),
+      }),
+    );
+  });
+
+  it('does not offer a plan the runtime rejected', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Plan this change' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1,
+      toolCallId: 'plan-1',
+      name: 'update_plan',
+      category: 'other',
+      summary: 'Updating the plan',
+      input: { plan: [{ step: 'Build the UI', status: 'pending' }] },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 2,
+      toolCallId: 'plan-1',
+      name: 'update_plan',
+      output: 'update_plan: failed to parse arguments',
+      isError: true,
+      elapsedMs: 1,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'planUpdate' }));
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'toolCallEnd',
+        payload: expect.objectContaining({ toolUseId: 'plan-1', isError: true }),
       }),
     );
   });
@@ -4041,6 +4251,18 @@ describe('ChatStateManager session compaction', () => {
       category: 'other',
       summary: 'Plan',
       input: { plan: [{ step: 'Change the loop bound', status: 'pending' }] },
+    } as never);
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-plan',
+      name: 'update_plan',
+      output: 'Plan updated',
+      isError: false,
+      elapsedMs: 1,
     } as never);
     harness.emit({
       type: 'turn_completed',

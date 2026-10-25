@@ -211,6 +211,16 @@ impl CloudClient {
         })
     }
 
+    #[cfg(test)]
+    pub(crate) fn for_test_server(base: &str) -> Self {
+        Self {
+            base: base.to_string(),
+            jwt: "test-token".to_string(),
+            owner: "test-owner".to_string(),
+            http: reqwest::Client::new(),
+        }
+    }
+
     /// Identity the stored sync cursors belong to. A different account signing
     /// in must not resume another account's cursors.
     pub fn owner(&self) -> &str {
