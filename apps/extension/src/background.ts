@@ -165,6 +165,7 @@ import {
   executeChromeManagedToolInput,
   normalizeChromeManagedRoutingMetadata,
   type ChromeManagedChatResult,
+  type ChromeManagedChatContinuation,
   type ChromeManagedResumeCallbacks,
   type ChromeManagedToolHandoffOutcome,
 } from './features/cloud-bridge/managedChatHandler';
@@ -364,6 +365,38 @@ interface PendingChatToolHandoff {
 }
 
 const pendingChatToolHandoffs = new Map<string, PendingChatToolHandoff>();
+const MAX_CHAT_CONTINUATIONS = 16;
+const chatContinuations = new Map<string, ChromeManagedChatContinuation>();
+
+function chatContinuationKey(owner: ManagedCloudOwner, runId: string): string {
+  return `${owner.accountId}\n${owner.authIncarnation}\n${runId}`;
+}
+
+function rememberChatContinuation(
+  owner: ManagedCloudOwner,
+  runId: string | undefined,
+  continuation: ChromeManagedChatContinuation,
+): void {
+  if (!runId) return;
+  const key = chatContinuationKey(owner, runId);
+  chatContinuations.delete(key);
+  chatContinuations.set(key, continuation);
+  while (chatContinuations.size > MAX_CHAT_CONTINUATIONS) {
+    const oldest = chatContinuations.keys().next().value;
+    if (oldest === undefined) break;
+    chatContinuations.delete(oldest);
+  }
+}
+
+function takeChatContinuation(
+  owner: ManagedCloudOwner,
+  runId: string,
+): ChromeManagedChatContinuation | undefined {
+  const key = chatContinuationKey(owner, runId);
+  const continuation = chatContinuations.get(key);
+  chatContinuations.delete(key);
+  return continuation;
+}
 
 function unansweredToolResults(calls: readonly ToolCall[], content: string) {
   return calls.map((call) => ({ toolCallId: call.id, content }));
@@ -451,6 +484,24 @@ function adoptPendingChatToolHandoffs(
     adopted.push({ handoffId, calls: pending.calls });
   }
   return adopted;
+}
+
+function hasPendingChatToolHandoff(active: ActiveChatStream): boolean {
+  return [...pendingChatToolHandoffs.values()].some(
+    (pending) =>
+      pending.streamId === active.streamId &&
+      pending.clientInstanceId === active.clientInstanceId &&
+      sameManagedCloudOwner(pending.owner, active.owner),
+  );
+}
+
+function notifyWaitingBrowserStep(active: ActiveChatStream): void {
+  showNotification(
+    t('notifyTaskInputTitle'),
+    t('notifyBrowserStepWaiting'),
+    active.historyConversationId,
+    active.owner,
+  );
 }
 
 function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessage): boolean {
@@ -1274,7 +1325,9 @@ function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
   });
   port.onDisconnect.addListener(() => {
     for (const active of activeChatStreams.values()) {
-      if (active.clientInstanceId === clientInstanceId) active.panelDetached = true;
+      if (active.clientInstanceId !== clientInstanceId) continue;
+      active.panelDetached = true;
+      if (hasPendingChatToolHandoff(active)) notifyWaitingBrowserStep(active);
     }
     syncDetachedChatHeartbeat();
   });
@@ -6491,6 +6544,8 @@ async function handleChatMessage(
             isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream)
               ? requestChatToolHandoff(activeStream, id, calls)
               : Promise.resolve({ status: 'cancelled' }),
+          onContinuation: (continuation) =>
+            rememberChatContinuation(owner, activeStream.cloudRun?.runId, continuation),
         }),
         getAuthToken: async () => {
           activeStream.controller.signal.throwIfAborted();
@@ -6806,7 +6861,22 @@ async function handleResolveChatApproval(
           quotaWarning,
         }),
     };
-    const getResumeToken = async () => credential.token;
+    const getResumeToken = async () => {
+      const current = await getManagedCloudAuthContext();
+      return current && sameManagedCloudOwner(current.owner, credential.owner)
+        ? current.token
+        : null;
+    };
+    const continuation = takeChatContinuation(credential.owner, message.cloudRun.runId);
+    const continuationDependencies = {
+      ...(continuation ? { continuation } : {}),
+      onToolHandoff: (calls: ToolCall[]) =>
+        activeChatStreams.get(streamKey) === activeStream
+          ? requestChatToolHandoff(activeStream, id, calls)
+          : Promise.resolve({ status: 'cancelled' as const }),
+      onContinuation: (next: ChromeManagedChatContinuation) =>
+        rememberChatContinuation(credential.owner, activeStream.cloudRun?.runId, next),
+    };
     const result =
       message.type === 'RESOLVE_CHAT_INPUT'
         ? await executeChromeManagedToolInput(
@@ -6818,6 +6888,7 @@ async function handleResolveChatApproval(
             },
             {
               ...createChromeManagedToolInputDependencies(onText, callbacks),
+              ...continuationDependencies,
               getAuthToken: getResumeToken,
             },
           )
@@ -6831,6 +6902,7 @@ async function handleResolveChatApproval(
             },
             {
               ...createChromeManagedApprovalDependencies(onText, callbacks),
+              ...continuationDependencies,
               getAuthToken: getResumeToken,
             },
           );

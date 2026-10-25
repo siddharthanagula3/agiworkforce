@@ -27,6 +27,7 @@ import {
   MAX_CONVERSATIONS,
   MAX_CONVERSATION_STORE_BYTES,
   MAX_HISTORY_CONTENT_CHARS,
+  MAX_HISTORY_ERROR_TEXT_CHARS,
   MAX_MESSAGES_PER_CONVERSATION,
   pendingCloudMessages,
   recordCloudSyncState,
@@ -43,6 +44,7 @@ import {
 import { sameManagedCloudOwner, type ManagedCloudOwner } from './managedCloudAuthority';
 import { readCloudMirroringEnabled } from '../privacy/cloudMirroring';
 import { platformRequestHeaders } from '../../platformHeaders';
+import { t } from '../../i18n';
 
 const HISTORY_PULL_TIMEOUT_MS = 20_000;
 
@@ -176,7 +178,7 @@ function isManagedHistoryMessage(
   return true;
 }
 
-function projectPublicHistoryMessage(message: ManagedCloudMessage): HistoryMessage | null {
+export function projectPublicHistoryMessage(message: ManagedCloudMessage): HistoryMessage | null {
   if (message.role !== 'user' && message.role !== 'assistant') return null;
   const timestamp = Date.parse(message.createdAt);
   if (!ManagedCloudCreateMessageRequestSchema.shape.id.safeParse(message.id).success)
@@ -211,6 +213,15 @@ function projectPublicHistoryMessage(message: ManagedCloudMessage): HistoryMessa
     ...(message.model ? { model: message.model } : {}),
     ...(message.provider ? { provider: message.provider } : {}),
     ...(metadata['managedQuickMode'] === true ? { managedQuickMode: true } : {}),
+    ...(metadata['error'] === true
+      ? {
+          error: true,
+          errorText:
+            typeof metadata['errorText'] === 'string' && metadata['errorText'].trim()
+              ? metadata['errorText'].slice(0, MAX_HISTORY_ERROR_TEXT_CHARS)
+              : t('spStoredReplyFailed'),
+        }
+      : {}),
     ...(generatedFiles.length > 0 ? { generatedFiles } : {}),
     ...(interactiveCards.length > 0 ? { interactiveCards } : {}),
   };

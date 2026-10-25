@@ -69,6 +69,8 @@ import {
   PROVIDERS_IN_ORDER,
   productLinkPath,
   resolveModelEffort,
+  CONNECTORS_COMING_SOON_LABEL,
+  CONNECTORS_COMING_SOON_MESSAGE,
   type ClarifyState,
   type Effort,
   type InteractiveCard,
@@ -334,6 +336,7 @@ import { createExtensionCloudChatClient } from './features/cloud-bridge/conversa
 import { managedModelImageLimit } from './features/cloud-bridge/managedModelLimits';
 import {
   capabilityAllowed,
+  connectorsComingSoon,
   fetchAccountSummary,
   type AccountSummary,
   type CapabilityDocument,
@@ -4725,6 +4728,7 @@ function injectStyles(): void {
     .sp-attach-menu-label { flex: 1; min-width: 0; }
     .sp-attach-menu-label > span { display: block; }
     .sp-attach-menu-hint { color: var(--agi-ext-text-muted); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .sp-attach-menu-item[aria-disabled='true'] { color: var(--agi-ext-text-muted); cursor: not-allowed; }
     .sp-attach-menu-check {
       display: inline-flex;
       align-items: center;
@@ -8456,6 +8460,9 @@ function updateComposerAdmissionControls(): void {
     control.disabled = !controlsReady;
     control.setAttribute('aria-disabled', String(!controlsReady));
   }
+  const connectorsControl = document.getElementById('sp-attach-connectors-item');
+  if (connectorsControl && connectorsComingSoon(capabilityDocument))
+    connectorsControl.setAttribute('aria-disabled', 'true');
   for (const control of document.querySelectorAll<HTMLButtonElement | HTMLInputElement>(
     '#sp-attach-screenshot-item, #sp-attach-file-input',
   )) {
@@ -12693,12 +12700,20 @@ function buildUI(): void {
 
   const connectorsItem = el('button', {
     class: 'sp-attach-menu-item',
+    id: 'sp-attach-connectors-item',
     type: 'button',
     role: 'menuitem',
   });
   connectorsItem.appendChild(renderIcon(Plug, 16));
   connectorsItem.appendChild(el('span', { class: 'sp-attach-menu-label' }, t('spConnectors')));
+  const connectorsComingSoonTag = el(
+    'span',
+    { class: 'sp-attach-menu-hint' },
+    CONNECTORS_COMING_SOON_LABEL,
+  );
+  connectorsItem.appendChild(connectorsComingSoonTag);
   connectorsItem.addEventListener('click', () => {
+    if (connectorsComingSoon(capabilityDocument)) return;
     attachMenu.classList.remove('open');
     attachBtn.setAttribute('aria-expanded', 'false');
     void chrome.tabs.create({ url: CONNECTORS_URL });
@@ -13039,7 +13054,12 @@ function buildUI(): void {
   applyCapabilityGates = () => {
     micBtn.hidden = !capabilityAllowed(capabilityDocument, 'canUseVoice');
     fileItem.hidden = !capabilityAllowed(capabilityDocument, 'canUploadFiles');
-    connectorsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseConnectors');
+    const connectorsLocked = connectorsComingSoon(capabilityDocument);
+    connectorsItem.hidden =
+      !connectorsLocked && !capabilityAllowed(capabilityDocument, 'canUseConnectors');
+    connectorsItem.setAttribute('aria-disabled', String(connectorsLocked));
+    connectorsItem.title = connectorsLocked ? CONNECTORS_COMING_SOON_MESSAGE : '';
+    connectorsComingSoonTag.hidden = !connectorsLocked;
     skillsItem.hidden = !capabilityAllowed(capabilityDocument, 'canUseSkills');
     if (skillsItem.hidden && composerSkill) {
       composerSkill = null;

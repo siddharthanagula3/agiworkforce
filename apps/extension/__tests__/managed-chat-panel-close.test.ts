@@ -85,7 +85,7 @@ const harness = vi.hoisted(() => {
       create: vi.fn(),
       onAlarm: event(),
     },
-    notifications: { onClicked: event(), onButtonClicked: event() },
+    notifications: { create: vi.fn(), onClicked: event(), onButtonClicked: event() },
     contextMenus: {
       create: vi.fn(),
       removeAll: vi.fn(() => Promise.resolve()),
@@ -285,6 +285,16 @@ describe('closing the side panel during a managed turn', () => {
     expect(harness.cancelRun).not.toHaveBeenCalled();
   });
 
+  it('does not notify when the closed panel left no browser step waiting', async () => {
+    const closePanel = openPanelPort(FIRST_PANEL);
+    await startTurn('stream-no-step', runReference(false));
+    harness.chromeMock.notifications.create.mockClear();
+
+    closePanel();
+
+    expect(harness.chromeMock.notifications.create).not.toHaveBeenCalled();
+  });
+
   it('saves the reply of a turn that finished after the panel closed', async () => {
     await seedStreamingTurn('The report');
     const closePanel = openPanelPort(FIRST_PANEL);
@@ -401,7 +411,13 @@ describe('closing the side panel during a managed turn', () => {
         .map(([message]) => message as Record<string, unknown>)
         .find((message) => message['type'] === 'CHAT_TOOL_HANDOFF') as Record<string, unknown>
     )['handoffId'];
+    harness.chromeMock.notifications.create.mockClear();
     closePanel();
+    expect(harness.chromeMock.notifications.create).toHaveBeenCalledOnce();
+    expect(harness.chromeMock.notifications.create.mock.calls[0]![1]).toMatchObject({
+      title: 'notifyTaskInputTitle',
+      message: 'notifyBrowserStepWaiting',
+    });
 
     const adoption = await dispatch({
       type: 'ADOPT_CHAT_TURN',

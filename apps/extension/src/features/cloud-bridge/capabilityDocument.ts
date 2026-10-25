@@ -3,6 +3,7 @@ import {
   parseMeResponse,
 } from '@agiworkforce/cloud-contracts';
 import {
+  CONNECTORS_COMING_SOON_REASON,
   resolveCapabilityDocumentDecision,
   type CapabilityDocumentWireView,
   type PlatformCapability,
@@ -74,6 +75,13 @@ export async function fetchAccountSummary(
     planTier: me.plan.effective_tier ?? me.plan.tier,
     greetingName: (await optedOut) ? null : me.profile?.preferred_name?.trim() || me.name || null,
   };
+}
+
+export function connectorsComingSoon(document: CapabilityDocument | null): boolean {
+  return (
+    !capabilityAllowed(document, 'canUseConnectors') &&
+    document?.denialReasons?.['canUseConnectors'] === CONNECTORS_COMING_SOON_REASON
+  );
 }
 
 export function capabilityAllowed(

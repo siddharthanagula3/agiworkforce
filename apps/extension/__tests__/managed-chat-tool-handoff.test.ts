@@ -8,9 +8,12 @@ import {
   type ManagedChatStreamOptions,
 } from '../src/features/cloud-bridge/freeTrialClient';
 import {
+  executeChromeManagedApproval,
   executeChromeManagedChat,
+  RESUMED_BROWSER_STEP_UNAVAILABLE_MESSAGE,
   MANAGED_TOOL_CONTINUATION_RETRIES,
   MAX_MANAGED_TOOL_LEGS,
+  type ChromeManagedChatContinuation,
   type ChromeManagedChatDependencies,
 } from '../src/features/cloud-bridge/managedChatHandler';
 import {
@@ -503,5 +506,114 @@ describe('executeChromeManagedChat tool continuation', () => {
     );
     expect(result).toMatchObject({ status: 'error', code: 'invalid_request' });
     expect(deps.streamChat).not.toHaveBeenCalled();
+  });
+});
+
+describe('a browser step asked for after an approval', () => {
+  const runId = '22222222-2222-4222-8222-222222222222';
+  const pausedRun = {
+    runId,
+    runPath: `/api/llm/v1/chat/completions/runs/${runId}`,
+    lastSequence: 3,
+    state: 'awaiting_input' as const,
+  };
+
+  async function pausedTurn(): Promise<ChromeManagedChatContinuation> {
+    const onContinuation = vi.fn();
+    const result = await executeChromeManagedChat(
+      {
+        id: 'stream-paused',
+        text: 'Check the page and send the update',
+        modelSelection: 'auto',
+        tools: chatBrowserToolDefinitions('read'),
+      },
+      dependencies({
+        streamChat: vi.fn(() =>
+          stream(
+            { type: 'text', text: 'Needs approval. ' },
+            { type: 'run', run: pausedRun },
+            { type: 'done' },
+          ),
+        ),
+        onContinuation,
+      }),
+    );
+    expect(result.status).toBe('success');
+    expect(onContinuation).toHaveBeenCalledOnce();
+    return onContinuation.mock.calls[0]![0] as ChromeManagedChatContinuation;
+  }
+
+  it('keeps what a paused turn needs to continue with a browser tool', async () => {
+    const continuation = await pausedTurn();
+    expect(continuation).toMatchObject({ nextLeg: 1, pendingText: 'Needs approval. ' });
+    expect(continuation.messages.at(-1)).toMatchObject({ role: 'user' });
+    expect(continuation.tools.map((tool) => tool.function.name)).toEqual([CHAT_READ_PAGE_TOOL]);
+  });
+
+  it('runs the browser tool and carries on the same turn after the approval', async () => {
+    const continuation = await pausedTurn();
+    const onToolHandoff = vi.fn(async () => ({
+      status: 'resolved' as const,
+      results: [{ toolCallId: 'call_1', content: 'Owner: Marisol Vance.' }],
+    }));
+    const streamChat = vi.fn(() =>
+      stream({ type: 'text', text: 'Marisol Vance owns it.' }, { type: 'done' }),
+    );
+    const onText = vi.fn();
+
+    const result = await executeChromeManagedApproval(
+      {
+        id: 'stream-paused',
+        run: pausedRun,
+        toolApprovals: [{ tool_call_id: 'call-approved', decision: 'approved' }],
+      },
+      {
+        getAuthToken: vi.fn(async () => 'fresh-token'),
+        streamApproval: vi.fn(() =>
+          stream({ type: 'text', text: 'Approved. ' }, { type: 'tool-handoff', calls: [readCall] }),
+        ),
+        onText,
+        continuation,
+        streamChat,
+        onToolHandoff,
+      },
+    );
+
+    expect(result).toEqual({ status: 'success' });
+    expect(onToolHandoff).toHaveBeenCalledWith([readCall]);
+    const [messages, token, options] = streamChat.mock.calls[0]! as unknown as [
+      FreeTrialMessage[],
+      string,
+      ManagedChatStreamOptions,
+    ];
+    expect(token).toBe('fresh-token');
+    expect(messages.slice(-2)).toEqual([
+      { role: 'assistant', content: 'Needs approval. Approved. ', tool_calls: [readCall] },
+      { role: 'tool', tool_call_id: 'call_1', content: 'Owner: Marisol Vance.' },
+    ]);
+    expect(options.tools?.map((tool) => tool.function.name)).toEqual([CHAT_READ_PAGE_TOOL]);
+    expect(options.idempotencyKey).not.toBe(continuation.streamOptions.idempotencyKey);
+    expect(onText).toHaveBeenCalledWith('Marisol Vance owns it.');
+  });
+
+  it('settles with a retryable explanation when nothing can continue the turn', async () => {
+    const result = await executeChromeManagedApproval(
+      {
+        id: 'stream-paused',
+        run: pausedRun,
+        toolApprovals: [{ tool_call_id: 'call-approved', decision: 'approved' }],
+      },
+      {
+        getAuthToken: vi.fn(async () => 'token'),
+        streamApproval: vi.fn(() => stream({ type: 'tool-handoff', calls: [readCall] })),
+        onText: vi.fn(),
+      },
+    );
+
+    expect(result).toEqual({
+      status: 'error',
+      code: 'protocol_error',
+      message: RESUMED_BROWSER_STEP_UNAVAILABLE_MESSAGE,
+    });
   });
 });
