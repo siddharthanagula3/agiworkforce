@@ -83,6 +83,20 @@ beforeEach(() => {
     ],
     erasure_tombstones: [{ user_id: 'user_erased' }],
     github_installations: [],
+    slack_installations: [
+      {
+        id: 'slack_installation',
+        team_id: 'workspace-account',
+        installed_by_user_id: 'user_stays',
+      },
+    ],
+    slack_account_links: [
+      'user_stays',
+      'user_removed',
+      'user_suspended',
+      'user_personal',
+      'user_erased',
+    ].map((userId) => ({ installation_id: 'slack_installation', user_id: userId })),
     event_trigger_events: [],
   });
 });

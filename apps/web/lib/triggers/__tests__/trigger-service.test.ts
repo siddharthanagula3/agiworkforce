@@ -251,6 +251,34 @@ describe('createTrigger', () => {
     expect(created.verificationCode).toMatch(/^[0-9a-f]{12}$/);
   });
 
+  it.each([
+    ['slack', ['message'], 'T0123ABCD', 'from slack_installations'],
+    ['github', ['push'], 'acme/secret-backend', 'from github_installations'],
+  ] as const)(
+    'refuses a %s trigger for an account its creator does not hold, before saving it',
+    async (source, eventTypes, sourceAccount, ownershipTable) => {
+      const query = vi.fn(async (sql: string, _params?: unknown[]) => {
+        if (sql.includes('count(*)')) return [{ count: '1' }];
+        if (sql.includes('from scheduled_tasks')) return [{ id: TASK_ID }];
+        if (sql.includes(ownershipTable)) return [];
+        return [row({ source, source_account: sourceAccount })];
+      });
+
+      await expect(
+        createTrigger(
+          database(query),
+          { userId: 'user-1', organizationId: null },
+          { taskId: TASK_ID, name: 'Listen', source, eventTypes: [...eventTypes], sourceAccount },
+        ),
+      ).rejects.toBeInstanceOf(TriggerValidationError);
+      const ownership = query.mock.calls.find(([sql]) => String(sql).includes(ownershipTable));
+      expect(ownership?.[1]).toEqual([sourceAccount, 'user-1']);
+      expect(
+        query.mock.calls.some(([sql]) => String(sql).includes('insert into event_triggers')),
+      ).toBe(false);
+    },
+  );
+
   it('hands a connector trigger its own endpoint and signing secret', async () => {
     vi.stubEnv(EVENT_TRIGGER_SIGNING_SECRET_ENV, 'deployment-secret');
     const created = await createTrigger(

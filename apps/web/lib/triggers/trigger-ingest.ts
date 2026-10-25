@@ -25,6 +25,7 @@ import { eventTypeMatchCandidates, type EventTrigger, type TriggerEvent } from '
 
 const MAX_TRIGGERS_PER_EVENT = 20;
 const MAX_EVENT_DATA_BYTES = 16_384;
+const SLACK_PRIVATE_CONVERSATION_TYPES: ReadonlySet<string> = new Set(['im', 'mpim']);
 
 export interface TriggerIngestOutcome {
   triggerId: string;
@@ -46,6 +47,12 @@ const OWNER_IS_A_MEMBER = ownerIsActiveWorkspaceMemberSql(
   8,
 );
 
+// An event reaches a trigger only when its owner holds the source account: the
+// GitHub installation they linked and a repository they proved they can reach,
+// or a Slack workspace they installed the app in or linked their Slack user in.
+// A private channel's messages reach only the installer who granted the app its
+// access. A well-formed id or a code posted in the workspace proves nothing about
+// who may read its events.
 function triggerMatchStatement(membershipNegation: '' | 'not '): string {
   return `select trigger.*
        from event_triggers as trigger
@@ -64,6 +71,25 @@ function triggerMatchStatement(membershipNegation: '' | 'not '): string {
             select 1 from github_installations as installation
              where installation.installation_id = $5
                and installation.user_id = trigger.user_id
+               and trigger.source_account = any (installation.verified_repositories)
+          )
+        )
+        and (
+          trigger.source <> 'slack'
+          or exists (
+            select 1 from slack_installations as installation
+             where installation.team_id = trigger.source_account
+               and (
+                 installation.installed_by_user_id = trigger.user_id
+                 or (
+                   coalesce($9::text, '') <> 'group'
+                   and exists (
+                     select 1 from slack_account_links as link
+                      where link.installation_id = installation.id
+                        and link.user_id = trigger.user_id
+                   )
+                 )
+               )
           )
         )
         and ${OWNER_ACCOUNT_MAY_ACT}
@@ -82,7 +108,13 @@ function triggerMatchParams(event: TriggerEvent): unknown[] {
     MAX_TRIGGERS_PER_EVENT,
     UNATTENDED_RUN_DENIED_STATUSES,
     MEMBERSHIP_STATUSES_THAT_MAY_ACT,
+    slackChannelType(event),
   ];
+}
+
+function slackChannelType(event: TriggerEvent): string | null {
+  const channelType = event.data['channelType'];
+  return event.source === 'slack' && typeof channelType === 'string' ? channelType : null;
 }
 
 // An event that matched a trigger whose owner has left the workspace fires
@@ -278,6 +310,13 @@ async function claimEventRun(
   return { outcome: 'enqueued', jobId: job.id };
 }
 
+// A direct or group message to the app is the sender's own conversation with it,
+// so it may carry a verification code but is never delivered to a trigger.
+function isPrivateSlackConversation(event: TriggerEvent): boolean {
+  const channelType = slackChannelType(event);
+  return channelType !== null && SLACK_PRIVATE_CONVERSATION_TYPES.has(channelType);
+}
+
 async function verifySlackOwnership(
   db: DatabaseAdapter,
   trigger: EventTrigger,
@@ -308,6 +347,7 @@ export async function ingestTriggerEvent(
   const outcomes: TriggerIngestOutcome[] = [];
 
   for (const trigger of triggers) {
+    if (trigger.verificationStatus === 'verified' && isPrivateSlackConversation(event)) continue;
     const eventId = await recordDelivery(db, trigger, event);
     if (!eventId) {
       outcomes.push({ triggerId: trigger.id, outcome: 'duplicate', detail: null });

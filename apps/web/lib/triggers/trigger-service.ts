@@ -250,6 +250,49 @@ export interface CreatedTrigger {
   signingSecret: string | null;
 }
 
+const SLACK_WORKSPACE_HELD_SQL = `
+  select 1 as held
+    from slack_installations as installation
+   where installation.team_id = $1
+     and (
+       installation.installed_by_user_id = $2
+       or exists (
+         select 1 from slack_account_links as link
+          where link.installation_id = installation.id
+            and link.user_id = $2
+       )
+     )
+   limit 1`;
+
+const GITHUB_REPOSITORY_PROVED_SQL = `
+  select 1 as held
+    from github_installations as installation
+   where installation.user_id = $2
+     and installation.ownership_verified_at is not null
+     and $1 = any (installation.verified_repositories)
+   limit 1`;
+
+// The ingest only delivers an account's events to an owner who holds it, so a
+// trigger for an account the caller does not hold is refused here rather than
+// saved to wait for events that never reach it.
+async function assertOwnerHoldsSourceAccount(
+  db: DatabaseAdapter,
+  userId: string,
+  definition: ValidatedTrigger,
+): Promise<void> {
+  if (definition.source !== 'slack' && definition.source !== 'github') return;
+  const [held] = await db.query<{ held: number }>(
+    definition.source === 'slack' ? SLACK_WORKSPACE_HELD_SQL : GITHUB_REPOSITORY_PROVED_SQL,
+    [definition.sourceAccount, userId],
+  );
+  if (held) return;
+  throw new TriggerValidationError(
+    definition.source === 'slack'
+      ? 'Install the app in that Slack workspace, or link your Slack account there, before adding a trigger for it'
+      : 'Connect GitHub with an account that can reach that repository before adding a trigger for it',
+  );
+}
+
 export async function createTrigger(
   db: DatabaseAdapter,
   scope: { userId: string; organizationId: string | null },
@@ -271,6 +314,7 @@ export async function createTrigger(
     [definition.taskId, scope.userId],
   );
   if (!task) throw new TriggerValidationError('Task not found or not owned by this account');
+  await assertOwnerHoldsSourceAccount(db, scope.userId, definition);
 
   const selfVerifying = definition.source === 'github' || definition.source === 'connector';
   const verificationCode = definition.source === 'slack' ? secureTokenHex(6) : null;

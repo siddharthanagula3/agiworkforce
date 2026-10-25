@@ -103,6 +103,7 @@ async function handleSlackEvent(request: NextRequest): Promise<NextResponse> {
     data: {
       teamId,
       channel: text(event['channel'], 64),
+      channelType: text(event['channel_type'], 32),
       user: text(event['user'], 64),
       text: text(event['text']),
       ts: text(event['ts'], 64),
