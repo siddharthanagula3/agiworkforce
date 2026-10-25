@@ -65,6 +65,7 @@ import {
   messageKindForAgentEvent,
   PRODUCT_NAMES,
 } from '@agiworkforce/types';
+import { PRIVACY_BOUNDARY_ERROR_CODE } from '@agiworkforce/local-runtime-contract';
 import { redactTelemetryText } from '../core/telemetry';
 import { trackRuntimeChild } from './runtimeProcessRegistry';
 
@@ -580,6 +581,11 @@ const hostModelSummarySchema = z.object({
   trustMode: trustModeSchema,
 });
 
+const privacyPinSchema = z.object({
+  trustMode: trustModeSchema,
+  configPath: z.string().min(1).max(4_096).optional(),
+});
+
 const localModelListResponseSchema = z.object({
   models: z.array(
     z.object({
@@ -600,6 +606,7 @@ const localModelListResponseSchema = z.object({
     .max(20)
     .optional()
     .catch(undefined),
+  privacyPin: privacyPinSchema.optional().catch(undefined),
 });
 const turnSummarySchema = z.object({
   id: z.string().min(1),
@@ -1222,6 +1229,23 @@ const threadWriterConflictSchema = z.object({
   threadId: z.string().min(1),
   writer: threadWriterSchema,
 });
+
+const PRIVACY_BOUNDARY_REFUSAL_SCHEMA = z.object({
+  model: z.string().min(1),
+  requested: trustModeSchema,
+  pin: privacyPinSchema,
+});
+
+/** The refusal a `thread/start` gets when its model crosses the configured privacy pin. */
+export function privacyBoundaryRefusal(
+  error: unknown,
+): z.infer<typeof PRIVACY_BOUNDARY_REFUSAL_SCHEMA> | undefined {
+  if (!(error instanceof LocalRuntimeProtocolError) || error.code !== PRIVACY_BOUNDARY_ERROR_CODE) {
+    return undefined;
+  }
+  const refusal = PRIVACY_BOUNDARY_REFUSAL_SCHEMA.safeParse(error.data);
+  return refusal.success ? refusal.data : undefined;
+}
 
 export function writerConflictHolder(error: unknown): string | undefined {
   if (

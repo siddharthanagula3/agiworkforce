@@ -5,7 +5,12 @@ import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { handleCorsPreflightRequest, withCorsRoute } from '@/lib/cors';
-import { findSelectableSkillWithFiles } from '@/lib/services/skill-catalog-service';
+import {
+  findSelectableSkillWithFiles,
+  readManagedSkillFileBytes,
+  type SkillFileEntry,
+} from '@/lib/services/skill-catalog-service';
+import { hashSkillContent } from '@agiworkforce/skills';
 import { listEnabledPluginIds } from '@/lib/services/plugin-installation-service';
 import { workspaceAllowsPlugins } from '@/lib/services/workspace-plugin-access';
 import { requireSkillName } from '../../skill-name-param';
@@ -38,9 +43,25 @@ async function handleListFiles(
   }
 
   const bundled = await found.access.listFiles(found.skill);
+  // The hash is the ETag a download of the same file carries, so a client that
+  // already holds those bytes can skip the download.
+  const contentHashOf = async (file: SkillFileEntry): Promise<string | undefined> => {
+    if (found.managed) {
+      const read = await readManagedSkillFileBytes(found.skill, file.path);
+      return read.ok ? read.file.contentHash : undefined;
+    }
+    const read = await found.access.readFile(found.skill, file.path);
+    return read.ok ? hashSkillContent(Buffer.from(read.content, 'utf8')) : undefined;
+  };
+  const hashed = await Promise.all(
+    bundled.map(async (file) => {
+      const contentHash = await contentHashOf(file);
+      return contentHash === undefined ? file : { ...file, contentHash };
+    }),
+  );
   const files = [
     { path: SKILL_ENTRY_FILE, size: Buffer.byteLength(found.skill.body, 'utf8') },
-    ...bundled,
+    ...hashed,
   ].sort((left, right) => (left.path < right.path ? -1 : left.path > right.path ? 1 : 0));
   return NextResponse.json({ files });
 }

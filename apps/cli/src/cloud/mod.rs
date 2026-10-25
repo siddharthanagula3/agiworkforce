@@ -625,13 +625,13 @@ pub async fn refresh_account_skills(
     if fresh && !force {
         return Ok(0);
     }
-    let synced = skills::fetch_account_skills(&session.client).await?;
+    let synced = skills::fetch_account_skills(&session.client, &dir).await?;
     skills::write_account_skills(&dir, &synced)
         .and_then(|()| std::fs::write(&stamp, b""))
         .map_err(|error| {
             CloudError::Transport(format!("could not save the account's skills: {error}"))
         })?;
-    Ok(synced.len())
+    Ok(synced.fetched.len())
 }
 
 const ACCOUNT_SKILLS_STAMP: &str = ".synced";

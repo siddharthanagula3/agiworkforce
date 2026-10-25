@@ -176,6 +176,7 @@ async function handleListSkills(request: NextRequest) {
           lifecycle: s.frontmatter['draft'] === true ? 'draft' : 'included',
           downloadable: s.source === 'bundled' && s.frontmatter['draft'] !== true,
           ...(installTotals.has(s.name) ? { installs: installTotals.get(s.name) } : {}),
+          ...(s.treeHash === undefined ? {} : { treeHash: s.treeHash }),
           // Straight from the bundle's frontmatter. Omitted when the skill has
           // none, so the column can say "unknown" instead of showing a version
           // this route made up.

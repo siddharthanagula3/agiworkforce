@@ -32,17 +32,18 @@ use agiworkforce_protocol::developer_session::{
     PermissionRulesResponse, PermissionsAddParams, PermissionsListResponse,
     PermissionsRemoveParams, PlanDecideParams, PlanDecision, PluginInstallParams,
     PluginListResponse, PluginRemoveParams, PluginSetEnabledParams, PluginUpdateResponse,
-    ProviderParams, ProviderSetKeyParams, ProvidersListResponse, RewindSkippedFile,
-    SettingsReadResponse, SettingsWriteParams, SkillConsentParams, SkillConsentResponse,
-    SkillInstallParams, SkillListResponse, SkillRemoveParams, SkillSetEnabledParams,
-    SlashCommandListResponse, SlashCommandRunParams, SlashCommandRunResponse, ThreadCheckpoint,
-    ThreadCheckpointsResponse, ThreadCompactParams, ThreadCompactResponse, ThreadDeleteParams,
-    ThreadDeleteResponse, ThreadForkParams, ThreadHandoffAcceptParams, ThreadHandoffParams,
-    ThreadIdParams, ThreadListParams, ThreadListResponse, ThreadPinParams, ThreadPinResponse,
-    ThreadPinnedNotification, ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse,
-    ThreadRenameParams, ThreadRenameResponse, ThreadRevertParams, ThreadRevertResponse,
-    ThreadRewindParams, ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit,
-    ThreadSearchParams, ThreadSearchResponse, ThreadSideQuestionDelta, ThreadSideQuestionParams,
+    PrivacyBoundaryRefusalData, PrivacyPin, ProviderParams, ProviderSetKeyParams,
+    ProvidersListResponse, RewindSkippedFile, SettingsReadResponse, SettingsWriteParams,
+    SkillConsentParams, SkillConsentResponse, SkillInstallParams, SkillListResponse,
+    SkillRemoveParams, SkillSetEnabledParams, SlashCommandListResponse, SlashCommandRunParams,
+    SlashCommandRunResponse, ThreadCheckpoint, ThreadCheckpointsResponse, ThreadCompactParams,
+    ThreadCompactResponse, ThreadDeleteParams, ThreadDeleteResponse, ThreadForkParams,
+    ThreadHandoffAcceptParams, ThreadHandoffParams, ThreadIdParams, ThreadListParams,
+    ThreadListResponse, ThreadPinParams, ThreadPinResponse, ThreadPinnedNotification,
+    ThreadPlanNotification, ThreadReadResponse, ThreadReconnectResponse, ThreadRenameParams,
+    ThreadRenameResponse, ThreadRevertParams, ThreadRevertResponse, ThreadRewindParams,
+    ThreadRewindResponse, ThreadRewindRestore, ThreadSearchHit, ThreadSearchParams,
+    ThreadSearchResponse, ThreadSideQuestionDelta, ThreadSideQuestionParams,
     ThreadSideQuestionResponse, ThreadStartParams, ThreadStatus, ThreadSummary,
     ThreadWriterChangedNotification, ThreadWriterConflictData, TrustListResponse,
     TrustRevokeParams, TurnEndedNotification, TurnFailure, TurnFailureCode, TurnInterruptParams,
@@ -2166,6 +2167,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 models: Vec::new(),
                 host_models: self.host_models.read().await.clone().unwrap_or_default(),
                 local_servers: Vec::new(),
+                privacy_pin: privacy_pin_of(&self.config),
             });
         }
         let host_models = self.host_models(params.refresh).await;
@@ -2192,6 +2194,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             models,
             host_models,
             local_servers,
+            privacy_pin: privacy_pin_of(&self.config),
         })
     }
 
@@ -2249,6 +2252,11 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         refresh_account_memory_setting().await;
         let mut agent = AgentSession::new_checked(&model, &system_context, None, provider_override)
             .map_err(invalid_request)?;
+        refuse_outside_privacy_pin(
+            &self.config,
+            &requested_model,
+            agent.provider_privacy_mode(),
+        )?;
         agent.install_workspace_file_authority(self.workspace_file_authority.clone());
         agent.apply_ui_config(&self.config);
         agent.bypass_permissions_available = self.bypass_permissions_available;
@@ -5877,6 +5885,51 @@ fn resolve_auto_with_trust(
     })
 }
 
+fn privacy_pin_of(config: &CliConfig) -> Option<PrivacyPin> {
+    let (mode, path) = config.privacy_pin()?;
+    Some(PrivacyPin {
+        trust_mode: trust_mode_of(mode),
+        config_path: path.map(|path| path.display().to_string()),
+    })
+}
+
+/// A session whose model runs outside the boundary the configuration pins is
+/// refused before it starts. Nothing picks another model in its place.
+fn refuse_outside_privacy_pin(
+    config: &CliConfig,
+    model: &str,
+    route: crate::agent::PrivacyMode,
+) -> Result<(), DeveloperSessionHostError> {
+    let Some((pinned, path)) = config.privacy_pin() else {
+        return Ok(());
+    };
+    if route == pinned {
+        return Ok(());
+    }
+    let pin = PrivacyPin {
+        trust_mode: trust_mode_of(pinned),
+        config_path: path.map(|path| path.display().to_string()),
+    };
+    let place = pin
+        .config_path
+        .clone()
+        .unwrap_or_else(|| "your organization's managed policy".to_string());
+    Err(DeveloperSessionHostError::privacy_boundary(
+        format!(
+            "{model} runs on the {} boundary, and privacy_mode = \"{}\" in {place} keeps sessions {}. Choose a {} model or change that setting.",
+            route.trust_word(),
+            pinned.label(),
+            pinned.trust_word(),
+            pinned.trust_word(),
+        ),
+        PrivacyBoundaryRefusalData {
+            model: model.to_string(),
+            requested: trust_mode_of(route),
+            pin,
+        },
+    ))
+}
+
 fn trust_mode_of(privacy_mode: crate::agent::PrivacyMode) -> DeveloperSessionTrustMode {
     match privacy_mode {
         crate::agent::PrivacyMode::Local => DeveloperSessionTrustMode::Local,
@@ -9346,6 +9399,51 @@ mod tests {
         assert_eq!(
             waiter.await.expect("waiter task"),
             ApprovalDecision::AllowOnce
+        );
+    }
+
+    #[test]
+    fn a_model_outside_the_pinned_privacy_boundary_is_refused_with_its_reason() {
+        let mut config = CliConfig::default();
+        assert!(refuse_outside_privacy_pin(
+            &config,
+            "cloud-model",
+            crate::agent::PrivacyMode::Managed
+        )
+        .is_ok());
+        config.ui.privacy_mode = Some("local".to_string());
+        config.source.privacy_mode_origin = Some(crate::config::PrivacyModeOrigin::File(
+            std::path::PathBuf::from("/home/me/.agiworkforce/config.toml"),
+        ));
+        assert!(refuse_outside_privacy_pin(
+            &config,
+            "local-model",
+            crate::agent::PrivacyMode::Local
+        )
+        .is_ok());
+
+        let refused =
+            refuse_outside_privacy_pin(&config, "cloud-model", crate::agent::PrivacyMode::Managed)
+                .expect_err("a Managed model under a Local pin must not start");
+        assert_eq!(
+            refused.code(),
+            agiworkforce_protocol::developer_session::PRIVACY_BOUNDARY_ERROR_CODE
+        );
+        assert!(refused
+            .message()
+            .contains("/home/me/.agiworkforce/config.toml"));
+        let data: PrivacyBoundaryRefusalData =
+            serde_json::from_value(refused.data().cloned().expect("typed data"))
+                .expect("data shape");
+        assert_eq!(data.model, "cloud-model");
+        assert_eq!(data.requested, DeveloperSessionTrustMode::Managed);
+        assert_eq!(data.pin.trust_mode, DeveloperSessionTrustMode::Local);
+        assert_eq!(
+            privacy_pin_of(&config),
+            Some(PrivacyPin {
+                trust_mode: DeveloperSessionTrustMode::Local,
+                config_path: Some("/home/me/.agiworkforce/config.toml".to_string()),
+            })
         );
     }
 

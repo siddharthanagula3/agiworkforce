@@ -5,6 +5,7 @@
 use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
+use sha2::{Digest, Sha256};
 
 use super::client::{CloudClient, CloudError};
 
@@ -13,6 +14,8 @@ pub const ACCOUNT_SKILLS_DIR: &str = "account-skills";
 const SKILL_ENTRY_FILE: &str = "SKILL.md";
 const MAX_SKILL_FILES: usize = 64;
 const MAX_SKILL_FILE_BYTES: u64 = 1_000_000;
+/// Names the package hash a held skill was written from, beside its files.
+const TREE_HASH_FILE: &str = ".tree-hash";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AccountSkill {
@@ -21,6 +24,9 @@ pub struct AccountSkill {
     pub description: String,
     #[serde(default)]
     pub lifecycle: Option<String>,
+    /// Hash of the whole package, when the server offers one.
+    #[serde(default, rename = "treeHash")]
+    pub tree_hash: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +51,21 @@ struct SkillFileEntry {
     path: String,
     #[serde(default)]
     size: u64,
+    /// The hash a download of this file carries, when the server offers it.
+    #[serde(default, rename = "contentHash")]
+    content_hash: Option<String>,
+}
+
+/// The form the web gives a file's hash: its download ETag.
+fn content_hash(bytes: &[u8]) -> String {
+    format!("sha256:{}", crate::hex::encode(&Sha256::digest(bytes)))
+}
+
+/// The copy this device already holds, when it is byte for byte the one listed.
+fn held_copy(held: &Path, relative: &str, listed_hash: Option<&str>) -> Option<Vec<u8>> {
+    let listed_hash = listed_hash?;
+    let bytes = std::fs::read(held.join(relative)).ok()?;
+    (content_hash(&bytes) == listed_hash).then_some(bytes)
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -52,6 +73,25 @@ pub struct SyncedSkill {
     pub name: String,
     pub document: String,
     pub files: Vec<(String, Vec<u8>)>,
+    pub tree_hash: Option<String>,
+}
+
+/// What one sync brought down, and every name the account lists, so a sync
+/// the server cut short removes only the skills the account no longer has.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SkillSync {
+    pub fetched: Vec<SyncedSkill>,
+    pub listed: Vec<String>,
+}
+
+/// A held skill written from the same package needs nothing downloaded.
+fn holds_package(held: &Path, tree_hash: Option<&str>) -> bool {
+    let Some(tree_hash) = tree_hash else {
+        return false;
+    };
+    held.join(SKILL_ENTRY_FILE).is_file()
+        && std::fs::read_to_string(held.join(TREE_HASH_FILE))
+            .is_ok_and(|held_hash| held_hash.trim() == tree_hash)
 }
 
 pub fn account_skills_dir(config_dir: &Path) -> PathBuf {
@@ -97,6 +137,7 @@ fn path_segment(value: &str) -> String {
 async fn fetch_skill(
     client: &CloudClient,
     skill: &AccountSkill,
+    held: &Path,
 ) -> Result<SyncedSkill, CloudError> {
     let base = format!("{SKILLS_PATH}/{}", path_segment(&skill.name));
     let body: SkillBody = client.get(&base, &[]).await?;
@@ -110,6 +151,10 @@ async fn fetch_skill(
         .filter(|entry| crate::sync::is_contained_relative_path(&entry.path))
         .take(MAX_SKILL_FILES)
     {
+        if let Some(bytes) = held_copy(held, &entry.path, entry.content_hash.as_deref()) {
+            files.push((entry.path.clone(), bytes));
+            continue;
+        }
         let path = entry
             .path
             .split('/')
@@ -117,7 +162,7 @@ async fn fetch_skill(
             .collect::<Vec<_>>()
             .join("/");
         let (bytes, _) = client
-            .get_bytes_with_header(&format!("{base}/files/{path}"), None)
+            .get_bytes_with_header(&format!("{base}/files/{path}?download=1"), None)
             .await?;
         if bytes.len() as u64 <= MAX_SKILL_FILE_BYTES {
             files.push((entry.path.clone(), bytes));
@@ -127,32 +172,49 @@ async fn fetch_skill(
         name: skill.name.clone(),
         document: skill_document(skill, &body.body),
         files,
+        tree_hash: skill.tree_hash.clone(),
     })
 }
 
 /// A draft is its author's work in progress and is not offered to sessions.
-pub async fn fetch_account_skills(client: &CloudClient) -> Result<Vec<SyncedSkill>, CloudError> {
+/// A file already held in `dir` with the listed hash is kept, not downloaded.
+/// A skill already held from the same package is kept as it is. When the
+/// server stops answering for a while, what came down so far is kept and the
+/// rest waits for the next sync.
+pub async fn fetch_account_skills(
+    client: &CloudClient,
+    dir: &Path,
+) -> Result<SkillSync, CloudError> {
     let list: SkillList = client.get(SKILLS_PATH, &[]).await?;
-    let mut synced = Vec::new();
-    for skill in list
+    let offered: Vec<&AccountSkill> = list
         .skills
         .iter()
         .filter(|skill| safe_skill_name(&skill.name))
         .filter(|skill| skill.lifecycle.as_deref() != Some("draft"))
-    {
-        match fetch_skill(client, skill).await {
-            Ok(skill) => synced.push(skill),
+        .collect();
+    let mut fetched = Vec::new();
+    for skill in &offered {
+        let held = dir.join(&skill.name);
+        if holds_package(&held, skill.tree_hash.as_deref()) {
+            continue;
+        }
+        match fetch_skill(client, skill, &held).await {
+            Ok(skill) => fetched.push(skill),
             Err(CloudError::Api { status: 404, .. }) => {}
+            Err(CloudError::Api { status: 429, .. }) => break,
             Err(error) => return Err(error),
         }
     }
-    Ok(synced)
+    Ok(SkillSync {
+        fetched,
+        listed: offered.iter().map(|skill| skill.name.clone()).collect(),
+    })
 }
 
 /// Each skill is staged and moved in whole, so a session never reads half of one.
-pub fn write_account_skills(dir: &Path, skills: &[SyncedSkill]) -> std::io::Result<()> {
+pub fn write_account_skills(dir: &Path, sync: &SkillSync) -> std::io::Result<()> {
     std::fs::create_dir_all(dir)?;
-    for skill in skills {
+    for skill in &sync.fetched {
         let staging = dir.join(format!(".{}.syncing", skill.name));
         if staging.exists() {
             std::fs::remove_dir_all(&staging)?;
@@ -166,6 +228,9 @@ pub fn write_account_skills(dir: &Path, skills: &[SyncedSkill]) -> std::io::Resu
             }
             std::fs::write(target, bytes)?;
         }
+        if let Some(tree_hash) = &skill.tree_hash {
+            std::fs::write(staging.join(TREE_HASH_FILE), tree_hash)?;
+        }
         let destination = dir.join(&skill.name);
         if destination.exists() {
             std::fs::remove_dir_all(&destination)?;
@@ -174,7 +239,7 @@ pub fn write_account_skills(dir: &Path, skills: &[SyncedSkill]) -> std::io::Resu
     }
     for entry in std::fs::read_dir(dir)?.flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        if !skills.iter().any(|skill| skill.name == name) && entry.path().is_dir() {
+        if !sync.listed.contains(&name) && entry.path().is_dir() {
             std::fs::remove_dir_all(entry.path())?;
         }
     }
@@ -190,6 +255,14 @@ mod tests {
             name: name.to_string(),
             document: document.to_string(),
             files: vec![("scripts/run.sh".to_string(), b"echo hi\n".to_vec())],
+            tree_hash: None,
+        }
+    }
+
+    fn sync(fetched: Vec<SyncedSkill>, listed: &[&str]) -> SkillSync {
+        SkillSync {
+            fetched,
+            listed: listed.iter().map(|name| (*name).to_string()).collect(),
         }
     }
 
@@ -200,11 +273,16 @@ mod tests {
                 name: "pdf-forms".to_string(),
                 description: "Fill PDF forms:\n  read fields, then write them".to_string(),
                 lifecycle: None,
+                tree_hash: None,
             },
             "Read the form first.\n",
         );
         let dir = tempfile::tempdir().unwrap();
-        write_account_skills(dir.path(), &[skill("pdf-forms", &document)]).unwrap();
+        write_account_skills(
+            dir.path(),
+            &sync(vec![skill("pdf-forms", &document)], &["pdf-forms"]),
+        )
+        .unwrap();
 
         let loaded = crate::skills::load_skill(&dir.path().join("pdf-forms").join("SKILL.md"))
             .expect("loads");
@@ -225,15 +303,21 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         write_account_skills(
             dir.path(),
-            &[
-                skill("kept", "---\nname: kept\n---\n"),
-                skill("dropped", "---\nname: dropped\n---\n"),
-            ],
+            &sync(
+                vec![
+                    skill("kept", "---\nname: kept\n---\n"),
+                    skill("dropped", "---\nname: dropped\n---\n"),
+                ],
+                &["kept", "dropped"],
+            ),
         )
         .unwrap();
         write_account_skills(
             dir.path(),
-            &[skill("kept", "---\nname: kept\ndescription: v2\n---\n")],
+            &sync(
+                vec![skill("kept", "---\nname: kept\ndescription: v2\n---\n")],
+                &["kept"],
+            ),
         )
         .unwrap();
 
@@ -241,6 +325,208 @@ mod tests {
         assert!(std::fs::read_to_string(dir.path().join("kept/SKILL.md"))
             .unwrap()
             .contains("v2"));
+    }
+
+    #[test]
+    fn a_package_held_at_the_listed_hash_is_kept_without_a_download() {
+        let dir = tempfile::tempdir().unwrap();
+        let mut held = skill("pdf-forms", "---\nname: pdf-forms\n---\n");
+        held.tree_hash = Some("sha256-tree-v1:abc".to_string());
+        write_account_skills(dir.path(), &sync(vec![held], &["pdf-forms"])).unwrap();
+
+        let path = dir.path().join("pdf-forms");
+        assert!(holds_package(&path, Some("sha256-tree-v1:abc")));
+        assert!(!holds_package(&path, Some("sha256-tree-v1:changed")));
+        assert!(!holds_package(&path, None));
+    }
+
+    #[test]
+    fn a_sync_the_server_cut_short_keeps_every_skill_the_account_still_lists() {
+        let dir = tempfile::tempdir().unwrap();
+        write_account_skills(
+            dir.path(),
+            &sync(
+                vec![
+                    skill("first", "---\nname: first\n---\n"),
+                    skill("second", "---\nname: second\n---\n"),
+                ],
+                &["first", "second"],
+            ),
+        )
+        .unwrap();
+        write_account_skills(
+            dir.path(),
+            &sync(
+                vec![skill("first", "---\nname: first\n---\n")],
+                &["first", "second"],
+            ),
+        )
+        .unwrap();
+
+        assert!(dir.path().join("second/SKILL.md").is_file());
+    }
+
+    #[test]
+    fn a_file_held_with_the_listed_hash_is_reused_and_any_other_is_fetched() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(dir.path().join("references")).unwrap();
+        std::fs::write(dir.path().join("references/guide.md"), b"same bytes").unwrap();
+        let listed = content_hash(b"same bytes");
+        assert!(listed.starts_with("sha256:") && listed.len() == "sha256:".len() + 64);
+
+        assert_eq!(
+            held_copy(dir.path(), "references/guide.md", Some(&listed)),
+            Some(b"same bytes".to_vec())
+        );
+        assert_eq!(
+            held_copy(
+                dir.path(),
+                "references/guide.md",
+                Some(&content_hash(b"changed"))
+            ),
+            None
+        );
+        assert_eq!(held_copy(dir.path(), "references/guide.md", None), None);
+        assert_eq!(
+            held_copy(dir.path(), "references/missing.md", Some(&listed)),
+            None
+        );
+    }
+
+    /// A stand-in for the web catalogue: `skills` packages of one reference
+    /// file each, the same 60-requests-a-minute budget the web gives this
+    /// route, and a count of what was asked for.
+    async fn catalogue(
+        skills: usize,
+        with_hashes: bool,
+    ) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        use tokio::io::{AsyncReadExt, AsyncWriteExt};
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        let served = std::sync::Arc::new(AtomicUsize::new(0));
+        let count = served.clone();
+        tokio::spawn(async move {
+            loop {
+                let Ok((mut socket, _)) = listener.accept().await else {
+                    return;
+                };
+                let count = count.clone();
+                tokio::spawn(async move {
+                    let mut request = vec![0u8; 8192];
+                    let read = socket.read(&mut request).await.unwrap_or(0);
+                    let line = String::from_utf8_lossy(&request[..read]).to_string();
+                    let path = line.split_whitespace().nth(1).unwrap_or("/").to_string();
+                    let seen = count.fetch_add(1, Ordering::SeqCst) + 1;
+                    let reference = b"Reference text".to_vec();
+                    let (status, body): (u16, Vec<u8>) = if seen > 60 {
+                        (429, br#"{"error":"Too many requests"}"#.to_vec())
+                    } else if path == "/api/skills" {
+                        let entries: Vec<String> = (0..skills)
+                            .map(|index| {
+                                let hash = if with_hashes {
+                                    format!(r#","treeHash":"sha256-tree-v1:{index}""#)
+                                } else {
+                                    String::new()
+                                };
+                                format!(r#"{{"name":"skill-{index}","description":"d"{hash}}}"#)
+                            })
+                            .collect();
+                        (
+                            200,
+                            format!(r#"{{"skills":[{}]}}"#, entries.join(",")).into_bytes(),
+                        )
+                    } else if path.ends_with("/files") {
+                        let hash = if with_hashes {
+                            format!(r#","contentHash":"{}""#, content_hash(&reference))
+                        } else {
+                            String::new()
+                        };
+                        (
+                            200,
+                            format!(
+                                r#"{{"files":[{{"path":"SKILL.md","size":4}},{{"path":"references/guide.md","size":14{hash}}}]}}"#
+                            )
+                            .into_bytes(),
+                        )
+                    } else if path.contains("/files/") {
+                        (200, reference)
+                    } else {
+                        (200, br#"{"body":"Use it."}"#.to_vec())
+                    };
+                    let head = format!(
+                        "HTTP/1.1 {status} X\r\ncontent-length: {}\r\nconnection: close\r\n\r\n",
+                        body.len()
+                    );
+                    let _ = socket.write_all(head.as_bytes()).await;
+                    let _ = socket.write_all(&body).await;
+                });
+            }
+        });
+        (base, served)
+    }
+
+    /// Before the package hash, every sync asked for every skill again, and a
+    /// catalogue past the web's budget never finished: each session start
+    /// spent the budget and kept nothing.
+    #[tokio::test]
+    async fn a_catalogue_past_the_request_budget_lands_over_syncs_and_then_costs_one_request() {
+        use std::sync::atomic::Ordering;
+        let dir = tempfile::tempdir().unwrap();
+        let (base, served) = catalogue(30, true).await;
+        let client = CloudClient::for_test_server(&base);
+
+        let first = fetch_account_skills(&client, dir.path()).await.unwrap();
+        write_account_skills(dir.path(), &first).unwrap();
+        let first_requests = served.load(Ordering::SeqCst);
+        assert_eq!(first.listed.len(), 30);
+        assert!(
+            first_requests <= 61,
+            "first sync asked {first_requests} times"
+        );
+        assert!(!first.fetched.is_empty() && first.fetched.len() < 30);
+
+        served.store(0, Ordering::SeqCst);
+        let second = fetch_account_skills(&client, dir.path()).await.unwrap();
+        write_account_skills(dir.path(), &second).unwrap();
+        served.store(0, Ordering::SeqCst);
+        let settled = fetch_account_skills(&client, dir.path()).await.unwrap();
+        write_account_skills(dir.path(), &settled).unwrap();
+        let settled_requests = served.load(Ordering::SeqCst);
+
+        for index in 0..30 {
+            assert!(dir.path().join(format!("skill-{index}/SKILL.md")).is_file());
+            assert_eq!(
+                std::fs::read(
+                    dir.path()
+                        .join(format!("skill-{index}/references/guide.md"))
+                )
+                .unwrap(),
+                b"Reference text"
+            );
+        }
+        assert!(settled.fetched.is_empty());
+        assert_eq!(
+            settled_requests, 1,
+            "a catalogue held in full costs only its listing"
+        );
+        eprintln!(
+            "skills sync requests: first {first_requests}, settled {settled_requests} (30 skills, 1 file each)"
+        );
+    }
+
+    #[tokio::test]
+    async fn without_package_hashes_every_sync_downloads_every_skill() {
+        use std::sync::atomic::Ordering;
+        let dir = tempfile::tempdir().unwrap();
+        let (base, served) = catalogue(5, false).await;
+        let client = CloudClient::for_test_server(&base);
+        for _ in 0..2 {
+            served.store(0, Ordering::SeqCst);
+            let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
+            write_account_skills(dir.path(), &sync).unwrap();
+        }
+        assert_eq!(served.load(Ordering::SeqCst), 1 + 5 * 3);
     }
 
     #[test]

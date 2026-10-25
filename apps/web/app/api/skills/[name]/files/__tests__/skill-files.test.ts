@@ -84,6 +84,23 @@ describe('/api/skills/[name]/files', () => {
     expect(paths).toContain('references/checklist.md');
   });
 
+  it('gives each file the hash its download carries, so a client can skip what it holds', async () => {
+    const res = await listFiles(treeRequest(), {
+      params: Promise.resolve({ name: 'design-review' }),
+    });
+    const body = (await res.json()) as {
+      files: Array<{ path: string; contentHash?: string }>;
+    };
+    for (const path of ['references/checklist.md', 'assets/logo.png']) {
+      const listed = body.files.find((entry) => entry.path === path);
+      const download = await readFile(fileRequest(path, '?download=1'), {
+        params: Promise.resolve({ name: 'design-review', path: path.split('/') }),
+      });
+      expect(listed?.contentHash).toMatch(/^sha256:[0-9a-f]{64}$/u);
+      expect(download.headers.get('etag')).toBe(`"${listed?.contentHash}"`);
+    }
+  });
+
   it('returns 404 for an unknown skill name', async () => {
     const res = await listFiles(treeRequest(), { params: Promise.resolve({ name: 'nope' }) });
     expect(res.status).toBe(404);

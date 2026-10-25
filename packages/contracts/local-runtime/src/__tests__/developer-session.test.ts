@@ -10,6 +10,7 @@ import {
   SUPPORTED_DEVELOPER_SESSION_PROTOCOL_VERSIONS,
   THREAD_WRITER_CONFLICT_ERROR_CODE,
   MCP_APPROVAL_STALE_ERROR_CODE,
+  PRIVACY_BOUNDARY_ERROR_CODE,
   normalizeDeveloperAgentMode,
   remoteTurnAgentMode,
   developerEffortLevels,
@@ -65,6 +66,11 @@ describe('developer-session protocol versions', () => {
       /pub const THREAD_WRITER_CONFLICT_ERROR_CODE: i32 = (-?\d+);/u,
     );
     expect(Number(errorCode![1])).toBe(THREAD_WRITER_CONFLICT_ERROR_CODE);
+  });
+
+  it('reads a privacy boundary refusal by the code the Rust contract gives it', () => {
+    const errorCode = rustContract.match(/pub const PRIVACY_BOUNDARY_ERROR_CODE: i32 = (-?\d+);/u);
+    expect(Number(errorCode![1])).toBe(PRIVACY_BOUNDARY_ERROR_CODE);
   });
 
   it('reads a stale MCP approval by the code the Rust contract gives it', () => {

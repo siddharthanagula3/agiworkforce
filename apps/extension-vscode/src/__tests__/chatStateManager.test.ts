@@ -1757,6 +1757,43 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('offers no model the configured privacy pin would refuse in the inline picker', async () => {
+    const harness = makeHarness({
+      localModels: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
+    });
+    harness.runtime.listLocalModels.mockResolvedValue({
+      models: [{ id: SYNTHETIC_LOCAL_MODEL_ID, provider: 'ollama' }],
+      privacyPin: { trustMode: 'local', configPath: '/home/me/.agiworkforce/config.toml' },
+    });
+
+    await harness.manager.handleMessage({ type: 'openModelPopover' });
+
+    const data = harness.posted.find((message) => message.type === 'modelPickerData') as
+      | {
+          payload: {
+            groups: Array<{
+              boundary: string;
+              description: string;
+              models: Array<{ disabled?: boolean }>;
+            }>;
+          };
+        }
+      | undefined;
+    const groups = data?.payload.groups ?? [];
+    const crossing = groups.filter(
+      (group) => group.boundary === 'cloud' || group.boundary === 'byok',
+    );
+    expect(crossing.length).toBeGreaterThan(0);
+    for (const group of crossing) {
+      expect(group.description).toBe(
+        'Off while privacy_mode = "local" is set in /home/me/.agiworkforce/config.toml',
+      );
+      expect(group.models.every((model) => model.disabled === true)).toBe(true);
+    }
+    const local = groups.find((group) => group.boundary === 'local');
+    expect(local?.models.some((model) => model.disabled !== true)).toBe(true);
+  });
+
   it('shows an honest setup state when the local CLI runtime is unavailable', async () => {
     const harness = makeHarness({ localModelError: new Error('spawn agi ENOENT') });
 
@@ -2340,6 +2377,27 @@ describe('ChatStateManager local turn lifecycle', () => {
     } finally {
       vi.mocked(vscode.workspace.getConfiguration).mockImplementation(original!);
     }
+  });
+
+  it('says why a model outside the configured privacy pin did not start, with no retry', async () => {
+    const harness = makeHarness();
+    const message =
+      'cloud-model runs on the Managed boundary, and privacy_mode = "local" in /home/me/.agiworkforce/config.toml keeps sessions Local. Choose a Local model or change that setting.';
+    harness.runtime.startThread.mockRejectedValueOnce(
+      new LocalRuntimeProtocolError(message, -32013, {
+        model: 'cloud-model',
+        requested: 'managed',
+        pin: { trustMode: 'local', configPath: '/home/me/.agiworkforce/config.toml' },
+      }),
+    );
+
+    await harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'hello' } });
+
+    expect(harness.runtime.startTurn).not.toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({
+      type: 'error',
+      payload: expect.objectContaining({ headline: message, retryable: false }),
+    });
   });
 
   it('includes user-curated memory as untrusted turn data', async () => {

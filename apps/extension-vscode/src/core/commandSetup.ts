@@ -227,6 +227,7 @@ import {
   type HostModelUnreachable,
   type ReachableQuickPickItem,
 } from '../features/model-picker/reachability';
+import { privacyPinReason, type PrivacyPin } from '../features/model-picker/privacyPin';
 import { openAgentConfig } from '../features/config/agentConfig';
 import { exportVsCodeDiagnostics } from '../features/diagnostics';
 
@@ -427,16 +428,21 @@ async function runGitToOutputChannel(args: string[], cwd: string, title: string)
 async function readHostModels(
   localRuntimes: LocalRuntimePool,
   refresh: boolean,
-): Promise<HostModel[] | undefined> {
+): Promise<{ hostModels?: HostModel[]; privacyPin?: PrivacyPin }> {
   const folder = getActiveWorkspaceFolderSync();
-  if (folder === undefined) return undefined;
+  if (folder === undefined) return {};
   try {
     const runtime = localRuntimes.forWorkspace(folder.uri.fsPath);
     const response = await runtime.listLocalModels(refresh ? { refresh: true } : {});
     const hostModels = response.hostModels;
-    return hostModels === undefined || hostModels.length === 0 ? undefined : [...hostModels];
+    return {
+      ...(hostModels === undefined || hostModels.length === 0
+        ? {}
+        : { hostModels: [...hostModels] }),
+      ...(response.privacyPin === undefined ? {} : { privacyPin: response.privacyPin }),
+    };
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -1237,11 +1243,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
         typeof options === 'object' &&
         options !== null &&
         (options as { refresh?: unknown }).refresh === true;
-      const hostModels = await readHostModels(localRuntimes, refresh);
+      const { hostModels, privacyPin } = await readHostModels(localRuntimes, refresh);
       const allItems: ReachableQuickPickItem[] = buildReachabilityQuickPickItems({
         items: buildGroupedQuickPickItems(pickerTier, route),
         ...(hostModels === undefined ? {} : { hostModels }),
         ...(route?.trustMode === undefined ? {} : { privacyMode: route.trustMode }),
+        ...(privacyPin === undefined ? {} : { privacyPin }),
       }).map((item) => ({
         ...item,
         picked: item.modelId !== undefined && item.modelId === currentModel,
@@ -1256,6 +1263,12 @@ export function setupCommands(context: vscode.ExtensionContext, deps: CommandDep
 
       if (picked === undefined || picked.modelId === undefined) return;
 
+      if (picked.pinnedOut !== undefined) {
+        vscode.window.showWarningMessage(
+          `${PRODUCT_NAMES.code}: ${modelDisplayLabel(picked.modelId)} is ${privacyPinReason(picked.pinnedOut).replace(/^Off/u, 'off')}.`,
+        );
+        return;
+      }
       if (picked.unreachable !== undefined) {
         await runUnreachableOffer(picked.unreachable);
         return;

@@ -101,6 +101,8 @@ fn export_typescript_bindings() {
         .expect("export developer-session writer change graph");
     agiworkforce_protocol::developer_session::ThreadWriterConflictData::export_all_to(dir)
         .expect("export developer-session writer conflict graph");
+    agiworkforce_protocol::developer_session::PrivacyBoundaryRefusalData::export_all_to(dir)
+        .expect("export developer-session privacy boundary refusal graph");
     agiworkforce_protocol::developer_session::TurnModelNotification::export_all_to(dir)
         .expect("export developer-session turn model graph");
 

@@ -80,6 +80,7 @@ import {
   CLI_NOT_FOUND_MARKER,
   LocalRuntimeProtocolError,
   readMcpAuthRequired,
+  privacyBoundaryRefusal,
   writerConflictHolder,
   type LocalRuntimeClient,
   type LocalRuntimeEvent,
@@ -204,6 +205,8 @@ import {
   planFromThread,
   type PlanVisualization,
 } from '../../integrations/planVisualization';
+import { privacyPinReason, privacyPinRefuses, type PrivacyPin } from '../model-picker/privacyPin';
+import type { ModelTrustMode } from '../model-picker/reachability';
 import { getTokenCounter } from '../../data/tokenCounter';
 import { formatCreditAmount, formatUnsettledRequests } from '../../data/usagePresentation';
 import {
@@ -245,6 +248,7 @@ const PERMISSION_REFUSAL: ChatErrorHint = { category: 'permission' };
 const RUNTIME_REFUSAL: ChatErrorHint = { category: 'runtime' };
 const RUNTIME_FAILURE: ChatErrorHint = { category: 'runtime', retryable: true };
 const RUNTIME_SETUP_REFUSAL: ChatErrorHint = { category: 'runtime', action: 'open-settings' };
+const PRIVACY_PIN_REFUSAL: ChatErrorHint = { category: 'runtime', retryable: false };
 const PLAN_REFUSAL: ChatErrorHint = { category: 'subscription', action: 'upgrade-plan' };
 const SIGN_IN_REFUSAL: ChatErrorHint = { category: 'sign-in', action: 'sign-in-account' };
 const MODEL_UNAVAILABLE: ChatErrorHint = { category: 'provider', action: 'switch-model' };
@@ -897,6 +901,7 @@ export class ChatStateManager {
   private readonly _cliCapabilities: CliCapabilityAdapter;
   private _slashEntries: ReadonlyMap<string, SlashMenuEntry> | undefined;
   private _latestPlan: { threadId: string; plan: PlanVisualization } | undefined;
+  private _privacyPin: PrivacyPin | undefined;
   private readonly _proposedPlansByToolCall = new Map<
     string,
     {
@@ -1637,6 +1642,21 @@ export class ChatStateManager {
                 : tier === 'local'
                   ? 'Sign in or add a provider key to unlock these models'
                   : manualModelUnlockText();
+        }
+
+        const pin = this._privacyPin;
+        if (pin !== undefined) {
+          for (const group of groups) {
+            const boundary: ModelTrustMode | undefined =
+              group.boundary === 'cloud'
+                ? 'managed'
+                : group.boundary === 'byok'
+                  ? 'byok'
+                  : undefined;
+            if (boundary === undefined || !privacyPinRefuses(pin, boundary)) continue;
+            group.description = privacyPinReason(pin);
+            group.models = group.models.map((model) => ({ ...model, disabled: true }));
+          }
         }
 
         this._post({ type: 'modelPickerData', payload: { groups, currentModel } });
@@ -3457,6 +3477,7 @@ export class ChatStateManager {
         this._localModelProviders.set(model.id, model.provider);
       }
       this._localServers = response.localServers ?? [];
+      this._privacyPin = response.privacyPin;
       const wasReady = this._runtimeReady;
       this._runtimeReady = true;
       this._post({ type: 'runtimeStatus', payload: { status: 'ready' } });
@@ -4199,6 +4220,10 @@ export class ChatStateManager {
       }
       return true;
     } catch (error) {
+      if (privacyBoundaryRefusal(error) !== undefined && error instanceof Error) {
+        this._postError(error.message, PRIVACY_PIN_REFUSAL);
+        return false;
+      }
       const holder = writerConflictHolder(error);
       this._postError(
         holder !== undefined
