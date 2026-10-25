@@ -165,6 +165,7 @@ import {
   executeChromeManagedToolInput,
   normalizeChromeManagedRoutingMetadata,
   type ChromeManagedChatResult,
+  type ChromeManagedChatContinuation,
   type ChromeManagedResumeCallbacks,
   type ChromeManagedToolHandoffOutcome,
 } from './features/cloud-bridge/managedChatHandler';
@@ -358,11 +359,44 @@ interface PendingChatToolHandoff {
   owner: ManagedCloudOwner;
   clientInstanceId: string;
   streamId: string;
+  calls: ToolCall[];
   callIds: readonly string[];
   finish: (outcome: ChromeManagedToolHandoffOutcome) => void;
 }
 
 const pendingChatToolHandoffs = new Map<string, PendingChatToolHandoff>();
+const MAX_CHAT_CONTINUATIONS = 16;
+const chatContinuations = new Map<string, ChromeManagedChatContinuation>();
+
+function chatContinuationKey(owner: ManagedCloudOwner, runId: string): string {
+  return `${owner.accountId}\n${owner.authIncarnation}\n${runId}`;
+}
+
+function rememberChatContinuation(
+  owner: ManagedCloudOwner,
+  runId: string | undefined,
+  continuation: ChromeManagedChatContinuation,
+): void {
+  if (!runId) return;
+  const key = chatContinuationKey(owner, runId);
+  chatContinuations.delete(key);
+  chatContinuations.set(key, continuation);
+  while (chatContinuations.size > MAX_CHAT_CONTINUATIONS) {
+    const oldest = chatContinuations.keys().next().value;
+    if (oldest === undefined) break;
+    chatContinuations.delete(oldest);
+  }
+}
+
+function takeChatContinuation(
+  owner: ManagedCloudOwner,
+  runId: string,
+): ChromeManagedChatContinuation | undefined {
+  const key = chatContinuationKey(owner, runId);
+  const continuation = chatContinuations.get(key);
+  chatContinuations.delete(key);
+  return continuation;
+}
 
 function unansweredToolResults(calls: readonly ToolCall[], content: string) {
   return calls.map((call) => ({ toolCallId: call.id, content }));
@@ -409,6 +443,7 @@ function requestChatToolHandoff(
       owner: active.owner,
       clientInstanceId: active.clientInstanceId,
       streamId,
+      calls,
       callIds: calls.map((call) => call.id),
       finish,
     });
@@ -430,6 +465,43 @@ function requestChatToolHandoff(
       }),
     );
   });
+}
+
+function adoptPendingChatToolHandoffs(
+  active: ActiveChatStream,
+  streamId: string,
+  clientInstanceId: string,
+): import('./types').AdoptedChatToolHandoff[] {
+  const adopted: import('./types').AdoptedChatToolHandoff[] = [];
+  for (const [handoffId, pending] of pendingChatToolHandoffs) {
+    if (
+      pending.streamId !== streamId ||
+      pending.clientInstanceId !== active.clientInstanceId ||
+      !sameManagedCloudOwner(pending.owner, active.owner)
+    )
+      continue;
+    pending.clientInstanceId = clientInstanceId;
+    adopted.push({ handoffId, calls: pending.calls });
+  }
+  return adopted;
+}
+
+function hasPendingChatToolHandoff(active: ActiveChatStream): boolean {
+  return [...pendingChatToolHandoffs.values()].some(
+    (pending) =>
+      pending.streamId === active.streamId &&
+      pending.clientInstanceId === active.clientInstanceId &&
+      sameManagedCloudOwner(pending.owner, active.owner),
+  );
+}
+
+function notifyWaitingBrowserStep(active: ActiveChatStream): void {
+  showNotification(
+    t('notifyTaskInputTitle'),
+    t('notifyBrowserStepWaiting'),
+    active.historyConversationId,
+    active.owner,
+  );
 }
 
 function resolveChatToolHandoff(message: import('./types').ResolveChatToolsMessage): boolean {
@@ -1253,7 +1325,9 @@ function handleManagedChatKeepalivePort(port: chrome.runtime.Port): void {
   });
   port.onDisconnect.addListener(() => {
     for (const active of activeChatStreams.values()) {
-      if (active.clientInstanceId === clientInstanceId) active.panelDetached = true;
+      if (active.clientInstanceId !== clientInstanceId) continue;
+      active.panelDetached = true;
+      if (hasPendingChatToolHandoff(active)) notifyWaitingBrowserStep(active);
     }
     syncDetachedChatHeartbeat();
   });
@@ -1704,6 +1778,9 @@ function handleNativeDisconnect(): void {
   scheduleNativeReconnect('native_disconnect');
 }
 
+const SCREENSHOT_NEEDS_ACTIVE_TAB =
+  'Chrome lets AGI capture a tab only after you open AGI on it. Select the AGI icon on this tab, then try again.';
+
 function showNotification(
   title: string,
   message: string,
@@ -1716,7 +1793,7 @@ function showNotification(
     notifId,
     {
       type: 'basic',
-      iconUrl: 'icons/icon128.png',
+      iconUrl: chrome.runtime.getURL('icons/icon128.png'),
       title,
       message,
     },
@@ -1761,7 +1838,7 @@ async function notifyScheduledTaskRunning(
       publish: () => {
         chrome.notifications.create(`agi_task_notif_${crypto.randomUUID()}`, {
           type: 'basic',
-          iconUrl: 'icons/icon48.png',
+          iconUrl: chrome.runtime.getURL('icons/icon48.png'),
           title: t('notifyScheduledTaskRunningTitle'),
           message: taskName,
           priority: 0,
@@ -4173,6 +4250,11 @@ async function handleMessageAsync(
           await active.settlement;
           return { success: true } as ExtensionResponse;
         }
+        const toolHandoffs = adoptPendingChatToolHandoffs(
+          active,
+          active.streamId,
+          adoptMsg.clientInstanceId,
+        );
         active.clientInstanceId = adoptMsg.clientInstanceId;
         active.panelDetached = false;
         adoptedChatStreamKeys.set(adoptedKey, streamKey);
@@ -4184,6 +4266,7 @@ async function handleMessageAsync(
             text: active.visibleText ?? '',
             ...(active.cloudRun ? { cloudRun: { ...active.cloudRun } } : {}),
             ...(active.assistantMessageId ? { assistantMessageId: active.assistantMessageId } : {}),
+            ...(toolHandoffs.length > 0 ? { toolHandoffs } : {}),
           },
         } as ExtensionResponse;
       }
@@ -4420,9 +4503,12 @@ async function handleMessageAsync(
           timestamp: Date.now(),
         } as ExtensionResponse;
       } catch (error) {
+        const reason = error instanceof Error ? error.message : '';
         return {
           success: false,
-          error: error instanceof Error ? error.message : 'Screenshot failed',
+          error: /activeTab|<all_urls>/u.test(reason)
+            ? SCREENSHOT_NEEDS_ACTIVE_TAB
+            : reason || 'Screenshot failed',
         } as ExtensionResponse;
       }
     }
@@ -6458,6 +6544,8 @@ async function handleChatMessage(
             isCurrentManagedCloudOperation(activeChatStreams.get(streamKey), activeStream)
               ? requestChatToolHandoff(activeStream, id, calls)
               : Promise.resolve({ status: 'cancelled' }),
+          onContinuation: (continuation) =>
+            rememberChatContinuation(owner, activeStream.cloudRun?.runId, continuation),
         }),
         getAuthToken: async () => {
           activeStream.controller.signal.throwIfAborted();
@@ -6773,7 +6861,22 @@ async function handleResolveChatApproval(
           quotaWarning,
         }),
     };
-    const getResumeToken = async () => credential.token;
+    const getResumeToken = async () => {
+      const current = await getManagedCloudAuthContext();
+      return current && sameManagedCloudOwner(current.owner, credential.owner)
+        ? current.token
+        : null;
+    };
+    const continuation = takeChatContinuation(credential.owner, message.cloudRun.runId);
+    const continuationDependencies = {
+      ...(continuation ? { continuation } : {}),
+      onToolHandoff: (calls: ToolCall[]) =>
+        activeChatStreams.get(streamKey) === activeStream
+          ? requestChatToolHandoff(activeStream, id, calls)
+          : Promise.resolve({ status: 'cancelled' as const }),
+      onContinuation: (next: ChromeManagedChatContinuation) =>
+        rememberChatContinuation(credential.owner, activeStream.cloudRun?.runId, next),
+    };
     const result =
       message.type === 'RESOLVE_CHAT_INPUT'
         ? await executeChromeManagedToolInput(
@@ -6785,6 +6888,7 @@ async function handleResolveChatApproval(
             },
             {
               ...createChromeManagedToolInputDependencies(onText, callbacks),
+              ...continuationDependencies,
               getAuthToken: getResumeToken,
             },
           )
@@ -6798,6 +6902,7 @@ async function handleResolveChatApproval(
             },
             {
               ...createChromeManagedApprovalDependencies(onText, callbacks),
+              ...continuationDependencies,
               getAuthToken: getResumeToken,
             },
           );

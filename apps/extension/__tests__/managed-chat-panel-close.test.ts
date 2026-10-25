@@ -85,7 +85,7 @@ const harness = vi.hoisted(() => {
       create: vi.fn(),
       onAlarm: event(),
     },
-    notifications: { onClicked: event(), onButtonClicked: event() },
+    notifications: { create: vi.fn(), onClicked: event(), onButtonClicked: event() },
     contextMenus: {
       create: vi.fn(),
       removeAll: vi.fn(() => Promise.resolve()),
@@ -285,6 +285,16 @@ describe('closing the side panel during a managed turn', () => {
     expect(harness.cancelRun).not.toHaveBeenCalled();
   });
 
+  it('does not notify when the closed panel left no browser step waiting', async () => {
+    const closePanel = openPanelPort(FIRST_PANEL);
+    await startTurn('stream-no-step', runReference(false));
+    harness.chromeMock.notifications.create.mockClear();
+
+    closePanel();
+
+    expect(harness.chromeMock.notifications.create).not.toHaveBeenCalled();
+  });
+
   it('saves the reply of a turn that finished after the panel closed', async () => {
     await seedStreamingTurn('The report');
     const closePanel = openPanelPort(FIRST_PANEL);
@@ -379,6 +389,62 @@ describe('closing the side panel during a managed turn', () => {
     expect(stop['success']).toBe(true);
     expect(turn.signal.aborted).toBe(true);
     expect((await lastStoredMessage())?.streaming).toBe(true);
+  });
+
+  it('hands a browser step that was waiting on the closed panel to the reopened one', async () => {
+    await seedStreamingTurn('');
+    const closePanel = openPanelPort(FIRST_PANEL);
+    const turn = await startTurn('stream-waiting-tool', runReference(false));
+    const call = {
+      id: 'call-read',
+      type: 'function' as const,
+      function: { name: 'browser_read_page', arguments: '{}' },
+    };
+    const outcome = turn.dependencies.onToolHandoff!([call]);
+    await vi.waitFor(() =>
+      expect(harness.chromeMock.runtime.sendMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ type: 'CHAT_TOOL_HANDOFF', clientInstanceId: FIRST_PANEL }),
+      ),
+    );
+    const handoffId = (
+      harness.chromeMock.runtime.sendMessage.mock.calls
+        .map(([message]) => message as Record<string, unknown>)
+        .find((message) => message['type'] === 'CHAT_TOOL_HANDOFF') as Record<string, unknown>
+    )['handoffId'];
+    harness.chromeMock.notifications.create.mockClear();
+    closePanel();
+    expect(harness.chromeMock.notifications.create).toHaveBeenCalledOnce();
+    expect(harness.chromeMock.notifications.create.mock.calls[0]![1]).toMatchObject({
+      title: 'notifyTaskInputTitle',
+      message: 'notifyBrowserStepWaiting',
+    });
+
+    const adoption = await dispatch({
+      type: 'ADOPT_CHAT_TURN',
+      owner,
+      clientInstanceId: REOPENED_PANEL,
+      historyConversationId: CONVERSATION,
+    });
+    expect(adoption).toMatchObject({
+      adopted: { id: 'stream-waiting-tool', toolHandoffs: [{ handoffId, calls: [call] }] },
+    });
+
+    const resolve = (clientInstanceId: string) =>
+      dispatch({
+        type: 'RESOLVE_CHAT_TOOLS',
+        owner,
+        clientInstanceId,
+        id: 'stream-waiting-tool',
+        handoffId,
+        results: [{ toolCallId: 'call-read', content: 'Owner: Marisol Vance.' }],
+      });
+    expect((await resolve(FIRST_PANEL))['success']).toBe(false);
+    expect((await resolve(REOPENED_PANEL))['success']).toBe(true);
+    await expect(outcome).resolves.toMatchObject({
+      status: 'resolved',
+      results: [{ toolCallId: 'call-read', content: 'Owner: Marisol Vance.' }],
+    });
+    expect(turn.signal.aborted).toBe(false);
   });
 
   it('reports nothing to adopt for a conversation with no running turn', async () => {

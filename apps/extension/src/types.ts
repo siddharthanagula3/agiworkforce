@@ -533,11 +533,17 @@ export interface AdoptChatTurnMessage extends BaseMessage {
   historyConversationId: string;
 }
 
+export interface AdoptedChatToolHandoff {
+  handoffId: string;
+  calls: ToolCall[];
+}
+
 export interface AdoptedChatTurn {
   id: string;
   text: string;
   cloudRun?: ManagedCloudAgentRunReference;
   assistantMessageId?: string;
+  toolHandoffs?: AdoptedChatToolHandoff[];
 }
 
 export interface ResolveChatApprovalMessage extends BaseMessage {

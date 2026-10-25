@@ -1347,6 +1347,10 @@
     "message": "The images or page from this message are no longer attached. Attach them again, then send.",
     "description": "Shown when a message is sent again after its images or page were cleared by a reload"
   },
+  "spStoredReplyFailed": {
+    "message": "This reply did not finish. Retry to run it again.",
+    "description": "Failed turn text restored from account history when the original error text was not saved"
+  },
   "spEmptyResponse": {
     "message": "No response was returned. Try again.",
     "description": "Failed turn text when the model returned nothing"
@@ -3803,6 +3807,10 @@
   "notifyTaskFailedBody": {
     "message": "AGI could not finish your task. Select to see why.",
     "description": "Chrome notification body when a browser task fails."
+  },
+  "notifyBrowserStepWaiting": {
+    "message": "Open the AGI side panel to finish the browser step this reply is waiting on.",
+    "description": "Notification body when the side panel closed while a reply waited on a browser step"
   },
   "notifyTaskInputTitle": {
     "message": "AGI needs your input",

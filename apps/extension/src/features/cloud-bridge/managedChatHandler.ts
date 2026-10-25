@@ -132,6 +132,16 @@ export type ChromeManagedToolHandoffOutcome =
   | { status: 'resolved'; results: ChromeManagedToolResult[]; tools?: readonly ToolDefinition[] }
   | { status: 'cancelled' };
 
+export interface ChromeManagedChatContinuation {
+  messages: FreeTrialMessage[];
+  tools: readonly ToolDefinition[];
+  streamOptions: ManagedChatStreamOptions;
+  routing: ChromeManagedRoutingResult;
+  nextLeg: number;
+  pendingText: string;
+  completionMode?: ChromeManagedChatRequest['completionMode'];
+}
+
 export type ChromeManagedRoutingResult = ChromeManagedRoutingMetadata;
 
 export type ChromeManagedChatResult =
@@ -172,6 +182,7 @@ export interface ChromeManagedChatDependencies {
   onRunReference?: (run: Extract<FreeTrialChunk, { type: 'run' }>['run']) => void | Promise<void>;
   onQuotaWarning?: (warning: ManagedQuotaWarningSignal) => void | Promise<void>;
   onToolHandoff?: (calls: ToolCall[]) => Promise<ChromeManagedToolHandoffOutcome>;
+  onContinuation?: (continuation: ChromeManagedChatContinuation) => void | Promise<void>;
 }
 
 export interface ChromeManagedApprovalRequest {
@@ -230,6 +241,16 @@ type ChromeManagedResumeHandlers = Omit<
   ChromeManagedApprovalDependencies,
   'getAuthToken' | 'streamApproval'
 >;
+
+export interface ChromeManagedResumeContinuationDependencies {
+  continuation?: ChromeManagedChatContinuation;
+  streamChat?: typeof streamFreeChat;
+  onToolHandoff?: (calls: ToolCall[]) => Promise<ChromeManagedToolHandoffOutcome>;
+  onContinuation?: (continuation: ChromeManagedChatContinuation) => void | Promise<void>;
+}
+
+export const RESUMED_BROWSER_STEP_UNAVAILABLE_MESSAGE =
+  'This reply needs a browser step AGI can no longer continue. Retry to run it again.';
 
 export type ChromeManagedResumeCallbacks = Omit<ChromeManagedResumeHandlers, 'onText'>;
 
@@ -569,7 +590,7 @@ export async function executeChromeManagedChat(
     };
   }
 
-  let token = await dependencies.getAuthToken();
+  const token = await dependencies.getAuthToken();
   if (!token) {
     return {
       status: 'error',
@@ -708,7 +729,7 @@ export async function executeChromeManagedChat(
     request.effort === undefined ? undefined : resolveModelEffort(routing.modelKey, request.effort);
   const routedModelSearches = getModelMetadataById(routing.modelKey)?.capabilities.search === true;
 
-  let routingResult: ChromeManagedRoutingResult = {
+  const routingResult: ChromeManagedRoutingResult = {
     modelKey: routing.modelKey,
     taskType: routing.taskType,
     reason: routing.reason,
@@ -740,12 +761,88 @@ export async function executeChromeManagedChat(
     ...(request.skillName ? { skillName: request.skillName } : {}),
     signal: request.signal,
   };
-  let latestTaskState: AgentTaskState | undefined;
-  let tools =
+  const tools =
     getModelMetadataById(routing.modelKey)?.capabilities.tools === true
       ? (request.tools ?? [])
       : [];
-  for (let leg = 0; leg < MAX_MANAGED_TOOL_LEGS; leg += 1) {
+  return runManagedChatLegs(
+    {
+      messages,
+      tools,
+      streamOptions,
+      routing: routingResult,
+      firstLeg: 0,
+      token,
+      completionMode: request.completionMode,
+      signal: request.signal,
+    },
+    dependencies,
+  );
+}
+
+const CONTINUATION_TASK_STATES: ReadonlySet<AgentTaskState> = new Set([
+  'awaiting_input',
+  'awaiting_approval',
+]);
+
+interface ManagedChatLegsState {
+  messages: FreeTrialMessage[];
+  tools: readonly ToolDefinition[];
+  streamOptions: ManagedChatStreamOptions;
+  routing: ChromeManagedRoutingResult;
+  firstLeg: number;
+  token: string;
+  completionMode?: ChromeManagedChatRequest['completionMode'];
+  signal?: AbortSignal;
+}
+
+type ManagedChatLegsDependencies = Pick<
+  ChromeManagedChatDependencies,
+  | 'getAuthToken'
+  | 'streamChat'
+  | 'onRouting'
+  | 'onText'
+  | 'onCodeExecution'
+  | 'onAgentEvent'
+  | 'onGeneratedFiles'
+  | 'onInteractiveCard'
+  | 'onSources'
+  | 'onRunReference'
+  | 'onQuotaWarning'
+  | 'onToolHandoff'
+  | 'onContinuation'
+>;
+
+function appendToolLeg(
+  messages: FreeTrialMessage[],
+  text: string,
+  calls: ToolCall[],
+  results: readonly ChromeManagedToolResult[],
+): void {
+  const resultsById = new Map(results.map((result) => [result.toolCallId, result]));
+  messages.push({ role: 'assistant', content: text, tool_calls: calls });
+  for (const call of calls) {
+    messages.push({
+      role: 'tool',
+      tool_call_id: call.id,
+      content: (
+        resultsById.get(call.id)?.content ?? 'This browser tool did not return a result.'
+      ).slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
+    });
+  }
+}
+
+async function runManagedChatLegs(
+  state: ManagedChatLegsState,
+  dependencies: ManagedChatLegsDependencies,
+): Promise<ChromeManagedChatResult> {
+  const messages = [...state.messages];
+  const streamOptions: ManagedChatStreamOptions = { ...state.streamOptions, signal: state.signal };
+  let routingResult = state.routing;
+  let token: string | null = state.token;
+  let latestTaskState: AgentTaskState | undefined;
+  let tools = state.tools;
+  for (let leg = state.firstLeg; leg < MAX_MANAGED_TOOL_LEGS; leg += 1) {
     if (leg > 0) {
       // A tool leg can wait on the user and a browser task for minutes, longer
       // than a session token lives, so each continuation asks for a fresh one.
@@ -853,10 +950,27 @@ export async function executeChromeManagedChat(
         }
         if (!handoff) {
           terminal = adjudicateManagedChatCompletion(
-            request.completionMode,
+            state.completionMode,
             latestTaskState,
             routingResult,
           );
+          if (
+            terminal.status === 'success' &&
+            latestTaskState !== undefined &&
+            CONTINUATION_TASK_STATES.has(latestTaskState) &&
+            legTools.length > 0 &&
+            leg + 1 < MAX_MANAGED_TOOL_LEGS
+          ) {
+            await dependencies.onContinuation?.({
+              messages: [...messages],
+              tools,
+              streamOptions,
+              routing: routingResult,
+              nextLeg: leg + 1,
+              pendingText: legText,
+              ...(state.completionMode ? { completionMode: state.completionMode } : {}),
+            });
+          }
         }
         break;
       }
@@ -866,9 +980,9 @@ export async function executeChromeManagedChat(
         attempt < MANAGED_TOOL_CONTINUATION_RETRIES &&
         terminal?.status === 'error' &&
         terminal.code === 'server_error' &&
-        !request.signal?.aborted
+        !state.signal?.aborted
       ) {
-        await waitBeforeContinuationRetry(attempt, request.signal);
+        await waitBeforeContinuationRetry(attempt, state.signal);
         continue;
       }
       break;
@@ -884,20 +998,10 @@ export async function executeChromeManagedChat(
       };
     }
     const outcome = await dependencies.onToolHandoff(handoff);
-    if (outcome.status === 'cancelled' || request.signal?.aborted) {
+    if (outcome.status === 'cancelled' || state.signal?.aborted) {
       return { status: 'error', code: 'cancelled', message: 'Cancelled.', routing: routingResult };
     }
-    const resultsById = new Map(outcome.results.map((result) => [result.toolCallId, result]));
-    messages.push({ role: 'assistant', content: legText, tool_calls: handoff });
-    for (const call of handoff) {
-      messages.push({
-        role: 'tool',
-        tool_call_id: call.id,
-        content: (
-          resultsById.get(call.id)?.content ?? 'This browser tool did not return a result.'
-        ).slice(0, MAX_CHAT_TOOL_RESULT_CHARS),
-      });
-    }
+    appendToolLeg(messages, legText, handoff, outcome.results);
     if (outcome.tools) tools = outcome.tools;
   }
 
@@ -909,13 +1013,18 @@ export async function executeChromeManagedChat(
   };
 }
 
+type RelayedResume =
+  ChromeManagedApprovalResult | { status: 'handoff'; calls: ToolCall[]; text: string };
+
 async function relayManagedResume(
   stream: AsyncGenerator<FreeTrialChunk>,
   dependencies: ChromeManagedResumeHandlers,
   unterminatedMessage: string,
-): Promise<ChromeManagedApprovalResult> {
+): Promise<RelayedResume> {
+  let text = '';
   for await (const chunk of stream) {
     if (chunk.type === 'text') {
+      text += chunk.text;
       await dependencies.onText(chunk.text);
       continue;
     }
@@ -948,13 +1057,7 @@ async function relayManagedResume(
       continue;
     }
     if (chunk.type === 'answered-model') continue;
-    if (chunk.type === 'tool-handoff') {
-      return {
-        status: 'error',
-        code: 'protocol_error',
-        message: 'This resumed AGI Cloud run asked for a browser tool. Send the request again.',
-      };
-    }
+    if (chunk.type === 'tool-handoff') return { status: 'handoff', calls: chunk.calls, text };
     if (chunk.type === 'error') {
       return {
         status: 'error',
@@ -973,9 +1076,70 @@ async function relayManagedResume(
   return { status: 'error', code: 'protocol_error', message: unterminatedMessage };
 }
 
+async function continueResumedRun(
+  relayed: RelayedResume,
+  token: string,
+  dependencies: ChromeManagedResumeHandlers &
+    ChromeManagedResumeContinuationDependencies & { getAuthToken: typeof getAuthToken },
+  signal: AbortSignal | undefined,
+): Promise<ChromeManagedApprovalResult> {
+  if (relayed.status !== 'handoff') return relayed;
+  const continuation = dependencies.continuation;
+  if (!continuation || !dependencies.onToolHandoff || continuation.tools.length === 0) {
+    return {
+      status: 'error',
+      code: 'protocol_error',
+      message: RESUMED_BROWSER_STEP_UNAVAILABLE_MESSAGE,
+    };
+  }
+  const outcome = await dependencies.onToolHandoff(relayed.calls);
+  if (outcome.status === 'cancelled' || signal?.aborted) {
+    return { status: 'error', code: 'cancelled', message: 'Cancelled.' };
+  }
+  const messages = [...continuation.messages];
+  appendToolLeg(
+    messages,
+    `${continuation.pendingText}${relayed.text}`,
+    relayed.calls,
+    outcome.results,
+  );
+  const result = await runManagedChatLegs(
+    {
+      messages,
+      tools: outcome.tools ?? continuation.tools,
+      streamOptions: continuation.streamOptions,
+      routing: continuation.routing,
+      firstLeg: continuation.nextLeg,
+      token,
+      ...(continuation.completionMode ? { completionMode: continuation.completionMode } : {}),
+      signal,
+    },
+    {
+      ...dependencies,
+      streamChat: dependencies.streamChat ?? streamFreeChat,
+    },
+  );
+  if (result.status === 'success') return { status: 'success' };
+  return {
+    status: 'error',
+    code:
+      result.code === 'account_unavailable' ||
+      result.code === 'model_not_admitted' ||
+      result.code === 'routing_unavailable'
+        ? 'server_error'
+        : result.code,
+    message: result.message,
+    ...(result.retryAfterSeconds !== undefined
+      ? { retryAfterSeconds: result.retryAfterSeconds }
+      : {}),
+    ...(result.requestId !== undefined ? { requestId: result.requestId } : {}),
+    ...(result.quota ? { quota: result.quota } : {}),
+  };
+}
+
 export async function executeChromeManagedApproval(
   request: ChromeManagedApprovalRequest,
-  dependencies: ChromeManagedApprovalDependencies,
+  dependencies: ChromeManagedApprovalDependencies & ChromeManagedResumeContinuationDependencies,
 ): Promise<ChromeManagedApprovalResult> {
   if (
     !STREAM_ID_PATTERN.test(request.id) ||
@@ -1002,23 +1166,28 @@ export async function executeChromeManagedApproval(
     };
   }
 
-  return relayManagedResume(
-    dependencies.streamApproval(request.run.runId, request.toolApprovals, token, {
-      signal: request.signal,
-      ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
-      idempotencyKey: await managedChatIdempotencyKey(
-        'approval',
-        `${request.id}:${request.run.runId}:${JSON.stringify(request.toolApprovals)}:${request.guidance ?? ''}`,
-      ),
-    }),
+  return continueResumedRun(
+    await relayManagedResume(
+      dependencies.streamApproval(request.run.runId, request.toolApprovals, token, {
+        signal: request.signal,
+        ...(request.guidance === undefined ? {} : { guidance: request.guidance }),
+        idempotencyKey: await managedChatIdempotencyKey(
+          'approval',
+          `${request.id}:${request.run.runId}:${JSON.stringify(request.toolApprovals)}:${request.guidance ?? ''}`,
+        ),
+      }),
+      dependencies,
+      'AGI Cloud closed the approval stream without a terminal event.',
+    ),
+    token,
     dependencies,
-    'AGI Cloud closed the approval stream without a terminal event.',
+    request.signal,
   );
 }
 
 export async function executeChromeManagedToolInput(
   request: ChromeManagedToolInputRequest,
-  dependencies: ChromeManagedToolInputDependencies,
+  dependencies: ChromeManagedToolInputDependencies & ChromeManagedResumeContinuationDependencies,
 ): Promise<ChromeManagedApprovalResult> {
   if (
     !STREAM_ID_PATTERN.test(request.id) ||
@@ -1044,16 +1213,21 @@ export async function executeChromeManagedToolInput(
     };
   }
 
-  return relayManagedResume(
-    dependencies.streamToolInput(request.run.runId, request.toolInputs, token, {
-      signal: request.signal,
-      idempotencyKey: await managedChatIdempotencyKey(
-        'input',
-        `${request.id}:${request.run.runId}:${request.run.lastSequence}:${JSON.stringify(request.toolInputs)}`,
-      ),
-    }),
+  return continueResumedRun(
+    await relayManagedResume(
+      dependencies.streamToolInput(request.run.runId, request.toolInputs, token, {
+        signal: request.signal,
+        idempotencyKey: await managedChatIdempotencyKey(
+          'input',
+          `${request.id}:${request.run.runId}:${request.run.lastSequence}:${JSON.stringify(request.toolInputs)}`,
+        ),
+      }),
+      dependencies,
+      'AGI Cloud closed the input stream without a terminal event.',
+    ),
+    token,
     dependencies,
-    'AGI Cloud closed the input stream without a terminal event.',
+    request.signal,
   );
 }
 
@@ -1070,6 +1244,7 @@ export function createChromeManagedChatDependencies(
     | 'onRunReference'
     | 'onQuotaWarning'
     | 'onToolHandoff'
+    | 'onContinuation'
   > = {},
 ): ChromeManagedChatDependencies {
   return { ...DEFAULT_DEPENDENCIES, onText, ...callbacks };

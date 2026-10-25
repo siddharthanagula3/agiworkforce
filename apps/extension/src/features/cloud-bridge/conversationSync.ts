@@ -402,7 +402,9 @@ async function flushEligibleConversation(
           metadata: buildExtensionCloudMessageMetadata({
             localConversationId: conversationId,
             runtime: 'managed-cloud',
-            ...(message.error ? { error: true } : {}),
+            ...(message.error
+              ? { error: true, ...(message.errorText ? { errorText: message.errorText } : {}) }
+              : {}),
             ...(message.managedQuickMode ? { managedQuickMode: true } : {}),
             ...(message.cloudAgentRun?.runId
               ? { cloudAgentRunId: message.cloudAgentRun.runId }

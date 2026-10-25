@@ -267,7 +267,7 @@ describe('CAPTURE_SCREENSHOT names the tab it captured', () => {
     expect(response['data']).toBeUndefined();
   });
 
-  it('reports a capture Chrome refused instead of an image', async () => {
+  it('explains a capture Chrome refused for a tab AGI was not opened on', async () => {
     harness.captureVisibleTab.mockRejectedValueOnce(
       new Error('Either the <all_urls> or activeTab permission is required.'),
     );
@@ -275,6 +275,27 @@ describe('CAPTURE_SCREENSHOT names the tab it captured', () => {
     const response = await fromPage();
 
     expect(response['success']).toBe(false);
-    expect(response['error']).toContain('activeTab permission');
+    expect(response['error']).toBe(
+      'Chrome lets AGI capture a tab only after you open AGI on it. Select the AGI icon on this tab, then try again.',
+    );
+  });
+});
+
+describe('the capture-page shortcut without AGI Desktop', () => {
+  it('tells the user with a notification whose icon resolves from the extension root', async () => {
+    const chromeMock = (globalThis as unknown as { chrome: typeof chrome }).chrome;
+    const create = chromeMock.notifications.create as unknown as ReturnType<typeof vi.fn>;
+    create.mockClear();
+    const onCommand = (
+      chromeMock.commands.onCommand.addListener as unknown as ReturnType<typeof vi.fn>
+    ).mock.calls[0]![0] as (command: string) => void;
+
+    onCommand('capture_page');
+
+    await vi.waitFor(() => expect(create).toHaveBeenCalledOnce());
+    expect(create.mock.calls[0]![1]).toMatchObject({
+      iconUrl: chromeMock.runtime.getURL('icons/icon128.png'),
+    });
+    expect(create.mock.calls[0]![1].iconUrl).not.toBe('icons/icon128.png');
   });
 });

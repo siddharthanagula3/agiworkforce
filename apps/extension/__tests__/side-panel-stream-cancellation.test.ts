@@ -13,6 +13,7 @@ import {
   hydrateStoredChatMessage,
   reconcileManagedRunActivity,
   resolveComposerPrompt,
+  settleBrowserActivity,
   type SidePanelChatMessage,
 } from '../src/features/side-panel/chat-state';
 
@@ -29,6 +30,7 @@ const names = [
   'canAdmitComposerMessage',
   'retryFailedMessage',
   'serializeMessagesForHistory',
+  'settleChatToolActivity',
 ];
 const functions = program.statements
   .filter((node) => ts.isFunctionDeclaration(node) && names.includes(node.name?.text ?? ''))
@@ -83,6 +85,7 @@ function harness() {
     sameManagedCloudOwner,
     applyStreamFailure,
     reconcileManagedRunActivity,
+    settleBrowserActivity,
     saveMessages,
     renderMessages,
     updateSendButton: vi.fn(),
