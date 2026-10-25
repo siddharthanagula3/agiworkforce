@@ -419,7 +419,7 @@ export function LocalMcpSettings() {
                       return result.connected
                         ? {
                             kind: 'test',
-                            text: `Connected in ${result.elapsedMs} ms with ${result.toolCount} tools.`,
+                            text: `Connected in ${result.elapsedMs} ms with ${result.toolCount} ${result.toolCount === 1 ? 'tool' : 'tools'}.`,
                             failure: false,
                           }
                         : {

@@ -178,7 +178,7 @@ export const LOCAL_CODE_COPY = {
   browserAddressPlaceholder: 'Type a URL',
   browserEmptyTitle: 'Browse the web',
   browserEmptyHint: 'Type a URL to open a site. Pages on this computer open right away.',
-  browserRefused: (host: string): string => `${host} was not opened.`,
+  browserRefused: (host: string): string => `${host} isn't allowed in the browser pane.`,
   browserTryAgain: 'Try again',
   browserInvalid: 'Enter a web address such as example.com.',
   browserFailed: 'The page could not be opened.',

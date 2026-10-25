@@ -83,7 +83,7 @@ describe('the browser panel in a coding session', () => {
     render(<LocalBrowserPanel address="https://example.com/" addressKey={1} onClose={vi.fn()} />);
     await act(async () => undefined);
     act(() => emitState({ ...CLOSED_BROWSER_PANE, open: true, refusedHost: 'example.com' }));
-    expect(screen.getByText('example.com was not opened.')).toBeInTheDocument();
+    expect(screen.getByText("example.com isn't allowed in the browser pane.")).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     });
