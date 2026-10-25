@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import {
   parseMeResponse,
   type EffectiveCapabilityDocumentWire,
+  type MeBillingOwner,
   type MeDisabledFeature,
   type MeSubscriptionSource,
 } from '@agiworkforce/cloud-contracts';
@@ -38,6 +39,7 @@ export interface SubscriptionPlan {
   cancel_at_period_end?: boolean;
   plan_name: string;
   subscription_source?: MeSubscriptionSource;
+  billing_owner?: MeBillingOwner;
 }
 
 export interface FeatureFlags {
@@ -116,6 +118,7 @@ export const useBillingStore = create<AuthState>()((set) => ({
           ...(data.plan.subscription_source
             ? { subscription_source: data.plan.subscription_source }
             : {}),
+          ...(data.plan.billing_owner ? { billing_owner: data.plan.billing_owner } : {}),
         };
 
         const user: User = {

@@ -1,5 +1,5 @@
-import type { MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
-import { isEntitledSubscriptionStatus } from '@agiworkforce/types';
+import type { MeBillingOwner, MeSubscriptionSource } from '@agiworkforce/cloud-contracts';
+import { COMPANY_SITE_NAME, isEntitledSubscriptionStatus } from '@agiworkforce/types';
 import { storeDisplayName, storeSubscriptionManagementUrl } from '@/src/features/release-state';
 
 export type MobileBillingSource = MeSubscriptionSource | 'unknown';
@@ -21,16 +21,19 @@ const TERMINAL_SUBSCRIPTION_STATUSES = new Set([
   'incomplete_expired',
 ]);
 
-export function subscriptionSourceLabel(source: MobileBillingSource): string {
+export function subscriptionSourceLabel(
+  source: MobileBillingSource,
+  billingOwner?: MeBillingOwner | null,
+): string {
   switch (source) {
     case 'stripe':
-      return 'AGI Workforce on the web';
+      return `${COMPANY_SITE_NAME} on the web`;
     case 'apple':
       return storeDisplayName('apple') ?? UNATTRIBUTED_SOURCE_LABEL;
     case 'google':
       return storeDisplayName('google') ?? UNATTRIBUTED_SOURCE_LABEL;
     case 'manual':
-      return 'your organization';
+      return billingOwner === 'personal' ? COMPANY_SITE_NAME : 'your organization';
     case 'none':
       return 'this device';
     case 'unknown':
@@ -61,6 +64,7 @@ export function getSubscriptionOwnerGuard(
   source: MobileBillingSource,
   status: string,
   webBillingLinksAllowed: boolean,
+  billingOwner?: MeBillingOwner | null,
 ): SubscriptionOwnerGuard {
   const entitled = isEntitledSubscriptionStatus(status);
   const hasRecoverableRecordedOwner =
@@ -70,7 +74,7 @@ export function getSubscriptionOwnerGuard(
 
   return {
     blocked: entitled || hasRecoverableRecordedOwner,
-    sourceLabel: subscriptionSourceLabel(source),
+    sourceLabel: subscriptionSourceLabel(source, billingOwner),
     managementUrl,
     managementActionLabel: !managementUrl
       ? 'OK'

@@ -133,6 +133,7 @@ const mockTierState = {
   billingTier: 'free',
   billingStatus: 'none',
   billingSource: 'none',
+  billingOwner: null as 'organization' | 'personal' | null,
   billingCancelsAtPeriodEnd: false,
   refreshTier: mockRefreshTier,
 };
@@ -164,6 +165,7 @@ describe('Cloud Billing screen, Local-mode-blocked tier refresh (2026-07-05)', (
       billingTier: 'free',
       billingStatus: 'none',
       billingSource: 'none',
+      billingOwner: null,
       billingCancelsAtPeriodEnd: false,
     });
     Object.assign(mockAuthState, {
@@ -976,6 +978,28 @@ describe('web billing links outside the US App Store and on Android', () => {
   afterAll(() => {
     mockWebBillingLinksAllowed = true;
   });
+
+  it.each([
+    ['personal', 'Managed on the web', 'By your organization'],
+    ['organization', 'By your organization', 'Managed on the web'],
+    [null, 'By your organization', 'Managed on the web'],
+  ] as const)(
+    'labels a plan granted by hand to a %s owner by who manages it',
+    (billingOwner, shown, hidden) => {
+      Object.assign(mockTierState, {
+        tier: 'pro',
+        billingTier: 'pro',
+        billingStatus: 'active',
+        billingSource: 'manual',
+        billingOwner,
+      });
+
+      const { getByText, queryByText } = render(<CloudBillingScreen />);
+
+      expect(getByText(shown)).toBeTruthy();
+      expect(queryByText(hidden)).toBeNull();
+    },
+  );
 
   it('names where a web-billed plan is managed without a link or portal', () => {
     Object.assign(mockFeatures, { billing: true });

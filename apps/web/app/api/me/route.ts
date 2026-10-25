@@ -42,7 +42,10 @@ import {
   userDisabledCapabilities,
   workspaceDisabledCapabilities,
 } from '@/lib/services/capability-handshake-service';
-import { resolveSubscriptionBillingSource } from '@/lib/server/subscription-billing-owner';
+import {
+  resolveBillingOwner,
+  resolveSubscriptionBillingSource,
+} from '@/lib/server/subscription-billing-owner';
 import { getCapabilityLimitResets } from '@/lib/server/capability-limit-resets';
 import { resolveCloudCodeExecutionPolicy } from '@/lib/server/code-execution-policy';
 import { getIdentityUser } from '@/lib/server/identity';
@@ -303,6 +306,10 @@ async function handleGetMe(request: NextRequest) {
       effective_tier: wirePlanOf(effectiveTier).tier,
       ...seatTypeField(wirePlanOf(effectiveTier).seatType),
       ...(subscriptionSource === 'unverified' ? {} : { subscription_source: subscriptionSource }),
+      billing_owner: resolveBillingOwner({
+        holdsOrganizationSeat: entitlement.seatSource !== null,
+        planTier: subscription?.plan_tier,
+      }),
     };
 
     const responseBody: MeResponse = {

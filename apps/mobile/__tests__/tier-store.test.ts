@@ -61,11 +61,13 @@ function mePayload(
     granted = ['canChat', 'canUseCloudExecution', 'canUseConnectors'],
     codeExecution = true,
     subscriptionSource = 'stripe',
+    billingOwner,
   }: {
     status?: string;
     granted?: string[];
     codeExecution?: boolean;
     subscriptionSource?: 'none' | 'stripe' | 'apple' | 'google' | 'manual';
+    billingOwner?: 'organization' | 'personal';
   } = {},
 ) {
   return {
@@ -81,6 +83,7 @@ function mePayload(
       status,
       current_period_end: null,
       subscription_source: subscriptionSource,
+      ...(billingOwner ? { billing_owner: billingOwner } : {}),
     },
     feature_flags: {
       advanced_model_access: true,
@@ -111,6 +114,7 @@ function resetStore() {
     billingTier: 'free',
     billingStatus: 'none',
     billingSource: 'unknown',
+    billingOwner: null,
     billingPeriodEnd: null,
     billingCancelsAtPeriodEnd: false,
     isRefreshing: false,
@@ -234,6 +238,18 @@ describe('refreshTier, success cases', () => {
     await getState().refreshTier();
 
     expect(getState().billingSource).toBe('apple');
+  });
+
+  it('hydrates who owns the billing, and reads an older server without it as unknown', async () => {
+    mockApiGet.mockResolvedValueOnce(
+      mePayload('pro', { subscriptionSource: 'manual', billingOwner: 'personal' }),
+    );
+    await getState().refreshTier();
+    expect(getState().billingOwner).toBe('personal');
+
+    mockApiGet.mockResolvedValueOnce(mePayload('pro', { subscriptionSource: 'manual' }));
+    await getState().refreshTier();
+    expect(getState().billingOwner).toBeNull();
   });
 
   it('persists the server-authoritative capability handshake', async () => {

@@ -118,6 +118,7 @@ export default function CloudBillingScreen() {
   const billingTier = useTierStore((s) => s.billingTier);
   const billingStatus = useTierStore((s) => s.billingStatus);
   const billingSource = useTierStore((s) => s.billingSource);
+  const billingOwner = useTierStore((s) => s.billingOwner);
   const billingPeriodEnd = useTierStore((s) => s.billingPeriodEnd);
   const billingCancelsAtPeriodEnd = useTierStore((s) => s.billingCancelsAtPeriodEnd);
   const refreshTier = useTierStore((s) => s.refreshTier);
@@ -155,6 +156,7 @@ export default function CloudBillingScreen() {
     billingSource,
     billingStatus,
     webBillingLinksAllowed,
+    billingOwner,
   );
   const managementTarget = billingManagementTarget({
     source: billingSource,
@@ -472,7 +474,11 @@ export default function CloudBillingScreen() {
             <SettingsRow
               label="Billing"
               icon={CreditCard}
-              value={billingSource === 'manual' ? 'By your organization' : 'Managed on the web'}
+              value={
+                billingSource === 'manual' && billingOwner !== 'personal'
+                  ? 'By your organization'
+                  : 'Managed on the web'
+              }
               isLast
             />
           ) : null}
