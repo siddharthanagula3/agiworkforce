@@ -932,6 +932,14 @@ function parseLocalThinking(raw: string): ParsedLocalThinking {
   };
 }
 
+function mergeReasoning(fromEvents: string, fromTags: string): string {
+  const events = fromEvents.trim();
+  if (!events) return fromTags;
+  if (!fromTags || events.includes(fromTags)) return events;
+  if (fromTags.includes(events)) return fromTags;
+  return `${events}\n\n${fromTags}`;
+}
+
 function parseCurrentTurnAssistantOutput(raw: string, prompt: string): ParsedLocalThinking {
   const parsed = parseLocalThinking(raw);
   return {
@@ -2334,6 +2342,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
       let cloudContentRaw = '';
       let lastParsedTags = parseCurrentTurnAssistantOutput(cloudContentRaw, content);
+      let eventReasoning = '';
       const turnGeneratedFiles: GeneratedFileWire[] = [];
       const turnInteractiveCards: InteractiveCard[] = [];
       let turnFinishReason: string | undefined;
@@ -2533,6 +2542,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
 
             if (delta.x_agent_event) {
               agentActivity = applyAgentActivityEvent(agentActivity, delta.x_agent_event);
+              if (delta.x_agent_event.event.type === 'reasoning-delta') {
+                eventReasoning += delta.x_agent_event.event.delta;
+              }
             }
 
             const prevContentLength = cloudContentRaw.length;
@@ -2556,7 +2568,10 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
               ).pending;
             }
 
-            if (parsedTags.hasReasoning && !thinkingStartTimes.has(conversationId)) {
+            if (
+              (parsedTags.hasReasoning || eventReasoning) &&
+              !thinkingStartTimes.has(conversationId)
+            ) {
               thinkingStartTimes.set(conversationId, Date.now());
             }
             if (
@@ -2568,7 +2583,7 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
             ) {
               thinkingEndTimes.set(conversationId, Date.now());
             }
-            const newReasoning = parsedTags.reasoning;
+            const newReasoning = mergeReasoning(eventReasoning, parsedTags.reasoning);
 
             accumulateToolCallDelta(toolAcc, delta);
             const toolCalls = toolCallList(toolAcc);
