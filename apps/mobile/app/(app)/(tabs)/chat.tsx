@@ -1011,6 +1011,7 @@ export default function ChatTabScreen() {
             actionLabel={usageLimit.actionLabel}
             onAction={usageLimit.openRecovery}
             onDismiss={usageLimit.dismissWarning}
+            notice={usageLimit.creditsNotice}
           />
         )}
         {workMode === 'agiwork' && !voiceInlineVisible ? <ComposerApprovalModeControl /> : null}

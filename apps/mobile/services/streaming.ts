@@ -23,6 +23,7 @@ import { ApiPaywallError, recoverStreamSession, streamAuthRefusal } from './api'
 import { ApiHttpError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
 import { ensureCloudSendConsent, ensureLlmGateOpen } from './llmGate';
 import { surfaceTermsNotice } from './termsNotice';
+import { surfaceUsageCreditsNotice } from '@/src/features/chat/utils/usageCreditsNotice';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
 import { useModelStore } from '@/src/features/model-picker/store';
@@ -308,6 +309,7 @@ interface InitialStreamRequest {
   connector_tools_enabled?: boolean;
   disabled_connector_ids?: string[];
   x_interactive_cards?: { supported: string[]; canRespond: boolean };
+  use_prompt_cache?: true;
 }
 
 interface ApprovalResumeRequest {
@@ -466,6 +468,7 @@ async function attemptStream(
     const substitution = readModelSubstitution(response.headers);
     if (substitution) callbacks.onModelSubstitution?.(substitution);
     surfaceTermsNotice(response.headers);
+    surfaceUsageCreditsNotice(response.headers);
   }
 
   for await (const event of readServerSentEvents(response, {
@@ -589,7 +592,10 @@ export async function streamChat(
     return;
   }
 
-  const request = options.ignorePickerSpeed ? body : withPickerSpeed(body);
+  const request: InitialStreamRequest = {
+    ...(options.ignorePickerSpeed ? body : withPickerSpeed(body)),
+    use_prompt_cache: true,
+  };
   let timeoutController = new AbortController();
   let timeoutId = setTimeout(() => timeoutController.abort(), TIMEOUTS.STREAMING);
   let combinedSignal = signal

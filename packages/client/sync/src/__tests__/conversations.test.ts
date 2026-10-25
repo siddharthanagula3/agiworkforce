@@ -58,6 +58,7 @@ describe('applyConversationDeltas', () => {
       {
         id: 'c1',
         title: 'New (dirty)',
+        userTitlePending: true,
         createdAt: T,
         updatedAt: T,
         messageCount: 0,
@@ -94,6 +95,7 @@ describe('applyConversationDeltas', () => {
       {
         id: 'c1',
         title: 'New (dirty)',
+        userTitlePending: true,
         createdAt: T,
         updatedAt: T,
         messageCount: 4,
@@ -123,6 +125,32 @@ describe('applyConversationDeltas', () => {
       serverVersion: '9',
       activeLeafMessageId: 'm-current',
       messageCount: 4,
+    });
+  });
+
+  it('replaces a placeholder title with the server title even while the conversation is dirty', () => {
+    const port = createInMemoryConversationPort([
+      {
+        id: 'c1',
+        title: 'First message cut to forty chars...',
+        createdAt: T,
+        updatedAt: T,
+        messageCount: 2,
+        pinned: false,
+        serverVersion: '1',
+      },
+    ]);
+
+    applyConversationDeltas(
+      port,
+      [delta({ title: 'Quarterly plan review', server_version: '4' })],
+      ['c1'],
+    );
+
+    expect(port.get('c1')).toMatchObject({
+      title: 'Quarterly plan review',
+      serverVersion: '4',
+      userTitlePending: false,
     });
   });
 
@@ -184,6 +212,7 @@ describe('applyConversationDeltas', () => {
       {
         id: 'c1',
         title: 'New (dirty)',
+        userTitlePending: true,
         createdAt: T,
         updatedAt: T,
         messageCount: 0,
@@ -213,7 +242,7 @@ describe('toConversationPushItem', () => {
   };
 
   it('maps a full record to the camelCase wire shape', () => {
-    expect(toConversationPushItem(base)).toEqual({
+    expect(toConversationPushItem({ ...base, userTitlePending: true })).toEqual({
       id: 'c1',
       title: 'Hello',
       model: 'fixture-model',
@@ -228,6 +257,23 @@ describe('toConversationPushItem', () => {
     const item = toConversationPushItem(rest);
     expect(item.model).toBeNull();
     expect(item.projectId).toBeNull();
+  });
+
+  it('leaves the title out of a push for a conversation the user never renamed', () => {
+    const item = toConversationPushItem({ ...base, title: 'First message cut to forty chars...' });
+    expect(item).not.toHaveProperty('title');
+    expect(item.baseVersion).toBe('7');
+  });
+
+  it('pushes the title of a conversation the user renamed', () => {
+    expect(
+      toConversationPushItem({ ...base, title: 'My name', userTitlePending: true }),
+    ).toMatchObject({ title: 'My name', baseVersion: '7' });
+  });
+
+  it('names a conversation the server has never seen, since a create needs a title', () => {
+    const { serverVersion: _serverVersion, ...unsynced } = base;
+    expect(toConversationPushItem(unsynced)).toMatchObject({ title: 'Hello', baseVersion: '0' });
   });
 
   it('uses revision zero for a legacy record and never emits client clocks', () => {

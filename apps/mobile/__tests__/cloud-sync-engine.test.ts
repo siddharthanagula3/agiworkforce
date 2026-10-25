@@ -21,6 +21,7 @@ jest.mock('../services/api', () => ({
 }));
 
 import { api } from '../services/api';
+import { useChatMessageStore } from '../stores/chat/chatMessageStore';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { useChatCloudMessageStore } from '../stores/chat/chatCloudMessageStore';
 import { useCloudSyncStateStore } from '../stores/chat/cloudSyncStateStore';
@@ -936,6 +937,133 @@ describe('syncNow, push', () => {
     const latest = useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1');
     expect(latest).toMatchObject({ title: 'edited later', serverVersion: '8' });
     expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
+  });
+
+  it('leaves the title out of the push for a chat the user never renamed', async () => {
+    seedConversation('c1', { title: 'First message cut to forty chars...', serverVersion: '7' });
+    markConversationForSync('c1');
+    mockPost.mockImplementationOnce(
+      async () =>
+        ({
+          protocolVersion: 2,
+          applied: {
+            conversations: [{ id: 'c1', server_version: '8' }],
+            messages: [],
+            artifacts: [],
+          },
+          conflicts: { conversations: [], messages: [], artifacts: [] },
+          cursor: '8',
+        }) as never,
+    );
+
+    await syncNow();
+
+    const [, body] = mockPost.mock.calls[0] as [string, { conversations: Array<object> }];
+    expect(body.conversations[0]).toMatchObject({ id: 'c1', baseVersion: '7' });
+    expect(body.conversations[0]).not.toHaveProperty('title');
+  });
+
+  it('pushes a renamed chat title once, then stops sending it after the server acknowledges', async () => {
+    seedConversation('c1', { title: 'Placeholder', serverVersion: '7' });
+    await useChatMessageStore.getState().renameConversation('c1', 'Budget 2027');
+    markConversationForSync('c1');
+    mockPost.mockImplementationOnce(
+      async () =>
+        ({
+          protocolVersion: 2,
+          applied: {
+            conversations: [{ id: 'c1', server_version: '8' }],
+            messages: [],
+            artifacts: [],
+          },
+          conflicts: { conversations: [], messages: [], artifacts: [] },
+          cursor: '8',
+        }) as never,
+    );
+
+    await syncNow();
+
+    const [, body] = mockPost.mock.calls[0] as [string, { conversations: Array<object> }];
+    expect(body.conversations[0]).toMatchObject({ title: 'Budget 2027', baseVersion: '7' });
+    const stored = useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1');
+    expect(stored).toMatchObject({
+      title: 'Budget 2027',
+      serverVersion: '8',
+      userTitlePending: false,
+    });
+  });
+
+  it('keeps a renamed chat title through a stale CAS conflict and re-pushes it on the new base', async () => {
+    seedConversation('c1', { title: 'Placeholder', serverVersion: '7' });
+    await useChatMessageStore.getState().renameConversation('c1', 'Budget 2027');
+    markConversationForSync('c1');
+    mockPost.mockImplementationOnce(
+      async () =>
+        ({
+          protocolVersion: 2,
+          applied: { conversations: [], messages: [], artifacts: [] },
+          conflicts: {
+            conversations: [
+              { id: 'c1', current: { ...convDelta('c1', '8'), title: 'Generated title' } },
+            ],
+            messages: [],
+            artifacts: [],
+          },
+          cursor: '8',
+        }) as never,
+    );
+
+    await syncNow();
+
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1'),
+    ).toMatchObject({ title: 'Budget 2027', serverVersion: '8', userTitlePending: true });
+    expect(useCloudSyncStateStore.getState().dirtyConversationIds).toContain('c1');
+  });
+
+  it('replaces a placeholder title with the generated server title on pull, even while dirty', async () => {
+    seedConversation('c1', { title: 'First message cut to forty chars...', serverVersion: '7' });
+    markConversationForSync('c1');
+    mockGet.mockResolvedValueOnce({
+      conversations: [{ ...convDelta('c1', '9'), title: 'Quarterly plan review' }],
+      messages: [],
+      artifacts: [],
+      cursor: '9',
+      hasMore: false,
+    } as never);
+    mockPost.mockResolvedValue({
+      protocolVersion: 2,
+      applied: { conversations: [], messages: [], artifacts: [] },
+      conflicts: { conversations: [], messages: [], artifacts: [] },
+      cursor: '9',
+    } as never);
+
+    await syncNow();
+
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1'),
+    ).toMatchObject({ title: 'Quarterly plan review', serverVersion: '9' });
+  });
+
+  it('replaces a placeholder title with the server title from a conversation list refresh', () => {
+    seedConversation('c1', { title: 'First message cut to forty chars...', serverVersion: '7' });
+    markConversationForSync('c1');
+
+    useChatCloudMessageStore.getState().setCloudConversations([
+      {
+        id: 'c1',
+        title: 'Quarterly plan review',
+        createdAt: T,
+        updatedAt: T,
+        messageCount: 2,
+        pinned: false,
+        serverVersion: '9',
+      },
+    ]);
+
+    expect(
+      useChatCloudMessageStore.getState().conversations.find((c) => c.id === 'c1')?.title,
+    ).toBe('Quarterly plan review');
   });
 
   it('adopts the deterministic server winner for a stale conversation CAS conflict', async () => {

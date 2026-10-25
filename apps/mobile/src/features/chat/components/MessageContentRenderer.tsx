@@ -135,6 +135,10 @@ export function renderInlineMath(text: string, keyBase: string): React.ReactNode
   return parts;
 }
 
+function isIndexAccess(text: string, markerIndex: number): boolean {
+  return markerIndex > 0 && /[\w)\]]/.test(text.charAt(markerIndex - 1));
+}
+
 export function renderInlineMarkdown(
   source: string,
   keyBase = 'inline',
@@ -228,7 +232,7 @@ export function renderInlineMarkdown(
             {`[${marker}]`}
           </Text>,
         );
-      } else {
+      } else if (citation || isIndexAccess(text, inlineMatch.index)) {
         parts.push(inlineMatch[0]);
       }
     }

@@ -14,8 +14,15 @@ import { useCloudUsageStore } from '@/src/features/settings/cloud-usage/store';
 import {
   usageReadingsFromSnapshot,
   usageWarningFromSnapshot,
+  type UsageNotice,
 } from '@/src/features/chat/components/UsageLimitBanner';
 import type { UsageSnapshot } from '@/services/usage';
+import {
+  USAGE_CREDITS_NOTICE,
+  USAGE_CREDITS_NOTICE_ACTION,
+  USAGE_CREDITS_NOTICE_ROUTE,
+  useUsageCreditsNoticeStore,
+} from '@/src/features/chat/utils/usageCreditsNotice';
 
 export const USAGE_RECOVERY_ROUTE = '/(app)/settings/cloud-billing';
 const RESET_RECHECK_MAX_MS = 60_000;
@@ -43,6 +50,7 @@ export interface WorkUsageLimit {
   actionLabel: string | null;
   openRecovery: () => void;
   dismissWarning: () => void;
+  creditsNotice: UsageNotice | null;
 }
 
 export function useWorkUsageLimit({
@@ -62,6 +70,8 @@ export function useWorkUsageLimit({
   const usageError = useCloudUsageStore((s) => s.error);
   const refresh = useCloudUsageStore((s) => s.refresh);
   const [dismissedKey, setDismissedKey] = useState<string | null>(null);
+  const creditsNoticeShown = useUsageCreditsNoticeStore((s) => s.shown);
+  const dismissCreditsNotice = useUsageCreditsNoticeStore((s) => s.dismiss);
   const [now, setNow] = useState(() => Date.now());
 
   useEffect(() => {
@@ -122,6 +132,23 @@ export function useWorkUsageLimit({
     setDismissedKey(warningKey);
   }, [warningKey]);
 
+  const openUsage = useCallback(() => {
+    dismissCreditsNotice();
+    router.push(USAGE_CREDITS_NOTICE_ROUTE as Parameters<typeof router.push>[0]);
+  }, [dismissCreditsNotice, router]);
+  const creditsNotice = useMemo<UsageNotice | null>(
+    () =>
+      metered && creditsNoticeShown
+        ? {
+            message: USAGE_CREDITS_NOTICE,
+            actionLabel: USAGE_CREDITS_NOTICE_ACTION,
+            onAction: openUsage,
+            onDismiss: dismissCreditsNotice,
+          }
+        : null,
+    [creditsNoticeShown, dismissCreditsNotice, metered, openUsage],
+  );
+
   return {
     snapshot,
     warning: warningKey !== null && warningKey !== dismissedKey ? liveWarning : null,
@@ -129,5 +156,6 @@ export function useWorkUsageLimit({
     actionLabel: recovery ? workUsageRecoveryActionLabel(recovery) : null,
     openRecovery,
     dismissWarning,
+    creditsNotice,
   };
 }

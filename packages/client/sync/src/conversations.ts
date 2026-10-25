@@ -17,6 +17,7 @@ export interface SyncConversationRecord {
   /** The tombstone `projects.ts` has always carried. Optional while stores adopt it. */
   deletedAt?: string | null;
   serverVersion?: string;
+  userTitlePending?: boolean;
 }
 
 export interface ConversationStorePort extends TombstoneStorePort {
@@ -28,13 +29,14 @@ export interface ConversationStorePort extends TombstoneStorePort {
 
 type LocallyOwnedConversationFields = Pick<
   SyncConversationRecord,
-  'title' | 'model' | 'projectId' | 'pinned'
->;
+  'model' | 'projectId' | 'pinned'
+> &
+  Partial<Pick<SyncConversationRecord, 'title' | 'userTitlePending'>>;
 
 function locallyOwnedFields(record: SyncConversationRecord): LocallyOwnedConversationFields {
   const pushed = toConversationPushItem(record);
   return {
-    title: pushed.title,
+    ...(record.userTitlePending === true ? { title: record.title, userTitlePending: true } : {}),
     model: pushed.model ?? undefined,
     projectId: pushed.projectId ?? undefined,
     pinned: pushed.pinned,
@@ -70,6 +72,7 @@ export function applyConversationDeltas(
       ...branchPointer,
       deletedAt: null,
       serverVersion: d.server_version,
+      userTitlePending: false,
     };
     if (existing && dirtyConversationIds.includes(d.id)) {
       // Dirty preservation covers local edits awaiting a push, and a push
@@ -90,7 +93,7 @@ export function applyConversationDeltas(
 
 export interface ConversationPushItem {
   id: string;
-  title: string;
+  title?: string;
   model: string | null;
   projectId: string | null;
   pinned: boolean;
@@ -98,9 +101,10 @@ export interface ConversationPushItem {
 }
 
 export function toConversationPushItem(record: SyncConversationRecord): ConversationPushItem {
+  const namesConversation = record.userTitlePending === true || record.serverVersion === undefined;
   return {
     id: record.id,
-    title: record.title,
+    ...(namesConversation ? { title: record.title } : {}),
     model: record.model ?? null,
     projectId: record.projectId ?? null,
     pinned: record.pinned ?? false,
@@ -115,6 +119,7 @@ export function conversationSyncContentMatches(
   return (
     left.id === right.id &&
     left.title === right.title &&
+    (left.userTitlePending === true) === (right.userTitlePending === true) &&
     (left.model ?? null) === (right.model ?? null) &&
     (left.projectId ?? null) === (right.projectId ?? null) &&
     left.pinned === right.pinned

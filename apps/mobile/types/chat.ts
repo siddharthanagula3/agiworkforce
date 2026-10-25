@@ -155,6 +155,7 @@ export interface ConversationSummary {
   temporary?: boolean;
   unread?: boolean;
   serverVersion?: string;
+  userTitlePending?: boolean;
   parentConversationId?: string;
   forkPointMessageId?: string;
   /**

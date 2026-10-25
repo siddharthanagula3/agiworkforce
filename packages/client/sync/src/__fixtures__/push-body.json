@@ -10,6 +10,7 @@
         "updatedAt": "2026-07-02T00:00:00.000Z",
         "messageCount": 2,
         "pinned": true,
+        "userTitlePending": true,
         "model": "fixture-model",
         "projectId": "018f6f2a-0000-7000-8000-000000000099",
         "serverVersion": "12"
@@ -22,6 +23,26 @@
         "pinned": true,
         "baseVersion": "12"
       }
+    },
+    {
+      "name": "unrenamed_record_omits_title",
+      "record": {
+        "id": "018f6f2a-0000-7000-8000-000000000004",
+        "title": "First message cut to forty chars...",
+        "createdAt": "2026-07-01T00:00:00.000Z",
+        "updatedAt": "2026-07-01T00:00:00.000Z",
+        "messageCount": 2,
+        "pinned": false,
+        "serverVersion": "12"
+      },
+      "expectedWireItem": {
+        "id": "018f6f2a-0000-7000-8000-000000000004",
+        "model": null,
+        "projectId": null,
+        "pinned": false,
+        "baseVersion": "12"
+      },
+      "note": "The server owns the generated title; a client names a conversation only after the user renamed it or when a push creates it."
     },
     {
       "name": "missing_optional_fields_null_out",

@@ -1874,6 +1874,7 @@ export default function ChatScreen() {
           actionLabel={usageLimit.actionLabel}
           onAction={usageLimit.openRecovery}
           onDismiss={usageLimit.dismissWarning}
+          notice={usageLimit.creditsNotice}
         />
 
         <ProviderConsentBanner

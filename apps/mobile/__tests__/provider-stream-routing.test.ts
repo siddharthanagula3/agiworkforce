@@ -125,6 +125,7 @@ describe('managed mobile stream routing', () => {
             model: qwenModel.id,
             messages: [{ role: 'user', content: 'hello' }],
             stream: true,
+            use_prompt_cache: true,
           }),
         }),
         { stream: true },
