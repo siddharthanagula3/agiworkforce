@@ -30,11 +30,16 @@ vi.mock('@/lib/api-auth', () => ({
   getClerkAuthUser: vi.fn(async () => ({ userId: LEAVING_OWNER })),
 }));
 vi.mock('@/lib/server/neon-db', () => ({ getNeonDb: vi.fn(() => ({})) }));
-vi.mock('@/lib/server/identity', () => ({ getIdentityProvider: vi.fn(() => ({})) }));
-vi.mock('@/lib/server/request-context-cache', () => ({
+vi.mock('@/lib/server/identity', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  getIdentityProvider: vi.fn(() => ({})),
+}));
+vi.mock('@/lib/server/request-context-cache', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   invalidateActiveOrganizationCache: vi.fn(async () => undefined),
 }));
-vi.mock('@/lib/services/active-workspace-service', () => ({
+vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   resolveActiveOrganizationId: vi.fn(async () => ORGANIZATION_ID),
 }));
 vi.mock('@/lib/services/organization-membership-service', () => ({

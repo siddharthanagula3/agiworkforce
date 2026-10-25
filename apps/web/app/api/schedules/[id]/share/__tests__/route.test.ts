@@ -73,6 +73,7 @@ vi.mock('@/lib/security/outbound-content-inspection', () => ({
 vi.mock('@/lib/services/organization-policy-gate', () => ({
   diagnoseMemberPolicy: vi.fn(),
   evaluateActiveWorkspacePolicy: vi.fn(),
+  evaluateWorkspacePolicyFor: vi.fn(),
   readOrganizationIpAllowList: vi.fn(),
   resolveEffectiveWorkspaceControls: vi.fn(),
   resolveIpAllowListPolicy: vi.fn(),

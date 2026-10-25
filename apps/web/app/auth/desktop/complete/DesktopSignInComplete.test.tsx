@@ -8,7 +8,8 @@ vi.mock('@/features/auth/IdentityAuthAdapter', () => ({
   useIdentityTicketSignIn: () => ({ ready: true, signInWithTicket }),
 }));
 
-vi.mock('@/features/desktop-host/lib/browser-sign-in', () => ({
+vi.mock('@/features/desktop-host/lib/browser-sign-in', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
   beginBrowserSignIn: vi.fn(async () => false),
 }));
 
