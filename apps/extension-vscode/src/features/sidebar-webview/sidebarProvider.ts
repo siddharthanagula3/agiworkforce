@@ -284,6 +284,10 @@ export class SidebarProvider implements vscode.WebviewViewProvider {
     return this._stateManager.resumeConversation(threadId);
   }
 
+  public pushAgentControls(): void {
+    this._stateManager.pushAgentControls();
+  }
+
   public pushFollowUpBehavior(): void {
     this._stateManager.pushFollowUpBehavior();
   }

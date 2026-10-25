@@ -426,6 +426,8 @@ export function activate(context: vscode.ExtensionContext): void {
         void reconcileAgentControlConsent(context)
           .then(async () => {
             updateStatusBar();
+            sidebarProvider?.pushAgentControls();
+            ChatEditorPanel.pushAgentControls();
             await offerPermissionRuntimeRestart();
           })
           .catch((error: unknown) => {

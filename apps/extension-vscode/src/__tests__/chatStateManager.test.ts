@@ -2312,6 +2312,36 @@ describe('ChatStateManager local turn lifecycle', () => {
     });
   });
 
+  it('shows a mode changed outside the chat, unless this chat chose its own', async () => {
+    const harness = makeHarness();
+    const original = vi.mocked(vscode.workspace.getConfiguration).getMockImplementation();
+    let configuredMode = 'plan';
+    vi.mocked(vscode.workspace.getConfiguration).mockImplementation(
+      () =>
+        ({
+          get: vi.fn(<T>(key: string, defaultValue?: T) =>
+            key === 'agent.mode' ? (configuredMode as T) : defaultValue,
+          ),
+          update: vi.fn().mockResolvedValue(undefined),
+          has: vi.fn().mockReturnValue(false),
+          inspect: vi.fn().mockReturnValue(undefined),
+        }) as unknown as vscode.WorkspaceConfiguration,
+    );
+    try {
+      harness.manager.pushAgentControls();
+      expect(harness.posted).toContainEqual({ type: 'modeChanged', payload: { mode: 'plan' } });
+
+      await harness.manager.handleMessage({ type: 'setMode', payload: { mode: 'ask' } });
+      configuredMode = 'auto';
+      harness.posted.length = 0;
+      harness.manager.pushAgentControls();
+      expect(harness.posted).toContainEqual({ type: 'modeChanged', payload: { mode: 'ask' } });
+      expect(harness.posted).toContainEqual(expect.objectContaining({ type: 'effortChanged' }));
+    } finally {
+      vi.mocked(vscode.workspace.getConfiguration).mockImplementation(original!);
+    }
+  });
+
   it('includes user-curated memory as untrusted turn data', async () => {
     const harness = makeHarness();
     const facts = [
@@ -3828,6 +3858,18 @@ describe('ChatStateManager local turn lifecycle', () => {
       },
     });
     harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 1_784_335_200_010,
+      toolCallId: 'plan-1',
+      name: 'update_plan',
+      output: 'Plan updated',
+      isError: false,
+      elapsedMs: 10,
+    });
+    harness.emit({
       type: 'turn_completed',
       threadId: 'thread-1',
       turnId: 'turn-1',
@@ -3853,6 +3895,57 @@ describe('ChatStateManager local turn lifecycle', () => {
       expect.objectContaining({
         type: 'toolCallStart',
         payload: expect.objectContaining({ name: 'update_plan' }),
+      }),
+    );
+  });
+
+  it('does not offer a plan the runtime rejected', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Plan this change' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'tool_execution_start',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 0,
+      emittedAtMs: 1,
+      toolCallId: 'plan-1',
+      name: 'update_plan',
+      category: 'other',
+      summary: 'Updating the plan',
+      input: { plan: [{ step: 'Build the UI', status: 'pending' }] },
+    });
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 1,
+      emittedAtMs: 2,
+      toolCallId: 'plan-1',
+      name: 'update_plan',
+      output: 'update_plan: failed to parse arguments',
+      isError: true,
+      elapsedMs: 1,
+    });
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+
+    expect(harness.posted).not.toContainEqual(expect.objectContaining({ type: 'planUpdate' }));
+    expect(harness.posted).toContainEqual(
+      expect.objectContaining({
+        type: 'toolCallEnd',
+        payload: expect.objectContaining({ toolUseId: 'plan-1', isError: true }),
       }),
     );
   });
@@ -4100,6 +4193,18 @@ describe('ChatStateManager session compaction', () => {
       category: 'other',
       summary: 'Plan',
       input: { plan: [{ step: 'Change the loop bound', status: 'pending' }] },
+    } as never);
+    harness.emit({
+      type: 'tool_execution_end',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      sequence: 2,
+      emittedAtMs: 2,
+      toolCallId: 'call-plan',
+      name: 'update_plan',
+      output: 'Plan updated',
+      isError: false,
+      elapsedMs: 1,
     } as never);
     harness.emit({
       type: 'turn_completed',

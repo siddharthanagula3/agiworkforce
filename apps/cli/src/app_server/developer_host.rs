@@ -3756,12 +3756,14 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 agent.pending_image_blocks = input.images;
                 agent.search_next_turn = input.search;
                 agent.quiet = true;
+                let checkpoints = agent.checkpoint_file_authority().cloned();
                 agent.on_tool_approval = Some(ToolApprovalSink(approval_callback(
                     task_thread_id.clone(),
                     task_turn_id.clone(),
                     task_pending.clone(),
                     task_notifications.clone(),
                     task_event_sequence.clone(),
+                    checkpoints,
                 )));
                 withhold_subagent_tools(&task_workspace_root, &mut agent);
                 agent.on_user_input = task_answers_user_input.then(|| {
@@ -6044,10 +6046,13 @@ fn approval_callback(
     pending: Arc<Mutex<HashMap<String, PendingApproval>>>,
     notifications: broadcast::Sender<AppServerNotification>,
     sequence: Arc<StdMutex<u64>>,
+    checkpoints: Option<crate::path_security::WorkspaceFileAuthority>,
 ) -> crate::tools::ApprovalCallback {
     let runtime = tokio::runtime::Handle::current();
+    let checkpoints = Arc::new(checkpoints);
     Arc::new(move |request: ApprovalRequest| {
         let runtime = runtime.clone();
+        let checkpoints = checkpoints.clone();
         let sequence = sequence.clone();
         let thread_id = thread_id.clone();
         let turn_id = turn_id.clone();
@@ -6055,7 +6060,12 @@ fn approval_callback(
         let notifications = notifications.clone();
         Box::pin(async move {
             let request_id = request.id.to_string();
-            let risk = request.kind.risk();
+            let risk = match checkpoints.as_ref() {
+                Some(authority) => request.kind.risk_with_restorable(|path| {
+                    crate::agent::checkpoint_restorable(path, authority)
+                }),
+                None => request.kind.risk(),
+            };
             let exec_command = match &request.kind {
                 ApprovalRequestKind::Exec { command } => Some(command.clone()),
                 _ => None,
@@ -9289,6 +9299,7 @@ mod tests {
             pending.clone(),
             notifications,
             Arc::new(StdMutex::new(0)),
+            None,
         );
         let request = ApprovalRequest::new(
             crate::tui::approval_broker::ApprovalRequestKind::Exec {
@@ -9339,6 +9350,47 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn an_edit_the_session_checkpoints_is_reported_as_reversible() {
+        let root = tempdir().expect("workspace");
+        std::fs::write(root.path().join("app.ts"), "export const a = 1;\n").expect("file");
+        let authority =
+            crate::path_security::WorkspaceFileAuthority::new(root.path()).expect("authority");
+        let workspace = authority.root().to_path_buf();
+        let pending = Arc::new(Mutex::new(HashMap::new()));
+        let (notifications, mut receiver) = broadcast::channel(4);
+        let callback = approval_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            pending.clone(),
+            notifications,
+            Arc::new(StdMutex::new(0)),
+            Some(authority),
+        );
+        let request = ApprovalRequest::new(
+            crate::tui::approval_broker::ApprovalRequestKind::FileEdit {
+                path: workspace.join("app.ts"),
+            },
+            "Edit app.ts",
+            vec!["app.ts".to_string()],
+        );
+        let request_id = request.id.to_string();
+        let waiter = tokio::spawn(async move { callback(request).await });
+        receiver.recv().await.expect("awaiting-input notification");
+        let notification = receiver.recv().await.expect("approval notification");
+        assert_eq!(notification.params["reversible"], true);
+
+        pending
+            .lock()
+            .await
+            .remove(&request_id)
+            .expect("pending approval")
+            .responder
+            .send(ApprovalReply::decided(ApprovalDecision::Cancel))
+            .expect("resume approval waiter");
+        waiter.await.expect("waiter task");
+    }
+
+    #[tokio::test]
     async fn concurrent_child_approvals_keep_independent_request_identity_and_outcomes() {
         let pending = Arc::new(Mutex::new(HashMap::new()));
         let (notifications, mut receiver) = broadcast::channel(32);
@@ -9348,6 +9400,7 @@ mod tests {
             pending.clone(),
             notifications,
             Arc::new(StdMutex::new(0)),
+            None,
         );
         let first =
             crate::teams::named_approval(ToolApprovalSink(callback.clone()), "subagent_first");
@@ -9421,6 +9474,7 @@ mod tests {
             pending.clone(),
             notifications,
             Arc::new(StdMutex::new(0)),
+            None,
         );
         let first = ApprovalRequest::new(
             ApprovalRequestKind::Exec {
@@ -10981,6 +11035,7 @@ mod tests {
             Arc::default(),
             notifications,
             Arc::new(StdMutex::new(0)),
+            None,
         )));
         host.apply_subagent_boundary_policy(&mut agent);
         assert!(tool_names(&agent).iter().any(|name| name == "task"));

@@ -897,6 +897,15 @@ export class ChatStateManager {
   private readonly _cliCapabilities: CliCapabilityAdapter;
   private _slashEntries: ReadonlyMap<string, SlashMenuEntry> | undefined;
   private _latestPlan: { threadId: string; plan: PlanVisualization } | undefined;
+  private readonly _proposedPlansByToolCall = new Map<
+    string,
+    {
+      threadId: string;
+      turnId: string;
+      plan: PlanVisualization;
+      start: { name: string; category: AgentEventToolCategory; summary: string; input: unknown };
+    }
+  >();
   private _planDocument: { uri: string; threadId: string; original: string } | undefined;
   private _planDocumentListener: vscode.Disposable | undefined;
   private _contextUsage:
@@ -2186,6 +2195,19 @@ export class ChatStateManager {
     }
   }
 
+  public pushAgentControls(): void {
+    const model = this._activeModel;
+    this._post({ type: 'modeChanged', payload: { mode: this.sessionAgentMode() } });
+    this._post({
+      type: 'effortChanged',
+      payload: {
+        effort: this._shownEffort(),
+        supportsEffort: this.modelSupportsEffort(model),
+        efforts: this.modelEffortLevels(model),
+      },
+    });
+  }
+
   public pushFollowUpBehavior(): void {
     this._post({
       type: 'followUpBehavior',
@@ -2539,10 +2561,13 @@ export class ChatStateManager {
     this._writtenFilesByTurn.set(pending.turnId, written);
   }
 
-  private _forgetTurnWrites(turnId: string): void {
+  private _forgetTurnToolState(turnId: string): void {
     this._writtenFilesByTurn.delete(turnId);
     for (const [toolCallId, pending] of this._pendingWritesByToolCall) {
       if (pending.turnId === turnId) this._pendingWritesByToolCall.delete(toolCallId);
+    }
+    for (const [toolCallId, proposed] of this._proposedPlansByToolCall) {
+      if (proposed.turnId === turnId) this._proposedPlansByToolCall.delete(toolCallId);
     }
   }
 
@@ -4709,23 +4734,24 @@ export class ChatStateManager {
     }
     if (event.type === 'tool_execution_start') {
       this._notePendingWrite(event.turnId, event.toolCallId, event.name, event.input);
+      const entry = this._activityEntry('tool', event.toolCallId);
+      const start = {
+        name: entry?.name ?? event.name,
+        category: entry?.category ?? event.category,
+        summary: entry?.summary ?? event.summary,
+        input: entry?.input ?? event.input,
+      };
       const plan = event.name === 'update_plan' ? parsePlanVisualization(event.input) : undefined;
       if (plan !== undefined) {
-        this._latestPlan = { threadId: event.threadId, plan };
-        this._post({ type: 'planUpdate', payload: plan });
+        this._proposedPlansByToolCall.set(event.toolCallId, {
+          threadId: event.threadId,
+          turnId: event.turnId,
+          plan,
+          start,
+        });
         return;
       }
-      const entry = this._activityEntry('tool', event.toolCallId);
-      this._post({
-        type: 'toolCallStart',
-        payload: {
-          toolUseId: event.toolCallId,
-          name: entry?.name ?? event.name,
-          category: entry?.category ?? event.category,
-          summary: entry?.summary ?? event.summary,
-          input: entry?.input ?? event.input,
-        },
-      });
+      this._post({ type: 'toolCallStart', payload: { toolUseId: event.toolCallId, ...start } });
       return;
     }
     if (event.type === 'tool_execution_end') {
@@ -4733,6 +4759,19 @@ export class ChatStateManager {
       const elapsedMs = entry?.elapsedMs ?? event.elapsedMs;
       const isError = entry === undefined ? event.isError : entry.status === 'failed';
       this._settlePendingWrite(event.toolCallId, !isError);
+      const proposed = this._proposedPlansByToolCall.get(event.toolCallId);
+      this._proposedPlansByToolCall.delete(event.toolCallId);
+      if (proposed !== undefined && !isError) {
+        this._latestPlan = { threadId: proposed.threadId, plan: proposed.plan };
+        this._post({ type: 'planUpdate', payload: proposed.plan });
+        return;
+      }
+      if (proposed !== undefined) {
+        this._post({
+          type: 'toolCallStart',
+          payload: { toolUseId: event.toolCallId, ...proposed.start },
+        });
+      }
       this._post({
         type: 'toolCallEnd',
         payload: {
@@ -4807,7 +4846,7 @@ export class ChatStateManager {
       const servedModel = this._servedModelByTurn.get(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
       const writtenFiles = [...(this._writtenFilesByTurn.get(event.turnId) ?? [])];
-      this._forgetTurnWrites(event.turnId);
+      this._forgetTurnToolState(event.turnId);
       if (writtenFiles.length > 0) {
         this._lastChangedTurn = {
           threadId: event.threadId,
@@ -4859,14 +4898,14 @@ export class ChatStateManager {
     if (event.type === 'turn_interrupted') {
       this._expirePendingApprovals(event.turnId);
       this._servedModelByTurn.delete(event.turnId);
-      this._forgetTurnWrites(event.turnId);
+      this._forgetTurnToolState(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
       complete();
       return;
     }
     this._expirePendingApprovals(event.turnId);
     this._servedModelByTurn.delete(event.turnId);
-    this._forgetTurnWrites(event.turnId);
+    this._forgetTurnToolState(event.turnId);
     if (event.failure !== undefined && event.failure !== null) {
       this._recoveryHref = safeRecoveryHref(event.failure.recoveryHref);
       this._post({ type: 'error', payload: presentTurnFailure(event.failure) });

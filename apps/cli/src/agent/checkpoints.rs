@@ -562,6 +562,11 @@ fn validate_blob(digest: &str, bytes: &[u8]) -> Result<()> {
     Ok(())
 }
 
+/// Whether writing `path` now would leave a copy that rewind can restore.
+pub(crate) fn restorable(path: &Path, authority: &WorkspaceFileAuthority) -> bool {
+    !matches!(observe(path, Some(authority)), Observed::Untracked(_))
+}
+
 fn observe(path: &Path, authority: Option<&WorkspaceFileAuthority>) -> Observed {
     let read = authority
         .context("the session workspace file authority is unavailable")

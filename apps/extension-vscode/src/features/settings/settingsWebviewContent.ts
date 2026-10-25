@@ -2710,7 +2710,8 @@ ${capabilityTabs}
                 ? 'Google Play'
                 : identity && identity.subscriptionSource === 'stripe'
                   ? 'Web billing'
-                  : identity && identity.subscriptionSource === 'manual'
+                  : identity && identity.subscriptionSource === 'manual' &&
+                      identity.accountType === 'Organization account'
                     ? 'Organization-managed billing'
                     : '';
             planStatus.textContent = billingIssue
