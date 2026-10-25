@@ -4952,7 +4952,7 @@ export async function* runToolLoop(
         return Promise.resolve(loadDeferredToolSchemas(tc.args));
       }
       if (tc.qualifiedName === TOOL_RESULT_READER_TOOL_NAME) {
-        return readStoredToolResult(options.userId, tc.args);
+        return readStoredToolResult(toolResultOwner, tc.args);
       }
       const argumentProblem = toolArgumentProblem(tc, externalToolSchemas.get(tc.qualifiedName));
       if (argumentProblem) {

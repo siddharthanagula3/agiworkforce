@@ -28,6 +28,8 @@ import {
 } from './tool-result-store';
 
 const USER_ID = 'user-1';
+const CONVERSATION_ID = 'conversation-1';
+const OWNER = { userId: USER_ID, conversationId: CONVERSATION_ID };
 
 beforeEach(() => {
   store.value = createMemoryKeyValueStore();
@@ -37,10 +39,10 @@ describe('trimmed tool results', () => {
   it('keeps a trimmed result readable through its reference', async () => {
     const content = 'row\n'.repeat(5_000);
     expect(trimmedToolResultNotice('call_1')).toContain('read_tool_result with reference "call_1"');
-    await expect(
-      keepTrimmedToolResult({ userId: USER_ID, toolCallId: 'call_1', content }),
-    ).resolves.toBe(true);
-    const read = await readStoredToolResult(USER_ID, { reference: 'call_1', offset: 0 });
+    await expect(keepTrimmedToolResult({ ...OWNER, toolCallId: 'call_1', content })).resolves.toBe(
+      true,
+    );
+    const read = await readStoredToolResult(OWNER, { reference: 'call_1', offset: 0 });
     expect(read.isError).toBe(false);
     expect(read.content).toContain('row\nrow');
     expect(read.content).toContain(`of ${content.length}.`);
@@ -49,32 +51,89 @@ describe('trimmed tool results', () => {
   it('leaves the full result an oversized notice already points to', async () => {
     const full = 'x'.repeat(MAX_EXECUTION_OUTPUT_BYTES + 10);
     const inline = await referenceOversizedToolResult({
-      userId: USER_ID,
+      ...OWNER,
       toolCallId: 'call_2',
       toolName: 'connector__export',
       content: full,
     });
     expect(inline).not.toBeNull();
     await expect(
-      keepTrimmedToolResult({ userId: USER_ID, toolCallId: 'call_2', content: inline! }),
+      keepTrimmedToolResult({ ...OWNER, toolCallId: 'call_2', content: inline! }),
     ).resolves.toBe(true);
-    const read = await readStoredToolResult(USER_ID, { reference: 'call_2', offset: 0 });
+    const read = await readStoredToolResult(OWNER, { reference: 'call_2', offset: 0 });
     expect(read.content).toContain(`of ${full.length}.`);
   });
 
   it('keeps nothing without a store or a user', async () => {
     await expect(
-      keepTrimmedToolResult({ userId: undefined, toolCallId: 'call_3', content: 'data' }),
+      keepTrimmedToolResult({
+        userId: undefined,
+        conversationId: CONVERSATION_ID,
+        toolCallId: 'call_3',
+        content: 'data',
+      }),
     ).resolves.toBe(false);
     store.value = null;
     await expect(
-      keepTrimmedToolResult({ userId: USER_ID, toolCallId: 'call_3', content: 'data' }),
+      keepTrimmedToolResult({ ...OWNER, toolCallId: 'call_3', content: 'data' }),
     ).resolves.toBe(false);
   });
 
+  it('keeps nothing without a conversation to scope it to', async () => {
+    await expect(
+      keepTrimmedToolResult({ userId: USER_ID, toolCallId: 'call_6', content: 'data' }),
+    ).resolves.toBe(false);
+    await expect(
+      referenceOversizedToolResult({
+        userId: USER_ID,
+        conversationId: null,
+        toolCallId: 'call_6',
+        toolName: 'connector__export',
+        content: 'x'.repeat(MAX_EXECUTION_OUTPUT_BYTES + 10),
+      }),
+    ).resolves.toBeNull();
+  });
+
+  it('does not return a result stored by another conversation under the same tool call id', async () => {
+    await keepTrimmedToolResult({
+      ...OWNER,
+      toolCallId: 'gemini-tool-1',
+      content: 'from the first conversation',
+    });
+    await keepTrimmedToolResult({
+      userId: USER_ID,
+      conversationId: 'conversation-2',
+      toolCallId: 'gemini-tool-1',
+      content: 'from the second conversation',
+    });
+
+    const first = await readStoredToolResult(OWNER, { reference: 'gemini-tool-1', offset: 0 });
+    const second = await readStoredToolResult(
+      { userId: USER_ID, conversationId: 'conversation-2' },
+      { reference: 'gemini-tool-1', offset: 0 },
+    );
+    const unscoped = await readStoredToolResult(
+      { userId: USER_ID },
+      { reference: 'gemini-tool-1', offset: 0 },
+    );
+    const otherConversation = await readStoredToolResult(
+      { userId: USER_ID, conversationId: 'conversation-3' },
+      { reference: 'gemini-tool-1', offset: 0 },
+    );
+
+    expect(first.content).toContain('from the first conversation');
+    expect(first.content).not.toContain('from the second conversation');
+    expect(second.content).toContain('from the second conversation');
+    expect(unscoped.isError).toBe(true);
+    expect(otherConversation.isError).toBe(true);
+  });
+
   it('reads a kept result back only for the user who produced it', async () => {
-    await keepTrimmedToolResult({ userId: USER_ID, toolCallId: 'call_4', content: 'private' });
-    const read = await readStoredToolResult('user-2', { reference: 'call_4', offset: 0 });
+    await keepTrimmedToolResult({ ...OWNER, toolCallId: 'call_4', content: 'private' });
+    const read = await readStoredToolResult(
+      { ...OWNER, userId: 'user-2' },
+      { reference: 'call_4', offset: 0 },
+    );
     expect(read.isError).toBe(true);
   });
 });
@@ -83,7 +142,7 @@ describe('oversized results handed over as a prefix', () => {
   it('reports the full size and how much was kept', async () => {
     const kept = 'y'.repeat(MAX_EXECUTION_OUTPUT_BYTES + 10);
     const inline = await referenceOversizedToolResult({
-      userId: USER_ID,
+      ...OWNER,
       toolCallId: 'call_5',
       toolName: 'execute_code',
       content: kept,
@@ -106,23 +165,21 @@ describe('trimToolResultHistoryKeepingReferences', () => {
 
   it('replaces older results with a reference that reads the original back', async () => {
     const messages = history();
-    await expect(
-      trimToolResultHistoryKeepingReferences(messages, { userId: USER_ID }, 2_500, 1),
-    ).resolves.toBe(2);
+    await expect(trimToolResultHistoryKeepingReferences(messages, OWNER, 2_500, 1)).resolves.toBe(
+      2,
+    );
     expect(messages[1]!.content).toBe(trimmedToolResultNotice('call_a'));
     expect(messages[3]!.content).toBe('recent');
-    const read = await readStoredToolResult(USER_ID, { reference: 'call_a', offset: 0 });
+    const read = await readStoredToolResult(OWNER, { reference: 'call_a', offset: 0 });
     expect(read.content).toContain('aaaa');
     expect(read.content).toContain('of 3000.');
   });
 
   it('does not trim a reference notice again', async () => {
     const messages = history();
-    await trimToolResultHistoryKeepingReferences(messages, { userId: USER_ID }, 100, 1);
+    await trimToolResultHistoryKeepingReferences(messages, OWNER, 100, 1);
     const once = messages.map((message) => message.content);
-    await expect(
-      trimToolResultHistoryKeepingReferences(messages, { userId: USER_ID }, 100, 1),
-    ).resolves.toBe(0);
+    await expect(trimToolResultHistoryKeepingReferences(messages, OWNER, 100, 1)).resolves.toBe(0);
     expect(messages.map((message) => message.content)).toEqual(once);
   });
 
