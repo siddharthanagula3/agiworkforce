@@ -504,6 +504,11 @@ pub struct ManagedSession {
     /// written before tags carried one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub memory_nonce: Option<String>,
+    /// Fingerprint of the AGI account signed in when the session was created.
+    /// Another account on this machine never lists, reads or resumes it.
+    /// Absent for a session started signed out, which stays machine-local.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
 }
 
 /// Every message shown up to the latest compaction, in its original wording.
@@ -819,6 +824,8 @@ struct ManagedSessionJsonlHeader {
     hosted_message_ids: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     memory_nonce: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    account: Option<String>,
 }
 
 /// A reader that predates `TranscriptMessage` skips it as unreadable and
@@ -868,6 +875,7 @@ impl ManagedSession {
             transcript: None,
             hosted_message_ids: Vec::new(),
             memory_nonce: None,
+            account: None,
         }
     }
 
@@ -967,6 +975,7 @@ impl ManagedSession {
             transcript: None,
             hosted_message_ids: Vec::new(),
             memory_nonce: None,
+            account: None,
         }
     }
 
@@ -1681,6 +1690,7 @@ impl ManagedSession {
                         transcript: record.transcript,
                         hosted_message_ids: record.hosted_message_ids,
                         memory_nonce: record.memory_nonce,
+                        account: record.account,
                     });
                 }
                 ManagedSessionJsonlRecord::Message { message } => {
@@ -1913,6 +1923,7 @@ impl ManagedSession {
             }),
             hosted_message_ids: self.hosted_message_ids.clone(),
             memory_nonce: self.memory_nonce.clone(),
+            account: self.account.clone(),
         }));
         serde_json::to_writer(&mut *writer, &header)
             .context("Failed to serialize managed session header")?;
@@ -1987,6 +1998,19 @@ mod tests {
                 }],
             ),
         ]
+    }
+
+    #[test]
+    fn jsonl_round_trip_keeps_the_account_a_session_was_started_under() {
+        let temp_dir = tempdir().unwrap();
+        let path = temp_dir.path().join("owned-session.jsonl");
+        let mut session = ManagedSession::new("owned-session", Utc::now());
+        session.account = Some("account-fingerprint-a".to_string());
+
+        session.save_to_path(&path).expect("save owned session");
+        let restored = ManagedSession::load_from_path(&path).expect("load owned session");
+
+        assert_eq!(restored.account.as_deref(), Some("account-fingerprint-a"));
     }
 
     #[test]
@@ -2143,6 +2167,7 @@ mod tests {
             transcript: None,
             hosted_message_ids: Vec::new(),
             memory_nonce: None,
+            account: None,
         };
 
         session.save_to_path(&path).unwrap();
@@ -2201,6 +2226,7 @@ mod tests {
             transcript: None,
             hosted_message_ids: Vec::new(),
             memory_nonce: None,
+            account: None,
         };
 
         session.save_to_path(&path).unwrap();

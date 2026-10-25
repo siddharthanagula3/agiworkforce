@@ -35,6 +35,7 @@ export function webviewStrings() {
     starting: t('webview.starting'),
     completed: t('webview.completed'),
     completedWithErrors: t('webview.completedWithErrors'),
+    stopped: t('webview.stopped'),
     collapseDetails: t('webview.collapseDetails'),
     expandDetails: t('webview.expandDetails'),
     lineDelta: t('webview.lineDelta'),

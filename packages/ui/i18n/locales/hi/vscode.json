@@ -125,6 +125,7 @@
   "webview.starting": "शुरू हो रहा है…",
   "webview.completed": "पूर्ण",
   "webview.completedWithErrors": "त्रुटियों के साथ पूर्ण",
+  "webview.stopped": "रोका गया",
   "webview.collapseDetails": "विवरण संक्षिप्त करें",
   "webview.expandDetails": "विवरण विस्तृत करें",
   "webview.lineDelta": "+{added} −{removed} पंक्तियाँ",

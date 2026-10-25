@@ -115,6 +115,9 @@ impl DirLock {
 #[derive(Debug, Clone)]
 pub struct Connection {
     base_dir: PathBuf,
+    /// The account signed in when the store was opened. Sessions another
+    /// account started are neither listed nor opened through this connection.
+    viewer: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
@@ -216,7 +219,21 @@ pub(crate) fn open_db_in(base_dir: impl AsRef<Path>) -> Result<Connection> {
             base_dir.join(SESSION_METADATA_DIR_NAME).display()
         )
     })?;
-    Ok(Connection { base_dir })
+    Ok(Connection {
+        base_dir,
+        viewer: crate::runtime::session_control::signed_in_account(),
+    })
+}
+
+#[cfg(test)]
+pub(crate) fn open_db_as(base_dir: impl AsRef<Path>, viewer: Option<&str>) -> Result<Connection> {
+    let mut conn = open_db_in(base_dir)?;
+    conn.viewer = viewer.map(str::to_string);
+    Ok(conn)
+}
+
+fn visible_to(session: &ManagedSession, viewer: Option<&str>) -> bool {
+    crate::runtime::session_control::session_visible_to_account(session.account.as_deref(), viewer)
 }
 
 /// Open the managed session store rooted in the CLI config directory.
@@ -385,10 +402,29 @@ fn load_managed_session_from_path(path: &Path) -> Result<ManagedSession> {
     ManagedSession::load_from_path(path)
 }
 
-fn resolve_reference_path(base_dir: &Path, reference: &str) -> Result<PathBuf> {
+fn resolve_reference_path(
+    base_dir: &Path,
+    viewer: Option<&str>,
+    reference: &str,
+) -> Result<PathBuf> {
+    let path = resolve_any_reference_path(base_dir, viewer, reference)?;
+    let session = load_managed_session_from_path(&path)?;
+    crate::runtime::session_control::ensure_session_visible(
+        &session.session_id,
+        session.account.as_deref(),
+        viewer,
+    )?;
+    Ok(path)
+}
+
+fn resolve_any_reference_path(
+    base_dir: &Path,
+    viewer: Option<&str>,
+    reference: &str,
+) -> Result<PathBuf> {
     let parsed = ManagedSessionReference::parse(reference)?;
     match parsed {
-        ManagedSessionReference::Latest => list_sessions_in(base_dir, usize::MAX)?
+        ManagedSessionReference::Latest => list_sessions_in(base_dir, usize::MAX, viewer)?
             .into_iter()
             .next()
             .map(|summary| {
@@ -529,11 +565,15 @@ fn summary_from_session(
 }
 
 /// Sessions a listing offers, newest first. Archived ones are left to search.
-fn list_sessions_in(base_dir: &Path, limit: usize) -> Result<Vec<SessionSummary>> {
+fn list_sessions_in(
+    base_dir: &Path,
+    limit: usize,
+    viewer: Option<&str>,
+) -> Result<Vec<SessionSummary>> {
     let sessions = load_all_sessions(base_dir)?;
     Ok(sessions
         .into_iter()
-        .filter(|(_, session, _)| session.archived_at.is_none())
+        .filter(|(_, session, _)| session.archived_at.is_none() && visible_to(session, viewer))
         .take(limit)
         .map(|(path, session, metadata)| summary_from_session(&path, &session, metadata.as_ref()))
         .collect())
@@ -765,12 +805,12 @@ pub fn adopt_hosted_conversation(
 
 /// List sessions ordered by most-recently-updated, up to `limit` rows.
 pub fn list_sessions(conn: &Connection, limit: usize) -> Result<Vec<SessionSummary>> {
-    list_sessions_in(&conn.base_dir, limit)
+    list_sessions_in(&conn.base_dir, limit, conn.viewer.as_deref())
 }
 
 /// Load all messages for a managed session in chronological order.
 pub fn load_session(conn: &Connection, session_id: &str) -> Result<Vec<Message>> {
-    let path = resolve_reference_path(&conn.base_dir, session_id)?;
+    let path = resolve_reference_path(&conn.base_dir, conn.viewer.as_deref(), session_id)?;
     let session = load_managed_session_from_path(&path)?;
     Ok(session.messages)
 }
@@ -787,7 +827,7 @@ pub fn load_session(conn: &Connection, session_id: &str) -> Result<Vec<Message>>
 /// disagreeing. The load above remembers the file's fingerprint, so the save
 /// below is the same process writing what it just read.
 pub fn rename_session(conn: &Connection, session_id: &str, new_title: &str) -> Result<()> {
-    let path = resolve_reference_path(&conn.base_dir, session_id)?;
+    let path = resolve_reference_path(&conn.base_dir, conn.viewer.as_deref(), session_id)?;
     let mut session = load_managed_session_from_path(&path)?;
     session.title = Some(new_title.to_string());
     session.save_to_path(&path)?;
@@ -826,6 +866,7 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
     let sessions = load_all_sessions(&conn.base_dir)?;
     Ok(sessions
         .into_iter()
+        .filter(|(_, session, _)| visible_to(session, conn.viewer.as_deref()))
         .filter_map(|(path, session, metadata)| {
             let summary = summary_from_session(&path, &session, metadata.as_ref());
             let title_matches = normalize_for_search(&summary.title).contains(&needle);
@@ -847,7 +888,7 @@ pub fn search_sessions(conn: &Connection, query: &str) -> Result<Vec<SessionSumm
 /// Fork an existing managed session into a new managed session id.
 #[allow(dead_code)]
 pub fn fork_session(conn: &Connection, source_id: &str) -> Result<String> {
-    let source_path = resolve_reference_path(&conn.base_dir, source_id)?;
+    let source_path = resolve_reference_path(&conn.base_dir, conn.viewer.as_deref(), source_id)?;
     let source_session = load_managed_session_from_path(&source_path)?;
     let new_id = Uuid::new_v4().to_string();
     let forked = ManagedSession::forked_from(&source_session, new_id.clone(), Utc::now(), None);
@@ -1178,7 +1219,8 @@ mod tests {
 
         rename_session(&conn, "s-rename", "Chosen by a person").unwrap();
 
-        let path = resolve_reference_path(&conn.base_dir, "s-rename").unwrap();
+        let path =
+            resolve_reference_path(&conn.base_dir, conn.viewer.as_deref(), "s-rename").unwrap();
         let reloaded = load_managed_session_from_path(&path).unwrap();
         assert_eq!(reloaded.title.as_deref(), Some("Chosen by a person"));
 
@@ -1220,7 +1262,8 @@ mod tests {
         let (tempdir, conn) = temp_connection();
         save_session(&conn, "s-named", "Hello there", "claude", "/tmp", "main").unwrap();
 
-        let path = resolve_reference_path(&conn.base_dir, "s-named").unwrap();
+        let path =
+            resolve_reference_path(&conn.base_dir, conn.viewer.as_deref(), "s-named").unwrap();
         let mut session = load_managed_session_from_path(&path).unwrap();
         session.title = Some("Named by the protocol".to_string());
         let summary = summary_from_session(&path, &session, None);
@@ -1236,7 +1279,8 @@ mod tests {
         let (tempdir, conn) = temp_connection();
         save_session(&conn, "s-both", "Hello there", "claude", "/tmp", "main").unwrap();
 
-        let path = resolve_reference_path(&conn.base_dir, "s-both").unwrap();
+        let path =
+            resolve_reference_path(&conn.base_dir, conn.viewer.as_deref(), "s-both").unwrap();
         let mut session = load_managed_session_from_path(&path).unwrap();
         session.title = Some("From the header".to_string());
         let metadata = SessionMetadata {
@@ -1311,6 +1355,45 @@ mod tests {
     }
 
     #[test]
+    fn the_terminal_never_lists_or_opens_another_accounts_session() {
+        let (_tempdir, setup) = temp_connection();
+        for (id, owner) in [
+            ("mine", Some("account-a")),
+            ("machine", None),
+            ("theirs", Some("account-b")),
+        ] {
+            save_session(&setup, id, id, "", "/", "").unwrap();
+            save_message(&setup, id, &Message::text("user", "shared words"), 3).unwrap();
+            let path = find_session_path(&setup.base_dir, id).expect("saved session");
+            let mut session = load_managed_session_from_path(&path).unwrap();
+            session.account = owner.map(str::to_string);
+            session.save_to_path(&path).unwrap();
+        }
+        let conn = open_db_as(&setup.base_dir, Some("account-a")).unwrap();
+
+        let mut listed: Vec<String> = list_sessions(&conn, 10)
+            .unwrap()
+            .into_iter()
+            .map(|summary| summary.id)
+            .collect();
+        listed.sort();
+        assert_eq!(listed, vec!["machine".to_string(), "mine".to_string()]);
+        let found: Vec<String> = search_sessions(&conn, "shared words")
+            .unwrap()
+            .into_iter()
+            .map(|summary| summary.id)
+            .collect();
+        assert!(!found.contains(&"theirs".to_string()));
+        let refused = load_session(&conn, "theirs").expect_err("another account's session");
+        assert!(refused.to_string().contains("belongs to another account"));
+        assert!(load_session(&conn, "mine").is_ok());
+        assert!(load_session(&conn, "machine").is_ok());
+        let latest = resolve_reference_path(&conn.base_dir, conn.viewer.as_deref(), "latest")
+            .expect("latest");
+        assert!(!latest.to_string_lossy().contains("theirs"));
+    }
+
+    #[test]
     fn an_archived_session_leaves_every_listing_and_stays_findable_by_search() {
         use crate::runtime::session_control::ManagedSessionStore;
 
@@ -1348,7 +1431,8 @@ mod tests {
             2,
             "archiving deleted a session"
         );
-        let latest = resolve_reference_path(&conn.base_dir, "latest").expect("latest");
+        let latest = resolve_reference_path(&conn.base_dir, conn.viewer.as_deref(), "latest")
+            .expect("latest");
         assert!(
             latest.to_string_lossy().contains("kept"),
             "latest resolved to an archived session: {}",

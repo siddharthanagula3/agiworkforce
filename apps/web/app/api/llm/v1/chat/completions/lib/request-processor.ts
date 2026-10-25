@@ -800,7 +800,13 @@ export type ImplicitManagedToolIntentContext = {
   prompt: string;
   taskType: RoutingTaskType;
   planTier: string | null | undefined;
+  surface?: CloudChatSurface;
 };
+
+// These clients run their own file and shell tools on the developer's machine.
+// A cloud sandbox offered on top of them repeats tool names such as read_file,
+// which the provider rejects, and moves a local task to Managed Cloud.
+const IMPLICIT_SANDBOX_EXCLUDED_SURFACES = new Set<CloudChatSurface>(['vscode', 'cli']);
 
 export type TurnWebDomainPolicy =
   | { ok: true; policy: ResearchDomainPolicy | null }
@@ -880,7 +886,11 @@ export function applyImplicitManagedToolIntent(
       (RE_DATA_EXECUTION_ACTION.test(context.prompt) &&
         RE_DATA_EXECUTION_SUBJECT.test(context.prompt)));
 
-  if (request.code_execution === undefined && hasExplicitCodeExecutionIntent) {
+  if (
+    request.code_execution === undefined &&
+    hasExplicitCodeExecutionIntent &&
+    (context.surface === undefined || !IMPLICIT_SANDBOX_EXCLUDED_SURFACES.has(context.surface))
+  ) {
     request.code_execution = true;
   }
 }
@@ -4248,6 +4258,7 @@ async function processAdmittedRequest(
     prompt: lastUserText,
     taskType: resolvedTaskType,
     planTier: subscription.plan_tier,
+    surface: chatSurface,
   });
   const turnToolProhibition = mergeTurnToolProhibitions(
     resolveTurnToolProhibition(lastUserText, {

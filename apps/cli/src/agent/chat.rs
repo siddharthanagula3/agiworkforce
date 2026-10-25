@@ -1264,8 +1264,10 @@ team, not from the user:\n",
 of steps before any mutating action (run_command, edit_file, write_file, apply_patch, MCP tools, \
 task subagents). The user reviews and approves the plan; only then can you execute mutating \
 tools. If your plan is rejected, the rejection feedback will be prefixed to the next user \
-message -- revise and call `update_plan` again.\n\n",
+message -- revise and call `update_plan` again. ",
             );
+            prefix.push_str(&plan_approval_guidance(self.plan_approval_control));
+            prefix.push_str("\n\n");
         }
         let effective_input = if prefix.is_empty() {
             user_input.to_string()
@@ -3603,10 +3605,30 @@ async fn settle_document(
     notice
 }
 
+/// How the user approves a plan where they are, so a reply that mentions it
+/// names what is actually in front of them: a button in an editor or app, the
+/// slash command in the terminal.
+pub(crate) fn plan_approval_guidance(control: Option<&str>) -> String {
+    match control {
+        Some(control) => format!(
+            "The user approves the plan with the {control} button shown with it. When you mention approving, name that button; never tell them to type a command."
+        ),
+        None => "The user approves the plan by typing `/plan accept`.".to_string(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::HashMap;
+
+    #[test]
+    fn plan_guidance_names_the_button_in_an_editor_and_the_command_in_a_terminal() {
+        let editor = plan_approval_guidance(Some("Approve plan"));
+        assert!(editor.contains("Approve plan button"));
+        assert!(!editor.contains("/plan accept"));
+        assert!(plan_approval_guidance(None).contains("`/plan accept`"));
+    }
 
     #[test]
     fn a_compaction_that_summarizes_twice_is_charged_for_both_calls() {

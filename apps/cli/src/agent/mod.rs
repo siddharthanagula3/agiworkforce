@@ -316,6 +316,9 @@ pub struct AgentSession {
     /// front of every turn.
     pub(crate) browser_available: Option<bool>,
     pub quiet: bool,
+    /// The control a host shows for approving a plan, named in plan-mode
+    /// guidance. `None` is the terminal, where the user types `/plan accept`.
+    pub plan_approval_control: Option<&'static str>,
     #[allow(dead_code)]
     pub fast_mode: bool,
     #[allow(dead_code)]
@@ -810,6 +813,7 @@ impl AgentSession {
             on_continuation_chunk: None::<ContinuationSink>,
             browser_available: None,
             quiet: false,
+            plan_approval_control: None,
             fast_mode: false,
             original_model: None,
             checkpoint_log: checkpoints::CheckpointLog::in_memory(),

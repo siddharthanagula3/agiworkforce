@@ -231,4 +231,27 @@ describe('sidebar action status', () => {
     expect(activityMeta(group)).toBe('1 action · 1 error');
     expect(group.classList.contains('activity-group--collapsed')).toBe(true);
   });
+
+  it('names a turn the user stopped as stopped, not completed', () => {
+    boot();
+    post({
+      type: 'toolCallStart',
+      payload: {
+        toolUseId: 'stopped-tool',
+        name: 'read_file',
+        category: 'filesystem',
+        summary: 'Read source',
+        input: { path: 'src/index.ts' },
+      },
+    });
+    post({
+      type: 'toolCallEnd',
+      payload: { toolUseId: 'stopped-tool', output: 'ok', isError: false, elapsedMs: 20 },
+    });
+    post({ type: 'done', payload: { stopped: true } });
+
+    const stack = activity();
+    expect(activityMeta(stack)).toBe('1 action · Stopped');
+    expect(stack.dataset.status).toBe('stopped');
+  });
 });

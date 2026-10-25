@@ -60,6 +60,8 @@ pub struct ManagedSessionSummary {
     pub routing_authority: Option<ManagedSessionRoutingAuthority>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub auto_routing: Option<ManagedSessionAutoRouting>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
 }
 
 /// Resolved session reference that includes both the original reference and the located session.
@@ -220,6 +222,7 @@ impl ManagedSessionSummary {
                 .filter(|authority| authority.validated_provider().is_ok())
                 .cloned(),
             auto_routing: session.auto_routing.clone(),
+            account: session.account.clone(),
         }
     }
 }
@@ -573,14 +576,70 @@ pub fn managed_session_exists(session_id: impl AsRef<str>) -> Result<bool> {
     Ok(find_session_path_in(&base_dir, session_id).is_some())
 }
 
-/// The managed sessions a listing offers, archived ones left out.
-pub fn list_active_managed_sessions() -> Result<Vec<ManagedSessionSummary>> {
-    ManagedSessionStore::user_config()?.list_active()
+/// A session started signed out belongs to the machine; one started under an
+/// account is shown and opened only while that same account is signed in.
+pub fn session_visible_to_account(owner: Option<&str>, signed_in: Option<&str>) -> bool {
+    owner.is_none_or(|owner| Some(owner) == signed_in)
 }
 
-/// Return the newest managed session, if one exists.
+/// The account this machine is signed in to, as sessions record it.
+pub fn signed_in_account() -> Option<String> {
+    crate::app_server::account::account_fingerprint()
+}
+
+pub(crate) fn ensure_session_visible(
+    session_id: &str,
+    owner: Option<&str>,
+    signed_in: Option<&str>,
+) -> Result<()> {
+    if !session_visible_to_account(owner, signed_in) {
+        bail!("Managed session '{session_id}' belongs to another account");
+    }
+    Ok(())
+}
+
+fn latest_visible_managed_session_in(
+    base_dir: &Path,
+    signed_in: Option<&str>,
+) -> Result<Option<ResolvedManagedSessionReference>> {
+    Ok(list_managed_sessions_in(base_dir)?
+        .into_iter()
+        .find(|summary| session_visible_to_account(summary.account.as_deref(), signed_in))
+        .map(reference_from_summary))
+}
+
+pub(crate) fn resolve_visible_managed_session_in(
+    base_dir: &Path,
+    reference: ManagedSessionReference,
+    signed_in: Option<&str>,
+) -> Result<ResolvedManagedSessionReference> {
+    if matches!(reference, ManagedSessionReference::Latest) {
+        return latest_visible_managed_session_in(base_dir, signed_in)?
+            .ok_or_else(|| anyhow::anyhow!("No managed sessions are available"));
+    }
+    let resolved = resolve_managed_session_reference_in(base_dir, reference)?;
+    ensure_session_visible(
+        &resolved.summary.session_id,
+        resolved.summary.account.as_deref(),
+        signed_in,
+    )?;
+    Ok(resolved)
+}
+
+/// The managed sessions a listing offers, archived ones and another
+/// account's left out.
+pub fn list_active_managed_sessions() -> Result<Vec<ManagedSessionSummary>> {
+    let signed_in = signed_in_account();
+    let mut sessions = ManagedSessionStore::user_config()?.list_active()?;
+    sessions.retain(|summary| {
+        session_visible_to_account(summary.account.as_deref(), signed_in.as_deref())
+    });
+    Ok(sessions)
+}
+
+/// Return the newest managed session the signed-in account may open.
 pub fn latest_managed_session() -> Result<Option<ResolvedManagedSessionReference>> {
-    latest_managed_session_in(&CliConfig::config_dir()?)
+    latest_visible_managed_session_in(&CliConfig::config_dir()?, signed_in_account().as_deref())
 }
 
 /// Resolve a session reference string into a specific session file.
@@ -588,13 +647,22 @@ pub fn resolve_managed_session_reference(
     reference: impl AsRef<str>,
 ) -> Result<ResolvedManagedSessionReference> {
     let reference = ManagedSessionReference::parse(reference)?;
-    ManagedSessionStore::user_config()?.resolve(reference)
+    resolve_visible_managed_session_in(
+        &CliConfig::config_dir()?,
+        reference,
+        signed_in_account().as_deref(),
+    )
 }
 
 /// Load a managed session from a session id, path, or the `latest` alias.
 pub fn load_managed_session(reference: impl AsRef<str>) -> Result<ManagedSession> {
     let reference = ManagedSessionReference::parse(reference)?;
-    ManagedSessionStore::user_config()?.load(reference)
+    let resolved = resolve_visible_managed_session_in(
+        &CliConfig::config_dir()?,
+        reference,
+        signed_in_account().as_deref(),
+    )?;
+    load_session_from_path(&resolved.path)
 }
 
 /// Fork a managed session and persist the copy as a new managed session.
@@ -647,6 +715,47 @@ mod tests {
             vec![message("hi")],
         );
         save_session_in(base, &session).unwrap();
+    }
+
+    #[test]
+    fn resume_never_opens_another_accounts_session_and_latest_skips_it() {
+        use super::{resolve_visible_managed_session_in, ManagedSessionStore};
+
+        let temp_dir = tempfile::tempdir().unwrap();
+        let store = ManagedSessionStore::new(temp_dir.path().to_path_buf());
+        let mut ids = Vec::new();
+        for owner in [Some("account-a"), None, Some("account-b")] {
+            let created = store.create(Vec::new()).unwrap();
+            let mut session = ManagedSession::load_from_path(&created.path).unwrap();
+            session.account = owner.map(str::to_string);
+            session.save_to_path(&created.path).unwrap();
+            ids.push(created.summary.session_id);
+            std::thread::sleep(std::time::Duration::from_millis(5));
+        }
+        let base = temp_dir.path();
+
+        let refused = resolve_visible_managed_session_in(
+            base,
+            ManagedSessionReference::SessionId(ids[2].clone()),
+            Some("account-a"),
+        )
+        .expect_err("another account's session");
+        assert!(refused.to_string().contains("belongs to another account"));
+        for visible in &ids[..2] {
+            resolve_visible_managed_session_in(
+                base,
+                ManagedSessionReference::SessionId(visible.clone()),
+                Some("account-a"),
+            )
+            .expect("own and machine sessions open");
+        }
+        let latest = resolve_visible_managed_session_in(
+            base,
+            ManagedSessionReference::Latest,
+            Some("account-a"),
+        )
+        .unwrap();
+        assert_ne!(latest.summary.session_id, ids[2]);
     }
 
     #[test]
@@ -758,6 +867,7 @@ mod tests {
             transcript: None,
             hosted_message_ids: Vec::new(),
             memory_nonce: None,
+            account: None,
         };
         let first_path = super::save_session_in(base, &first).unwrap();
         assert!(first_path.starts_with(&store_dir));
@@ -796,6 +906,7 @@ mod tests {
             transcript: None,
             hosted_message_ids: Vec::new(),
             memory_nonce: None,
+            account: None,
         };
         let second_path = super::save_session_in(base, &second).unwrap();
         assert!(second_path.starts_with(&store_dir));

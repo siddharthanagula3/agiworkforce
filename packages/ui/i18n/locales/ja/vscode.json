@@ -121,6 +121,7 @@
   "webview.starting": "開始しています…",
   "webview.completed": "完了",
   "webview.completedWithErrors": "完了 (エラーあり)",
+  "webview.stopped": "停止しました",
   "webview.collapseDetails": "詳細を折りたたむ",
   "webview.expandDetails": "詳細を展開",
   "webview.lineDelta": "+{added} −{removed} 行",

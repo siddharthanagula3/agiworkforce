@@ -857,6 +857,7 @@ export class ChatStateManager {
   private _cancelRequested = false;
   private _agentActivity?: AgentActivityState;
   private _conversationEpoch = 0;
+  private _shownAccountKey: string | undefined;
 
   conversationEpoch(): number {
     return this._conversationEpoch;
@@ -1059,6 +1060,7 @@ export class ChatStateManager {
   async handleMessage(msg: WebviewToExtMessage): Promise<void> {
     switch (msg.type) {
       case 'ready': {
+        this._post({ type: 'sessionBinding', payload: { epoch: this._conversationEpoch } });
         if (this._context.globalState.get<boolean>(ONBOARDING_SEEN_KEY) === true) {
           this._post({ type: 'hideOnboarding' });
         }
@@ -1339,7 +1341,9 @@ export class ChatStateManager {
 
       case 'regenerate': {
         trackProductEvent('response_regenerated', this._thread?.trustMode);
-        await vscode.commands.executeCommand(RETRY_LAST_MESSAGE_COMMAND);
+        if (!(await this._regenerateLastAnswer())) {
+          await vscode.commands.executeCommand(RETRY_LAST_MESSAGE_COMMAND);
+        }
         break;
       }
 
@@ -1834,11 +1838,26 @@ export class ChatStateManager {
     }
   }
 
+  /**
+   * A different account must not see the one before it: its open transcript,
+   * its session spend, or its sessions. Signing out counts as a change too.
+   */
+  private async _noteShownAccount(key: string): Promise<void> {
+    const previous = this._shownAccountKey;
+    this._shownAccountKey = key;
+    if (previous === undefined || previous === key) return;
+    await this.handleMessage({ type: 'newChat' });
+    getTokenCounter().reset();
+    this._conversationTreeProvider?.refresh();
+    await this.pushRecentConversations();
+  }
+
   public async pushAccountStatus(shouldPost: () => boolean = () => true): Promise<void> {
     const state = await getAccountAuthState(this._secrets);
     if (state.status !== 'signed-in') {
       const cli = await resolveAccountPresence(this._secrets, this._cliCapabilities);
       if (cli.source === 'cli' && cli.cli !== undefined) {
+        await this._noteShownAccount(accountKey(cli.cli.email));
         await recordAccountIdentityTier(this._context, cli.cli.tier, null);
         if (shouldPost()) {
           this._postWebSearchGate();
@@ -1858,6 +1877,7 @@ export class ChatStateManager {
         }
         return;
       }
+      if (state.status === 'signed-out') await this._noteShownAccount(SIGNED_OUT_ACCOUNT_KEY);
       if (shouldPost()) {
         this._postWebSearchGate();
         this._post({ type: 'accountStatus', payload: { status: state.status } });
@@ -1876,6 +1896,7 @@ export class ChatStateManager {
       return;
     }
     if (identity) {
+      await this._noteShownAccount(accountKey(identity.email));
       await recordAccountIdentityTier(
         this._context,
         identity.tier,
@@ -2795,6 +2816,7 @@ export class ChatStateManager {
 
   private async _reportBilledTurn(requestIds: readonly string[]): Promise<void> {
     const settled = await getTokenCounter().settleBillingRequests(this._secrets, requestIds);
+    await this.pushUsageMeter();
     const billed = settled.filter((credits): credits is number => credits !== null);
     if (billed.length === 0) return;
     const total = billed.reduce((sum, credits) => sum + credits, 0);
@@ -4454,6 +4476,40 @@ export class ChatStateManager {
     }
   }
 
+  /**
+   * Regenerate answers the last question again instead of asking it a second
+   * time. The session is branched just before that question and the question
+   * is sent on the branch, so the new answer takes the old one's place while
+   * the old answer stays in the original session, as a sibling does on Web.
+   */
+  private async _regenerateLastAnswer(): Promise<boolean> {
+    const thread = this._thread;
+    if (thread === undefined || this.turnInFlight()) return false;
+    if (!(await thread.runtime.offers('forkAtMessage'))) return false;
+    const read = await thread.runtime.readThread(thread.id);
+    const question = normalizeTranscriptMessages(read.messages)
+      .filter((message) => message.role === 'user' && message.index !== undefined)
+      .at(-1);
+    if (question?.index === undefined) return false;
+    const text =
+      typedTextFor(this._context.workspaceState, thread.id, question.index, question.text) ??
+      question.text;
+    if (question.index === 0) {
+      this.resetConversation();
+      this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
+      return true;
+    }
+    const forked = await thread.runtime.forkThread(
+      thread.id,
+      t('messageActions.branchTitle', { title: read.thread.title }),
+      question.index - 1,
+    );
+    this._conversationTreeProvider?.refresh();
+    if (!(await this.resumeConversation(forked.id))) return false;
+    this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
+    return true;
+  }
+
   private async _resendMessage(
     thread: DeveloperThreadState,
     messageIndex: number,
@@ -4925,6 +4981,7 @@ export class ChatStateManager {
       this._servedModelByTurn.delete(event.turnId);
       this._forgetTurnToolState(event.turnId);
       this._post({ type: 'done', payload: { stopped: true } });
+      void this.pushUsageMeter();
       complete();
       return;
     }
@@ -4942,13 +4999,14 @@ export class ChatStateManager {
         retryable: true,
       });
     }
+    void this.pushUsageMeter();
     complete();
   }
 
   private _cancelBeforeTurnStart(): boolean {
     if (!this._cancelRequested) return false;
     this._cancelRequested = false;
-    this._post({ type: 'done' });
+    this._post({ type: 'done', payload: { stopped: true } });
     return true;
   }
 
@@ -4962,7 +5020,7 @@ export class ChatStateManager {
     delete this._activeTurn;
     try {
       await active.runtime.interruptTurn({ threadId: active.threadId, turnId: active.turnId });
-      if (!active.isUiSettled()) this._post({ type: 'done' });
+      if (!active.isUiSettled()) this._post({ type: 'done', payload: { stopped: true } });
     } catch (error) {
       this._postError(
         error instanceof Error ? error.message : t('chatNotice.cancellationFailed'),
@@ -4972,6 +5030,12 @@ export class ChatStateManager {
       active.complete();
     }
   }
+}
+
+const SIGNED_OUT_ACCOUNT_KEY = 'signed-out';
+
+function accountKey(email: string | null | undefined): string {
+  return email?.trim().toLowerCase() || 'signed-in';
 }
 
 function catalogContextWindow(model: string): number | undefined {

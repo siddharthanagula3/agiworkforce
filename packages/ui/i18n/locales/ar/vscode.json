@@ -141,6 +141,7 @@
   "webview.starting": "جارٍ البدء…",
   "webview.completed": "مكتمل",
   "webview.completedWithErrors": "اكتمل مع وجود أخطاء",
+  "webview.stopped": "تم الإيقاف",
   "webview.collapseDetails": "طي التفاصيل",
   "webview.expandDetails": "توسيع التفاصيل",
   "webview.lineDelta": "الأسطر: +{added} −{removed}",

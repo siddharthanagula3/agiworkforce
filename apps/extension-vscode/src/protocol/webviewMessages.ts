@@ -389,6 +389,10 @@ export function parseBoundWebviewMessage(
   const binding = SessionBindingSchema.safeParse(raw);
   if (!binding.success) return undefined;
   if (binding.data.origin !== current.origin) return undefined;
-  if (binding.data.epoch !== current.epoch) return undefined;
-  return parseWebviewMessage(raw);
+  const message = parseWebviewMessage(raw);
+  // A reloaded page boots with the epoch baked into its HTML. Its `ready` can
+  // never be stale, and the host answers it with the live binding; dropping it
+  // leaves the panel with nothing that reaches the host again.
+  if (binding.data.epoch !== current.epoch && message?.type !== 'ready') return undefined;
+  return message;
 }

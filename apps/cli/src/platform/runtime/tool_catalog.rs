@@ -718,12 +718,12 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
             }),
         ).with_size_cap(20_000).deferred(),
         // Sprint B4: real plan mode -- model writes plan via this tool, user
-        // approves via /plan accept, then mutating tools unlock. Deferred
+        // approves it, then mutating tools unlock. Deferred
         // because it is plan-mode-only; normal sessions don't need it in the
         // initial schema list.
         def(
             "update_plan",
-            "Write or revise the execution plan. REQUIRED in plan mode before any mutating tool call (bash, edit_file, write_file, apply_patch, MCP tools). Each step is one discrete action. After calling, await user approval -- do NOT call mutating tools yet. The user reviews the plan and types `/plan accept`.",
+            "Write or revise the execution plan. REQUIRED in plan mode before any mutating tool call (bash, edit_file, write_file, apply_patch, MCP tools). Each step is one discrete action. After calling, await user approval -- do NOT call mutating tools yet. The user reviews the plan and approves or revises it.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
@@ -1906,6 +1906,15 @@ mod tests {
         assert!(policy_alias_matches_tool("Grep", "grep_files"));
         assert!(policy_alias_matches_tool("Grep", "search_files"));
         assert!(!policy_alias_matches_tool("Write", "read_file"));
+    }
+
+    #[test]
+    fn the_plan_tool_leaves_naming_the_approve_control_to_the_host() {
+        let plan = all_declared_tool_definitions()
+            .into_iter()
+            .find(|tool| tool.name == "update_plan")
+            .expect("update_plan is declared");
+        assert!(!plan.description.contains("/plan accept"));
     }
 
     #[test]

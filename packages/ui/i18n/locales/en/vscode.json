@@ -125,6 +125,7 @@
   "webview.starting": "Starting…",
   "webview.completed": "Completed",
   "webview.completedWithErrors": "Completed with errors",
+  "webview.stopped": "Stopped",
   "webview.collapseDetails": "Collapse details",
   "webview.expandDetails": "Expand details",
   "webview.lineDelta": "+{added} −{removed} lines",

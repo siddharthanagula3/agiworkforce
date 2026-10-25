@@ -129,6 +129,7 @@
   "webview.starting": "Avvio in corso…",
   "webview.completed": "Completato",
   "webview.completedWithErrors": "Completato con errori",
+  "webview.stopped": "Interrotto",
   "webview.collapseDetails": "Comprimi dettagli",
   "webview.expandDetails": "Espandi dettagli",
   "webview.lineDelta": "+{added} −{removed} righe",

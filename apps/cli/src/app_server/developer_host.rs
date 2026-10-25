@@ -271,6 +271,8 @@ struct RunningTurn {
 struct PartialOutput {
     text: String,
     next_delta_index: u64,
+    /// A tool ran since the last text, so the next text starts a new step.
+    step_ended: bool,
 }
 
 struct ClientTurn {
@@ -1188,6 +1190,7 @@ impl CliDeveloperSessionHost {
             .load_managed_conversation(managed_session, path)
             .map_err(invalid_request)?;
         agent.quiet = true;
+        agent.plan_approval_control = Some(PLAN_APPROVAL_CONTROL);
 
         Ok(Arc::new(Mutex::new(agent)))
     }
@@ -1339,6 +1342,14 @@ impl CliDeveloperSessionHost {
         if workspace_root != self.workspace_root {
             return Err(DeveloperSessionHostError::not_found(
                 "Thread does not belong to this workspace",
+            ));
+        }
+        if !crate::runtime::session_control::session_visible_to_account(
+            session.account.as_deref(),
+            account::account_fingerprint().as_deref(),
+        ) {
+            return Err(DeveloperSessionHostError::not_found(
+                "Thread belongs to another account",
             ));
         }
         Ok(())
@@ -2297,6 +2308,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         agent.apply_ui_config(&self.config);
         agent.bypass_permissions_available = self.bypass_permissions_available;
         agent.quiet = true;
+        agent.plan_approval_control = Some(PLAN_APPROVAL_CONTROL);
 
         let id = Uuid::new_v4().to_string();
         let mut managed =
@@ -2311,6 +2323,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
         managed.architecture = crate::runtime::architecture::discover(&self.workspace_root);
         managed.created_by = Some(source_to_stored(source).to_string());
         managed.client = Some(client.name.clone());
+        managed.account = account::account_fingerprint();
         let git = workspace_git_state(&self.workspace_root);
         managed.git_branch = git.branch;
         managed.worktree_root = git.worktree_root;
@@ -2361,10 +2374,16 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
             .await
             .map_err(internal_error)?
             .map_err(internal_error)?;
+        let signed_in_account = account::account_fingerprint();
         summaries.retain(|summary| {
             let workspace_matches =
                 summary.workspace_root.as_deref() == Some(self.workspace_root.as_path());
-            (params.include_archived || summary.archived_at.is_none()) && workspace_matches
+            (params.include_archived || summary.archived_at.is_none())
+                && workspace_matches
+                && crate::runtime::session_control::session_visible_to_account(
+                    summary.account.as_deref(),
+                    signed_in_account.as_deref(),
+                )
         });
         let mut waiting = HashSet::new();
         for summary in &summaries {
@@ -3800,6 +3819,7 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 agent.pending_image_blocks = input.images;
                 agent.search_next_turn = input.search;
                 agent.quiet = true;
+                agent.plan_approval_control = Some(PLAN_APPROVAL_CONTROL);
                 let checkpoints = agent.checkpoint_file_authority().cloned();
                 agent.on_tool_approval = Some(ToolApprovalSink(approval_callback(
                     task_thread_id.clone(),
@@ -3820,12 +3840,15 @@ impl DeveloperSessionHost for CliDeveloperSessionHost {
                 });
                 agent.on_tool_event = Some(ToolEventSink(mcp_sign_in_tracking(
                     plan_tracking(
-                        tool_event_callback(
-                            task_thread_id.clone(),
-                            task_turn_id.clone(),
-                            task_event_sequence.clone(),
-                            task_notifications.clone(),
-                            task_activity.clone(),
+                        text_step_tracking(
+                            task_partial.clone(),
+                            tool_event_callback(
+                                task_thread_id.clone(),
+                                task_turn_id.clone(),
+                                task_event_sequence.clone(),
+                                task_notifications.clone(),
+                                task_activity.clone(),
+                            ),
                         ),
                         task_thread_id.clone(),
                         task_workspace_root.clone(),
@@ -6398,7 +6421,12 @@ fn output_delta_callback(
         let mut partial = partial
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        partial.text.push_str(chunk);
+        let delta = if std::mem::take(&mut partial.step_ended) {
+            format!("{}{chunk}", paragraph_break_between(&partial.text, chunk))
+        } else {
+            chunk.to_string()
+        };
+        partial.text.push_str(&delta);
         let index = partial.next_delta_index;
         partial.next_delta_index += 1;
         if let Ok(notification) = AppServerNotification::new(
@@ -6406,12 +6434,44 @@ fn output_delta_callback(
             serde_json::json!({
                 "threadId": thread_id,
                 "turnId": turn_id,
-                "delta": chunk,
+                "delta": delta,
                 "index": index,
             }),
         ) {
             let _ = notifications.send(notification);
         }
+    })
+}
+
+/// Text the model writes after a tool call is a new step of the reply. Joined
+/// straight onto the step before it, "the workspace." and "I've written" run
+/// together as "workspace.I've", so a paragraph break goes between them, the
+/// same break the hosted tool loop puts between its steps.
+fn paragraph_break_between(before: &str, after: &str) -> String {
+    if before.trim().is_empty() || after.is_empty() {
+        return String::new();
+    }
+    let before = before.trim_end_matches([' ', '\t']);
+    let trailing = before.len() - before.trim_end_matches('\n').len();
+    let leading = after.len() - after.trim_start_matches('\n').len();
+    "\n".repeat(2usize.saturating_sub(trailing + leading))
+}
+
+fn text_step_tracking(
+    partial: Arc<StdMutex<PartialOutput>>,
+    inner: Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync>,
+) -> Arc<dyn Fn(crate::tui::app_event::TuiAppEvent) + Send + Sync> {
+    Arc::new(move |event| {
+        if matches!(
+            event,
+            crate::tui::app_event::TuiAppEvent::ToolStarted { .. }
+        ) {
+            partial
+                .lock()
+                .unwrap_or_else(|poisoned| poisoned.into_inner())
+                .step_ended = true;
+        }
+        inner(event);
     })
 }
 
@@ -7188,6 +7248,10 @@ fn device_surface(client: Option<&AppServerClientInfo>) -> &'static str {
     }
 }
 
+/// The plan card's approve button in the editor and app clients, as their
+/// webviews label it (`webview.approvePlan`).
+const PLAN_APPROVAL_CONTROL: &str = "Approve plan";
+
 fn source_to_stored(source: DeveloperSessionSource) -> &'static str {
     match source {
         DeveloperSessionSource::Cli => "cli",
@@ -7255,6 +7319,30 @@ fn internal_error(error: impl std::fmt::Display) -> DeveloperSessionHostError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn another_account_never_sees_a_thread_started_under_a_different_one() {
+        assert!(crate::runtime::session_control::session_visible_to_account(
+            Some("account-a"),
+            Some("account-a")
+        ));
+        assert!(
+            !crate::runtime::session_control::session_visible_to_account(
+                Some("account-a"),
+                Some("account-b")
+            )
+        );
+        assert!(
+            !crate::runtime::session_control::session_visible_to_account(Some("account-a"), None)
+        );
+        assert!(crate::runtime::session_control::session_visible_to_account(
+            None,
+            Some("account-b")
+        ));
+        assert!(crate::runtime::session_control::session_visible_to_account(
+            None, None
+        ));
+    }
 
     #[test]
     fn the_approval_page_names_the_app_that_asked_to_sign_in() {
@@ -8680,6 +8768,51 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn text_after_a_tool_call_starts_a_new_paragraph_instead_of_running_on() {
+        let (notifications, mut receiver) = broadcast::channel(8);
+        let partial = Arc::new(StdMutex::new(PartialOutput::default()));
+        let on_delta = output_delta_callback(
+            "thread-1".to_string(),
+            "turn-1".to_string(),
+            partial.clone(),
+            notifications,
+        );
+        let on_tool = text_step_tracking(partial.clone(), Arc::new(|_| {}));
+
+        on_delta("I'll start by reading the workspace.");
+        on_tool(crate::tui::app_event::TuiAppEvent::ToolStarted {
+            call_id: "call-1".to_string(),
+            name: "read_file".to_string(),
+            summary: String::new(),
+            input: serde_json::json!({}),
+        });
+        on_delta("I've written the plan.");
+        on_delta(" Nothing is changed yet.");
+
+        let first = receiver.recv().await.expect("first step");
+        let second = receiver.recv().await.expect("second step");
+        let same_step = receiver.recv().await.expect("rest of the second step");
+        assert_eq!(
+            first.params["delta"],
+            "I'll start by reading the workspace."
+        );
+        assert_eq!(second.params["delta"], "\n\nI've written the plan.");
+        assert_eq!(same_step.params["delta"], " Nothing is changed yet.");
+        assert_eq!(
+            partial.lock().expect("partial").text,
+            "I'll start by reading the workspace.\n\nI've written the plan. Nothing is changed yet."
+        );
+    }
+
+    #[test]
+    fn a_step_that_already_ends_its_paragraph_gets_no_extra_break() {
+        assert_eq!(paragraph_break_between("Done.\n\n", "Next"), "");
+        assert_eq!(paragraph_break_between("Done.\n", "Next"), "\n");
+        assert_eq!(paragraph_break_between("Done.", "\nNext"), "\n");
+        assert_eq!(paragraph_break_between("  ", "Next"), "");
+    }
+
+    #[tokio::test]
     async fn a_turns_continuation_reaches_the_client_instead_of_the_protocol_stream() {
         let (notifications, mut receiver) = broadcast::channel(8);
         let partial = Arc::new(StdMutex::new(PartialOutput::default()));
@@ -9922,6 +10055,7 @@ mod tests {
         let partial = Arc::new(StdMutex::new(PartialOutput {
             text: "partial assistant response".to_string(),
             next_delta_index: 1,
+            ..PartialOutput::default()
         }));
         host.sessions
             .lock()
@@ -11763,6 +11897,7 @@ mod tests {
                 partial: Arc::new(StdMutex::new(PartialOutput {
                     text: "Half of the answer".to_string(),
                     next_delta_index: 4,
+                    ..PartialOutput::default()
                 })),
                 event_sequence: Arc::new(StdMutex::new(9)),
                 process_owner: crate::process_tree::ProcessTreeOwner::new(),

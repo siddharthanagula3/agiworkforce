@@ -408,6 +408,8 @@ async function getCloudCredential(secrets: vscode.SecretStorage): Promise<CloudC
       return { kind: 'account', token: accountToken };
     }
   }
+  const sharedAccountToken = await adoptSharedAccountCredential(secrets);
+  if (sharedAccountToken !== undefined) return { kind: 'account', token: sharedAccountToken };
   const apiKey = await getApiKey(secrets);
   if (apiKey !== undefined && apiKey !== '') return { kind: 'api-key', token: apiKey };
   return {

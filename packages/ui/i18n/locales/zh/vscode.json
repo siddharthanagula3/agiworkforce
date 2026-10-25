@@ -121,6 +121,7 @@
   "webview.starting": "正在启动…",
   "webview.completed": "已完成",
   "webview.completedWithErrors": "已完成，但有错误",
+  "webview.stopped": "已停止",
   "webview.collapseDetails": "折叠详细信息",
   "webview.expandDetails": "展开详细信息",
   "webview.lineDelta": "+{added} −{removed} 行",

@@ -133,6 +133,7 @@
   "webview.starting": "Запуск…",
   "webview.completed": "Завершено",
   "webview.completedWithErrors": "Завершено с ошибками",
+  "webview.stopped": "Остановлено",
   "webview.collapseDetails": "Свернуть подробности",
   "webview.expandDetails": "Развернуть подробности",
   "webview.lineDelta": "Строки: +{added} −{removed}",

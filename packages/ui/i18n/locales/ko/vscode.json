@@ -121,6 +121,7 @@
   "webview.starting": "시작 중…",
   "webview.completed": "완료됨",
   "webview.completedWithErrors": "완료됨(오류 있음)",
+  "webview.stopped": "중지됨",
   "webview.collapseDetails": "세부 정보 축소",
   "webview.expandDetails": "세부 정보 확장",
   "webview.lineDelta": "+{added} −{removed}줄",

@@ -450,6 +450,20 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.posted).toContainEqual({ type: 'hideOnboarding' });
   });
 
+  it('rebinds a reloaded webview to the conversation that replaced the one it was rendered with', async () => {
+    const harness = makeHarness();
+    await harness.manager.handleMessage({ type: 'newChat' });
+    harness.posted.length = 0;
+
+    await harness.manager.handleMessage({ type: 'ready' });
+
+    expect(harness.posted[0]).toEqual({
+      type: 'sessionBinding',
+      payload: { epoch: harness.manager.conversationEpoch() },
+    });
+    expect(harness.manager.conversationEpoch()).toBeGreaterThan(0);
+  });
+
   it('returns exact active-selection metadata in sidebar file search results', async () => {
     const harness = makeHarness();
     const root = await realContextWorkspace(harness);
@@ -1938,6 +1952,122 @@ describe('ChatStateManager local turn lifecycle', () => {
     }
   });
 
+  it('tells the view a turn the user stopped was stopped, not finished', async () => {
+    const harness = makeHarness();
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Write a long essay' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.posted.length = 0;
+
+    await harness.manager.handleMessage({ type: 'cancel' });
+    await send;
+
+    expect(harness.runtime.interruptTurn).toHaveBeenCalled();
+    expect(harness.posted).toContainEqual({ type: 'done', payload: { stopped: true } });
+    expect(harness.posted).not.toContainEqual({ type: 'done' });
+  });
+
+  it('regenerates the last answer in place of the old one, as the web does', async () => {
+    const forked = threadSummary({ id: 'thread-regenerated' });
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: forked,
+        messages: [
+          { role: 'user', text: 'First question', index: 0 },
+          { role: 'assistant', text: 'First answer', index: 1 },
+        ],
+        transcriptTruncated: false,
+      } as unknown as ThreadReadResponse,
+    });
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Explain calc.js' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'Old answer',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await send;
+    const runtime = harness.runtime as typeof harness.runtime & {
+      forkThread: ReturnType<typeof vi.fn>;
+    };
+    runtime.offers.mockImplementation(async (capability: string) => capability === 'forkAtMessage');
+    runtime.forkThread = vi.fn().mockResolvedValue(forked);
+    harness.runtime.readThread.mockResolvedValueOnce({
+      thread: threadSummary(),
+      messages: [
+        { role: 'user', text: 'First question', index: 0 },
+        { role: 'assistant', text: 'First answer', index: 1 },
+        { role: 'user', text: 'Explain calc.js', index: 2 },
+        { role: 'assistant', text: 'Old answer', index: 3 },
+      ],
+      transcriptTruncated: false,
+    });
+    const executeCommand = vi.mocked(vscode.commands.executeCommand);
+    executeCommand.mockClear();
+    harness.posted.length = 0;
+
+    await harness.manager.handleMessage({ type: 'regenerate' });
+
+    expect(runtime.forkThread).toHaveBeenCalledWith('thread-1', expect.any(String), 1);
+    expect(executeCommand).not.toHaveBeenCalledWith('agi-workforce.retryLastMessage');
+    expect(harness.posted).toContainEqual({
+      type: 'composerDraft',
+      payload: { text: 'Explain calc.js', references: [], submit: true },
+    });
+  });
+
+  it('clears the open conversation and the session meter when another account signs in', async () => {
+    const authState = vi
+      .spyOn(api, 'getAccountAuthState')
+      .mockResolvedValue({ status: 'signed-out' });
+    const presence = vi.spyOn(accountAccess, 'resolveAccountPresence').mockResolvedValue({
+      signedIn: true,
+      source: 'cli',
+      cli: { signedIn: true, email: 'first@example.test', tier: 'max' },
+    });
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary(),
+        messages: [],
+        transcriptTruncated: false,
+      } as unknown as ThreadReadResponse,
+    });
+    const counter = getTokenCounter();
+
+    try {
+      await harness.manager.pushAccountStatus();
+      expect(harness.posted.map((message) => message.type)).not.toContain('conversationCleared');
+      expect(harness.conversationTreeProvider?.refresh).not.toHaveBeenCalled();
+
+      counter.addMeasuredUsage('fixture-model', 1_000, 100);
+      presence.mockResolvedValue({
+        signedIn: true,
+        source: 'cli',
+        cli: { signedIn: true, email: 'second@example.test', tier: 'basic' },
+      });
+      harness.posted.length = 0;
+
+      await harness.manager.pushAccountStatus();
+
+      expect(harness.posted.map((message) => message.type)).toContain('conversationCleared');
+      expect(counter.totalTokens).toBe(0);
+      expect(harness.conversationTreeProvider?.refresh).toHaveBeenCalled();
+    } finally {
+      counter.reset();
+      authState.mockRestore();
+      presence.mockRestore();
+    }
+  });
+
   it('records the tier the CLI reports, so pickers group by the plan after a CLI sign-in', async () => {
     const authState = vi
       .spyOn(api, 'getAccountAuthState')
@@ -3419,7 +3549,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     await vi.waitFor(() => expect(settled).toBe(true));
 
     expect(harness.runtime.interruptTurn).toHaveBeenCalledOnce();
-    expect(harness.posted).toContainEqual({ type: 'done' });
+    expect(harness.posted).toContainEqual({ type: 'done', payload: { stopped: true } });
     await send;
   });
 
@@ -3496,7 +3626,7 @@ describe('ChatStateManager local turn lifecycle', () => {
     await send;
 
     expect(harness.runtime.startTurn).not.toHaveBeenCalled();
-    expect(harness.posted).toContainEqual({ type: 'done' });
+    expect(harness.posted).toContainEqual({ type: 'done', payload: { stopped: true } });
   });
 
   it('drops unseen pending attachments when a chat surface closes', async () => {
@@ -4071,6 +4201,72 @@ describe('ChatStateManager context usage reporting', () => {
       payload: { usedTokens: 43_000, contextWindow: MODEL_CONTEXT_LIMITS[model!.id] },
     });
   });
+
+  it('refreshes the usage meter once a managed turn has been billed', async () => {
+    const harness = makeHarness();
+    const settle = vi.spyOn(getTokenCounter(), 'settleBillingRequests').mockResolvedValue([2]);
+
+    const send = harness.manager.handleMessage({
+      type: 'sendMessage',
+      payload: { text: 'Inspect this project' },
+    });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    harness.posted.length = 0;
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+      managedRequestIds: ['request-1'],
+    });
+    await send;
+
+    await vi.waitFor(() =>
+      expect(harness.posted.map((message) => message.type)).toContain('usageMeter'),
+    );
+    expect(settle).toHaveBeenCalledWith(expect.anything(), ['request-1']);
+    const types = harness.posted.map((message) => message.type);
+    expect(types.indexOf('usageMeter')).toBeGreaterThan(types.indexOf('done'));
+  });
+
+  it.each([
+    {
+      type: 'turn_failed' as const,
+      status: 'failed' as const,
+      error: 'You have reached a usage limit on your account.',
+    },
+    { type: 'turn_interrupted' as const, status: 'interrupted' as const },
+  ])(
+    'refreshes the usage meter after a $type turn, which can still have used credits',
+    async (ending) => {
+      const harness = makeHarness();
+
+      const send = harness.manager.handleMessage({
+        type: 'sendMessage',
+        payload: { text: 'Inspect this project' },
+      });
+      await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      harness.posted.length = 0;
+      harness.emit({
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        response: '',
+        inputTokens: 0,
+        outputTokens: 0,
+        ...ending,
+      } as LocalRuntimeEvent);
+      await send;
+
+      await vi.waitFor(() =>
+        expect(harness.posted.map((message) => message.type)).toContain('usageMeter'),
+      );
+    },
+  );
 
   it('feeds the session token counter the runtime-measured counts, not a char estimate', async () => {
     const harness = makeHarness();

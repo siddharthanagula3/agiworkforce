@@ -30,6 +30,7 @@ import {
   clearAccountToken,
   clearApiKey,
   fetchBilledCredits,
+  fetchTierInfo,
   AgiWorkforceClientUpdateRequiredError,
   forgetSharedCredentialRefusal,
   shareAccountCredentialFrom,
@@ -968,6 +969,51 @@ describe('one sign-in shared with the AGI CLI', () => {
       status: 'signed-in',
       expiresAt: now + 60_000,
     });
+  });
+
+  it('reads plan usage with the borrowed CLI session instead of treating the editor as signed out', async () => {
+    const ctx = new ExtensionContext();
+    const secrets = ctx.secrets as unknown as import('vscode').SecretStorage;
+    const now = 1_750_000_000_000;
+    vi.spyOn(Date, 'now').mockReturnValue(now);
+    shareAccountCredentialFrom(async () => ({ token: 'cli-token', expiresAtMs: now + 60_000 }));
+    const authorizations: string[] = [];
+    vi.mocked(https.request).mockImplementation(((
+      options: https.RequestOptions,
+      callback: (res: EventEmitter & { statusCode?: number }) => void,
+    ) => {
+      authorizations.push(String(options.headers?.['Authorization']));
+      const res = Object.assign(new EventEmitter(), { statusCode: 200 });
+      queueMicrotask(() => {
+        callback(res);
+        res.emit(
+          'data',
+          Buffer.from(
+            JSON.stringify({
+              plan_tier: 'max',
+              usage_percentage: 0,
+              usage_reset_at: '2026-09-01T00:00:00.000Z',
+              has_usage_remaining: true,
+              period_start: '2026-08-01T00:00:00.000Z',
+              period_end: '2026-09-01T00:00:00.000Z',
+              subscription_status: 'active',
+            }),
+            'utf8',
+          ),
+        );
+        res.emit('end');
+      });
+      return Object.assign(new EventEmitter(), {
+        setTimeout: () => undefined,
+        end: () => undefined,
+        destroy: () => undefined,
+      });
+    }) as never);
+
+    const tierInfo = await fetchTierInfo(secrets);
+
+    expect(authorizations).toEqual(['Bearer cli-token']);
+    expect(tierInfo?.tier).toBe('max');
   });
 
   it('keeps the editor session when it already has one', async () => {

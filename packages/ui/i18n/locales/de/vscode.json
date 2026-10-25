@@ -125,6 +125,7 @@
   "webview.starting": "Wird gestartet…",
   "webview.completed": "Abgeschlossen",
   "webview.completedWithErrors": "Mit Fehlern abgeschlossen",
+  "webview.stopped": "Gestoppt",
   "webview.collapseDetails": "Details zuklappen",
   "webview.expandDetails": "Details aufklappen",
   "webview.lineDelta": "+{added} −{removed} Zeilen",

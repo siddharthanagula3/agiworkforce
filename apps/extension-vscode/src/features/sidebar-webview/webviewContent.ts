@@ -1422,8 +1422,9 @@ export function getWebviewContent(
 
     .usage-bucket-row {
       display: flex;
+      flex-wrap: wrap;
       align-items: baseline;
-      gap: 6px;
+      column-gap: 6px;
       min-width: 0;
       padding: 2px 0;
     }
@@ -1461,7 +1462,7 @@ export function getWebviewContent(
     .usage-credit-topup:focus-visible { color: var(--link-active); }
 
     .usage-bucket-label {
-      flex: 1;
+      flex: 1 1 auto;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2139,6 +2140,12 @@ export function getWebviewContent(
     }
     .actions-menu.open { display: flex; }
 
+    .actions-menu-item-badge {
+      margin-left: auto;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+    }
+
     .actions-menu-item {
       display: flex;
       align-items: center;
@@ -2687,10 +2694,18 @@ export function getWebviewContent(
             type="button"
             class="actions-menu-item"
             role="menuitem"
-            data-surface="${item.id}"
+            data-surface="${item.id}"${
+              item.badge === undefined
+                ? ''
+                : ` aria-label="${escapeHtml(`${item.label}, ${item.badge}`)}"`
+            }
           >
             <span class="codicon codicon-${item.icon}" aria-hidden="true"></span>
-            <span>${escapeHtml(item.label)}</span>
+            <span>${escapeHtml(item.label)}</span>${
+              item.badge === undefined
+                ? ''
+                : `<span class="actions-menu-item-badge" aria-hidden="true">${escapeHtml(item.badge)}</span>`
+            }
           </button>`,
             )
             .join('')}
@@ -5550,12 +5565,13 @@ export function getWebviewContent(
       });
     }
     if (sessionsSheet) {
-      sessionsSheet.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          closeSessionsSheet();
-        }
-      });
+      // The sheet covers the panel, so it takes Escape first, from the
+      // composer or anything else that still holds focus behind it.
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape' || sessionsSheet.hidden || !sessionsSheet.isConnected) return;
+        event.preventDefault();
+        closeSessionsSheet();
+      }, true);
     }
 
     // ── Slash commands ────────────────────────────────────────────────────────
@@ -6792,7 +6808,7 @@ export function getWebviewContent(
           }
         }
         turnSources = [];
-        finalizeToolCallStack();
+        finalizeToolCallStack(Boolean(msg.payload && msg.payload.stopped));
         if (msg.payload && msg.payload.providerLabel) {
           updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor || 'var(--border)');
         }
@@ -7775,7 +7791,7 @@ export function getWebviewContent(
       return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
 
-    function updateActivitySummary(latestSummary, terminal) {
+    function updateActivitySummary(latestSummary, terminal, stopped) {
       if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
       var total = toolCallList.querySelectorAll('.tool-call').length;
       var running = toolCallList.querySelectorAll('.tool-call--pending').length;
@@ -7784,11 +7800,13 @@ export function getWebviewContent(
       var parts = [pluralText(L10N.actions, total)];
       if (terminal) {
         parts.push(
-          errors > 0
-            ? pluralText(L10N.errors, errors)
-            : toolCallStackHasError
-              ? L10N.completedWithErrors
-              : L10N.completed
+          stopped
+            ? L10N.stopped
+            : errors > 0
+              ? pluralText(L10N.errors, errors)
+              : toolCallStackHasError
+                ? L10N.completedWithErrors
+                : L10N.completed
         );
       } else {
         if (running > 0) parts.push(pluralText(L10N.runningCount, running));
@@ -7797,10 +7815,18 @@ export function getWebviewContent(
       }
       if (latestSummary) parts.push(latestSummary);
       activityMeta.textContent = parts.join(' · ');
-      var status = terminal ? (errors > 0 || toolCallStackHasError ? 'error' : 'done') : 'working';
+      var status = !terminal
+        ? 'working'
+        : stopped
+          ? 'stopped'
+          : errors > 0 || toolCallStackHasError ? 'error' : 'done';
       toolCallStack.dataset.status = status;
       activityIcon.className = 'activity-group__icon codicon codicon-' +
-        (status === 'error' ? 'error' : status === 'done' ? 'check' : 'loading');
+        (status === 'error'
+          ? 'error'
+          : status === 'done'
+            ? 'check'
+            : status === 'stopped' ? 'circle-slash' : 'loading');
       activitySummaryButton.setAttribute(
         'aria-label',
         L10N.activity + ', ' + parts.join(', ') + '. ' +
@@ -7843,7 +7869,11 @@ export function getWebviewContent(
       summaryButton.addEventListener('click', function() {
         var collapsed = stackEl.classList.toggle('activity-group--collapsed');
         summaryButton.setAttribute('aria-expanded', String(!collapsed));
-        updateActivitySummary('', stackEl.dataset.status !== 'working');
+        updateActivitySummary(
+          '',
+          stackEl.dataset.status !== 'working',
+          stackEl.dataset.status === 'stopped',
+        );
       });
       stackEl.appendChild(summaryButton);
       stackEl.appendChild(listEl);
@@ -8058,11 +8088,11 @@ export function getWebviewContent(
       return existing;
     }
 
-    function finalizeToolCallStack() {
+    function finalizeToolCallStack(stopped) {
       if (!toolCallStack) return;
       toolCallStack.classList.add('activity-group--collapsed');
       if (activitySummaryButton) activitySummaryButton.setAttribute('aria-expanded', 'false');
-      updateActivitySummary('', true);
+      updateActivitySummary('', true, stopped === true);
       toolCallStack = null;
       toolCallList = null;
       activitySummaryButton = null;

@@ -1322,8 +1322,9 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     .usage-bucket-row {
       display: flex;
+      flex-wrap: wrap;
       align-items: baseline;
-      gap: 6px;
+      column-gap: 6px;
       min-width: 0;
       padding: 2px 0;
     }
@@ -1361,7 +1362,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     .usage-credit-topup:focus-visible { color: var(--link-active); }
 
     .usage-bucket-label {
-      flex: 1;
+      flex: 1 1 auto;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -2039,6 +2040,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
     .actions-menu.open { display: flex; }
 
+    .actions-menu-item-badge {
+      margin-left: auto;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+    }
+
     .actions-menu-item {
       display: flex;
       align-items: center;
@@ -2617,10 +2624,10 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
             type="button"
             class="actions-menu-item"
             role="menuitem"
-            data-surface="connectors"
+            data-surface="connectors" aria-label="Connectors, Coming soon"
           >
             <span class="codicon codicon-plug" aria-hidden="true"></span>
-            <span>Connectors</span>
+            <span>Connectors</span><span class="actions-menu-item-badge" aria-hidden="true">Coming soon</span>
           </button><button
             type="button"
             class="actions-menu-item"
@@ -3078,7 +3085,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -5550,12 +5557,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       });
     }
     if (sessionsSheet) {
-      sessionsSheet.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          closeSessionsSheet();
-        }
-      });
+      // The sheet covers the panel, so it takes Escape first, from the
+      // composer or anything else that still holds focus behind it.
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape' || sessionsSheet.hidden || !sessionsSheet.isConnected) return;
+        event.preventDefault();
+        closeSessionsSheet();
+      }, true);
     }
 
     // ── Slash commands ────────────────────────────────────────────────────────
@@ -6792,7 +6800,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           }
         }
         turnSources = [];
-        finalizeToolCallStack();
+        finalizeToolCallStack(Boolean(msg.payload && msg.payload.stopped));
         if (msg.payload && msg.payload.providerLabel) {
           updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor || 'var(--border)');
         }
@@ -7775,7 +7783,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
 
-    function updateActivitySummary(latestSummary, terminal) {
+    function updateActivitySummary(latestSummary, terminal, stopped) {
       if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
       var total = toolCallList.querySelectorAll('.tool-call').length;
       var running = toolCallList.querySelectorAll('.tool-call--pending').length;
@@ -7784,11 +7792,13 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       var parts = [pluralText(L10N.actions, total)];
       if (terminal) {
         parts.push(
-          errors > 0
-            ? pluralText(L10N.errors, errors)
-            : toolCallStackHasError
-              ? L10N.completedWithErrors
-              : L10N.completed
+          stopped
+            ? L10N.stopped
+            : errors > 0
+              ? pluralText(L10N.errors, errors)
+              : toolCallStackHasError
+                ? L10N.completedWithErrors
+                : L10N.completed
         );
       } else {
         if (running > 0) parts.push(pluralText(L10N.runningCount, running));
@@ -7797,10 +7807,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       }
       if (latestSummary) parts.push(latestSummary);
       activityMeta.textContent = parts.join(' · ');
-      var status = terminal ? (errors > 0 || toolCallStackHasError ? 'error' : 'done') : 'working';
+      var status = !terminal
+        ? 'working'
+        : stopped
+          ? 'stopped'
+          : errors > 0 || toolCallStackHasError ? 'error' : 'done';
       toolCallStack.dataset.status = status;
       activityIcon.className = 'activity-group__icon codicon codicon-' +
-        (status === 'error' ? 'error' : status === 'done' ? 'check' : 'loading');
+        (status === 'error'
+          ? 'error'
+          : status === 'done'
+            ? 'check'
+            : status === 'stopped' ? 'circle-slash' : 'loading');
       activitySummaryButton.setAttribute(
         'aria-label',
         L10N.activity + ', ' + parts.join(', ') + '. ' +
@@ -7843,7 +7861,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       summaryButton.addEventListener('click', function() {
         var collapsed = stackEl.classList.toggle('activity-group--collapsed');
         summaryButton.setAttribute('aria-expanded', String(!collapsed));
-        updateActivitySummary('', stackEl.dataset.status !== 'working');
+        updateActivitySummary(
+          '',
+          stackEl.dataset.status !== 'working',
+          stackEl.dataset.status === 'stopped',
+        );
       });
       stackEl.appendChild(summaryButton);
       stackEl.appendChild(listEl);
@@ -8058,11 +8080,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       return existing;
     }
 
-    function finalizeToolCallStack() {
+    function finalizeToolCallStack(stopped) {
       if (!toolCallStack) return;
       toolCallStack.classList.add('activity-group--collapsed');
       if (activitySummaryButton) activitySummaryButton.setAttribute('aria-expanded', 'false');
-      updateActivitySummary('', true);
+      updateActivitySummary('', true, stopped === true);
       toolCallStack = null;
       toolCallList = null;
       activitySummaryButton = null;
@@ -9554,8 +9576,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     .usage-bucket-row {
       display: flex;
+      flex-wrap: wrap;
       align-items: baseline;
-      gap: 6px;
+      column-gap: 6px;
       min-width: 0;
       padding: 2px 0;
     }
@@ -9593,7 +9616,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     .usage-credit-topup:focus-visible { color: var(--link-active); }
 
     .usage-bucket-label {
-      flex: 1;
+      flex: 1 1 auto;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -10271,6 +10294,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
     .actions-menu.open { display: flex; }
 
+    .actions-menu-item-badge {
+      margin-left: auto;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+    }
+
     .actions-menu-item {
       display: flex;
       align-items: center;
@@ -10849,10 +10878,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
             type="button"
             class="actions-menu-item"
             role="menuitem"
-            data-surface="connectors"
+            data-surface="connectors" aria-label="Connectors, Coming soon"
           >
             <span class="codicon codicon-plug" aria-hidden="true"></span>
-            <span>Connectors</span>
+            <span>Connectors</span><span class="actions-menu-item-badge" aria-hidden="true">Coming soon</span>
           </button><button
             type="button"
             class="actions-menu-item"
@@ -11310,7 +11339,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -13782,12 +13811,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       });
     }
     if (sessionsSheet) {
-      sessionsSheet.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          closeSessionsSheet();
-        }
-      });
+      // The sheet covers the panel, so it takes Escape first, from the
+      // composer or anything else that still holds focus behind it.
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape' || sessionsSheet.hidden || !sessionsSheet.isConnected) return;
+        event.preventDefault();
+        closeSessionsSheet();
+      }, true);
     }
 
     // ── Slash commands ────────────────────────────────────────────────────────
@@ -15024,7 +15054,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           }
         }
         turnSources = [];
-        finalizeToolCallStack();
+        finalizeToolCallStack(Boolean(msg.payload && msg.payload.stopped));
         if (msg.payload && msg.payload.providerLabel) {
           updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor || 'var(--border)');
         }
@@ -16007,7 +16037,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
 
-    function updateActivitySummary(latestSummary, terminal) {
+    function updateActivitySummary(latestSummary, terminal, stopped) {
       if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
       var total = toolCallList.querySelectorAll('.tool-call').length;
       var running = toolCallList.querySelectorAll('.tool-call--pending').length;
@@ -16016,11 +16046,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       var parts = [pluralText(L10N.actions, total)];
       if (terminal) {
         parts.push(
-          errors > 0
-            ? pluralText(L10N.errors, errors)
-            : toolCallStackHasError
-              ? L10N.completedWithErrors
-              : L10N.completed
+          stopped
+            ? L10N.stopped
+            : errors > 0
+              ? pluralText(L10N.errors, errors)
+              : toolCallStackHasError
+                ? L10N.completedWithErrors
+                : L10N.completed
         );
       } else {
         if (running > 0) parts.push(pluralText(L10N.runningCount, running));
@@ -16029,10 +16061,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       }
       if (latestSummary) parts.push(latestSummary);
       activityMeta.textContent = parts.join(' · ');
-      var status = terminal ? (errors > 0 || toolCallStackHasError ? 'error' : 'done') : 'working';
+      var status = !terminal
+        ? 'working'
+        : stopped
+          ? 'stopped'
+          : errors > 0 || toolCallStackHasError ? 'error' : 'done';
       toolCallStack.dataset.status = status;
       activityIcon.className = 'activity-group__icon codicon codicon-' +
-        (status === 'error' ? 'error' : status === 'done' ? 'check' : 'loading');
+        (status === 'error'
+          ? 'error'
+          : status === 'done'
+            ? 'check'
+            : status === 'stopped' ? 'circle-slash' : 'loading');
       activitySummaryButton.setAttribute(
         'aria-label',
         L10N.activity + ', ' + parts.join(', ') + '. ' +
@@ -16075,7 +16115,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       summaryButton.addEventListener('click', function() {
         var collapsed = stackEl.classList.toggle('activity-group--collapsed');
         summaryButton.setAttribute('aria-expanded', String(!collapsed));
-        updateActivitySummary('', stackEl.dataset.status !== 'working');
+        updateActivitySummary(
+          '',
+          stackEl.dataset.status !== 'working',
+          stackEl.dataset.status === 'stopped',
+        );
       });
       stackEl.appendChild(summaryButton);
       stackEl.appendChild(listEl);
@@ -16290,11 +16334,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       return existing;
     }
 
-    function finalizeToolCallStack() {
+    function finalizeToolCallStack(stopped) {
       if (!toolCallStack) return;
       toolCallStack.classList.add('activity-group--collapsed');
       if (activitySummaryButton) activitySummaryButton.setAttribute('aria-expanded', 'false');
-      updateActivitySummary('', true);
+      updateActivitySummary('', true, stopped === true);
       toolCallStack = null;
       toolCallList = null;
       activitySummaryButton = null;
@@ -17786,8 +17830,9 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     .usage-bucket-row {
       display: flex;
+      flex-wrap: wrap;
       align-items: baseline;
-      gap: 6px;
+      column-gap: 6px;
       min-width: 0;
       padding: 2px 0;
     }
@@ -17825,7 +17870,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     .usage-credit-topup:focus-visible { color: var(--link-active); }
 
     .usage-bucket-label {
-      flex: 1;
+      flex: 1 1 auto;
       min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -18503,6 +18548,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
     .actions-menu.open { display: flex; }
 
+    .actions-menu-item-badge {
+      margin-left: auto;
+      color: var(--text-secondary);
+      font-size: var(--type-caption-size);
+    }
+
     .actions-menu-item {
       display: flex;
       align-items: center;
@@ -19081,10 +19132,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             type="button"
             class="actions-menu-item"
             role="menuitem"
-            data-surface="connectors"
+            data-surface="connectors" aria-label="Connectors, Coming soon"
           >
             <span class="codicon codicon-plug" aria-hidden="true"></span>
-            <span>Connectors</span>
+            <span>Connectors</span><span class="actions-menu-item-badge" aria-hidden="true">Coming soon</span>
           </button><button
             type="button"
             class="actions-menu-item"
@@ -19542,7 +19593,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve plan","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -22014,12 +22065,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       });
     }
     if (sessionsSheet) {
-      sessionsSheet.addEventListener('keydown', function (event) {
-        if (event.key === 'Escape') {
-          event.preventDefault();
-          closeSessionsSheet();
-        }
-      });
+      // The sheet covers the panel, so it takes Escape first, from the
+      // composer or anything else that still holds focus behind it.
+      document.addEventListener('keydown', function (event) {
+        if (event.key !== 'Escape' || sessionsSheet.hidden || !sessionsSheet.isConnected) return;
+        event.preventDefault();
+        closeSessionsSheet();
+      }, true);
     }
 
     // ── Slash commands ────────────────────────────────────────────────────────
@@ -23256,7 +23308,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           }
         }
         turnSources = [];
-        finalizeToolCallStack();
+        finalizeToolCallStack(Boolean(msg.payload && msg.payload.stopped));
         if (msg.payload && msg.payload.providerLabel) {
           updateProviderBadge(msg.payload.providerLabel, msg.payload.brandColor || 'var(--border)');
         }
@@ -24239,7 +24291,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       return (value / 1000).toFixed(value < 10000 ? 1 : 0) + ' s';
     }
 
-    function updateActivitySummary(latestSummary, terminal) {
+    function updateActivitySummary(latestSummary, terminal, stopped) {
       if (!toolCallStack || !activityMeta || !activitySummaryButton || !activityIcon || !toolCallList) return;
       var total = toolCallList.querySelectorAll('.tool-call').length;
       var running = toolCallList.querySelectorAll('.tool-call--pending').length;
@@ -24248,11 +24300,13 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       var parts = [pluralText(L10N.actions, total)];
       if (terminal) {
         parts.push(
-          errors > 0
-            ? pluralText(L10N.errors, errors)
-            : toolCallStackHasError
-              ? L10N.completedWithErrors
-              : L10N.completed
+          stopped
+            ? L10N.stopped
+            : errors > 0
+              ? pluralText(L10N.errors, errors)
+              : toolCallStackHasError
+                ? L10N.completedWithErrors
+                : L10N.completed
         );
       } else {
         if (running > 0) parts.push(pluralText(L10N.runningCount, running));
@@ -24261,10 +24315,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       }
       if (latestSummary) parts.push(latestSummary);
       activityMeta.textContent = parts.join(' · ');
-      var status = terminal ? (errors > 0 || toolCallStackHasError ? 'error' : 'done') : 'working';
+      var status = !terminal
+        ? 'working'
+        : stopped
+          ? 'stopped'
+          : errors > 0 || toolCallStackHasError ? 'error' : 'done';
       toolCallStack.dataset.status = status;
       activityIcon.className = 'activity-group__icon codicon codicon-' +
-        (status === 'error' ? 'error' : status === 'done' ? 'check' : 'loading');
+        (status === 'error'
+          ? 'error'
+          : status === 'done'
+            ? 'check'
+            : status === 'stopped' ? 'circle-slash' : 'loading');
       activitySummaryButton.setAttribute(
         'aria-label',
         L10N.activity + ', ' + parts.join(', ') + '. ' +
@@ -24307,7 +24369,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       summaryButton.addEventListener('click', function() {
         var collapsed = stackEl.classList.toggle('activity-group--collapsed');
         summaryButton.setAttribute('aria-expanded', String(!collapsed));
-        updateActivitySummary('', stackEl.dataset.status !== 'working');
+        updateActivitySummary(
+          '',
+          stackEl.dataset.status !== 'working',
+          stackEl.dataset.status === 'stopped',
+        );
       });
       stackEl.appendChild(summaryButton);
       stackEl.appendChild(listEl);
@@ -24522,11 +24588,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       return existing;
     }
 
-    function finalizeToolCallStack() {
+    function finalizeToolCallStack(stopped) {
       if (!toolCallStack) return;
       toolCallStack.classList.add('activity-group--collapsed');
       if (activitySummaryButton) activitySummaryButton.setAttribute('aria-expanded', 'false');
-      updateActivitySummary('', true);
+      updateActivitySummary('', true, stopped === true);
       toolCallStack = null;
       toolCallList = null;
       activitySummaryButton = null;
