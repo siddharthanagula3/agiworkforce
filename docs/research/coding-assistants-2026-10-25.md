@@ -238,7 +238,7 @@ Sources read 2026-10-25: <https://code.visualstudio.com/docs/copilot/overview>,
   attach a GitHub issue or pull request; `#fetch` for web content; images by attach or drag; browser "Add
   to Chat" for an element, screenshot or console logs. `@` chat participants are deprecated and not
   supported in the Copilot harness (D, chat-context).
-- Instructions: `.github/copilot-instructions.md`, `AGENTS.md`, `CLAUDE.md` (needs `chat.useClaudeMdFile`
+- Instructions: a copilot-instructions.md file in the repository's .github folder, `AGENTS.md`, `CLAUDE.md` (needs `chat.useClaudeMdFile`
   for the Local harness), `*.instructions.md` with `applyTo`, and `.claude/rules` (D, custom-instructions).
   Memory, subagents, hooks, agent skills, custom agents, plugins and prompt files exist (D, features sheet).
 - MCP servers; browser tools that let the agent open the app and test a flow (D, features sheet). Whether
