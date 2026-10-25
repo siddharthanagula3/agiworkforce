@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -25,7 +26,7 @@ import { recordWorkspaceAuditEvent } from '@/lib/workspace-audit';
 export const runtime = 'nodejs';
 
 async function handleGetBody(request: NextRequest, context: { params: Promise<{ name: string }> }) {
-  const rateLimit = await withRateLimit(request, 'chat-conversation');
+  const rateLimit = await withRateLimit(request, 'skills-catalog-read');
   if (rateLimit) return rateLimit;
   const { db, userId } = await getUserScopedDb(request);
   const name = requireSkillName((await context.params).name);
@@ -103,7 +104,7 @@ async function handleDeleteSkill(
   return new NextResponse(null, { status: 204 });
 }
 
-export const GET = withCorsRoute(withErrorHandler(handleGetBody));
+export const GET = withCorsRoute(withAdmittedRateLimitHeaders(withErrorHandler(handleGetBody)));
 export const PUT = withCorsRoute(withErrorHandler(handleUpdateSkill));
 export const DELETE = withCorsRoute(withErrorHandler(handleDeleteSkill));
 

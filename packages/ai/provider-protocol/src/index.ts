@@ -48,8 +48,10 @@ export type {
 export {
   resolveAnthropicPayloadPolicy,
   applyAnthropicPayloadPolicyToParams,
+  planAnthropicCacheBreakpoints,
 } from './anthropic-payload-policy';
 export type {
+  AnthropicCacheBreakpointPlan,
   AnthropicPayloadPolicy,
   AnthropicPayloadPolicyInput,
   AnthropicEphemeralCacheControl,

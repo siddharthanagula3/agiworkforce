@@ -1,6 +1,30 @@
 import { describe, expect, it } from 'vitest';
+import {
+  SYSTEM_PROMPT_CACHE_BOUNDARY,
+  splitSystemPromptCacheBoundary,
+} from '@agiworkforce/provider-protocol';
 
-import { resolveResidencyRegion, resolveTurnPromptCache } from '../request-processor';
+import {
+  placeTurnSystemNotices,
+  resolveResidencyRegion,
+  resolveTurnPromptCache,
+  type ProcessedRequest,
+} from '../request-processor';
+import { REQUIRED_SEARCH_SYSTEM_NUDGE } from '@/lib/web-search/required-search';
+
+type TurnMessages = ProcessedRequest['llmRequest']['messages'];
+
+function message(role: TurnMessages[number]['role'], content: string): TurnMessages[number] {
+  return { role, content };
+}
+
+function cachedSystemPrefix(messages: TurnMessages): string {
+  const system = messages
+    .filter((entry) => entry.role === 'system')
+    .map((entry) => entry.content)
+    .join('\n\n');
+  return splitSystemPromptCacheBoundary(system)?.stablePrefix ?? system;
+}
 
 const TURN = {
   requested: true,
@@ -104,5 +128,54 @@ describe('resolveResidencyRegion', () => {
 
   it('carries the workspace region when the deployment asserts none of its own', () => {
     expect(resolveResidencyRegion('eu', null)).toBe('eu');
+  });
+});
+
+describe('placeTurnSystemNotices', () => {
+  const conversation = (): TurnMessages => [
+    message('system', 'Capability preamble that every turn shares.'),
+    message('system', 'You are a browser assistant.'),
+    message('user', 'What changed in the news today?'),
+  ];
+
+  it('keeps the cached system prefix byte-identical on a turn that carries a notice', () => {
+    const plain = conversation();
+    const nudged = conversation();
+    placeTurnSystemNotices(plain, []);
+    placeTurnSystemNotices(nudged, [REQUIRED_SEARCH_SYSTEM_NUDGE]);
+
+    expect(cachedSystemPrefix(nudged)).toBe(cachedSystemPrefix(plain));
+    expect(cachedSystemPrefix(nudged)).not.toContain(REQUIRED_SEARCH_SYSTEM_NUDGE);
+    expect(nudged.map((entry) => entry.role)).toEqual([
+      'system',
+      'system',
+      'system',
+      'system',
+      'user',
+    ]);
+  });
+
+  it('adds notices after an existing per-turn block without a second boundary', () => {
+    const messages = conversation();
+    messages.splice(2, 0, message('system', `${SYSTEM_PROMPT_CACHE_BOUNDARY}Recalled memory.`));
+    placeTurnSystemNotices(messages, ['Notice one.', 'Notice two.']);
+
+    const boundaries = messages.filter((entry) =>
+      entry.content.includes(SYSTEM_PROMPT_CACHE_BOUNDARY),
+    );
+    expect(boundaries).toHaveLength(1);
+    expect(messages.slice(3, 5).map((entry) => entry.content)).toEqual([
+      'Notice one.',
+      'Notice two.',
+    ]);
+    expect(messages[5]?.role).toBe('user');
+  });
+
+  it('keeps each notice a message of its own that context fitting cannot shorten', () => {
+    const messages = conversation();
+    placeTurnSystemNotices(messages, [REQUIRED_SEARCH_SYSTEM_NUDGE]);
+
+    const notice = messages.find((entry) => entry.content === REQUIRED_SEARCH_SYSTEM_NUDGE);
+    expect(notice?.content.startsWith(SYSTEM_PROMPT_CACHE_BOUNDARY)).toBe(false);
   });
 });

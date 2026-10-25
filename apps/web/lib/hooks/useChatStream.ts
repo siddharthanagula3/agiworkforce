@@ -2760,6 +2760,34 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     latencyTrace?.observeAssistantText(fullAssistantContent);
   };
 
+  // A direct stream carries the same reasoning twice, inline in tags and as
+  // reasoning events, while the durable route carries only the events: the
+  // first channel to deliver reasoning is the one shown for the whole turn.
+  let thinkingChannel: 'tagged' | 'event' | null = null;
+  const thinkingFrom = (channel: 'tagged' | 'event'): boolean => {
+    thinkingChannel ??= channel;
+    return thinkingChannel === channel;
+  };
+  let eventThinkingOpen = false;
+  const closeEventThinking = (): boolean => {
+    if (!eventThinkingOpen) return false;
+    eventThinkingOpen = false;
+    return true;
+  };
+  const consumeReasoningEvent = (event: AgentEvent): void => {
+    const kind = messageKindForAgentEvent(event.type);
+    if (kind === 'reasoning' && event.type === 'reasoning-delta') {
+      if (!event.delta || !thinkingFrom('event')) return;
+      if (!eventThinkingOpen) {
+        openThinkingSegment();
+        eventThinkingOpen = true;
+      }
+      appendThinkingText(event.delta);
+      return;
+    }
+    if (kind !== null && kind !== 'status' && closeEventThinking()) closeThinkingSegment();
+  };
+
   const consumeThinkingParts = (parts: readonly ThinkingTagPart[], isFinal = false): void => {
     for (const part of parts) {
       switch (part.type) {
@@ -2767,13 +2795,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           emitPublicText(part.text, isFinal);
           break;
         case 'thinking':
-          appendThinkingText(part.text);
+          if (thinkingFrom('tagged')) appendThinkingText(part.text);
           break;
         case 'thinking-start':
-          openThinkingSegment();
+          if (thinkingFrom('tagged')) openThinkingSegment();
           break;
         case 'thinking-end':
-          closeThinkingSegment();
+          if (thinkingFrom('tagged')) closeThinkingSegment();
           break;
       }
     }
@@ -2848,7 +2876,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   const settleStream = (): StreamOutcome => {
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
     finishRunningTools();
@@ -2892,7 +2920,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     beginStreamPhase(assistantMessageId, 'reconnecting');
 
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
 
@@ -2918,6 +2946,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
         onEvent: (envelope) => {
           endStreamPhase(assistantMessageId, 'reconnecting');
           const kind = recordAgentEventOutcome(envelope.event);
+          consumeReasoningEvent(envelope.event);
           if (kind === 'text' && envelope.event.type === 'text-delta' && envelope.event.delta) {
             const reconciled = reconcileManagedCloudPublicText(
               unacknowledgedPublicText,
@@ -3024,7 +3053,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           if (sequenceGapSeen) continue;
           latencyTrace?.markDone();
           flushContentBuffer(true);
-          if (contentSplitter.closeThinking()) {
+          if (contentSplitter.closeThinking() || closeEventThinking()) {
             closeThinkingSegment();
           }
           finishRunningTools();
@@ -3079,6 +3108,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
           );
           if (agentEnvelope && !duplicateAgentEnvelope) {
             const kind = recordAgentEventOutcome(agentEnvelope.event);
+            consumeReasoningEvent(agentEnvelope.event);
             if (kind === 'text' && agentEnvelope.event.type === 'text-delta') {
               unacknowledgedPublicText = reconcileManagedCloudPublicText(
                 unacknowledgedPublicText,
@@ -3606,7 +3636,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       }
     }
     flushContentBuffer(true);
-    if (contentSplitter.closeThinking()) {
+    if (contentSplitter.closeThinking() || closeEventThinking()) {
       closeThinkingSegment();
     }
     throw terminalError;

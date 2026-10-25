@@ -30,6 +30,7 @@ function offeredTools(surface: CloudChatSurface): string[] {
     isTemporary: false,
     ambientToolsAllowed: true,
     pluginDraftsAllowed: true,
+    userMessage: 'Turn this into a plugin.',
   });
   return (request.tools ?? []).map((tool) => tool.function.name);
 }

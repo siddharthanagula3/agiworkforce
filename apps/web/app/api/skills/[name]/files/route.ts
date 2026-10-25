@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { getUserScopedDb } from '@/lib/server/rls-db';
@@ -23,7 +24,7 @@ async function handleListFiles(
   request: NextRequest,
   context: { params: Promise<{ name: string }> },
 ) {
-  const rateLimit = await withRateLimit(request, 'chat-conversation');
+  const rateLimit = await withRateLimit(request, 'skills-catalog-read');
   if (rateLimit) return rateLimit;
   const { db, userId } = await getUserScopedDb(request, { resolveOrganization: false });
   const name = requireSkillName((await context.params).name);
@@ -66,7 +67,7 @@ async function handleListFiles(
   return NextResponse.json({ files });
 }
 
-export const GET = withCorsRoute(withErrorHandler(handleListFiles));
+export const GET = withCorsRoute(withAdmittedRateLimitHeaders(withErrorHandler(handleListFiles)));
 
 export function OPTIONS(request: NextRequest): NextResponse {
   return handleCorsPreflightRequest(request) ?? new NextResponse(null, { status: 204 });

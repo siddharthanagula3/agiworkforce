@@ -29,6 +29,52 @@ export interface AnthropicPayloadPolicy {
   serviceTier: AnthropicServiceTier | undefined;
 }
 
+export interface AnthropicCacheBreakpointPlan {
+  system: AnthropicEphemeralCacheControl | undefined;
+  conversation: AnthropicEphemeralCacheControl | undefined;
+}
+
+const CONVERSATION_CACHE_CONTROL: AnthropicEphemeralCacheControl = { type: 'ephemeral' };
+
+/**
+ * The stable system prefix is the one entry every later turn reads, so it alone
+ * takes the policy's TTL, an hour when the turn carries tools. The conversation
+ * entry is read only by the next request of a live exchange, seconds or minutes
+ * later, so a five-minute write (1.25x input) beats an hour-long one (2x); the
+ * ordering rule that an hour-long entry precede every five-minute one holds
+ * because the system renders first. A request with no tools and no prior reply
+ * ends the exchange, so its conversation entry could never be read.
+ */
+export function planAnthropicCacheBreakpoints(
+  policy: Pick<AnthropicPayloadPolicy, 'cacheControl'>,
+  request: { hasTools: boolean; hasAssistantTurn: boolean },
+): AnthropicCacheBreakpointPlan {
+  if (!policy.cacheControl) return { system: undefined, conversation: undefined };
+  return {
+    system: policy.cacheControl,
+    conversation:
+      request.hasTools || request.hasAssistantTurn ? CONVERSATION_CACHE_CONTROL : undefined,
+  };
+}
+
+function payloadHasTools(payloadObj: Record<string, unknown>): boolean {
+  const tools = payloadObj['tools'];
+  return Array.isArray(tools) && tools.length > 0;
+}
+
+function payloadHasAssistantTurn(payloadObj: Record<string, unknown>): boolean {
+  const messages = payloadObj['messages'];
+  return (
+    Array.isArray(messages) &&
+    messages.some(
+      (message: unknown) =>
+        !!message &&
+        typeof message === 'object' &&
+        (message as Record<string, unknown>)['role'] === 'assistant',
+    )
+  );
+}
+
 function resolveBaseUrlHostname(baseUrl: string): string | undefined {
   try {
     return new URL(baseUrl).hostname;
@@ -82,16 +128,14 @@ function resolveAnthropicEphemeralCacheControl(
   return { type: 'ephemeral', ...(ttl ? { ttl } : {}) };
 }
 
-/** Whether per-turn content follows the cached system prefix. */
 function applyAnthropicCacheControlToSystem(
   system: unknown,
   cacheControl: AnthropicEphemeralCacheControl,
-): boolean {
+): void {
   if (!Array.isArray(system)) {
-    return false;
+    return;
   }
 
-  let perTurnSuffix = false;
   const normalizedBlocks: Array<unknown> = [];
   for (const block of system) {
     if (!block || typeof block !== 'object') {
@@ -123,7 +167,6 @@ function applyAnthropicCacheControlToSystem(
       });
     }
     if (split.dynamicSuffix) {
-      perTurnSuffix = true;
       normalizedBlocks.push({
         ...rest,
         text: split.dynamicSuffix,
@@ -132,7 +175,6 @@ function applyAnthropicCacheControlToSystem(
   }
 
   system.splice(0, system.length, ...normalizedBlocks);
-  return perTurnSuffix;
 }
 
 function stripAnthropicSystemPromptBoundary(system: unknown): void {
@@ -235,15 +277,14 @@ export function applyAnthropicPayloadPolicyToParams(
     return;
   }
 
-  const perTurnSuffix = applyAnthropicCacheControlToSystem(
-    payloadObj['system'],
-    policy.cacheControl,
-  );
-  // Per-turn system content renders ahead of every message, so the next turn
-  // can never read a message entry this turn writes: an hour-long write there
-  // costs 1.6x a five-minute one and buys nothing.
-  applyAnthropicCacheControlToMessages(
-    payloadObj['messages'],
-    perTurnSuffix ? { type: 'ephemeral' } : policy.cacheControl,
-  );
+  const plan = planAnthropicCacheBreakpoints(policy, {
+    hasTools: payloadHasTools(payloadObj),
+    hasAssistantTurn: payloadHasAssistantTurn(payloadObj),
+  });
+  if (plan.system) {
+    applyAnthropicCacheControlToSystem(payloadObj['system'], plan.system);
+  }
+  if (plan.conversation) {
+    applyAnthropicCacheControlToMessages(payloadObj['messages'], plan.conversation);
+  }
 }

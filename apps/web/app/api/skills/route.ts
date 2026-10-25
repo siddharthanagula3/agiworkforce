@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { buildWorkspaceFeatureGateResponse } from '@/lib/managed-compute-gate';
 import { resolveCloudChatSurface } from '@/lib/free-chat-surface-policy';
 import { withErrorHandler } from '@/lib/error-handler';
+import { withAdmittedRateLimitHeaders } from '@/lib/rate-limit-headers';
 import { createError } from '@/lib/errors';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
@@ -137,7 +138,7 @@ async function readUploadedSkillDraft(request: NextRequest): Promise<UploadedSki
 }
 
 async function handleListSkills(request: NextRequest) {
-  const rateLimit = await withRateLimit(request, 'chat-conversation');
+  const rateLimit = await withRateLimit(request, 'skills-catalog-read');
   if (rateLimit) return rateLimit;
   const { db, userId } = await getUserScopedDb(request);
   const wholeCatalog = new URL(request.url).searchParams.get(CATALOG_PARAM) === CATALOG_ALL;
@@ -255,7 +256,7 @@ async function handleCreateSkill(request: NextRequest) {
   );
 }
 
-export const GET = withCorsRoute(withErrorHandler(handleListSkills));
+export const GET = withCorsRoute(withAdmittedRateLimitHeaders(withErrorHandler(handleListSkills)));
 export const POST = withCorsRoute(withErrorHandler(handleCreateSkill));
 
 export function OPTIONS(request: NextRequest): NextResponse {

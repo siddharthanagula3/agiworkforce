@@ -170,6 +170,7 @@ import {
   listConversationToolResults,
   readStoredToolResult,
   referenceOversizedToolResult,
+  earlierToolResultsNotice,
   toolResultReaderToolDef,
   trimmedToolResultNotice,
   type ToolResultOwner,
@@ -246,6 +247,7 @@ import {
   withdrawnToolMessage,
 } from './tool-turn-governor';
 import { prohibitedToolResultMessage, turnProhibitsTool } from './turn-tool-prohibition';
+import { turnWithholdsTool, withheldToolResultMessage } from './turn-tool-offer';
 import { displaySourceSnippet } from '@/lib/sources/display-snippet';
 import { resolveNativeSearchMaxUses } from './request-processor';
 import { e2bCutoverEnabled } from '@/lib/e2b/gate';
@@ -315,7 +317,11 @@ import {
   isRequiredExecutionToolChoice,
   resolveCodeExecutionRequirement,
 } from '@/lib/code-execution/required-execution';
-import { extractTextContent, type ProcessedRequest } from './request-processor';
+import {
+  extractTextContent,
+  placeTurnSystemNotices,
+  type ProcessedRequest,
+} from './request-processor';
 import {
   addToolSpend,
   createObservedProviderUsage,
@@ -3642,15 +3648,13 @@ export async function* runToolLoop(
 
   const deviceHost: DesktopHostDeclaration | undefined = processed.deviceHost;
   const turnToolProhibition = processed.turnToolProhibition;
+  const turnWithheldTools = new Set(processed.turnWithheldTools ?? []);
   const mcpTools = turnToolProhibition?.allTools ? [] : (options.mcpTools ?? []);
   const googleHostedServerIds = googleHostedServerIdsOf(mcpTools);
   // Schemas are admitted against a byte budget rather than sent whole, so the
   // prompt payload stays bounded as the connected count grows. Nothing is
   // hidden: what is left out is listed on TOOL_DIRECTORY_TOOL_NAME.
-  const toolSchemaSelection = selectToolSchemas({
-    tools: mcpTools,
-    turnText: lastUserTurnText(processed.chatRequest?.messages),
-  });
+  const toolSchemaSelection = selectToolSchemas({ tools: mcpTools });
   const loadedToolNames = new Set(toolSchemaSelection.tools.map((tool) => tool.qualifiedName));
   let deferredToolSchemas = toolSchemaSelection.deferred;
   const toolResultOwner: ToolResultOwner = {
@@ -3672,7 +3676,7 @@ export async function* runToolLoop(
     return [
       ...loaded,
       ...(directory ? [directory] : []),
-      ...(storedResults ? [toolResultReaderToolDef(earlierStoredResults)] : []),
+      ...(storedResults ? [toolResultReaderToolDef()] : []),
     ];
   };
   const loadDeferredToolSchemas = (args: Record<string, unknown>): ToolLoopToolResult => {
@@ -3754,6 +3758,8 @@ export async function* runToolLoop(
   const observedUsage = options.usage ?? createObservedProviderUsage();
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
+  const storedResultsNotice = earlierToolResultsNotice(earlierStoredResults);
+  if (storedResultsNotice) placeTurnSystemNotices(messages, [storedResultsNotice]);
 
   const connectorPermissions = processed.toolLockdown
     ? LOCKED_DOWN_CONNECTOR_TOOL_PERMISSIONS
@@ -5000,6 +5006,12 @@ export async function* runToolLoop(
           content: prohibitedToolResultMessage(tc.qualifiedName),
           isError: true,
           unavailable: true,
+        });
+      }
+      if (turnWithholdsTool(turnWithheldTools, tc.qualifiedName)) {
+        return Promise.resolve({
+          content: withheldToolResultMessage(tc.qualifiedName),
+          isError: true,
         });
       }
       const resumeInput = suspendContext.resumeInput?.get(tc.id);
@@ -6681,8 +6693,10 @@ export async function* runToolLoop(
       }
       messages.push(assistantMessage);
 
-      const prohibitedCalls = pendingToolCalls.filter((tc) =>
-        turnProhibitsTool(turnToolProhibition, tc.qualifiedName),
+      const prohibitedCalls = pendingToolCalls.filter(
+        (tc) =>
+          turnProhibitsTool(turnToolProhibition, tc.qualifiedName) ||
+          turnWithholdsTool(turnWithheldTools, tc.qualifiedName),
       );
       // A call to a tool this turn never offered has nothing to approve: the
       // model named a tool it saw earlier or invented one. Asking would put a
@@ -6719,30 +6733,37 @@ export async function* runToolLoop(
       ];
       for (const { tc, gate, offered } of refusedCalls) {
         const escalationDenied = gate?.reason === 'lethal_trifecta';
+        const withheld = gate === null && turnWithholdsTool(turnWithheldTools, tc.qualifiedName);
         logger.warn(
           {
             tool: tc.qualifiedName,
             requestId: processed.requestId,
-            reason: gate?.reason ?? (offered ? 'turn_prohibition' : 'not_offered'),
+            reason:
+              gate?.reason ??
+              (!offered ? 'not_offered' : withheld ? 'turn_withheld' : 'turn_prohibition'),
           },
           !offered
             ? '[tool-loop] tool call refused: the tool was not offered on this turn'
-            : gate === null
-              ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
-              : escalationDenied
-                ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
-                : '[tool-loop] tool call blocked by the user permission store',
+            : withheld
+              ? '[tool-loop] tool call refused: the request does not call for this tool'
+              : gate === null
+                ? '[tool-loop] tool call refused: the user ruled this tool out for the turn'
+                : escalationDenied
+                  ? '[tool-loop] egress escalation denied on an unattended run: untrusted content + sensitive source + egress path, no human to approve'
+                  : '[tool-loop] tool call blocked by the user permission store',
         );
         const content = await applyToolResultSecretPolicy(
           options.userId,
           tc.qualifiedName,
           !offered
             ? notOfferedToolResultMessage(tc.qualifiedName)
-            : gate === null
-              ? prohibitedToolResultMessage(tc.qualifiedName)
-              : escalationDenied
-                ? refusedToolResultMessage(tc.qualifiedName)
-                : blockedToolResultMessage(tc.qualifiedName),
+            : withheld
+              ? withheldToolResultMessage(tc.qualifiedName)
+              : gate === null
+                ? prohibitedToolResultMessage(tc.qualifiedName)
+                : escalationDenied
+                  ? refusedToolResultMessage(tc.qualifiedName)
+                  : blockedToolResultMessage(tc.qualifiedName),
         );
         await auditToolCall(tc.qualifiedName, 'blocked');
         const blockedCategory = canonicalToolCategory(tc.qualifiedName, mcpTools);
