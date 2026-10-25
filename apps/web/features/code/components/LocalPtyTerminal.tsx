@@ -25,7 +25,6 @@ import styles from '../CloudCodePage.module.css';
 const FONT_SIZE = 13;
 const LINE_HEIGHT = 1.2;
 const MINIMUM_CONTRAST_RATIO = 4.5;
-const SELECTION_ALPHA = 0.25;
 
 type Phase =
   | { kind: 'starting' }
@@ -37,12 +36,6 @@ export interface LocalPtyTerminalProps {
   rootId: string;
 }
 
-function translucent(color: string, alpha: number): string {
-  const channels = color.match(/\d+(\.\d+)?/g);
-  if (!channels || channels.length < 3) return color;
-  return `rgba(${channels[0]}, ${channels[1]}, ${channels[2]}, ${alpha})`;
-}
-
 function themeOf(element: HTMLElement) {
   const style = getComputedStyle(element);
   return {
@@ -50,7 +43,7 @@ function themeOf(element: HTMLElement) {
     foreground: style.color,
     cursor: style.color,
     cursorAccent: style.backgroundColor,
-    selectionBackground: translucent(style.color, SELECTION_ALPHA),
+    selectionBackground: style.caretColor,
   };
 }
 
