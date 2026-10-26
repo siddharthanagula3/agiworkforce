@@ -1,5 +1,7 @@
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { MermaidConfig } from 'mermaid';
+import { X } from 'lucide-react';
+import { Button, Dialog, DialogClose, DialogContent, DialogTitle } from '@agiworkforce/ui';
 
 import { reportClientFailure } from '../../lib/client-failures';
 import { sanitizeSvg } from '../../lib/sanitize-svg';
@@ -26,6 +28,8 @@ const MERMAID_CONFIG: MermaidConfig = {
   class: { htmlLabels: false },
   suppressErrorRendering: true,
 };
+
+const EXPAND_LABEL = 'Open diagram full screen';
 
 const INLINE_TEXT_ANCHOR = /text-anchor:\s*([a-z]+)/i;
 
@@ -109,6 +113,16 @@ export function clearMermaidSvgCache(): void {
 }
 
 const SVG_VIEWBOX_HEIGHT = /viewBox="[-\d.]+\s+[-\d.]+\s+[-\d.]+\s+([\d.]+)"/;
+const SVG_VIEWBOX_WIDTH = /viewBox="[-\d.]+\s+[-\d.]+\s+([\d.]+)\s+[-\d.]+"/;
+
+export const MERMAID_MIN_SCALE = 0.75;
+
+function diagramMinWidth(svg: string): string | undefined {
+  const match = SVG_VIEWBOX_WIDTH.exec(svg);
+  const width = match ? Number(match[1]) : NaN;
+  if (!Number.isFinite(width) || width <= 0) return undefined;
+  return `${Math.ceil(width * MERMAID_MIN_SCALE)}px`;
+}
 
 function cachedDiagramHeight(source: string): number | null {
   const svg = svgCache.get(source);
@@ -168,6 +182,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     return cached ? { phase: 'ready', svg: cached } : { phase: 'idle' };
   });
   const [showSource, setShowSource] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const reactId = useId();
   const diagramId = useMemo(() => `mermaid-${reactId.replace(/[:]/g, '')}`, [reactId]);
   const renderHostRef = useRef<HTMLDivElement>(null);
@@ -245,15 +260,31 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
   const renderHost = <div ref={renderHostRef} aria-hidden="true" className="sr-only" />;
 
   if (state.phase === 'ready') {
+    const minWidth = diagramMinWidth(state.svg);
+    const diagramStyle = minWidth
+      ? ({ '--mermaid-min-width': minWidth } as React.CSSProperties)
+      : undefined;
+    const openExpanded = () => setExpanded(true);
     return (
       <figure className={className} data-mermaid="ready">
         {renderHost}
         <div
           className="mermaid-diagram"
-          // llm-guardrail-allow: the markup is mermaid output passed through the
-          // package's own sanitizeSvg, which is the canonical owner of SVG
-          // stripping for this surface. Diagram source is model output, so
-          // mermaid's securityLevel is not relied on as the only defence.
+          style={diagramStyle}
+          {...(interactive
+            ? {
+                role: 'button',
+                tabIndex: 0,
+                'aria-label': EXPAND_LABEL,
+                onClick: openExpanded,
+                onKeyDown: (event: React.KeyboardEvent) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    openExpanded();
+                  }
+                },
+              }
+            : {})}
           // llm-guardrail-allow: mermaid output, passed through the package sanitizeSvg
           dangerouslySetInnerHTML={{ __html: state.svg }}
         />
@@ -263,8 +294,43 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
               <button type="button" onClick={() => setShowSource((v) => !v)}>
                 {showSource ? 'Hide source' : 'Show source'}
               </button>
+              <button type="button" onClick={openExpanded}>
+                Full screen
+              </button>
             </figcaption>
             {showSource ? sourceBlock : null}
+            <Dialog open={expanded} onOpenChange={setExpanded}>
+              <DialogContent
+                hideCloseButton
+                disableAnimation
+                aria-describedby={undefined}
+                className="inset-4 flex w-auto max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden bg-background p-0 backdrop-blur-none"
+              >
+                <div className="flex items-center justify-between gap-2 border-b border-border py-2 ps-4 pe-2">
+                  <DialogTitle className="text-sm font-semibold">Diagram</DialogTitle>
+                  <DialogClose asChild>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      aria-label="Close full screen diagram"
+                      title="Close full screen diagram"
+                      className="h-8 w-8 p-0 text-[var(--chat-text-muted)] hover:bg-[var(--chat-surface-hover)] hover:text-[var(--chat-text-primary)] [@media(pointer:coarse)]:h-11 [@media(pointer:coarse)]:w-11"
+                    >
+                      <X className="h-4 w-4" aria-hidden="true" />
+                    </Button>
+                  </DialogClose>
+                </div>
+                <div
+                  className="mermaid-diagram mermaid-diagram-expanded min-h-0 flex-1 overflow-auto overscroll-contain p-4"
+                  role="region"
+                  aria-label="Diagram"
+                  tabIndex={0}
+                  // llm-guardrail-allow: mermaid output, passed through the package sanitizeSvg
+                  dangerouslySetInnerHTML={{ __html: state.svg }}
+                />
+              </DialogContent>
+            </Dialog>
           </>
         ) : null}
       </figure>
