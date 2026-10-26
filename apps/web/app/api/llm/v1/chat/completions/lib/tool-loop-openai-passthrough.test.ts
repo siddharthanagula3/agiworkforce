@@ -7,6 +7,7 @@ const mockGetOptionalEnv = vi.fn((key: string) =>
 );
 vi.mock('@shared/utils/env', () => ({
   getOptionalEnv: (...args: [string]) => mockGetOptionalEnv(...args),
+  requireEnv: (key: string) => mockGetOptionalEnv(key) ?? `mock-${key}`,
 }));
 
 const mockOpenAIStream = vi.fn();
