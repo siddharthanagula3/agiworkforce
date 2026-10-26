@@ -56,15 +56,15 @@ export function editableDocumentFromReply(
 const CONCEPTS = [
   {
     name: 'Solid',
-    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Solid blue square"><rect x="40" y="40" width="120" height="120" fill="#2f6fed"/></svg>',
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Solid blue square"><rect x="40" y="40" width="120" height="120" fill="royalblue"/></svg>',
   },
   {
     name: 'Rounded',
-    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Rounded blue square"><rect x="36" y="36" width="128" height="128" rx="28" fill="#1f4fd8"/><rect x="68" y="68" width="64" height="64" rx="12" fill="#8eb0ff"/></svg>',
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Rounded blue square"><rect x="36" y="36" width="128" height="128" rx="28" fill="mediumblue"/><rect x="68" y="68" width="64" height="64" rx="12" fill="lightsteelblue"/></svg>',
   },
   {
     name: 'Outline',
-    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Outlined blue square"><rect x="40" y="40" width="120" height="120" fill="none" stroke="#5b8def" stroke-width="14"/></svg>',
+    svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200" role="img" aria-label="Outlined blue square"><rect x="40" y="40" width="120" height="120" fill="none" stroke="cornflowerblue" stroke-width="14"/></svg>',
   },
 ] as const;
 
@@ -79,7 +79,7 @@ export function blueSquareConceptDocument(): string {
 <meta charset="utf-8" />
 <title>Blue square logo concepts</title>
 <style>
-  body { margin: 0; background: #111318; color: #f5f7fb; font-family: sans-serif; }
+  body { margin: 0; background: black; color: white; font-family: sans-serif; }
   h1 { font-size: 1.1rem; margin: 16px; }
   .stage { min-height: 280px; display: grid; place-items: center; }
   .slide { display: none; text-align: center; }
