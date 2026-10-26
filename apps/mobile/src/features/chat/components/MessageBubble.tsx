@@ -1,4 +1,5 @@
 import { View, useWindowDimensions, Alert, Modal, Platform } from 'react-native';
+import { thinkingDurationSecondsOf } from '../utils/thinkingDuration';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { readConnectorConnectRequest, type ConnectorConnectRequest } from '@agiworkforce/types';
 import { ConnectorConnectCard } from './ConnectorConnectCard';
@@ -1380,7 +1381,7 @@ export const MessageBubble = memo(function MessageBubble({
               <ThinkingChip
                 thinkingText={reasoningText ?? ''}
                 isStreaming={message.isStreaming}
-                duration={message.metadata?.thinkingDuration as number | undefined}
+                duration={thinkingDurationSecondsOf(message.metadata)}
                 startedAtMs={message.metadata?.thinkingStartedAt as number | undefined}
                 activity={canonicalActivity}
               />

@@ -149,7 +149,7 @@ describe('managed reasoning-delta frames', () => {
     expect(final.reasoning).toBe("I'm setting up the cryptarithm");
     expect(final.content).toBe('The answer is 42.');
     expect(final.isStreaming).toBe(false);
-    expect(final.metadata?.thinkingDuration).toEqual(expect.any(Number));
+    expect(final.metadata?.thinkingDurationSeconds).toEqual(expect.any(Number));
   });
 
   it('does not repeat reasoning that also arrives as thinking tags', async () => {

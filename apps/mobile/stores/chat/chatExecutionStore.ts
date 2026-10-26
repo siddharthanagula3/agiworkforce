@@ -2235,7 +2235,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                   localMode: true,
                   localModelId: localRef.modelId,
                   localModelName: localRef.displayName,
-                  ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
+                  ...(thinkingDuration !== undefined
+                    ? { thinkingDurationSeconds: thinkingDuration }
+                    : {}),
                 },
               }
             : m,
@@ -2744,7 +2746,9 @@ export const useChatExecutionStore = create<ExecutionState>()((set, get) => ({
                       ...(turnInteractiveCards.length > 0
                         ? { interactiveCards: turnInteractiveCards }
                         : {}),
-                      ...(thinkingDuration !== undefined ? { thinkingDuration } : {}),
+                      ...(thinkingDuration !== undefined
+                        ? { thinkingDurationSeconds: thinkingDuration }
+                        : {}),
                       ...(turnFinishReason !== undefined ? { finishReason: turnFinishReason } : {}),
                       ...(turnStreamError !== undefined ? { streamError: turnStreamError } : {}),
                       ...(agentActivity ? { agentActivity } : {}),
