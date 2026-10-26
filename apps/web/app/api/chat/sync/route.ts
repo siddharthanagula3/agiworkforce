@@ -107,7 +107,8 @@ async function handlePull(request: NextRequest) {
         : db.query<MessageDelta>(
             `
         select m.id, m.conversation_id, m.parent_id::text as parent_id,
-               m.role, m.content, m.model, m.provider,
+               m.role, case when m.deleted_at is null then m.content else '' end as content,
+               m.model, m.provider,
                m.input_tokens, m.output_tokens, m.metadata,
                m.created_at, m.updated_at, m.deleted_at, m.server_version
         from web_messages m
@@ -122,7 +123,8 @@ async function handlePull(request: NextRequest) {
         ? Promise.resolve<ArtifactDelta[]>([])
         : db.query<ArtifactDelta>(
             `
-        select id, conversation_id, message_id, title, artifact_type, language, content,
+        select id, conversation_id, message_id, title, artifact_type, language,
+               case when deleted_at is null then content else '' end as content,
                current_version, pinned, tags, created_at, updated_at, deleted_at, server_version
         from web_artifacts
         where user_id = $1 and server_version > $2
