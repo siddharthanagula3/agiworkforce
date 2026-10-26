@@ -1,11 +1,16 @@
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('../MermaidDiagram', () => ({
+type MermaidDiagramModule = typeof import('../MermaidDiagram');
+type HighlightedCodeModule = typeof import('../HighlightedCode');
+
+vi.mock('../MermaidDiagram', async (importOriginal) => ({
+  ...(await importOriginal<MermaidDiagramModule>()),
   MermaidDiagram: () => null,
 }));
 
-vi.mock('../HighlightedCode', () => ({
+vi.mock('../HighlightedCode', async (importOriginal) => ({
+  ...(await importOriginal<HighlightedCodeModule>()),
   HighlightedCode: ({ code, language }: { code: string; language: string }) => (
     <code data-testid="highlighted" data-language={language}>
       {code}
