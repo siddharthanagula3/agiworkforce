@@ -3592,9 +3592,12 @@ async function processAdmittedRequest(
             }>(
               `select c.id, c.project_id, c.is_temporary, c.selected_route_id, c.instructions, c.agent_id
                    from web_conversations c
-                  where c.id = $1 and c.user_id = $2 and c.deleted_at is null
+                  where c.id = $1
+                    and c.user_id = $2
+                    and c.organization_id is not distinct from $3
+                    and c.deleted_at is null
                   limit 1`,
-              [chatRequest.conversation_id, userId],
+              [chatRequest.conversation_id, userId, scoped.organizationId],
             ),
             readActiveStudyInstruction(scoped.db, userId, conversationId),
           ]);

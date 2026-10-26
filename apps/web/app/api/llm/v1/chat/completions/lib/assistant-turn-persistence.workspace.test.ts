@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({ execute: vi.fn(), query: vi.fn(async () => [] as unknown[]) }));
@@ -56,4 +58,19 @@ describe('assistant turn workspace persistence', () => {
       expect(params[9]).toBe(organizationId);
     },
   );
+});
+
+describe('completion conversation admission', () => {
+  it('loads a conversation only from the active workspace', () => {
+    const source = readFileSync(
+      join(process.cwd(), 'app/api/llm/v1/chat/completions/lib/request-processor.ts'),
+      'utf8',
+    );
+    const start = source.indexOf('select c.id, c.project_id, c.is_temporary');
+    const statement = source.slice(start, source.indexOf('limit 1', start));
+
+    expect(statement).toContain('c.user_id = $2');
+    expect(statement).toContain('c.organization_id is not distinct from $3');
+    expect(statement).toContain('c.deleted_at is null');
+  });
 });
