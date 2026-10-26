@@ -19,7 +19,10 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
-import { MANAGED_CLOUD_APPROVAL_HISTORY_PATH } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_APPROVAL_HISTORY_PATH,
+  type ManagedCloudWorkspaceOwnershipTransfer,
+} from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import settingsService, { type UserSettings, type APIKey } from '../services/user-preferences';
@@ -1246,7 +1249,9 @@ export function useLeaveOrganization(): LeaveOrganizationMutation {
  *
  * @returns UseMutationResult for removing a team member
  */
-export type OrganizationOwnerRoleAfterTransfer = 'admin' | 'member' | 'viewer';
+export type OrganizationOwnerRoleAfterTransfer = NonNullable<
+  ManagedCloudWorkspaceOwnershipTransfer['outgoingOwnerRole']
+>;
 
 export type TransferOwnershipVariables = {
   organizationId: string;

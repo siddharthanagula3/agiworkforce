@@ -40,3 +40,13 @@ export const ManagedCloudAccountWorkspacesSchema = z
   });
 
 export type ManagedCloudAccountWorkspaces = z.infer<typeof ManagedCloudAccountWorkspacesSchema>;
+
+export const ManagedCloudWorkspaceOwnershipTransferSchema = z.object({
+  organizationId: z.string().uuid('organizationId must be a UUID'),
+  toUserId: z.string().trim().min(1).max(255),
+  outgoingOwnerRole: z.enum(['admin', 'member', 'viewer']).default('admin'),
+});
+
+export type ManagedCloudWorkspaceOwnershipTransfer = z.input<
+  typeof ManagedCloudWorkspaceOwnershipTransferSchema
+>;

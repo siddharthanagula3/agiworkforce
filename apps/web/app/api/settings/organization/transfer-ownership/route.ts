@@ -1,7 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
-import { z } from 'zod';
+import { ManagedCloudWorkspaceOwnershipTransferSchema } from '@agiworkforce/cloud-contracts';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -18,12 +18,6 @@ import { requireTeamAdminAccess } from '@/app/api/settings/team/team-admin-acces
 import { requireEligibleOwnershipSuccessor } from '@/lib/services/organization-membership-service';
 import { canPerformOnOrganization } from '@/lib/resources';
 
-const TransferSchema = z.object({
-  organizationId: z.string().uuid('organizationId must be a UUID'),
-  toUserId: z.string().trim().min(1).max(255),
-  outgoingOwnerRole: z.enum(['admin', 'member', 'viewer']).default('admin'),
-});
-
 async function handleTransfer(request: NextRequest) {
   const rateLimitResponse = await withRateLimit(request, 'settings-org-transfer-ownership');
   if (rateLimitResponse) return rateLimitResponse;
@@ -34,7 +28,7 @@ async function handleTransfer(request: NextRequest) {
   const { userId } = await getClerkAuthUser(request);
 
   const body = await request.json().catch(() => ({}));
-  const parsed = TransferSchema.safeParse(body);
+  const parsed = ManagedCloudWorkspaceOwnershipTransferSchema.safeParse(body);
   if (!parsed.success) {
     throw createError.validation('Invalid request body', parsed.error.issues);
   }
