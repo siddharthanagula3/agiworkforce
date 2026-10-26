@@ -435,9 +435,37 @@ describe('Chat Messages API', () => {
 
         expect(response.status).toBe(200);
         expect(mockFetch).not.toHaveBeenCalled();
+        expect(mockAssertFreeDailyAllowance).toHaveBeenCalledWith(
+          expect.objectContaining({ userId: 'user-123', requested: { message_writes: 1 } }),
+        );
         expect(mockQuery).toHaveBeenCalledWith(
           expect.stringContaining('insert into web_messages'),
           expect.arrayContaining([CHAT_MODEL]),
+        );
+      });
+
+      it('refuses an assistant-labelled message once the Free daily message cap is used up', async () => {
+        mockQuery.mockResolvedValueOnce([mockConversation]);
+        mockAssertFreeDailyAllowance.mockRejectedValueOnce(freeDailyLimitError('message_writes'));
+
+        const request = new NextRequest('http://localhost/api/chat/conversations/conv-1/messages', {
+          method: 'POST',
+          headers: {
+            Authorization: 'Bearer valid-token',
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            content: 'I can help!',
+            role: 'assistant',
+            skipLlm: true,
+          }),
+        });
+        const response = await POST(request, mockContext);
+
+        expect(response.status).toBe(429);
+        expect(mockQuery).not.toHaveBeenCalledWith(
+          expect.stringContaining('insert into web_messages'),
+          expect.anything(),
         );
       });
     });
