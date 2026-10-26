@@ -95,11 +95,13 @@ export function ThinkingBlock({
   };
 
   const resolvedDuration: number = (() => {
-    if (durationSeconds !== undefined) return durationSeconds;
-    if (!isStreaming && completedAt && startedAt) {
-      return Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000);
-    }
-    return elapsedSeconds;
+    if (isStreaming) return durationSeconds ?? elapsedSeconds;
+    const measured =
+      durationSeconds ??
+      (completedAt && startedAt
+        ? Math.round((new Date(completedAt).getTime() - new Date(startedAt).getTime()) / 1000)
+        : undefined);
+    return measured === undefined ? 0 : Math.max(1, measured);
   })();
 
   const durationLabel = formatThinkingDuration(resolvedDuration);

@@ -61,3 +61,23 @@ describe('ThinkingBlock header ids', () => {
     }
   });
 });
+
+describe('ThinkingBlock duration', () => {
+  it('reads Thought for 1s when the reasoning finished inside a second', () => {
+    render(
+      <ThinkingBlock
+        content="Checking the arithmetic."
+        isStreaming={false}
+        startedAt="2026-10-26T02:42:23.462Z"
+        completedAt="2026-10-26T02:42:23.604Z"
+        durationSeconds={0}
+      />,
+    );
+    expect(screen.getByText('Thought for 1s')).toBeInTheDocument();
+  });
+
+  it('keeps the plain label only when no timing was recorded', () => {
+    render(<ThinkingBlock content="Checking the arithmetic." isStreaming={false} />);
+    expect(screen.getByText('Thought process')).toBeInTheDocument();
+  });
+});

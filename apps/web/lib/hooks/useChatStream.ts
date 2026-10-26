@@ -2275,10 +2275,13 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     patchMessageMeta({ thinkingSegments: thinkingSegments.map((s) => ({ ...s })) });
   };
 
+  const streamOpenedAt = new Date().toISOString();
   let thinkingActivityOpen = false;
   const openThinkingSegment = () => {
     coalescedAppends.flush();
-    const startedAt = new Date().toISOString();
+    const firstStepOfTurn =
+      thinkingSegments.length === 0 && !thinkingStartedAt && toolTimeline.length === 0;
+    const startedAt = firstStepOfTurn ? streamOpenedAt : new Date().toISOString();
     thinkingStartedAt = startedAt;
     thinkingSegments.push({
       id: `${assistantMessageId}-think-${thinkingSegments.length}`,
