@@ -1899,12 +1899,23 @@ impl AgentSession {
         managed_session.memory_nonce = Some(self.memory_nonce.clone());
         managed_session.workspace_root = self.workspace_root();
         managed_session.created_by = Some("cli".to_string());
-        let path = store.save(&managed_session)?;
+        let path = store.path_for(&managed_session.session_id)?;
         let carried = std::mem::take(&mut self.checkpoint_log);
         self.adopt_managed_session(managed_session, path.clone())?;
         self.checkpoint_log = carried.moved_into(std::mem::take(&mut self.checkpoint_log));
-        self.sync_managed_session_metadata()?;
-        Ok(())
+        self.persist_managed_session()
+    }
+
+    /// A session joins the history with its first message. Until then it has
+    /// nothing to resume, and writing it would list an empty session for
+    /// every launch that ended without one.
+    fn has_nothing_to_save(&self, path: &Path) -> bool {
+        !path.exists()
+            && !self.messages.iter().any(|message| message.role == "user")
+            && self
+                .managed_session
+                .as_ref()
+                .is_none_or(|session| session.code_session().tasks.is_empty())
     }
 
     /// Override the managed session ID with a caller-supplied UUID.  This must
@@ -1917,10 +1928,13 @@ impl AgentSession {
         crate::runtime::session::validate_managed_session_id(session_id)?;
         if let Some(ref mut ms) = self.managed_session {
             ms.session_id = session_id.to_string();
-            if let Some(ref path) = self.managed_session_path {
-                ms.save_to_path(path)?;
+            match self.managed_session_path.as_deref() {
+                Some(path) if path.exists() => {
+                    ms.save_to_path(path)?;
+                    self.sync_managed_session_metadata()?;
+                }
+                _ => {}
             }
-            self.sync_managed_session_metadata()?;
         }
         Ok(())
     }
@@ -2429,10 +2443,28 @@ impl AgentSession {
     }
 
     pub fn persist_managed_session(&mut self) -> Result<()> {
+        self.write_managed_session(false)
+    }
+
+    /// Write the session even before its first message, for a caller that
+    /// hands the session to someone else (Remote Control) right away.
+    pub fn persist_managed_session_now(&mut self) -> Result<()> {
+        self.write_managed_session(true)
+    }
+
+    fn write_managed_session(&mut self, even_if_empty: bool) -> Result<()> {
         if !self.session_persistence {
             return Ok(());
         }
         let workspace_root = self.workspace_root();
+        if !even_if_empty
+            && self
+                .managed_session_path
+                .as_deref()
+                .is_some_and(|path| self.has_nothing_to_save(path))
+        {
+            return Ok(());
+        }
         let (Some(managed_session), Some(path)) = (
             self.managed_session.as_mut(),
             self.managed_session_path.as_deref(),
@@ -2451,21 +2483,12 @@ impl AgentSession {
         if managed_session.created_by.is_none() {
             managed_session.created_by = Some("cli".to_string());
         }
-        if managed_session.title.is_none() {
-            managed_session.title = self
-                .messages
-                .iter()
-                .find(|message| message.role == "user")
-                .map(Message::text_content)
-                .map(|text| {
-                    text.split_whitespace()
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                        .chars()
-                        .take(80)
-                        .collect::<String>()
-                })
-                .filter(|title| !title.is_empty());
+        if managed_session
+            .title
+            .as_deref()
+            .is_none_or(is_envelope_title)
+        {
+            managed_session.title = title_from_messages(&self.messages, SESSION_TITLE_MAX_CHARS);
         }
         managed_session.permission_mode = Some(
             self.permission_mode
@@ -2810,6 +2833,7 @@ fn escape_attr(path: &Path) -> String {
         .replace('>', "&gt;")
 }
 
+const SESSION_TITLE_MAX_CHARS: usize = 80;
 const ACCOUNT_SKILLS_SESSION_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
 const TURN_CONTEXT_OPEN: &str = "<turn-context>\n";
 const TURN_CONTEXT_CLOSE: &str = "\n</turn-context>\n\n";
@@ -2824,6 +2848,49 @@ pub fn user_words(text: &str) -> &str {
     text.strip_prefix(TURN_CONTEXT_OPEN)
         .and_then(|rest| rest.split_once(TURN_CONTEXT_CLOSE))
         .map_or(text, |(_, typed)| typed)
+}
+
+const SPLICED_BLOCKS: [(&str, &str); 3] = [
+    ("<file path=", "</file>"),
+    ("<attached_files>", "</attached_files>"),
+    ("<context uri=", "</context>"),
+];
+
+/// The prompt as the user typed it: the turn context and the file contents an
+/// `@mention` or `--file` splices in ahead of it are not part of it.
+pub fn typed_prompt(text: &str) -> &str {
+    let mut rest = user_words(text).trim_start();
+    while let Some(after) = SPLICED_BLOCKS.iter().find_map(|(open, close)| {
+        rest.starts_with(open)
+            .then(|| rest.split_once(close).map(|(_, after)| after))
+            .flatten()
+    }) {
+        rest = after.trim_start();
+    }
+    rest
+}
+
+/// A stored title that is really the start of an envelope rather than words
+/// anyone chose, the way sessions were titled before titles came from
+/// [`typed_prompt`].
+pub fn is_envelope_title(title: &str) -> bool {
+    let title = title.trim_start();
+    title.starts_with(TURN_CONTEXT_OPEN.trim_end())
+        || SPLICED_BLOCKS
+            .iter()
+            .any(|(open, _)| title.starts_with(open))
+}
+
+/// A session's title from its first user message, at most `max_chars` long.
+pub fn title_from_messages(messages: &[Message], max_chars: usize) -> Option<String> {
+    let first = messages.iter().find(|message| message.role == "user")?;
+    let text = first.text_content();
+    let words = typed_prompt(&text)
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let title: String = words.chars().take(max_chars).collect();
+    (!title.is_empty()).then_some(title)
 }
 
 /// The account project this working directory has been linked to with
@@ -4727,6 +4794,54 @@ mod tests {
             session.session_persistence_enabled(),
             "a run without --no-session-persistence must still persist"
         );
+    }
+
+    #[test]
+    fn a_launch_that_never_sends_a_message_adds_nothing_to_history() {
+        let mut session = persistence_test_session(true);
+        session.enable_managed_session().expect("enable");
+        let path = session.managed_session_path.clone().expect("bound path");
+
+        session.persist_managed_session().expect("persist on exit");
+        assert!(
+            !path.exists(),
+            "a session with only its system prompt was written to history"
+        );
+
+        session
+            .messages
+            .push(Message::text("user", "the first real message"));
+        session.persist_managed_session().expect("persist the turn");
+        assert!(path.exists(), "the first message must save the session");
+    }
+
+    #[test]
+    fn a_session_title_is_what_the_user_typed_not_the_context_sent_with_it() {
+        let sent = with_turn_context(
+            "[workspace] main, 3 files changed\n\n<attached_files>\n<attached_file path=\"a.rs\">\nfn a() {}\n</attached_file>\n</attached_files>",
+            "<file path=\"b.rs\">\nfn b() {}\n</file>\n\nRename   the parser",
+        );
+        let mut session = persistence_test_session(true);
+        session.enable_managed_session().expect("enable");
+        session.messages.push(Message::text("user", sent.clone()));
+        session.persist_managed_session().expect("persist");
+
+        let path = session.managed_session_path.clone().expect("path");
+        let saved = ManagedSession::load_from_path(&path).expect("load");
+        assert_eq!(saved.title.as_deref(), Some("Rename the parser"));
+
+        let mut legacy = saved.clone();
+        legacy.title = Some("<turn-context> [workspace] main, 3 files changed".to_string());
+        legacy.save_to_path(&path).expect("write a legacy title");
+        let listed = crate::runtime::session_control::ManagedSessionStore::user_config()
+            .expect("store")
+            .list()
+            .expect("list")
+            .into_iter()
+            .find(|summary| summary.session_id == saved.session_id)
+            .expect("listed");
+        assert_eq!(listed.title.as_deref(), Some("Rename the parser"));
+        assert_eq!(typed_prompt(&sent), "Rename   the parser");
     }
 
     #[test]

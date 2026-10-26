@@ -38,6 +38,8 @@ pub struct ManagedSessionSummary {
     pub message_count: usize,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub title: Option<String>,
+    #[serde(skip)]
+    pub has_user_message: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -142,6 +144,15 @@ impl ManagedSessionStore {
         save_session_in(&self.base_dir, session)
     }
 
+    /// Where `save` writes a session with this id, without writing it.
+    pub fn path_for(&self, session_id: &str) -> Result<PathBuf> {
+        validate_managed_session_id(session_id)?;
+        Ok(managed_session_dir_in(&self.base_dir).join(format!(
+            "{session_id}.{}",
+            super::session::MANAGED_SESSION_JSONL_EXTENSION
+        )))
+    }
+
     pub fn archive(&self, reference: ManagedSessionReference) -> Result<()> {
         let resolved = self.resolve(reference)?;
         let mut session = load_session_from_path(&resolved.path)?;
@@ -197,6 +208,15 @@ impl ManagedSessionReference {
     }
 }
 
+const LISTED_TITLE_MAX_CHARS: usize = 80;
+
+fn listed_title(session: &ManagedSession) -> Option<String> {
+    match session.title.as_deref() {
+        Some(title) if !crate::agent::is_envelope_title(title) => Some(title.to_string()),
+        _ => crate::agent::title_from_messages(&session.messages, LISTED_TITLE_MAX_CHARS),
+    }
+}
+
 impl ManagedSessionSummary {
     fn from_session(session: &ManagedSession, path: PathBuf) -> Self {
         Self {
@@ -206,7 +226,11 @@ impl ManagedSessionSummary {
             created_at: session.created_at,
             updated_at: session.updated_at,
             message_count: session.messages.len(),
-            title: session.title.clone(),
+            title: listed_title(session),
+            has_user_message: session
+                .messages
+                .iter()
+                .any(|message| message.role == "user"),
             model: session.model.clone(),
             workspace_root: session.workspace_root.clone(),
             created_by: session.created_by.clone(),
@@ -309,13 +333,8 @@ fn summary_from_path(path: PathBuf) -> Result<ManagedSessionSummary> {
 }
 
 fn save_session_in(base_dir: &Path, session: &ManagedSession) -> Result<PathBuf> {
-    validate_managed_session_id(&session.session_id)?;
-    let dir = ensure_managed_session_dir(base_dir)?;
-    let path = dir.join(format!(
-        "{}.{}",
-        session.session_id,
-        super::session::MANAGED_SESSION_JSONL_EXTENSION
-    ));
+    ensure_managed_session_dir(base_dir)?;
+    let path = ManagedSessionStore::new(base_dir.to_path_buf()).path_for(&session.session_id)?;
     session.save_to_path(&path)?;
     Ok(path)
 }
@@ -341,8 +360,8 @@ fn list_managed_sessions_in(base_dir: &Path) -> Result<Vec<ManagedSessionSummary
         let path = match entry {
             Ok(entry) => entry.path(),
             Err(error) => {
-                eprintln!(
-                    "warning: skipped unreadable managed-session directory entry in {}: {error}",
+                tracing::warn!(
+                    "skipped unreadable managed-session directory entry in {}: {error}",
                     dir.display()
                 );
                 continue;
@@ -356,8 +375,8 @@ fn list_managed_sessions_in(base_dir: &Path) -> Result<Vec<ManagedSessionSummary
         let summary = match summary_from_path(path.clone()) {
             Ok(summary) => summary,
             Err(error) => {
-                eprintln!(
-                    "warning: skipped invalid managed session {}: {error:#}",
+                tracing::warn!(
+                    "skipped invalid managed session {}: {error:#}",
                     path.display()
                 );
                 continue;
@@ -626,13 +645,14 @@ pub(crate) fn resolve_visible_managed_session_in(
     Ok(resolved)
 }
 
-/// The managed sessions a listing offers, archived ones and another
-/// account's left out.
+/// The managed sessions a listing offers: archived ones, ones nobody wrote
+/// in, and another account's are left out.
 pub fn list_active_managed_sessions() -> Result<Vec<ManagedSessionSummary>> {
     let signed_in = signed_in_account();
     let mut sessions = ManagedSessionStore::user_config()?.list_active()?;
     sessions.retain(|summary| {
-        session_visible_to_account(summary.account.as_deref(), signed_in.as_deref())
+        summary.has_user_message
+            && session_visible_to_account(summary.account.as_deref(), signed_in.as_deref())
     });
     Ok(sessions)
 }

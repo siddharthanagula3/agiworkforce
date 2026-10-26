@@ -361,22 +361,17 @@ fn write_metadata(base_dir: &Path, session_id: &str, metadata: &SessionMetadata)
 }
 
 fn infer_title(messages: &[Message]) -> String {
-    messages
-        .iter()
-        .find(|message| message.role == "user")
-        .map(|message| {
-            let text = crate::agent::user_words(&message.text_content()).to_string();
-            let normalized = text.split_whitespace().collect::<Vec<_>>().join(" ");
-            let truncated: String = normalized.chars().take(50).collect();
-            if normalized.chars().count() > 50 {
-                format!("{truncated}...")
-            } else {
-                truncated
-            }
-        })
-        .filter(|title| !title.trim().is_empty())
-        .unwrap_or_else(|| "Untitled".to_string())
+    match crate::agent::title_from_messages(messages, INFERRED_TITLE_MAX_CHARS + 1) {
+        Some(title) if title.chars().count() > INFERRED_TITLE_MAX_CHARS => {
+            let truncated: String = title.chars().take(INFERRED_TITLE_MAX_CHARS).collect();
+            format!("{truncated}...")
+        }
+        Some(title) => title,
+        None => "Untitled".to_string(),
+    }
 }
+
+const INFERRED_TITLE_MAX_CHARS: usize = 50;
 
 fn total_tokens(messages: &[Message]) -> i64 {
     messages
@@ -537,6 +532,7 @@ fn summary_from_session(
     let title = metadata
         .and_then(|value| value.title.clone())
         .or_else(|| session.title.clone())
+        .filter(|title| !crate::agent::is_envelope_title(title))
         .unwrap_or_else(|| infer_title(&session.messages));
     let model = metadata
         .and_then(|value| value.model.clone())
