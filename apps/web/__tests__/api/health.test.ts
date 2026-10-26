@@ -94,7 +94,7 @@ vi.mock('@/lib/server/neon-db', () => ({
   })),
 }));
 
-import { GET } from '@/app/api/health/route';
+import { GET, redactPublicCapabilityCheck } from '@/app/api/health/route';
 
 describe('Health Check API', () => {
   beforeEach(() => {
@@ -394,6 +394,37 @@ describe('Health Check API', () => {
       expect(data.checks.database.status).toBe('unhealthy');
       expect(data.checks.database.message).toBe('unavailable');
     });
+  });
+});
+
+describe('public health capability messages', () => {
+  it('replaces an internal finding with a generic unhealthy message', () => {
+    expect(
+      redactPublicCapabilityCheck({
+        status: 'unhealthy',
+        message: '1 queue(s) not draining',
+      }),
+    ).toEqual({ status: 'unhealthy', message: 'unavailable' });
+    expect(
+      redactPublicCapabilityCheck({ status: 'unhealthy', message: 'index schema missing' }),
+    ).toEqual({ status: 'unhealthy', message: 'unavailable' });
+  });
+
+  it('keeps generic messages and drops a detail on a healthy check', () => {
+    expect(
+      redactPublicCapabilityCheck({
+        status: 'unhealthy',
+        message: 'unavailable',
+        blocksBilling: true,
+      }),
+    ).toEqual({ status: 'unhealthy', message: 'unavailable', blocksBilling: true });
+    expect(redactPublicCapabilityCheck({ status: 'healthy', message: 'not configured' })).toEqual({
+      status: 'healthy',
+      message: 'not configured',
+    });
+    expect(
+      redactPublicCapabilityCheck({ status: 'healthy', message: 'oldest due job has waited 90m' }),
+    ).toEqual({ status: 'healthy' });
   });
 });
 
