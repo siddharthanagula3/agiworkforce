@@ -40,6 +40,9 @@ describe('GET /api/mcp-apps/sandbox is a stateless relay document', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Type')).toContain('text/html');
     expect(body).toContain('sandbox-proxy-ready');
+    expect(body).toContain('sandbox="allow-scripts allow-forms"');
+    expect(body).not.toContain('params.sandbox');
+    expect(body).not.toContain("setAttribute('sandbox'");
     expect(body).not.toMatch(/payload|token|authorization|cookie/i);
     expect(body).not.toContain('fetch(');
   });

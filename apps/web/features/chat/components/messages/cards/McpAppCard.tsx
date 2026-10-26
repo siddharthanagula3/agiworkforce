@@ -53,6 +53,44 @@ interface AppResource {
   permissions?: McpUiResourcePermissions;
 }
 
+const DEVICE_PERMISSIONS = ['camera', 'microphone', 'geolocation', 'clipboardWrite'] as const;
+
+type DevicePermission = (typeof DEVICE_PERMISSIONS)[number];
+
+type DeviceGrant = 'unneeded' | 'pending' | 'granted' | 'denied';
+
+const DEVICE_PERMISSION_LABEL: Record<DevicePermission, string> = {
+  camera: 'camera',
+  microphone: 'microphone',
+  geolocation: 'location',
+  clipboardWrite: 'clipboard',
+};
+
+export function requestedDevicePermissions(
+  permissions: McpUiResourcePermissions | undefined,
+): DevicePermission[] {
+  if (!permissions) return [];
+  return DEVICE_PERMISSIONS.filter((key) => permissions[key] !== undefined);
+}
+
+export function deviceAccessSentence(names: readonly DevicePermission[]): string {
+  const labels = names.map((name) => DEVICE_PERMISSION_LABEL[name]);
+  if (labels.length === 0) return 'This app wants to use this device.';
+  if (labels.length === 1) return `This app wants to use your ${labels[0]}.`;
+  const last = labels[labels.length - 1];
+  return `This app wants to use your ${labels.slice(0, -1).join(', ')} and ${last}.`;
+}
+
+function permissionsForGrant(
+  permissions: McpUiResourcePermissions | undefined,
+  grant: DeviceGrant,
+): McpUiResourcePermissions | undefined {
+  if (!permissions || grant === 'granted') return permissions;
+  const next: McpUiResourcePermissions = { ...permissions };
+  for (const key of DEVICE_PERMISSIONS) delete next[key];
+  return Object.keys(next).length > 0 ? next : undefined;
+}
+
 interface PendingApproval {
   name: string;
   resolve: (approved: boolean) => void;
@@ -185,6 +223,15 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
   const [fallback, setFallback] = useState<PlainResultFallback | null>(null);
   const [height, setHeight] = useState(360);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
+  const resourceKey = `${body.payloadId}\0${body.connectorId}\0${body.resourceUri}\0${body.toolName}`;
+  const [trackedResourceKey, setTrackedResourceKey] = useState(resourceKey);
+  const [deviceGrant, setDeviceGrant] = useState<DeviceGrant>('unneeded');
+  const [deviceAsk, setDeviceAsk] = useState<DevicePermission[] | null>(null);
+  if (trackedResourceKey !== resourceKey) {
+    setTrackedResourceKey(resourceKey);
+    setDeviceGrant('unneeded');
+    setDeviceAsk(null);
+  }
 
   useEffect(() => {
     let disposed = false;
@@ -224,6 +271,14 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
         });
         const resource = extractAppResource(resourceEnvelope, body.resourceUri);
         if (disposed) return;
+        const requestedDevices = requestedDevicePermissions(resource.permissions);
+        if (requestedDevices.length > 0 && deviceGrant === 'unneeded') {
+          setDeviceAsk(requestedDevices);
+          setDeviceGrant('pending');
+          return;
+        }
+        if (requestedDevices.length > 0 && deviceGrant === 'pending') return;
+        const grantedPermissions = permissionsForGrant(resource.permissions, deviceGrant);
 
         const bridge = new AppBridge(
           null,
@@ -319,8 +374,9 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
               ? 'allow-scripts allow-same-origin allow-forms'
               : 'allow-scripts allow-forms',
           );
-          const allow = buildAllowAttribute(resource.permissions);
+          const allow = buildAllowAttribute(grantedPermissions);
           if (allow) iframe.setAttribute('allow', allow);
+          else iframe.removeAttribute('allow');
           iframe.src = sandboxUrl.toString();
         });
         if (disposed) return;
@@ -330,7 +386,7 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
         await bridge.sendSandboxResourceReady({
           html: resource.html,
           ...(resource.csp ? { csp: resource.csp } : {}),
-          ...(resource.permissions ? { permissions: resource.permissions } : {}),
+          ...(grantedPermissions ? { permissions: grantedPermissions } : {}),
         });
       } catch (reason) {
         if (disposed) return;
@@ -359,11 +415,11 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
       void bridgeRef.current?.close().catch(() => undefined);
       bridgeRef.current = null;
     };
-  }, [body.connectorId, body.payloadId, body.resourceUri, body.toolName]);
+  }, [body.connectorId, body.payloadId, body.resourceUri, body.toolName, deviceGrant]);
 
   return (
     <section className="my-2 overflow-hidden rounded-xl border border-border bg-card">
-      {status === 'loading' ? (
+      {status === 'loading' && !deviceAsk ? (
         <div className="flex items-center gap-2 px-4 py-3 text-sm text-muted-foreground">
           <Spinner size="sm" aria-hidden="true" /> Loading MCP App…
         </div>
@@ -390,10 +446,41 @@ export function McpAppCard({ body }: { body: McpAppCardBody }) {
       <iframe
         ref={iframeRef}
         title={`${body.toolName} interactive result`}
-        className={status === 'error' || status === 'fallback' ? 'hidden' : 'block w-full border-0'}
+        className={
+          status === 'error' || status === 'fallback' || deviceAsk
+            ? 'hidden'
+            : 'block w-full border-0'
+        }
         style={{ height }}
         referrerPolicy="no-referrer"
       />
+      {deviceAsk ? (
+        <div className="border-t border-border bg-muted/50 px-4 py-3">
+          <p className="text-xs text-foreground">{deviceAccessSentence(deviceAsk)}</p>
+          <div className="mt-2 flex gap-2">
+            <button
+              type="button"
+              className="rounded-md bg-primary px-3 py-1.5 text-xs text-primary-foreground"
+              onClick={() => {
+                setDeviceGrant('granted');
+                setDeviceAsk(null);
+              }}
+            >
+              Allow once
+            </button>
+            <button
+              type="button"
+              className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground"
+              onClick={() => {
+                setDeviceGrant('denied');
+                setDeviceAsk(null);
+              }}
+            >
+              Deny
+            </button>
+          </div>
+        </div>
+      ) : null}
       {pendingApproval ? (
         <div className="border-t border-border bg-muted/50 px-4 py-3">
           <p className="text-xs text-foreground">

@@ -71,6 +71,10 @@ function buildCsp(csp?: McpUiResourceCsp): string {
   ].join('; ');
 }
 
+// The inner frame keeps the sandbox written in the markup. A notification
+// can carry an override, and applying it would let a parent add
+// allow-same-origin or top navigation. Device permissions still arrive on
+// the same notification, and the host asks before it includes them.
 const PROXY_HTML = `<!doctype html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <style>html,body,#view{box-sizing:border-box;width:100%;height:100%;margin:0;border:0;background:transparent}#view{display:block}</style></head>
@@ -84,7 +88,6 @@ const PROXY_HTML = `<!doctype html>
     if(event.source===parent){
       if(event.data&&event.data.method===resource){
         const params=event.data.params||{};
-        if(typeof params.sandbox==='string')inner.setAttribute('sandbox',params.sandbox);
         const permissions=params.permissions||{};
         const allow=Object.keys(permissions).map((key)=>allowMap[key]).filter(Boolean).join('; ');
         if(allow)inner.setAttribute('allow',allow);
