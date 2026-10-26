@@ -6,15 +6,19 @@ import { describe, expect, it } from 'vitest';
 const require = createRequire(import.meta.url);
 const {
   PACKAGED_RUNTIME_OUTPUT_ALLOWLIST,
+  isAllowedRuntimeOutput,
   validatePackagedRuntimeOutput,
 }: {
   PACKAGED_RUNTIME_OUTPUT_ALLOWLIST: readonly string[];
+  isAllowedRuntimeOutput: (file: string) => boolean;
   validatePackagedRuntimeOutput: (files: string[], options?: { requireAll?: boolean }) => void;
 } = require('../../scripts/vsce-package.js');
 
 const EXPECTED_RUNTIME_OUTPUT = [
   'out/extension.js',
   'out/webview/render.js',
+  'out/webview/enhance/enhance.js',
+  'out/webview/katex/katex.min.css',
   'out/codicons/codicon.css',
   'out/codicons/codicon.ttf',
 ];
@@ -43,9 +47,7 @@ describe('VSIX package hygiene', () => {
 
     expect(result.status, result.stderr || result.stdout).toBe(0);
     const runtimeFiles = result.stdout.split(/\r?\n/u).filter((file) => file.startsWith('out/'));
-    expect(runtimeFiles.every((file) => PACKAGED_RUNTIME_OUTPUT_ALLOWLIST.includes(file))).toBe(
-      true,
-    );
+    expect(runtimeFiles.filter((file) => !isAllowedRuntimeOutput(file))).toEqual([]);
   });
 
   it('packages the Marketplace README but not the contributor notes', { timeout: 60_000 }, () => {
@@ -69,6 +71,15 @@ describe('VSIX package hygiene', () => {
         'out/features/stale.js',
       ]),
     ).toThrow(/out\/features\/stale\.js/u);
+  });
+
+  it('admits the split enhancer chunks and KaTeX fonts but nothing else beside them', () => {
+    expect(isAllowedRuntimeOutput('out/webview/enhance/chunk-5XQZ3ABC.js')).toBe(true);
+    expect(isAllowedRuntimeOutput('out/webview/katex/fonts/KaTeX_Main-Regular.woff2')).toBe(true);
+    expect(isAllowedRuntimeOutput('out/webview/enhance/chunk-5XQZ3ABC.js.map')).toBe(false);
+    expect(isAllowedRuntimeOutput('out/webview/enhance/stale.js')).toBe(false);
+    expect(isAllowedRuntimeOutput('out/webview/katex/fonts/KaTeX_Main-Regular.ttf')).toBe(false);
+    expect(isAllowedRuntimeOutput('out/webview/katex/other.css')).toBe(false);
   });
 
   it('requires every runtime asset when creating a release package', () => {

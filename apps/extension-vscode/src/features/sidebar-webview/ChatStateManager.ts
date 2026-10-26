@@ -132,6 +132,7 @@ import { resolveProjectsWorkspace } from '../projects/projectsClient';
 import { SHOW_ARCHIVED_SESSIONS_COMMAND } from '../trees/sessionPickers';
 import { isCloudThread, showCloudSession } from '../trees/cloudSessions';
 import { rememberTypedText, typedTextFor } from './typedMessages';
+import { previousAnswersFor, rememberReplacedAnswer } from './answerVariants';
 import { conversationMarkdown, exportFileName } from './conversationExport';
 import {
   CONTINUE_IN_CLOUD_COMMAND,
@@ -182,7 +183,12 @@ import {
 } from '../remote-control/approvalAnswers';
 import { t, tPlural } from '../../l10n';
 import { openTurnChanges, writtenFilePath } from './turnChanges';
-import { openPathReference, openWorkspaceFileDiff, type PathReferenceTarget } from '../path-links';
+import {
+  openPathReference,
+  openWorkspaceFileDiff,
+  resolvePathReferenceExistence,
+  type PathReferenceTarget,
+} from '../path-links';
 import { buildCustomInstructionInput } from '../instructions';
 import { clearActiveCloudProject, getActiveCloudProject } from '../projects/activeProject';
 import { OPEN_PROJECT_COMMAND } from '../projects/projectsTree';
@@ -373,6 +379,7 @@ export type WebviewToExtMessage =
   | { type: 'openPrivacySettings' }
   | { type: 'openRecentConversation'; payload: { threadId: string } }
   | { type: 'openPathReference'; payload: PathReferenceTarget }
+  | { type: 'resolvePathReferences'; payload: { paths: string[] } }
   | { type: 'requestContextMenuState' }
   | { type: 'attachContext'; payload: { kind: ContextAttachmentKind } }
   | { type: 'dismissEditorContext'; payload: { id: string } }
@@ -444,6 +451,8 @@ export type WebviewToExtMessage =
 
 export type ExtToWebviewMessage =
   | { type: 'token'; payload: { text: string } }
+  | { type: 'pathReferencesResolved'; payload: { results: Record<string, boolean> } }
+  | { type: 'answerVariants'; payload: { previousAnswers: string[] } }
   | { type: 'reasoning'; payload: { text: string } }
   | { type: 'answerRating'; payload: { key: string; rating: AnswerRating | null } }
   | {
@@ -523,6 +532,7 @@ export type ExtToWebviewMessage =
           text: string;
           index?: number;
           rating?: AnswerRating;
+          previousAnswers?: string[];
         }>;
         plan?: PlanVisualization;
         subagents?: DeveloperChildTask[];
@@ -1438,6 +1448,14 @@ export class ChatStateManager {
 
       case 'openPathReference': {
         await openPathReference(msg.payload);
+        break;
+      }
+
+      case 'resolvePathReferences': {
+        this._post({
+          type: 'pathReferencesResolved',
+          payload: { results: await resolvePathReferenceExistence(msg.payload.paths) },
+        });
         break;
       }
 
@@ -4791,36 +4809,39 @@ export class ChatStateManager {
     }
   }
 
-  /**
-   * Regenerate answers the last question again instead of asking it a second
-   * time. The session is branched just before that question and the question
-   * is sent on the branch, so the new answer takes the old one's place while
-   * the old answer stays in the original session, as a sibling does on Web.
-   */
   private async _regenerateLastAnswer(): Promise<boolean> {
     const thread = this._thread;
     if (thread === undefined || this.turnInFlight()) return false;
-    if (!(await thread.runtime.offers('forkAtMessage'))) return false;
+    if (!(await thread.runtime.offers('checkpoints'))) return false;
     const read = await thread.runtime.readThread(thread.id);
-    const question = normalizeTranscriptMessages(read.messages)
-      .filter((message) => message.role === 'user' && message.index !== undefined)
-      .at(-1);
+    const transcript = normalizeTranscriptMessages(read.messages);
+    const questionPosition = transcript.findLastIndex(
+      (message) => message.role === 'user' && message.index !== undefined,
+    );
+    const question = transcript[questionPosition];
     if (question?.index === undefined) return false;
+    const replaced = transcript
+      .slice(questionPosition + 1)
+      .filter((message) => message.role === 'assistant')
+      .map((message) => message.text)
+      .join('\n\n');
     const text =
       typedTextFor(this._context.workspaceState, thread.id, question.index, question.text) ??
       question.text;
-    if (question.index === 0) {
-      this.resetConversation();
-      this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
-      return true;
-    }
-    const forked = await thread.runtime.forkThread(
+    const outcome = await thread.runtime.rewindThread({
+      threadId: thread.id,
+      messageIndex: question.index,
+      restore: 'conversation',
+    });
+    if (!outcome.conversationRestored || this._thread !== thread) return false;
+    const previousAnswers = await rememberReplacedAnswer(
+      this._context.workspaceState,
       thread.id,
-      t('messageActions.branchTitle', { title: read.thread.title }),
-      question.index - 1,
+      question.index,
+      replaced,
     );
-    this._conversationTreeProvider?.refresh();
-    if (!(await this.resumeConversation(forked.id))) return false;
+    if (!(await this.resumeConversation(thread.id))) return false;
+    this._post({ type: 'answerVariants', payload: { previousAnswers } });
     this._post({ type: 'composerDraft', payload: { text, references: [], submit: true } });
     return true;
   }
@@ -4908,7 +4929,8 @@ export class ChatStateManager {
     >,
   ): ConversationLoadedPayload {
     const plan = planFromThread(response.plan, response.todos);
-    const messages = normalizeTranscriptMessages(response.messages).map((message) => {
+    const transcript = normalizeTranscriptMessages(response.messages);
+    const messages = transcript.map((message, position) => {
       if (message.role === 'user') {
         const typed =
           message.index === undefined
@@ -4920,7 +4942,12 @@ export class ChatStateManager {
         this._context.globalState,
         answerRatingId(summary.id, message.text),
       );
-      return rating === undefined ? message : { ...message, rating };
+      const previousAnswers = this._previousAnswersAt(summary.id, transcript, position);
+      return {
+        ...message,
+        ...(rating === undefined ? {} : { rating }),
+        ...(previousAnswers.length === 0 ? {} : { previousAnswers }),
+      };
     });
     return {
       threadId: summary.id,
@@ -4933,6 +4960,22 @@ export class ChatStateManager {
       ...(plan === undefined ? {} : { plan }),
       ...(response.childTasks?.length ? { subagents: response.childTasks } : {}),
     };
+  }
+
+  private _previousAnswersAt(
+    threadId: string,
+    transcript: ReadonlyArray<{ role: 'user' | 'assistant'; index?: number }>,
+    position: number,
+  ): string[] {
+    if (transcript[position + 1]?.role === 'assistant') return [];
+    for (let cursor = position - 1; cursor >= 0; cursor -= 1) {
+      const message = transcript[cursor];
+      if (message?.role !== 'user') continue;
+      return message.index === undefined
+        ? []
+        : previousAnswersFor(this._context.workspaceState, threadId, message.index);
+    }
+    return [];
   }
 
   private _postSubagents(conversation: ConversationLoadedPayload): void {

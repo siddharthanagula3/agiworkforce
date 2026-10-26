@@ -120,6 +120,15 @@ const openPathReference = z.object({
   }),
 });
 
+export const MAX_PATH_REFERENCE_LOOKUPS = 200;
+
+const resolvePathReferences = z.object({
+  type: z.literal('resolvePathReferences'),
+  payload: z.object({
+    paths: z.array(z.string().min(1).max(1024)).min(1).max(MAX_PATH_REFERENCE_LOOKUPS),
+  }),
+});
+
 const attachFiles = z.object({
   type: z.literal('attachFiles'),
   payload: z.object({
@@ -354,6 +363,7 @@ export const WebviewToExtSchema = z.discriminatedUnion('type', [
   openHelp,
   openRecentConversation,
   openPathReference,
+  resolvePathReferences,
   requestContextMenuState,
   attachContext,
   dismissEditorContext,

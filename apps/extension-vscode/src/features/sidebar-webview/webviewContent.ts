@@ -138,6 +138,12 @@ export function getWebviewContent(
   const renderJsUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR, 'render.js'),
   );
+  const enhanceJsUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR, 'enhance', 'enhance.js'),
+  );
+  const katexCssUri = webview.asWebviewUri(
+    vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR, 'katex', 'katex.min.css'),
+  );
 
   return /* html */ `<!DOCTYPE html>
 <html lang="en">
@@ -148,10 +154,11 @@ export function getWebviewContent(
     content="default-src 'none';
              style-src 'nonce-${nonce}' ${cspSource};
              script-src 'nonce-${nonce}' ${cspSource};
-             img-src ${cspSource};
+             img-src ${cspSource} blob:;
              font-src ${cspSource};" />
   <title>${PRODUCT_NAMES.code}</title>
   <link rel="stylesheet" href="${codiconCssUri}" />
+  <link rel="stylesheet" href="${katexCssUri}" />
   <style nonce="${nonce}">
     :root {
       /* Host theme first; AGI tokens are complete fallbacks for compatible IDEs. */
@@ -645,7 +652,23 @@ export function getWebviewContent(
       align-self: stretch;
       color: var(--text-primary);
       padding-inline: 2px;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: break-word;
     }
+    .message.assistant > :first-child { margin-top: 0; }
+    .message.assistant p,
+    .message.assistant ul,
+    .message.assistant ol,
+    .message.assistant blockquote,
+    .message.assistant table { margin: 0 0 10px; }
+    .message.assistant ul,
+    .message.assistant ol { padding-left: 4px; }
+    .message.assistant li { margin-top: 2px; margin-bottom: 2px; }
+    .message.assistant li > p { margin: 0; }
+    .message.assistant > :last-child,
+    .message.assistant > :has(+ .message-actions),
+    .message.assistant > :has(+ .message-sources) { margin-bottom: 0; }
 
     .message-actions {
       display: flex;
@@ -695,6 +718,10 @@ export function getWebviewContent(
     .message-sources__host { margin-left: 6px; }
     .message-action--regenerate { display: none; }
     .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .answer-variants { display: inline-flex; align-items: center; gap: 2px; margin-right: 4px; color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .answer-variants__count { min-width: 3ch; text-align: center; font-variant-numeric: tabular-nums; }
+    .answer-variants .message-action:disabled { opacity: 0.4; cursor: default; }
+    .answer-variants .message-action:disabled:hover { background: transparent; color: var(--text-secondary); }
     .message-meta {
       align-self: center;
       margin-left: 6px;
@@ -1302,8 +1329,19 @@ export function getWebviewContent(
     h2, h3, h4 { margin: 8px 0 4px; font-weight: 600; }
     h2 { font-size: var(--type-h2-size); line-height: var(--type-h2-height); } h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-height); } h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
-    .message table { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
-    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    .message table { display: block; width: max-content; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
+    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; hyphens: manual; }
+    .message [data-math='display'] { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; overflow-y: hidden; }
+    .message .katex { font-size: 1.1em; }
+    .shiki-token { color: var(--shiki-light); font-style: var(--shiki-light-font-style, normal); font-weight: var(--shiki-light-font-weight, normal); text-decoration: var(--shiki-light-text-decoration, none); }
+    body.vscode-dark .shiki-token,
+    body.vscode-high-contrast:not(.vscode-high-contrast-light) .shiki-token { color: var(--shiki-dark); font-style: var(--shiki-dark-font-style, normal); font-weight: var(--shiki-dark-font-weight, normal); text-decoration: var(--shiki-dark-text-decoration, none); }
+    .mermaid-diagram { margin: 8px 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--corner-control); background: var(--bg-overlay); overflow-x: auto; }
+    .mermaid-diagram img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+    .mermaid-diagram__toggle { margin-top: 8px; background: none; border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--text-secondary); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; }
+    .mermaid-diagram__toggle:hover { background: var(--hover); color: var(--text-primary); }
+    .mermaid-diagram + .code-block-wrapper { margin-top: -4px; }
+    .mermaid-render-host { position: absolute; left: -10000px; top: 0; width: 1200px; visibility: hidden; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
     ol > li { list-style: decimal; }
@@ -3123,8 +3161,9 @@ export function getWebviewContent(
   </div>
 
   <!-- Markdown rendering bundle (markdown-it + DOMPurify). Loaded before the
-       inline script so window.agiRender is available when needed. -->
-  <script nonce="${nonce}" src="${renderJsUri}"></script>
+       inline script so window.agiRender is available when needed. It imports
+       the math, highlighting and diagram enhancer on first use. -->
+  <script nonce="${nonce}" src="${renderJsUri}" data-enhance-src="${enhanceJsUri}"></script>
 
   <script nonce="${nonce}">
     var L10N = ${webviewStringsScript()};
@@ -4260,6 +4299,72 @@ export function getWebviewContent(
     }
 
     var assistantSources = new WeakMap();
+    var pendingPreviousAnswers = null;
+
+    function showAnswerVariant(messageEl, text) {
+      var row = messageEl.querySelector(':scope > .message-actions');
+      if (!row) return;
+      var nodes = Array.prototype.slice.call(messageEl.childNodes);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        if (node === row) break;
+        if (node.classList && node.classList.contains('visually-hidden')) continue;
+        node.remove();
+      }
+      var holder = document.createElement('div');
+      holder.innerHTML = renderAssistant(text);
+      while (holder.firstChild) messageEl.insertBefore(holder.firstChild, row);
+      if (typeof window.agiEnhance === 'function') window.agiEnhance(messageEl);
+      requestPathResolution();
+      bindCodeBlockActions(messageEl);
+      assistantSources.set(messageEl, text);
+    }
+
+    function appendAnswerVariants(messageEl, currentText, previousAnswers) {
+      if (!messageEl || !Array.isArray(previousAnswers) || previousAnswers.length === 0) return;
+      var row = messageEl.querySelector(':scope > .message-actions');
+      if (!row) return;
+      var variants = previousAnswers.concat([currentText]);
+      var position = variants.length - 1;
+      var nav = document.createElement('span');
+      nav.className = 'answer-variants';
+      nav.setAttribute('role', 'group');
+      function navButton(iconClass, label) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        var icon = document.createElement('span');
+        icon.className = 'codicon ' + iconClass;
+        icon.setAttribute('aria-hidden', 'true');
+        button.appendChild(icon);
+        return button;
+      }
+      var previous = navButton('codicon-chevron-left', L10N.previousAnswer);
+      var next = navButton('codicon-chevron-right', L10N.nextAnswer);
+      var counter = document.createElement('span');
+      counter.className = 'answer-variants__count';
+      function sync() {
+        counter.textContent = (position + 1) + ' / ' + variants.length;
+        nav.setAttribute('aria-label', fillText(L10N.answerVariant, { current: position + 1, total: variants.length }));
+        previous.disabled = position === 0;
+        next.disabled = position === variants.length - 1;
+      }
+      function select(target) {
+        if (target < 0 || target >= variants.length || target === position) return;
+        position = target;
+        showAnswerVariant(messageEl, variants[position]);
+        sync();
+      }
+      previous.addEventListener('click', function () { select(position - 1); });
+      next.addEventListener('click', function () { select(position + 1); });
+      nav.appendChild(previous);
+      nav.appendChild(counter);
+      nav.appendChild(next);
+      row.insertBefore(nav, row.firstChild);
+      sync();
+    }
 
     function settleMessageCopy(button, icon, copied) {
       icon.className = 'codicon ' + (copied ? 'codicon-check' : 'codicon-error');
@@ -4564,6 +4669,7 @@ export function getWebviewContent(
 
     function renderTranscript(conversation) {
       messagesEl.innerHTML = '';
+      pendingPreviousAnswers = null;
       activePlanCard = null;
       toolCallStack = null;
       toolCallList = null;
@@ -4582,6 +4688,7 @@ export function getWebviewContent(
           renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
+          appendAnswerVariants(assistantHistoryEl, historyMessage.text || '', historyMessage.previousAnswers);
         } else if (historyMessage.role === 'user') {
           var userHistoryEl = addMessage('user', historyMessage.text || '');
           appendUserActions(userHistoryEl, historyMessage.text || '');
@@ -4871,6 +4978,14 @@ export function getWebviewContent(
 
     function renderAssistantInto(el, text) {
       el.innerHTML = renderAssistant(text);
+      if (typeof window.agiEnhance === 'function') window.agiEnhance(el);
+      requestPathResolution();
+    }
+
+    function requestPathResolution() {
+      if (typeof window.agiTakePendingPaths !== 'function') return;
+      var paths = window.agiTakePendingPaths();
+      if (paths.length > 0) vscode.postMessage({ type: 'resolvePathReferences', payload: { paths: paths } });
     }
 
     // Path references inside rendered output are spans, not anchors, because
@@ -6807,6 +6922,18 @@ export function getWebviewContent(
         );
       }
 
+      else if (msg.type === 'answerVariants') {
+        pendingPreviousAnswers = msg.payload && Array.isArray(msg.payload.previousAnswers)
+          ? msg.payload.previousAnswers
+          : null;
+      }
+
+      else if (msg.type === 'pathReferencesResolved') {
+        if (typeof window.agiResolvePaths === 'function' && msg.payload && msg.payload.results) {
+          window.agiResolvePaths(msg.payload.results);
+        }
+      }
+
       else if (msg.type === 'turnResumed') {
         removeTyping();
         showTyping();
@@ -6856,6 +6983,8 @@ export function getWebviewContent(
           );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
+          appendAnswerVariants(currentAssistantEl, accumulatedContent, pendingPreviousAnswers);
+          pendingPreviousAnswers = null;
           if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
           if (msg.payload && msg.payload.turnId && msg.payload.changedFiles > 0) {
             appendTurnChanges(

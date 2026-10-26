@@ -20,10 +20,13 @@ scripts/**
 node_modules/**
 
 # Production output allowlist. The package wrapper and verifier enforce the same
-# four-file contract; all other compiled output is development/test residue.
+# contract; all other compiled output is development/test residue.
 out/**
 !out/extension.js
 !out/webview/render.js
+!out/webview/enhance/*.js
+!out/webview/katex/katex.min.css
+!out/webview/katex/fonts/*.woff2
 !out/codicons/codicon.css
 !out/codicons/codicon.ttf
 

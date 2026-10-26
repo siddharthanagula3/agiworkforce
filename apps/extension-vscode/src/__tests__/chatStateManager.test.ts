@@ -47,6 +47,7 @@ import { getTokenCounter } from '../data/tokenCounter';
 import { modelDisplayNameById } from '@agiworkforce/types';
 import * as api from '../utils/api';
 import * as accountAccess from '../features/surfaces/accountAccess';
+import { rememberReplacedAnswer } from '../features/sidebar-webview/answerVariants';
 
 function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   return {
@@ -2003,11 +2004,10 @@ describe('ChatStateManager local turn lifecycle', () => {
     expect(harness.posted).not.toContainEqual({ type: 'done' });
   });
 
-  it('regenerates the last answer in place of the old one, as the web does', async () => {
-    const forked = threadSummary({ id: 'thread-regenerated' });
+  it('regenerates the last answer in the same session and keeps the old one as an earlier version', async () => {
     const harness = makeHarness({
       resolvedConversation: {
-        thread: forked,
+        thread: threadSummary(),
         messages: [
           { role: 'user', text: 'First question', index: 0 },
           { role: 'assistant', text: 'First answer', index: 1 },
@@ -2030,11 +2030,15 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
-    const runtime = harness.runtime as typeof harness.runtime & {
-      forkThread: ReturnType<typeof vi.fn>;
-    };
-    runtime.offers.mockImplementation(async (capability: string) => capability === 'forkAtMessage');
-    runtime.forkThread = vi.fn().mockResolvedValue(forked);
+    const forkThread = vi.fn();
+    const rewindThread = vi.fn().mockResolvedValue({
+      conversationRestored: true,
+      filesRestored: false,
+    });
+    Object.assign(harness.runtime, { forkThread, rewindThread });
+    harness.runtime.offers.mockImplementation(
+      async (capability: string) => capability === 'checkpoints' || capability === 'forkAtMessage',
+    );
     harness.runtime.readThread.mockResolvedValueOnce({
       thread: threadSummary(),
       messages: [
@@ -2051,12 +2055,47 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     await harness.manager.handleMessage({ type: 'regenerate' });
 
-    expect(runtime.forkThread).toHaveBeenCalledWith('thread-1', expect.any(String), 1);
+    expect(forkThread).not.toHaveBeenCalled();
+    expect(rewindThread).toHaveBeenCalledWith({
+      threadId: 'thread-1',
+      messageIndex: 2,
+      restore: 'conversation',
+    });
     expect(executeCommand).not.toHaveBeenCalledWith('agi-workforce.retryLastMessage');
+    expect(harness.posted).toContainEqual({
+      type: 'answerVariants',
+      payload: { previousAnswers: ['Old answer'] },
+    });
     expect(harness.posted).toContainEqual({
       type: 'composerDraft',
       payload: { text: 'Explain calc.js', references: [], submit: true },
     });
+  });
+
+  it('offers the replaced answer beside the new one when the session is reopened', async () => {
+    const harness = makeHarness({
+      resolvedConversation: {
+        thread: threadSummary({ id: 'history-2', status: 'idle' }),
+        messages: [
+          { role: 'user', text: 'First question', index: 0 },
+          { role: 'assistant', text: 'First answer', index: 1 },
+          { role: 'user', text: 'Explain calc.js', index: 2 },
+          { role: 'assistant', text: 'New answer', index: 3 },
+        ],
+        transcriptTruncated: false,
+      } satisfies ThreadReadResponse,
+    });
+    await rememberReplacedAnswer(harness.context.workspaceState, 'history-2', 2, 'Old answer');
+
+    await expect(harness.manager.resumeConversation('history-2')).resolves.toBe(true);
+
+    const loaded = harness.posted.find((message) => message.type === 'conversationLoaded');
+    expect(loaded?.payload.messages).toEqual([
+      { role: 'user', text: 'First question', index: 0 },
+      { role: 'assistant', text: 'First answer', index: 1 },
+      { role: 'user', text: 'Explain calc.js', index: 2 },
+      { role: 'assistant', text: 'New answer', index: 3, previousAnswers: ['Old answer'] },
+    ]);
   });
 
   it('clears the open conversation and the session meter when another account signs in', async () => {

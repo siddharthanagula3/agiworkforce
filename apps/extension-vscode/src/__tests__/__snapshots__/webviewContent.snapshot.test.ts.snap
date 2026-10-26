@@ -10,10 +10,11 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     content="default-src 'none';
              style-src 'nonce-NONCE' vscode-webview://mock;
              script-src 'nonce-NONCE' vscode-webview://mock;
-             img-src vscode-webview://mock;
+             img-src vscode-webview://mock blob:;
              font-src vscode-webview://mock;" />
   <title>AGI Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
+  <link rel="stylesheet" href="https://mock///mock/extension/out/webview/katex/katex.min.css" />
   <style nonce="NONCE">
     :root {
       /* Host theme first; AGI tokens are complete fallbacks for compatible IDEs. */
@@ -545,7 +546,23 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
       align-self: stretch;
       color: var(--text-primary);
       padding-inline: 2px;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: break-word;
     }
+    .message.assistant > :first-child { margin-top: 0; }
+    .message.assistant p,
+    .message.assistant ul,
+    .message.assistant ol,
+    .message.assistant blockquote,
+    .message.assistant table { margin: 0 0 10px; }
+    .message.assistant ul,
+    .message.assistant ol { padding-left: 4px; }
+    .message.assistant li { margin-top: 2px; margin-bottom: 2px; }
+    .message.assistant li > p { margin: 0; }
+    .message.assistant > :last-child,
+    .message.assistant > :has(+ .message-actions),
+    .message.assistant > :has(+ .message-sources) { margin-bottom: 0; }
 
     .message-actions {
       display: flex;
@@ -595,6 +612,10 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     .message-sources__host { margin-left: 6px; }
     .message-action--regenerate { display: none; }
     .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .answer-variants { display: inline-flex; align-items: center; gap: 2px; margin-right: 4px; color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .answer-variants__count { min-width: 3ch; text-align: center; font-variant-numeric: tabular-nums; }
+    .answer-variants .message-action:disabled { opacity: 0.4; cursor: default; }
+    .answer-variants .message-action:disabled:hover { background: transparent; color: var(--text-secondary); }
     .message-meta {
       align-self: center;
       margin-left: 6px;
@@ -1202,8 +1223,19 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     h2, h3, h4 { margin: 8px 0 4px; font-weight: 600; }
     h2 { font-size: var(--type-h2-size); line-height: var(--type-h2-height); } h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-height); } h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
-    .message table { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
-    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    .message table { display: block; width: max-content; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
+    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; hyphens: manual; }
+    .message [data-math='display'] { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; overflow-y: hidden; }
+    .message .katex { font-size: 1.1em; }
+    .shiki-token { color: var(--shiki-light); font-style: var(--shiki-light-font-style, normal); font-weight: var(--shiki-light-font-weight, normal); text-decoration: var(--shiki-light-text-decoration, none); }
+    body.vscode-dark .shiki-token,
+    body.vscode-high-contrast:not(.vscode-high-contrast-light) .shiki-token { color: var(--shiki-dark); font-style: var(--shiki-dark-font-style, normal); font-weight: var(--shiki-dark-font-weight, normal); text-decoration: var(--shiki-dark-text-decoration, none); }
+    .mermaid-diagram { margin: 8px 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--corner-control); background: var(--bg-overlay); overflow-x: auto; }
+    .mermaid-diagram img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+    .mermaid-diagram__toggle { margin-top: 8px; background: none; border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--text-secondary); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; }
+    .mermaid-diagram__toggle:hover { background: var(--hover); color: var(--text-primary); }
+    .mermaid-diagram + .code-block-wrapper { margin-top: -4px; }
+    .mermaid-render-host { position: absolute; left: -10000px; top: 0; width: 1200px; visibility: hidden; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
     ol > li { list-style: decimal; }
@@ -3115,11 +3147,12 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
   </div>
 
   <!-- Markdown rendering bundle (markdown-it + DOMPurify). Loaded before the
-       inline script so window.agiRender is available when needed. -->
-  <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
+       inline script so window.agiRender is available when needed. It imports
+       the math, highlighting and diagram enhancer on first use. -->
+  <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js" data-enhance-src="https://mock///mock/extension/out/webview/enhance/enhance.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","previousAnswer":"Previous answer","nextAnswer":"Next answer","answerVariant":"Answer {current} of {total}","diagram":"Diagram","showDiagramSource":"Show source","hideDiagramSource":"Hide source","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -4252,6 +4285,72 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
     }
 
     var assistantSources = new WeakMap();
+    var pendingPreviousAnswers = null;
+
+    function showAnswerVariant(messageEl, text) {
+      var row = messageEl.querySelector(':scope > .message-actions');
+      if (!row) return;
+      var nodes = Array.prototype.slice.call(messageEl.childNodes);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        if (node === row) break;
+        if (node.classList && node.classList.contains('visually-hidden')) continue;
+        node.remove();
+      }
+      var holder = document.createElement('div');
+      holder.innerHTML = renderAssistant(text);
+      while (holder.firstChild) messageEl.insertBefore(holder.firstChild, row);
+      if (typeof window.agiEnhance === 'function') window.agiEnhance(messageEl);
+      requestPathResolution();
+      bindCodeBlockActions(messageEl);
+      assistantSources.set(messageEl, text);
+    }
+
+    function appendAnswerVariants(messageEl, currentText, previousAnswers) {
+      if (!messageEl || !Array.isArray(previousAnswers) || previousAnswers.length === 0) return;
+      var row = messageEl.querySelector(':scope > .message-actions');
+      if (!row) return;
+      var variants = previousAnswers.concat([currentText]);
+      var position = variants.length - 1;
+      var nav = document.createElement('span');
+      nav.className = 'answer-variants';
+      nav.setAttribute('role', 'group');
+      function navButton(iconClass, label) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        var icon = document.createElement('span');
+        icon.className = 'codicon ' + iconClass;
+        icon.setAttribute('aria-hidden', 'true');
+        button.appendChild(icon);
+        return button;
+      }
+      var previous = navButton('codicon-chevron-left', L10N.previousAnswer);
+      var next = navButton('codicon-chevron-right', L10N.nextAnswer);
+      var counter = document.createElement('span');
+      counter.className = 'answer-variants__count';
+      function sync() {
+        counter.textContent = (position + 1) + ' / ' + variants.length;
+        nav.setAttribute('aria-label', fillText(L10N.answerVariant, { current: position + 1, total: variants.length }));
+        previous.disabled = position === 0;
+        next.disabled = position === variants.length - 1;
+      }
+      function select(target) {
+        if (target < 0 || target >= variants.length || target === position) return;
+        position = target;
+        showAnswerVariant(messageEl, variants[position]);
+        sync();
+      }
+      previous.addEventListener('click', function () { select(position - 1); });
+      next.addEventListener('click', function () { select(position + 1); });
+      nav.appendChild(previous);
+      nav.appendChild(counter);
+      nav.appendChild(next);
+      row.insertBefore(nav, row.firstChild);
+      sync();
+    }
 
     function settleMessageCopy(button, icon, copied) {
       icon.className = 'codicon ' + (copied ? 'codicon-check' : 'codicon-error');
@@ -4556,6 +4655,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     function renderTranscript(conversation) {
       messagesEl.innerHTML = '';
+      pendingPreviousAnswers = null;
       activePlanCard = null;
       toolCallStack = null;
       toolCallList = null;
@@ -4574,6 +4674,7 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
+          appendAnswerVariants(assistantHistoryEl, historyMessage.text || '', historyMessage.previousAnswers);
         } else if (historyMessage.role === 'user') {
           var userHistoryEl = addMessage('user', historyMessage.text || '');
           appendUserActions(userHistoryEl, historyMessage.text || '');
@@ -4863,6 +4964,14 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
 
     function renderAssistantInto(el, text) {
       el.innerHTML = renderAssistant(text);
+      if (typeof window.agiEnhance === 'function') window.agiEnhance(el);
+      requestPathResolution();
+    }
+
+    function requestPathResolution() {
+      if (typeof window.agiTakePendingPaths !== 'function') return;
+      var paths = window.agiTakePendingPaths();
+      if (paths.length > 0) vscode.postMessage({ type: 'resolvePathReferences', payload: { paths: paths } });
     }
 
     // Path references inside rendered output are spans, not anchors, because
@@ -6799,6 +6908,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
         );
       }
 
+      else if (msg.type === 'answerVariants') {
+        pendingPreviousAnswers = msg.payload && Array.isArray(msg.payload.previousAnswers)
+          ? msg.payload.previousAnswers
+          : null;
+      }
+
+      else if (msg.type === 'pathReferencesResolved') {
+        if (typeof window.agiResolvePaths === 'function' && msg.payload && msg.payload.results) {
+          window.agiResolvePaths(msg.payload.results);
+        }
+      }
+
       else if (msg.type === 'turnResumed') {
         removeTyping();
         showTyping();
@@ -6848,6 +6969,8 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
+          appendAnswerVariants(currentAssistantEl, accumulatedContent, pendingPreviousAnswers);
+          pendingPreviousAnswers = null;
           if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
           if (msg.payload && msg.payload.turnId && msg.payload.changedFiles > 0) {
             appendTurnChanges(
@@ -8419,10 +8542,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     content="default-src 'none';
              style-src 'nonce-NONCE' vscode-webview://mock;
              script-src 'nonce-NONCE' vscode-webview://mock;
-             img-src vscode-webview://mock;
+             img-src vscode-webview://mock blob:;
              font-src vscode-webview://mock;" />
   <title>AGI Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
+  <link rel="stylesheet" href="https://mock///mock/extension/out/webview/katex/katex.min.css" />
   <style nonce="NONCE">
     :root {
       /* Host theme first; AGI tokens are complete fallbacks for compatible IDEs. */
@@ -8954,7 +9078,23 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
       align-self: stretch;
       color: var(--text-primary);
       padding-inline: 2px;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: break-word;
     }
+    .message.assistant > :first-child { margin-top: 0; }
+    .message.assistant p,
+    .message.assistant ul,
+    .message.assistant ol,
+    .message.assistant blockquote,
+    .message.assistant table { margin: 0 0 10px; }
+    .message.assistant ul,
+    .message.assistant ol { padding-left: 4px; }
+    .message.assistant li { margin-top: 2px; margin-bottom: 2px; }
+    .message.assistant li > p { margin: 0; }
+    .message.assistant > :last-child,
+    .message.assistant > :has(+ .message-actions),
+    .message.assistant > :has(+ .message-sources) { margin-bottom: 0; }
 
     .message-actions {
       display: flex;
@@ -9004,6 +9144,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     .message-sources__host { margin-left: 6px; }
     .message-action--regenerate { display: none; }
     .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .answer-variants { display: inline-flex; align-items: center; gap: 2px; margin-right: 4px; color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .answer-variants__count { min-width: 3ch; text-align: center; font-variant-numeric: tabular-nums; }
+    .answer-variants .message-action:disabled { opacity: 0.4; cursor: default; }
+    .answer-variants .message-action:disabled:hover { background: transparent; color: var(--text-secondary); }
     .message-meta {
       align-self: center;
       margin-left: 6px;
@@ -9611,8 +9755,19 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     h2, h3, h4 { margin: 8px 0 4px; font-weight: 600; }
     h2 { font-size: var(--type-h2-size); line-height: var(--type-h2-height); } h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-height); } h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
-    .message table { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
-    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    .message table { display: block; width: max-content; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
+    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; hyphens: manual; }
+    .message [data-math='display'] { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; overflow-y: hidden; }
+    .message .katex { font-size: 1.1em; }
+    .shiki-token { color: var(--shiki-light); font-style: var(--shiki-light-font-style, normal); font-weight: var(--shiki-light-font-weight, normal); text-decoration: var(--shiki-light-text-decoration, none); }
+    body.vscode-dark .shiki-token,
+    body.vscode-high-contrast:not(.vscode-high-contrast-light) .shiki-token { color: var(--shiki-dark); font-style: var(--shiki-dark-font-style, normal); font-weight: var(--shiki-dark-font-weight, normal); text-decoration: var(--shiki-dark-text-decoration, none); }
+    .mermaid-diagram { margin: 8px 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--corner-control); background: var(--bg-overlay); overflow-x: auto; }
+    .mermaid-diagram img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+    .mermaid-diagram__toggle { margin-top: 8px; background: none; border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--text-secondary); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; }
+    .mermaid-diagram__toggle:hover { background: var(--hover); color: var(--text-primary); }
+    .mermaid-diagram + .code-block-wrapper { margin-top: -4px; }
+    .mermaid-render-host { position: absolute; left: -10000px; top: 0; width: 1200px; visibility: hidden; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
     ol > li { list-style: decimal; }
@@ -11524,11 +11679,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
   </div>
 
   <!-- Markdown rendering bundle (markdown-it + DOMPurify). Loaded before the
-       inline script so window.agiRender is available when needed. -->
-  <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
+       inline script so window.agiRender is available when needed. It imports
+       the math, highlighting and diagram enhancer on first use. -->
+  <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js" data-enhance-src="https://mock///mock/extension/out/webview/enhance/enhance.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","previousAnswer":"Previous answer","nextAnswer":"Next answer","answerVariant":"Answer {current} of {total}","diagram":"Diagram","showDiagramSource":"Show source","hideDiagramSource":"Hide source","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -12661,6 +12817,72 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
     }
 
     var assistantSources = new WeakMap();
+    var pendingPreviousAnswers = null;
+
+    function showAnswerVariant(messageEl, text) {
+      var row = messageEl.querySelector(':scope > .message-actions');
+      if (!row) return;
+      var nodes = Array.prototype.slice.call(messageEl.childNodes);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        if (node === row) break;
+        if (node.classList && node.classList.contains('visually-hidden')) continue;
+        node.remove();
+      }
+      var holder = document.createElement('div');
+      holder.innerHTML = renderAssistant(text);
+      while (holder.firstChild) messageEl.insertBefore(holder.firstChild, row);
+      if (typeof window.agiEnhance === 'function') window.agiEnhance(messageEl);
+      requestPathResolution();
+      bindCodeBlockActions(messageEl);
+      assistantSources.set(messageEl, text);
+    }
+
+    function appendAnswerVariants(messageEl, currentText, previousAnswers) {
+      if (!messageEl || !Array.isArray(previousAnswers) || previousAnswers.length === 0) return;
+      var row = messageEl.querySelector(':scope > .message-actions');
+      if (!row) return;
+      var variants = previousAnswers.concat([currentText]);
+      var position = variants.length - 1;
+      var nav = document.createElement('span');
+      nav.className = 'answer-variants';
+      nav.setAttribute('role', 'group');
+      function navButton(iconClass, label) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        var icon = document.createElement('span');
+        icon.className = 'codicon ' + iconClass;
+        icon.setAttribute('aria-hidden', 'true');
+        button.appendChild(icon);
+        return button;
+      }
+      var previous = navButton('codicon-chevron-left', L10N.previousAnswer);
+      var next = navButton('codicon-chevron-right', L10N.nextAnswer);
+      var counter = document.createElement('span');
+      counter.className = 'answer-variants__count';
+      function sync() {
+        counter.textContent = (position + 1) + ' / ' + variants.length;
+        nav.setAttribute('aria-label', fillText(L10N.answerVariant, { current: position + 1, total: variants.length }));
+        previous.disabled = position === 0;
+        next.disabled = position === variants.length - 1;
+      }
+      function select(target) {
+        if (target < 0 || target >= variants.length || target === position) return;
+        position = target;
+        showAnswerVariant(messageEl, variants[position]);
+        sync();
+      }
+      previous.addEventListener('click', function () { select(position - 1); });
+      next.addEventListener('click', function () { select(position + 1); });
+      nav.appendChild(previous);
+      nav.appendChild(counter);
+      nav.appendChild(next);
+      row.insertBefore(nav, row.firstChild);
+      sync();
+    }
 
     function settleMessageCopy(button, icon, copied) {
       icon.className = 'codicon ' + (copied ? 'codicon-check' : 'codicon-error');
@@ -12965,6 +13187,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     function renderTranscript(conversation) {
       messagesEl.innerHTML = '';
+      pendingPreviousAnswers = null;
       activePlanCard = null;
       toolCallStack = null;
       toolCallList = null;
@@ -12983,6 +13206,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
+          appendAnswerVariants(assistantHistoryEl, historyMessage.text || '', historyMessage.previousAnswers);
         } else if (historyMessage.role === 'user') {
           var userHistoryEl = addMessage('user', historyMessage.text || '');
           appendUserActions(userHistoryEl, historyMessage.text || '');
@@ -13272,6 +13496,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
 
     function renderAssistantInto(el, text) {
       el.innerHTML = renderAssistant(text);
+      if (typeof window.agiEnhance === 'function') window.agiEnhance(el);
+      requestPathResolution();
+    }
+
+    function requestPathResolution() {
+      if (typeof window.agiTakePendingPaths !== 'function') return;
+      var paths = window.agiTakePendingPaths();
+      if (paths.length > 0) vscode.postMessage({ type: 'resolvePathReferences', payload: { paths: paths } });
     }
 
     // Path references inside rendered output are spans, not anchors, because
@@ -15208,6 +15440,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
         );
       }
 
+      else if (msg.type === 'answerVariants') {
+        pendingPreviousAnswers = msg.payload && Array.isArray(msg.payload.previousAnswers)
+          ? msg.payload.previousAnswers
+          : null;
+      }
+
+      else if (msg.type === 'pathReferencesResolved') {
+        if (typeof window.agiResolvePaths === 'function' && msg.payload && msg.payload.results) {
+          window.agiResolvePaths(msg.payload.results);
+        }
+      }
+
       else if (msg.type === 'turnResumed') {
         removeTyping();
         showTyping();
@@ -15257,6 +15501,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
+          appendAnswerVariants(currentAssistantEl, accumulatedContent, pendingPreviousAnswers);
+          pendingPreviousAnswers = null;
           if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
           if (msg.payload && msg.payload.turnId && msg.payload.changedFiles > 0) {
             appendTurnChanges(
@@ -16828,10 +17074,11 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     content="default-src 'none';
              style-src 'nonce-NONCE' vscode-webview://mock;
              script-src 'nonce-NONCE' vscode-webview://mock;
-             img-src vscode-webview://mock;
+             img-src vscode-webview://mock blob:;
              font-src vscode-webview://mock;" />
   <title>AGI Code</title>
   <link rel="stylesheet" href="https://mock///mock/extension/out/codicons/codicon.css" />
+  <link rel="stylesheet" href="https://mock///mock/extension/out/webview/katex/katex.min.css" />
   <style nonce="NONCE">
     :root {
       /* Host theme first; AGI tokens are complete fallbacks for compatible IDEs. */
@@ -17363,7 +17610,23 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
       align-self: stretch;
       color: var(--text-primary);
       padding-inline: 2px;
+      white-space: normal;
+      word-break: normal;
+      overflow-wrap: break-word;
     }
+    .message.assistant > :first-child { margin-top: 0; }
+    .message.assistant p,
+    .message.assistant ul,
+    .message.assistant ol,
+    .message.assistant blockquote,
+    .message.assistant table { margin: 0 0 10px; }
+    .message.assistant ul,
+    .message.assistant ol { padding-left: 4px; }
+    .message.assistant li { margin-top: 2px; margin-bottom: 2px; }
+    .message.assistant li > p { margin: 0; }
+    .message.assistant > :last-child,
+    .message.assistant > :has(+ .message-actions),
+    .message.assistant > :has(+ .message-sources) { margin-bottom: 0; }
 
     .message-actions {
       display: flex;
@@ -17413,6 +17676,10 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     .message-sources__host { margin-left: 6px; }
     .message-action--regenerate { display: none; }
     .message.assistant.message--latest .message-action--regenerate { display: inline-flex; }
+    .answer-variants { display: inline-flex; align-items: center; gap: 2px; margin-right: 4px; color: var(--text-secondary); font-size: var(--type-caption-size); line-height: var(--type-caption-height); }
+    .answer-variants__count { min-width: 3ch; text-align: center; font-variant-numeric: tabular-nums; }
+    .answer-variants .message-action:disabled { opacity: 0.4; cursor: default; }
+    .answer-variants .message-action:disabled:hover { background: transparent; color: var(--text-secondary); }
     .message-meta {
       align-self: center;
       margin-left: 6px;
@@ -18020,8 +18287,19 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     h2, h3, h4 { margin: 8px 0 4px; font-weight: 600; }
     h2 { font-size: var(--type-h2-size); line-height: var(--type-h2-height); } h3 { font-size: var(--type-h3-size); line-height: var(--type-h3-height); } h4 { font-size: var(--type-body-size); line-height: var(--type-body-height); }
     hr { border: none; border-top: 1px solid var(--border); margin: 8px 0; }
-    .message table { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
-    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; }
+    .message table { display: block; width: max-content; max-width: 100%; margin: 8px 0; overflow-x: auto; border-collapse: collapse; white-space: normal; }
+    .message th, .message td { padding: 4px 10px; border: 1px solid var(--border); text-align: left; vertical-align: top; word-break: normal; overflow-wrap: normal; hyphens: manual; }
+    .message [data-math='display'] { display: block; max-width: 100%; margin: 8px 0; overflow-x: auto; overflow-y: hidden; }
+    .message .katex { font-size: 1.1em; }
+    .shiki-token { color: var(--shiki-light); font-style: var(--shiki-light-font-style, normal); font-weight: var(--shiki-light-font-weight, normal); text-decoration: var(--shiki-light-text-decoration, none); }
+    body.vscode-dark .shiki-token,
+    body.vscode-high-contrast:not(.vscode-high-contrast-light) .shiki-token { color: var(--shiki-dark); font-style: var(--shiki-dark-font-style, normal); font-weight: var(--shiki-dark-font-weight, normal); text-decoration: var(--shiki-dark-text-decoration, none); }
+    .mermaid-diagram { margin: 8px 0; padding: 12px; border: 1px solid var(--border); border-radius: var(--corner-control); background: var(--bg-overlay); overflow-x: auto; }
+    .mermaid-diagram img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+    .mermaid-diagram__toggle { margin-top: 8px; background: none; border: 1px solid var(--border); border-radius: var(--corner-compact); color: var(--text-secondary); font-size: var(--type-label-size); line-height: var(--type-label-height); padding: 2px 8px; cursor: pointer; }
+    .mermaid-diagram__toggle:hover { background: var(--hover); color: var(--text-primary); }
+    .mermaid-diagram + .code-block-wrapper { margin-top: -4px; }
+    .mermaid-render-host { position: absolute; left: -10000px; top: 0; width: 1200px; visibility: hidden; }
     .message th { background: var(--bg-overlay); font-weight: 600; }
     li { margin-left: 16px; list-style: disc; }
     ol > li { list-style: decimal; }
@@ -19933,11 +20211,12 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
   </div>
 
   <!-- Markdown rendering bundle (markdown-it + DOMPurify). Loaded before the
-       inline script so window.agiRender is available when needed. -->
-  <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js"></script>
+       inline script so window.agiRender is available when needed. It imports
+       the math, highlighting and diagram enhancer on first use. -->
+  <script nonce="NONCE" src="https://mock///mock/extension/out/webview/render.js" data-enhance-src="https://mock///mock/extension/out/webview/enhance/enhance.js"></script>
 
   <script nonce="NONCE">
-    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
+    var L10N = {"retry":"Retry","details":"Details","copy":"Copy","copyResponse":"Copy response","copied":"Copied","copyFailed":"Copy failed","goodResponse":"Good response","badResponse":"Bad response","removeRating":"Remove rating","failed":"Failed","newerDiffReplaced":"A newer diff proposal replaced this request.","couldNotOpenDiff":"Could not open the proposed diff.","cloudSessionExpired":"AGI Cloud session expired","localStillAvailable":"· Local and provider BYOK remain available","signInAgain":"Sign in again","accountNeedsAttention":"Account needs attention","sessionExpired":"Session expired","tryAgain":"Try again","checking":"Checking…","openWorkspaceToBegin":"Open a workspace to begin","restrictedMode":"Workspace is in Restricted Mode","runtimeNeedsSetup":"Developer runtime needs setup","openFolderToBegin":"Open a folder or workspace to begin.","trustWorkspaceFirst":"Trust this workspace before AGI can use project files or tools.","cliUnavailable":"The AGI CLI is unavailable.","openFolder":"Open folder","manageTrust":"Manage trust","installCli":"Install AGI CLI","openSetup":"Open setup","activity":"Activity","reasoning":"Thinking","starting":"Starting…","completed":"Completed","completedWithErrors":"Completed with errors","stopped":"Stopped","collapseDetails":"Collapse details","expandDetails":"Expand details","lineDelta":"+{added} −{removed} lines","searchingSessions":"Searching sessions…","noMatchingSessions":"No sessions match \\"{query}\\"","alwaysAllow":"Always allow","alwaysAllowHint":"Saves a rule so AGI stops asking for this in every session. Manage it under Saved approvals.","alwaysAllowedOutcome":"Always allowed. AGI will not ask again for this.","mcpAuthRequired":"{server} needs you to sign in again. AGI could not use it for this step.","mcpReconnect":"Sign in and continue","mcpReconnecting":"Signing in…","mcpReconnected":"Signed in to {server}. AGI is continuing.","resendMessage":"Resend","resendMessageLabel":"Resend this message","branchFromAnswer":"Branch from here","branchFromAnswerLabel":"Start a new session that keeps the conversation up to this answer","branchFromMessage":"Branch","branchFromMessageLabel":"Start a new session from here with this message ready to edit","approvePlan":"Approve and auto-accept edits","approvePlanAskEdits":"Approve and ask before edits","revisePlan":"Revise","revisePlanPlaceholder":"What should change in the plan?","sendRevision":"Send","cancelRevision":"Cancel","turnKept":"Kept","turnUndone":"Undone","undoAll":"Undo all","undo":"Undo","keep":"Keep","reviewFile":"Review {file}","fileDeleted":"{file} (deleted)","keepFileChanges":"Keep the changes to {file}","undoFileChanges":"Undo the changes to {file}","turnFilesLabel":"Files this reply changed","showUsageDetails":"Show usage details","hideUsageDetails":"Hide usage details","previousAnswer":"Previous answer","nextAnswer":"Next answer","answerVariant":"Answer {current} of {total}","diagram":"Diagram","showDiagramSource":"Show source","hideDiagramSource":"Hide source","actions":{"locale":"en","forms":{"one":"{count} action","other":"{count} actions"}},"errors":{"locale":"en","forms":{"one":"{count} error","other":"{count} errors"}},"runningCount":{"locale":"en","forms":{"one":"{count} running","other":"{count} running"}},"completedCount":{"locale":"en","forms":{"one":"{count} completed","other":"{count} completed"}},"linesWritten":{"locale":"en","forms":{"one":"{count} line written","other":"{count} lines written"}},"contextUsedUnknownWindow":{"locale":"en","forms":{"one":"Last turn used {count} token. The context window for this model is not known here.","other":"Last turn used {count} tokens. The context window for this model is not known here."}},"contextUsed":{"locale":"en","forms":{"one":"Context after the last turn: {used} of {count} token ({percent}%)","other":"Context after the last turn: {used} of {count} tokens ({percent}%)"}},"answerTokens":{"locale":"en","forms":{"one":"{model} · {count} token ({input} in, {output} out)","other":"{model} · {count} tokens ({input} in, {output} out)"}},"moreLinesHidden":{"locale":"en","forms":{"one":"{count} more line not shown","other":"{count} more lines not shown"}},"sources":{"locale":"en","forms":{"one":"{count} source","other":"{count} sources"}}};
 
     function fillText(template, values) {
       return template.replace(/\\{([a-zA-Z]+)\\}/g, function (match, name) {
@@ -21070,6 +21349,72 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
     }
 
     var assistantSources = new WeakMap();
+    var pendingPreviousAnswers = null;
+
+    function showAnswerVariant(messageEl, text) {
+      var row = messageEl.querySelector(':scope > .message-actions');
+      if (!row) return;
+      var nodes = Array.prototype.slice.call(messageEl.childNodes);
+      for (var i = 0; i < nodes.length; i++) {
+        var node = nodes[i];
+        if (node === row) break;
+        if (node.classList && node.classList.contains('visually-hidden')) continue;
+        node.remove();
+      }
+      var holder = document.createElement('div');
+      holder.innerHTML = renderAssistant(text);
+      while (holder.firstChild) messageEl.insertBefore(holder.firstChild, row);
+      if (typeof window.agiEnhance === 'function') window.agiEnhance(messageEl);
+      requestPathResolution();
+      bindCodeBlockActions(messageEl);
+      assistantSources.set(messageEl, text);
+    }
+
+    function appendAnswerVariants(messageEl, currentText, previousAnswers) {
+      if (!messageEl || !Array.isArray(previousAnswers) || previousAnswers.length === 0) return;
+      var row = messageEl.querySelector(':scope > .message-actions');
+      if (!row) return;
+      var variants = previousAnswers.concat([currentText]);
+      var position = variants.length - 1;
+      var nav = document.createElement('span');
+      nav.className = 'answer-variants';
+      nav.setAttribute('role', 'group');
+      function navButton(iconClass, label) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'message-action';
+        button.title = label;
+        button.setAttribute('aria-label', label);
+        var icon = document.createElement('span');
+        icon.className = 'codicon ' + iconClass;
+        icon.setAttribute('aria-hidden', 'true');
+        button.appendChild(icon);
+        return button;
+      }
+      var previous = navButton('codicon-chevron-left', L10N.previousAnswer);
+      var next = navButton('codicon-chevron-right', L10N.nextAnswer);
+      var counter = document.createElement('span');
+      counter.className = 'answer-variants__count';
+      function sync() {
+        counter.textContent = (position + 1) + ' / ' + variants.length;
+        nav.setAttribute('aria-label', fillText(L10N.answerVariant, { current: position + 1, total: variants.length }));
+        previous.disabled = position === 0;
+        next.disabled = position === variants.length - 1;
+      }
+      function select(target) {
+        if (target < 0 || target >= variants.length || target === position) return;
+        position = target;
+        showAnswerVariant(messageEl, variants[position]);
+        sync();
+      }
+      previous.addEventListener('click', function () { select(position - 1); });
+      next.addEventListener('click', function () { select(position + 1); });
+      nav.appendChild(previous);
+      nav.appendChild(counter);
+      nav.appendChild(next);
+      row.insertBefore(nav, row.firstChild);
+      sync();
+    }
 
     function settleMessageCopy(button, icon, copied) {
       icon.className = 'codicon ' + (copied ? 'codicon-check' : 'codicon-error');
@@ -21374,6 +21719,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     function renderTranscript(conversation) {
       messagesEl.innerHTML = '';
+      pendingPreviousAnswers = null;
       activePlanCard = null;
       toolCallStack = null;
       toolCallList = null;
@@ -21392,6 +21738,7 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           renderAssistantInto(assistantHistoryEl, historyMessage.text || '');
           bindCodeBlockActions(assistantHistoryEl);
           appendMessageActions(assistantHistoryEl, historyMessage.text || '', null, historyMessage.rating);
+          appendAnswerVariants(assistantHistoryEl, historyMessage.text || '', historyMessage.previousAnswers);
         } else if (historyMessage.role === 'user') {
           var userHistoryEl = addMessage('user', historyMessage.text || '');
           appendUserActions(userHistoryEl, historyMessage.text || '');
@@ -21681,6 +22028,14 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
 
     function renderAssistantInto(el, text) {
       el.innerHTML = renderAssistant(text);
+      if (typeof window.agiEnhance === 'function') window.agiEnhance(el);
+      requestPathResolution();
+    }
+
+    function requestPathResolution() {
+      if (typeof window.agiTakePendingPaths !== 'function') return;
+      var paths = window.agiTakePendingPaths();
+      if (paths.length > 0) vscode.postMessage({ type: 'resolvePathReferences', payload: { paths: paths } });
     }
 
     // Path references inside rendered output are spans, not anchors, because
@@ -23617,6 +23972,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
         );
       }
 
+      else if (msg.type === 'answerVariants') {
+        pendingPreviousAnswers = msg.payload && Array.isArray(msg.payload.previousAnswers)
+          ? msg.payload.previousAnswers
+          : null;
+      }
+
+      else if (msg.type === 'pathReferencesResolved') {
+        if (typeof window.agiResolvePaths === 'function' && msg.payload && msg.payload.results) {
+          window.agiResolvePaths(msg.payload.results);
+        }
+      }
+
       else if (msg.type === 'turnResumed') {
         removeTyping();
         showTyping();
@@ -23666,6 +24033,8 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
           );
           bindCodeBlockActions(currentAssistantEl);
           appendMessageActions(currentAssistantEl, accumulatedContent, answerMeta(msg.payload));
+          appendAnswerVariants(currentAssistantEl, accumulatedContent, pendingPreviousAnswers);
+          pendingPreviousAnswers = null;
           if (turnSources.length > 0) appendSources(currentAssistantEl, turnSources);
           if (msg.payload && msg.payload.turnId && msg.payload.changedFiles > 0) {
             appendTurnChanges(

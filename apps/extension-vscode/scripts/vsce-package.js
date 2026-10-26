@@ -22,16 +22,31 @@ function loadVsceWithCompat() {
 const PACKAGED_RUNTIME_OUTPUT_ALLOWLIST = Object.freeze([
   'out/extension.js',
   'out/webview/render.js',
+  'out/webview/enhance/enhance.js',
+  'out/webview/katex/katex.min.css',
   'out/codicons/codicon.css',
   'out/codicons/codicon.ttf',
 ]);
 
+// The webview enhancer is split so Mermaid and each highlighter grammar load on
+// first use. Its chunks are named by content hash and the KaTeX fonts by face.
+const PACKAGED_RUNTIME_OUTPUT_PATTERNS = Object.freeze([
+  /^out\/webview\/enhance\/chunk-[A-Z0-9]+\.js$/u,
+  /^out\/webview\/katex\/fonts\/KaTeX_[A-Za-z0-9-]+\.woff2$/u,
+]);
+
+function isAllowedRuntimeOutput(file) {
+  return (
+    PACKAGED_RUNTIME_OUTPUT_ALLOWLIST.includes(file) ||
+    PACKAGED_RUNTIME_OUTPUT_PATTERNS.some((pattern) => pattern.test(file))
+  );
+}
+
 function validatePackagedRuntimeOutput(files, { requireAll = true } = {}) {
-  const allowed = new Set(PACKAGED_RUNTIME_OUTPUT_ALLOWLIST);
   const runtimeFiles = files
     .map((file) => file.replaceAll('\\', '/'))
     .filter((file) => file.startsWith('out/'));
-  const unexpected = runtimeFiles.filter((file) => !allowed.has(file));
+  const unexpected = runtimeFiles.filter((file) => !isAllowedRuntimeOutput(file));
   const missing = requireAll
     ? PACKAGED_RUNTIME_OUTPUT_ALLOWLIST.filter((file) => !runtimeFiles.includes(file))
     : [];
@@ -109,6 +124,7 @@ async function main() {
 
 module.exports = {
   PACKAGED_RUNTIME_OUTPUT_ALLOWLIST,
+  isAllowedRuntimeOutput,
   validatePackagedRuntimeOutput,
 };
 

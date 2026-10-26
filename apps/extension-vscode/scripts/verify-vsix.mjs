@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 
 const extensionRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
-const { PACKAGED_RUNTIME_OUTPUT_ALLOWLIST } = require('./vsce-package.js');
+const { PACKAGED_RUNTIME_OUTPUT_ALLOWLIST, isAllowedRuntimeOutput } = require('./vsce-package.js');
 const { inspectVsixArchive } = require('./vsix-zip.js');
 const sourceManifest = JSON.parse(
   fs.readFileSync(path.join(extensionRoot, 'package.json'), 'utf8'),
@@ -72,10 +72,7 @@ if (forbiddenEntries.length > 0) {
 const runtimeEntries = entries
   .filter((entry) => entry.startsWith('extension/out/') && !entry.endsWith('/'))
   .map((entry) => entry.replace(/^extension\//u, ''));
-const allowedRuntimeEntries = new Set(PACKAGED_RUNTIME_OUTPUT_ALLOWLIST);
-const unexpectedRuntimeEntries = runtimeEntries.filter(
-  (entry) => !allowedRuntimeEntries.has(entry),
-);
+const unexpectedRuntimeEntries = runtimeEntries.filter((entry) => !isAllowedRuntimeOutput(entry));
 const missingRuntimeEntries = PACKAGED_RUNTIME_OUTPUT_ALLOWLIST.filter(
   (entry) => !runtimeEntries.includes(entry),
 );
