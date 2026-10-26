@@ -1,5 +1,9 @@
 // @vitest-environment jsdom
 
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('../src/features/cloud-bridge/clerkAuth');
 type ScanModule1 = typeof import('../src/features/cloud-bridge/freeTrialClient');
@@ -502,5 +506,56 @@ describe('thinking summary while a reply streams', () => {
     await vi.waitFor(() => expect(section()?.getAttribute('data-live')).toBe('false'));
     expect(section()?.open).toBe(false);
     expect(label()).not.toBe('Thinking');
+  });
+
+  it('joins reasoning that arrives as thinking text and a reasoning event into one timed thought', async () => {
+    const frames = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), 'fixtures/managed-reasoning-stream.sse'),
+      'utf8',
+    )
+      .split('\n')
+      .filter((line) => line.startsWith('data: {'))
+      .flatMap((line) =>
+        (
+          JSON.parse(line.slice('data: '.length)) as {
+            choices: Array<{
+              delta: {
+                content?: string;
+                x_agent_event?: { event: { type: string; delta?: string } };
+              };
+            }>;
+          }
+        ).choices.map((choice) => choice.delta),
+      );
+    const reasoning = frames
+      .map((frame) => frame.x_agent_event?.event)
+      .filter((event) => event?.type === 'reasoning-delta')
+      .map((event) => event!.delta!)
+      .join('');
+    expect(reasoning.length).toBeGreaterThan(0);
+
+    const { send } = await adoptEmptyTurn('session-thinking-reasoning-events');
+    let now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockImplementation(() => now);
+    try {
+      for (const frame of frames) {
+        now += 500;
+        if (frame.content) send({ text: frame.content });
+        const envelope = frame.x_agent_event;
+        if (!envelope) continue;
+        if (envelope.event.type === 'reasoning-delta') {
+          send({ text: '', thinking: envelope.event.delta });
+        }
+        send({ text: '', done: false, agentEvent: envelope });
+      }
+      await vi.waitFor(() => expect(answer()).toContain('16 solutions'));
+      expect(section()?.open).toBe(false);
+      expect(label()).toMatch(/^Thought for \d+s$/);
+      const body = section()?.querySelector('.sp-thought__body');
+      expect(body?.textContent?.trim()).toBe(reasoning.trim());
+      expect(body?.querySelectorAll('p')).toHaveLength(1);
+    } finally {
+      clock.mockRestore();
+    }
   });
 });

@@ -13897,11 +13897,9 @@ chrome.runtime.onMessage.addListener((msg: unknown) => {
   if (chunk.agentEvent) {
     removeThinking();
     const before = _ctx.messages.find((message) => message.id === chunk.id);
-    if (before) settleThinking(before);
-    const approvalEventType =
-      messageKindForAgentEvent(chunk.agentEvent.event.type) === 'approval'
-        ? chunk.agentEvent.event.type
-        : null;
+    const agentEventKind = messageKindForAgentEvent(chunk.agentEvent.event.type);
+    if (before && agentEventKind !== 'reasoning') settleThinking(before);
+    const approvalEventType = agentEventKind === 'approval' ? chunk.agentEvent.event.type : null;
     const alreadyAwaitingApproval = before?.agentActivity?.entries.some(
       (entry) => entry.kind === 'tool' && entry.status === 'awaiting-approval',
     );
