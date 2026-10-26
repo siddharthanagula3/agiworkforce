@@ -2352,6 +2352,9 @@ const MessageBubbleComponent = function MessageBubble({
               key={showNoSearchResultsNotice ? `${message.id}-no-sources` : message.id}
               activity={activityTimeline}
               {...(isAgiWorkTurn ? { workMode: AGI_WORK_MODE } : {})}
+              {...(!message.isStreaming && searchSources.length > 0
+                ? { sourceCount: searchSources.length }
+                : {})}
               defaultExpanded={showNoSearchResultsNotice}
               onApprove={resolveToolApproval ? handleApproveTool : undefined}
               onApproveForChat={

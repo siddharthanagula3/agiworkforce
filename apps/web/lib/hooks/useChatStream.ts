@@ -238,6 +238,10 @@ import {
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
 import { cardOnlyAssistantTurnContent } from '@/features/chat/lib/assistant-history-turn';
 import {
+  citationSpansFromAnchors,
+  type CitationAnchor,
+} from '@/features/chat/lib/citation-anchors';
+import {
   freeModelAttachmentKind,
   freeQuotaChatOffering,
   routeFreeModelTurn,
@@ -1993,8 +1997,17 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
 
   let providerCitationSpans: { spans: CitationSpan[]; urls: string[] } | null = null;
 
+  const citationAnchors: CitationAnchor[] = [];
   const withProviderCitationMarkers = (content: string): string => {
-    if (!providerCitationSpans || !content) return content;
+    if (!content) return content;
+    if (!providerCitationSpans) {
+      if (citationAnchors.length === 0) return content;
+      return insertCitationMarkers(
+        content,
+        citationSpansFromAnchors(content, citationAnchors),
+        citationsInModelMarkerOrder.length,
+      );
+    }
     const delivered = existingSearchResults();
     const indexOfUrl = new Map(
       delivered.map(
@@ -3427,6 +3440,14 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             Partial<WebSearchCitationDeltaWire> | undefined;
           if (typeof citationBlock?.url === 'string' && typeof citationBlock.title === 'string') {
             appendMarkerOrderedCitation(citationBlock.url, citationBlock.title);
+            const citedKey = normalizeCitationUrl(citationBlock.url) ?? citationBlock.url;
+            const marker =
+              citationsInModelMarkerOrder.findIndex(
+                (citation) => (normalizeCitationUrl(citation.url) ?? citation.url) === citedKey,
+              ) + 1;
+            if (marker > 0 && !seamPending) {
+              citationAnchors.push({ offset: fullAssistantContent.length, marker });
+            }
           }
 
           const searchResultsBlock = parsed.choices?.[0]?.delta?.x_search_results;
