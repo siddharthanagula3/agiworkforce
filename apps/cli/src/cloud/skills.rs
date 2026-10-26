@@ -16,6 +16,8 @@ const MAX_SKILL_FILES: usize = 64;
 const MAX_SKILL_FILE_BYTES: u64 = 1_000_000;
 /// Names the package hash a held skill was written from, beside its files.
 const TREE_HASH_FILE: &str = ".tree-hash";
+/// The skill names of the last sync that brought the whole catalog down.
+const COMPLETED_CATALOG_FILE: &str = ".catalog";
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct AccountSkill {
@@ -82,6 +84,9 @@ pub struct SyncedSkill {
 pub struct SkillSync {
     pub fetched: Vec<SyncedSkill>,
     pub listed: Vec<String>,
+    /// Whether every listed skill is now held, so this sync's list is a
+    /// whole catalog rather than one paced batch of it.
+    pub complete: bool,
 }
 
 /// A held skill written from the same package needs nothing downloaded.
@@ -226,25 +231,30 @@ pub async fn fetch_account_skills(
         .filter(|skill| skill.lifecycle.as_deref() != Some("draft"))
         .collect();
     let mut fetched = Vec::new();
+    let mut complete = true;
     for skill in &offered {
         let held = dir.join(&skill.name);
         if holds_package(&held, skill.tree_hash.as_deref()) {
             continue;
         }
         if pacer.spent() {
+            complete = false;
             break;
         }
         match fetch_skill(client, skill, &held, &mut pacer).await {
             Ok(Some(skill)) => fetched.push(skill),
-            Ok(None) => break,
+            Ok(None) | Err(CloudError::Api { status: 429, .. }) => {
+                complete = false;
+                break;
+            }
             Err(CloudError::Api { status: 404, .. }) => {}
-            Err(CloudError::Api { status: 429, .. }) => break,
             Err(error) => return Err(error),
         }
     }
     Ok(SkillSync {
         fetched,
         listed: offered.iter().map(|skill| skill.name.clone()).collect(),
+        complete,
     })
 }
 
@@ -280,7 +290,26 @@ pub fn write_account_skills(dir: &Path, sync: &SkillSync) -> std::io::Result<()>
             std::fs::remove_dir_all(entry.path())?;
         }
     }
+    if sync.complete {
+        let staging = dir.join(format!("{COMPLETED_CATALOG_FILE}.syncing"));
+        std::fs::write(&staging, sync.listed.join("\n"))?;
+        std::fs::rename(&staging, dir.join(COMPLETED_CATALOG_FILE))?;
+    }
     Ok(())
+}
+
+/// The skill names the last complete sync listed, or none before one has
+/// finished. A session lists only these in its prompt, so a catalog that
+/// lands over several paced syncs reaches the prompt once, whole.
+pub fn completed_catalog(dir: &Path) -> std::collections::BTreeSet<String> {
+    std::fs::read_to_string(dir.join(COMPLETED_CATALOG_FILE))
+        .map(|text| {
+            text.lines()
+                .filter(|name| !name.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 #[cfg(test)]
@@ -300,6 +329,7 @@ mod tests {
         SkillSync {
             fetched,
             listed: listed.iter().map(|name| (*name).to_string()).collect(),
+            complete: true,
         }
     }
 
@@ -557,6 +587,51 @@ mod tests {
             "a catalogue held in full costs only its listing"
         );
         eprintln!("skills sync requests per paced sync: {per_sync:?}, then 1 (30 skills)");
+    }
+
+    /// What a session started now would list in its system prompt.
+    fn prompt_catalog(dir: &Path) -> String {
+        let mut held = Vec::new();
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            if let Ok(skill) = crate::skills::load_skill(&entry.path().join(SKILL_ENTRY_FILE)) {
+                held.push(skill);
+            }
+        }
+        crate::skills::format_skill_catalog_for_prompt(
+            &crate::skills::in_completed_account_catalog(held, dir),
+        )
+    }
+
+    #[tokio::test]
+    async fn the_prompt_lists_a_paced_catalogue_only_once_a_sync_has_brought_all_of_it() {
+        let dir = tempfile::tempdir().unwrap();
+        let (base, served) = catalogue(30, true).await;
+        let client = CloudClient::for_test_server(&base);
+
+        let before = prompt_catalog(dir.path());
+        let mut batches = 0;
+        loop {
+            served.store(0, std::sync::atomic::Ordering::SeqCst);
+            let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
+            write_account_skills(dir.path(), &sync).unwrap();
+            if sync.complete {
+                break;
+            }
+            batches += 1;
+            assert!(batches < 10, "the paced sync never finished");
+            assert_eq!(
+                prompt_catalog(dir.path()),
+                before,
+                "a session started between paced batches lists what the last complete sync did"
+            );
+        }
+
+        assert!(batches > 0, "the catalogue arrived over more than one sync");
+        let listed = prompt_catalog(dir.path());
+        for index in 0..30 {
+            assert!(listed.contains(&format!("- skill-{index}: ")), "{listed}");
+        }
+        assert_eq!(completed_catalog(dir.path()).len(), 30);
     }
 
     #[tokio::test]

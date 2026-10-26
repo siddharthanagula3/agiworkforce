@@ -121,7 +121,11 @@ fn classify_segments(trimmed: &str, depth: usize) -> CommandSafety {
     let mut prev_safe = false;
 
     for segment in &segments {
-        let classification = classify_single_segment(segment, prev_safe, depth);
+        let classification = if is_inert_shell_grammar(segment) {
+            CommandSafety::Safe
+        } else {
+            classify_single_segment(command_after_keywords(segment), prev_safe, depth)
+        };
         match classification {
             CommandSafety::Dangerous => return CommandSafety::Dangerous,
             CommandSafety::Unknown => all_safe = false,
@@ -134,6 +138,58 @@ fn classify_segments(trimmed: &str, depth: usize) -> CommandSafety {
         CommandSafety::Safe
     } else {
         CommandSafety::Unknown
+    }
+}
+
+/// Keywords that introduce the command after them on the same segment: the
+/// condition of `if`/`while`/`until` and the body after `do`/`then`/`else`
+/// run as commands, so they are classified as commands.
+const COMMAND_INTRODUCING_KEYWORDS: &[&str] = &[
+    "!", "do", "elif", "else", "if", "then", "until", "while", "{",
+];
+
+fn command_after_keywords(segment: &str) -> &str {
+    let mut rest = segment.trim_start();
+    while let Some((word, tail)) = rest.split_once(char::is_whitespace) {
+        if !COMMAND_INTRODUCING_KEYWORDS.contains(&word) {
+            break;
+        }
+        rest = tail.trim_start();
+    }
+    rest
+}
+
+/// Loop and conditional grammar that runs nothing itself: a keyword standing
+/// alone, or a `for NAME in WORDS` header, which only assigns words. A
+/// keyword carrying anything more, such as a redirection after `done`, is not
+/// grammar this reads and is classified as a command.
+fn is_inert_shell_grammar(segment: &str) -> bool {
+    const LONE_KEYWORDS: &[&str] = &["do", "done", "else", "fi", "then", "{", "}"];
+    LONE_KEYWORDS.contains(&segment) || is_plain_for_header(segment)
+}
+
+fn is_plain_for_header(segment: &str) -> bool {
+    let mut words = segment.split_whitespace();
+    if words.next() != Some("for") {
+        return false;
+    }
+    let Some(name) = words.next() else {
+        return false;
+    };
+    let is_name = name
+        .chars()
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic() || first == '_')
+        && name
+            .chars()
+            .all(|ch| ch.is_ascii_alphanumeric() || ch == '_');
+    if !is_name {
+        return false;
+    }
+    match words.next() {
+        None => true,
+        Some("in") => words.all(|word| !word.contains(['<', '>', '(', ')', '`', '&'])),
+        Some(_) => false,
     }
 }
 
@@ -1525,6 +1581,37 @@ mod tests {
             "grep -rn TODO src >/dev/null 2>&1",
         ] {
             assert_eq!(classify_command(command), CommandSafety::Safe, "{command}");
+        }
+    }
+
+    #[test]
+    fn a_loop_whose_body_only_reads_is_read_only() {
+        for command in [
+            "for f in src/cli.js src/store.js; do cat $f; done",
+            "for f in src/*.js test/*.js; do echo \"=== $f\"; cat $f; done",
+            "for f in src/*.js; do echo \"== $f\"; cat \"$f\"; done",
+            "for f in a b\ndo\n  wc -l $f\ndone",
+            "if git rev-parse HEAD; then cat package.json; else ls; fi",
+        ] {
+            assert_eq!(classify_command(command), CommandSafety::Safe, "{command}");
+        }
+    }
+
+    #[test]
+    fn a_loop_keeps_the_rating_of_what_it_runs() {
+        assert_eq!(
+            classify_command("for f in *.tmp; do rm -rf /; done"),
+            CommandSafety::Dangerous
+        );
+        for command in [
+            "for f in a b; do my-tool $f; done",
+            "for f in a b; do cat $f; done > all.txt",
+            "for f in <(rm -r build); do cat $f; done",
+            "for f in $(ls); do cat $f; done",
+            "for 1x in a; do cat $1x; done",
+            "while my-tool; do cat x; done",
+        ] {
+            assert_ne!(classify_command(command), CommandSafety::Safe, "{command}");
         }
     }
 

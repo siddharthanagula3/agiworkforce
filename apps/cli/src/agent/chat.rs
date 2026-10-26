@@ -1323,7 +1323,10 @@ team, not from the user:\n",
                 prefix.push_str(&format!("[workspace] {git_state}\n\n"));
             }
         }
-        for attached in std::mem::take(&mut self.attached_turn_context) {
+        let attached_context = std::mem::take(&mut self.pending_attached_files)
+            .into_iter()
+            .chain(std::mem::take(&mut self.attached_turn_context));
+        for attached in attached_context {
             prefix.push_str(attached.trim_end());
             prefix.push_str("\n\n");
         }
@@ -3674,12 +3677,19 @@ async fn settle_document(
 /// How the user approves a plan where they are, so a reply that mentions it
 /// names what is actually in front of them: a button in an editor or app, the
 /// slash command in the terminal.
-pub(crate) fn plan_approval_guidance(control: Option<&str>) -> String {
-    match control {
-        Some(control) => format!(
-            "The user approves the plan with the {control} button shown with it. When you mention approving, name that button; never tell them to type a command."
-        ),
-        None => "The user approves the plan by typing `/plan accept`.".to_string(),
+pub(crate) fn plan_approval_guidance(controls: Option<&[&str]>) -> String {
+    match controls {
+        Some(controls) if !controls.is_empty() => {
+            let named = controls
+                .iter()
+                .map(|control| format!("\"{control}\""))
+                .collect::<Vec<_>>()
+                .join(" or ");
+            format!(
+                "The user approves the plan with a button shown with it: {named}. When you mention approving, name those buttons as written; never tell them to type a command."
+            )
+        }
+        _ => "The user approves the plan by typing `/plan accept`.".to_string(),
     }
 }
 
@@ -3690,8 +3700,13 @@ mod tests {
 
     #[test]
     fn plan_guidance_names_the_button_in_an_editor_and_the_command_in_a_terminal() {
-        let editor = plan_approval_guidance(Some("Approve plan"));
-        assert!(editor.contains("Approve plan button"));
+        let editor = plan_approval_guidance(Some(&[
+            "Approve and auto-accept edits",
+            "Approve and ask before edits",
+        ]));
+        assert!(editor
+            .contains("\"Approve and auto-accept edits\" or \"Approve and ask before edits\""));
+        assert!(!editor.contains("Approve plan"));
         assert!(!editor.contains("/plan accept"));
         assert!(plan_approval_guidance(None).contains("`/plan accept`"));
     }

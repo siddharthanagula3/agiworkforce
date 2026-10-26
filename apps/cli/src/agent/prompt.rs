@@ -401,7 +401,9 @@ pub fn assemble_system_prompt(
             .ok()
             .and_then(|cwd| compaction::load_instructions(&cwd)),
         memory_cwd: std::env::current_dir().ok(),
-        skills_content: skills::format_skill_catalog_for_prompt(&skills::discover_skills()),
+        skills_content: skills::format_skill_catalog_for_prompt(
+            &skills::discover_skills_for_prompt(),
+        ),
         rules_context: memory::always_on_rules_context(
             &std::env::current_dir()
                 .ok()

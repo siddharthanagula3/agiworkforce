@@ -147,16 +147,20 @@ const WRITER_LABEL: &str = "AGI app-server";
 /// a user who turned memory off on the web is not remembered or read here.
 /// Only the terminal CLI refreshed this before, so a desktop session kept the
 /// last cached answer. Signed out or offline, the cached answer stands.
+///
+/// The skill sync runs beside the session instead of ahead of it: a session
+/// lists the catalog of the last complete sync, so waiting on a paced
+/// download only held up opening the thread, for seconds, with nothing shown.
 async fn refresh_account_memory_setting() {
-    let (memory, skills) = tokio::join!(
-        crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed),
-        crate::cloud::refresh_account_skills(crate::agent::PrivacyMode::Managed, false),
-    );
-    if let Err(error) = memory {
+    tokio::spawn(async {
+        if let Err(error) =
+            crate::cloud::refresh_account_skills(crate::agent::PrivacyMode::Managed, false).await
+        {
+            tracing::debug!(%error, "account skills not refreshed");
+        }
+    });
+    if let Err(error) = crate::cloud::refresh_memory(crate::agent::PrivacyMode::Managed).await {
         tracing::debug!(%error, "account memory setting not refreshed");
-    }
-    if let Err(error) = skills {
-        tracing::debug!(%error, "account skills not refreshed");
     }
 }
 
@@ -223,6 +227,7 @@ struct TurnSetupSnapshot {
     max_turns: Option<usize>,
     message_count: usize,
     attachment_count: usize,
+    pending_attachment_count: usize,
     fallback_chain: Option<crate::routing::fallback::FallbackChain>,
     auto_routing: Option<ManagedSessionAutoRouting>,
     allowed_tools: Option<Vec<String>>,
@@ -246,6 +251,7 @@ impl TurnSetupSnapshot {
             max_turns: agent.max_turns,
             message_count: agent.messages.len(),
             attachment_count: agent.attached_context_files.len(),
+            pending_attachment_count: agent.pending_attached_files.len(),
             fallback_chain: agent.fallback_chain.clone(),
             auto_routing: agent.managed_auto_routing().cloned(),
             allowed_tools: agent.allowed_tools.clone(),
@@ -268,6 +274,9 @@ impl TurnSetupSnapshot {
         agent.max_turns = self.max_turns;
         agent.messages.truncate(self.message_count);
         agent.attached_context_files.truncate(self.attachment_count);
+        agent
+            .pending_attached_files
+            .truncate(self.pending_attachment_count);
         agent.fallback_chain = self.fallback_chain;
         agent.set_managed_auto_routing(self.auto_routing);
         agent.allowed_tools = self.allowed_tools;
@@ -7312,9 +7321,12 @@ fn device_surface(client: Option<&AppServerClientInfo>) -> &'static str {
     }
 }
 
-/// The plan card's approve button in the editor and app clients, as their
-/// webviews label it (`webview.approvePlan`).
-const PLAN_APPROVAL_CONTROL: &str = "Approve plan";
+/// The plan card's approve buttons in the editor and app clients, as their
+/// webviews label them (`webview.approvePlan`, `webview.approvePlanAskEdits`).
+const PLAN_APPROVAL_CONTROL: &[&str] = &[
+    "Approve and auto-accept edits",
+    "Approve and ask before edits",
+];
 
 fn source_to_stored(source: DeveloperSessionSource) -> &'static str {
     match source {

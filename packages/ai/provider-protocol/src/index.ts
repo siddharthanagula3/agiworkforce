@@ -33,6 +33,7 @@ export {
   stripSystemPromptCacheBoundary,
   splitSystemPromptCacheBoundary,
   prependSystemPromptAdditionAfterCacheBoundary,
+  joinSystemTextsAtCacheBoundary,
 } from './system-prompt-cache-boundary';
 export { formatTurnContext, isTurnContextText } from './turn-context';
 

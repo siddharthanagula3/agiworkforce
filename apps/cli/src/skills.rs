@@ -156,6 +156,39 @@ pub fn discover_skills() -> Vec<Skill> {
     skills
 }
 
+/// The skills a session lists in its system prompt, read once when it starts.
+/// Account skills come only from the last sync that finished: a paced sync
+/// lands a large catalog over several runs, and a session started between
+/// them would otherwise list a different part of it each time. A skill held
+/// from an unfinished sync still lists and loads through the skill tool.
+pub fn discover_skills_for_prompt() -> Vec<Skill> {
+    let skills = discover_skills();
+    match crate::config::CliConfig::config_dir() {
+        Ok(config_dir) => in_completed_account_catalog(
+            skills,
+            &crate::cloud::skills::account_skills_dir(&config_dir),
+        ),
+        Err(_) => skills,
+    }
+}
+
+pub(crate) fn in_completed_account_catalog(skills: Vec<Skill>, account_dir: &Path) -> Vec<Skill> {
+    let catalog = crate::cloud::skills::completed_catalog(account_dir);
+    skills
+        .into_iter()
+        .filter(|skill| {
+            let Ok(relative) = skill.path.strip_prefix(account_dir) else {
+                return true;
+            };
+            relative
+                .components()
+                .next()
+                .and_then(|folder| folder.as_os_str().to_str())
+                .is_some_and(|folder| catalog.contains(folder))
+        })
+        .collect()
+}
+
 /// ALL discovered skills regardless of the disable set, used by the
 /// /skills-toggle overlay so it can list + re-enable disabled skills.
 ///

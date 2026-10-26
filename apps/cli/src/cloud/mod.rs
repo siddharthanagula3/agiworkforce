@@ -604,11 +604,16 @@ pub async fn refresh_memory(privacy: PrivacyMode) -> Result<memory::MemoryCache,
     Ok(cache)
 }
 
-/// Any failure keeps the skills already on this device.
+/// Any failure keeps the skills already on this device. One sync runs at a
+/// time; a call made while one is running leaves the work to it.
 pub async fn refresh_account_skills(
     privacy: PrivacyMode,
     force: bool,
 ) -> Result<usize, CloudError> {
+    static SYNCING: tokio::sync::Mutex<()> = tokio::sync::Mutex::const_new(());
+    let Ok(_syncing) = SYNCING.try_lock() else {
+        return Ok(0);
+    };
     if crate::tier_cache::capability_refusal(crate::tier_cache::SKILLS_CAPABILITY, "Skills")
         .is_some()
     {

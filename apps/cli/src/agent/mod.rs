@@ -316,9 +316,9 @@ pub struct AgentSession {
     /// front of every turn.
     pub(crate) browser_available: Option<bool>,
     pub quiet: bool,
-    /// The control a host shows for approving a plan, named in plan-mode
+    /// The controls a host shows for approving a plan, named in plan-mode
     /// guidance. `None` is the terminal, where the user types `/plan accept`.
-    pub plan_approval_control: Option<&'static str>,
+    pub plan_approval_control: Option<&'static [&'static str]>,
     #[allow(dead_code)]
     pub fast_mode: bool,
     #[allow(dead_code)]
@@ -401,6 +401,10 @@ pub struct AgentSession {
     /// problems in a file) rather than typed. It reaches the model inside
     /// the turn context, so a resumed transcript shows the words as typed.
     pub(crate) attached_turn_context: Vec<String>,
+    /// File contents attached since the last turn. They ride in the next
+    /// user message's turn context, never as a system message: a system
+    /// message added mid-conversation changes the cached system prefix.
+    pub(crate) pending_attached_files: Vec<String>,
     pub search_next_turn: bool,
     /// When `true`, all streaming chunks (including continuation/retry/fallback
     /// turns) are emitted as `MessageDelta` JSONL events to stdout instead of
@@ -743,7 +747,7 @@ impl AgentSession {
         let privacy_mode = provider_privacy_mode(&provider);
         let memory_nonce = uuid::Uuid::new_v4().simple().to_string();
 
-        let discovered = skills::discover_skills();
+        let discovered = skills::discover_skills_for_prompt();
         let skills_content = skills::format_skill_catalog_for_prompt(&discovered);
 
         let rules = std::env::current_dir()
@@ -859,6 +863,7 @@ impl AgentSession {
             cloud_project: None,
             pending_image_blocks: Vec::new(),
             attached_turn_context: Vec::new(),
+            pending_attached_files: Vec::new(),
             search_next_turn: false,
             json_events: false,
             json_session_id: String::new(),
@@ -1445,7 +1450,7 @@ impl AgentSession {
             } else {
                 format!("{activated_rules}\n\n{attached_files}")
             };
-            self.messages.push(Message::text("system", &message));
+            self.pending_attached_files.push(message);
         }
 
         report
@@ -1749,6 +1754,7 @@ impl AgentSession {
         self.loop_strike_count = 0;
         self.reset_plan_state();
         self.attached_context_files.clear();
+        self.pending_attached_files.clear();
         self.pending_privacy_handoff = None;
     }
 
@@ -1757,6 +1763,7 @@ impl AgentSession {
             authority.clear_additional();
         }
         self.attached_context_files.clear();
+        self.pending_attached_files.clear();
         self.pending_image_blocks.clear();
         self.workspace_rules.clear();
         self.active_rule_sources.clear();
@@ -3432,7 +3439,7 @@ mod tests {
     }
 
     #[test]
-    fn attach_context_files_adds_file_contents_to_session_context() {
+    fn attached_files_wait_for_the_next_user_turn_instead_of_a_system_message() {
         let ctx = SystemContext {
             cwd: "/tmp".to_string(),
             git_branch: None,
@@ -3462,23 +3469,21 @@ mod tests {
             .expect("file under workspace");
         std::fs::write(file.path(), "attached body").unwrap();
 
+        let messages_before = session.messages.clone();
+
         let report = session.attach_context_files([file.path().to_string_lossy().to_string()]);
 
         assert_eq!(report.added.len(), 1);
         assert!(report.failed.is_empty());
         assert_eq!(session.attached_context_files.len(), 1);
-        assert!(session
-            .messages
-            .last()
-            .unwrap()
-            .text_content()
-            .contains("attached body"));
-        assert!(session
-            .messages
-            .last()
-            .unwrap()
-            .text_content()
-            .contains("Apply the Rust file rule."));
+        assert_eq!(session.messages.len(), messages_before.len());
+        assert_eq!(
+            session.messages[0].text_content(),
+            messages_before[0].text_content()
+        );
+        let pending = session.pending_attached_files.join("\n");
+        assert!(pending.contains("attached body"));
+        assert!(pending.contains("Apply the Rust file rule."));
     }
 
     #[test]

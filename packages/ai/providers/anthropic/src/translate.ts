@@ -15,6 +15,7 @@ import {
   UnsupportedFileInputError,
   type PromptCachePlan,
 } from '@agiworkforce/types';
+import { joinSystemTextsAtCacheBoundary } from '@agiworkforce/provider-protocol';
 
 type ThinkingDisplay = NonNullable<ModelReasoning['thinkingDisplay']>;
 
@@ -201,19 +202,22 @@ function translateSystem(
       ...(b.cacheControl ? { cache_control: b.cacheControl } : {}),
     }));
   }
-  const systemMsgs = messages.filter((m) => m.role === 'system');
-  if (systemMsgs.length === 0) {
-    return undefined;
-  }
-  const text = systemMsgs
-    .map((m) => {
-      if (typeof m.content === 'string') return m.content;
-      return m.content
-        .filter((b): b is TextBlock => b.type === 'text')
-        .map((b) => b.text)
-        .join('\n\n');
-    })
-    .join('\n\n');
+  const firstConversationIndex = messages.findIndex((m) => m.role !== 'system');
+  const openingCount = firstConversationIndex === -1 ? messages.length : firstConversationIndex;
+  const systemText = (m: ProviderMessage): string =>
+    typeof m.content === 'string'
+      ? m.content
+      : m.content
+          .filter((b): b is TextBlock => b.type === 'text')
+          .map((b) => b.text)
+          .join('\n\n');
+  const text = joinSystemTextsAtCacheBoundary(
+    messages.slice(0, openingCount).map(systemText),
+    messages
+      .slice(openingCount)
+      .filter((m) => m.role === 'system')
+      .map(systemText),
+  );
   return text ? [{ type: 'text', text }] : undefined;
 }
 

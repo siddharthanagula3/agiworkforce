@@ -512,7 +512,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         def(
             "run_command",
             &format!(
-                "Execute a shell command and return stdout/stderr. Use for system commands, builds, tests, git operations, etc. To create or change a file use write_file or edit_file, not a heredoc, echo or cat redirection. A command is stopped after {} seconds unless it runs in the background: set run_in_background for dev servers, watchers, interactive programs and long builds.",
+                "Execute a shell command and return stdout/stderr. Use for system commands, builds, tests, git operations, etc. To read a file use read_file, not cat, head, tail or sed: edit_file and write_file accept only a file read through read_file. To create or change a file use write_file or edit_file, not a heredoc, echo or cat redirection. A command is stopped after {} seconds unless it runs in the background: set run_in_background for dev servers, watchers, interactive programs and long builds.",
                 crate::tools::COMMAND_TIMEOUT.as_secs()
             ),
             serde_json::json!({
@@ -587,7 +587,7 @@ fn core_tool_definitions() -> Vec<ToolDefinition> {
         ).read_only().with_size_cap(20_000),
         def(
             "edit_file",
-            "Apply a targeted edit to a file by replacing an exact string match with new content.",
+            "Apply a targeted edit to a file by replacing an exact string match with new content. Read the file with read_file first in this conversation; a file shown by a shell command such as cat does not count, and the edit fails until read_file has read it.",
             serde_json::json!({
                 "type": "object",
                 "properties": {
