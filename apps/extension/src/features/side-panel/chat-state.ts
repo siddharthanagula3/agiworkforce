@@ -74,6 +74,7 @@ export interface SidePanelChatMessage {
    * cursor that will never move again.
    */
   interrupted?: boolean;
+  userStopped?: boolean;
   stopping?: boolean;
   reconnecting?: boolean;
   error?: boolean;
@@ -151,6 +152,7 @@ export interface StoredSidePanelChatMessage {
   error?: boolean;
   errorText?: string;
   streamCancellation?: 'pending' | 'unconfirmed';
+  userStopped?: boolean;
   cloudMessageId?: string;
 }
 
@@ -433,6 +435,7 @@ export function hydrateStoredChatMessage(
         }
       : {}),
     ...(message.streaming ? { interrupted: true } : {}),
+    ...(message.userStopped ? { userStopped: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
   };
   const cancellationRequestedAt = Date.parse(message.cloudAgentRun?.cancellationRequestedAt ?? '');

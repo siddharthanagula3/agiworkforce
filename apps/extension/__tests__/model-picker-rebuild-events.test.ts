@@ -170,6 +170,18 @@ describe('mounted model picker rebuild events', () => {
     );
   });
 
+  it('counts every model the All models list shows, as the web catalogue does', () => {
+    const test = harness();
+    const label = test.all().textContent ?? '';
+    test.all().click();
+    const listed = test.dropdown.querySelectorAll('.sp-model-option[data-model]').length;
+    const autoRows = test.dropdown.querySelectorAll(
+      `.sp-model-option[data-model="${getDefaultAutoRoutingProfile().id}"]`,
+    ).length;
+
+    expect(label).toBe(`All models (${listed - autoRows})`);
+  });
+
   it('still closes the picker when a click starts outside the original menu path', () => {
     const test = harness();
     const outside = el('button');

@@ -204,7 +204,6 @@ export function buildManagedModelPickerMenu(
   current: ManagedModelPickerOption | null;
   recommended: ManagedModelPickerOption[];
   all: ManagedModelPickerOption[];
-  remainingCount: number;
 } {
   const options = getManagedModelPickerOptions(access);
   const shortList = buildModelPickerShortList({
@@ -228,9 +227,6 @@ export function buildManagedModelPickerMenu(
   });
   const current = shortList.current ? toOption(shortList.current) : null;
   const recommended = shortList.recommended.map(toOption);
-  const shown = new Set(
-    [...recommended, ...(current ? [current] : [])].map((option) => option.value),
-  );
   const all = options
     .filter((option) => option.value !== autoProfile.id)
     .map((option) => {
@@ -242,7 +238,6 @@ export function buildManagedModelPickerMenu(
     current,
     recommended,
     all,
-    remainingCount: all.filter((option) => !shown.has(option.value)).length,
   };
 }
 

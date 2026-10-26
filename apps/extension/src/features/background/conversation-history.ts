@@ -112,6 +112,7 @@ export interface HistoryMessage {
   error?: boolean;
   errorText?: string;
   streamCancellation?: 'pending' | 'unconfirmed';
+  userStopped?: boolean;
   cloudMessageId?: string;
   cloudSyncedAt?: number;
   cloudSyncedChars?: number;
@@ -478,6 +479,9 @@ function normalizeHistoryMessage(
     (message['streamCancellation'] === 'pending' || message['streamCancellation'] === 'unconfirmed')
   ) {
     normalized.streamCancellation = message['streamCancellation'];
+  }
+  if (message['role'] === 'assistant' && message['userStopped'] === true) {
+    normalized.userStopped = true;
   }
   if (
     typeof message['cloudMessageId'] === 'string' &&

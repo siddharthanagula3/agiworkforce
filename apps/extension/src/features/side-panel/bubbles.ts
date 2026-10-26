@@ -403,6 +403,18 @@ function buildInterruptedFooter(
   return footer;
 }
 
+function buildStoppedFooter(
+  msg: ChatMessage,
+  onRegenerate?: (messageId: string) => void,
+): HTMLElement | null {
+  if (msg.role !== 'assistant' || !msg.userStopped || msg.streaming || msg.stopping) return null;
+  if (msg.error || msg.interrupted) return null;
+  const footer = el('div', { class: 'sp-bubble-interrupted-footer', role: 'status' });
+  footer.appendChild(el('div', { class: 'sp-bubble-interrupted-text' }, t('spResponseStopped')));
+  if (onRegenerate) footer.appendChild(buildRetryButton(msg, onRegenerate));
+  return footer;
+}
+
 export function resolveManagedArtifactUrl(uri: string): string | null {
   const trimmed = uri.trim();
   if (!trimmed) return null;
@@ -807,6 +819,8 @@ function buildBubble(msg: ChatMessage, options: BubbleInteractionOptions = {}): 
   if (errorFooter) bubble.appendChild(errorFooter);
   const interruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (interruptedFooter) bubble.appendChild(interruptedFooter);
+  const stoppedFooter = buildStoppedFooter(msg, options.onRegenerate);
+  if (stoppedFooter) bubble.appendChild(stoppedFooter);
 
   appendAnswerExtras(wrapper, msg, options, all);
   const receipt = buildRouteReceipt(msg);
@@ -1300,6 +1314,8 @@ export function buildBubbleWithTools(
   if (toolsErrorFooter) wrapper.appendChild(toolsErrorFooter);
   const toolsInterruptedFooter = buildInterruptedFooter(msg, options.onRetry);
   if (toolsInterruptedFooter) wrapper.appendChild(toolsInterruptedFooter);
+  const toolsStoppedFooter = buildStoppedFooter(msg, options.onRegenerate);
+  if (toolsStoppedFooter) wrapper.appendChild(toolsStoppedFooter);
 
   const toolsReceipt = buildRouteReceipt(msg);
   if (toolsReceipt) wrapper.appendChild(toolsReceipt);

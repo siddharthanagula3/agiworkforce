@@ -3020,6 +3020,36 @@
     "message": "Maths could not be displayed, so its source is shown.",
     "description": "Tooltip on maths shown as source text because the renderer failed to load"
   },
+  "spDiagramLabel": {
+    "message": "Diagram",
+    "description": "Accessible name of a Mermaid diagram drawn inside an answer"
+  },
+  "spDiagramShowSource": {
+    "message": "Show source",
+    "description": "Button under a Mermaid diagram in an answer that reveals the diagram's source code"
+  },
+  "spDiagramHideSource": {
+    "message": "Hide source",
+    "description": "Button under a Mermaid diagram in an answer that hides the diagram's source code again"
+  },
+  "spResponseStopped": {
+    "message": "Response stopped.",
+    "description": "Notice under an answer the user stopped before it finished"
+  },
+  "spFollowUpsLabel": {
+    "message": "Suggested follow-ups",
+    "description": "Accessible name of the group of follow-up questions shown under the latest answer"
+  },
+  "spFollowUpAsk": {
+    "message": "Ask: $QUESTION$",
+    "description": "Accessible name of a suggested follow-up question button",
+    "placeholders": {
+      "question": {
+        "content": "$1",
+        "example": "How do I get there?"
+      }
+    }
+  },
   "spFreePlanTrainingNoticeOptOut": {
     "message": "Opt out in your account’s privacy settings.",
     "description": "Link in the Free plan training notice that opens the AGI web account privacy settings, where the no-training model setting lives"

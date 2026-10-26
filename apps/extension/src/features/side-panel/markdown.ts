@@ -2,7 +2,10 @@ import DOMPurify from 'dompurify';
 import markdownit from 'markdown-it';
 import type { StateBlock, StateInline } from 'markdown-it';
 import markdownItFootnote from 'markdown-it-footnote';
-import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import {
+  closeUnterminatedCodeFence,
+  normalizeMarkdownSource,
+} from '@agiworkforce/utils/markdown-source';
 import {
   highlightToLines,
   resolveHighlightLanguage,
@@ -85,8 +88,19 @@ export function sanitizeHtml(dirty: string): string {
       'data-math',
       'data-md-image',
       'data-lang',
+      'data-fence-open',
+      'data-task',
     ],
-    ADD_URI_SAFE_ATTR: ['colspan', 'rowspan', 'start', 'data-math', 'data-md-image', 'data-lang'],
+    ADD_URI_SAFE_ATTR: [
+      'colspan',
+      'rowspan',
+      'start',
+      'data-math',
+      'data-md-image',
+      'data-lang',
+      'data-fence-open',
+      'data-task',
+    ],
     FORBID_TAGS: [
       'script',
       'style',
@@ -156,6 +170,7 @@ const escapeText = (text: string): string => md.utils.escapeHtml(text).replace(/
 
 md.renderer.rules['text'] = (tokens, index) => escapeText(tokens[index]?.content ?? '');
 
+const MERMAID_LANGUAGE = 'mermaid';
 const CODE_LANGUAGE = /^[A-Za-z0-9+#._-]{1,32}$/;
 
 function codeLanguage(info: string | undefined): string | null {
@@ -163,11 +178,27 @@ function codeLanguage(info: string | undefined): string | null {
   return CODE_LANGUAGE.test(candidate) ? candidate : null;
 }
 
-const renderCode = (content: string, language: string | null = null): string =>
-  `<pre${language ? ` data-lang="${escapeText(language)}"` : ''}><code>${escapeText(content.replace(/\n$/, ''))}</code></pre>\n`;
+type RenderEnv = Record<string, unknown> & {
+  docId: string;
+  openFenceEndLine: number | null;
+};
 
-md.renderer.rules['fence'] = (tokens, index) =>
-  renderCode(tokens[index]?.content ?? '', codeLanguage(tokens[index]?.info));
+const renderCode = (content: string, language: string | null = null, open = false): string =>
+  `<pre${language ? ` data-lang="${escapeText(language)}"` : ''}${open ? ' data-fence-open="true"' : ''}><code>${escapeText(content.replace(/\n$/, ''))}</code></pre>\n`;
+
+function fenceIsOpen(map: [number, number] | null, env: unknown): boolean {
+  const openFenceEndLine = (env as Partial<RenderEnv> | undefined)?.openFenceEndLine ?? null;
+  return openFenceEndLine !== null && map !== null && map[1] >= openFenceEndLine;
+}
+
+md.renderer.rules['fence'] = (tokens, index, _options, env) => {
+  const language = codeLanguage(tokens[index]?.info);
+  return renderCode(
+    tokens[index]?.content ?? '',
+    language,
+    language === MERMAID_LANGUAGE && fenceIsOpen(tokens[index]?.map ?? null, env),
+  );
+};
 
 md.renderer.rules['code_block'] = (tokens, index) => renderCode(tokens[index]?.content ?? '');
 
@@ -312,11 +343,39 @@ md.renderer.rules['math_inline_display'] = (tokens, index) =>
 md.renderer.rules['math_block'] = (tokens, index) =>
   `<div data-math="display">${escapeText((tokens[index]?.content ?? '').trim())}</div>\n`;
 
+const TASK_MARKER = /^\[([ xX])\]\s+/u;
+
+md.core.ruler.push('side_panel_task_items', (state) => {
+  const tokens = state.tokens;
+  for (let index = 2; index < tokens.length; index += 1) {
+    const inline = tokens[index];
+    if (inline?.type !== 'inline' || !inline.children) continue;
+    if (tokens[index - 1]?.type !== 'paragraph_open') continue;
+    if (tokens[index - 2]?.type !== 'list_item_open') continue;
+    const first = inline.children[0];
+    if (first?.type !== 'text') continue;
+    const marker = TASK_MARKER.exec(first.content);
+    if (!marker) continue;
+    first.content = first.content.slice(marker[0].length);
+    const checkbox = new state.Token('task_checkbox', 'span', 0);
+    checkbox.meta = { checked: marker[1] !== ' ' };
+    inline.children.unshift(checkbox);
+  }
+});
+
+md.renderer.rules['task_checkbox'] = (tokens, index) =>
+  `<span data-task="${tokens[index]?.meta?.['checked'] ? 'done' : 'open'}"></span>`;
+
 let renderSequence = 0;
 
 export function renderMarkdown(text: string): string {
   renderSequence += 1;
-  return md.render(normalizeMarkdownSource(text), { docId: `m${renderSequence}` });
+  const source = normalizeMarkdownSource(text);
+  const env: RenderEnv = {
+    docId: `m${renderSequence}`,
+    openFenceEndLine: closeUnterminatedCodeFence(text) !== text ? source.split('\n').length : null,
+  };
+  return md.render(source, env);
 }
 
 type Katex = typeof import('katex').default;
@@ -600,9 +659,152 @@ function addRemoteImages(root: HTMLElement): void {
   }
 }
 
+function addTaskCheckboxes(root: HTMLElement): void {
+  for (const marker of root.querySelectorAll<HTMLElement>('span[data-task]')) {
+    const checkbox = el('input', { class: 'sp-task-checkbox', type: 'checkbox' });
+    checkbox.checked = marker.dataset['task'] === 'done';
+    checkbox.disabled = true;
+    marker.closest('li')?.classList.add('sp-task-item');
+    marker.replaceWith(checkbox);
+  }
+}
+
+type Mermaid = typeof import('mermaid').default;
+
+const SVG_TYPE = 'image/svg+xml';
+const DIAGRAM_CACHE_LIMIT = 32;
+let mermaidLoad: Promise<Mermaid> | undefined;
+let mermaidTheme: 'dark' | 'default' | null = null;
+let diagramSequence = 0;
+const diagramCache = new Map<string, string | null>();
+const diagramPending = new Map<string, Promise<string | null>>();
+
+function prefersDarkPanel(): boolean {
+  const theme = document.documentElement.getAttribute('data-theme');
+  if (theme === 'dark') return true;
+  if (theme === 'light') return false;
+  return typeof matchMedia === 'function' && matchMedia('(prefers-color-scheme: dark)').matches;
+}
+
+function loadMermaid(theme: 'dark' | 'default'): Promise<Mermaid> {
+  const load = (mermaidLoad ??= import('mermaid').then((module) => module.default));
+  load.catch(() => {
+    if (mermaidLoad === load) mermaidLoad = undefined;
+  });
+  return load.then((mermaid) => {
+    if (mermaidTheme !== theme) {
+      mermaid.initialize({
+        startOnLoad: false,
+        securityLevel: 'strict',
+        theme,
+        htmlLabels: false,
+        fontFamily: getComputedStyle(document.body).fontFamily,
+        flowchart: { htmlLabels: false, useMaxWidth: false },
+        class: { htmlLabels: false },
+        suppressErrorRendering: true,
+      });
+      mermaidTheme = theme;
+    }
+    return mermaid;
+  });
+}
+
+function standaloneSvg(svg: string): string {
+  const doc = new DOMParser().parseFromString(svg, SVG_TYPE);
+  const root = doc.documentElement;
+  if (doc.querySelector('parsererror') || root.localName !== 'svg') throw new Error('invalid svg');
+  const [, , width, height] = (root.getAttribute('viewBox') ?? '')
+    .trim()
+    .split(/[\s,]+/u)
+    .map(Number);
+  if (width !== undefined && height !== undefined && width > 0 && height > 0) {
+    root.setAttribute('width', String(Math.ceil(width)));
+    root.setAttribute('height', String(Math.ceil(height)));
+  }
+  root.removeAttribute('style');
+  return new XMLSerializer().serializeToString(root);
+}
+
+function rememberDiagram(key: string, image: string | null): void {
+  diagramCache.delete(key);
+  diagramCache.set(key, image);
+  while (diagramCache.size > DIAGRAM_CACHE_LIMIT) {
+    const oldest = diagramCache.keys().next();
+    if (oldest.done) break;
+    diagramCache.delete(oldest.value);
+  }
+}
+
+function diagramImage(source: string, theme: 'dark' | 'default'): Promise<string | null> {
+  const key = `${theme}\u0000${source}`;
+  if (diagramCache.has(key)) return Promise.resolve(diagramCache.get(key) ?? null);
+  let pending = diagramPending.get(key);
+  if (pending) return pending;
+  pending = (async (): Promise<string | null> => {
+    const host = el('div', { class: 'sp-mermaid-host', 'aria-hidden': 'true' });
+    document.body.appendChild(host);
+    try {
+      const mermaid = await loadMermaid(theme);
+      diagramSequence += 1;
+      const { svg } = await mermaid.render(`sp-mermaid-${diagramSequence}`, source, host);
+      return `data:${SVG_TYPE};charset=utf-8,${encodeURIComponent(standaloneSvg(svg))}`;
+    } catch {
+      return null;
+    } finally {
+      host.remove();
+    }
+  })().then((image) => {
+    diagramPending.delete(key);
+    rememberDiagram(key, image);
+    return image;
+  });
+  diagramPending.set(key, pending);
+  return pending;
+}
+
+function showDiagram(block: HTMLElement, image: string): void {
+  const figure = el('figure', { class: 'sp-mermaid' });
+  figure.appendChild(el('img', { src: image, alt: t('spDiagramLabel') }));
+  const toggle = el(
+    'button',
+    { class: 'sp-mermaid__toggle', type: 'button', 'aria-expanded': 'false' },
+    t('spDiagramShowSource'),
+  );
+  toggle.addEventListener('click', () => {
+    const showing = block.hidden;
+    block.hidden = !showing;
+    toggle.textContent = showing ? t('spDiagramHideSource') : t('spDiagramShowSource');
+    toggle.setAttribute('aria-expanded', String(showing));
+  });
+  figure.appendChild(toggle);
+  block.before(figure);
+  block.hidden = true;
+}
+
+function renderDiagrams(root: HTMLElement): Promise<void> {
+  const theme = prefersDarkPanel() ? 'dark' : 'default';
+  const blocks = [
+    ...root.querySelectorAll<HTMLPreElement>(`pre[data-lang="${MERMAID_LANGUAGE}"]`),
+  ].filter((pre) => pre.dataset['fenceOpen'] === undefined);
+  return Promise.all(
+    blocks.map(async (pre) => {
+      const source = pre.textContent ?? '';
+      const block = pre.closest<HTMLElement>('.sp-code-block') ?? pre;
+      if (!source.trim()) return;
+      const image = await diagramImage(source, theme);
+      if (image && block.isConnected && pre.textContent === source) showDiagram(block, image);
+    }),
+  ).then(() => undefined);
+}
+
 export function renderMarkdownInto(target: HTMLElement, text: string): Promise<void> {
   target.innerHTML = sanitizeHtml(renderMarkdown(text));
+  addTaskCheckboxes(target);
   addCodeCopyButtons(target);
   addRemoteImages(target);
-  return Promise.all([renderMath(target), highlightCodeBlocks(target)]).then(() => undefined);
+  return Promise.all([
+    renderMath(target),
+    highlightCodeBlocks(target),
+    renderDiagrams(target),
+  ]).then(() => undefined);
 }

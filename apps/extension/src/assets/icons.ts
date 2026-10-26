@@ -61,6 +61,10 @@ export const MessageSquare = svg(
 
 export const ChevronRight = svg('<polyline points="9 18 15 12 9 6"/>');
 
+export const CornerDownRight = svg(
+  '<polyline points="15 10 20 15 15 20"/><path d="M4 4v7a4 4 0 0 0 4 4h12"/>',
+);
+
 export const Folder = svg(
   '<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
 );

@@ -34,6 +34,7 @@ const LOCALIZED_SOURCES = [
   'src/features/side-panel/agiWorkPlanReview.ts',
   'src/features/side-panel/freePlanNotices.ts',
   'src/features/side-panel/markdown.ts',
+  'src/features/side-panel/followUps.ts',
   'src/features/side-panel/usageWindows.ts',
   'src/features/side-panel/memorySheet.ts',
   'src/features/side-panel/tasksSheet.ts',

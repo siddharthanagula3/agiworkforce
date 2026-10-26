@@ -188,6 +188,13 @@ import {
   OPEN_BROWSER_CONVERSATION_MESSAGE,
 } from './features/background/background-results';
 import { el } from './features/side-panel/dom';
+import { createScrollPin, type ScrollPin } from './features/side-panel/scrollPin';
+import {
+  buildFollowUps,
+  followUpTargetFor,
+  followUpsPath,
+  readFollowUpSuggestions,
+} from './features/side-panel/followUps';
 import {
   buildBrowserTurnControls,
   buildBubbleWithTools,
@@ -1134,6 +1141,7 @@ function serializeMessagesForHistory() {
     ...(message.errorText ? { errorText: message.errorText } : {}),
     ...(message.streamCancellation ? { streamCancellation: message.streamCancellation } : {}),
     ...(message.role === 'assistant' && message.streaming ? { streaming: true } : {}),
+    ...(message.role === 'assistant' && message.userStopped ? { userStopped: true } : {}),
     ...(message.cloudMessageId ? { cloudMessageId: message.cloudMessageId } : {}),
     ...(message.role === 'assistant' && message.agentEvents
       ? { agentEvents: message.agentEvents }
@@ -2519,6 +2527,53 @@ function injectStyles(): void {
     }
     .sp-code-block { min-width: 0; max-width: 100%; margin: 4px 0; }
     .sp-code-block > pre { margin: 0; }
+    .sp-mermaid {
+      margin: 4px 0;
+      padding: 10px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-control);
+      background: var(--agi-ext-surface);
+      overflow-x: auto;
+    }
+    .sp-mermaid img { display: block; max-width: 100%; height: auto; margin: 0 auto; }
+    .sp-mermaid__toggle {
+      margin-top: 8px;
+      padding: 2px 8px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-compact);
+      background: none;
+      color: var(--agi-ext-text-muted);
+      font: inherit;
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-height);
+      cursor: pointer;
+    }
+    .sp-mermaid__toggle:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-mermaid-host { position: absolute; left: -10000px; top: 0; width: 1200px; visibility: hidden; }
+    .sp-follow-ups { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; }
+    .sp-follow-up {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      min-height: 32px;
+      padding: 6px 12px;
+      border: 1px solid var(--agi-ext-border);
+      border-radius: var(--corner-menu);
+      background: none;
+      color: var(--agi-ext-text-muted);
+      font: inherit;
+      font-size: var(--type-label-size);
+      line-height: var(--type-label-height);
+      text-align: left;
+      cursor: pointer;
+    }
+    .sp-follow-up:hover { background: var(--agi-ext-hover); color: var(--agi-ext-text); }
+    .sp-follow-up:focus-visible { outline: 2px solid var(--agi-ext-focus); outline-offset: 1px; }
+    .sp-follow-up__text { min-width: 0; overflow-wrap: anywhere; }
+    @media (pointer: coarse) { .sp-follow-up { min-height: 44px; } }
+    .sp-bubble-assistant li.sp-task-item { list-style: none; }
+    .sp-task-checkbox { margin: 0 6px 0 -18px; vertical-align: -2px; accent-color: var(--agi-ext-text); }
     .sp-code-block__bar {
       display: flex;
       align-items: center;
@@ -3530,15 +3585,10 @@ function injectStyles(): void {
     .sp-composer-notice > span { flex: 1; min-width: 0; }
     #sp-mic-notice { flex-wrap: wrap; justify-content: flex-end; color: var(--agi-ext-text); }
     #sp-mic-notice > span { flex-basis: 100%; }
-    #sp-usage-warning[data-severity='warning'] {
+    #sp-usage-warning[data-severity='critical'] {
       border-color: var(--agi-ext-warning-border);
       background: var(--agi-ext-warning-bg);
       color: var(--agi-ext-warning-text);
-    }
-    #sp-usage-warning[data-severity='critical'] {
-      border-color: var(--agi-ext-danger-border);
-      background: var(--agi-ext-danger-bg);
-      color: var(--agi-ext-danger-text);
     }
     .sp-composer-notice-action {
       flex-shrink: 0;
@@ -5212,9 +5262,79 @@ function injectStyles(): void {
   }
 }
 
+let messagesScrollPin: { container: HTMLElement; pin: ScrollPin } | null = null;
+
+let followUpRequest: { key: string; controller: AbortController } | null = null;
+let shownFollowUps: string | null = null;
+const followUpsAskedBeforeMirror = new Set<string>();
+
+function clearFollowUps(): void {
+  followUpRequest?.controller.abort();
+  followUpRequest = null;
+  shownFollowUps = null;
+  document.getElementById('sp-follow-ups')?.remove();
+}
+
+async function refreshFollowUps(): Promise<void> {
+  const owner = _ctx.managedCloudOwner;
+  const conversationId = _ctx.conversationId;
+  if (_ctx.isStreaming || !owner || !conversationId || _ctx.temporaryChat) {
+    clearFollowUps();
+    return;
+  }
+  const target = followUpTargetFor(
+    await getConversation(owner, conversationId).catch(() => undefined),
+  );
+  if (_ctx.conversationId !== conversationId || _ctx.isStreaming) return;
+  const key = target ? `${conversationId}:${target.cloudMessageId}` : null;
+  if (key !== shownFollowUps && key !== followUpRequest?.key) clearFollowUps();
+  if (!target || !key || key === shownFollowUps || key === followUpRequest?.key) return;
+  if (!target.mirrored) {
+    if (followUpsAskedBeforeMirror.has(key)) return;
+    followUpsAskedBeforeMirror.add(key);
+  }
+  const controller = new AbortController();
+  followUpRequest = { key, controller };
+  try {
+    const auth = await getManagedCloudAuthContext();
+    if (!auth || !sameManagedCloudOwner(auth.owner, owner)) return;
+    const response = await fetch(`${FREE_TRIAL_GATEWAY}${followUpsPath(target)}`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${auth.token}`,
+        'X-Requested-With': 'XMLHttpRequest',
+        ...platformRequestHeaders(),
+      },
+      signal: controller.signal,
+    });
+    if (!response.ok) return;
+    const suggestions = readFollowUpSuggestions(await response.json());
+    if (followUpRequest?.key !== key || _ctx.isStreaming || suggestions.length === 0) return;
+    const container = document.getElementById('sp-messages');
+    if (!container) return;
+    document.getElementById('sp-follow-ups')?.remove();
+    container.appendChild(
+      buildFollowUps(suggestions, (question) => {
+        clearFollowUps();
+        sendMessage(question);
+      }),
+    );
+    shownFollowUps = key;
+    scrollToBottom();
+  } catch {
+    return;
+  } finally {
+    if (followUpRequest?.key === key) followUpRequest = null;
+  }
+}
+
 function scrollToBottom(): void {
   const msgs = document.getElementById('sp-messages');
-  if (msgs) msgs.scrollTop = msgs.scrollHeight;
+  if (!msgs) return;
+  if (messagesScrollPin?.container !== msgs) {
+    messagesScrollPin = { container: msgs, pin: createScrollPin(msgs) };
+  }
+  messagesScrollPin.pin.toEnd();
 }
 
 const toolsAllowedForChat = new Map<string, Set<string>>();
@@ -5724,6 +5844,9 @@ function renderMessages(): void {
   resumeVideoPolling();
   renderTemporaryChatState();
 
+  const followUps = document.getElementById('sp-follow-ups');
+  if (followUps && followUps !== container.lastElementChild) clearFollowUps();
+  void refreshFollowUps();
   scrollToBottom();
 }
 
@@ -7077,7 +7200,10 @@ function cancelCurrentManagedStream(preservePartialOutput: boolean): void {
       sameManagedCloudOwner(owner, _ctx.managedCloudOwner));
   const completeStop = (): void => {
     if (!isCurrent()) return;
-    if (stopped) stopped.stopping = false;
+    if (stopped) {
+      stopped.stopping = false;
+      stopped.userStopped = true;
+    }
     stoppingStreamId = null;
     clearStoppedStream();
     trackProductEvent('generation_stopped', stopped?.runtime);
@@ -9740,9 +9866,7 @@ function buildUI(): void {
         el(
           'span',
           { class: 'sp-model-option-name' },
-          modelCatalogueOpen
-            ? t('spModelsBack')
-            : t('spAllModels', [String(menu.remainingCount + lockedModels.length)]),
+          modelCatalogueOpen ? t('spModelsBack') : t('spAllModels', [String(catalogue.length)]),
         ),
       );
       allButton.appendChild(renderIcon(ChevronRight, 12));
@@ -14435,6 +14559,7 @@ async function releaseContextHandoffTo(
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local' && changes[BROWSER_STORE_KEY]) {
     void refreshActivePersistenceState();
+    void refreshFollowUps();
   }
   if (
     area === 'local' &&
