@@ -123,16 +123,20 @@ async function handlePull(request: NextRequest) {
         ? Promise.resolve<ArtifactDelta[]>([])
         : db.query<ArtifactDelta>(
             `
-        select id, conversation_id, message_id, title, artifact_type, language,
-               case when deleted_at is null then content else '' end as content,
-               current_version, pinned, tags, created_at, updated_at, deleted_at, server_version
-        from web_artifacts
-        where user_id = $1 and server_version > $2
+        select artifact.id, artifact.conversation_id, artifact.message_id, artifact.title,
+               artifact.artifact_type, artifact.language,
+               case when deleted_at is null then artifact.content else '' end as content,
+               artifact.current_version, artifact.pinned, artifact.tags, artifact.created_at,
+               -- Unqualified on purpose: qualifying deleted_at makes the lifecycle
+               -- guard treat this tombstone read as a filter and drop its exemption.
+               artifact.updated_at, deleted_at, artifact.server_version
+        from web_artifacts as artifact
+        where artifact.user_id = $1 and artifact.server_version > $2
           and not exists (
             select 1 from web_conversations c
-             where c.id = web_artifacts.conversation_id and c.is_temporary
+             where c.id = artifact.conversation_id and c.is_temporary
           )
-        order by server_version asc
+        order by artifact.server_version asc
         limit ${MAX_ARTIFACTS_PULL}
       `,
             [userId, since],
