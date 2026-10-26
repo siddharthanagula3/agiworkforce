@@ -5,6 +5,7 @@ import { useHealthSpaceAvailable } from '@/features/health/hooks/use-health-spac
 import { StudyModeIndicator } from '@/features/study/components/StudyModeIndicator';
 import { useConversationStudySession } from '@/features/study/hooks/use-conversation-study-session';
 import { retryableUserMessageId } from '@/features/chat/lib/retryable-turn';
+import { useWindowEdgeOffset } from '@/features/chat/hooks/use-window-edge-offset';
 import { CHAT_OUTPUT_FORMAT_LABEL, type ChatOutputFormat } from '@/lib/chat-output-format';
 import { readPersistedRouteLane, readRouteLane } from '@/features/chat/lib/routeLane';
 import { putActiveLeafMessageId } from '@/features/chat/lib/activeLeafSelection';
@@ -1100,6 +1101,8 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
   const settingsSectionParam = searchParams?.get(SETTINGS_DEEP_LINK_QUERY_KEY) ?? null;
 
   const sidebarCollapsed = useUIStore((state) => state.sidebarCollapsed);
+  const appHeaderRef = useRef<HTMLElement>(null);
+  useWindowEdgeOffset(appHeaderRef);
   const setSidebarCollapsed = useUIStore((state) => state.setSidebarCollapsed);
   const shellLayout = useShellLayout();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
@@ -6642,7 +6645,9 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             ) : null
           ) : (
             <header
+              ref={appHeaderRef}
               data-app-header=""
+              data-window-edge="offset"
               className={cn(
                 'relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
                 isEmptyChat
