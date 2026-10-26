@@ -669,12 +669,16 @@ impl AgentSession {
                 }
             }
         }
-        let (memory, policy, skills) = tokio::join!(
+        let skills = tokio::spawn(crate::cloud::refresh_account_skills(
+            PrivacyMode::Managed,
+            false,
+        ));
+        let (memory, policy) = tokio::join!(
             crate::cloud::refresh_memory(PrivacyMode::Managed),
             crate::cloud::workspace_policy::refresh(PrivacyMode::Managed),
-            crate::cloud::refresh_account_skills(PrivacyMode::Managed, false),
         );
-        if let Err(error) = skills {
+        if let Ok(Ok(Err(error))) = tokio::time::timeout(ACCOUNT_SKILLS_SESSION_WAIT, skills).await
+        {
             if !error.is_boundary() {
                 crate::output::print_warn(&format!(
                     "using the account skills this device already had: {error}"
@@ -2806,6 +2810,7 @@ fn escape_attr(path: &Path) -> String {
         .replace('>', "&gt;")
 }
 
+const ACCOUNT_SKILLS_SESSION_WAIT: std::time::Duration = std::time::Duration::from_secs(20);
 const TURN_CONTEXT_OPEN: &str = "<turn-context>\n";
 const TURN_CONTEXT_CLOSE: &str = "\n</turn-context>\n\n";
 

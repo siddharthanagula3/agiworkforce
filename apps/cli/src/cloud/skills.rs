@@ -99,8 +99,14 @@ fn holds_package(held: &Path, tree_hash: Option<&str>) -> bool {
             .is_ok_and(|held_hash| held_hash.trim() == tree_hash)
 }
 
-/// A background mirror stops once it has left less than half of the bucket the
-/// server reports, so the skills page and the next sync never find it spent.
+const SAFETY_MARGIN_DIVISOR: u64 = 10;
+const MAX_RESET_WAIT: std::time::Duration = std::time::Duration::from_secs(90);
+const RESET_SLACK: std::time::Duration = std::time::Duration::from_millis(250);
+
+/// A background mirror keeps a tenth of the bucket the server reports unspent,
+/// so the skills page never finds it empty. Once only that margin is left it
+/// waits for the bucket to refill, when the server says that is soon, and goes
+/// on from there.
 #[derive(Debug, Default)]
 struct Pacer {
     budget: Option<RateBudget>,
@@ -113,9 +119,22 @@ impl Pacer {
         }
     }
 
-    fn spent(&self) -> bool {
-        self.budget
-            .is_some_and(|budget| budget.remaining.saturating_mul(2) < budget.limit)
+    fn at_margin(budget: &RateBudget) -> bool {
+        budget.remaining <= (budget.limit / SAFETY_MARGIN_DIVISOR).max(1)
+    }
+
+    /// Whether the next request may go out, after waiting out a refill that is
+    /// near enough. False when the bucket is low and will not refill soon.
+    async fn admit(&mut self) -> bool {
+        let Some(budget) = self.budget.filter(Self::at_margin) else {
+            return true;
+        };
+        let Some(wait) = budget.reset_in.filter(|wait| *wait <= MAX_RESET_WAIT) else {
+            return false;
+        };
+        tokio::time::sleep(wait + RESET_SLACK).await;
+        self.budget = None;
+        true
     }
 }
 
@@ -166,9 +185,12 @@ async fn fetch_skill(
     pacer: &mut Pacer,
 ) -> Result<Option<SyncedSkill>, CloudError> {
     let base = format!("{SKILLS_PATH}/{}", path_segment(&skill.name));
+    if !pacer.admit().await {
+        return Ok(None);
+    }
     let (body, budget): (SkillBody, _) = client.get_observed(&base).await?;
     pacer.note(budget);
-    if pacer.spent() {
+    if !pacer.admit().await {
         return Ok(None);
     }
     let (listed, budget): (SkillFiles, _) = client.get_observed(&format!("{base}/files")).await?;
@@ -186,7 +208,7 @@ async fn fetch_skill(
             files.push((entry.path.clone(), bytes));
             continue;
         }
-        if pacer.spent() {
+        if !pacer.admit().await {
             return Ok(None);
         }
         let path = entry
@@ -214,9 +236,9 @@ async fn fetch_skill(
 /// A draft is its author's work in progress and is not offered to sessions.
 /// A file already held in `dir` with the listed hash is kept, not downloaded.
 /// A skill already held from the same package is kept as it is. When the
-/// server stops answering for a while, what came down so far is kept and the
-/// rest waits for the next sync, as it does once the sync has spent its share
-/// of the rate-limit bucket the server reports.
+/// server stops answering for a while, or the rate-limit bucket it reports is
+/// low and will not refill soon, what came down so far is kept and the rest
+/// waits for the next sync.
 pub async fn fetch_account_skills(
     client: &CloudClient,
     dir: &Path,
@@ -236,10 +258,6 @@ pub async fn fetch_account_skills(
         let held = dir.join(&skill.name);
         if holds_package(&held, skill.tree_hash.as_deref()) {
             continue;
-        }
-        if pacer.spent() {
-            complete = false;
-            break;
         }
         match fetch_skill(client, skill, &held, &mut pacer).await {
             Ok(Some(skill)) => fetched.push(skill),
@@ -461,32 +479,72 @@ mod tests {
     }
 
     /// A stand-in for the web catalogue: `skills` packages of one reference
-    /// file each, the same 60-requests-a-minute budget the web gives this
-    /// route, and a count of what was asked for.
+    /// file each behind a rate-limit bucket of `limit` requests per `window`,
+    /// answering with the headers the web sends and refusing past the bucket.
+    struct Catalogue {
+        base: String,
+        requests: std::sync::atomic::AtomicUsize,
+        refused: std::sync::atomic::AtomicUsize,
+        bucket: std::sync::Mutex<(std::time::Instant, usize)>,
+    }
+
+    impl Catalogue {
+        fn refill(&self) {
+            *self.bucket.lock().unwrap() = (std::time::Instant::now(), 0);
+        }
+
+        fn requests(&self) -> usize {
+            self.requests.load(std::sync::atomic::Ordering::SeqCst)
+        }
+
+        fn refused(&self) -> usize {
+            self.refused.load(std::sync::atomic::Ordering::SeqCst)
+        }
+
+        fn reset_requests(&self) {
+            self.requests.store(0, std::sync::atomic::Ordering::SeqCst);
+        }
+    }
+
     async fn catalogue(
         skills: usize,
         with_hashes: bool,
-    ) -> (String, std::sync::Arc<std::sync::atomic::AtomicUsize>) {
-        use std::sync::atomic::{AtomicUsize, Ordering};
+        limit: usize,
+        window: std::time::Duration,
+    ) -> std::sync::Arc<Catalogue> {
+        use std::sync::atomic::Ordering;
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-        let base = format!("http://{}", listener.local_addr().unwrap());
-        let served = std::sync::Arc::new(AtomicUsize::new(0));
-        let count = served.clone();
+        let state = std::sync::Arc::new(Catalogue {
+            base: format!("http://{}", listener.local_addr().unwrap()),
+            requests: Default::default(),
+            refused: Default::default(),
+            bucket: std::sync::Mutex::new((std::time::Instant::now(), 0)),
+        });
+        let served = state.clone();
         tokio::spawn(async move {
             loop {
                 let Ok((mut socket, _)) = listener.accept().await else {
                     return;
                 };
-                let count = count.clone();
+                let state = served.clone();
                 tokio::spawn(async move {
                     let mut request = vec![0u8; 8192];
                     let read = socket.read(&mut request).await.unwrap_or(0);
                     let line = String::from_utf8_lossy(&request[..read]).to_string();
                     let path = line.split_whitespace().nth(1).unwrap_or("/").to_string();
-                    let seen = count.fetch_add(1, Ordering::SeqCst) + 1;
+                    state.requests.fetch_add(1, Ordering::SeqCst);
+                    let (seen, until_reset) = {
+                        let mut bucket = state.bucket.lock().unwrap();
+                        if bucket.0.elapsed() >= window {
+                            *bucket = (std::time::Instant::now(), 0);
+                        }
+                        bucket.1 += 1;
+                        (bucket.1, window.saturating_sub(bucket.0.elapsed()))
+                    };
                     let reference = b"Reference text".to_vec();
-                    let (status, body): (u16, Vec<u8>) = if seen > 60 {
+                    let (status, body): (u16, Vec<u8>) = if seen > limit {
+                        state.refused.fetch_add(1, Ordering::SeqCst);
                         (429, br#"{"error":"Too many requests"}"#.to_vec())
                     } else if path == "/api/skills" {
                         let entries: Vec<String> = (0..skills)
@@ -521,72 +579,93 @@ mod tests {
                     } else {
                         (200, br#"{"body":"Use it."}"#.to_vec())
                     };
+                    let reset = (chrono::Utc::now()
+                        + chrono::Duration::from_std(until_reset).unwrap())
+                    .to_rfc3339_opts(chrono::SecondsFormat::Millis, true);
                     let head = format!(
-                        "HTTP/1.1 {status} X\r\ncontent-length: {}\r\nx-ratelimit-limit: 60\r\nx-ratelimit-remaining: {}\r\nconnection: close\r\n\r\n",
+                        "HTTP/1.1 {status} X\r\ncontent-length: {}\r\nx-ratelimit-limit: {limit}\r\nx-ratelimit-remaining: {}\r\nx-ratelimit-reset: {reset}\r\nconnection: close\r\n\r\n",
                         body.len(),
-                        60usize.saturating_sub(seen)
+                        limit.saturating_sub(seen)
                     );
                     let _ = socket.write_all(head.as_bytes()).await;
                     let _ = socket.write_all(&body).await;
                 });
             }
         });
-        (base, served)
+        state
     }
 
-    /// Before pacing, a first sync spent the whole bucket and was refused
-    /// with a 429 part way; each sync now takes at most half of what the
-    /// server reports is left and the rest lands on the following syncs.
-    #[tokio::test]
-    async fn a_catalogue_past_the_request_budget_lands_over_paced_syncs_and_then_costs_one_request()
-    {
-        use std::sync::atomic::Ordering;
-        let dir = tempfile::tempdir().unwrap();
-        let (base, served) = catalogue(30, true).await;
-        let client = CloudClient::for_test_server(&base);
+    const A_MINUTE: std::time::Duration = std::time::Duration::from_secs(60);
 
-        let mut per_sync = Vec::new();
-        let mut settled_requests = None;
-        for _ in 0..10 {
-            served.store(0, Ordering::SeqCst);
-            let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
-            write_account_skills(dir.path(), &sync).unwrap();
-            let requests = served.load(Ordering::SeqCst);
-            assert_eq!(sync.listed.len(), 30);
-            if sync.fetched.is_empty() {
-                settled_requests = Some(requests);
-                break;
-            }
-            per_sync.push(requests);
-        }
-
-        assert!(
-            per_sync.len() > 1,
-            "a paced first sync leaves work for the next"
-        );
-        for requests in &per_sync {
-            assert!(
-                *requests <= 31,
-                "a sync asked {requests} times of a 60-request bucket"
-            );
-        }
-        for index in 0..30 {
-            assert!(dir.path().join(format!("skill-{index}/SKILL.md")).is_file());
+    fn assert_whole_catalogue_held(dir: &Path, skills: usize) {
+        for index in 0..skills {
+            assert!(dir.join(format!("skill-{index}/SKILL.md")).is_file());
             assert_eq!(
-                std::fs::read(
-                    dir.path()
-                        .join(format!("skill-{index}/references/guide.md"))
-                )
-                .unwrap(),
+                std::fs::read(dir.join(format!("skill-{index}/references/guide.md"))).unwrap(),
                 b"Reference text"
             );
         }
+    }
+
+    #[tokio::test]
+    async fn one_run_brings_down_a_catalogue_the_bucket_covers_and_the_next_costs_one_request() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalogue = catalogue(63, true, 300, A_MINUTE).await;
+        let client = CloudClient::for_test_server(&catalogue.base);
+
+        let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
+        write_account_skills(dir.path(), &sync).unwrap();
+
+        assert!(sync.complete);
+        assert_eq!(sync.fetched.len(), 63);
+        assert_eq!(catalogue.refused(), 0);
+        assert_eq!(catalogue.requests(), 1 + 63 * 3);
+        assert_whole_catalogue_held(dir.path(), 63);
+        assert_eq!(completed_catalog(dir.path()).len(), 63);
+
+        catalogue.reset_requests();
+        let again = fetch_account_skills(&client, dir.path()).await.unwrap();
+        write_account_skills(dir.path(), &again).unwrap();
+        assert!(again.complete && again.fetched.is_empty());
         assert_eq!(
-            settled_requests,
-            Some(1),
+            catalogue.requests(),
+            1,
             "a catalogue held in full costs only its listing"
         );
-        eprintln!("skills sync requests per paced sync: {per_sync:?}, then 1 (30 skills)");
+    }
+
+    #[tokio::test]
+    async fn a_smaller_bucket_is_waited_out_and_the_run_still_completes_without_a_refusal() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalogue = catalogue(63, true, 60, std::time::Duration::from_secs(1)).await;
+        let client = CloudClient::for_test_server(&catalogue.base);
+
+        let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
+        write_account_skills(dir.path(), &sync).unwrap();
+
+        assert!(sync.complete);
+        assert_eq!(sync.fetched.len(), 63);
+        assert_eq!(
+            catalogue.refused(),
+            0,
+            "the run never spent past the bucket"
+        );
+        assert_eq!(catalogue.requests(), 1 + 63 * 3);
+        assert_whole_catalogue_held(dir.path(), 63);
+    }
+
+    #[tokio::test]
+    async fn a_refill_too_far_away_ends_the_run_early_without_a_refusal() {
+        let dir = tempfile::tempdir().unwrap();
+        let catalogue = catalogue(63, true, 60, std::time::Duration::from_secs(3600)).await;
+        let client = CloudClient::for_test_server(&catalogue.base);
+
+        let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
+
+        assert!(!sync.complete);
+        assert!(!sync.fetched.is_empty() && sync.fetched.len() < 63);
+        assert_eq!(catalogue.refused(), 0);
+        assert!(catalogue.requests() <= 60 - 60 / SAFETY_MARGIN_DIVISOR as usize);
     }
 
     /// What a session started now would list in its system prompt.
@@ -603,15 +682,15 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn the_prompt_lists_a_paced_catalogue_only_once_a_sync_has_brought_all_of_it() {
+    async fn the_prompt_lists_a_cut_short_catalogue_only_once_a_sync_has_brought_all_of_it() {
         let dir = tempfile::tempdir().unwrap();
-        let (base, served) = catalogue(30, true).await;
-        let client = CloudClient::for_test_server(&base);
+        let catalogue = catalogue(30, true, 60, std::time::Duration::from_secs(3600)).await;
+        let client = CloudClient::for_test_server(&catalogue.base);
 
         let before = prompt_catalog(dir.path());
         let mut batches = 0;
         loop {
-            served.store(0, std::sync::atomic::Ordering::SeqCst);
+            catalogue.refill();
             let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
             write_account_skills(dir.path(), &sync).unwrap();
             if sync.complete {
@@ -636,16 +715,15 @@ mod tests {
 
     #[tokio::test]
     async fn without_package_hashes_every_sync_downloads_every_skill() {
-        use std::sync::atomic::Ordering;
         let dir = tempfile::tempdir().unwrap();
-        let (base, served) = catalogue(5, false).await;
-        let client = CloudClient::for_test_server(&base);
+        let catalogue = catalogue(5, false, 300, A_MINUTE).await;
+        let client = CloudClient::for_test_server(&catalogue.base);
         for _ in 0..2 {
-            served.store(0, Ordering::SeqCst);
+            catalogue.reset_requests();
             let sync = fetch_account_skills(&client, dir.path()).await.unwrap();
             write_account_skills(dir.path(), &sync).unwrap();
         }
-        assert_eq!(served.load(Ordering::SeqCst), 1 + 5 * 3);
+        assert_eq!(catalogue.requests(), 1 + 5 * 3);
     }
 
     #[test]

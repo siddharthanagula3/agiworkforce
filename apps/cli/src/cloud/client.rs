@@ -589,18 +589,30 @@ pub struct Reply {
     pub rate_budget: Option<RateBudget>,
 }
 
-/// What the server says is left of the rate-limit bucket a call spent from.
+/// What the server says is left of the rate-limit bucket a call spent from,
+/// and how long until it refills.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct RateBudget {
     pub limit: u64,
     pub remaining: u64,
+    pub reset_in: Option<std::time::Duration>,
 }
 
 fn rate_budget_of(headers: &reqwest::header::HeaderMap) -> Option<RateBudget> {
     let read = |name: &str| headers.get(name)?.to_str().ok()?.trim().parse::<u64>().ok();
+    let reset_in = headers
+        .get("x-ratelimit-reset")
+        .and_then(|value| value.to_str().ok())
+        .and_then(|value| chrono::DateTime::parse_from_rfc3339(value.trim()).ok())
+        .map(|reset| {
+            (reset.with_timezone(&chrono::Utc) - chrono::Utc::now())
+                .to_std()
+                .unwrap_or_default()
+        });
     Some(RateBudget {
         limit: read("x-ratelimit-limit")?,
         remaining: read("x-ratelimit-remaining")?,
+        reset_in,
     })
 }
 

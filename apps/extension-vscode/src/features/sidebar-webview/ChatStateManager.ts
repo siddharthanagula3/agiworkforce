@@ -1006,6 +1006,7 @@ export class ChatStateManager {
   >();
   private readonly _editorContextListeners: vscode.Disposable[] = [];
   private _editorContextSequence = 0;
+  private _editorContextActedOn = false;
   private _answerRatings: Promise<void> = Promise.resolve();
   private readonly _activeModelChanged = new vscode.EventEmitter<string>();
   readonly onDidChangeActiveModel = this._activeModelChanged.event;
@@ -1022,8 +1023,14 @@ export class ChatStateManager {
     this._activeModel = Config.model();
     this._cliCapabilities = new CliCapabilityAdapter(this._localRuntimes);
     this._editorContextListeners.push(
-      vscode.window.onDidChangeActiveTextEditor(() => void this.pushEditorContext()),
-      vscode.window.onDidChangeTextEditorSelection(() => void this.pushEditorContext()),
+      vscode.window.onDidChangeActiveTextEditor((editor) => {
+        if (editor !== undefined) this._editorContextActedOn = true;
+        void this.pushEditorContext();
+      }),
+      vscode.window.onDidChangeTextEditorSelection((event) => {
+        if (event.kind !== undefined) this._editorContextActedOn = true;
+        void this.pushEditorContext();
+      }),
       vscode.languages.onDidChangeDiagnostics(() => void this.pushEditorContext()),
       onApprovalAnsweredOnPhone((answer) => this._approvalAnsweredOnPhone(answer)),
     );
@@ -3142,12 +3149,17 @@ export class ChatStateManager {
     };
   }
 
-  async pushEditorContext(): Promise<void> {
-    const sequence = ++this._editorContextSequence;
-    const snapshot = await captureEditorContext(
+  private async _captureEditorContext(): Promise<EditorContextSnapshot> {
+    if (!this._editorContextActedOn) return { chips: [], contextFiles: [], texts: [] };
+    return captureEditorContext(
       new Set(this._dismissedEditorContext),
       this._editorContextAlreadySent,
     );
+  }
+
+  async pushEditorContext(): Promise<void> {
+    const sequence = ++this._editorContextSequence;
+    const snapshot = await this._captureEditorContext();
     if (sequence !== this._editorContextSequence) return;
     this._post({ type: 'editorContext', payload: { chips: snapshot.chips } });
   }
@@ -3883,10 +3895,7 @@ export class ChatStateManager {
       browseWeb,
       references: Array.isArray(references) ? references.filter(isWorkspaceFileReference) : [],
       attachments: this._pendingAttachments.splice(0),
-      editorContext: captureEditorContext(
-        new Set(this._dismissedEditorContext),
-        this._editorContextAlreadySent,
-      ),
+      editorContext: this._captureEditorContext(),
     };
     this._dismissedEditorContext.clear();
     this._lastUserTurn = { role: 'user', text, references: request.references };

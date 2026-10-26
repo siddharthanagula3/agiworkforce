@@ -64,6 +64,36 @@ function threadSummary(overrides: Partial<ThreadSummary> = {}): ThreadSummary {
   };
 }
 
+function userActsInTheEditor(): void {
+  const changed = vi.mocked(vscode.window.onDidChangeActiveTextEditor).mock.calls.at(-1)?.[0];
+  changed?.(vscode.window.activeTextEditor as vscode.TextEditor);
+}
+
+function editorOpenOn(root: string, file: string): void {
+  Object.defineProperty(vscode.window, 'activeTextEditor', {
+    configurable: true,
+    writable: true,
+    value: {
+      selection: {
+        isEmpty: true,
+        start: { line: 0, character: 0 },
+        end: { line: 0, character: 0 },
+        active: { line: 0, character: 0 },
+      },
+      document: {
+        uri: vscode.Uri.file(path.join(root, file)),
+        languageId: 'typescript',
+        lineCount: 3,
+        getText: () => '',
+      },
+    },
+  });
+  vi.mocked(vscode.workspace.asRelativePath).mockImplementation((value: unknown) =>
+    String((value as { fsPath?: string }).fsPath ?? value).replace(`${root}${path.sep}`, ''),
+  );
+  vi.mocked(vscode.languages.getDiagnostics).mockReturnValue([] as never);
+}
+
 function makeHarness(
   options: {
     approvalFailure?: Error;
@@ -2297,6 +2327,7 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     const harness = makeHarness();
     harness.runtime.startThread.mockResolvedValue(threadSummary({ cwd: root }));
+    userActsInTheEditor();
 
     const send = harness.manager.handleMessage({
       type: 'sendMessage',
@@ -2355,6 +2386,7 @@ describe('ChatStateManager local turn lifecycle', () => {
 
     const harness = makeHarness();
     harness.runtime.startThread.mockResolvedValue(threadSummary({ cwd: root }));
+    userActsInTheEditor();
 
     await harness.manager.handleMessage({
       type: 'dismissEditorContext',
@@ -2387,6 +2419,64 @@ describe('ChatStateManager local turn lifecycle', () => {
       outputTokens: 1,
     });
     await send;
+  });
+
+  it('starts a reloaded window with no editor chip and sends no file until the user acts', async () => {
+    const root = await realContextWorkspace();
+    editorOpenOn(root, 'src/app.ts');
+    const harness = makeHarness();
+    harness.runtime.startThread.mockResolvedValue(threadSummary({ cwd: root }));
+
+    await harness.manager.pushEditorContext();
+    expect(harness.posted.at(-1)).toEqual({ type: 'editorContext', payload: { chips: [] } });
+
+    const first = harness.manager.handleMessage({ type: 'sendMessage', payload: { text: 'Hi' } });
+    await vi.waitFor(() => expect(harness.runtime.startTurn).toHaveBeenCalledOnce());
+    expect(
+      (harness.runtime.startTurn.mock.calls[0]?.[0] as { contextFiles?: string[] }).contextFiles ??
+        [],
+    ).not.toContain(path.join(root, 'src/app.ts'));
+    harness.emit({
+      type: 'turn_completed',
+      threadId: 'thread-1',
+      turnId: 'turn-1',
+      status: 'completed',
+      response: 'done',
+      inputTokens: 1,
+      outputTokens: 1,
+    });
+    await first;
+
+    userActsInTheEditor();
+    await vi.waitFor(() =>
+      expect(harness.posted.at(-1)).toEqual({
+        type: 'editorContext',
+        payload: {
+          chips: [{ id: 'active-file:src/app.ts', kind: 'active-file', label: 'app.ts' }],
+        },
+      }),
+    );
+  });
+
+  it('does not take a selection restored by a reload for the user acting', async () => {
+    const root = await realContextWorkspace();
+    editorOpenOn(root, 'src/app.ts');
+    const harness = makeHarness();
+    const selected = vi.mocked(vscode.window.onDidChangeTextEditorSelection).mock.calls.at(-1)?.[0];
+
+    selected?.({ kind: undefined } as never);
+    await harness.manager.pushEditorContext();
+    expect(harness.posted.at(-1)).toEqual({ type: 'editorContext', payload: { chips: [] } });
+
+    selected?.({ kind: 2 } as never);
+    await vi.waitFor(() =>
+      expect(harness.posted.at(-1)).toEqual({
+        type: 'editorContext',
+        payload: {
+          chips: [{ id: 'active-file:src/app.ts', kind: 'active-file', label: 'app.ts' }],
+        },
+      }),
+    );
   });
 
   it('presents a typed turn failure and ignores the legacy string when both arrive', async () => {
