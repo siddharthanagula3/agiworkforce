@@ -116,6 +116,11 @@ import {
   itineraryToolDefinition,
 } from '@/lib/places/itinerary-tool';
 import {
+  ANSWER_UI_CARD_KIND,
+  answerUiToolDefinition,
+  isAnswerUiTool,
+} from '@/lib/services/answer-ui-tool-service';
+import {
   PRODUCT_COMPARISON_CARD_KIND,
   asksForProductComparison,
   productComparisonToolDefinition,
@@ -1173,6 +1178,24 @@ export function applyClarifyCardCapability(
       agiWork: request.work_mode === 'agiwork',
     }),
   };
+}
+
+export function applyAnswerUiCapability(
+  request: ChatCompletionRequest,
+  params: { toolsCapable: boolean },
+): boolean {
+  if (
+    !params.toolsCapable ||
+    request.stream !== true ||
+    request.x_interactive_cards?.supported.includes(ANSWER_UI_CARD_KIND) !== true
+  ) {
+    return false;
+  }
+  request.tools = [
+    ...(request.tools ?? []).filter((tool) => !isAnswerUiTool(tool.function.name)),
+    answerUiToolDefinition(),
+  ];
+  return true;
 }
 
 export function applyMapSearchCardCapability(
@@ -5420,6 +5443,8 @@ async function processAdmittedRequest(
     hasAttachment:
       Array.isArray(lastUserContent) && lastUserContent.some((part) => part.type !== 'text'),
   });
+
+  applyAnswerUiCapability(chatRequest, { toolsCapable: resolvedModelCaps?.tools ?? true });
 
   const originalModel = chatRequest.model;
   let usedFallback = false;

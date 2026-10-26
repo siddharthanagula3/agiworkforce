@@ -1,5 +1,7 @@
 export const CHART_KINDS = ['bar', 'line', 'pie'] as const;
 export type ChartKind = (typeof CHART_KINDS)[number];
+export const CHART_RENDER_KINDS = [...CHART_KINDS, 'scatter'] as const;
+export type ChartRenderKind = (typeof CHART_RENDER_KINDS)[number];
 export const CHART_DONUT_TYPES = ['donut', 'doughnut'] as const;
 
 export const CHART_ROW_CAP = 500;
@@ -40,6 +42,10 @@ export interface ChartSpec {
   title?: string;
   xLabel?: string;
   yLabel?: string;
+}
+
+export interface ChartRenderSpec extends Omit<ChartSpec, 'kind'> {
+  kind: ChartRenderKind;
 }
 
 export type ChartParseResult = { ok: true; spec: ChartSpec } | { ok: false; reason: string };

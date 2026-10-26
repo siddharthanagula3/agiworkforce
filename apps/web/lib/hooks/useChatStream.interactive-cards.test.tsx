@@ -133,6 +133,7 @@ describe('useChatStream, interactive cards', () => {
     const body = JSON.parse(String(init?.body)) as Record<string, unknown>;
     expect(body['x_interactive_cards']).toEqual({
       supported: [
+        'answer-ui.v1',
         'clarify.v1',
         'image.v1',
         'itinerary.v1',
@@ -143,6 +144,33 @@ describe('useChatStream, interactive cards', () => {
       ],
       canRespond: true,
     });
+  });
+
+  it('carries an answer UI card onto the assistant message so it replays from metadata', async () => {
+    const answerUi = {
+      schemaVersion: 1,
+      cardId: 'answer-ui-toolu_9',
+      kind: 'answer-ui.v1',
+      createdAt: '2026-10-25T10:00:00.000Z',
+      fallback: { headline: 'Checklist', text: '- [ ] Check links' },
+      producedBy: { toolCallId: 'toolu_9', toolName: 'render_answer_ui' },
+      body: {
+        blocks: [
+          {
+            type: 'checklist',
+            id: 'qa',
+            items: [{ id: 'links', label: 'Check links', checked: false }],
+          },
+        ],
+      },
+    };
+    mockSseStream([textEvent('Here is a checklist.'), cardEvent(answerUi)]);
+    await send();
+
+    const [card] = assistantMessage()?.metadata?.interactiveCards ?? [];
+    expect(card?.recognized).toBe(true);
+    expect(card?.kind).toBe('answer-ui.v1');
+    expect(card?.fallback.text).toBe('- [ ] Check links');
   });
 
   it('keeps the prose of the same turn intact', async () => {

@@ -28,6 +28,7 @@ export * from './conversations';
 export * from './message-metadata-projection';
 export * from './message-thread';
 export * from './interactive-cards';
+export * from './answer-ui';
 export * from './managed-cloud-chat-client';
 export * from './chat-attachments';
 export * from './chat-attachment-truncation';

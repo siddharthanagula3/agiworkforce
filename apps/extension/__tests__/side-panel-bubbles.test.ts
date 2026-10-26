@@ -176,6 +176,42 @@ describe('side-panel buildBubbleWithTools (real render)', () => {
     expect(node.querySelector('button')).toBeNull();
   });
 
+  it('shows an answer UI card as its plain-text fallback until Chrome has a renderer', () => {
+    const node = buildInteractiveCardEl(
+      decodeCard({
+        schemaVersion: 1,
+        cardId: 'answer-ui-toolu_1',
+        kind: 'answer-ui.v1',
+        createdAt: '2026-10-25T10:00:00.000Z',
+        fallback: {
+          headline: 'Website QA',
+          text: 'Website QA\n- [ ] Check links\n- [x] Test forms',
+        },
+        producedBy: { toolCallId: 'toolu_1', toolName: 'render_answer_ui' },
+        body: {
+          blocks: [
+            {
+              type: 'checklist',
+              id: 'qa',
+              title: 'Website QA',
+              items: [
+                { id: 'links', label: 'Check links', checked: false },
+                { id: 'forms', label: 'Test forms', checked: true },
+              ],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(node.dataset['cardKind']).toBe('answer-ui.v1');
+    expect(node.querySelector('.sp-interactive-card__headline')?.textContent).toBe('Website QA');
+    expect(node.querySelector('.sp-interactive-card__text')?.textContent).toBe(
+      'Website QA\n- [ ] Check links\n- [x] Test forms',
+    );
+    expect(node.querySelector('button, input')).toBeNull();
+  });
+
   it('revalidates provider URLs in the host opener', () => {
     const open = vi.spyOn(window, 'open').mockImplementation(() => null);
     openInteractiveCardUrl('https://example.test/collect');

@@ -28,6 +28,7 @@ import {
   messageKindForAgentEvent,
   type InteractiveCard,
   type InteractiveCardClientCapability,
+  type AnswerUiValue,
   type InteractiveCardResponsePayload,
   type KnownInteractiveCardKind,
   type StreamSequenceState,
@@ -120,6 +121,7 @@ import {
   SSE_DONE_DATA,
 } from '@agiworkforce/client-runtime';
 import {
+  AnswerUiMessageResponseSchema,
   INTERACTIVE_CARD_RESPONSE_PATH,
   RESPONDABLE_INTERACTIVE_CARD_KIND,
   interactiveCardNeedsResume,
@@ -1154,6 +1156,7 @@ export interface InteractiveCardResponseBinding {
 }
 
 export const WEB_INTERACTIVE_CARD_KINDS = [
+  'answer-ui.v1',
   'clarify.v1',
   'image.v1',
   'itinerary.v1',
@@ -1302,6 +1305,28 @@ export async function respondToInteractiveCard(
   } finally {
     inFlightCardResponses.delete(inFlightKey);
   }
+}
+
+export async function requestAnswerUiMessage(
+  binding: InteractiveCardResponseBinding,
+  actionId: string,
+  values: Record<string, AnswerUiValue>,
+): Promise<string> {
+  const headers = await addCsrfHeaders({ 'Content-Type': 'application/json' });
+  const response = await fetch(INTERACTIVE_CARD_RESPONSE_PATH, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      conversation_id: binding.conversationId,
+      message_id: binding.messageId,
+      card_id: binding.cardId,
+      response: { kind: 'message', action_id: actionId, values },
+    } satisfies InteractiveCardResponseRequest),
+  });
+  if (!response.ok) {
+    throw new Error(`Answer UI message rejected with ${response.status}`);
+  }
+  return AnswerUiMessageResponseSchema.parse(await response.json()).message;
 }
 
 function autoResolvePendingApprovals(

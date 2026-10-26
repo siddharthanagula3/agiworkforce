@@ -145,6 +145,7 @@ describe('the model cannot author place identity', () => {
 describe('kind allowlist', () => {
   it('recognizes exactly the kinds this build ships', () => {
     expect([...KNOWN_INTERACTIVE_CARD_KINDS]).toEqual([
+      'answer-ui.v1',
       'clarify.v1',
       'image.v1',
       'itinerary.v1',

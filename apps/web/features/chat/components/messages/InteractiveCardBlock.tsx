@@ -7,6 +7,7 @@ import {
   type InteractiveCard,
   type InteractiveCardRegistry,
   type InteractiveCardRenderContext,
+  type AnswerUiValue,
   type InteractiveCardResponsePayload,
 } from '@agiworkforce/types';
 import {
@@ -15,6 +16,7 @@ import {
   interactiveCardResponseDeadlineMs,
 } from '@/app/api/interactive-cards/response-contract';
 import {
+  requestAnswerUiMessage,
   respondToInteractiveCard,
   useInteractiveCardResume,
   type InteractiveCardResponseBinding,
@@ -22,6 +24,8 @@ import {
 } from '@/lib/hooks/useChatStream';
 import { selectIsActiveConversationStreaming, useChatStore } from '@shared/stores/web-chat-store';
 import { cn } from '@shared/lib/utils';
+import { AnswerUiCard, type AnswerUiCardContext } from './cards/answer-ui/AnswerUiCard';
+import { useAnswerUiFollowUp } from './cards/answer-ui/answer-ui-follow-up';
 import { ClarifyCard, type ClarifyCardContext } from './cards/ClarifyCard';
 import { ImageToolCard } from './cards/ImageToolCard';
 import { ItineraryCardLazy, MapSearchCardLazy, PlacesMapCardLazy } from './cards/LazyMapCards';
@@ -33,6 +37,9 @@ type WebCardRegistry = {
 };
 
 const WEB_CARD_REGISTRY: WebCardRegistry = {
+  'answer-ui.v1': ({ card, body, ctx }) => (
+    <AnswerUiCard body={body} label={card.fallback.headline} ctx={ctx as AnswerUiCardContext} />
+  ),
   'clarify.v1': ({ card, body, ctx }) => (
     <ClarifyCard card={card} body={body} ctx={ctx as ClarifyCardContext} />
   ),
@@ -49,6 +56,21 @@ const WEB_CARD_REGISTRY: WebCardRegistry = {
 function openMapSearchProviderUrl(value: string): void {
   if (!isAllowedMapSearchProviderUrl(value)) return;
   window.open(new URL(value).toString(), '_blank', 'noopener,noreferrer');
+}
+
+export const ANSWER_UI_SEND_WAITS_FOR_REPLY = 'Available when the reply finishes.';
+export const ANSWER_UI_SEND_NEEDS_SAVED_CHAT = 'Buttons that send a message work in saved chats.';
+
+function useCardSendBlockedReason(): string | undefined {
+  const isStreaming = useChatStore(selectIsActiveConversationStreaming);
+  const isTemporary = useChatStore(
+    (state) =>
+      state.conversations.find((conversation) => conversation.id === state.activeConversationId)
+        ?.isTemporary ?? false,
+  );
+  if (isStreaming) return ANSWER_UI_SEND_WAITS_FOR_REPLY;
+  if (isTemporary) return ANSWER_UI_SEND_NEEDS_SAVED_CHAT;
+  return undefined;
 }
 
 function useCardResponseChannel(
@@ -111,6 +133,10 @@ function useCardResponseDeadline(card: InteractiveCard): void {
 
 type WebCardContext = InteractiveCardRenderContext & { assistantText?: string };
 
+function isUuid(value: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
+
 interface InteractiveCardBlockProps {
   cards: readonly InteractiveCard[];
   className?: string;
@@ -120,16 +146,24 @@ interface InteractiveCardBlockProps {
    * assistant's own words.
    */
   assistantText?: string;
+  trustedImageUrls?: readonly string[];
 }
 
 interface SingleCardProps {
   card: InteractiveCard;
   assistantText?: string;
+  trustedImageUrls?: readonly string[];
 }
 
-const SingleCard = memo(function SingleCard({ card, assistantText }: SingleCardProps) {
+const SingleCard = memo(function SingleCard({
+  card,
+  assistantText,
+  trustedImageUrls,
+}: SingleCardProps) {
   const renderer = resolveInteractiveCardRenderer(WEB_CARD_REGISTRY, card);
   const channel = useCardResponseChannel(card.cardId);
+  const sendBlockedReason = useCardSendBlockedReason();
+  const sendFollowUp = useAnswerUiFollowUp();
   const submissionError = useCardSubmissionError(card.cardId);
   const [submitting, setSubmitting] = useState(false);
   useCardResponseDeadline(card);
@@ -143,6 +177,21 @@ const SingleCard = memo(function SingleCard({ card, assistantText }: SingleCardP
       void respondToInteractiveCard({ ...channel, cardId }, payload).finally(() =>
         setSubmitting(false),
       );
+    };
+
+    const canSendMessage =
+      channel !== null &&
+      sendFollowUp !== null &&
+      isUuid(channel.conversationId) &&
+      isUuid(channel.messageId);
+    const onSendMessage = async (actionId: string, values: Record<string, AnswerUiValue>) => {
+      if (!channel || !sendFollowUp) return;
+      const text = await requestAnswerUiMessage(
+        { ...channel, cardId: card.cardId },
+        actionId,
+        values,
+      );
+      sendFollowUp(text);
     };
 
     return (
@@ -162,6 +211,10 @@ const SingleCard = memo(function SingleCard({ card, assistantText }: SingleCardP
             submitting,
             ...(submissionError ? { submissionError } : {}),
             ...(assistantText ? { assistantText } : {}),
+            ...(trustedImageUrls ? { trustedImageUrls } : {}),
+            canSend: canSendMessage,
+            ...(canSendMessage ? { onSendMessage } : {}),
+            ...(sendBlockedReason ? { sendBlockedReason } : {}),
             onOpenUrl: openMapSearchProviderUrl,
           },
         })}
@@ -191,12 +244,18 @@ export const InteractiveCardBlock = memo(function InteractiveCardBlock({
   cards,
   className,
   assistantText,
+  trustedImageUrls,
 }: InteractiveCardBlockProps) {
   if (cards.length === 0) return null;
   return (
     <div className={className}>
       {cards.map((card) => (
-        <SingleCard key={card.cardId} card={card} assistantText={assistantText} />
+        <SingleCard
+          key={card.cardId}
+          card={card}
+          assistantText={assistantText}
+          trustedImageUrls={trustedImageUrls}
+        />
       ))}
     </div>
   );

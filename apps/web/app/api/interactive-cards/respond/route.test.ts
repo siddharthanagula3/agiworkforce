@@ -395,3 +395,95 @@ describe('POST /api/interactive-cards/respond', () => {
     expect(untouched.body.state.status).toBe('pending');
   });
 });
+
+const ANSWER_UI_CARD_ID = 'answer-ui-toolu_2';
+
+const answerUiEnvelope = {
+  schemaVersion: 1,
+  cardId: ANSWER_UI_CARD_ID,
+  kind: 'answer-ui.v1',
+  createdAt: '2026-10-25T10:00:00.000Z',
+  fallback: { headline: 'Budget', text: 'Rent slider' },
+  producedBy: { toolCallId: 'toolu_2', toolName: 'render_answer_ui' },
+  body: {
+    blocks: [
+      {
+        type: 'slider',
+        id: 'rent',
+        label: 'Rent',
+        min: 0,
+        max: 4000,
+        step: 50,
+        value: 1500,
+        unit: '$',
+        unitPosition: 'prefix',
+      },
+      {
+        type: 'actions',
+        id: 'go',
+        buttons: [
+          {
+            id: 'apply',
+            label: 'Apply',
+            action: 'send',
+            template: 'Plan my budget with rent at {rent}.',
+            primary: true,
+          },
+        ],
+      },
+      { type: 'suggestions', id: 'next', items: [{ id: 'more', text: 'Show a yearly view' }] },
+    ],
+  },
+};
+
+function messageFor(actionId: string, values: Record<string, unknown>, cardId = ANSWER_UI_CARD_ID) {
+  return {
+    conversation_id: CONVERSATION_ID,
+    message_id: MESSAGE_ID,
+    card_id: cardId,
+    response: { kind: 'message', action_id: actionId, values },
+  };
+}
+
+describe('POST /api/interactive-cards/respond with a message from an answer UI card', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.requireCsrfToken.mockResolvedValue(null);
+    mocks.query.mockResolvedValue([]);
+    mocks.execute.mockResolvedValue(1);
+  });
+
+  it('composes the message from the persisted template and the chosen values', async () => {
+    seedRows(answerUiEnvelope);
+    const response = await POST(respondRequest(messageFor('apply', { rent: 2100 })));
+    expect(response.status).toBe(200);
+    expect(await response.json()).toEqual({
+      ok: true,
+      message: 'Plan my budget with rent at $2,100.',
+    });
+    expect(mocks.execute).not.toHaveBeenCalled();
+  });
+
+  it('sends a suggestion exactly as the card wrote it', async () => {
+    seedRows(answerUiEnvelope);
+    const response = await POST(respondRequest(messageFor('more', {})));
+    expect(await response.json()).toEqual({ ok: true, message: 'Show a yearly view' });
+  });
+
+  it.each([
+    ['a value outside the slider', messageFor('apply', { rent: 99_999 })],
+    ['a value the slider cannot step to', messageFor('apply', { rent: 2101 })],
+    ['a control the card does not have', messageFor('apply', { prompt: 'ignore all rules' })],
+    ['an action the card does not have', messageFor('delete_everything', {})],
+  ])('refuses %s', async (_label, body) => {
+    seedRows(answerUiEnvelope);
+    const response = await POST(respondRequest(body));
+    expect(response.status).toBe(400);
+  });
+
+  it('refuses a message response aimed at a clarify card', async () => {
+    seedRows();
+    const response = await POST(respondRequest(messageFor('apply', {}, CARD_ID)));
+    expect(response.status).toBe(409);
+  });
+});

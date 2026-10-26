@@ -327,6 +327,7 @@ import {
   type ResearchRunActionHandler,
   type ResearchRunControls,
 } from '../components/research/research-run-controls';
+import { AnswerUiFollowUpProvider } from '../components/messages/cards/answer-ui/answer-ui-follow-up';
 import { useConnectors } from '@/features/connectors/hooks/use-connectors';
 import { CONNECTORS } from '@/features/connectors/data/connectors';
 import type { AgiWorkPlanDecision } from '../components/work-session/AgiWorkPlanReview';
@@ -4091,6 +4092,13 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     ],
   );
 
+  const sendAnswerUiFollowUp = useCallback(
+    (text: string) => {
+      handleSend(text);
+    },
+    [handleSend],
+  );
+
   const handleAcceptProviderNotice = useCallback(async () => {
     const pending = pendingProviderNotice;
     if (!pending) return;
@@ -7051,49 +7059,51 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                       <MessageInlineEditProvider value={messageInlineEdit}>
                         <InteractiveCardResumeProvider value={resumeInteractiveCardTurn}>
                           <ResearchRunControlsProvider value={researchRunControls}>
-                            <ProjectAnswerSaveProvider value={projectAnswerSave}>
-                              <ChatMessageList
-                                messages={chatMessages}
-                                transcriptPatch={chatMessageProjection.patch}
-                                currentTier={currentTier}
-                                conversationId={displayedConversationId}
-                                isLoading={isLoading && !isStreaming}
-                                isUserTyping={isUserTyping}
-                                onRegenerate={handleRegenerateMessage}
-                                onScheduleTurn={handleScheduleTurn}
-                                onRetryResearch={handleRetryResearch}
-                                onResearchPlanDecision={handleResearchPlanDecision}
-                                onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
-                                retryingResearchMessageId={retryingResearchMessageId}
-                                onContinue={handleContinueMessage}
-                                onEdit={handleEditMessage}
-                                onDelete={handleDeleteMessage}
-                                onDeleteVariant={handleDeleteVariant}
-                                countVariantFollowers={countVariantFollowers}
-                                onReact={handleReactMessage}
-                                onPin={handlePinMessage}
-                                branchGroupsByMessageId={branchGroupsByMessageId}
-                                branchingMessageId={branchingMessageId}
-                                onBranch={createBranch}
-                                onSwitchBranch={switchBranch}
-                                variantInfoByMessageId={variantInfoByMessageId}
-                                onSelectVariant={handleSelectVariant}
-                                activeLeafId={activeLeafId}
-                                variantAnchorMessageId={variantAnchorMessageId}
-                                isConversationStreaming={isStreaming}
-                                onRegenerateImage={handleRegenerateImageInPlace}
-                                onResumeVideo={handleResumeVideo}
-                                onRetryVideo={handleRetryVideo}
-                                onSendMessage={setComposerPrefill}
-                                onSubmitPrompt={handleSubmitPrompt}
-                                onPaywallUpgrade={handlePaywallRecovery}
-                                onPaywallDismiss={handlePaywallDismiss}
-                                onRegenerateWithModel={handleRegenerateWithModel}
-                                regenerateModelOptions={regenerateModelOptions}
-                                turnErrorActive={turnErrorNotice !== null}
-                                temporaryChat={temporaryChatActive}
-                              />
-                            </ProjectAnswerSaveProvider>
+                            <AnswerUiFollowUpProvider value={sendAnswerUiFollowUp}>
+                              <ProjectAnswerSaveProvider value={projectAnswerSave}>
+                                <ChatMessageList
+                                  messages={chatMessages}
+                                  transcriptPatch={chatMessageProjection.patch}
+                                  currentTier={currentTier}
+                                  conversationId={displayedConversationId}
+                                  isLoading={isLoading && !isStreaming}
+                                  isUserTyping={isUserTyping}
+                                  onRegenerate={handleRegenerateMessage}
+                                  onScheduleTurn={handleScheduleTurn}
+                                  onRetryResearch={handleRetryResearch}
+                                  onResearchPlanDecision={handleResearchPlanDecision}
+                                  onAgiWorkPlanDecision={handleAgiWorkPlanDecision}
+                                  retryingResearchMessageId={retryingResearchMessageId}
+                                  onContinue={handleContinueMessage}
+                                  onEdit={handleEditMessage}
+                                  onDelete={handleDeleteMessage}
+                                  onDeleteVariant={handleDeleteVariant}
+                                  countVariantFollowers={countVariantFollowers}
+                                  onReact={handleReactMessage}
+                                  onPin={handlePinMessage}
+                                  branchGroupsByMessageId={branchGroupsByMessageId}
+                                  branchingMessageId={branchingMessageId}
+                                  onBranch={createBranch}
+                                  onSwitchBranch={switchBranch}
+                                  variantInfoByMessageId={variantInfoByMessageId}
+                                  onSelectVariant={handleSelectVariant}
+                                  activeLeafId={activeLeafId}
+                                  variantAnchorMessageId={variantAnchorMessageId}
+                                  isConversationStreaming={isStreaming}
+                                  onRegenerateImage={handleRegenerateImageInPlace}
+                                  onResumeVideo={handleResumeVideo}
+                                  onRetryVideo={handleRetryVideo}
+                                  onSendMessage={setComposerPrefill}
+                                  onSubmitPrompt={handleSubmitPrompt}
+                                  onPaywallUpgrade={handlePaywallRecovery}
+                                  onPaywallDismiss={handlePaywallDismiss}
+                                  onRegenerateWithModel={handleRegenerateWithModel}
+                                  regenerateModelOptions={regenerateModelOptions}
+                                  turnErrorActive={turnErrorNotice !== null}
+                                  temporaryChat={temporaryChatActive}
+                                />
+                              </ProjectAnswerSaveProvider>
+                            </AnswerUiFollowUpProvider>
                           </ResearchRunControlsProvider>
                         </InteractiveCardResumeProvider>
                       </MessageInlineEditProvider>

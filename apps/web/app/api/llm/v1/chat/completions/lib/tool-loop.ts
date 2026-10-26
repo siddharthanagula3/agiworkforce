@@ -419,6 +419,7 @@ import { isForcedToolChoiceFor } from '@/lib/required-tool-call';
 import { executeItineraryTool, isItineraryTool } from '@/lib/places/itinerary-tool';
 import type { PlacesSearchBilling } from '@/lib/places/places-cost';
 import { executeClarifyTool, isClarifyTool } from '@/lib/services/clarify-tool-service';
+import { executeAnswerUiTool, isAnswerUiTool } from '@/lib/services/answer-ui-tool-service';
 import {
   executeProductComparisonTool,
   isProductComparisonTool,
@@ -845,6 +846,7 @@ export function resolveToolRetrySafety(toolName: string): CloudAgentToolRetrySaf
     isItineraryTool(toolName) ||
     isProductComparisonTool(toolName) ||
     isClarifyTool(toolName) ||
+    isAnswerUiTool(toolName) ||
     toolName === SKILL_TOOL_NAME
     ? 'safe'
     : 'unsafe';
@@ -912,6 +914,7 @@ function canonicalToolCategory(
   if (isItineraryTool(toolName)) return 'other';
   if (isProductComparisonTool(toolName)) return 'other';
   if (isClarifyTool(toolName)) return 'other';
+  if (isAnswerUiTool(toolName)) return 'other';
   if (isMemoryTool(toolName)) return 'memory';
   if (isFileSearchTool(toolName)) return 'filesystem';
   if (isScheduleTool(toolName)) return 'other';
@@ -2545,6 +2548,16 @@ async function runMcpTool(
       : { content: outcome.content, isError: true };
   }
 
+  if (isAnswerUiTool(toolCall.qualifiedName)) {
+    if (!availableTools.has(toolCall.qualifiedName)) {
+      return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
+    }
+    const outcome = executeAnswerUiTool(toolCall.args, { toolCallId: toolCall.id });
+    return outcome.ok
+      ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
+      : { content: outcome.content, isError: true };
+  }
+
   if (isUrlFetchTool(toolCall.qualifiedName)) {
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
@@ -2900,7 +2913,8 @@ export function isToolOffered(
     isPlacesSearchTool(qualifiedName) ||
     isItineraryTool(qualifiedName) ||
     isProductComparisonTool(qualifiedName) ||
-    isClarifyTool(qualifiedName)
+    isClarifyTool(qualifiedName) ||
+    isAnswerUiTool(qualifiedName)
   ) {
     return availableTools.has(qualifiedName);
   }

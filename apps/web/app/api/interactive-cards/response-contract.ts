@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import {
+  ANSWER_UI_LIMITS,
   CLARIFY_MAX_OPTIONS,
   CLARIFY_MAX_QUESTIONS,
   CLARIFY_OTHER_MAX_LENGTH,
@@ -44,7 +45,31 @@ export const InteractiveCardResponsePayloadSchema = z.discriminatedUnion('kind',
       text: z.string().optional(),
     })
     .strict(),
+  z
+    .object({
+      kind: z.literal('message'),
+      action_id: IdentifierSchema.max(ANSWER_UI_LIMITS.idLength),
+      values: z
+        .record(
+          z.string().min(1).max(ANSWER_UI_LIMITS.idLength),
+          z.union([
+            z.number().finite(),
+            z.string().max(ANSWER_UI_LIMITS.inputValueLength),
+            z
+              .array(z.string().min(1).max(ANSWER_UI_LIMITS.idLength))
+              .max(ANSWER_UI_LIMITS.checklistItems),
+          ]),
+        )
+        .refine((values) => Object.keys(values).length <= ANSWER_UI_LIMITS.maxNodes, {
+          message: 'too many values',
+        }),
+    })
+    .strict(),
 ]);
+
+export const AnswerUiMessageResponseSchema = z
+  .object({ ok: z.literal(true), message: z.string().min(1).max(ANSWER_UI_LIMITS.messageLength) })
+  .strict();
 
 export const InteractiveCardResponseRequestSchema = z
   .object({

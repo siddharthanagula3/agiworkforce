@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import {
+  ANSWER_UI_CARD_KIND,
   INTERACTIVE_CARDS_METADATA_KEY,
+  composeAnswerUiMessage,
   type ClarifyAnswer,
   type ClarifyCardBody,
   type ClarifyQuestion,
@@ -55,7 +57,7 @@ function toClarifyAnswer(
 
 function settleClarifyBody(
   body: ClarifyCardBody,
-  payload: InteractiveCardResponsePayload,
+  payload: Exclude<InteractiveCardResponsePayload, { kind: 'message' }>,
   settledAt: string,
 ): ClarifyCardBody {
   if (payload.kind === 'dismiss') {
@@ -138,6 +140,17 @@ async function handleRespond(request: NextRequest) {
 
   if (!card) {
     throw createError.notFound('Interactive card not found');
+  }
+
+  if (payload.kind === 'message') {
+    if (!card.recognized || card.kind !== ANSWER_UI_CARD_KIND) {
+      throw createError.conflict('This card does not send messages');
+    }
+    const composed = composeAnswerUiMessage(card.body, payload.action_id, payload.values);
+    if (!composed.ok) {
+      throw createError.validation(`The card cannot send that: ${composed.reason}`);
+    }
+    return NextResponse.json({ ok: true, message: composed.text });
   }
 
   if (!interactiveCardAcceptsResponse(card)) {

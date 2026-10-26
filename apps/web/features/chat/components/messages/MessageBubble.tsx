@@ -2493,7 +2493,11 @@ const MessageBubbleComponent = function MessageBubble({
               leads the turn; every other card follows the prose that motivated
               it. */}
           {!isUser && leadingInteractiveCards.length > 0 ? (
-            <InteractiveCardBlock cards={leadingInteractiveCards} assistantText={cleanedContent} />
+            <InteractiveCardBlock
+              cards={leadingInteractiveCards}
+              assistantText={cleanedContent}
+              trustedImageUrls={trustedImageUrls}
+            />
           ) : null}
 
           <div className={cn('relative min-w-0', isUser && 'max-w-full')}>
@@ -2619,7 +2623,11 @@ const MessageBubbleComponent = function MessageBubble({
               A card that fails to render its kind still renders its authored
               fallback, so this block never leaves a gap in the answer. */}
           {!isUser && trailingInteractiveCards.length > 0 ? (
-            <InteractiveCardBlock cards={trailingInteractiveCards} assistantText={cleanedContent} />
+            <InteractiveCardBlock
+              cards={trailingInteractiveCards}
+              assistantText={cleanedContent}
+              trustedImageUrls={trustedImageUrls}
+            />
           ) : null}
 
           {!isUser && !streamingBlock && createdArtifacts.length > 0 && (

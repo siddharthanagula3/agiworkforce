@@ -5509,6 +5509,7 @@ function respondToInteractiveCard(
     !card?.recognized ||
     card.kind !== 'clarify.v1' ||
     card.body.state.status !== 'pending' ||
+    payload.kind === 'message' ||
     _ctx.isStreaming
   ) {
     return;

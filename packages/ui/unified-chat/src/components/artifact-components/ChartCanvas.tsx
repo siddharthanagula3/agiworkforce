@@ -9,12 +9,14 @@ import {
   Pie,
   PieChart,
   ResponsiveContainer,
+  Scatter,
+  ScatterChart,
   Tooltip,
   XAxis,
   YAxis,
   type PieLabelRenderProps,
 } from 'recharts';
-import { formatChartShare, type ChartChrome, type ChartSpec } from './chart-spec';
+import { formatChartShare, type ChartChrome, type ChartRenderSpec } from './chart-spec';
 
 const AXIS_FONT_SIZE_PX = 11;
 const GRID_DASH = '3 3';
@@ -26,9 +28,11 @@ const PIE_CENTER = '50%';
 const BAR_RADIUS: [number, number, number, number] = [3, 3, 0, 0];
 const TOOLTIP_RADIUS_PX = 8;
 const DEFAULT_SERIES_KEY = 'value';
+const SCATTER_X_KEY = 'x';
+const SCATTER_Y_KEY = 'y';
 
 export interface ChartCanvasProps {
-  spec: ChartSpec;
+  spec: ChartRenderSpec;
   palette: readonly string[];
   chrome: ChartChrome;
   animate: boolean;
@@ -105,6 +109,41 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
           />
         ))}
       </LineChart>
+    ) : kind === 'scatter' ? (
+      <ScatterChart>
+        <CartesianGrid strokeDasharray={GRID_DASH} stroke={chrome.grid} />
+        <XAxis
+          type="number"
+          dataKey={SCATTER_X_KEY}
+          name={spec.xLabel ?? xKey}
+          tick={axisTick}
+          stroke={chrome.grid}
+        />
+        <YAxis
+          type="number"
+          dataKey={SCATTER_Y_KEY}
+          name={spec.yLabel}
+          tick={axisTick}
+          stroke={chrome.grid}
+        />
+        <Tooltip {...tooltipStyles} cursor={{ stroke: chrome.grid }} />
+        {showLegend && <Legend wrapperStyle={legendStyle} />}
+        {series.map((entry, index) => (
+          <Scatter
+            key={entry.dataKey}
+            name={entry.name ?? entry.dataKey}
+            data={rows.flatMap((row) => {
+              const x = row[xKey];
+              const y = row[entry.dataKey];
+              return typeof x === 'number' && typeof y === 'number'
+                ? [{ [SCATTER_X_KEY]: x, [SCATTER_Y_KEY]: y }]
+                : [];
+            })}
+            fill={colorAt(index, entry.color)}
+            isAnimationActive={animate}
+          />
+        ))}
+      </ScatterChart>
     ) : (
       <PieChart>
         <Pie
