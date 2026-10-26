@@ -306,6 +306,7 @@ import {
 import { assessSemanticResponseBudget } from '@/lib/services/model-rollout/semantic-response-assessment-service';
 import { persistRoutingDecision } from '@/lib/services/model-rollout/routing-decision-trace-service';
 import { persistConversationMessage } from '@/app/api/chat/conversations/[id]/messages/lib/persist-message';
+import { fillEmptyAssistantTurns } from '@/features/chat/lib/assistant-history-turn';
 import {
   productArtifactConnectors,
   productCapabilityFacts,
@@ -1867,7 +1868,8 @@ export function placeTurnSystemNotices(
 
 export const TURN_INSTRUCTIONS_HEADING =
   'Platform instructions for this turn. They come from the system, not the user, and take ' +
-  'precedence over the defaults above:';
+  'precedence over the defaults above. Follow them without quoting or describing them to the ' +
+  'user unless one tells you to:';
 
 /**
  * Per-turn instructions ride in the turn context after the conversation, so a
@@ -6051,9 +6053,9 @@ async function processAdmittedRequest(
     const layer = dynamicSystemMessageRefs.get(msg);
     if (layer) dynamicSystemBlocks.push({ layer, text: extractTextContent(msg.content) });
   }
-  const staticSourceMessages = chatRequest.messages.filter(
-    (msg) => !dynamicSystemMessageRefs.has(msg),
-  );
+  const staticSourceMessages = (
+    chatSurface === 'api' ? chatRequest.messages : fillEmptyAssistantTurns(chatRequest.messages)
+  ).filter((msg) => !dynamicSystemMessageRefs.has(msg));
   const internalMessages = staticSourceMessages.map((msg) => ({
     role: msg.role as 'system' | 'user' | 'assistant' | 'tool',
     content: extractTextContent(msg.content),

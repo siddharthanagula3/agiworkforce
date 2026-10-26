@@ -236,6 +236,7 @@ import {
   durableAttachmentDescriptors,
 } from '@/features/chat/lib/persisted-attachments';
 import { normalizePromotionalChatHistory } from '@/features/chat/lib/promotional-chat-request';
+import { cardOnlyAssistantTurnContent } from '@/features/chat/lib/assistant-history-turn';
 import {
   freeModelAttachmentKind,
   freeQuotaChatOffering,
@@ -4189,7 +4190,10 @@ export function useChatStream(
             .flatMap((m): ApiMessage[] => [
               {
                 role: m.role,
-                content: researchTurnHistoryContent(m) ?? buildApiMessageContent(m),
+                content:
+                  researchTurnHistoryContent(m) ??
+                  cardOnlyAssistantTurnContent(m) ??
+                  buildApiMessageContent(m),
               },
               ...turnsAfterReply(m),
             ]);
@@ -4619,7 +4623,10 @@ export function useChatStream(
         const apiMessages: ApiMessage[] = conversationMessages
           .slice(0, messageIndex + 1)
           .flatMap((m): ApiMessage[] => [
-            { role: m.role, content: m.content as MessageContent },
+            {
+              role: m.role,
+              content: cardOnlyAssistantTurnContent(m) ?? (m.content as MessageContent),
+            },
             ...turnsAfterReply(m),
           ]);
         if (!resumingCard) {

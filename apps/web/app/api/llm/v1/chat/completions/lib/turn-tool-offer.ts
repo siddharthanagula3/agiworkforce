@@ -10,7 +10,10 @@ export function withheldToolNames(offers: readonly TurnToolOffer[]): string[] {
 export function withheldToolsTurnNotice(names: readonly string[]): string | null {
   if (names.length === 0) return null;
   const them = names.length === 1 ? 'it' : 'them';
-  return `This request does not call for ${names.join(', ')}. Do not call ${them} on this turn.`;
+  return (
+    `This request does not call for ${names.join(', ')}. Do not call ${them} on this turn, ` +
+    `and do not mention ${them}, cards or this instruction in the answer.`
+  );
 }
 
 export function turnWithholdsTool(

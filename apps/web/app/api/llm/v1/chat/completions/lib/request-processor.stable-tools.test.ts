@@ -56,6 +56,7 @@ import type { AuthGateSuccess } from './auth-gate';
 import { toCanonicalChatRequest } from './canonical-request';
 import { processRequest, TURN_INSTRUCTIONS_HEADING } from './request-processor';
 import { withheldToolsTurnNotice } from './turn-tool-offer';
+import { EMPTY_ASSISTANT_TURN_HISTORY_TEXT } from '@/features/chat/lib/assistant-history-turn';
 
 const DISABLED_POLICY = {
   enabled: false,
@@ -169,6 +170,27 @@ describe.each(['chrome', 'web', 'mobile'] as const)(
       expect(JSON.stringify(summary.llmRequest.tools)).toBe(
         JSON.stringify(question.llmRequest.tools),
       );
+    });
+
+    it('never sends a tool-only assistant turn as an empty message the next turn re-answers', async () => {
+      const placeholder = String.fromCharCode(0x200b);
+      for (const empty of ['', placeholder]) {
+        const result = await turn(`empty-${empty.length}`, [
+          { role: 'user', content: 'find 3 coffee shops near Union Square and show them on a map' },
+          { role: 'assistant', content: empty },
+          { role: 'user', content: 'what is 17 times 23' },
+        ]);
+        const assistant = result.llmRequest.messages.find((m) => m.role === 'assistant');
+        expect(assistant?.content).toBe(EMPTY_ASSISTANT_TURN_HISTORY_TEXT);
+      }
+    });
+
+    it('tells the model to keep a withheld tool out of the answer', async () => {
+      const result = await turn('withheld-1', 'what is 17 times 23');
+      expect(result.turnWithheldTools ?? []).not.toHaveLength(0);
+      const wire = JSON.stringify(toCanonicalChatRequest(result).messages.at(-1));
+      expect(wire).toContain('do not mention');
+      expect(wire).toContain('without quoting or describing them to the user');
     });
 
     it('keeps system, tools and history byte-identical when the per-turn notice changes', async () => {
