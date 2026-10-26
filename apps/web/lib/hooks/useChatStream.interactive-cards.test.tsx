@@ -154,6 +154,22 @@ describe('useChatStream, interactive cards', () => {
     expect(assistantMessage()?.metadata?.interactiveCards).toHaveLength(1);
   });
 
+  it('records where in the prose each card arrived, so it renders in stream order', async () => {
+    const leading = clone(CARD);
+    leading.cardId = 'toolu_lead';
+    mockSseStream([
+      cardEvent(leading),
+      textEvent('Here is the image you asked for. '),
+      cardEvent(CARD),
+    ]);
+    await send();
+
+    expect(assistantMessage()?.metadata?.interactiveCardTextOffsets).toEqual({
+      toolu_lead: 0,
+      toolu_01abc: 'Here is the image you asked for. '.length,
+    });
+  });
+
   it('keeps an unknown kind as a fallback-bearing card', async () => {
     const unknown = clone(CARD);
     unknown.kind = 'weather.v1';

@@ -203,7 +203,8 @@ import { ThinkingBlock } from '../ThinkingBlock';
 import { mergeAdjacentThinkingSegments } from '../../lib/mergeThinkingSegments';
 import { loadWorkbookSheets, pptxToSlidesMarkdown } from '../../lib/office-file-preview';
 import { formatBytes } from '@shared/utils/format';
-import { interactiveCardRendersBeforeProse, type InteractiveCard } from '@agiworkforce/types';
+import type { InteractiveCard } from '@agiworkforce/types';
+import { cardLeadsProse } from '@/features/chat/lib/interactive-card-placement';
 import { InteractiveCardBlock } from './InteractiveCardBlock';
 import { TurnPluginDraftCard } from '../PluginDraftCard';
 import {
@@ -622,6 +623,7 @@ interface Message {
      * unrecognized card carries only its envelope and its authored fallback.
      */
     interactiveCards?: InteractiveCard[];
+    interactiveCardTextOffsets?: Record<string, number>;
     /** Deep Research run state (activity header + persistence). */
     research?: MessageResearchState;
     /** AGI Work plan steps with their status, and the goal and approval state they belong to. */
@@ -1864,13 +1866,16 @@ const MessageBubbleComponent = function MessageBubble({
   ]);
 
   const interactiveCards = message.metadata?.interactiveCards;
+  const interactiveCardTextOffsets = message.metadata?.interactiveCardTextOffsets;
   const leadingInteractiveCards = useMemo(
-    () => (interactiveCards ?? []).filter((card) => interactiveCardRendersBeforeProse(card.kind)),
-    [interactiveCards],
+    () =>
+      (interactiveCards ?? []).filter((card) => cardLeadsProse(card, interactiveCardTextOffsets)),
+    [interactiveCards, interactiveCardTextOffsets],
   );
   const trailingInteractiveCards = useMemo(
-    () => (interactiveCards ?? []).filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
-    [interactiveCards],
+    () =>
+      (interactiveCards ?? []).filter((card) => !cardLeadsProse(card, interactiveCardTextOffsets)),
+    [interactiveCards, interactiveCardTextOffsets],
   );
 
   /**

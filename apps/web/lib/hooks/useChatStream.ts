@@ -1967,6 +1967,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
       .slice(0, INTERACTIVE_CARDS_MAX_PER_MESSAGE)
       .map((card) => [card.cardId, card]),
   );
+  const interactiveCardTextOffsets: Record<string, number> = {
+    ...seedMetadata?.interactiveCardTextOffsets,
+  };
 
   const patchMessageMeta = (patch: Partial<MessageMetadata>) => {
     const current = findConversationMessage(conversationId, assistantMessageId)?.metadata;
@@ -2580,6 +2583,7 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
     }
     if (interactiveCards.size > 0) {
       metadata.interactiveCards = [...interactiveCards.values()];
+      metadata.interactiveCardTextOffsets = { ...interactiveCardTextOffsets };
     }
     if (interactiveCardsResumed) {
       metadata.interactiveCardsResumed = true;
@@ -3384,7 +3388,15 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
                 interactiveCards.size < INTERACTIVE_CARDS_MAX_PER_MESSAGE)
             ) {
               interactiveCards.set(card.cardId, card);
-              patchMessageMeta({ interactiveCards: [...interactiveCards.values()] });
+              if (interactiveCardTextOffsets[card.cardId] === undefined) {
+                interactiveCardTextOffsets[card.cardId] = hasVisibleText(fullAssistantContent)
+                  ? fullAssistantContent.length
+                  : 0;
+              }
+              patchMessageMeta({
+                interactiveCards: [...interactiveCards.values()],
+                interactiveCardTextOffsets: { ...interactiveCardTextOffsets },
+              });
             }
           }
 
