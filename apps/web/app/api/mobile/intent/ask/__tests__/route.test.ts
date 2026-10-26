@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/server/mobile-intent-tokens');
+type ScanModule1 = typeof import('@/lib/ip-allow-list-gate');
+type ScanModule2 = typeof import('@/lib/mfa-policy-gate');
 
 const { mockResolve, mockAnswer, mockAssertIp, mockAssertMfa } = vi.hoisted(() => ({
   mockResolve: vi.fn(),
@@ -9,11 +11,11 @@ const { mockResolve, mockAnswer, mockAssertIp, mockAssertMfa } = vi.hoisted(() =
 }));
 
 vi.mock('@/lib/ip-allow-list-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/ip-allow-list-gate')>()),
+  ...(await importOriginal<ScanModule1>()),
   assertIpAllowList: (...args: unknown[]) => mockAssertIp(...args),
 }));
 vi.mock('@/lib/mfa-policy-gate', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@/lib/mfa-policy-gate')>()),
+  ...(await importOriginal<ScanModule2>()),
   assertMfaPolicy: (...args: unknown[]) => mockAssertMfa(...args),
 }));
 
