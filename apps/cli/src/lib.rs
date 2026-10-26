@@ -37,6 +37,7 @@ pub mod doctor;
 pub mod documents;
 pub mod errors;
 pub mod hex;
+pub(crate) mod log_sink;
 mod session_browser;
 pub use features::hooks::hooks;
 pub mod markdown;
@@ -672,7 +673,8 @@ pub fn compute_log_filter(
 /// subscriber already installed by an embedder) is ignored rather than
 /// panicking. Returns the effective filter directive that was applied.
 pub fn init_tracing(verbose: bool, debug: Option<&Option<String>>) -> String {
-    use tracing_subscriber::{fmt, EnvFilter};
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::EnvFilter;
 
     let env = std::env::var("RUST_LOG")
         .or_else(|_| std::env::var("AGIWORKFORCE_LOG"))
@@ -683,10 +685,9 @@ pub fn init_tracing(verbose: bool, debug: Option<&Option<String>>) -> String {
         EnvFilter::try_new(&directive).unwrap_or_else(|_| EnvFilter::new("agiworkforce_cli=warn"));
 
     // Diagnostics go to stderr so they never contaminate stdout payloads
-    // (raw/JSON one-shot output, SDK JSONL streams).
-    let _ = fmt()
-        .with_env_filter(filter)
-        .with_writer(std::io::stderr)
+    // (raw/JSON one-shot output, SDK JSONL streams), and to the log file while
+    // the full-screen UI owns the terminal.
+    let _ = log_sink::subscriber(filter, std::io::stderr, log_sink::LogFile, tui::tui_active)
         .try_init();
 
     directive

@@ -366,6 +366,11 @@ fn state_dir_checks() -> Vec<DoctorCheck> {
                     "daemon logs directory",
                     config_dir.join("daemon-logs"),
                 ),
+                (
+                    "state.logs",
+                    "log directory",
+                    config_dir.join(crate::log_sink::LOG_DIR_NAME),
+                ),
             ] {
                 checks.push(writable_path_check(id, title, &path));
             }

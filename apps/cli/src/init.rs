@@ -15,7 +15,7 @@ pub fn init_home_dir(home: &Path) -> Result<()> {
         "memories",
         "memories/session_summaries",
         "shell_snapshots",
-        "log",
+        crate::log_sink::LOG_DIR_NAME,
         "cache",
     ];
     for dir in &dirs {
