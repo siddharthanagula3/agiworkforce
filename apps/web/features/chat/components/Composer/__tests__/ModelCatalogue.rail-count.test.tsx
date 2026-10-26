@@ -5,7 +5,6 @@ import type { ModelCatalogueEntry } from '@/app/api/models/catalogue/route';
 import { ModelCatalogue } from '../ModelCatalogue';
 
 const OFFERED_ID = 'fixture-offered-model';
-const WITHHELD_ID = 'fixture-withheld-model';
 
 function entry(overrides: Partial<ModelCatalogueEntry> = {}): ModelCatalogueEntry {
   return {

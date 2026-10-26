@@ -3443,7 +3443,9 @@ async function consumeAssistantStream(ctx: ConsumeStreamContext): Promise<Stream
             const citedKey = normalizeCitationUrl(citationBlock.url) ?? citationBlock.url;
             const marker =
               citationsInModelMarkerOrder.findIndex(
-                (citation) => (normalizeCitationUrl(citation.url) ?? citation.url) === citedKey,
+                (citation) =>
+                  citation.url !== undefined &&
+                  (normalizeCitationUrl(citation.url) ?? citation.url) === citedKey,
               ) + 1;
             if (marker > 0 && !seamPending) {
               citationAnchors.push({ offset: fullAssistantContent.length, marker });

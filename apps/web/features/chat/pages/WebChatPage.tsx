@@ -4542,9 +4542,10 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     [storeProjects, activeProjectId, setActiveProject, handleComposerCreateProject],
   );
 
+  const firstAnswerStreaming = displayedMessages[1]?.isStreaming === true;
   useEffect(() => {
     if (!displayedConversationId || displayedMessages.length !== 2) return;
-    if (displayedMessages[1]?.isStreaming) return;
+    if (firstAnswerStreaming) return;
     const conversationId = displayedConversationId;
     if (autoTitledConversationsRef.current.has(conversationId)) return;
     const convo = conversations.find((c) => c.id === conversationId);
@@ -4592,7 +4593,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     displayedMessages.length,
-    displayedMessages[1]?.isStreaming,
+    firstAnswerStreaming,
     displayedConversationId,
     conversations,
     localModelSelection,
