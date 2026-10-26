@@ -609,6 +609,18 @@
       "why": "Resolves the workspace that stores a shared chat so that workspace's external sharing policy applies to the link. A soft-deleted chat keeps its workspace, so including it keeps the stricter policy; this probe returns only the organization id, never conversation content."
     },
     {
+      "file": "apps/web/app/api/artifacts/publish/route.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "Resolves the workspace that stores the chat an artifact is published from so that workspace's external sharing policy applies to the publication. A soft-deleted chat keeps its workspace, so including it keeps the stricter policy; this probe returns only the organization id, never conversation content."
+    },
+    {
+      "file": "apps/web/app/api/artifacts/publish/[token]/route.ts",
+      "table": "web_conversations",
+      "class": "ownership-check",
+      "why": "Resolves the workspace that stores the chat a publication came from before it is made public so that workspace's external sharing policy applies. A soft-deleted chat keeps its workspace, so including it keeps the stricter policy; this probe returns only the organization id, never conversation content."
+    },
+    {
       "file": "apps/web/lib/services/custom-agent-service.ts",
       "table": "web_conversations",
       "class": "write-path",

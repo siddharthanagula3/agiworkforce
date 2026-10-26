@@ -163,6 +163,25 @@ describe('POST /api/settings/organization/transfer-ownership', () => {
     expect(mockExecute).not.toHaveBeenCalled();
   });
 
+  it('reads only active memberships for the requester and the successor', async () => {
+    mockQuery
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([member('current-owner', 'owner')])
+      .mockResolvedValueOnce([]);
+
+    const response = await POST(
+      transferRequest({ organizationId: ORG_A, toUserId: 'suspended-member' }),
+    );
+
+    expect(response.status).toBe(404);
+    const [, requesterRead, successorRead] = mockQuery.mock.calls;
+    expect(requesterRead?.[1]).toEqual([ORG_A, 'current-owner']);
+    expect(String(requesterRead?.[0])).toMatch(/status = 'active'/);
+    expect(successorRead?.[1]).toEqual([ORG_A, 'suspended-member']);
+    expect(String(successorRead?.[0])).toMatch(/status = 'active'/);
+    expect(mockExecute).not.toHaveBeenCalled();
+  });
+
   it('refuses a caller with no membership in the named organization', async () => {
     mockQuery.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
 

@@ -13,6 +13,7 @@ import {
   PRIMARY_OWNER_ONLY_PERMISSIONS,
   adminPermissionKey,
   adminPermissionLevel,
+  canSeeMemberEmails,
   canonicalOrganizationPermission,
   expandOrganizationPermissions,
   hasOrganizationPermission,
@@ -146,5 +147,25 @@ describe('missingOrganizationPermissions', () => {
     expect(missingOrganizationPermissions(['audit.read'], ['admin.audit.manage'])).toEqual([
       'admin.audit.manage',
     ]);
+  });
+});
+
+describe('canSeeMemberEmails', () => {
+  it('shows member emails to a sharer or a member administrator, in both vocabularies', () => {
+    for (const grant of [
+      'content.share',
+      'feature.content.share',
+      'sharing.manage',
+      'feature.sharing.manage',
+      'members.manage',
+      'admin.members.view',
+    ]) {
+      expect(canSeeMemberEmails([grant]), grant).toBe(true);
+    }
+  });
+
+  it('hides them from a member who only opens what the workspace shares', () => {
+    expect(canSeeMemberEmails([])).toBe(false);
+    expect(canSeeMemberEmails(['content.read', 'feature.content.view'])).toBe(false);
   });
 });

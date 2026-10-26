@@ -48,6 +48,7 @@ import {
   priceServerToolUsage,
 } from '@/lib/services/managed-usage-accounting-service';
 import { offersDynamicFilteringWebTool } from '@/lib/web-search/native-search-pricing';
+import { estimateTokens } from '@agiworkforce/routing';
 import { createUsageAccumulator, ingestUsageChunk, type UsageAccumulator } from './adapter-usage';
 import { compactionUsageFields } from './context-window';
 import { SSE_RESPONSE_HEADERS, withSseHeartbeat } from './sse-heartbeat';
@@ -127,6 +128,36 @@ export function resolveBilledOutcome(input: {
 }): 'completed' | 'failed' {
   if (input.cancelled === true && input.totalTokens > 0) return 'completed';
   return input.outcome ?? 'completed';
+}
+
+/**
+ * The usage a stopped turn is settled on.
+ *
+ * Providers report token counts only as their stream ends, so a reader who stops
+ * mid-answer leaves the observed counts at zero after the provider has billed the
+ * prompt and the output so far, and `resolveBilledOutcome` would refund the turn
+ * the reader kept. The prompt estimate the reservation was sized on and the text
+ * that reached the reader stand in for counts the provider had not reported yet.
+ * A turn that delivered nothing keeps its observed counts, so a stop before any
+ * output still refunds in full.
+ */
+export function stoppedTurnUsage(input: {
+  usage: UsageAccumulator;
+  deliveredNothing: boolean;
+  deliveredText: string;
+  estimatedPromptTokens: number;
+  model: string;
+}): UsageAccumulator {
+  if (input.deliveredNothing) return input.usage;
+  return {
+    ...input.usage,
+    inputTokens:
+      input.usage.inputTokens > 0 ? input.usage.inputTokens : input.estimatedPromptTokens,
+    outputTokens: Math.max(
+      input.usage.outputTokens,
+      estimateTokens(input.deliveredText, input.model),
+    ),
+  };
 }
 
 /**
@@ -461,6 +492,15 @@ export async function buildAdapterStreamResponse(
       ),
     });
 
+  const stoppedUsage = (): UsageAccumulator =>
+    stoppedTurnUsage({
+      usage,
+      deliveredNothing: turnDeliveredNothing(),
+      deliveredText: assembler.canonicalText(),
+      estimatedPromptTokens: processed.estimatedPromptTokens,
+      model: modelUsed,
+    });
+
   const turnTruncated = (): boolean =>
     isTurnTruncated({
       reportedFailure: assembler.lastError !== null,
@@ -583,7 +623,10 @@ export async function buildAdapterStreamResponse(
             userId,
             provider: providerUsed,
             model: modelUsed,
-            usage: streamBillingUsage(usage, streamStartedAt),
+            usage: streamBillingUsage(
+              request.signal.aborted ? stoppedUsage() : usage,
+              streamStartedAt,
+            ),
             outcome: 'failed',
             errorClass: classifyError(streamError).category,
             ...(request.signal.aborted ? { cancelled: true } : {}),
@@ -791,7 +834,7 @@ export async function buildAdapterStreamResponse(
           userId,
           provider: providerUsed,
           model: modelUsed,
-          usage: streamBillingUsage(usage, streamStartedAt),
+          usage: streamBillingUsage(stoppedUsage(), streamStartedAt),
           outcome: 'failed',
           cancelled: true,
         });

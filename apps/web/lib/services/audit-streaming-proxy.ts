@@ -131,8 +131,17 @@ export async function deliverAuditBatch(input: {
       method: 'POST',
       headers,
       body: input.body,
+      redirect: 'manual',
       signal: AbortSignal.timeout(AUDIT_STREAM_DELIVERY_TIMEOUT_MS),
     });
+    if (response.status >= 300 && response.status < 400) {
+      await response.body?.cancel().catch(() => undefined);
+      return {
+        status: response.status,
+        error: `Endpoint answered ${response.status}; redirects are not followed.`,
+        succeeded: false,
+      };
+    }
     const succeeded = response.status >= 200 && response.status < 300;
     return {
       status: response.status,

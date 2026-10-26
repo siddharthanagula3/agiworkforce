@@ -155,6 +155,16 @@ describe('team administration billing capability', () => {
     expect(resolveOrganizationEntitlementPlan).not.toHaveBeenCalled();
   });
 
+  it('counts only an active membership as belonging to the organization', async () => {
+    mockQuery.mockResolvedValueOnce([]);
+
+    await expect(requireTeamAdminAccess(db, 'suspended-admin', ORG_A)).rejects.toMatchObject({
+      statusCode: 403,
+    });
+    expect(String(mockQuery.mock.calls[0]?.[0])).toMatch(/status = 'active'/);
+    expect(resolveOrganizationEntitlementPlan).not.toHaveBeenCalled();
+  });
+
   it('still fails closed on the capability before any seat number is trusted', async () => {
     resolveOrganizationEntitlementPlan.mockResolvedValue('free');
     mockQuery.mockResolvedValueOnce([{ user_id: 'user-1' }]);

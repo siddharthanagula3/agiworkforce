@@ -5,6 +5,7 @@ import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { requireCsrfToken } from '@/lib/csrf';
 import { createError } from '@/lib/errors';
+import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
@@ -37,6 +38,14 @@ async function handleShare(request: NextRequest, context: RouteContext) {
     if (error instanceof ScheduleNotFoundError) throw createError.notFound('Schedule not found');
     throw error;
   }
+  const [stored] = await db.query<{ organization_id: string | null }>(
+    `select organization_id from scheduled_tasks where id = $1 and user_id = $2 limit 1`,
+    [task.id, userId],
+  );
+  const sharingGateResponse = await buildExternalSharingGateResponse(userId, request, [
+    stored?.organization_id ?? null,
+  ]);
+  if (sharingGateResponse) return sharingGateResponse;
   const outbound = await inspectOutboundContent({
     channel: 'share',
     value: scheduleShareSnapshot(task),

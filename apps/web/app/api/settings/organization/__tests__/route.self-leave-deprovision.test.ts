@@ -11,7 +11,9 @@ const {
   mockRecordAuditEvent,
   mockInvalidateActiveOrganizationCache,
   mockResolveActiveOrganizationId,
+  mockGetTeamAdminAccess,
 } = vi.hoisted(() => ({
+  mockGetTeamAdminAccess: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   mockLeaveOrganization: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   mockDeprovisionMember: vi.fn<(...args: unknown[]) => Promise<unknown>>(),
   mockRecordAuditEvent: vi.fn<(...args: unknown[]) => Promise<void>>(async () => undefined),
@@ -51,17 +53,20 @@ vi.mock('@/lib/services/active-workspace-service', async (importOriginal) => ({
 vi.mock('@/lib/services/organization-membership-service', () => ({
   leaveOrganization: (...args: unknown[]) => mockLeaveOrganization(...args),
 }));
+vi.mock('@/app/api/settings/team/team-admin-access', () => ({
+  getTeamAdminAccess: (...args: unknown[]) => mockGetTeamAdminAccess(...args),
+}));
 vi.mock('@/lib/services/deprovision-service', () => ({
   deprovisionMember: (...args: unknown[]) => mockDeprovisionMember(...args),
 }));
 
 import { DELETE } from '../leave/route';
 
-function request() {
+function request(body: unknown = {}) {
   return new Request('http://localhost:3000/api/settings/organization/leave', {
     method: 'DELETE',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify(body),
   }) as never;
 }
 
@@ -155,5 +160,15 @@ describe('DELETE /api/settings/organization/leave deprovisions the departing mem
     await DELETE(request());
 
     expect(mockDeprovisionMember).not.toHaveBeenCalled();
+  });
+
+  it('does not read organization access for a member leaving without a successor', async () => {
+    await DELETE(request());
+
+    expect(mockGetTeamAdminAccess).not.toHaveBeenCalled();
+    expect(mockLeaveOrganization).toHaveBeenCalledWith(expect.anything(), {
+      userId: LEAVING_USER,
+      organizationId: ORGANIZATION_ID,
+    });
   });
 });

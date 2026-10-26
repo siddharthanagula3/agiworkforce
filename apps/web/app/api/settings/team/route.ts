@@ -2,7 +2,7 @@ import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
 import { z } from 'zod';
-import { normalizeTeamSeatType } from '@agiworkforce/types';
+import { canSeeMemberEmails, normalizeTeamSeatType } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { withRateLimit } from '@/lib/rate-limit';
 import { createError } from '@/lib/errors';
@@ -10,7 +10,10 @@ import { logger } from '@/lib/logger';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { requireCsrfToken } from '@/lib/csrf';
 import { getNeonDb } from '@/lib/server/neon-db';
-import { requireMemberPermission } from '@/lib/services/organization-permission-service';
+import {
+  requireMemberPermission,
+  resolveOrganizationPermissions,
+} from '@/lib/services/organization-permission-service';
 import { resolveOrganizationMembershipId } from '@/lib/services/active-workspace-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
 import type { OrganizationMemberRow, ProfileRow } from '@/lib/server/neon-types';
@@ -20,6 +23,7 @@ import { withSeatAccountingErrors } from '@/lib/services/organization-seat-servi
 import { expirePendingInvitations } from '@/lib/services/organization-invitation-service';
 import { organizationOwnsEmailDomain } from '@/lib/services/organization-verified-domains';
 import { requireTeamAdminAccess } from './team-admin-access';
+import { assertMembershipRoleWithinActor } from './membership-role-ceiling';
 
 const OrganizationIdSchema = z.string().uuid('organizationId must be a UUID');
 
@@ -87,6 +91,10 @@ async function handleList(request: NextRequest) {
     throw createError.forbidden('You are not a member of this organization');
   }
 
+  const rosterShowsEmail = canSeeMemberEmails(
+    await resolveOrganizationPermissions(organizationId, userId),
+  );
+
   const members = await db.query<MemberWithProfile>(
     `select
        om.organization_id, om.user_id, om.role,
@@ -102,7 +110,14 @@ async function handleList(request: NextRequest) {
     [organizationId],
   );
 
-  return NextResponse.json({ members: members.map((member) => formatMember(member, userId)) });
+  return NextResponse.json({
+    members: members.map((member) =>
+      formatMember(
+        rosterShowsEmail || member.user_id === userId ? member : { ...member, email: null },
+        userId,
+      ),
+    ),
+  });
 }
 
 async function handleAddMember(request: NextRequest) {
@@ -141,12 +156,20 @@ async function handleAddMember(request: NextRequest) {
       if (!requesterMembership) {
         throw createError.forbidden('You are not a member of this organization');
       }
-      await requireMemberPermission(
+      const actorPermissions = await requireMemberPermission(
         organizationId,
         userId,
         'members.manage',
         'Your workspace role does not allow adding team members.',
       );
+      await assertMembershipRoleWithinActor({
+        organizationId,
+        actorUserId: userId,
+        subject: email,
+        actorPermissions,
+        role,
+        request,
+      });
 
       await expirePendingInvitations(tx, organizationId);
 

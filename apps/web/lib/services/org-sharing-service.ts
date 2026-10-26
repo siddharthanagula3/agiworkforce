@@ -310,6 +310,7 @@ export async function shareProject(
            from public.user_projects
           where id = $2
             and user_id = $3
+            and (organization_id is null or organization_id = $1)
             and deleted_at is null
        ), grant_row as materialized (
          insert into public.organization_shared_projects

@@ -31,6 +31,19 @@ export interface ToolResultOwner {
   conversationId?: string | null;
 }
 
+// A turn with no conversation keeps what it trims for itself, never for a later
+// turn that happens to reuse a provider tool-call id.
+export function toolResultOwnerForTurn(input: {
+  userId: string | undefined;
+  conversationId: string | undefined;
+  requestId: string;
+}): ToolResultOwner {
+  return {
+    userId: input.userId,
+    conversationId: input.conversationId ?? `request:${input.requestId}`,
+  };
+}
+
 export interface StoredToolResultSummary {
   reference: string;
   toolName: string | null;
@@ -40,8 +53,8 @@ export interface StoredToolResultSummary {
 
 type IndexedToolResult = Omit<StoredToolResultSummary, 'reference'>;
 
-function storageKey(userId: string, reference: string): string {
-  return `${KEY_PREFIX}:${userId}:${reference}`;
+function storageKey(userId: string, conversationId: string, reference: string): string {
+  return `${KEY_PREFIX}:${userId}:${conversationId}:${reference}`;
 }
 
 function indexKey(userId: string, conversationId: string): string {
@@ -139,12 +152,12 @@ export async function referenceOversizedToolResult(
   if (!exceedsInlineLimit(input.content)) return null;
   const store = getKeyValueStore();
   const reference = referenceFor(input.toolCallId);
-  if (!store || !input.userId || !reference) return null;
+  if (!store || !input.userId || !input.conversationId || !reference) return null;
   const kept = input.content.slice(0, MAX_KEPT_TOOL_OUTPUT_CHARS);
   const totalChars = input.totalChars ?? input.content.length;
   try {
     const saved = await store.set(
-      storageKey(input.userId, reference),
+      storageKey(input.userId, input.conversationId, reference),
       { toolName: input.toolName, content: kept, totalChars },
       { ttlSeconds: TTL_SECONDS },
     );
@@ -183,12 +196,12 @@ export async function keepTrimmedToolResult(
 ): Promise<boolean> {
   const store = getKeyValueStore();
   const reference = referenceFor(input.toolCallId);
-  if (!store || !input.userId || !reference) return false;
+  if (!store || !input.userId || !input.conversationId || !reference) return false;
   if (input.content.includes(`${STORED_RESULT_NOTICE_MARKER} "${reference}"`)) return true;
   let saved: boolean;
   try {
     saved = await store.set(
-      storageKey(input.userId, reference),
+      storageKey(input.userId, input.conversationId, reference),
       {
         content: input.content.slice(0, MAX_KEPT_TOOL_OUTPUT_CHARS),
         totalChars: input.content.length,
@@ -210,7 +223,7 @@ export async function keepTrimmedToolResult(
 }
 
 export async function readStoredToolResult(
-  userId: string | undefined,
+  owner: ToolResultOwner,
   args: Record<string, unknown>,
 ): Promise<{ content: string; isError: boolean }> {
   const reference = typeof args['reference'] === 'string' ? args['reference'] : '';
@@ -218,12 +231,14 @@ export async function readStoredToolResult(
   const offset =
     typeof rawOffset === 'number' && Number.isInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0;
   const store = getKeyValueStore();
-  if (!store || !userId || !REFERENCE_PATTERN.test(reference)) {
+  if (!store || !owner.userId || !owner.conversationId || !REFERENCE_PATTERN.test(reference)) {
     return { content: `No stored tool result matches "${reference}".`, isError: true };
   }
   let stored: StoredToolResult | null;
   try {
-    stored = await store.get<StoredToolResult>(storageKey(userId, reference));
+    stored = await store.get<StoredToolResult>(
+      storageKey(owner.userId, owner.conversationId, reference),
+    );
   } catch (error) {
     logger.warn({ error }, '[tool-result-store] stored result could not be read');
     return { content: 'The stored tool result could not be read. Try again.', isError: true };

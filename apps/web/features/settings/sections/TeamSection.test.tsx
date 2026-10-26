@@ -619,7 +619,7 @@ describe('TeamSection', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave workspace' }));
     expect(screen.getByRole('alertdialog')).toHaveTextContent('seat becomes available');
     fireEvent.click(screen.getByRole('button', { name: 'Leave workspace' }));
-    expect(state.leaveOrganization).toHaveBeenCalledWith({});
+    expect(state.leaveOrganization).toHaveBeenCalledWith({ organizationId: 'org-1' });
   });
 
   it('transfers ownership and leaves atomically from the owner UI', () => {
@@ -675,7 +675,10 @@ describe('TeamSection', () => {
     expect(leaveButton).toBeEnabled();
     fireEvent.click(leaveButton);
     fireEvent.click(screen.getByRole('button', { name: 'Transfer and leave' }));
-    expect(state.leaveOrganization).toHaveBeenCalledWith({ successorUserId: 'successor' });
+    expect(state.leaveOrganization).toHaveBeenCalledWith({
+      organizationId: 'org-1',
+      successorUserId: 'successor',
+    });
   });
 
   function renderAsOwnerWithMember() {

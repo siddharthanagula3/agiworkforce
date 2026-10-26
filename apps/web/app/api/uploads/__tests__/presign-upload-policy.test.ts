@@ -126,7 +126,7 @@ describe('POST /api/uploads/presign · type policy', () => {
       expect(response.status).toBe(200);
       expect(body.uploadUrl).toMatch(
         new RegExp(
-          `^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/api/uploads/chat-attachment/put\\?key=`,
+          `^${origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/api/uploads/chat-attachment/put\\?token=`,
         ),
       );
       expect(mockGetPresignedPrivateUploadUrl).not.toHaveBeenCalled();

@@ -36,6 +36,7 @@ import {
 } from '@/lib/e2b/provider-proxy-access-cache';
 import {
   getProviderProxyUsageParser,
+  stoppedProviderProxyUsage,
   type ProviderProxyUsage,
 } from '@/lib/e2b/provider-proxy-usage';
 import {
@@ -194,6 +195,7 @@ interface ProviderProxyMetering {
   providerId: string;
   sessionId: string;
   reservedModel: string;
+  estimatedPromptTokens: number;
 }
 
 /**
@@ -203,9 +205,10 @@ interface ProviderProxyMetering {
  * of: this runs inside `after()`, well after the proxied response has already
  * reached the sandbox, so a failure here can only be logged.
  *
- * No observed tokens is a full refund. An upstream error, a dropped
- * connection before the first token and a client abort all land here the same
- * way, and the reservation is released rather than charged.
+ * No observed tokens is a full refund: an upstream error or a connection
+ * dropped before the first token releases the reservation rather than charging
+ * it. A stream stopped after output reached the caller arrives here already
+ * carrying `stoppedProviderProxyUsage`.
  */
 async function settleProviderProxyUsage(
   metering: ProviderProxyMetering,
@@ -318,7 +321,11 @@ function attachUsageSettlement(
     let usage: ProviderProxyUsage | null = null;
     try {
       if (streamAccumulator) {
-        usage = streamAccumulator.finish();
+        usage = stoppedProviderProxyUsage(
+          meteredCall,
+          streamAccumulator.finish(),
+          streamAccumulator.deliveredText(),
+        );
       } else if (jsonBuffer.trim().length > 0) {
         usage = parser.parseJsonBody(JSON.parse(jsonBuffer));
       }
@@ -513,6 +520,7 @@ async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> 
     providerId: input.providerId,
     sessionId: input.sessionId,
     reservedModel: parsed.model,
+    estimatedPromptTokens: parsed.estimatedPromptTokens,
   };
 
   try {

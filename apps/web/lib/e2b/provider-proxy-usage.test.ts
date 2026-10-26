@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getProviderProxyUsageParser } from './provider-proxy-usage';
+import { getProviderProxyUsageParser, stoppedProviderProxyUsage } from './provider-proxy-usage';
 
 const parser = getProviderProxyUsageParser('anthropic');
 if (!parser) throw new Error('anthropic provider-proxy usage parser is not registered');
@@ -339,5 +339,125 @@ describe('openai provider-proxy usage parser', () => {
         cacheWrite1hTokens: 0,
       });
     });
+  });
+});
+
+describe('a proxied stream the caller stops before the usage frame', () => {
+  it('settles a Responses stream cut short by its output limit on the usage it reports', () => {
+    const accumulator = openaiParser.createStreamAccumulator();
+    accumulator.push(
+      sseFrame('response.incomplete', {
+        type: 'response.incomplete',
+        response: {
+          id: 'resp_1',
+          model: 'test-openai-model',
+          usage: { input_tokens: 900, output_tokens: 4_000 },
+          incomplete_details: { reason: 'max_output_tokens' },
+        },
+      }),
+    );
+
+    expect(accumulator.finish()).toMatchObject({
+      model: 'test-openai-model',
+      inputTokens: 900,
+      outputTokens: 4_000,
+    });
+  });
+
+  it('collects the generated text, reasoning and tool arguments each stream delivered', () => {
+    const anthropic = parser.createStreamAccumulator();
+    anthropic.push(
+      sseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        delta: { type: 'thinking_delta', thinking: 'plan ' },
+      }),
+    );
+    anthropic.push(
+      sseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        delta: { type: 'text_delta', text: 'answer ' },
+      }),
+    );
+    anthropic.push(
+      sseFrame('content_block_delta', {
+        type: 'content_block_delta',
+        delta: { type: 'input_json_delta', partial_json: '{"a":1}' },
+      }),
+    );
+    expect(anthropic.deliveredText()).toBe('plan answer {"a":1}');
+
+    const responses = openaiParser.createStreamAccumulator();
+    responses.push(
+      sseFrame('response.output_text.delta', { type: 'response.output_text.delta', delta: 'hi ' }),
+    );
+    responses.push(
+      sseFrame('response.function_call_arguments.delta', {
+        type: 'response.function_call_arguments.delta',
+        delta: '{"q":"x"}',
+      }),
+    );
+    responses.push(
+      sseFrame('response.audio.delta', { type: 'response.audio.delta', delta: 'AAAA' }),
+    );
+    expect(responses.deliveredText()).toBe('hi {"q":"x"}');
+
+    const chat = openaiParser.createStreamAccumulator();
+    chat.push(
+      rawSseData({
+        choices: [
+          {
+            index: 0,
+            delta: { content: 'yo ', tool_calls: [{ function: { arguments: '{"b":2}' } }] },
+          },
+        ],
+      }),
+    );
+    expect(chat.deliveredText()).toBe('yo {"b":2}');
+  });
+
+  const metering = { estimatedPromptTokens: 2_500, reservedModel: 'test-openai-model' };
+  const delivered = 'A long answer the caller already received. '.repeat(30);
+
+  it('bills the prompt estimate and the delivered output when no usage frame arrived', () => {
+    const usage = stoppedProviderProxyUsage(metering, null, delivered);
+
+    expect(usage?.inputTokens).toBe(2_500);
+    expect(usage?.outputTokens).toBeGreaterThan(0);
+  });
+
+  it('keeps the input count the stream did report and estimates only the missing output', () => {
+    const usage = stoppedProviderProxyUsage(
+      metering,
+      {
+        model: 'test-anthropic-model',
+        inputTokens: 700,
+        outputTokens: 0,
+        cacheReadTokens: 30,
+        cacheWriteTokens: 0,
+        cacheWrite1hTokens: 0,
+      },
+      delivered,
+    );
+
+    expect(usage).toMatchObject({
+      model: 'test-anthropic-model',
+      inputTokens: 700,
+      cacheReadTokens: 30,
+    });
+    expect(usage?.outputTokens).toBeGreaterThan(0);
+  });
+
+  it('leaves reported output and a call that delivered nothing as observed', () => {
+    const reported = {
+      model: 'test-openai-model',
+      inputTokens: 10,
+      outputTokens: 5,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
+    };
+
+    expect(stoppedProviderProxyUsage(metering, reported, delivered)).toBe(reported);
+    expect(stoppedProviderProxyUsage(metering, null, '')).toBeNull();
   });
 });

@@ -341,6 +341,95 @@ describe('managed agent stream', () => {
     );
   });
 
+  it('bills a stop that lands before the first provider step reported usage', async () => {
+    finalize.mockClear();
+    const usage = createObservedProviderUsage();
+    const stream = buildManagedAgentStream({
+      generator: completedGenerator(),
+      processed: { ...processed, estimatedPromptTokens: 3_000 } as ProcessedRequest,
+      usage,
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+    });
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    const settledUsage = (finalize.mock.calls.at(-1)?.[0] as { usage: typeof usage }).usage;
+    expect(settledUsage.providerCalls).toBe(1);
+    expect(settledUsage.inputTokens).toBe(3_000);
+    expect(settledUsage.outputTokens).toBeGreaterThan(0);
+  });
+
+  it('still releases a stop before anything reached the reader', async () => {
+    finalize.mockClear();
+    async function* stalledGenerator(): AsyncGenerator<Uint8Array> {
+      yield new TextEncoder().encode(': keep-alive\n\n');
+      yield new TextEncoder().encode('data: [DONE]\n\n');
+    }
+    const stream = buildManagedAgentStream({
+      generator: stalledGenerator(),
+      processed: { ...processed, estimatedPromptTokens: 3_000 } as ProcessedRequest,
+      usage: createObservedProviderUsage(),
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+    });
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    const settledUsage = (finalize.mock.calls.at(-1)?.[0] as { usage: { providerCalls: number } })
+      .usage;
+    expect(settledUsage.providerCalls).toBe(0);
+  });
+
+  it('keeps a step as reported once the usage of the step that delivered the text arrived', async () => {
+    finalize.mockClear();
+    const usage = createObservedProviderUsage();
+    async function* reportedStep(): AsyncGenerator<Uint8Array> {
+      const encoder = new TextEncoder();
+      yield encoder.encode('data: {"choices":[{"delta":{"content":"hello"}}]}\n\n');
+      accumulateObservedProviderUsage(usage, { inputTokens: 120, outputTokens: 40 });
+      yield encoder.encode(': keep-alive\n\n');
+      yield encoder.encode('data: [DONE]\n\n');
+    }
+    const stream = buildManagedAgentStream({
+      generator: reportedStep(),
+      processed: { ...processed, estimatedPromptTokens: 3_000 } as ProcessedRequest,
+      usage,
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+    });
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.read();
+    await reader.cancel();
+
+    const settledUsage = (finalize.mock.calls.at(-1)?.[0] as { usage: typeof usage }).usage;
+    expect(settledUsage).toMatchObject({ providerCalls: 1, inputTokens: 120, outputTokens: 40 });
+  });
+
+  it('bills a later step the reader stops before that step reported usage', async () => {
+    finalize.mockClear();
+    const usage = createObservedProviderUsage();
+    accumulateObservedProviderUsage(usage, { inputTokens: 120, outputTokens: 40 });
+    const stream = buildManagedAgentStream({
+      generator: completedGenerator(),
+      processed: { ...processed, estimatedPromptTokens: 3_000 } as ProcessedRequest,
+      usage,
+      completionReason: 'tool_loop_completed',
+      cancellationReason: 'client_cancelled_tool_loop',
+    });
+    const reader = stream.getReader();
+    await reader.read();
+    await reader.cancel();
+
+    const settledUsage = (finalize.mock.calls.at(-1)?.[0] as { usage: typeof usage }).usage;
+    expect(settledUsage.providerCalls).toBe(2);
+    expect(settledUsage.inputTokens).toBe(3_120);
+    expect(settledUsage.outputTokens).toBeGreaterThan(40);
+  });
+
   it('releases an error response with no observed usage instead of charging an estimate', async () => {
     finalize.mockClear();
     const stream = buildManagedAgentStream({

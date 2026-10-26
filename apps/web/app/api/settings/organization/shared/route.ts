@@ -25,7 +25,7 @@ import {
   resolveOrgMembership,
   type SharedProjectSummary,
 } from '@/lib/services/org-sharing-service';
-import { expandOrganizationPermissions } from '@agiworkforce/types';
+import { canSeeMemberEmails } from '@agiworkforce/types';
 import { resolveOrganizationPermissions } from '@/lib/services/organization-permission-service';
 
 export const runtime = 'nodejs';
@@ -61,9 +61,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   const permissions = await resolveOrganizationPermissions(membership.organizationId, userId);
   const canManageSharing = permissions.has('sharing.manage');
-  const held = expandOrganizationPermissions(permissions);
-  const rosterShowsEmail =
-    canManageSharing || held.has('content.share') || held.has('admin.members.view');
+  const rosterShowsEmail = canSeeMemberEmails(permissions);
   const [members, sharedProjects, sharedConnectors, sharedArtifacts, sharedConversations] =
     await Promise.all([
       getNeonDb().query<{

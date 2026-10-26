@@ -1,10 +1,15 @@
 import 'server-only';
 
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { createError } from '@/lib/errors';
+import { canUseBillingPlanCapability, type BillingPlanTier } from '@agiworkforce/types';
+import { AppError, createError } from '@/lib/errors';
 import type { OrganizationMemberRow } from '@/lib/server/neon-types';
-import { withSeatAccountingErrors } from '@/lib/services/organization-seat-service';
+import {
+  withSeatAccountingErrors,
+  type OrganizationSeatState,
+} from '@/lib/services/organization-seat-service';
 import { persistActiveWorkspaceSelection } from '@/lib/services/active-workspace-service';
+import { resolveUserPersonalPlanTier } from '@/lib/services/org-entitlements';
 
 export interface LeaveOrganizationResult {
   organizationId: string;
@@ -13,10 +18,68 @@ export interface LeaveOrganizationResult {
   successorPreviousRole: OrganizationMemberRow['role'] | null;
 }
 
+export interface OwnershipSuccessorAccess {
+  plan: BillingPlanTier;
+  seatSource: OrganizationSeatState['seatSource'] | 'unknown';
+}
+
 export interface LeaveOrganizationInput {
   userId: string;
   organizationId: string;
-  successorUserId?: string;
+  successor?: { userId: string; organizationAccess: OwnershipSuccessorAccess };
+}
+
+export async function requireEligibleOwnershipSuccessor(
+  tx: DatabaseAdapter,
+  input: { organizationId: string; successorUserId: string; access: OwnershipSuccessorAccess },
+): Promise<OrganizationMemberRow> {
+  const { organizationId, successorUserId, access } = input;
+  const [successor] = await tx.query<OrganizationMemberRow>(
+    `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+       from public.organization_members
+      where organization_id = $1 and user_id = $2 and status = 'active'
+      limit 1`,
+    [organizationId, successorUserId],
+  );
+
+  if (!successor) {
+    throw createError.notFound(
+      'That person is not an active member of this organization. Add or invite them first.',
+    );
+  }
+
+  if (access.seatSource !== 'billing') {
+    const successorPlan = await resolveUserPersonalPlanTier(tx, successorUserId);
+    const orgNeedsEnterpriseControls = canUseBillingPlanCapability(
+      access.plan,
+      'enterprise_controls',
+    );
+    const successorGrantsTeamAdmin = canUseBillingPlanCapability(successorPlan, 'team_admin');
+    const successorGrantsEnterpriseControls = canUseBillingPlanCapability(
+      successorPlan,
+      'enterprise_controls',
+    );
+
+    if (
+      !successorGrantsTeamAdmin ||
+      (orgNeedsEnterpriseControls && !successorGrantsEnterpriseControls)
+    ) {
+      throw new AppError(
+        'ORG_TRANSFER_ENTITLEMENT_REQUIRED',
+        "This organization has no subscription of its own, so team administration follows the owner's personal plan. Give the new owner a Team or Enterprise plan, or attach a subscription to the organization, before transferring ownership.",
+        409,
+        {
+          organizationId,
+          toUserId: successorUserId,
+          successorPlan,
+          requiredCapability: orgNeedsEnterpriseControls ? 'enterprise_controls' : 'team_admin',
+          requiredPlans: orgNeedsEnterpriseControls ? ['enterprise'] : ['team', 'enterprise'],
+        },
+      );
+    }
+  }
+
+  return successor;
 }
 
 export function assertOwnerTurnsOnFastMode(
@@ -80,8 +143,8 @@ export async function leaveOrganization(
         [membership.organization_id],
       );
 
-      const [currentMembership] = await tx.query<OrganizationMemberRow>(
-        `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
+      const [currentMembership] = await tx.query<OrganizationMemberRow & { status: string }>(
+        `select organization_id, user_id, role, status, provisioning_source, provisioned_at, joined_at
            from public.organization_members
           where organization_id = $1 and user_id = $2
           limit 1`,
@@ -93,7 +156,7 @@ export async function leaveOrganization(
       }
       let successorPreviousRole: OrganizationMemberRow['role'] | null = null;
       if (currentMembership.role === 'owner') {
-        if (!input.successorUserId || input.successorUserId === userId) {
+        if (!input.successor || input.successor.userId === userId) {
           const [memberCount] = await tx.query<{ count: string }>(
             `select count(*)::text as count
                from public.organization_members
@@ -110,16 +173,16 @@ export async function leaveOrganization(
           );
         }
 
-        const [successor] = await tx.query<OrganizationMemberRow>(
-          `select organization_id, user_id, role, provisioning_source, provisioned_at, joined_at
-             from public.organization_members
-            where organization_id = $1 and user_id = $2
-            limit 1`,
-          [currentMembership.organization_id, input.successorUserId],
-        );
-        if (!successor) {
-          throw createError.notFound('The selected successor is not a member of this workspace.');
+        if (currentMembership.status !== 'active') {
+          throw createError
+            .forbidden('Only an active owner can hand this workspace to a successor.')
+            .asUserSafe();
         }
+        const successor = await requireEligibleOwnershipSuccessor(tx, {
+          organizationId: currentMembership.organization_id,
+          successorUserId: input.successor.userId,
+          access: input.successor.organizationAccess,
+        });
         successorPreviousRole = successor.role;
 
         await tx.execute(
@@ -134,7 +197,7 @@ export async function leaveOrganization(
             where organization_id = $1 and user_id = $2`,
           [currentMembership.organization_id, successor.user_id],
         );
-      } else if (input.successorUserId) {
+      } else if (input.successor) {
         throw createError.validation('Only the current owner can choose a successor.');
       }
 
@@ -155,7 +218,7 @@ export async function leaveOrganization(
         organizationId: removed.organization_id,
         previousRole: currentMembership.role,
         successorUserId:
-          currentMembership.role === 'owner' ? (input.successorUserId ?? null) : null,
+          currentMembership.role === 'owner' ? (input.successor?.userId ?? null) : null,
         successorPreviousRole,
       };
     }),

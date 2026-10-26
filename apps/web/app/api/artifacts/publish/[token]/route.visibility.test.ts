@@ -8,6 +8,7 @@ type OrganizationPermissionServiceModule =
   typeof import('@/lib/services/organization-permission-service');
 type OrgEntitlementsModule = typeof import('@/lib/services/org-entitlements');
 type LoggerModule = typeof import('@/lib/logger');
+type ManagedComputeGateModule = typeof import('@/lib/managed-compute-gate');
 
 const mocks = vi.hoisted(() => ({
   query: vi.fn(),
@@ -17,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   permissions: new Set<string>(['content.read', 'content.share']),
   canShareArtifacts: vi.fn(async (..._args: unknown[]) => true),
   usesConnectors: false,
+  sharingGate: vi.fn(async (..._args: unknown[]): Promise<Response | null> => null),
 }));
 
 vi.mock('server-only', () => ({}));
@@ -49,6 +51,10 @@ vi.mock('@/lib/services/org-entitlements', async (importOriginal) => ({
   ...(await importOriginal<OrgEntitlementsModule>()),
   organizationCanShareArtifacts: (...a: unknown[]) => mocks.canShareArtifacts(...a),
   getWorkspaceArtifactSharingErrorMessage: () => 'Upgrade to share with your workspace.',
+}));
+vi.mock('@/lib/managed-compute-gate', async (importOriginal) => ({
+  ...(await importOriginal<ManagedComputeGateModule>()),
+  buildExternalSharingGateResponse: (...a: unknown[]) => mocks.sharingGate(...a),
 }));
 vi.mock('@/lib/logger', async (importOriginal) => ({
   ...(await importOriginal<LoggerModule>()),
@@ -140,6 +146,7 @@ beforeEach(() => {
   mocks.permissions = new Set(['content.read', 'content.share']);
   mocks.canShareArtifacts.mockResolvedValue(true);
   mocks.usesConnectors = false;
+  mocks.sharingGate.mockResolvedValue(null);
   mocks.query.mockImplementation(async (sql: string) => respond('organization')(sql));
   mocks.scopedDb.mockResolvedValue({
     db: { query: (...args: unknown[]) => mocks.query(...args) },
@@ -149,6 +156,28 @@ beforeEach(() => {
 });
 
 describe('PATCH /api/artifacts/publish/[token]', () => {
+  it('asks the workspaces the publication is stored under before reopening its public link', async () => {
+    mocks.query.mockImplementation(async (sql: string) => respond('public')(sql));
+    mocks.sharingGate.mockResolvedValue(
+      Response.json({ error: { code: 'external_sharing_disabled' } }, { status: 403 }),
+    );
+
+    const response = await call({ visibility: 'public' });
+
+    expect(response.status).toBe(403);
+    expect(mocks.sharingGate).toHaveBeenCalledWith('user-1', expect.anything(), [ORG]);
+    const statements = mocks.query.mock.calls.map(([sql]) => String(sql));
+    expect(
+      statements.some((sql) => sql.includes('delete from public.organization_shared_artifacts')),
+    ).toBe(false);
+    expect(statements.some((sql) => sql.includes('set visibility = $3'))).toBe(false);
+  });
+
+  it('does not ask the external sharing policy for a move into the workspace', async () => {
+    expect((await call({ visibility: 'organization' })).status).toBe(200);
+    expect(mocks.sharingGate).not.toHaveBeenCalled();
+  });
+
   it('mints the grant row and records the workspace audience', async () => {
     const response = await call({ visibility: 'organization' });
 

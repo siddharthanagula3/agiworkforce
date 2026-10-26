@@ -1,9 +1,22 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 type ScanModule0 = typeof import('@/lib/server/mobile-intent-tokens');
+type ScanModule1 = typeof import('@/lib/ip-allow-list-gate');
+type ScanModule2 = typeof import('@/lib/mfa-policy-gate');
 
-const { mockResolve, mockAnswer } = vi.hoisted(() => ({
+const { mockResolve, mockAnswer, mockAssertIp, mockAssertMfa } = vi.hoisted(() => ({
   mockResolve: vi.fn(),
   mockAnswer: vi.fn(),
+  mockAssertIp: vi.fn(),
+  mockAssertMfa: vi.fn(),
+}));
+
+vi.mock('@/lib/ip-allow-list-gate', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule1>()),
+  assertIpAllowList: (...args: unknown[]) => mockAssertIp(...args),
+}));
+vi.mock('@/lib/mfa-policy-gate', async (importOriginal) => ({
+  ...(await importOriginal<ScanModule2>()),
+  assertMfaPolicy: (...args: unknown[]) => mockAssertMfa(...args),
 }));
 
 vi.mock('@/lib/rate-limit', () => ({ withRateLimit: vi.fn().mockResolvedValue(null) }));
@@ -30,6 +43,8 @@ vi.mock('@/lib/server/mobile-intent-tokens', async (importOriginal) => ({
   resolveMobileIntentToken: (...args: unknown[]) => mockResolve(...args),
 }));
 
+import { IpNotAllowedError } from '@/lib/ip-allow-list-gate';
+import { MfaRequiredError } from '@/lib/mfa-policy-gate';
 import { POST } from '../route';
 
 function ask(token: string | null, body: unknown, headers: Record<string, string> = {}) {
@@ -47,6 +62,35 @@ function ask(token: string | null, body: unknown, headers: Record<string, string
 describe('POST /api/mobile/intent/ask', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockAssertIp.mockResolvedValue(undefined);
+    mockAssertMfa.mockResolvedValue(undefined);
+  });
+
+  const liveOwner = {
+    tokenId: 'token-1',
+    userId: 'user-1',
+    organizationId: null,
+    installId: 'install-1',
+  };
+
+  it('applies the workspace ip allow list to the token owner and answers nothing when refused', async () => {
+    mockResolve.mockResolvedValueOnce(liveOwner);
+    mockAssertIp.mockRejectedValueOnce(new IpNotAllowedError());
+    const res = await POST(ask('agi_it_live', { prompt: 'Hello' }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe('ip_not_allowed');
+    expect(mockAssertIp).toHaveBeenCalledWith('user-1', expect.anything());
+    expect(mockAnswer).not.toHaveBeenCalled();
+  });
+
+  it('applies the workspace mfa policy to the token owner and answers nothing when refused', async () => {
+    mockResolve.mockResolvedValueOnce(liveOwner);
+    mockAssertMfa.mockRejectedValueOnce(new MfaRequiredError('Turn on two-step verification.'));
+    const res = await POST(ask('agi_it_live', { prompt: 'Hello' }));
+    expect(res.status).toBe(403);
+    expect((await res.json()).error.code).toBe('mfa_required');
+    expect(mockAssertMfa).toHaveBeenCalledWith('user-1');
+    expect(mockAnswer).not.toHaveBeenCalled();
   });
 
   const cookieCredentialHeaders: Record<string, string>[] = [

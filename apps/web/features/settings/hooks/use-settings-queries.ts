@@ -19,7 +19,10 @@ import {
   type QueryClient,
 } from '@tanstack/react-query';
 import { z } from 'zod';
-import { MANAGED_CLOUD_APPROVAL_HISTORY_PATH } from '@agiworkforce/cloud-contracts';
+import {
+  MANAGED_CLOUD_APPROVAL_HISTORY_PATH,
+  type ManagedCloudWorkspaceOwnershipTransfer,
+} from '@agiworkforce/cloud-contracts';
 import { queryKeys } from '@shared/stores/query-client';
 import { useAuthStore } from '@shared/stores/authentication-store';
 import settingsService, { type UserSettings, type APIKey } from '../services/user-preferences';
@@ -1196,27 +1199,32 @@ export function useRevokeTeamInvitation(): UseMutationResult<
   });
 }
 
-export function useLeaveOrganization(): UseMutationResult<
+export type LeaveOrganizationVariables = { organizationId: string; successorUserId?: string };
+
+export type LeaveOrganizationMutation = UseMutationResult<
   void,
   Error,
-  { successorUserId?: string }
-> {
-  const queryClient = useQueryClient();
+  LeaveOrganizationVariables
+> & {
+  /** Handing ownership to a successor answers 403 until a fresh second factor is proven. */
+  stepUpDialog: ReactElement | null;
+};
 
-  return useMutation({
-    mutationFn: async ({ successorUserId }) => {
-      const token = await getAuthToken();
-      if (!token) throw new Error('User not authenticated');
-      const csrfToken = await getCsrfToken();
-      const response = await fetch('/api/settings/organization/leave', {
-        method: 'DELETE',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`,
-          'x-csrf-token': csrfToken,
-        },
-        body: JSON.stringify(successorUserId ? { successorUserId } : {}),
-      });
+export function useLeaveOrganization(): LeaveOrganizationMutation {
+  const queryClient = useQueryClient();
+  const { withStepUp, dialog } = useStepUp();
+
+  const mutation = useMutation<void, Error, LeaveOrganizationVariables>({
+    mutationFn: async ({ organizationId, successorUserId }) => {
+      const response = await withStepUp(
+        (headers) =>
+          sendAuthorizedJson(
+            '/api/settings/organization/leave',
+            { method: 'DELETE', body: successorUserId ? { successorUserId } : {} },
+            headers,
+          ),
+        organizationId,
+      );
       if (!response.ok) throw new Error(await readApiError(response));
     },
     onSuccess: async () => {
@@ -1227,8 +1235,13 @@ export function useLeaveOrganization(): UseMutationResult<
       );
       window.location.reload();
     },
-    onError: (error: Error) => toast.error(toUserMessage(error, 'Failed to leave workspace')),
+    onError: (error: Error) => {
+      if (isStepUpCancelled(error)) return;
+      toast.error(toUserMessage(error, 'Failed to leave workspace'));
+    },
   });
+
+  return { ...mutation, stepUpDialog: dialog };
 }
 
 /**
@@ -1236,7 +1249,9 @@ export function useLeaveOrganization(): UseMutationResult<
  *
  * @returns UseMutationResult for removing a team member
  */
-export type OrganizationOwnerRoleAfterTransfer = 'admin' | 'member' | 'viewer';
+export type OrganizationOwnerRoleAfterTransfer = NonNullable<
+  ManagedCloudWorkspaceOwnershipTransfer['outgoingOwnerRole']
+>;
 
 export type TransferOwnershipVariables = {
   organizationId: string;

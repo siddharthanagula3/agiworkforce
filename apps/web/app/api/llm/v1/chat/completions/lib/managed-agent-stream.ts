@@ -2,10 +2,12 @@ import 'server-only';
 
 import { logger } from '@/lib/logger';
 import {
+  accumulateObservedProviderUsage,
   finalizeObservedManagedUsage,
   observedTurnCost,
   type ObservedProviderUsage,
 } from '@/lib/services/managed-usage-accounting-service';
+import { estimateTokens } from '@agiworkforce/routing';
 import { markManagedUsageClientDelivered } from '@/lib/services/managed-usage-request-service';
 import type { GenerationAttempt } from '@/lib/services/generation-attempt';
 import { classifyError } from '@agiworkforce/provider-runtime';
@@ -149,6 +151,8 @@ export function buildManagedAgentStream(
   const publicText = createPublicTextDeltaProjector();
   const sourceCollector = new AssistantTurnSourceCollector();
   let assistantText = '';
+  let unbilledText = '';
+  let unbilledSinceProviderCalls = input.usage.providerCalls;
   const interactiveCards = new Map<string, InteractiveCard>();
   let turnPersisted = false;
   let settledCostMicrousd: number | null = null;
@@ -323,6 +327,23 @@ export function buildManagedAgentStream(
     if (recorded) report.settledCostMicrousd = settledCostMicrousd;
   };
 
+  // A reader who stops a provider step before its usage frame leaves that step
+  // unobserved after the provider has billed its prompt and the output so far,
+  // which would release the reservation for text the reader kept. The prompt
+  // estimate and the text that step delivered stand in, as `stoppedTurnUsage`
+  // does for a direct stream; text from a step whose usage arrived is counted.
+  const recordStoppedTurnUsage = (serving: ProcessedRequest): void => {
+    if (input.usage.providerCalls !== unbilledSinceProviderCalls || !unbilledText.trim()) return;
+    accumulateObservedProviderUsage(
+      input.usage,
+      {
+        inputTokens: input.processed.estimatedPromptTokens,
+        outputTokens: estimateTokens(unbilledText, serving.chatRequest.model),
+      },
+      { provider: serving.provider, model: serving.chatRequest.model },
+    );
+  };
+
   const settle = async (
     reason: string,
     outcome: 'completed' | 'failed' | 'cancelled',
@@ -330,6 +351,7 @@ export function buildManagedAgentStream(
   ) => {
     if (settled) return;
     const serving = servingRequest();
+    if (outcome === 'cancelled') recordStoppedTurnUsage(serving);
     if (input.processed.managedUsage) {
       const finalization = await finalizeObservedManagedUsage({
         reservation: input.processed.managedUsage,
@@ -427,8 +449,14 @@ export function buildManagedAgentStream(
             reportedFailure = true;
             reportedFailureCode ??= managedAgentReportedFailureCode(next.value);
           }
+          const textDelta = publicText.push(extractAssistantTextDelta(next.value));
+          if (input.usage.providerCalls !== unbilledSinceProviderCalls) {
+            unbilledText = '';
+            unbilledSinceProviderCalls = input.usage.providerCalls;
+          }
+          unbilledText += textDelta;
           if (persistable) {
-            assistantText += publicText.push(extractAssistantTextDelta(next.value));
+            assistantText += textDelta;
             sourceCollector.ingestWireBytes(next.value);
             for (const card of extractAssistantInteractiveCardDeltas(next.value)) {
               if (

@@ -99,11 +99,15 @@ function ipv6Segments(address: string): number[] | null {
   return [...left, ...new Array<number>(gap).fill(0), ...right];
 }
 
-// 6to4 and Teredo carry an IPv4 destination inside the address, so a relay would
-// deliver the request to whatever it names. No public service is reached only
-// through either, so both prefixes are refused whole, as the desktop judge does.
+// 6to4, Teredo, IPv4-compatible (::/96), SIIT (::ffff:0:0/96) and NAT64 (64:ff9b::/32,
+// both the well-known and the local-use prefix) carry an IPv4 destination inside the
+// address, so a relay would deliver the request to whatever it names. No public service
+// is reached only through any of them, so each prefix is refused whole rather than decoded.
 function isSpecialPurposeIpv6(segments: number[]): boolean {
-  const [s0, s1, s2, s3] = segments as [number, number, number, number];
+  const [s0, s1, s2, s3, s4, s5] = segments as [number, number, number, number, number, number];
+  if (s0 === 0 && s1 === 0 && s2 === 0 && s3 === 0 && s4 === 0 && s5 === 0) return true;
+  if (s0 === 0 && s1 === 0 && s2 === 0 && s3 === 0 && s4 === 0xffff && s5 === 0) return true;
+  if (s0 === 0x0064 && s1 === 0xff9b) return true;
   if ((s0 & 0xff00) === 0xff00) return true;
   if ((s0 & 0xffc0) === 0xfec0) return true;
   if (s0 === 0x2002) return true;

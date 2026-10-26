@@ -23,7 +23,12 @@ import { EEA_COUNTRY_CODES } from '@/lib/eu-access';
 import { logger } from '@/lib/logger';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { getNeonDb } from '@/lib/server/neon-db';
-import type { NormalizedCharge, NormalizedPeriod } from '@/lib/server/payments/domain';
+import {
+  CHARGE_REFUND_LEDGER_DESCRIPTION_PREFIX,
+  type NormalizedCharge,
+  type NormalizedPeriod,
+  type NormalizedSubscriptionPayment,
+} from '@/lib/server/payments/domain';
 import {
   cancelStripeSubscriptionNow,
   listStripeCustomerCharges,
@@ -39,6 +44,7 @@ import { recordNotification } from '@/lib/services/notification-service';
 const DAY_MS = 86_400_000;
 const CUSTOMER_CHARGE_LIMIT = 24;
 const OPERATOR_LIST_LIMIT = 100;
+const REFUND_REQUEST_LOCK_SQL = `select pg_advisory_xact_lock(hashtextextended('agi:billing-refund-requests:' || $1, 0))`;
 const STATUTORY_WITHDRAWAL_COUNTRIES: ReadonlySet<string> = new Set([...EEA_COUNTRY_CODES, 'GB']);
 const STRIPE_REFUND_REFUSALS: Readonly<Record<string, string>> = {
   charge_already_refunded: 'This payment is already refunded.',
@@ -95,6 +101,13 @@ interface CreditPeriodFacts {
   allocatedMicrousd: number;
   usedMicrousd: number;
   topUpMicrousd: number;
+  unsettledTopUpRefundMicrousd: number;
+}
+
+interface UnsettledTopUpRefundRow {
+  charge_id: string;
+  charge_amount_cents: string | number;
+  refund_cents: string | number | null;
 }
 
 interface RefundFacts {
@@ -196,7 +209,48 @@ function inWithdrawalWindow(charge: NormalizedCharge, now: Date): boolean {
   return isWithinDays(charge.createdAt, STATUTORY_WITHDRAWAL_DAYS, now);
 }
 
+async function readUnsettledTopUpRefunds(
+  db: DatabaseAdapter,
+  userId: string,
+): Promise<UnsettledTopUpRefundRow[]> {
+  return db.query<UnsettledTopUpRefundRow>(
+    `select request.charge_id, request.charge_amount_cents,
+            coalesce(request.refund_amount_cents, request.assessed_refund_cents) as refund_cents
+       from public.billing_refund_requests request
+      where request.user_id = $1
+        and request.charge_kind = 'top_up'
+        and not starts_with(request.charge_id, $2)
+        and (
+          request.status = 'refunded'
+          or (request.status = 'pending' and request.assessment <> 'needs_review')
+        )
+        and not exists (
+          select 1 from public.credit_transactions clawback
+           where clawback.user_id = request.user_id
+             and clawback.transaction_type = 'refund'
+             and clawback.description = $3 || request.charge_id
+        )`,
+    [userId, STORE_CHARGE_ID_PREFIX, CHARGE_REFUND_LEDGER_DESCRIPTION_PREFIX],
+  );
+}
+
+async function unsettledRefundMicrousd(
+  row: UnsettledTopUpRefundRow,
+  topUpMicrousd: number,
+): Promise<number> {
+  const charge = await retrieveStripeCharge(row.charge_id);
+  if (!charge?.purchasedLedgerCents) return topUpMicrousd;
+  const purchased = charge.purchasedLedgerCents * MICROUSD_PER_LEDGER_CENT;
+  const chargedCents = Number(row.charge_amount_cents);
+  const refundCents = Math.max(Number(row.refund_cents ?? 0), charge.refundedMinorUnits);
+  if (refundCents >= chargedCents) return purchased;
+  return Math.floor((purchased * refundCents) / chargedCents);
+}
+
 async function readRefundFacts(db: DatabaseAdapter, userId: string): Promise<RefundFacts> {
+  // Read before the balance: a clawback committing between the two reads is then
+  // subtracted twice rather than missed, so the purchased pool is never overstated.
+  const unsettled = await readUnsettledTopUpRefunds(db, userId);
   const [credits] = await db.query<{
     credits_allocated_microusd: string | number;
     credits_used_microusd: string | number;
@@ -222,22 +276,30 @@ async function readRefundFacts(db: DatabaseAdapter, userId: string): Promise<Ref
   const endsAt = subscription?.current_period_end
     ? new Date(subscription.current_period_end)
     : null;
+  const planPeriod = startsAt && endsAt ? { startsAt, endsAt } : null;
+  if (!credits) return { credits: null, planPeriod };
+
+  const topUpMicrousd = Number(credits.top_up_allocated_microusd);
+  let unsettledTopUpRefundMicrousd = 0;
+  for (const row of unsettled) {
+    unsettledTopUpRefundMicrousd += await unsettledRefundMicrousd(row, topUpMicrousd);
+  }
   return {
-    credits: credits
-      ? {
-          allocatedMicrousd: Number(credits.credits_allocated_microusd),
-          usedMicrousd: Number(credits.credits_used_microusd),
-          topUpMicrousd: Number(credits.top_up_allocated_microusd),
-        }
-      : null,
-    planPeriod: startsAt && endsAt ? { startsAt, endsAt } : null,
+    credits: {
+      allocatedMicrousd: Number(credits.credits_allocated_microusd),
+      usedMicrousd: Number(credits.credits_used_microusd),
+      topUpMicrousd,
+      unsettledTopUpRefundMicrousd,
+    },
+    planPeriod,
   };
 }
 
 function purchasedRemainingMicrousd(credits: CreditPeriodFacts): number {
   return Math.max(
     0,
-    Math.min(credits.topUpMicrousd, credits.allocatedMicrousd - credits.usedMicrousd),
+    Math.min(credits.topUpMicrousd, credits.allocatedMicrousd - credits.usedMicrousd) -
+      credits.unsettledTopUpRefundMicrousd,
   );
 }
 
@@ -269,15 +331,19 @@ function coversCurrentPlanPeriod(
   return charge.createdAt >= planPeriod.startsAt && charge.createdAt < planPeriod.endsAt;
 }
 
-async function withdrawalTermsFor(
+async function subscriptionPaymentOf(
+  charge: NormalizedCharge,
+): Promise<NormalizedSubscriptionPayment | null> {
+  if (charge.disputed || charge.kind === 'top_up' || !charge.paymentReference) return null;
+  return readStripeSubscriptionPayment(charge.paymentReference);
+}
+
+function withdrawalTermsFor(
   charge: NormalizedCharge,
   facts: RefundFacts,
-): Promise<WithdrawalTerms> {
+  subscriptionPayment: NormalizedSubscriptionPayment | null,
+): WithdrawalTerms {
   if (charge.disputed) return { refundCents: null, prorated: false };
-  const subscriptionPayment =
-    charge.kind === 'top_up' || !charge.paymentReference
-      ? null
-      : await readStripeSubscriptionPayment(charge.paymentReference);
   const consent =
     charge.kind === 'top_up'
       ? charge.withdrawalConsent
@@ -391,7 +457,10 @@ export async function listRefundableCharges(
   for (const charge of charges) {
     const country = charge.billingCountry ?? customerCountry ?? charge.cardCountry;
     const withdrawalEligible = isWithdrawalCountry(country) && inWithdrawalWindow(charge, now);
-    const withdrawal = withdrawalEligible && facts ? await withdrawalTermsFor(charge, facts) : null;
+    const withdrawal =
+      withdrawalEligible && facts
+        ? withdrawalTermsFor(charge, facts, await subscriptionPaymentOf(charge))
+        : null;
     views.push(toRefundableChargeView(charge, { country, withdrawalEligible, withdrawal }));
   }
   return views;
@@ -400,7 +469,9 @@ export async function listRefundableCharges(
 async function countDiscretionaryRefunds(db: DatabaseAdapter, userId: string): Promise<number> {
   const [row] = await db.query<{ refunds: string | number }>(
     `select count(*) as refunds from public.billing_refund_requests
-      where user_id = $1 and status = 'refunded' and assessment = 'unused_within_policy'`,
+      where user_id = $1
+        and status in ('pending', 'refunded')
+        and assessment = 'unused_within_policy'`,
     [userId],
   );
   return Number(row?.refunds ?? 0);
@@ -518,42 +589,39 @@ export interface FileRefundRequestInput {
 }
 
 async function insertRefundRequest(
+  db: DatabaseAdapter,
   input: FileRefundRequestInput,
   charge: NormalizedCharge,
   country: string | null,
   decision: RefundDecision,
 ): Promise<{ row: RefundRequestRow; created: boolean }> {
-  try {
-    const [row] = await input.db.query<RefundRequestRow>(
-      `insert into public.billing_refund_requests (
-         user_id, charge_id, charge_kind, charge_amount_cents, charge_currency,
-         charge_created_at, reason, details, statutory_withdrawal, billing_country, assessment,
-         assessed_refund_cents
-       ) values ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12)
-       returning ${REQUEST_COLUMNS}`,
-      [
-        input.userId,
-        charge.reference,
-        chargeKindOf(charge),
-        charge.amount.minorUnits,
-        currencyOf(charge),
-        charge.createdAt.toISOString(),
-        input.reason,
-        input.details,
-        input.reason === 'statutory_withdrawal',
-        country,
-        decision.assessment,
-        decision.refundCents,
-      ],
-    );
-    if (!row) throw new Error('Refund request insert returned no row');
-    return { row, created: true };
-  } catch (error) {
-    if ((error as { code?: string }).code !== '23505') throw error;
-    const existing = await findRequestForCharge(input.db, input.userId, charge.reference);
-    if (!existing) throw error;
-    return { row: existing, created: false };
-  }
+  const [row] = await db.query<RefundRequestRow>(
+    `insert into public.billing_refund_requests (
+       user_id, charge_id, charge_kind, charge_amount_cents, charge_currency,
+       charge_created_at, reason, details, statutory_withdrawal, billing_country, assessment,
+       assessed_refund_cents
+     ) values ($1, $2, $3, $4, $5, $6::timestamptz, $7, $8, $9, $10, $11, $12)
+     on conflict do nothing
+     returning ${REQUEST_COLUMNS}`,
+    [
+      input.userId,
+      charge.reference,
+      chargeKindOf(charge),
+      charge.amount.minorUnits,
+      currencyOf(charge),
+      charge.createdAt.toISOString(),
+      input.reason,
+      input.details,
+      input.reason === 'statutory_withdrawal',
+      country,
+      decision.assessment,
+      decision.refundCents,
+    ],
+  );
+  if (row) return { row, created: true };
+  const existing = await findRequestForCharge(db, input.userId, charge.reference);
+  if (!existing) throw new Error('Refund request conflicts with a request on another account');
+  return { row: existing, created: false };
 }
 
 async function settleAutomatically(
@@ -633,21 +701,31 @@ export async function fileRefundRequest(
   }
 
   const now = input.now ?? new Date();
-  const facts = await readRefundFacts(input.db, input.userId);
   const country = await billingCountryOf(charge);
-  const decision = assessRefundRequest({
-    charge,
-    reason: input.reason,
-    country,
-    withdrawalCents: inWithdrawalWindow(charge, now)
-      ? (await withdrawalTermsFor(charge, facts)).refundCents
-      : null,
-    unused: isUnused(charge, facts.credits),
-    priorDiscretionaryRefunds: await countDiscretionaryRefunds(input.db, input.userId),
-    now,
-  });
+  const withdrawalWindow = inWithdrawalWindow(charge, now);
+  const subscriptionPayment = withdrawalWindow ? await subscriptionPaymentOf(charge) : null;
 
-  const { row, created } = await insertRefundRequest(input, charge, country, decision);
+  // A pending request reserves what it will refund until the webhook claws the
+  // credits back, so concurrent filings must assess one at a time per account.
+  const { row, created } = await input.db.transaction(async (tx) => {
+    await tx.query(REFUND_REQUEST_LOCK_SQL, [input.userId]);
+    const filed = await findRequestForCharge(tx, input.userId, charge.reference);
+    if (filed) return { row: filed, created: false };
+
+    const facts = await readRefundFacts(tx, input.userId);
+    const decision = assessRefundRequest({
+      charge,
+      reason: input.reason,
+      country,
+      withdrawalCents: withdrawalWindow
+        ? withdrawalTermsFor(charge, facts, subscriptionPayment).refundCents
+        : null,
+      unused: isUnused(charge, facts.credits),
+      priorDiscretionaryRefunds: await countDiscretionaryRefunds(tx, input.userId),
+      now,
+    });
+    return insertRefundRequest(tx, input, charge, country, decision);
+  });
   if (!created || row.assessment === 'needs_review') {
     return { request: toRefundRequestView(row), created };
   }

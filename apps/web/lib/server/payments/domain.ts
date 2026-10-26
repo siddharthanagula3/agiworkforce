@@ -4,6 +4,8 @@ export const PAYMENT_PROVIDER_IDS = ['stripe', 'apple', 'google'] as const;
 
 export type PaymentProviderId = (typeof PAYMENT_PROVIDER_IDS)[number];
 
+export const CHARGE_REFUND_LEDGER_DESCRIPTION_PREFIX = 'Refund for charge ';
+
 export type NormalizedSubscriptionStatus =
   | 'active'
   | 'trialing'

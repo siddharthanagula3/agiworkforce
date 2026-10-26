@@ -17,6 +17,7 @@ import {
 } from '@/lib/services/org-entitlements';
 import { resolveOrgMembership } from '@/lib/services/org-sharing-service';
 import { getUserScopedDb } from '@/lib/server/rls-db';
+import { buildExternalSharingGateResponse } from '@/lib/managed-compute-gate';
 import { moderateManagedPrompt } from '@/lib/moderation';
 import { inspectOutboundContent } from '@/lib/security/outbound-content-inspection';
 import { resolveSecretHandlingPolicy } from '@/lib/services/organization-policy-gate';
@@ -68,6 +69,32 @@ async function handleUnpublish(request: NextRequest, context: RouteContext): Pro
 }
 
 /**
+ * The workspaces this publication's content is stored under: the conversation
+ * it came from and any workspace it is shared into.
+ */
+async function readPublicationOrganizationIds(
+  db: DatabaseAdapter,
+  input: { userId: string; token: string },
+): Promise<(string | null)[]> {
+  const rows = await db.query<{ organization_id: string | null }>(
+    `select conversation.organization_id
+       from public.published_artifacts publication
+       join public.web_conversations conversation
+         on conversation.id = publication.conversation_id
+        and conversation.user_id = publication.user_id
+      where publication.token = $1 and publication.user_id = $2
+     union all
+     select share.organization_id
+       from public.organization_shared_artifacts share
+       join public.published_artifacts publication
+         on publication.id = share.published_artifact_id
+      where publication.token = $1 and publication.user_id = $2`,
+    [input.token, input.userId],
+  );
+  return rows.map((row) => row.organization_id ?? null);
+}
+
+/**
  * Move a published artifact between audiences.
  *
  * `organization` mints the grant row and closes the anonymous token page;
@@ -80,13 +107,6 @@ async function moveToAudience(
   db: DatabaseAdapter,
   input: { userId: string; token: string; visibility: ManagedCloudPublishedArtifactVisibility },
 ): Promise<{ updated: PublishedArtifact | null; organizationId: string | null }> {
-  if (
-    input.visibility === 'public' &&
-    (await publicationUsesConnectors(db, { userId: input.userId, token: input.token }))
-  ) {
-    throw createError.conflict(CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE);
-  }
-
   if (input.visibility !== 'organization') {
     const membership = await resolveOrgMembership(db, input.userId);
     if (membership) {
@@ -185,6 +205,17 @@ async function handleUpdate(request: NextRequest, context: RouteContext): Promis
 
   let updated: PublishedArtifact | null = null;
   let sharedWith: string | null = null;
+  if (visibility === 'public') {
+    if (await publicationUsesConnectors(db, { userId, token })) {
+      throw createError.conflict(CONNECTOR_ARTIFACT_PUBLIC_SHARE_MESSAGE);
+    }
+    const sharingGateResponse = await buildExternalSharingGateResponse(
+      userId,
+      request,
+      await readPublicationOrganizationIds(db, { userId, token }),
+    );
+    if (sharingGateResponse) return sharingGateResponse;
+  }
   if (visibility !== undefined) {
     const moved = await moveToAudience(db, { userId, token, visibility });
     updated = moved.updated;

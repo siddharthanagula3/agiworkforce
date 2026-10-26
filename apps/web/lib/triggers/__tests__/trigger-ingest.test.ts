@@ -200,6 +200,91 @@ describe('ingestTriggerEvent', () => {
     expect(hashVerificationCode(code)).toHaveLength(64);
   });
 
+  it('matches a GitHub trigger only on a repository its owner proved through the installation', async () => {
+    await ingestTriggerEvent(database({ triggers: [triggerRow()] }), event());
+
+    const match = statements.find((sql) => sql.includes('from event_triggers as trigger'))!;
+    expect(match).toContain('installation.user_id = trigger.user_id');
+    expect(match).toContain('trigger.source_account = any (installation.verified_repositories)');
+  });
+
+  it('matches a Slack trigger only for the workspace its owner installed the app in', async () => {
+    await ingestTriggerEvent(
+      database({ triggers: [] }),
+      event({ source: 'slack', type: 'message', account: 'T123456', installationId: null }),
+    );
+
+    const match = statements.find((sql) => sql.includes('from event_triggers as trigger'))!;
+    expect(match).toContain('from slack_installations as installation');
+    expect(match).toContain('installation.team_id = trigger.source_account');
+    expect(match).toContain('installation.installed_by_user_id = trigger.user_id');
+  });
+
+  it.each(['im', 'mpim'])(
+    'never records or runs a %s conversation with the app on a verified Slack trigger',
+    async (channelType) => {
+      const outcomes = await ingestTriggerEvent(
+        database({
+          triggers: [triggerRow({ source: 'slack', source_account: 'T123456' })],
+        }),
+        event({
+          source: 'slack',
+          type: 'message',
+          account: 'T123456',
+          installationId: null,
+          data: { channelType, user: 'U999', text: 'my private question to the app' },
+        }),
+      );
+
+      expect(outcomes).toEqual([]);
+      expect(statements.some((sql) => sql.includes('insert into event_trigger_events'))).toBe(
+        false,
+      );
+      expect(mocks.enqueueJob).not.toHaveBeenCalled();
+    },
+  );
+
+  it('still runs a verified Slack trigger for a channel message', async () => {
+    const outcomes = await ingestTriggerEvent(
+      database({
+        triggers: [triggerRow({ source: 'slack', source_account: 'T123456' })],
+      }),
+      event({
+        source: 'slack',
+        type: 'message',
+        account: 'T123456',
+        installationId: null,
+        data: { channelType: 'channel', user: 'U999', text: 'deploy finished' },
+      }),
+    );
+
+    expect(outcomes[0]).toMatchObject({ outcome: 'enqueued' });
+  });
+
+  it('lets a direct message carry the code that verifies a pending Slack trigger', async () => {
+    const outcomes = await ingestTriggerEvent(
+      database({
+        triggers: [
+          triggerRow({
+            source: 'slack',
+            verification_status: 'pending',
+            source_account: 'T123456',
+          }),
+        ],
+      }),
+      event({
+        source: 'slack',
+        type: 'message',
+        account: 'T123456',
+        installationId: null,
+        data: { channelType: 'im', text: 'abcdef123456' },
+      }),
+    );
+
+    expect(outcomes[0]?.detail).toContain('Ownership verified');
+    expect(mocks.enqueueJob).not.toHaveBeenCalled();
+  });
+
   it('records a delivery it could not queue instead of losing it', async () => {
     mocks.enqueueJob.mockRejectedValue(new Error('queue unavailable'));
 

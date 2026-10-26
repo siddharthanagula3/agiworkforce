@@ -159,13 +159,13 @@ async function execute(
       return { dataUrl: `data:${SCREENSHOT_MIME_TYPE};base64,${await context.capture(tabId)}` };
     case 'browser_console': {
       const response = requireSuccess(
-        await context.send(tabId, { type: 'READ_PAGE_CONSOLE', ...args }),
+        await context.send(tabId, { ...args, type: 'READ_PAGE_CONSOLE' }),
       );
       return { origin: response['origin'], console: response['console'] };
     }
     case 'browser_network': {
       const response = requireSuccess(
-        await context.send(tabId, { type: 'READ_PAGE_NETWORK', ...args }),
+        await context.send(tabId, { ...args, type: 'READ_PAGE_NETWORK' }),
       );
       return { origin: response['origin'], network: response['network'] };
     }

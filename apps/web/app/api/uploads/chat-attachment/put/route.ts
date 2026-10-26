@@ -8,19 +8,9 @@ import { createError } from '@/lib/errors';
 import { getClerkAuthUser } from '@/lib/api-auth';
 import { isPrivateObjectStorageConfigured, putPrivateObject } from '@/lib/server/object-storage';
 import { chatAttachmentSizeLabel, MAX_CHAT_ATTACHMENT_BYTES } from '@/lib/chat-attachment-policy';
+import { verifyChatAttachmentRelayUpload } from '@/lib/server/chat-attachment-completion';
 
 const CHAT_ATTACHMENT_SIZE_LIMIT_MESSAGE = `Chat attachments are limited to ${chatAttachmentSizeLabel(MAX_CHAT_ATTACHMENT_BYTES)} each.`;
-
-function isOwnedChatAttachmentKey(key: string, userId: string): boolean {
-  const prefix = `chat-attachments/${userId}/`;
-  return (
-    key.startsWith(prefix) &&
-    key.length > prefix.length &&
-    /^[A-Za-z0-9][A-Za-z0-9._/-]*$/.test(key) &&
-    !key.includes('//') &&
-    !key.split('/').some((segment) => segment === '.' || segment === '..')
-  );
-}
 
 async function handlePut(request: NextRequest): Promise<NextResponse> {
   const { userId } = await getClerkAuthUser(request);
@@ -35,9 +25,9 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
     throw createError.internal('Object storage is not configured');
   }
 
-  const key = request.nextUrl.searchParams.get('key') ?? '';
-  if (!isOwnedChatAttachmentKey(key, userId)) {
-    throw createError.forbidden('Invalid upload destination');
+  const token = request.nextUrl.searchParams.get('token');
+  if (!token) {
+    throw createError.forbidden('This upload is not authorized');
   }
 
   const contentLengthHeader = request.headers.get('content-length');
@@ -53,6 +43,20 @@ async function handlePut(request: NextRequest): Promise<NextResponse> {
   }
   if (body.byteLength > MAX_CHAT_ATTACHMENT_BYTES) {
     throw createError.validation(CHAT_ATTACHMENT_SIZE_LIMIT_MESSAGE);
+  }
+
+  let key: string;
+  try {
+    key = (
+      await verifyChatAttachmentRelayUpload(token, userId, {
+        contentType,
+        byteLength: body.byteLength,
+      })
+    ).key;
+  } catch (error) {
+    throw createError.forbidden(
+      error instanceof Error ? error.message : 'This upload is not authorized',
+    );
   }
 
   await putPrivateObject({

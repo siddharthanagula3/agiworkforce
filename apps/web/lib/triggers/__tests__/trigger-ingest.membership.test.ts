@@ -39,8 +39,9 @@ const EVENT: TriggerEvent = {
   type: 'message',
   deliveryId: 'delivery_1',
   installationId: null,
-  data: {},
-} as TriggerEvent;
+  occurredAt: '2026-01-01T00:00:00.000Z',
+  data: { channelType: 'channel' },
+};
 
 let world: FakePostgres;
 
@@ -83,6 +84,20 @@ beforeEach(() => {
     ],
     erasure_tombstones: [{ user_id: 'user_erased' }],
     github_installations: [],
+    slack_installations: [
+      {
+        id: 'slack_installation',
+        team_id: 'workspace-account',
+        installed_by_user_id: 'user_stays',
+      },
+    ],
+    slack_account_links: [
+      'user_stays',
+      'user_removed',
+      'user_suspended',
+      'user_personal',
+      'user_erased',
+    ].map((userId) => ({ installation_id: 'slack_installation', user_id: userId })),
     event_trigger_events: [],
   });
 });

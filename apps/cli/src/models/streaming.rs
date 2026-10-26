@@ -911,6 +911,20 @@ async fn run_managed_cloud(
     Ok(completed)
 }
 
+fn ollama_cloud_base_url(config: &CliConfig) -> Result<String> {
+    let base_url = config
+        .base_url("ollama-cloud")
+        .unwrap_or_else(|| "https://ollama.com/v1".to_string());
+    let trimmed = base_url.trim_end_matches('/');
+    if !super::provider_dispatch::is_safe_provider_base_url(trimmed) {
+        return Err(CliError::config(format!(
+            "ollama-cloud base_url must be https:// or a loopback http:// address without credentials: {base_url}"
+        ))
+        .into());
+    }
+    Ok(trimmed.to_string())
+}
+
 // ---------------------------------------------------------------------------
 // Streaming completion (main entry point)
 // ---------------------------------------------------------------------------
@@ -1079,10 +1093,7 @@ pub async fn stream_completion(
             .await
         }
         Provider::Ollama(OllamaMode::Cloud) => {
-            let base_url = config
-                .base_url("ollama-cloud")
-                .unwrap_or_else(|| "https://ollama.com/v1".to_string());
-            let url = format!("{}/chat/completions", base_url.trim_end_matches('/'));
+            let url = format!("{}/chat/completions", ollama_cloud_base_url(config)?);
             run_spec(
                 &client,
                 &openai_compat_spec("ollama-cloud", &url, key),
@@ -1147,6 +1158,49 @@ pub async fn stream_completion(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn ollama_cloud_sends_only_to_an_https_or_loopback_endpoint_without_credentials() {
+        let with_base_url = |base_url: &str| {
+            let mut config = CliConfig::default();
+            config.providers.insert(
+                "ollama-cloud".to_string(),
+                crate::config::ProviderConfig {
+                    api_key_env: None,
+                    base_url: Some(base_url.to_string()),
+                },
+            );
+            config
+        };
+
+        assert_eq!(
+            ollama_cloud_base_url(&CliConfig::default()).expect("default endpoint"),
+            "https://ollama.com/v1"
+        );
+        assert_eq!(
+            ollama_cloud_base_url(&with_base_url("https://ollama.example/v1/"))
+                .expect("https endpoint"),
+            "https://ollama.example/v1"
+        );
+        assert_eq!(
+            ollama_cloud_base_url(&with_base_url("http://127.0.0.1:11434/v1"))
+                .expect("loopback endpoint"),
+            "http://127.0.0.1:11434/v1"
+        );
+        for refused in [
+            "http://ollama.example/v1",
+            "HTTP://ollama.example/v1",
+            "https://user:secret@ollama.example/v1",
+            "http://localhost@ollama.example/v1",
+            "ftp://ollama.example/v1",
+            "not a url",
+        ] {
+            assert!(
+                ollama_cloud_base_url(&with_base_url(refused)).is_err(),
+                "{refused} should be refused"
+            );
+        }
+    }
 
     #[test]
     fn reasoning_the_gateway_inlines_never_reaches_the_answer() {

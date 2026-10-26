@@ -15,6 +15,7 @@ import {
   recordBetaApplication,
 } from '@/lib/server/beta-applications';
 import { getOptionalAuthUser } from '@/lib/api-auth';
+import { readPrimaryEmailState } from '@/lib/auth/email-confirmation';
 
 const optionalText = (max: number) =>
   z
@@ -50,18 +51,21 @@ async function handleApply(request: NextRequest) {
     );
   }
 
-  const userId = (await getOptionalAuthUser(request))?.userId ?? null;
+  const accountId = (await getOptionalAuthUser(request))?.userId ?? null;
+  const account = accountId ? await readPrimaryEmailState(accountId).catch(() => null) : null;
+  const verifiedEmail = account?.confirmed ? account.email : null;
+  const userId = verifiedEmail ? accountId : null;
   const data = parsed.data;
 
   const { alreadyReviewed } = await recordBetaApplication({
-    email: data.email.toLowerCase(),
+    email: (verifiedEmail ?? data.email).toLowerCase(),
     fullName: data.fullName,
     role: data.role,
     company: data.company ?? null,
     surfaces: [...new Set(data.surfaces)],
     useCase: data.useCase ?? null,
     discordHandle: data.discordHandle ?? null,
-    userId: userId ?? null,
+    userId,
     source: request.headers.get('referer'),
   });
 
