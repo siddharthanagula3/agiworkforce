@@ -38,7 +38,8 @@
 .code-block-body pre {
   margin: 0;
   padding: 14px 16px;
-  overflow-x: auto;
+  max-height: min(70vh, 32rem);
+  overflow: auto;
   font-size: 13px;
   line-height: 20px;
 }
