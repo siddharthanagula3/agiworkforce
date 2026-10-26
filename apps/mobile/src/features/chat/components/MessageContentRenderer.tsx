@@ -23,7 +23,7 @@ import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
-import { Download } from 'lucide-react-native';
+import { Download, Square, SquareCheck } from 'lucide-react-native';
 import { exportSourceFile, shareFile } from '@/services/fileCreation';
 import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
@@ -251,7 +251,15 @@ const listItemPattern = /^(\s*)(?:([-*])|(\d+)\.)\s+(.+)$/;
 const accountImagePattern = /^!\[([^\]]*)\]\(<?([^()<>\s]+)>?\)$/;
 const nestedBullets = ['•', '◦', '▪'];
 
-type ParsedListItem = { depth: number; marker: string; ordered: boolean; text: string };
+type ParsedListItem = {
+  depth: number;
+  marker: string;
+  ordered: boolean;
+  text: string;
+  task?: 'done' | 'open';
+};
+
+const taskItemPattern = /^\[([ xX])\]\s+(.+)$/;
 
 const TABLE_SORT_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -444,11 +452,13 @@ function collectListItems(
 
     const depth = indentStack.length - 1;
     const ordered = match[3] !== undefined;
+    const task = ordered ? null : taskItemPattern.exec(match[4]!);
     items.push({
       depth,
       ordered,
       marker: ordered ? `${match[3]}.` : nestedBullets[Math.min(depth, nestedBullets.length - 1)]!,
-      text: match[4]!,
+      text: task ? task[2]! : match[4]!,
+      ...(task ? { task: task[1] === ' ' ? ('open' as const) : ('done' as const) } : {}),
     });
     idx++;
   }
@@ -577,19 +587,37 @@ function renderTextSegment(
             <View
               key={`${keyBase}-li-${idx}-${i}`}
               style={{ flexDirection: 'row', gap: 8, paddingLeft: 4 + item.depth * 16 }}
+              {...(item.task
+                ? {
+                    accessible: true,
+                    accessibilityRole: 'checkbox' as const,
+                    accessibilityState: { checked: item.task === 'done', disabled: true },
+                    accessibilityLabel: restoreEscapes(item.text),
+                  }
+                : {})}
             >
-              <Text
-                style={{
-                  fontSize: typeScale.body,
-                  color: renderColors.teal,
-                  lineHeight: 22,
-                  ...(item.ordered
-                    ? { minWidth: 18, textAlign: 'right' as const }
-                    : { width: 12, textAlign: 'center' as const }),
-                }}
-              >
-                {item.marker}
-              </Text>
+              {item.task ? (
+                <View style={{ height: 22, justifyContent: 'center' }}>
+                  {item.task === 'done' ? (
+                    <SquareCheck size={16} color={renderColors.textSecondary} />
+                  ) : (
+                    <Square size={16} color={renderColors.textMuted} />
+                  )}
+                </View>
+              ) : (
+                <Text
+                  style={{
+                    fontSize: typeScale.body,
+                    color: renderColors.teal,
+                    lineHeight: 22,
+                    ...(item.ordered
+                      ? { minWidth: 18, textAlign: 'right' as const }
+                      : { width: 12, textAlign: 'center' as const }),
+                  }}
+                >
+                  {item.marker}
+                </Text>
+              )}
               <Text
                 style={{
                   fontSize: typeScale.body,
@@ -716,6 +744,64 @@ function renderTextSegment(
 }
 
 const PLAIN_TEXT_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['text', 'txt', 'plaintext']);
+const DIFF_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['diff', 'patch', 'udiff']);
+
+type DiffLineKind = 'added' | 'removed' | 'hunk' | 'file' | 'context';
+
+function diffLineKind(line: string): DiffLineKind {
+  if (line.startsWith('+++') || line.startsWith('---')) return 'file';
+  if (line.startsWith('@@')) return 'hunk';
+  if (line.startsWith('+')) return 'added';
+  if (line.startsWith('-')) return 'removed';
+  return 'context';
+}
+
+function renderDiffLines(
+  key: string,
+  codeContent: string,
+  renderColors: ColorScheme,
+): React.ReactElement {
+  const fill = (kind: DiffLineKind): string =>
+    kind === 'added'
+      ? renderColors.diffAddedFill
+      : kind === 'removed'
+        ? renderColors.diffRemovedFill
+        : renderColors.transparent;
+  const ink = (kind: DiffLineKind): string =>
+    kind === 'added'
+      ? renderColors.diffAddedText
+      : kind === 'removed'
+        ? renderColors.diffRemovedText
+        : kind === 'hunk'
+          ? renderColors.textMuted
+          : renderColors.textPrimary;
+  return (
+    <View>
+      {codeContent.split('\n').map((line, lineIdx) => {
+        const kind = diffLineKind(line);
+        return (
+          <View
+            key={`${key}-diff-${lineIdx}`}
+            style={{ backgroundColor: fill(kind), paddingHorizontal: 12 }}
+          >
+            <Text
+              style={{
+                fontSize: typeScale.footnote,
+                lineHeight: 19,
+                fontFamily: 'Menlo',
+                color: ink(kind),
+                fontWeight: kind === 'file' ? '600' : '400',
+              }}
+              selectable
+            >
+              {line.length > 0 ? line : ' '}
+            </Text>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
 
 function renderCodeCard(
   key: string,
@@ -725,9 +811,11 @@ function renderCodeCard(
   renderColors: ColorScheme,
 ): React.ReactElement {
   const languageLabel = fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
-  const codeTokens: SyntaxToken[] = highlightCode
-    ? tokenizeCode(codeContent, fenceLanguage)
-    : [{ text: codeContent, type: 'plain' }];
+  const isDiff = !!fenceLanguage && DIFF_FENCE_LANGUAGES.has(fenceLanguage.toLowerCase());
+  const codeTokens: SyntaxToken[] =
+    highlightCode && !isDiff
+      ? tokenizeCode(codeContent, fenceLanguage)
+      : [{ text: codeContent, type: 'plain' }];
   const wrapsLongLines =
     !fenceLanguage || PLAIN_TEXT_FENCE_LANGUAGES.has(fenceLanguage.toLowerCase());
   const codeText = (
@@ -789,7 +877,16 @@ function renderCodeCard(
         </Text>
         <CodeBlockCopyButton code={codeContent} />
       </View>
-      {wrapsLongLines ? (
+      {isDiff ? (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={true}
+          scrollEventThrottle={16}
+          style={{ paddingTop: 2, paddingBottom: 10 }}
+        >
+          {renderDiffLines(key, codeContent, renderColors)}
+        </ScrollView>
+      ) : wrapsLongLines ? (
         <View style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}>{codeText}</View>
       ) : (
         <ScrollView
