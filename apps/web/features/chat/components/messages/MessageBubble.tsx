@@ -3258,7 +3258,7 @@ const MessageBubbleComponent = function MessageBubble({
                         ariaLabel:
                           searchNotice === 'no-results'
                             ? 'Retry this response with web search'
-                            : 'Send this turn again with a web search required',
+                            : 'Search the web and answer this turn again',
                         icon: RefreshCw,
                         onClick: () => onRegenerate(message.id),
                       }

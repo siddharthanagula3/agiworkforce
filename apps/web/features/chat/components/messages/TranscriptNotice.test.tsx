@@ -76,10 +76,10 @@ describe('TranscriptNotice action', () => {
   it('fires onClick and labels the button for assistive tech', () => {
     const onClick = vi.fn();
     renderNotice({
-      action: { label: 'Retry', ariaLabel: 'Regenerate this response', icon: RefreshCw, onClick },
+      action: { label: 'Retry', ariaLabel: 'Retry this response', icon: RefreshCw, onClick },
     });
 
-    const button = screen.getByRole('button', { name: 'Regenerate this response' });
+    const button = screen.getByRole('button', { name: 'Retry this response' });
     expect(button).toHaveTextContent('Retry');
     fireEvent.click(button);
     expect(onClick).toHaveBeenCalledTimes(1);
@@ -111,11 +111,11 @@ describe('TranscriptNotice action', () => {
         icon={CircleAlert}
         message="Declined."
         actionSlot={<button type="button">Report issue</button>}
-        action={{ label: 'Retry', ariaLabel: 'Regenerate this response', onClick: vi.fn() }}
+        action={{ label: 'Retry', ariaLabel: 'Retry this response', onClick: vi.fn() }}
       />,
     );
     expect(screen.getByRole('button', { name: 'Report issue' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Regenerate this response' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry this response' })).toBeInTheDocument();
     unmount();
 
     render(
@@ -126,7 +126,7 @@ describe('TranscriptNotice action', () => {
       />,
     );
     expect(screen.getByRole('button', { name: 'Report issue' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Regenerate this response' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry this response' })).toBeNull();
   });
 
   it('renders no button at all when the call site passes no action', () => {
