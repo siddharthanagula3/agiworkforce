@@ -78,7 +78,6 @@ export const UNAUDITED_MUTATING_ROUTES: readonly UnauditedRoute[] = [
   { route: 'memory/sync/route.ts', reason: 'no_governed_state' },
   { route: 'mobile/content-report/route.ts', reason: 'dedicated_record' },
   { route: 'mobile/feedback/route.ts', reason: 'own_content' },
-  { route: 'mobile/intent/ask/route.ts', reason: 'own_content' },
   { route: 'mobile/push-token/route.ts', reason: 'no_governed_state' },
   { route: 'notifications/route.ts', reason: 'own_content' },
   { route: 'projects/[id]/duplicate/route.ts', reason: 'own_content' },
