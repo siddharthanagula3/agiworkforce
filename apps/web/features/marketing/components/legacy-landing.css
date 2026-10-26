@@ -1688,6 +1688,35 @@
   padding: 56px 0 8px;
   border-top: 1px solid var(--agi-rule);
 }
+
+/* The flagship hero plus the fact row fill a laptop viewport, so the cookie
+   card covers the phone and the last figures. While the card is open, lengthen
+   the hero so those sit above it. Taller screens already clear the row. */
+@media (min-width: 861px) and (max-height: 1000px) {
+  body:has([data-public-palette='flagship']):has([data-cookie-banner]) .agi-fl-hero-split {
+    padding-bottom: calc(clamp(40px, 5vw, 64px) + 11rem);
+  }
+
+  body:has([data-public-palette='flagship']):has([data-cookie-banner]) .agi-fl-hero-visual {
+    margin-top: -2.5rem;
+  }
+
+  body:has([data-public-palette='flagship']) [data-cookie-card] {
+    padding: 0.75rem 2.75rem 0.75rem 1rem;
+  }
+
+  body:has([data-public-palette='flagship']) [data-cookie-card] p {
+    display: -webkit-box;
+    margin-top: 0.25rem;
+    overflow: hidden;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  body:has([data-public-palette='flagship']) [data-cookie-actions] {
+    margin-top: 0.5rem;
+  }
+}
 [data-design='agi'] .agi-fl-proof-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
