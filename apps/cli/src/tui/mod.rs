@@ -14,6 +14,7 @@ pub(crate) mod transcript_cell;
 
 mod composer_edits;
 pub(crate) mod markdown_renderer;
+mod math_text;
 mod prompt_history;
 mod tui_app;
 pub mod widgets;
@@ -53,6 +54,29 @@ pub(crate) fn push_tui_notice(message: String) {
     {
         q.push(message);
     }
+}
+
+/// A turn's billed credits, settled after the turn ended, and the details
+/// line under its answer that they belong on.
+pub(crate) struct TurnBill {
+    pub details_at: usize,
+    pub details: String,
+    pub billed: crate::usage_summary::BilledTurn,
+}
+
+static TURN_BILLS: std::sync::Mutex<Vec<TurnBill>> = std::sync::Mutex::new(Vec::new());
+
+pub(crate) fn push_turn_bill(bill: TurnBill) {
+    if let Ok(mut bills) = TURN_BILLS.lock() {
+        bills.push(bill);
+    }
+}
+
+pub(crate) fn drain_turn_bills() -> Vec<TurnBill> {
+    TURN_BILLS
+        .lock()
+        .map(|mut bills| std::mem::take(&mut *bills))
+        .unwrap_or_default()
 }
 
 /// Drain all pending TUI notices, clearing the queue.

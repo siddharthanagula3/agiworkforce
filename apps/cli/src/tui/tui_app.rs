@@ -436,6 +436,8 @@ struct TuiApp {
     config: CliConfig,
     keybindings: crate::keybindings::Keybindings,
     chat_messages: Vec<ChatMessage>,
+    /// Credits the account was billed for this session's settled turns.
+    billed_credits: f64,
     input: String,
     cursor: usize,
     scroll_offset: u16,
@@ -662,6 +664,7 @@ impl TuiApp {
             config,
             keybindings,
             chat_messages,
+            billed_credits: 0.0,
             input: String::new(),
             cursor: 0,
             scroll_offset: 0,
@@ -1900,6 +1903,11 @@ fn spinner_frame(tick: u8) -> &'static str {
     FRAMES[(tick as usize) % FRAMES.len()]
 }
 
+/// The line under an answer. A turn the account pays for shows no figure
+/// until the server has billed it, and then shows only that one: the local
+/// price estimate is computed from the streamed token counts, which leave out
+/// what the server charges for (cache writes, tools, retries), so the two
+/// disagreed on every turn.
 fn answer_details(
     model: &str,
     turn: &crate::agent::TurnResult,
@@ -1913,11 +1921,38 @@ fn answer_details(
             crate::output::format_tokens(turn.output_tokens)
         ),
     ];
-    if turn.cost_usd > 0.0 && !turn.via_subscription {
+    if turn.cost_usd > 0.0 && !turn.via_subscription && turn.managed_request_ids.is_empty() {
         parts.push(crate::output::format_session_credits(turn.cost_usd));
     }
     parts.push(crate::output::format_duration_ms(elapsed.as_millis() as u64));
     parts.join(" · ")
+}
+
+/// Put each settled turn's billed credits on the line under its answer. A
+/// line the transcript no longer holds (cleared, rewound, resumed over) is
+/// left alone; the session total still counts the bill.
+fn apply_turn_bills(app: &mut TuiApp, bills: Vec<crate::tui::TurnBill>) -> bool {
+    let mut changed = false;
+    for bill in bills {
+        app.billed_credits += bill.billed.credits;
+        changed = true;
+        if let Some(message) = app
+            .chat_messages
+            .get_mut(bill.details_at)
+            .filter(|message| message.role == ChatRole::Detail && message.text == bill.details)
+        {
+            message.text = with_billed_credits(&bill.details, &bill.billed);
+        }
+    }
+    changed
+}
+
+fn with_billed_credits(details: &str, billed: &crate::usage_summary::BilledTurn) -> String {
+    let billed = crate::usage_summary::render_billed_turn(billed);
+    match details.rsplit_once(" · ") {
+        Some((head, elapsed)) => format!("{head} · {billed} · {elapsed}"),
+        None => format!("{details} · {billed}"),
+    }
 }
 
 /// AGI loading verb shown beside the spinner: one plain, steady word, the same
@@ -2158,7 +2193,7 @@ impl<'a> FrameCtx<'a> {
             privacy_mode: app.session.privacy_mode,
             mode: app.mode,
             effort_label: app.visible_effort_label(),
-            cost_str: crate::output::format_session_credits(app.session.cost_ledger.total_usd),
+            cost_str: app.session_cost(),
             notice: app.live_notice(),
             quit_key: app
                 .keybindings
@@ -2168,6 +2203,16 @@ impl<'a> FrameCtx<'a> {
 }
 
 impl TuiApp {
+    /// What this session has cost so far: on the account, the credits the
+    /// server billed; on a provider key, the estimate from its token prices.
+    fn session_cost(&self) -> String {
+        if self.session.privacy_mode == crate::agent::PrivacyMode::Managed {
+            crate::cost_ledger::format_credits(self.billed_credits)
+        } else {
+            crate::output::format_session_credits(self.session.cost_ledger.total_usd)
+        }
+    }
+
     /// The status-line notice while it is still within its TTL.
     fn live_notice(&self) -> Option<&str> {
         self.status_notice
@@ -2471,6 +2516,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
     };
     let mut lines: Vec<Line> = Vec::new();
     let start_view = ctx.chat_messages.is_empty() && !ctx.is_loading;
+    let content_width = area.width.saturating_sub(2) as usize;
 
     if start_view {
         use crate::design_system::AccessMode;
@@ -2631,7 +2677,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
 
             // Use full markdown renderer for assistant messages
             if msg.role == ChatRole::Assistant {
-                let md_lines = super::markdown_renderer::render_markdown(text);
+                let md_lines = super::markdown_renderer::render_markdown(text, content_width);
                 lines.extend(md_lines);
             } else {
                 // Simple rendering for user/system/error messages
@@ -2716,7 +2762,7 @@ fn render_chat(frame: &mut ratatui::Frame, area: Rect, ctx: &FrameCtx) {
         // Live streamed output. During a turn this is redrawn each tick, so show
         // a generous tail (not just 5 lines) for a real streaming feel.
         if !ctx.stream_buffer.is_empty() {
-            lines.extend(streaming_markdown_tail(ctx.stream_buffer));
+            lines.extend(streaming_markdown_tail(ctx.stream_buffer, content_width));
         }
     }
 
@@ -4411,7 +4457,7 @@ fn start_remote_control(app: &mut TuiApp) -> String {
         return "Remote Control needs a saved session, and this one is not being saved."
             .to_string();
     };
-    if let Err(error) = app.session.persist_managed_session() {
+    if let Err(error) = app.session.persist_managed_session_now() {
         return format!(
             "Remote Control could not save this session first: {}",
             sanitize_terminal_text(&format!("{error:#}"))
@@ -5105,7 +5151,7 @@ fn thinking_tail_lines(thinking: &str) -> Vec<Line<'static>> {
     rendered
 }
 
-fn streaming_markdown_tail(buffer: &str) -> Vec<Line<'static>> {
+fn streaming_markdown_tail(buffer: &str, width: usize) -> Vec<Line<'static>> {
     let source: Vec<&str> = buffer.lines().collect();
     let start = source.len().saturating_sub(STREAM_SOURCE_TAIL_LINES);
     let open_fence = source[..start]
@@ -5119,7 +5165,7 @@ fn streaming_markdown_tail(buffer: &str) -> Vec<Line<'static>> {
         tail.push_str("```\n");
     }
     tail.push_str(&source[start..].join("\n"));
-    let rendered = super::markdown_renderer::render_markdown(&tail);
+    let rendered = super::markdown_renderer::render_markdown(&tail, width);
     let skip = rendered.len().saturating_sub(STREAM_RENDERED_TAIL_LINES);
     rendered.into_iter().skip(skip).collect()
 }
@@ -6746,6 +6792,10 @@ async fn run_event_loop(
         // Surface out-of-band notices (e.g. a local model's tool support being
         // dropped for a turn) as system messages so they are visible instead of
         // silently swallowed, then redraw so they appear immediately.
+        if apply_turn_bills(app, crate::tui::drain_turn_bills()) {
+            render(terminal, app)?;
+        }
+
         let notices = crate::tui::drain_tui_notices();
         if !notices.is_empty() {
             for text in notices {
@@ -7656,7 +7706,7 @@ async fn send_message_with_prompt(
     let turn_context = app.context_snapshot();
     let turn_context_percent = turn_context.percent;
     let turn_started = Instant::now();
-    let turn_cost_str = crate::output::format_session_credits(app.session.cost_ledger.total_usd);
+    let turn_cost_str = app.session_cost();
     let turn_notice = app.live_notice().map(str::to_string);
     let side_query = app
         .session
@@ -8034,9 +8084,11 @@ async fn send_message_with_prompt(
                 role: ChatRole::Assistant,
                 text: response_text,
             });
+            let details = answer_details(&app.session.model, &turn, turn_started.elapsed());
+            let details_at = app.chat_messages.len();
             app.chat_messages.push(ChatMessage {
                 role: ChatRole::Detail,
-                text: answer_details(&app.session.model, &turn, turn_started.elapsed()),
+                text: details.clone(),
             });
 
             app.sync_stats();
@@ -8083,10 +8135,11 @@ async fn send_message_with_prompt(
                 let request_ids = turn.managed_request_ids.clone();
                 tokio::spawn(async move {
                     if let Some(billed) = crate::usage_summary::billed_turn(&request_ids).await {
-                        crate::tui::push_tui_notice(format!(
-                            "This turn: {}",
-                            crate::usage_summary::render_billed_turn(&billed)
-                        ));
+                        crate::tui::push_turn_bill(crate::tui::TurnBill {
+                            details_at,
+                            details,
+                            billed,
+                        });
                     }
                 });
             }
@@ -8895,6 +8948,56 @@ mod tests {
         let model = crate::model_catalog::fast_completion_model("anthropic");
         let session = crate::agent::AgentSession::new(&model, &sys_ctx, None);
         TuiApp::new(session, config)
+    }
+
+    #[test]
+    fn a_billed_turn_shows_one_credit_figure_the_server_billed() {
+        let turn = crate::agent::TurnResult {
+            response: "answer".to_string(),
+            input_tokens: 143,
+            output_tokens: 2_200,
+            cache_read_tokens: 0,
+            cache_creation_tokens: 0,
+            cost_usd: 0.0022,
+            via_subscription: false,
+            incomplete: None,
+            managed_request_ids: vec!["req-1".to_string()],
+            sources: Vec::new(),
+        };
+        let details = answer_details("unknown-model", &turn, std::time::Duration::from_secs(16));
+        assert!(
+            !details.contains("credit"),
+            "an estimate was shown before the bill: {details}"
+        );
+
+        let mut app = minimal_app();
+        app.session.privacy_mode = crate::agent::PrivacyMode::Managed;
+        app.chat_messages.push(ChatMessage {
+            role: ChatRole::Detail,
+            text: details.clone(),
+        });
+        let billed = crate::usage_summary::BilledTurn {
+            credits: 4.73,
+            settled: 1,
+            ..Default::default()
+        };
+        assert!(apply_turn_bills(
+            &mut app,
+            vec![crate::tui::TurnBill {
+                details_at: 0,
+                details,
+                billed,
+            }]
+        ));
+        let line = &app.chat_messages[0].text;
+        assert!(line.contains("· 4.73 credits billed · 16.0s"), "{line}");
+        assert_eq!(line.matches("credit").count(), 1, "{line}");
+        assert_eq!(
+            app.chat_messages.len(),
+            1,
+            "the bill must not arrive as a second figure"
+        );
+        assert_eq!(app.session_cost(), "4.73 credits");
     }
 
     #[test]
