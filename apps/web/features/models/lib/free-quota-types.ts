@@ -16,6 +16,8 @@ export const FREE_QUOTA_CATEGORIES: Readonly<Record<ProviderOfferingCategory, st
   embedding: 'Embeddings & ranking',
 };
 
+export const FREE_MODELS_SECTION_LABEL = 'Free models';
+
 export const FREE_QUOTA_STATUS_LABELS: Readonly<Record<FreeQuotaStatus, string>> = {
   ready: 'Free quota available',
   exhausted: 'Free allowance used up',

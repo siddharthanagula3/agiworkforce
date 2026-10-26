@@ -861,6 +861,14 @@ export function ComposerFooter({
   const effortPanelId = useId();
   const triggerReceiptId = useId();
   const [nameTipOpen, setNameTipOpen] = useState(false);
+  const nameTipHeldRef = useRef(false);
+  const handleNameTipOpenChange = useCallback((next: boolean) => {
+    if (next && nameTipHeldRef.current) return;
+    setNameTipOpen(next);
+  }, []);
+  const releaseNameTip = useCallback(() => {
+    nameTipHeldRef.current = false;
+  }, []);
   const [open, setOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [catalogueOpen, setCatalogueOpen] = useState(false);
@@ -1445,6 +1453,14 @@ export function ComposerFooter({
               const trigger = (extra: ButtonHTMLAttributes<HTMLButtonElement> = {}) => (
                 <button
                   {...extra}
+                  onBlur={(event) => {
+                    extra.onBlur?.(event);
+                    releaseNameTip();
+                  }}
+                  onPointerEnter={(event) => {
+                    extra.onPointerEnter?.(event);
+                    releaseNameTip();
+                  }}
                   ref={modelTriggerRef}
                   id={MODEL_SELECTOR_TRIGGER_ID}
                   disabled={modelChangePending}
@@ -1482,7 +1498,7 @@ export function ComposerFooter({
               );
               const withNameTip = (triggerNode: ReactNode) => (
                 <TooltipProvider>
-                  <Tooltip open={nameTipOpen && !open} onOpenChange={setNameTipOpen}>
+                  <Tooltip open={nameTipOpen && !open} onOpenChange={handleNameTipOpenChange}>
                     <TooltipTrigger asChild>{triggerNode}</TooltipTrigger>
                     <TooltipContent side="top" className="max-w-xs">
                       <span className="block font-medium">
@@ -1586,6 +1602,11 @@ export function ComposerFooter({
                           <FreeQuotaModelSection
                             sources={freeModelSources}
                             selectedId={selectedModelId}
+                            defaultExpanded={
+                              !paidPlan ||
+                              freeQuotaSelection(selectedModelId) !== null ||
+                              selectedModelId === freeDefaultModel?.id
+                            }
                             fallback={
                               freeDefaultModel
                                 ? {
@@ -1837,6 +1858,8 @@ export function ComposerFooter({
                     }}
                     onCloseAutoFocus={(event) => {
                       event.preventDefault();
+                      nameTipHeldRef.current = true;
+                      setNameTipOpen(false);
                       modelTriggerRef.current?.focus();
                     }}
                   >
