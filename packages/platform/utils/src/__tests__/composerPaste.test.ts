@@ -159,6 +159,20 @@ describe('code paste', () => {
     ).not.toBeNull();
   });
 
+  it('leaves a copied JSON document as plain text', () => {
+    const json = [
+      '{',
+      '  "test_id": "JSON-731",',
+      '  "status": "pass",',
+      '  "count": 3,',
+      '  "features": ["chat", "search", "artifacts"]',
+      '}',
+    ].join('\n');
+
+    expect(looksLikePastedCode(json)).toBe(false);
+    expect(pastedCodeFence(codeTransfer(json))).toBeNull();
+  });
+
   it('defers to the large-paste attachment', () => {
     expect(pastedCodeFence(codeTransfer(`${source}\n${'// pad\n'.repeat(2000)}`))).toBeNull();
   });

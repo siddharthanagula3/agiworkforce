@@ -11,12 +11,17 @@ import { MARKDOWN_SANITIZE_SCHEMA, SANITIZED_ID_PREFIX } from './markdownSanitiz
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
 import { MarkdownTable } from './MarkdownTable';
+import { restoreHyphenatedLabels } from './checklistLabels';
 import { CodeBlock } from './CodeBlock';
+import { extractSvgSlides } from './svgGallery';
+import { SvgConceptGallery } from './SvgConceptGallery';
 import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
 import { EmailBlock } from './EmailBlock';
 import { WritingBlock } from './WritingBlock';
 import { EMAIL_BLOCK_LANGUAGE, isRichBlockLanguage, parseEmailBlock } from './richBlocks';
+import { AnswerSurface } from './AnswerSurface';
+import { isAnswerSurfaceLanguage, liftAnswerBadges } from './answerSurfaces';
 import {
   TaskItemIndexContext,
   TaskToggleContext,
@@ -577,6 +582,27 @@ const RichFence = ({ language, source }: { language: string; source: string }) =
       <MarkdownContent content={source} />
     );
   }
+  if (language === 'message' || language === 'document' || language === 'post') {
+    const label =
+      language === 'message'
+        ? 'Chat message'
+        : language === 'document'
+          ? 'Document'
+          : 'Social post';
+    return (
+      <WritingBlock
+        source={source}
+        streaming={streaming}
+        renderBody={renderWritingBody}
+        kind={language}
+        label={label}
+        inline
+      />
+    );
+  }
+  if (isAnswerSurfaceLanguage(language)) {
+    return <AnswerSurface language={language} source={source} />;
+  }
   return <WritingBlock source={source} streaming={streaming} renderBody={renderWritingBody} />;
 };
 
@@ -616,6 +642,25 @@ const markdownComponents: Components = {
   ol: MarkdownOrderedList as Components['ol'],
   li: MarkdownListItem as Components['li'],
   input: MarkdownTaskCheckbox as Components['input'],
+  span: ({ className, children }) => {
+    const names = Array.isArray(className)
+      ? className
+      : typeof className === 'string'
+        ? className.split(' ')
+        : [];
+    if (names.includes('answer-badge')) {
+      return (
+        <span
+          data-answer-badge=""
+          className="mx-0.5 inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--chat-success)_18%,transparent)] px-2 py-0.5 text-xs font-medium text-[var(--chat-success-text)]"
+        >
+          {children}
+        </span>
+      );
+    }
+    const classText = Array.isArray(className) ? className.join(' ') : className;
+    return <span className={classText}>{children}</span>;
+  },
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-s-2 border-border ps-4 text-muted-foreground [&>:last-child]:mb-0">
       {children}
@@ -709,12 +754,17 @@ function MarkdownContentImpl({
     () => (skipPreprocess ? content : preprocessMath(content)),
     [content, skipPreprocess],
   );
+  const labeledContent = useMemo(
+    () => liftAnswerBadges(isStreaming ? mathContent : restoreHyphenatedLabels(mathContent)),
+    [mathContent, isStreaming],
+  );
+  const svgSlides = useMemo(() => extractSvgSlides(labeledContent), [labeledContent]);
   const processedContent = useMemo(
     () =>
       !isStreaming && linkifyNumericCitations && citations && citations.length > 0
-        ? linkifyCitationMarkers(mathContent, citations.length)
-        : mathContent,
-    [mathContent, isStreaming, citations, linkifyNumericCitations],
+        ? linkifyCitationMarkers(svgSlides.markdown, citations.length)
+        : svgSlides.markdown,
+    [svgSlides.markdown, isStreaming, citations, linkifyNumericCitations],
   );
   const taskToggle = useMemo<TaskToggle | null>(
     () =>
@@ -727,6 +777,7 @@ function MarkdownContentImpl({
         <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
           <TrustedImagesContext.Provider value={trustedImages}>
             <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
+              {svgSlides.slides.length > 0 ? <SvgConceptGallery slides={svgSlides.slides} /> : null}
               <ReactMarkdown
                 remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
                 remarkRehypeOptions={remarkRehypeOptions}

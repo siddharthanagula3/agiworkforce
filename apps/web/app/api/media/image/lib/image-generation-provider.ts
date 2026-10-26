@@ -373,6 +373,17 @@ export function estimateImageCostMicrousd(
   );
 }
 
+/** The catalog name of the image model a chat turn will call when the user did not pick one. */
+export function chatImageModelLabel(): string | null {
+  let provider: ImageProvider;
+  try {
+    provider = getDefaultProvider();
+  } catch {
+    return null;
+  }
+  return resolveImageCatalogModel(provider)?.name ?? null;
+}
+
 export function getDefaultProvider(): ImageProvider {
   if (hasServerProviderKey('google')) {
     return 'google';

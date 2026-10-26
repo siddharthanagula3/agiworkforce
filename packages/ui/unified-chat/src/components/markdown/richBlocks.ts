@@ -1,9 +1,18 @@
+import { ANSWER_SURFACE_LANGUAGES, answerSurfacePlainText } from './answerSurfaces';
+
 export const EMAIL_BLOCK_LANGUAGE = 'email';
 export const WRITING_BLOCK_LANGUAGE = 'writing';
+export const WRITING_KIND_LANGUAGES: ReadonlySet<string> = new Set([
+  WRITING_BLOCK_LANGUAGE,
+  'message',
+  'document',
+  'post',
+]);
 
 const RICH_BLOCK_LANGUAGES: ReadonlySet<string> = new Set([
   EMAIL_BLOCK_LANGUAGE,
-  WRITING_BLOCK_LANGUAGE,
+  ...WRITING_KIND_LANGUAGES,
+  ...ANSWER_SURFACE_LANGUAGES,
 ]);
 
 export function isRichBlockLanguage(language: string): boolean {
@@ -184,6 +193,7 @@ function richBlockText(language: string, source: string): string {
     const parsed = parseEmailBlock(source);
     return parsed ? emailPlainText(parsed.draft) : source;
   }
+  if (ANSWER_SURFACE_LANGUAGES.has(language)) return answerSurfacePlainText(language, source);
   return source;
 }
 

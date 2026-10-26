@@ -418,6 +418,7 @@ import {
   isProductComparisonTool,
 } from '@/lib/services/product-comparison-tool-service';
 import { executeImageChatTool, latestTurnImage } from '@/app/api/media/image/lib/image-chat-tools';
+import { chatImageModelLabel } from '@/app/api/media/image/lib/image-generation-provider';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
   FREE_MODEL_PROMOTION_LIMIT_CODE,
@@ -951,6 +952,12 @@ export function canonicalToolSummary(
   const server = serverLabel ?? mcpServerLabel(toolName);
   if (category === 'connector') return server ? `Using ${server} connector` : 'Using connector';
   if (category === 'mcp') return `Using ${server ?? 'MCP'} tool`;
+
+  if (toolName === 'generate_image' || toolName === 'edit_image') {
+    const phrase = toolStatusPhrase(toolName) ?? 'Creating image';
+    const label = chatImageModelLabel();
+    return label ? `${phrase} with ${label}` : phrase;
+  }
 
   const phrase =
     (category === 'skill' ? skillLoadActivitySummary(args, 'running') : undefined) ??
@@ -3717,6 +3724,7 @@ export async function* runToolLoop(
   // load a deferred one mid-turn and the next step has to carry it.
   const llmRequest = { ...processed.llmRequest, stream: true };
   let mapSearchBatchCompleted = false;
+  let clarifyTurnCompleted = false;
   const observedUsage = options.usage ?? createObservedProviderUsage();
 
   const messages: ProcessedRequest['llmRequest']['messages'] = [...llmRequest.messages];
@@ -5363,6 +5371,9 @@ export async function* runToolLoop(
       if (!isError && interactiveCard && isMapSearchTool(tc.qualifiedName)) {
         mapSearchBatchCompleted = true;
       }
+      if (!isError && interactiveCard && isClarifyTool(tc.qualifiedName)) {
+        clarifyTurnCompleted = true;
+      }
     }
 
     if (searchSourcesAdded) {
@@ -6737,8 +6748,9 @@ export async function* runToolLoop(
         }
 
         if (
-          mapSearchBatchCompleted &&
-          autoRunCalls.every((call) => isMapSearchTool(call.qualifiedName))
+          (mapSearchBatchCompleted &&
+            autoRunCalls.every((call) => isMapSearchTool(call.qualifiedName))) ||
+          (clarifyTurnCompleted && autoRunCalls.every((call) => isClarifyTool(call.qualifiedName)))
         ) {
           yield* flushTerminal('end-turn');
           return;

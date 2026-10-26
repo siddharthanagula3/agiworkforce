@@ -1,7 +1,11 @@
 .code-block-container {
   border-radius: var(--chat-radius-md);
-  overflow: hidden;
   border: 1px solid var(--chat-code-border);
+}
+
+.code-block-body-scroll {
+  max-height: 28rem;
+  overflow: auto;
 }
 
 .code-block-header-bar {
@@ -12,6 +16,8 @@
   padding: 0 8px 0 16px;
   background-color: var(--chat-code-header-bg);
   border-bottom: 1px solid var(--chat-code-border);
+  border-top-left-radius: var(--chat-radius-md);
+  border-top-right-radius: var(--chat-radius-md);
 }
 
 @media (pointer: coarse) {

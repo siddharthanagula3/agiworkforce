@@ -159,8 +159,21 @@ function pastedCodeLanguage(text: string, html: string): string {
  * lowers the line bar, because copying one line out of a code viewer is still a
  * code paste.
  */
+function isJsonDocument(text: string): boolean {
+  const trimmed = text.trim();
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return false;
+  try {
+    const value: unknown = JSON.parse(trimmed);
+    return value !== null && typeof value === 'object';
+  } catch {
+    return false;
+  }
+}
+
 export function looksLikePastedCode(text: string, html = ''): boolean {
   if (text.includes(CODE_FENCE)) return false;
+  // A copied JSON value is the data, not source the composer should fence.
+  if (isJsonDocument(text)) return false;
   const lines = text.replace(/\r\n?/g, '\n').split('\n');
   const { signals, populated } = codeSignalScore(lines);
   if (populated === 0) return false;

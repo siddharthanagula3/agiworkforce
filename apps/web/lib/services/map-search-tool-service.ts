@@ -50,8 +50,10 @@ export function createMapSearchToolDefinition() {
         'Render a real, visible map card in the chat. ALWAYS call this instead of writing a ' +
         'Google Maps or OpenStreetMap link in your answer whenever the user asks to see, show, ' +
         'find, or explore a real-world place, address, or route on a map. A pasted link is not ' +
-        'a map and does not satisfy that request. For a route, pass both endpoints in the ' +
-        'query as "<origin> to <destination>". This is a search, not a verified place identity ' +
+        'a map and does not satisfy that request. For a route or a trip with several stops, ' +
+        'pass every stop in order in one query as "<origin> to <stop> to <destination>", ' +
+        'for example "Chicago to Indianapolis to Cincinnati". Do not call this once per stop. ' +
+        'This is a search, not a verified place identity ' +
         'or turn-by-turn navigation; do not claim that a specific place was resolved. Never call ' +
         'this for a non-geographic use of the word map, such as a hash map, memory map, tree ' +
         'map, or site map; those are data structures or diagrams, not places, and get a normal ' +

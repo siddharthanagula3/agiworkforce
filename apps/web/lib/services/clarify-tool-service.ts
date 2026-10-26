@@ -83,17 +83,91 @@ function mentionsRejectedTopic(text: string): boolean {
   return CLARIFY_REJECTED_TOPIC_KEYWORDS.some((keyword) => lower.includes(keyword));
 }
 
+const META_CHOICE_LABEL =
+  /^(?:short|shorter|long|longer|brief|detailed|detail|bullets?|prose|paragraphs?|formal|casual|technical|simple|overview|in-depth|concise|verbose)$/i;
+
+function isMetaChoiceLabel(label: string): boolean {
+  const trimmed = label.trim();
+  return META_CHOICE_LABEL.test(trimmed) || mentionsRejectedTopic(trimmed);
+}
+
+/**
+ * A question is rejected only when every option is itself about delivery
+ * (format, tone, length). A domain choice such as Budget / Comfort / Luxury
+ * stays, even when the header says "style" or the question says "preference".
+ */
 function questionAsksAboutRejectedTopic(question: {
   header: string;
   question: string;
   options: { label: string; description?: string }[];
 }): boolean {
-  const fields = [
-    question.header,
-    question.question,
-    ...question.options.flatMap((option) => [option.label, option.description ?? '']),
-  ];
-  return fields.some(mentionsRejectedTopic);
+  return (
+    question.options.length > 0 &&
+    question.options.every((option) => isMetaChoiceLabel(option.label))
+  );
+}
+
+function clipText(value: unknown, max: number): string {
+  return typeof value === 'string' ? value.trim().slice(0, max) : '';
+}
+
+function normalizeOption(option: unknown): { label: string; description?: string } | null {
+  if (typeof option === 'string') {
+    const label = option.trim().slice(0, LABEL_MAX);
+    return label ? { label } : null;
+  }
+  if (!option || typeof option !== 'object' || Array.isArray(option)) return null;
+  const record = option as Record<string, unknown>;
+  const label = clipText(
+    record['label'] ?? record['text'] ?? record['name'] ?? record['title'],
+    LABEL_MAX,
+  );
+  if (!label) return null;
+  const description = clipText(record['description'], DESCRIPTION_MAX);
+  return description ? { label, description } : { label };
+}
+
+/**
+ * Models send this tool several shapes for one choice: option strings, a header
+ * longer than the card can label, or the question at the top level. Those are
+ * the same choice the user asked to click, so they are coerced instead of
+ * rejected.
+ */
+export function normalizeClarifyArgs(args: Record<string, unknown>): Record<string, unknown> {
+  const rawQuestions = Array.isArray(args['questions'])
+    ? args['questions']
+    : args['question'] !== undefined || args['options'] !== undefined
+      ? [args]
+      : [];
+  const questions = rawQuestions.slice(0, MAX_QUESTIONS).flatMap((entry) => {
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return [];
+    const record = entry as Record<string, unknown>;
+    const rawOptions = Array.isArray(record['options'])
+      ? record['options']
+      : Array.isArray(record['choices'])
+        ? record['choices']
+        : [];
+    const options = rawOptions
+      .map(normalizeOption)
+      .filter((option): option is { label: string; description?: string } => option !== null)
+      .slice(0, MAX_OPTIONS);
+    const header = clipText(record['header'] ?? record['title'], HEADER_MAX) || 'Choice';
+    const question = clipText(
+      record['question'] ?? record['prompt'] ?? args['prompt'],
+      QUESTION_MAX,
+    );
+    if (!question || options.length < 2) return [];
+    return [
+      {
+        header,
+        question,
+        options,
+        ...(record['multiSelect'] === true ? { multiSelect: true } : {}),
+      },
+    ];
+  });
+  const prompt = clipText(args['prompt'], QUESTION_MAX);
+  return { ...(prompt ? { prompt } : {}), questions };
 }
 
 const OptionSchema = z
@@ -216,7 +290,7 @@ export function executeClarifyTool(
   args: Record<string, unknown>,
   context: { toolCallId: string; now?: () => Date },
 ): ClarifyToolOutcome {
-  const parsed = ClarifyToolInputSchema.safeParse(args);
+  const parsed = ClarifyToolInputSchema.safeParse(normalizeClarifyArgs(args));
   if (!parsed.success) {
     return {
       ok: false,

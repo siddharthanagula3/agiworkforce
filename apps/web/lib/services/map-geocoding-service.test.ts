@@ -143,6 +143,42 @@ describe('map place resolution keeps one request in one place', () => {
     expect(resolved!.places[1]?.confident).toBe(false);
   });
 
+  it('puts Chicago, Indianapolis, and Cincinnati on one map', async () => {
+    const cities = [
+      { name: 'Chicago', lat: '41.8781', lon: '-87.6298' },
+      { name: 'Indianapolis', lat: '39.7684', lon: '-86.1581' },
+      { name: 'Cincinnati', lat: '39.1031', lon: '-84.5120' },
+    ];
+    stubGeocoder((query) => {
+      const city = cities.find((candidate) =>
+        query.toLowerCase().includes(candidate.name.toLowerCase()),
+      );
+      return city
+        ? [
+            {
+              lat: city.lat,
+              lon: city.lon,
+              display_name: `${city.name}, United States`,
+              category: 'place',
+              type: 'city',
+            },
+          ]
+        : [];
+    });
+
+    const resolved = await resolveMapView(
+      'Create a map of a short road trip with three stops: Chicago, Indianapolis, and Cincinnati',
+      GRID,
+    );
+
+    expect(resolved!.places.map((place) => place.label.split(',')[0])).toEqual([
+      'Chicago',
+      'Indianapolis',
+      'Cincinnati',
+    ]);
+    expect(resolved!.places.every((place) => place.confident !== false)).toBe(true);
+  });
+
   it('leaves a single place confident', async () => {
     stubGeocoder(() => [CHICAGO]);
     const resolved = await resolveMapView('Art Institute of Chicago', GRID);

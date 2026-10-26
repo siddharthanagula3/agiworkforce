@@ -164,6 +164,7 @@ import {
 } from '../../utils/artifact-detector';
 import {
   EXPLICIT_ARTIFACT_DERIVATION_POLICY,
+  computeDerivedArtifactId,
   extractTrailingUnclosedBlock,
   isExplicitlyRenderableArtifact,
   isRenderableArtifact,
@@ -239,7 +240,14 @@ import {
 import { rendersResearchPlan } from '../../utils/research-plan';
 import { ImageGenerationCard } from '../ImageGenerationCard';
 import { ImageLightbox } from '../ImageLightbox';
-import type { ImageAspectRatio } from '../../lib/imageGenerationOptions';
+import { getImageModelLabel, type ImageAspectRatio } from '../../lib/imageGenerationOptions';
+import {
+  editableDocumentFromReply,
+  hideSandboxChartImage,
+  imageCardModelId,
+  interactiveCardsForTurn,
+  logoConceptArtifact,
+} from '../../utils/turn-artifacts';
 import type { ImageRevisionRequest } from '@features/chat/lib/imageGenerationOptions';
 import { CodeExecutionBlock } from './CodeExecutionBlock';
 import { detectCardType } from '../cards';
@@ -1069,6 +1077,15 @@ const MessageBubbleComponent = function MessageBubble({
   const activeConversationModel = useChatStore(
     (s) => s.conversations.find((c) => c.id === s.activeConversationId)?.model ?? null,
   );
+  const priorUserText = useChatStore((state) => {
+    const index = state.messages.findIndex((entry) => entry.id === message.id);
+    if (index <= 0) return '';
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      const candidate = state.messages[cursor];
+      if (candidate?.role === 'user') return candidate.content;
+    }
+    return '';
+  });
 
   const [reportState, setReportState] = useState<'idle' | 'sending' | 'sent'>('idle');
   const projectAnswerSave = useProjectAnswerSave();
@@ -1292,7 +1309,7 @@ const MessageBubbleComponent = function MessageBubble({
     if (isUser) return [];
     // Pass message context so derived ids are deterministic + cross-surface
     // stable (the shared derivation keys on conversationId:messageId:ordinal).
-    return extractArtifacts(
+    const derived = extractArtifacts(
       message.content,
       {
         conversationId: artifactConversationId,
@@ -1301,6 +1318,60 @@ const MessageBubbleComponent = function MessageBubble({
       messageCodeBlocks,
       artifactDerivationPolicy,
     );
+    const document = message.isStreaming
+      ? null
+      : editableDocumentFromReply(priorUserText, message.content);
+    const withDocument =
+      document && !derived.some((artifact) => artifact.type === 'document')
+        ? [
+            ...derived,
+            {
+              id: computeDerivedArtifactId(
+                artifactConversationId,
+                `${message.id}:editable-document`,
+                0,
+              ),
+              type: 'document' as const,
+              language: 'markdown',
+              title: document.title,
+              content: document.content,
+            },
+          ]
+        : derived;
+    const logo = message.isStreaming
+      ? null
+      : logoConceptArtifact({
+          userText: priorUserText,
+          assistant: message.content,
+          artifacts: withDocument,
+          conversationId: artifactConversationId,
+          messageId: message.id,
+        });
+    if (!logo) return withDocument;
+    const existingIndex = withDocument.findIndex((artifact) => artifact.id === logo.id);
+    if (existingIndex >= 0) {
+      return withDocument.map((artifact, index) =>
+        index === existingIndex
+          ? {
+              ...artifact,
+              type: 'html' as const,
+              language: 'html',
+              title: logo.title,
+              content: logo.content,
+            }
+          : artifact,
+      );
+    }
+    return [
+      ...withDocument,
+      {
+        id: logo.id,
+        type: 'html' as const,
+        language: 'html',
+        title: logo.title,
+        content: logo.content,
+      },
+    ];
   }, [
     message.content,
     isUser,
@@ -1308,6 +1379,8 @@ const MessageBubbleComponent = function MessageBubble({
     message.id,
     messageCodeBlocks,
     artifactDerivationPolicy,
+    message.isStreaming,
+    priorUserText,
   ]);
   const legacyDerivedArtifactIds = useMemo(() => {
     if (isUser || artifactDerivationPolicy !== EXPLICIT_ARTIFACT_DERIVATION_POLICY) {
@@ -1654,6 +1727,22 @@ const MessageBubbleComponent = function MessageBubble({
       const saved = merged[savedIndex];
       if (saved && !saved.generatedFile) merged[savedIndex] = { ...saved, generatedFile };
     }
+    for (const promoted of extractedArtifacts) {
+      const index = merged.findIndex((existing) => existing.id === promoted.id);
+      if (index === -1) {
+        if (promoted.type === 'document' || promoted.type === 'html') merged.push(promoted);
+        continue;
+      }
+      const existing = merged[index];
+      if (
+        existing &&
+        promoted.type === 'html' &&
+        promoted.content.includes('<svg') &&
+        !existing.content.includes('<svg')
+      ) {
+        merged[index] = { ...existing, content: promoted.content, title: promoted.title };
+      }
+    }
     return merged;
   }, [visibleExistingArtifacts, extractedArtifacts, generatedFileArtifacts, generatedFileRecords]);
 
@@ -1666,8 +1755,16 @@ const MessageBubbleComponent = function MessageBubble({
         .map((artifact) => artifact.generatedFile?.id)
         .filter((id): id is string => Boolean(id)),
     );
-    return generatedFiles.filter((file) => file.kind === 'image' || !artifactFileIds.has(file.id));
-  }, [generatedFiles, artifacts]);
+    return generatedFiles.filter((file) => {
+      if (
+        file.kind === 'image' &&
+        hideSandboxChartImage(file.fileName, message.content, artifacts)
+      ) {
+        return false;
+      }
+      return file.kind === 'image' || !artifactFileIds.has(file.id);
+    });
+  }, [generatedFiles, artifacts, message.content]);
 
   const generatedFileAttachments = useMemo<Attachment[]>(
     () =>
@@ -1761,6 +1858,40 @@ const MessageBubbleComponent = function MessageBubble({
     visibleExistingArtifacts.length,
     extractedArtifacts,
     addArtifactForMessage,
+  ]);
+
+  useEffect(() => {
+    if (isUser || message.isStreaming) return;
+    for (const artifact of extractedArtifacts) {
+      if (artifact.type !== 'document' && artifact.type !== 'html') continue;
+      const stored = getMessageArtifacts(message.id).find((item) => item.id === artifact.id);
+      if (!stored) {
+        addArtifactForMessage(message.id, artifact, artifactConversationId);
+        continue;
+      }
+      if (
+        artifact.type === 'html' &&
+        artifact.content.includes('<svg') &&
+        !stored.content.includes('<svg')
+      ) {
+        upsertArtifact({
+          ...stored,
+          content: artifact.content,
+          title: artifact.title ?? stored.title,
+          type: 'html',
+          language: 'html',
+        });
+      }
+    }
+  }, [
+    addArtifactForMessage,
+    artifactConversationId,
+    extractedArtifacts,
+    getMessageArtifacts,
+    isUser,
+    message.id,
+    message.isStreaming,
+    upsertArtifact,
   ]);
 
   useEffect(() => {
@@ -1863,13 +1994,17 @@ const MessageBubbleComponent = function MessageBubble({
     citationsByMarker,
   ]);
 
-  const interactiveCards = message.metadata?.interactiveCards;
+  const interactiveCards = useMemo(
+    () =>
+      interactiveCardsForTurn(message.metadata?.interactiveCards ?? [], Boolean(turnFailureReason)),
+    [message.metadata?.interactiveCards, turnFailureReason],
+  );
   const leadingInteractiveCards = useMemo(
-    () => (interactiveCards ?? []).filter((card) => interactiveCardRendersBeforeProse(card.kind)),
+    () => interactiveCards.filter((card) => interactiveCardRendersBeforeProse(card.kind)),
     [interactiveCards],
   );
   const trailingInteractiveCards = useMemo(
-    () => (interactiveCards ?? []).filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
+    () => interactiveCards.filter((card) => !interactiveCardRendersBeforeProse(card.kind)),
     [interactiveCards],
   );
 
@@ -2085,11 +2220,20 @@ const MessageBubbleComponent = function MessageBubble({
           freePool: isFreeRouteLane(message.metadata?.routeLane),
         })
       : undefined;
-  const answeredByChipLabel = answeredByLabel
-    ? isAutoModeModelId(message.metadata?.requestedModel)
-      ? `Auto chose ${answeredByLabel}`
-      : answeredByLabel
-    : undefined;
+  const generatedImageLabel = !isUser
+    ? getImageModelLabel(
+        (typeof message.metadata?.imageGenModel === 'string'
+          ? message.metadata.imageGenModel
+          : undefined) ?? imageCardModelId(message.metadata?.interactiveCards),
+      )
+    : null;
+  const answeredByChipLabel = generatedImageLabel
+    ? generatedImageLabel
+    : answeredByLabel
+      ? isAutoModeModelId(message.metadata?.requestedModel)
+        ? `Auto chose ${answeredByLabel}`
+        : answeredByLabel
+      : undefined;
   const canonicalOwnsToolActivity = hasCanonicalToolActivity(canonicalActivity);
   const toolTimeline =
     !isUser && !canonicalOwnsToolActivity && message.metadata?.tools ? message.metadata.tools : [];
@@ -2908,6 +3052,7 @@ const MessageBubbleComponent = function MessageBubble({
               {...(media.aspectRatio ? { aspectRatio: media.aspectRatio } : {})}
               {...(media.progress === undefined ? {} : { progress: media.progress })}
               {...(media.taskId ? { taskId: media.taskId } : {})}
+              {...(generatedImageLabel ? { modelLabel: generatedImageLabel } : {})}
             />
           )}
 
@@ -3708,7 +3853,12 @@ const MessageBubbleComponent = function MessageBubble({
               {!isUser && answeredByChipLabel && (
                 <span
                   data-testid="message-answered-by"
-                  className="max-w-full truncate text-caption leading-tight text-[var(--chat-text-muted)] opacity-0 transition-opacity duration-quick group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100"
+                  className={cn(
+                    'max-w-full truncate text-caption leading-tight text-[var(--chat-text-muted)]',
+                    generatedImageLabel
+                      ? undefined
+                      : 'opacity-0 transition-opacity duration-quick group-hover:opacity-100 group-focus-within:opacity-100 pointer-coarse:opacity-100',
+                  )}
                 >
                   {answeredByChipLabel}
                 </span>

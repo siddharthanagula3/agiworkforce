@@ -14,7 +14,7 @@ import {
   YAxis,
   type PieLabelRenderProps,
 } from 'recharts';
-import { formatChartShare, type ChartChrome, type ChartSpec } from './chart-spec';
+import { chartHoverText, formatChartShare, type ChartChrome, type ChartSpec } from './chart-spec';
 
 const AXIS_FONT_SIZE_PX = 11;
 const GRID_DASH = '3 3';
@@ -26,6 +26,24 @@ const PIE_CENTER = '50%';
 const BAR_RADIUS: [number, number, number, number] = [3, 3, 0, 0];
 const TOOLTIP_RADIUS_PX = 8;
 const DEFAULT_SERIES_KEY = 'value';
+
+function yDomain(max: number): number {
+  if (!Number.isFinite(max) || max <= 0) return 1;
+  return Math.ceil(max * 1.1);
+}
+
+function ChartHover({
+  active,
+  label,
+  payload,
+}: {
+  active?: boolean;
+  label?: string | number;
+  payload?: ReadonlyArray<{ value?: string | number }>;
+}) {
+  if (!active || !payload?.length) return null;
+  return <div data-testid="chart-hover">{chartHoverText(label, payload[0]?.value)}</div>;
+}
 
 export interface ChartCanvasProps {
   spec: ChartSpec;
@@ -71,8 +89,8 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
       <BarChart data={rows}>
         <CartesianGrid strokeDasharray={GRID_DASH} stroke={chrome.grid} />
         <XAxis dataKey={xKey} tick={axisTick} stroke={chrome.grid} />
-        <YAxis tick={axisTick} stroke={chrome.grid} />
-        <Tooltip {...tooltipStyles} cursor={{ fill: chrome.hover }} />
+        <YAxis tick={axisTick} stroke={chrome.grid} domain={[0, yDomain]} allowDecimals={false} />
+        <Tooltip {...tooltipStyles} content={<ChartHover />} cursor={{ fill: chrome.hover }} />
         {showLegend && <Legend wrapperStyle={legendStyle} />}
         {series.map((entry, index) => (
           <Bar
@@ -89,8 +107,8 @@ export default function ChartCanvas({ spec, palette, chrome, animate }: ChartCan
       <LineChart data={rows}>
         <CartesianGrid strokeDasharray={GRID_DASH} stroke={chrome.grid} />
         <XAxis dataKey={xKey} tick={axisTick} stroke={chrome.grid} />
-        <YAxis tick={axisTick} stroke={chrome.grid} />
-        <Tooltip {...tooltipStyles} />
+        <YAxis tick={axisTick} stroke={chrome.grid} domain={[0, yDomain]} allowDecimals={false} />
+        <Tooltip {...tooltipStyles} content={<ChartHover />} />
         {showLegend && <Legend wrapperStyle={legendStyle} />}
         {series.map((entry, index) => (
           <Line
