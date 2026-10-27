@@ -18,6 +18,7 @@ Status: `todo`, `doing`, `done` (with the commit that landed it).
 - [x] C6 Help: help centre and a Troubleshooting submenu (logs, diagnostics,
       clear cache and restart) (`ab677d80f1`).
 - [ ] C7 Settings > Storage: space used on this computer, clear cache.
+- [ ] C8 Close Window moves from the Window menu to File, where both apps put Close.
 
 ## Larger slices
 

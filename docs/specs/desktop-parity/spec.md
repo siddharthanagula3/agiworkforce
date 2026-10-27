@@ -10,17 +10,16 @@ Bring the public Electron Desktop level with what both the Claude and the
 ChatGPT macOS desktop apps offer, where it is missing or broken here, and fix
 the defects the comparison exposed in the shell itself.
 
-Evidence is the reverse-engineering workspace kept outside this repository
-(`references/desktop-client-rea-20261026` and
-`docs/model-agnostic-chat/desktop-product-parity.md`), labelled as
-`docs/product/competitive-guidance.md` §3.2 requires:
+Evidence is recorded in `docs/research/competitor-surfaces-2026-10-24.md`: the
+vendor-page entries for both desktop apps, and the entry "Claude and ChatGPT for
+Mac: menus and settings as installed", observed on 2026-10-26 and labelled as
+`docs/product/competitive-guidance.md` §3.2 requires. No message content,
+private API, session store or source code was used, and none may be copied here.
 
-- **Observed 2026-10-26** on Claude 3.6556.2 and ChatGPT 26.1021.31345
-  (build 21828): native menus read through macOS Accessibility, settings pages
-  captured as screenshots. No message content, private API, session store or
-  source code was used, and none may be copied here.
-- A feature counts as common only when both apps show it. A control only one
-  app has is out of scope unless this product already intends it.
+A feature counts as common only when both apps show it. Where the two differ,
+the clearer version is taken, as `.agents/skills/agiworkforce-design` directs; a
+control only one app has is otherwise out of scope unless this product already
+intends it.
 
 ## Requirements
 
@@ -30,15 +29,23 @@ Common to both apps and missing or broken here:
    Screen Tile and Bring All to Front.
 2. Find is reachable from the menu bar and opens the conversation's own find.
 3. The menu bar moves to the previous and next chat in the order the sidebar
-   shows them.
-4. A temporary chat can be started from the menu bar.
-5. Open Folder… grants a folder and opens it as a local coding session.
-6. Help offers the help centre and a Troubleshooting menu: logs, diagnostics,
+   shows them (Claude's Previous and Next Chat, ChatGPT's Previous and Next
+   Sidebar Item).
+4. Open Folder… grants a folder and opens it as a local coding session.
+5. Help offers the help centre and a Troubleshooting menu: logs, diagnostics,
    clear cache and restart.
+6. Close sits in the File menu (Claude's Close Window and Close All, ChatGPT's
+   Close); here it sits in Window.
 7. Settings shows how much space the app uses on this computer and can clear
    what is safe to clear.
-8. Side chat, a built-in browser pane, an interactive terminal and split view
-   or tabs (each its own slice; see `plan.md`).
+8. Side chat, a built-in browser pane and an interactive terminal, each its own
+   slice (see `plan.md`).
+9. More than one conversation in a window. The apps differ here: Claude splits
+   the window into session panes, ChatGPT opens tabs.
+
+Only one app's menus carry these, and both products have the feature behind
+them, so the menu items follow the clearer-version rule: Search… (Claude's Go
+menu) and New Temporary Chat (ChatGPT's File menu).
 
 Defects in the shell found while comparing, each verified in code:
 
