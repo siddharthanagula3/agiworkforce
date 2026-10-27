@@ -95,13 +95,13 @@ async function isTemporaryChatUpload(
         limit 1`,
       [input.conversationId, userId, organizationId],
     );
-    return row ? row.is_temporary : input.temporary === true;
+    return row?.is_temporary === true;
   } catch (error) {
     logger.warn(
       { err: error, userId, conversationId: input.conversationId },
-      '[uploads] temporary-chat lookup failed; honouring the declared flag',
+      '[uploads] temporary-chat lookup failed; counting the file against storage',
     );
-    return input.temporary === true;
+    return false;
   }
 }
 

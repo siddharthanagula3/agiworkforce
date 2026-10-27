@@ -500,6 +500,7 @@ interface MessageBubbleProps {
   onPauseResearch?: (messageId: string) => Promise<boolean>;
   isResumingResearch?: boolean;
   onQuoteSelection?: (message: ChatMessage, text: string) => void;
+  onFollowUp?: (text: string) => void;
 }
 
 function MessageActionButton({
@@ -547,6 +548,7 @@ export const MessageBubble = memo(function MessageBubble({
   onPauseResearch,
   isResumingResearch = false,
   onQuoteSelection,
+  onFollowUp,
 }: MessageBubbleProps) {
   const isUser = message.role === 'user';
   const isAssistant = message.role === 'assistant';
@@ -1165,8 +1167,9 @@ export const MessageBubble = memo(function MessageBubble({
       renderMarkdownContent(bodyContent, themeColors, {
         highlightCode: !isStreamingRow,
         ...(inlineCitations ? { citations: inlineCitations } : {}),
+        ...(onFollowUp ? { onFollowUp } : {}),
       }),
-    [bodyContent, themeColors, isStreamingRow, inlineCitations],
+    [bodyContent, themeColors, isStreamingRow, inlineCitations, onFollowUp],
   );
 
   const imageWidth = Math.min(width - 80, 320);

@@ -193,6 +193,7 @@
     "free-quota",
     "free-quota-paths",
     "generated-files",
+    "github-repository-url",
     "google-docs-export",
     "header-names",
     "health-space",

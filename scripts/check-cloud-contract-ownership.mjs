@@ -51,6 +51,7 @@ const cloudModules = [
   'tool-approval-resume',
   'mcp-elicitation',
   'cloud-code-sessions',
+  'github-repository-url',
   'cloud-code-handoff',
   'managed-cloud-code-client',
   'cloud-code-transcript',

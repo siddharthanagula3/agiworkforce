@@ -107,6 +107,14 @@ function formatChartValue(value: ChartCellValue | undefined): string {
   return value ?? '';
 }
 
+/** Hover text for one plotted point: the category, then the value. */
+export function chartHoverText(label: unknown, value: unknown): string {
+  const category = label == null || label === '' ? 'Value' : String(label);
+  const shown =
+    typeof value === 'number' ? value.toLocaleString() : value == null ? '' : String(value);
+  return shown ? `${category}: ${shown}` : category;
+}
+
 export function formatChartShare(share: number): string {
   const percent = share * PERCENT;
   if (percent > 0 && percent < 1) return '<1%';

@@ -4,6 +4,10 @@ import type { StateBlock, StateInline } from 'markdown-it';
 import markdownItFootnote from 'markdown-it-footnote';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
 import {
+  classifyAssistantFence,
+  renderClassifiedFenceHtml,
+} from '@agiworkforce/unified-chat/assistant-fence';
+import {
   highlightToLines,
   resolveHighlightLanguage,
   type HighlightedLine,
@@ -166,8 +170,16 @@ function codeLanguage(info: string | undefined): string | null {
 const renderCode = (content: string, language: string | null = null): string =>
   `<pre${language ? ` data-lang="${escapeText(language)}"` : ''}><code>${escapeText(content.replace(/\n$/, ''))}</code></pre>\n`;
 
-md.renderer.rules['fence'] = (tokens, index) =>
-  renderCode(tokens[index]?.content ?? '', codeLanguage(tokens[index]?.info));
+md.renderer.rules['fence'] = (tokens, index) => {
+  const token = tokens[index];
+  const language = codeLanguage(token?.info);
+  const surface = renderClassifiedFenceHtml(
+    classifyAssistantFence(language ?? '', token?.content ?? ''),
+    'chrome',
+  );
+  if (surface !== null) return surface;
+  return renderCode(token?.content ?? '', language);
+};
 
 md.renderer.rules['code_block'] = (tokens, index) => renderCode(tokens[index]?.content ?? '');
 
@@ -450,8 +462,70 @@ function highlightCodeBlocks(root: HTMLElement): Promise<void> {
   ).then(() => undefined);
 }
 
+let followUpSender: ((text: string) => void) | null = null;
+
+export function setAnswerFollowUpSender(sender: ((text: string) => void) | null): void {
+  followUpSender = sender;
+}
+
+function decorateAssistantSurfaces(root: HTMLElement, onFollowUp?: (text: string) => void): void {
+  const send = onFollowUp ?? followUpSender;
+  for (const section of root.querySelectorAll<HTMLElement>('section[data-lang^="surface:"]')) {
+    const kind = section.dataset['lang'] ?? '';
+    const code = section.querySelector('pre code');
+    if (code && !section.querySelector('button')) {
+      const label =
+        kind === 'surface:prompt'
+          ? 'Copy full prompt'
+          : kind === 'surface:commands'
+            ? 'Copy commands'
+            : kind === 'surface:email'
+              ? 'Copy email'
+              : 'Copy';
+      const button = el('button', { type: 'button' }, label);
+      button.addEventListener('click', () => {
+        void navigator.clipboard?.writeText(code.textContent ?? '');
+      });
+      section.append(button);
+    }
+    if (kind === 'surface:checklist') {
+      const progress = section.querySelector<HTMLElement>('[data-lang="surface:progress"]');
+      for (const item of section.querySelectorAll<HTMLElement>(
+        'li[data-lang="surface:check"], li[data-lang="surface:checked"]',
+      )) {
+        const box = el('input', { type: 'checkbox' }) as HTMLInputElement;
+        box.checked = item.dataset['lang'] === 'surface:checked';
+        box.setAttribute('aria-label', item.textContent ?? '');
+        box.addEventListener('change', () => {
+          const boxes = [...section.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+          const done = boxes.filter((entry) => entry.checked).length;
+          if (progress) {
+            progress.textContent = t('spChecklistProgress', [String(done), String(boxes.length)]);
+          }
+        });
+        item.prepend(box);
+      }
+    }
+    if (kind === 'surface:writing') {
+      const draft = section.querySelector('pre');
+      if (draft) draft.setAttribute('contenteditable', 'true');
+    }
+    if (kind === 'surface:followups' && send) {
+      for (const item of section.querySelectorAll<HTMLElement>(
+        'li[data-lang="surface:followup"]',
+      )) {
+        const text = item.textContent ?? '';
+        const button = el('button', { type: 'button' }, text);
+        button.addEventListener('click', () => send(text));
+        item.replaceWith(button);
+      }
+    }
+  }
+}
+
 function addCodeCopyButtons(root: HTMLElement): void {
   for (const pre of root.querySelectorAll('pre')) {
+    if (pre.closest('section[data-lang^="surface:"]')) continue;
     const block = el('div', { class: 'sp-code-block' });
     pre.replaceWith(block);
     pre.tabIndex = 0;
@@ -600,8 +674,13 @@ function addRemoteImages(root: HTMLElement): void {
   }
 }
 
-export function renderMarkdownInto(target: HTMLElement, text: string): Promise<void> {
+export function renderMarkdownInto(
+  target: HTMLElement,
+  text: string,
+  options?: { onFollowUp?: (text: string) => void },
+): Promise<void> {
   target.innerHTML = sanitizeHtml(renderMarkdown(text));
+  decorateAssistantSurfaces(target, options?.onFollowUp);
   addCodeCopyButtons(target);
   addRemoteImages(target);
   return Promise.all([renderMath(target), highlightCodeBlocks(target)]).then(() => undefined);

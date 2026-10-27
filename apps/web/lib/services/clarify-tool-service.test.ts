@@ -93,6 +93,48 @@ describe('the clarify tool', () => {
     expect(executeClarifyTool({ questions: [] }, ctx).ok).toBe(false);
   });
 
+  it('renders Budget, Comfort, and Luxury even when the header says style', () => {
+    const outcome = executeClarifyTool(
+      {
+        prompt: 'Pick one before I recommend a trip.',
+        questions: [
+          {
+            header: 'Travel style preference',
+            question: 'Which travel style do you prefer?',
+            options: ['Budget', 'Comfort', 'Luxury'],
+          },
+        ],
+      },
+      ctx,
+    );
+    expect(outcome.ok).toBe(true);
+    if (!outcome.ok) return;
+    const body = recognisedBody(outcome.card);
+    expect(body.questions[0]?.options.map((option) => option.label)).toEqual([
+      'Budget',
+      'Comfort',
+      'Luxury',
+    ]);
+    expect(body.questions[0]?.multiSelect).toBe(false);
+    expect(outcome.content).not.toMatch(/rejected/i);
+  });
+
+  it('still rejects a question whose options are only about format', () => {
+    const outcome = executeClarifyTool(
+      {
+        questions: [
+          {
+            header: 'Format',
+            question: 'Which format do you want?',
+            options: [{ label: 'Bullets' }, { label: 'Prose' }],
+          },
+        ],
+      },
+      ctx,
+    );
+    expect(outcome.ok).toBe(false);
+  });
+
   it('keeps a style choice when the reader asked for selectable controls', () => {
     expect(
       userAskedForSelectableChoices(

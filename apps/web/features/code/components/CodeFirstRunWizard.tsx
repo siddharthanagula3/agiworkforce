@@ -12,7 +12,12 @@ import {
   ShieldCheck,
   type Icon,
 } from '@agiworkforce/icons';
-import { CODE_CLI_SIGN_IN_COMMAND, CODE_COPY, CODE_ROUTES } from '../code-surface';
+import {
+  CODE_CLI_SIGN_IN_COMMAND,
+  CODE_COPY,
+  CODE_ROUTES,
+  githubInstallHref,
+} from '../code-surface';
 import styles from '../CloudCodePage.module.css';
 
 const VALUE_GLYPH_SIZE = 22;
@@ -110,7 +115,7 @@ function GithubStep({ onFinish }: { onFinish: () => void }) {
           <span>{CODE_COPY.wizardGithubOption}</span>
         </div>
         <p className={styles['wizardOptionCopy']}>{CODE_COPY.wizardGithubOptionCopy}</p>
-        <a className={styles['wizardPrimary']} href={CODE_ROUTES.githubInstall} onClick={onFinish}>
+        <a className={styles['wizardPrimary']} href={githubInstallHref()} onClick={onFinish}>
           {CODE_COPY.firstRunAction}
         </a>
       </div>

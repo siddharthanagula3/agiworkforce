@@ -11,12 +11,19 @@ import { MARKDOWN_SANITIZE_SCHEMA, SANITIZED_ID_PREFIX } from './markdownSanitiz
 import { preprocessMath } from './preprocessMath';
 import { reactNodeText } from './reactNodeText';
 import { MarkdownTable } from './MarkdownTable';
+import { restoreHyphenatedLabels } from './checklistLabels';
 import { CodeBlock } from './CodeBlock';
+import { extractSvgSlides } from './svgGallery';
+import { SvgConceptGallery } from './SvgConceptGallery';
 import { LITERAL_HTML_REMARK_PLUGINS, REMARK_PLUGINS } from './remarkPlugins';
 import { StreamTailContext, useIsStreamTail } from './streamTailContext';
 import { EmailBlock } from './EmailBlock';
 import { WritingBlock } from './WritingBlock';
 import { EMAIL_BLOCK_LANGUAGE, isRichBlockLanguage, parseEmailBlock } from './richBlocks';
+import { AnswerSurface } from './AnswerSurface';
+import { isAnswerSurfaceLanguage, liftAnswerBadges } from './answerSurfaces';
+import { classifyAssistantFence } from './assistantFence';
+import { FollowUpActionProvider } from './FollowUpAction';
 import {
   TaskItemIndexContext,
   TaskToggleContext,
@@ -602,6 +609,31 @@ const RichFence = ({ language, source }: { language: string; source: string }) =
       <MarkdownContent content={source} />
     );
   }
+  if (language === 'message' || language === 'document' || language === 'post') {
+    const label =
+      language === 'message'
+        ? 'Chat message'
+        : language === 'document'
+          ? 'Document'
+          : 'Social post';
+    return (
+      <WritingBlock
+        source={source}
+        streaming={streaming}
+        renderBody={renderWritingBody}
+        kind={language}
+        label={label}
+        inline
+      />
+    );
+  }
+  if (isAnswerSurfaceLanguage(language)) {
+    const classified = classifyAssistantFence(language, source);
+    if (classified.kind === 'fallback') {
+      return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
+    }
+    return <AnswerSurface language={language} source={source} />;
+  }
   return <WritingBlock source={source} streaming={streaming} renderBody={renderWritingBody} />;
 };
 
@@ -611,13 +643,13 @@ const MarkdownPre = ({
   ...rest
 }: React.ComponentPropsWithoutRef<'pre'> & { node?: HastNode }) => {
   const language = fenceLanguage(node);
+  const source = reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '');
   if (isRichBlockLanguage(language)) {
-    return (
-      <RichFence
-        language={language}
-        source={reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '')}
-      />
-    );
+    return <RichFence language={language} source={source} />;
+  }
+  const classified = classifyAssistantFence(language, source);
+  if (classified.kind === 'fallback') {
+    return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
   }
   if (language === '' && hasMultilineFenceBody(node)) {
     return (
@@ -641,6 +673,25 @@ const markdownComponents: Components = {
   ol: MarkdownOrderedList as Components['ol'],
   li: MarkdownListItem as Components['li'],
   input: MarkdownTaskCheckbox as Components['input'],
+  span: ({ className, children }) => {
+    const names = Array.isArray(className)
+      ? className
+      : typeof className === 'string'
+        ? className.split(' ')
+        : [];
+    if (names.includes('answer-badge')) {
+      return (
+        <span
+          data-answer-badge=""
+          className="mx-0.5 inline-flex items-center rounded-full bg-[color-mix(in_srgb,var(--chat-success)_18%,transparent)] px-2 py-0.5 text-xs font-medium text-[var(--chat-success-text)]"
+        >
+          {children}
+        </span>
+      );
+    }
+    const classText = Array.isArray(className) ? className.join(' ') : className;
+    return <span className={classText}>{children}</span>;
+  },
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-s-2 border-border ps-4 text-muted-foreground [&>:last-child]:mb-0">
       {children}
@@ -679,6 +730,7 @@ export interface MarkdownContentProps {
   linkifyNumericCitations?: boolean;
   literalHtml?: boolean;
   onTaskToggle?: (index: number) => void;
+  onFollowUp?: (text: string) => void;
   footnoteScope?: string;
 }
 
@@ -718,6 +770,7 @@ function MarkdownContentImpl({
   linkifyNumericCitations = true,
   literalHtml,
   onTaskToggle,
+  onFollowUp,
   footnoteScope,
 }: MarkdownContentProps) {
   // The sanitizer prefixes every id itself, so footnote ids are generated
@@ -734,12 +787,17 @@ function MarkdownContentImpl({
     () => (skipPreprocess ? content : preprocessMath(content)),
     [content, skipPreprocess],
   );
+  const labeledContent = useMemo(
+    () => liftAnswerBadges(isStreaming ? mathContent : restoreHyphenatedLabels(mathContent)),
+    [mathContent, isStreaming],
+  );
+  const svgSlides = useMemo(() => extractSvgSlides(labeledContent), [labeledContent]);
   const processedContent = useMemo(
     () =>
       !isStreaming && linkifyNumericCitations && citations && citations.length > 0
-        ? linkifyCitationMarkers(mathContent, citations.length)
-        : mathContent,
-    [mathContent, isStreaming, citations, linkifyNumericCitations],
+        ? linkifyCitationMarkers(svgSlides.markdown, citations.length)
+        : svgSlides.markdown,
+    [svgSlides.markdown, isStreaming, citations, linkifyNumericCitations],
   );
   const taskToggle = useMemo<TaskToggle | null>(
     () =>
@@ -747,28 +805,33 @@ function MarkdownContentImpl({
     [onTaskToggle, isStreaming, processedContent],
   );
   return (
-    <TaskToggleContext.Provider value={taskToggle}>
-      <StreamTailContext.Provider value={Boolean(isStreaming)}>
-        <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
-          <TrustedImagesContext.Provider value={trustedImages}>
-            <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
-              <ReactMarkdown
-                remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
-                remarkRehypeOptions={remarkRehypeOptions}
-                rehypePlugins={REHYPE_PLUGINS}
-                urlTransform={markdownUrlTransform}
-                components={markdownComponents}
-              >
-                {processedContent}
-              </ReactMarkdown>
-            </Tooltip.Provider>
-          </TrustedImagesContext.Provider>
-        </CitationsContext.Provider>
-        {isStreaming && content.trim() && (
-          <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
-        )}
-      </StreamTailContext.Provider>
-    </TaskToggleContext.Provider>
+    <FollowUpActionProvider onFollowUp={onFollowUp}>
+      <TaskToggleContext.Provider value={taskToggle}>
+        <StreamTailContext.Provider value={Boolean(isStreaming)}>
+          <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
+            <TrustedImagesContext.Provider value={trustedImages}>
+              <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
+                {svgSlides.slides.length > 0 ? (
+                  <SvgConceptGallery slides={svgSlides.slides} />
+                ) : null}
+                <ReactMarkdown
+                  remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
+                  remarkRehypeOptions={remarkRehypeOptions}
+                  rehypePlugins={REHYPE_PLUGINS}
+                  urlTransform={markdownUrlTransform}
+                  components={markdownComponents}
+                >
+                  {processedContent}
+                </ReactMarkdown>
+              </Tooltip.Provider>
+            </TrustedImagesContext.Provider>
+          </CitationsContext.Provider>
+          {isStreaming && content.trim() && (
+            <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
+          )}
+        </StreamTailContext.Provider>
+      </TaskToggleContext.Provider>
+    </FollowUpActionProvider>
   );
 }
 

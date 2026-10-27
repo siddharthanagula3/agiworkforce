@@ -21,7 +21,7 @@ export const MARKDOWN_SANITIZE_SCHEMA: SanitizeSchema = {
     ],
     span: [
       ...(defaultSchema.attributes?.['span'] ?? []),
-      ['className', /^language-./, 'math-inline', 'math-display'],
+      ['className', /^language-./, 'math-inline', 'math-display', 'answer-badge'],
     ],
     div: [
       ...(defaultSchema.attributes?.['div'] ?? []),

@@ -898,6 +898,9 @@ export function ChatInterface({
               onToolApprove={runtime?.resolveToolApproval ? handleToolApprove : undefined}
               onToolReject={runtime?.resolveToolApproval ? handleToolReject : undefined}
               approvalTurnExpired={runtime?.resolveToolApproval ? !isApprovalTurnLive : undefined}
+              onFollowUp={(text) => {
+                sendMessage(text);
+              }}
               messageActions={messageActionSlots}
             />
           ) : emptyStateSlot !== undefined ? (

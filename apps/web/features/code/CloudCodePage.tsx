@@ -4,7 +4,7 @@ import { SshConnectionControl } from './components/SshConnectionControl';
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Code2,
   PanelLeft,
@@ -53,6 +53,11 @@ import { toUserMessage } from '@/lib/user-error-message';
 import { NotebookPanel } from '@/features/notebook/NotebookPanel';
 import { cloudCodeApi } from './services/cloud-code-api';
 import {
+  canonicalGitHubRepositoryBranch,
+  canonicalGitHubRepositoryUrl,
+} from '@agiworkforce/cloud-contracts';
+import { getGitHubCallbackNotice } from '@/features/connectors/lib/github-callback-notice';
+import {
   CODE_COPY,
   CODE_LIMITS,
   CODE_MISSING_SESSION_PARAM,
@@ -65,6 +70,7 @@ import {
   type CodeStatusFilter,
   filterAndSortSessions,
   parseExtraHosts,
+  REPOSITORY_MINIMUM_NETWORK_ACCESS,
   sessionContextChip,
   type CodeSessionFilters,
 } from './code-surface';
@@ -102,6 +108,7 @@ import {
   EMPTY_CODE_DRAFT,
   type CodeDraft,
   type CodeLocalState,
+  type CodeRepositoryEntry,
 } from './components/CodeComposer';
 import { CodeTranscript } from './components/CodeTranscript';
 import { CodeChangesPanel } from './components/CodeChangesPanel';
@@ -141,9 +148,34 @@ function friendlyError(error: unknown): string {
   return toUserMessage(error, CODE_COPY.loadFailed);
 }
 
+const READY_POLLS = 20;
+const READY_POLL_MS = 1000;
+
 function titleFromTask(task: string): string {
   const words = task.trim().split(/\s+/).slice(0, DEFAULT_SESSION_TITLE_WORDS).join(' ');
   return words.length > 0 ? words : CODE_COPY.surface;
+}
+
+function selectionForCreate(
+  draft: CodeDraft,
+  entry: CodeRepositoryEntry | null,
+): { error: string } | { patch: Partial<CodeDraft> } {
+  const typed = entry?.url.trim() ?? '';
+  if (!typed) return { patch: {} };
+  const parsed = canonicalGitHubRepositoryUrl(typed);
+  if (!parsed.ok) return { error: CODE_COPY.repositoryUrlInvalid };
+  const branch = canonicalGitHubRepositoryBranch(entry?.branch ?? '');
+  if (!branch.ok) return { error: CODE_COPY.repositoryBranchInvalid };
+  return {
+    patch: {
+      repository: null,
+      repositoryUrl: parsed.url,
+      repositoryBranch: branch.branch ?? '',
+      ...(draft.networkAccess === 'none'
+        ? { networkAccess: REPOSITORY_MINIMUM_NETWORK_ACCESS }
+        : {}),
+    },
+  };
 }
 
 export interface CloudCodePageProps {
@@ -220,6 +252,9 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
 
   const router = useRouter();
   const routerRef = useRef(router);
+  const searchParams = useSearchParams();
+  const submitLock = useRef(false);
+  const githubNotice = searchParams.get('github');
   const { firstName, nameResolved } = useGreeting();
   const selectedModelId = useModelStore((state) => state.selectedModelId);
   const planTier = normalizeBillingPlanTier(availability?.planTier);
@@ -580,9 +615,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   );
 
   const createSession = useCallback(
-    async (title: string): Promise<CloudCodeSession | null> => {
+    async (title: string, patch: Partial<CodeDraft> = {}): Promise<CloudCodeSession | null> => {
+      const next = { ...draft, ...patch };
       if (!canCreate || busy) return null;
-      if (draft.networkAccess === 'full' && !draft.fullNetworkAccepted) return null;
+      if (next.networkAccess === 'full' && !next.fullNetworkAccepted) return null;
       setBusy(true);
       setBusySince(new Date().toISOString());
       setError(null);
@@ -590,17 +626,16 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         const body = await api.create({
           requestId: makeRequestId(),
           title,
-          repository: draft.repository
-            ? { ...draft.repository, branch: draft.repositoryBranch.trim() || null }
+          repository: next.repository
+            ? { ...next.repository, branch: next.repositoryBranch.trim() || null }
             : null,
-          repositoryUrl: draft.repository ? null : draft.repositoryUrl.trim() || null,
-          repositoryBranch: draft.repository ? null : draft.repositoryBranch.trim() || null,
-          networkAccess: draft.networkAccess,
+          repositoryUrl: next.repository ? null : next.repositoryUrl.trim() || null,
+          repositoryBranch: next.repository ? null : next.repositoryBranch.trim() || null,
+          networkAccess: next.networkAccess,
           fullNetworkAcknowledged:
-            draft.networkAccess === 'full' ? draft.fullNetworkAccepted : undefined,
-          runtimeId: draft.runtimeId || null,
-          extraHosts:
-            draft.networkAccess === 'full' ? undefined : parseExtraHosts(draft.extraHosts),
+            next.networkAccess === 'full' ? next.fullNetworkAccepted : undefined,
+          runtimeId: next.runtimeId || null,
+          extraHosts: next.networkAccess === 'full' ? undefined : parseExtraHosts(next.extraHosts),
         });
         replaceSession(body.session);
         setSelectedId(body.session.id);
@@ -625,6 +660,15 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     },
     [api, busy, canCreate, draft, replaceSession, router],
   );
+
+  useEffect(() => {
+    if (!githubNotice) return;
+    const notice = getGitHubCallbackNotice(githubNotice);
+    if (!notice) return;
+    if (notice.kind === 'error') setError(notice.message);
+    else setRouteNotice(notice.message);
+    router.replace(CODE_ROUTES.root);
+  }, [githubNotice, router]);
 
   useEffect(() => {
     const wanted = routeLocalRef.current;
@@ -727,43 +771,102 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
     [local, openLocalSession, localPlacement],
   );
 
+  const waitForReady = useCallback(
+    async (initial: CloudCodeSession): Promise<CloudCodeSession> => {
+      let current = initial;
+      for (
+        let attempt = 0;
+        current.state === 'provisioning' && attempt < READY_POLLS;
+        attempt += 1
+      ) {
+        if (attempt > 0) await new Promise((resolve) => setTimeout(resolve, READY_POLL_MS));
+        try {
+          const detail = await api.get(current.id);
+          current = detail.session;
+          replaceSession(current);
+        } catch {
+          return current;
+        }
+      }
+      return current;
+    },
+    [api, replaceSession],
+  );
+
   const handleSubmit = useCallback(
-    async (text: string, mode: CloudCodeTurnMode = turnMode) => {
-      if (busy) return;
+    async (
+      text: string,
+      mode: CloudCodeTurnMode = turnMode,
+      entry: CodeRepositoryEntry | null = null,
+    ) => {
+      if (submitLock.current || busy) return;
+      submitLock.current = true;
+      try {
+        if (draft.environment === 'local' && !selectedSession) {
+          if (draft.localRootId === null) return;
+          await startLocalSession(draft.localRootId, text, localModelId);
+          return;
+        }
 
-      if (draft.environment === 'local' && !selectedSession) {
-        if (draft.localRootId === null) return;
-        await startLocalSession(draft.localRootId, text, localModelId);
-        return;
-      }
+        if (!canCreate) return;
 
-      if (!canCreate) return;
+        const selection = selectionForCreate(draft, entry);
+        if ('error' in selection) {
+          setError(selection.error);
+          return;
+        }
+        if (Object.keys(selection.patch).length > 0) {
+          setDraft((current) => ({ ...current, ...selection.patch }));
+        }
 
-      if (selectedSession && selectedSession.state === 'ready') {
+        if (
+          selectedSession &&
+          (selectedSession.state === 'ready' || selectedSession.state === 'provisioning')
+        ) {
+          const current =
+            selectedSession.state === 'provisioning'
+              ? await waitForReady(selectedSession)
+              : selectedSession;
+          if (current.state !== 'ready') {
+            setError(current.lastError || CODE_COPY.environmentNotReady);
+            return;
+          }
+          setTask('');
+          await startTurn(current, text, mode);
+          return;
+        }
+
+        const created = await createSession(titleFromTask(text), selection.patch);
+        if (!created) {
+          setTask(text);
+          return;
+        }
+        const ready = created.state === 'provisioning' ? await waitForReady(created) : created;
+        if (ready.state !== 'ready') {
+          setTask(text);
+          setError(
+            ready.lastError ||
+              (ready.state === 'failed' ? CODE_COPY.sessionFailed : CODE_COPY.environmentNotReady),
+          );
+          return;
+        }
         setTask('');
-        await startTurn(selectedSession, text, mode);
-        return;
+        await startTurn(ready, text, mode);
+      } finally {
+        submitLock.current = false;
       }
-
-      const created = await createSession(titleFromTask(text));
-      if (!created) {
-        setTask(text);
-        return;
-      }
-      setTask('');
-      if (created.state === 'ready') await startTurn(created, text, mode);
     },
     [
       busy,
       canCreate,
       createSession,
-      draft.environment,
-      draft.localRootId,
+      draft,
       localModelId,
       selectedSession,
       startLocalSession,
       startTurn,
       turnMode,
+      waitForReady,
     ],
   );
 
@@ -1611,7 +1714,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                     <CodeComposer
                       value={task}
                       onChange={setTask}
-                      onSubmit={(text) => void handleSubmit(text)}
+                      onSubmit={(text, repository) => void handleSubmit(text, turnMode, repository)}
                       disabled={
                         isLocalDraft && !selectedSession
                           ? draftFolder === null || localDraftBlocked !== null

@@ -67,6 +67,7 @@
     "@agiworkforce/sync": "workspace:*",
     "@agiworkforce/trust-boundaries": "workspace:*",
     "@agiworkforce/types": "workspace:*",
+    "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "@clerk/expo": "~4.10.1",
     "@expo-google-fonts/newsreader": "^0.4.1",

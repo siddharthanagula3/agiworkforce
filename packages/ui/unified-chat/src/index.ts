@@ -184,6 +184,8 @@ export {
   type OpenCodeBlockInEditor,
 } from './components/markdown/codeBlockEditor';
 export { toggleMarkdownTask } from './components/markdown/taskList';
+export { restoreHyphenatedLabels } from './components/markdown/checklistLabels';
+export { chartHoverText } from './components/artifact-components/chart-spec';
 export { richBlocksAsPlainText } from './components/markdown/richBlocks';
 export {
   StreamingMarkdownContent,

@@ -235,7 +235,7 @@ export interface MapSearchAction {
 
 export const MAP_SEARCH_MIN_ZOOM = 2;
 export const MAP_SEARCH_MAX_ZOOM = 17;
-export const MAP_SEARCH_MAX_PLACES = 2;
+export const MAP_SEARCH_MAX_PLACES = 6;
 
 export interface MapSearchPlace {
   label: string;

@@ -35,9 +35,11 @@ type ScanModule0 = typeof import('@/features/desktop-host');
 const push = vi.fn();
 const replace = vi.fn();
 const router = { push, replace };
+const navigationState = vi.hoisted(() => ({ search: '' }));
 vi.mock('next/navigation', () => ({
   useRouter: () => router,
   usePathname: () => '/code',
+  useSearchParams: () => new URLSearchParams(navigationState.search),
 }));
 
 vi.mock('@shared/components/layout/WebAppShell', () => ({
@@ -196,6 +198,7 @@ vi.mock('@/features/desktop-host', async (importOriginal) => ({
 }));
 
 beforeEach(() => {
+  navigationState.search = '';
   useSettingsStore.setState({ codeFirstRunCompleted: true, codeRailPins: {} });
   host = null;
   hostAfterHydration = null;
@@ -1225,7 +1228,7 @@ describe('CloudCodePage', () => {
     await waitFor(() =>
       expect(api.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          repositoryUrl: 'https://github.com/owner/repository',
+          repositoryUrl: 'https://github.com/owner/repository.git',
           networkAccess: 'trusted',
         }),
       ),
@@ -2345,9 +2348,234 @@ describe('CloudCodePage', () => {
     expect(screen.getByText('Install the GitHub app')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Connect GitHub' })).toHaveAttribute(
       'href',
-      '/api/github/install/start',
+      '/api/github/install/start?returnPath=%2Fcode',
     );
     expect(screen.queryByLabelText('Repository URL')).not.toBeInTheDocument();
+  });
+
+  it('sends a typed repository URL with the task without a separate apply click', async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<CloudCodePage api={api} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: 'Use a repository URL instead' }));
+    await user.type(
+      await screen.findByLabelText('Repository URL'),
+      'https://github.com/owner/repository.git/',
+    );
+    await user.type(await screen.findByLabelText('Branch'), 'release');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'run the tests',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repository: null,
+          repositoryUrl: 'https://github.com/owner/repository.git',
+          repositoryBranch: 'release',
+          networkAccess: 'trusted',
+        }),
+      ),
+    );
+    await waitFor(() =>
+      expect(api.startAgentTurn).toHaveBeenCalledWith(
+        session.id,
+        expect.objectContaining({ goal: 'run the tests' }),
+      ),
+    );
+  });
+
+  it('keeps the task and does not create a session for an unsupported repository URL', async () => {
+    const user = userEvent.setup();
+    const api = createApi();
+    render(<CloudCodePage api={api} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: 'Use a repository URL instead' }));
+    await user.type(
+      await screen.findByLabelText('Repository URL'),
+      'https://example.com/owner/repo',
+    );
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'run the tests',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'Only public HTTPS GitHub repository URLs in owner/repository form are supported.',
+    );
+    expect(api.create).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Describe a task or ask a question' })).toHaveValue(
+      'run the tests',
+    );
+  });
+
+  it('uses a newly typed URL instead of a repository chosen earlier', async () => {
+    const user = userEvent.setup();
+    const api = createApi({ listRepositories: vi.fn(async () => repositoryPage) });
+    render(<CloudCodePage api={api} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+    await user.click(await screen.findByRole('button', { name: /owner\/public-one/ }));
+    await user.click(await screen.findByRole('button', { name: 'owner/public-one' }));
+    await user.click(await screen.findByRole('button', { name: 'Use a repository URL instead' }));
+    await user.type(
+      await screen.findByLabelText('Repository URL'),
+      'https://github.com/other/private',
+    );
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'run the tests{Enter}',
+    );
+
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          repository: null,
+          repositoryUrl: 'https://github.com/other/private.git',
+          networkAccess: 'trusted',
+        }),
+      ),
+    );
+  });
+
+  it('starts the task once a provisioning session becomes ready', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      create: vi.fn(async () => ({
+        session: {
+          ...session,
+          state: 'provisioning' as const,
+          repositoryUrl: 'https://github.com/owner/repository.git',
+        },
+        terminalEntries: [],
+        turns: [],
+      })),
+      get: vi.fn(async () => ({ session, terminalEntries: [], turns: [] })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await user.type(
+      await screen.findByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'run the tests{Enter}',
+    );
+
+    await waitFor(() => expect(api.get).toHaveBeenCalledWith(session.id));
+    await waitFor(() => expect(api.startAgentTurn).toHaveBeenCalled());
+  });
+
+  it('does not send a second task while the first submission is still running', async () => {
+    const user = userEvent.setup();
+    let release: (() => void) | undefined;
+    const api = createApi({
+      create: vi.fn(
+        () =>
+          new Promise((resolve) => {
+            release = () => resolve({ session, terminalEntries: [], turns: [] });
+          }),
+      ),
+    });
+    render(<CloudCodePage api={api} />);
+
+    const field = await screen.findByRole('textbox', { name: 'Describe a task or ask a question' });
+    await user.type(field, 'run the tests');
+    const send = screen.getByRole('button', { name: 'Start the task' });
+    await user.click(send);
+    await user.click(send);
+    release?.();
+
+    await waitFor(() => expect(api.create).toHaveBeenCalledTimes(1));
+  });
+
+  it('explains that GitHub is not configured instead of offering the install flow', async () => {
+    const user = userEvent.setup();
+    render(
+      <CloudCodePage
+        api={createApi({
+          listRepositories: vi.fn(async () => ({
+            repositories: [],
+            installationCount: 0,
+            truncated: false,
+            unreachable: [],
+            connection: { status: 'unconfigured' as const },
+          })),
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+
+    expect(await screen.findByText('GitHub is not configured')).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Connect GitHub' })).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Repository URL')).toBeInTheDocument();
+  });
+
+  it('asks to finish authorization when GitHub is installed but not confirmed', async () => {
+    const user = userEvent.setup();
+    render(
+      <CloudCodePage
+        api={createApi({
+          listRepositories: vi.fn(async () => ({
+            repositories: [],
+            installationCount: 0,
+            truncated: false,
+            unreachable: [],
+            connection: { status: 'authorization-pending' as const },
+          })),
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+
+    expect(await screen.findByText('Finish connecting GitHub')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Finish GitHub authorization' })).toHaveAttribute(
+      'href',
+      '/api/github/install/start?returnPath=%2Fcode',
+    );
+    expect(screen.queryByText('Connect your GitHub account')).not.toBeInTheDocument();
+  });
+
+  it('offers reconnection when GitHub authorization can no longer list repositories', async () => {
+    const user = userEvent.setup();
+    render(
+      <CloudCodePage
+        api={createApi({
+          listRepositories: vi.fn(async () => ({
+            repositories: [],
+            installationCount: 1,
+            truncated: false,
+            unreachable: [{ installationId: 11, accountLogin: 'acme' }],
+            connection: { status: 'reauthorization-required' as const },
+          })),
+        })}
+      />,
+    );
+
+    await user.click(await screen.findByRole('button', { name: 'Select repository' }));
+
+    expect(
+      await screen.findByText(
+        'GitHub authorization expired, was revoked, or has to be confirmed again before repositories can be listed.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Reconnect GitHub' })).toHaveAttribute(
+      'href',
+      '/api/github/install/start?returnPath=%2Fcode',
+    );
+  });
+
+  it('shows the GitHub result after returning from authorization', async () => {
+    navigationState.search = 'github=connected';
+    render(<CloudCodePage api={createApi()} />);
+
+    expect(await screen.findByText('GitHub connected.')).toBeInTheDocument();
+    expect(replace).toHaveBeenCalledWith('/code');
   });
 
   it('lists the installation repositories and sends the chosen one as a reference', async () => {

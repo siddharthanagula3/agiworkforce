@@ -97,6 +97,7 @@ import {
   CODE_NETWORK_OPTIONS,
   CODE_ROUTES,
   CODE_TURN_STEP_HINTS,
+  githubInstallHref,
   DEFAULT_CODE_ENVIRONMENT,
   DEFAULT_NETWORK_ACCESS,
   DEFAULT_RUNTIME_ID,
@@ -123,7 +124,12 @@ import { LocalModelChip } from './LocalModelChip';
 import { describeRuntime, runtimeHelpText } from '../code-runtime';
 import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
 import { useCodeBranches } from '../hooks/use-code-branches';
-import type { CloudCodeApi, CloudCodeRepository } from '@agiworkforce/cloud-contracts';
+import {
+  canonicalGitHubRepositoryBranch,
+  canonicalGitHubRepositoryUrl,
+  type CloudCodeApi,
+  type CloudCodeRepository,
+} from '@agiworkforce/cloud-contracts';
 import styles from '../CloudCodePage.module.css';
 
 const CHIP_GLYPH_SIZE = 14;
@@ -195,6 +201,11 @@ export function draftRepositoryLabel(draft: CodeDraft): string {
 
 export function draftHasRepository(draft: CodeDraft): boolean {
   return draft.repository !== null || draft.repositoryUrl.trim().length > 0;
+}
+
+export interface CodeRepositoryEntry {
+  url: string;
+  branch: string;
 }
 
 function EnvironmentSettings({
@@ -571,7 +582,7 @@ function RepositoryFirstRun() {
           </li>
         ))}
       </ol>
-      <a className={styles['primaryButton']} href={CODE_ROUTES.githubInstall}>
+      <a className={styles['primaryButton']} href={githubInstallHref()}>
         {CODE_COPY.firstRunAction}
       </a>
     </div>
@@ -605,6 +616,16 @@ function RepositoryResults({
             <span>
               {search.trim() ? CODE_COPY.repositoryNoMatches : CODE_COPY.repositoryNoneReachable}
             </span>
+            {!search.trim() && (
+              <a
+                className={styles['secondaryButton']}
+                href={CODE_ROUTES.githubManageInstallations}
+                target="_blank"
+                rel="noreferrer"
+              >
+                {CODE_COPY.repositoryManageAccess}
+              </a>
+            )}
           </div>
         )}
 
@@ -654,9 +675,54 @@ function RepositoryResults({
   );
 }
 
+function RepositoryConnection({ state }: { state: CodeRepositoryState }) {
+  if (state.status === 'unconfigured') {
+    return (
+      <div className={styles['checklist']}>
+        <span className={styles['popoverHeading']}>{CODE_COPY.githubUnconfiguredTitle}</span>
+        <span className={styles['optionCopy']}>{CODE_COPY.githubUnconfiguredCopy}</span>
+      </div>
+    );
+  }
+  if (state.status === 'linking-unavailable') {
+    return (
+      <div className={styles['checklist']}>
+        <span className={styles['popoverHeading']}>{CODE_COPY.githubLinkingUnavailableTitle}</span>
+        <span className={styles['optionCopy']}>{CODE_COPY.githubLinkingUnavailableCopy}</span>
+      </div>
+    );
+  }
+  if (state.status === 'authorization-pending') {
+    return (
+      <div className={styles['checklist']}>
+        <span className={styles['popoverHeading']}>
+          {CODE_COPY.githubAuthorizationPendingTitle}
+        </span>
+        <span className={styles['optionCopy']}>{CODE_COPY.githubAuthorizationPendingCopy}</span>
+        <a className={styles['primaryButton']} href={githubInstallHref()}>
+          {CODE_COPY.githubAuthorizationPendingAction}
+        </a>
+      </div>
+    );
+  }
+  if (state.status === 'reauthorization-required') {
+    return (
+      <div className={styles['checklist']}>
+        <span className={styles['popoverHeading']}>{CODE_COPY.githubReauthorizeTitle}</span>
+        <span className={styles['optionCopy']}>{CODE_COPY.githubReauthorizeCopy}</span>
+        <a className={styles['primaryButton']} href={githubInstallHref()}>
+          {CODE_COPY.githubReauthorizeAction}
+        </a>
+      </div>
+    );
+  }
+  return null;
+}
+
 function RepositoryPicker({
   draft,
   onDraftChange,
+  onEntryChange,
   open,
   onOpenChange,
   trigger,
@@ -664,6 +730,7 @@ function RepositoryPicker({
 }: {
   draft: CodeDraft;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
+  onEntryChange: (entry: CodeRepositoryEntry) => void;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   trigger: React.ReactNode;
@@ -673,23 +740,47 @@ function RepositoryPicker({
   const [branch, setBranch] = useState(draft.repositoryBranch);
   const [search, setSearch] = useState('');
   const [urlMode, setUrlMode] = useState(false);
+  const [entryError, setEntryError] = useState<string | null>(null);
   const urlFieldId = useId();
   const branchFieldId = useId();
   const selected = draftHasRepository(draft);
   const { state, reload } = useCodeRepositories(open, search, api);
   const promoting = draft.networkAccess === 'none';
-  const showUrlFields = urlMode || state.status === 'error';
+  const urlOnly =
+    state.status === 'error' ||
+    state.status === 'unconfigured' ||
+    state.status === 'linking-unavailable';
+  const showUrlFields = urlMode || urlOnly;
+  const showResults =
+    !urlMode && (state.status === 'idle' || state.status === 'loading' || state.status === 'ready');
+
+  const remember = (nextUrl: string, nextBranch: string) => {
+    onEntryChange({ url: nextUrl, branch: nextBranch });
+  };
 
   const promote = () =>
     draft.networkAccess === 'none' ? { networkAccess: REPOSITORY_MINIMUM_NETWORK_ACCESS } : {};
 
   const apply = () => {
     const nextUrl = url.trim();
+    const parsedUrl = nextUrl ? canonicalGitHubRepositoryUrl(nextUrl) : null;
+    if (parsedUrl && !parsedUrl.ok) {
+      setEntryError(CODE_COPY.repositoryUrlInvalid);
+      return;
+    }
+    const parsedBranch = canonicalGitHubRepositoryBranch(branch);
+    if (!parsedBranch.ok) {
+      setEntryError(CODE_COPY.repositoryBranchInvalid);
+      return;
+    }
+    setEntryError(null);
+    const canonical = parsedUrl?.ok ? parsedUrl.url : '';
+    remember(canonical, parsedBranch.branch ?? '');
     onDraftChange({
       repository: null,
-      repositoryUrl: nextUrl,
-      repositoryBranch: nextUrl ? branch.trim() : '',
-      ...(nextUrl ? promote() : {}),
+      repositoryUrl: canonical,
+      repositoryBranch: parsedBranch.branch ?? '',
+      ...(canonical ? promote() : {}),
     });
     onOpenChange(false);
   };
@@ -697,6 +788,8 @@ function RepositoryPicker({
   const choose = (repository: CloudCodeRepository) => {
     setUrl('');
     setBranch(repository.defaultBranch ?? '');
+    setEntryError(null);
+    remember('', repository.defaultBranch ?? '');
     onDraftChange({
       repository: { installationId: repository.installationId, fullName: repository.fullName },
       repositoryUrl: '',
@@ -709,6 +802,8 @@ function RepositoryPicker({
   const clear = () => {
     setUrl('');
     setBranch('');
+    setEntryError(null);
+    remember('', '');
     onDraftChange({ repository: null, repositoryUrl: '', repositoryBranch: '' });
     onOpenChange(false);
   };
@@ -726,6 +821,7 @@ function RepositoryPicker({
       >
         <div className={styles['popover']}>
           {state.status === 'no-installation' && <RepositoryFirstRun />}
+          <RepositoryConnection state={state} />
 
           {state.status === 'error' && (
             <div className={styles['repositoryEmpty']}>
@@ -736,7 +832,7 @@ function RepositoryPicker({
             </div>
           )}
 
-          {state.status !== 'no-installation' && state.status !== 'error' && !urlMode && (
+          {showResults && (
             <RepositoryResults
               state={state}
               search={search}
@@ -755,7 +851,12 @@ function RepositoryPicker({
                   id={urlFieldId}
                   className={styles['textInput']}
                   value={url}
-                  onChange={(event) => setUrl(event.target.value)}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setUrl(next);
+                    setEntryError(null);
+                    remember(next, branch);
+                  }}
                   placeholder={CODE_COPY.repositoryUrlPlaceholder}
                   maxLength={CODE_LIMITS.repositoryUrl}
                 />
@@ -768,11 +869,21 @@ function RepositoryPicker({
                   id={branchFieldId}
                   className={styles['textInput']}
                   value={branch}
-                  onChange={(event) => setBranch(event.target.value)}
+                  onChange={(event) => {
+                    const next = event.target.value;
+                    setBranch(next);
+                    setEntryError(null);
+                    remember(url, next);
+                  }}
                   placeholder={CODE_COPY.repositoryBranchPlaceholder}
                   maxLength={CODE_LIMITS.repositoryBranch}
                 />
               </div>
+              {entryError && (
+                <span className={styles['formHelp']} role="alert">
+                  {entryError}
+                </span>
+              )}
               <div className={styles['popoverActions']}>
                 {selected && (
                   <button type="button" className={styles['secondaryButton']} onClick={clear}>
@@ -795,7 +906,7 @@ function RepositoryPicker({
             <span className={styles['formHelp']}>{CODE_COPY.environmentPromotedToTrusted}</span>
           )}
 
-          {state.status !== 'error' && (
+          {!urlOnly && (
             <button
               type="button"
               className={styles['popoverToggle']}
@@ -1114,10 +1225,12 @@ function LocalBranchChip({
 function RepositoryChips({
   draft,
   onDraftChange,
+  onEntryChange,
   api,
 }: {
   draft: CodeDraft;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
+  onEntryChange: (entry: CodeRepositoryEntry) => void;
   api: CloudCodeApi;
 }) {
   const [open, setOpen] = useState(false);
@@ -1128,6 +1241,7 @@ function RepositoryChips({
       <RepositoryPicker
         draft={draft}
         onDraftChange={onDraftChange}
+        onEntryChange={onEntryChange}
         open={open}
         onOpenChange={setOpen}
         api={api}
@@ -1146,6 +1260,7 @@ function RepositoryChips({
       <RepositoryPicker
         draft={draft}
         onDraftChange={onDraftChange}
+        onEntryChange={onEntryChange}
         open={open}
         onOpenChange={setOpen}
         api={api}
@@ -1490,7 +1605,7 @@ export function CodeUsageWarning() {
 export interface CodeComposerProps {
   value: string;
   onChange: (value: string) => void;
-  onSubmit: (text: string) => void;
+  onSubmit: (text: string, repository: CodeRepositoryEntry | null) => void;
   disabled: boolean;
   busy: boolean;
   showChips: boolean;
@@ -1543,17 +1658,21 @@ export function CodeComposer({
   const [focused, setFocused] = useState(false);
   const folder = local.folders.find((choice) => choice.rootId === draft.localRootId) ?? null;
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const repositoryEntry = useRef<CodeRepositoryEntry>({ url: '', branch: '' });
+  const sendable = value.trim().length > 0 && !disabled && !busy;
+  const submitTask = (text: string) => {
+    const url = repositoryEntry.current.url.trim();
+    onSubmit(text, url ? { url, branch: repositoryEntry.current.branch } : null);
+  };
   const dictation = useDictation({
     onInsert: (text) => onChange(value ? `${value} ${text}` : text),
     onSend: (text) => {
       const next = value ? `${value} ${text}` : text;
       onChange(next);
-      if (next.trim()) onSubmit(next.trim());
+      if (next.trim()) submitTask(next.trim());
     },
   });
   const startDictation = dictation.start;
-
-  const sendable = value.trim().length > 0 && !disabled && !busy;
   const [commandIndex, setCommandIndex] = useState(0);
   const [dismissedCommandQuery, setDismissedCommandQuery] = useState<string | null>(null);
   const cloudTurn = !showChips || draft.environment === 'cloud';
@@ -1596,7 +1715,7 @@ export function CodeComposer({
     if (handleCommandKey(event)) return;
     if (event.key !== ENTER_KEY || event.shiftKey) return;
     event.preventDefault();
-    if (sendable) onSubmit(value.trim());
+    if (sendable) submitTask(value.trim());
   };
 
   return (
@@ -1625,7 +1744,14 @@ export function CodeComposer({
                 />
               )
             ) : (
-              <RepositoryChips draft={draft} onDraftChange={onDraftChange} api={api} />
+              <RepositoryChips
+                draft={draft}
+                onDraftChange={onDraftChange}
+                onEntryChange={(entry) => {
+                  repositoryEntry.current = entry;
+                }}
+                api={api}
+              />
             )}
           </div>
         )}
@@ -1647,7 +1773,10 @@ export function CodeComposer({
 
         <CodeUsageWarning />
 
-        <div className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}>
+        <div
+          id="chat-composer"
+          className={`${styles['field']} ${focused ? styles['fieldFocused'] : ''}`}
+        >
           <SlashCommandMenu
             show={commandsOpen}
             suggestions={commandSuggestions}
@@ -1690,7 +1819,7 @@ export function CodeComposer({
                 className={styles['sendButton']}
                 disabled={!sendable}
                 aria-label={CODE_COPY.send}
-                onClick={() => onSubmit(value.trim())}
+                onClick={() => submitTask(value.trim())}
               >
                 {busy ? (
                   <Spinner size="sm" aria-hidden="true" />

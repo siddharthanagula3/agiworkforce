@@ -13,6 +13,11 @@ import { logger } from '@/lib/logger';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
 import { withRateLimit } from '@/lib/rate-limit';
 import {
+  GITHUB_CONNECT_RETURN_COOKIE,
+  githubConnectReturnLocation,
+  githubConnectReturnPath,
+} from '@/lib/github-connect-return';
+import {
   appInstallOwner,
   appInstallReturnUrl,
   linkVerifiedGitHubInstallation,
@@ -57,6 +62,26 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   const cookieStore = await cookies();
   const storedState = cookieStore.get('github_oauth_state')?.value;
   const pendingInstallationId = Number(cookieStore.get('github_pending_installation_id')?.value);
+  const finish = (status: string): NextResponse => {
+    const returnPath = githubConnectReturnPath(
+      cookieStore.get(GITHUB_CONNECT_RETURN_COOKIE)?.value,
+    );
+    if (!returnPath) {
+      return NextResponse.redirect(new URL(`/connectors?github=${status}`, request.url));
+    }
+    cookieStore.set({
+      name: GITHUB_CONNECT_RETURN_COOKIE,
+      value: '',
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 0,
+      path: '/',
+    });
+    return NextResponse.redirect(
+      new URL(githubConnectReturnLocation(returnPath, status), request.url),
+    );
+  };
 
   if (
     !state ||
@@ -75,7 +100,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
       },
       'GitHub OAuth callback rejected: invalid state or pending installation',
     );
-    return NextResponse.redirect(new URL('/connectors?github=invalid_state', request.url));
+    return finish('invalid_state');
   }
 
   for (const name of ['github_oauth_state', 'github_pending_installation_id']) {
@@ -88,16 +113,14 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
 
   if (!isGitHubInstallationLinkingAvailable()) {
-    return NextResponse.redirect(
-      new URL('/connectors?github=ownership_proof_required', request.url),
-    );
+    return finish('ownership_proof_required');
   }
 
   if (oauthError) {
-    return NextResponse.redirect(new URL('/connectors?github=oauth_denied', request.url));
+    return finish('oauth_denied');
   }
   if (!code || code.length > 512) {
-    return NextResponse.redirect(new URL('/connectors?github=oauth_failed', request.url));
+    return finish('oauth_failed');
   }
 
   const callbackUrl = new URL('/api/github/oauth/callback', request.url).toString();
@@ -113,22 +136,22 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
         { userId, installationId: pendingInstallationId },
         'GitHub installation ownership verification failed',
       );
-      return NextResponse.redirect(new URL('/connectors?github=ownership_failed', request.url));
+      return finish('ownership_failed');
     }
 
     const linked = await linkVerifiedGitHubInstallation(userId, verifiedInstallation);
     if (!linked) {
-      return NextResponse.redirect(new URL('/connectors?github=already_linked', request.url));
+      return finish('already_linked');
     }
   } catch (error) {
     logger.error(
       { error, userId, installationId: pendingInstallationId },
       'GitHub OAuth ownership verification failed',
     );
-    return NextResponse.redirect(new URL('/connectors?github=oauth_failed', request.url));
+    return finish('oauth_failed');
   }
 
-  return NextResponse.redirect(new URL('/connectors?github=connected', request.url));
+  return finish('connected');
 }
 
 export const GET = withPrivateNoStore(handleGet);

@@ -20,6 +20,7 @@ import {
   type KeyBinding,
 } from '@codemirror/view';
 import { tags } from '@lezer/highlight';
+import { separateGluedStatements } from './statement-lines';
 
 export interface CodeEditorWrap {
   before: string;
@@ -138,11 +139,17 @@ export function ArtifactCodeEditor({
       EditorView.lineWrapping,
       EditorView.contentAttributes.of({ 'aria-label': ariaLabel, spellcheck: 'false' }),
       EditorView.updateListener.of((update) => {
-        if (update.docChanged) onChangeRef.current(update.state.doc.toString());
+        if (!update.docChanged) return;
+        // Report the repaired text. The value effect writes it back into the
+        // document, so a dispatch here is not needed and would nest updates.
+        onChangeRef.current(separateGluedStatements(update.state.doc.toString()));
       }),
     ];
     const view = new EditorView({
-      state: EditorState.create({ doc: valueRef.current, extensions }),
+      state: EditorState.create({
+        doc: separateGluedStatements(valueRef.current),
+        extensions,
+      }),
       parent: host,
     });
     viewRef.current = view;
@@ -160,8 +167,9 @@ export function ArtifactCodeEditor({
     const view = viewRef.current;
     if (!view) return;
     const current = view.state.doc.toString();
-    if (current !== value) {
-      view.dispatch({ changes: { from: 0, to: current.length, insert: value } });
+    const next = separateGluedStatements(value);
+    if (current !== next) {
+      view.dispatch({ changes: { from: 0, to: current.length, insert: next } });
     }
   }, [value]);
 

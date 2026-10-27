@@ -21,6 +21,9 @@ interface WritingBlockProps {
   source: string;
   streaming: boolean;
   renderBody: (text: string) => React.ReactNode;
+  kind?: string;
+  label?: string;
+  inline?: boolean;
 }
 
 function CopyButton({
@@ -53,9 +56,17 @@ function CopyButton({
   );
 }
 
-export function WritingBlock({ source, streaming, renderBody }: WritingBlockProps) {
+export function WritingBlock({
+  source,
+  streaming,
+  renderBody,
+  kind = 'writing',
+  label: labelOverride,
+  inline = false,
+}: WritingBlockProps) {
   const { t } = useUiTranslation('chat');
   const editorId = useId();
+  const inlineId = useId();
   const [edited, setEdited] = useState<string | null>(null);
   const [expanded, setExpanded] = useState(false);
   const { copyState, copy } = useRichBlockCopy();
@@ -63,7 +74,7 @@ export function WritingBlock({ source, streaming, renderBody }: WritingBlockProp
 
   if (!streaming && text.trim() === '') return null;
 
-  const label = t('richBlock.writing', 'Writing');
+  const label = labelOverride ?? t('richBlock.writing', 'Writing');
   const copyLabels = {
     idle: t('richBlock.copyWriting', 'Copy this text'),
     copied: t('richBlock.writingCopied', 'Text copied'),
@@ -89,7 +100,7 @@ export function WritingBlock({ source, streaming, renderBody }: WritingBlockProp
 
   return (
     <RichBlockCard
-      kind="writing"
+      kind={kind}
       icon={<PenLine className="h-4 w-4" />}
       label={label}
       status={failedStatus}
@@ -112,7 +123,20 @@ export function WritingBlock({ source, streaming, renderBody }: WritingBlockProp
         )
       }
     >
-      <div className="px-4 pt-3 pb-1 text-[var(--chat-text-primary)]">{renderBody(text)}</div>
+      {inline ? (
+        <label className="block px-4 py-3" htmlFor={inlineId}>
+          <span className="sr-only">{label}</span>
+          <textarea
+            id={inlineId}
+            value={text}
+            readOnly={streaming}
+            onChange={(event) => setEdited(event.target.value)}
+            className="min-h-28 w-full resize-y bg-transparent text-base leading-[26px] text-[var(--chat-text-primary)] outline-none"
+          />
+        </label>
+      ) : (
+        <div className="px-4 pt-3 pb-1 text-[var(--chat-text-primary)]">{renderBody(text)}</div>
+      )}
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent
           hideCloseButton

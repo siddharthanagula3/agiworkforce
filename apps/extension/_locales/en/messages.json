@@ -4677,5 +4677,19 @@
   "spAutonomyAutoAria": {
     "message": "Permission mode: auto, asks before crucial actions",
     "description": "Autonomy chip accessible name in Auto mode"
+  },
+  "spChecklistProgress": {
+    "message": "$DONE$ of $TOTAL$",
+    "description": "How many items in a checklist are checked",
+    "placeholders": {
+      "done": {
+        "content": "$1",
+        "example": "1"
+      },
+      "total": {
+        "content": "$2",
+        "example": "2"
+      }
+    }
   }
 }

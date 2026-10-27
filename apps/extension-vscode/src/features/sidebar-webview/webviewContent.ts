@@ -4938,6 +4938,18 @@ export function getWebviewContent(
           });
         });
       }
+      if (typeof window.agiBindSurfaces === 'function') {
+        window.agiBindSurfaces(rootEl, {
+          onFollowUp: function(text) {
+            prefillComposer(text);
+            sendMessage();
+          },
+          copy: function(text) {
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
+            return navigator.clipboard.writeText(text);
+          }
+        });
+      }
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────

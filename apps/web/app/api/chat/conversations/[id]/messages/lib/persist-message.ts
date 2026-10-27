@@ -73,13 +73,11 @@ export async function persistConversationMessage(input: {
   if (!conversation) throw createError.notFound('Conversation not found');
   if (conversation.is_temporary) throw createError.conflict(TEMPORARY_CHAT_NOT_SAVED);
 
-  if (requestedMessage.role !== 'assistant') {
-    await assertFreeDailyAllowance({
-      db,
-      userId: scope.userId,
-      requested: { message_writes: 1 },
-    });
-  }
+  await assertFreeDailyAllowance({
+    db,
+    userId: scope.userId,
+    requested: { message_writes: 1 },
+  });
 
   const storedMetadata = await resolveSavedMessageSourceUrls(
     normalizeMessageMetadata(requestedMessage.metadata) ?? {},

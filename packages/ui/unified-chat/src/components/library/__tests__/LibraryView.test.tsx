@@ -1020,6 +1020,8 @@ describe('shared LibraryView', () => {
       fireEvent.click(await screen.findByRole('button', { name: 'Open quarterly-report.pdf' }));
       const viewer = await screen.findByTestId('library-file-viewer');
 
+      expect(viewer.className).toContain('bg-[var(--scrim)]');
+      expect(viewer.className).not.toContain('backdrop-blur');
       expect(viewer.textContent).toContain('Library');
       expect(viewer.textContent).toContain('quarterly-report.pdf');
       expect(screen.getByRole('button', { name: 'Download quarterly-report.pdf' })).toBeTruthy();

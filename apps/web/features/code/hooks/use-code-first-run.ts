@@ -31,10 +31,22 @@ export function useCodeFirstRun(
     ])
       .then(([sessions, repositories]) => {
         if (controller.signal.aborted) return;
+        const connection = repositories.connection?.status;
         const alreadySetUp =
           sessions.sessions.length > 0 || repositories.installationCount > NO_INSTALLATIONS;
         if (alreadySetUp) {
           setCompleted(true);
+          setState('hide');
+          return;
+        }
+        if (
+          connection === 'unconfigured' ||
+          connection === 'linking-unavailable' ||
+          connection === 'authorization-pending' ||
+          connection === 'reauthorization-required' ||
+          connection === 'connected' ||
+          connection === 'no-repositories'
+        ) {
           setState('hide');
           return;
         }

@@ -151,7 +151,7 @@ const FAST_PILL_OFF_CLASS =
   'border-[var(--chat-border)] text-muted-foreground hover:bg-muted/60 hover:text-foreground';
 const FAST_PILL_ON_CLASS = 'border-transparent bg-muted text-foreground hover:bg-muted/80';
 const MODEL_TRIGGER_CLASS =
-  'flex min-h-7 min-w-0 items-center gap-1 rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm pointer-coarse:min-h-11';
+  'flex min-h-7 min-w-0 max-w-full items-center gap-1 overflow-hidden rounded-md px-1.5 py-0.5 text-xs text-muted-foreground transition-colors hover:bg-muted/60 hover:text-foreground sm:min-h-8 sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-sm pointer-coarse:min-h-11';
 
 const CACHE_RESET_HINT_TEXT = 'Switching models here starts a new prompt cache';
 
@@ -173,7 +173,7 @@ const PLAN_LOADING_LABEL = "Loading your plan's models…";
 const PLAN_RETRY_LABEL = "Could not load your plan's models. Try again";
 const PICKER_TRIGGER_ICON_SIZE = 12;
 const PICKER_CATALOGUE_WIDTH_CLASS =
-  'w-[min(max(var(--picker-catalogue-width),20rem),48rem,calc(100vw-1rem))]';
+  'w-[min(max(var(--picker-catalogue-width),36rem),48rem,calc(100vw-1rem))]';
 const PICKER_SHEET_CLASS = 'max-h-[85dvh] border-[var(--chat-border)] bg-background';
 const PICKER_SHEET_BODY_CLASS = 'flex min-h-0 flex-1 flex-col overflow-y-hidden';
 const PICKER_SECTION_LABEL_CLASS = 'px-3 pb-1 pt-2 text-xs font-medium text-muted-foreground';

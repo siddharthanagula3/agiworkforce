@@ -496,7 +496,7 @@ export function ModelCatalogue({
           }}
           className={[
             ROW_CLASS,
-            'min-w-0 flex-1',
+            'min-w-[8rem] flex-1',
             hardLocked
               ? 'cursor-not-allowed opacity-45'
               : planLocked
@@ -505,7 +505,7 @@ export function ModelCatalogue({
           ].join(' ')}
         >
           <ProviderLogo providerKey={entry.developer} size={16} />
-          <span className="min-w-0 flex-1">
+          <span className="min-w-[8rem] flex-1">
             <span
               className={[
                 ROW_NAME_CLASS,

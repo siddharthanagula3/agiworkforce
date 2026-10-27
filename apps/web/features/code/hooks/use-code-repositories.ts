@@ -2,12 +2,20 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { CODE_TIMING } from '../code-surface';
-import type { CloudCodeApi, CloudCodeRepository } from '@agiworkforce/cloud-contracts';
+import type {
+  CloudCodeApi,
+  CloudCodeRepository,
+  CloudCodeRepositoryList,
+} from '@agiworkforce/cloud-contracts';
 
 export type CodeRepositoryState =
   | { status: 'idle' }
   | { status: 'loading' }
+  | { status: 'unconfigured' }
+  | { status: 'linking-unavailable' }
   | { status: 'no-installation' }
+  | { status: 'authorization-pending' }
+  | { status: 'reauthorization-required' }
   | {
       status: 'ready';
       repositories: CloudCodeRepository[];
@@ -19,6 +27,26 @@ export type CodeRepositoryState =
 const FIRST_TOKEN = 0;
 const NEXT_TOKEN = 1;
 const NO_INSTALLATIONS = 0;
+
+export function codeRepositoryState(body: CloudCodeRepositoryList): CodeRepositoryState {
+  const connection = body.connection?.status;
+  if (connection === 'unconfigured') return { status: 'unconfigured' };
+  if (connection === 'linking-unavailable') return { status: 'linking-unavailable' };
+  if (connection === 'authorization-pending') return { status: 'authorization-pending' };
+  if (connection === 'reauthorization-required') return { status: 'reauthorization-required' };
+  if (
+    connection === 'unauthorized' ||
+    (connection === undefined && body.installationCount === NO_INSTALLATIONS)
+  ) {
+    return { status: 'no-installation' };
+  }
+  return {
+    status: 'ready',
+    repositories: body.repositories,
+    truncated: body.truncated,
+    unreachable: body.unreachable.map((entry) => entry.accountLogin),
+  };
+}
 
 function useDebouncedValue(value: string): string {
   const [debounced, setDebounced] = useState(value);
@@ -50,16 +78,7 @@ export function useCodeRepositories(
       .listRepositories(debouncedSearch.trim() || undefined, controller.signal)
       .then((body) => {
         if (cancelled) return;
-        if (body.installationCount === NO_INSTALLATIONS) {
-          setState({ status: 'no-installation' });
-          return;
-        }
-        setState({
-          status: 'ready',
-          repositories: body.repositories,
-          truncated: body.truncated,
-          unreachable: body.unreachable.map((entry) => entry.accountLogin),
-        });
+        setState(codeRepositoryState(body));
       })
       .catch((error: unknown) => {
         if (cancelled) return;

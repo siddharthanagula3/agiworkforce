@@ -125,6 +125,29 @@ describe('CodeBlock copy control', () => {
 
     view.unmount();
   });
+
+  it('keeps Copy at the top of a 200-line block and copies the whole source', async () => {
+    const lines = Array.from({ length: 200 }, (_, index) => {
+      const number = String(index + 1).padStart(3, '0');
+      return `# QA-LINE-${number}`;
+    });
+    lines.push('print("LONG_CODE_COMPLETE")');
+    const source = lines.join('\n');
+    const view = mountClient(<CodeBlock className={PYTHON_LANGUAGE_CLASS}>{source}</CodeBlock>);
+
+    const scroller = view.container.querySelector('.code-block-body-scroll');
+    const button = findCopyButton(view.container);
+    expect(scroller).not.toBeNull();
+    expect(button.compareDocumentPosition(scroller!)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+
+    await act(async () => {
+      button.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+      await Promise.resolve();
+    });
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledExactlyOnceWith(source);
+    view.unmount();
+  });
 });
 
 describe('CodeBlock non-fenced and mermaid branches', () => {

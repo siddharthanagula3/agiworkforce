@@ -89,6 +89,8 @@ function distanceKm(a: MapSearchPlace, b: MapSearchPlace): number {
  * Institute of Chicago resolving to Rundu, Namibia, with a route offered.
  */
 const SAME_CONTEXT_RADIUS_KM = 400;
+/** A named road trip can cross a state. Two-stop lookups stay on the tighter radius. */
+const ROUTE_RADIUS_KM = 1_600;
 
 async function geocodeOne(
   query: string,
@@ -137,12 +139,35 @@ async function geocodeOne(
   };
 }
 
-export function splitRouteQuery(query: string): [string, string] | null {
-  const match = /^(.{2,120}?)\s+(?:to|->|→|until|thru|through)\s+(.{2,120})$/iu.exec(query.trim());
-  if (!match) return null;
-  const [, origin, destination] = match;
-  if (!origin?.trim() || !destination?.trim()) return null;
-  return [origin.trim(), destination.trim()];
+function cleanStop(part: string): string {
+  const colon = part.lastIndexOf(':');
+  const sliced = (colon >= 0 ? part.slice(colon + 1) : part).trim();
+  return sliced.replace(/^(?:a|the)\s+/iu, '').trim();
+}
+
+/**
+ * One map query can name a whole trip. "Chicago to Indianapolis to Cincinnati"
+ * and "Chicago, Indianapolis, and Cincinnati" are three stops, not one place
+ * called the whole sentence. A single "City, Region" is left whole.
+ */
+export function splitRouteQuery(query: string): string[] | null {
+  const trimmed = query.trim();
+  const directed = trimmed.split(/\s+(?:to|->|→)\s+/iu);
+  if (directed.length >= 2) {
+    const stops = directed
+      .flatMap((part) => part.split(/\s+(?:via|through|thru|until)\s+/iu))
+      .map(cleanStop)
+      .filter((part) => part.length >= 2);
+    return stops.length >= 2 ? stops : null;
+  }
+  if (/,/.test(trimmed) && /\band\b/iu.test(trimmed)) {
+    const stops = trimmed
+      .split(/\s*,\s*|\s+\band\b\s+/iu)
+      .map(cleanStop)
+      .filter((part) => part.length >= 2);
+    return stops.length >= 2 ? stops : null;
+  }
+  return null;
 }
 
 function mercatorY(latitude: number): number {
@@ -186,6 +211,7 @@ export async function resolveMapView(
   try {
     const route = splitRouteQuery(query);
     const targets = route ?? [query];
+    const radiusKm = targets.length >= 3 ? ROUTE_RADIUS_KM : SAME_CONTEXT_RADIUS_KM;
     const resolved: MapSearchPlace[] = [];
 
     // The first place establishes the geography; later ones are searched near
@@ -200,7 +226,7 @@ export async function resolveMapView(
         resolved.push({ ...place, confident: true });
         continue;
       }
-      const plausible = distanceKm(anchor, place) <= SAME_CONTEXT_RADIUS_KM;
+      const plausible = distanceKm(anchor, place) <= radiusKm;
       if (!plausible) {
         logger.warn(
           { target, anchor: anchor.label, candidate: place.label },

@@ -174,10 +174,14 @@ export const CookieConsent = () => {
             exit={reducedMotion ? { opacity: 0 } : { y: 24, opacity: 0 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
             className="pointer-events-none fixed inset-x-0 bottom-0 z-[var(--z-notification)] flex justify-center p-3 sm:justify-end sm:p-6"
+            data-cookie-banner
             role="region"
             aria-label="Cookie consent"
           >
-            <div className="pointer-events-auto relative w-full max-w-[32rem] rounded-3xl border border-border bg-card p-5 text-card-foreground shadow-e3">
+            <div
+              data-cookie-card
+              className="pointer-events-auto relative w-full max-w-[32rem] rounded-3xl border border-border bg-card p-5 text-card-foreground shadow-e3"
+            >
               <div className="flex items-center gap-2.5 pe-10">
                 <Cookie
                   size={COOKIE_ICON_SIZE}
@@ -201,7 +205,7 @@ export const CookieConsent = () => {
                 .
               </p>
 
-              <div className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
+              <div data-cookie-actions className="mt-4 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap">
                 <Button
                   data-variant="primary"
                   className={`${ACTION_CLASS} bg-foreground text-background hover:bg-foreground/90`}

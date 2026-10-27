@@ -40,6 +40,32 @@ describe('detectCardType', () => {
   it('ignores content too short to have structure', () => {
     expect(detectCardType('## Ingredients')).toBeNull();
   });
+
+  it('does not offer a steps view for a numbered list that is not a procedure', () => {
+    const answer = [
+      'Siddhartha, here are the five steps:',
+      '',
+      '1. **Profile the table.** Get the total rows, distinct order count, and null customer count.',
+      '2. **Investigate the duplicates.** Find the repeated order ids and compare the full rows.',
+      '3. **Investigate the null customer ids.** Check whether any of the rows are among the duplicates.',
+      '4. **Check related data and impact.** Verify that customer values exist in the customers table.',
+      '5. **Fix, validate and prevent.** Fix in a backup or transaction, then add constraints.',
+    ].join('\n');
+
+    expect(detectCardType(answer)).toBeNull();
+  });
+
+  it('offers a steps view for an explicit procedure', () => {
+    const answer = [
+      '## How to reset a stuck migration',
+      '',
+      'Step 1. Stop the writers.',
+      'Step 2. Record the current row counts.',
+      'Step 3. Re-run the migration inside a transaction.',
+    ].join('\n');
+
+    expect(detectCardType(answer)).toBe('steps');
+  });
 });
 
 describe('RecipeCard content preservation', () => {

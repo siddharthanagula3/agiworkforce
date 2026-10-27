@@ -20,6 +20,8 @@ import {
 } from '@/src/features/chat/utils/syntaxHighlight';
 import { openUntrustedUrlInAppBrowser } from '@/lib/safeOpenURL';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import { classifyAssistantFence } from '@agiworkforce/unified-chat/assistant-fence';
+import { AssistantSurface } from './AssistantSurface';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
@@ -814,6 +816,7 @@ export interface MarkdownRenderOptions {
   highlightCode?: boolean;
   citations?: readonly CitationSource[];
   onHeadingLayout?: (sectionId: string, y: number) => void;
+  onFollowUp?: (text: string) => void;
 }
 
 export function renderMarkdownContent(
@@ -849,7 +852,20 @@ export function renderMarkdownContent(
       elements.push(<MathBlock key={`bmath-${keyCounter++}`} latex={mathContent} display={true} />);
     } else if (match[4] !== undefined) {
       const codeContent = match[4].trim();
-      const fenceLanguage = match[3]?.trim().split(/\s+/)[0];
+      const fenceLanguage = match[3]?.trim().split(/\s+/)[0] ?? '';
+      const classified = classifyAssistantFence(fenceLanguage, codeContent);
+      if (classified.kind !== 'code') {
+        elements.push(
+          <AssistantSurface
+            key={`surface-${keyCounter++}`}
+            fence={classified}
+            colors={renderColors}
+            onFollowUp={options.onFollowUp}
+          />,
+        );
+        lastIndex = match.index + match[0].length;
+        continue;
+      }
       const chart = fenceLanguage === 'mermaid' ? parseMermaidChart(codeContent) : null;
       if (chart) {
         elements.push(

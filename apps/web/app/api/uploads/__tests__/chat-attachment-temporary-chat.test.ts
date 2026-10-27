@@ -135,6 +135,22 @@ describe('POST /api/uploads/chat-attachment/complete · Temporary Chat file poli
     expect(SCOPED_DB.query).not.toHaveBeenCalled();
   });
 
+  it('does not treat a missing conversation as temporary', async () => {
+    SCOPED_DB.query.mockResolvedValue([]);
+
+    await POST(completeRequest({ conversationId: CONVERSATION, temporary: true }));
+
+    expect(insertedTemporaryFlag()).toBe(false);
+  });
+
+  it('counts the file when the conversation lookup fails', async () => {
+    SCOPED_DB.query.mockRejectedValue(new Error('database unavailable'));
+
+    await POST(completeRequest({ conversationId: CONVERSATION, temporary: true }));
+
+    expect(insertedTemporaryFlag()).toBe(false);
+  });
+
   it('never reuses a kept file for a temporary chat, nor the other way round', async () => {
     await POST(completeRequest({ temporary: true }));
 

@@ -1,3 +1,4 @@
+import { restoreHyphenatedLabels } from '@agiworkforce/unified-chat';
 import type { ArtifactKind, ArtifactRenderPayload } from '@/lib/artifact-sandbox';
 import {
   buildArtifactCspMeta,
@@ -31,7 +32,7 @@ function renderTypeFor(type: ArtifactData['type']): ArtifactData['type'] {
 export function buildArtifactPreviewDocument(type: ArtifactData['type'], content: string): string {
   switch (renderTypeFor(type)) {
     case 'html':
-      return buildSandboxSrcDoc(content);
+      return buildSandboxSrcDoc(restoreHyphenatedLabels(content));
 
     case 'react': {
       const reactSource = escapeForInlineScript(content);

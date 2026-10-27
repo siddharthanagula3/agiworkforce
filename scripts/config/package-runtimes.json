@@ -268,6 +268,7 @@
       "./network-error": "universal",
       "./tabular": "universal",
       "./markdown-document": "universal",
+      "./assistant-fence": "universal",
       "./shiki-highlighter": "universal",
       "./agi-work-progress": "universal",
       "./task-display": "universal",

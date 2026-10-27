@@ -139,6 +139,20 @@ export const CloudCodeRepositorySchema = z.object({
   isPrivate: z.boolean(),
 });
 
+export const CLOUD_CODE_GITHUB_CONNECTION_STATUSES = [
+  'unconfigured',
+  'linking-unavailable',
+  'unauthorized',
+  'authorization-pending',
+  'connected',
+  'no-repositories',
+  'reauthorization-required',
+] as const;
+
+export const CloudCodeGitHubConnectionSchema = z.object({
+  status: z.enum(CLOUD_CODE_GITHUB_CONNECTION_STATUSES),
+});
+
 export const CloudCodeRepositoryListSchema = z.object({
   repositories: z.array(CloudCodeRepositorySchema),
   installationCount: z.number().int().nonnegative(),
@@ -146,6 +160,7 @@ export const CloudCodeRepositoryListSchema = z.object({
   unreachable: z
     .array(z.object({ installationId: z.number().int(), accountLogin: z.string() }))
     .default([]),
+  connection: CloudCodeGitHubConnectionSchema.optional(),
 });
 
 export const CloudCodeBranchSchema = z.object({

@@ -19,6 +19,7 @@ interface MediaGenerationPlaceholderProps {
   taskId?: string;
   progress?: number;
   className?: string;
+  modelLabel?: string;
 }
 
 const LABEL: Readonly<Record<MediaTurnCategory, string>> = {
@@ -193,6 +194,7 @@ export function MediaGenerationPlaceholder({
   taskId,
   progress,
   className,
+  modelLabel,
 }: MediaGenerationPlaceholderProps) {
   const [elapsed, setElapsed] = useState(0);
   const [cancelState, setCancelState] = useState<'idle' | 'sending' | 'sent' | 'failed'>('idle');
@@ -216,7 +218,13 @@ export function MediaGenerationPlaceholder({
       <div className="flex flex-wrap items-baseline gap-x-2 text-sm text-[var(--chat-text-primary)]">
         {/* The live region holds the label alone. The clock beside it changes
             every second, and inside the region it would be read aloud each time. */}
-        <span role="status">{LABEL[category]}</span>
+        <span role="status">
+          {modelLabel
+            ? category === 'image'
+              ? `Generating with ${modelLabel}`
+              : `${LABEL[category]} with ${modelLabel}`
+            : LABEL[category]}
+        </span>
         <span className="tabular-nums text-[var(--chat-text-secondary)]">
           <span className="sr-only">Elapsed </span>
           {formatElapsed(elapsed)}

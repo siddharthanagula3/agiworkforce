@@ -4937,6 +4937,18 @@ exports[`VS Code webview structural snapshots > locks the default rendered webvi
           });
         });
       }
+      if (typeof window.agiBindSurfaces === 'function') {
+        window.agiBindSurfaces(rootEl, {
+          onFollowUp: function(text) {
+            prefillComposer(text);
+            sendMessage();
+          },
+          copy: function(text) {
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
+            return navigator.clipboard.writeText(text);
+          }
+        });
+      }
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
@@ -13168,6 +13180,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when ef
           });
         });
       }
+      if (typeof window.agiBindSurfaces === 'function') {
+        window.agiBindSurfaces(rootEl, {
+          onFollowUp: function(text) {
+            prefillComposer(text);
+            sendMessage();
+          },
+          copy: function(text) {
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
+            return navigator.clipboard.writeText(text);
+          }
+        });
+      }
     }
 
     // ── Send ──────────────────────────────────────────────────────────────────
@@ -21397,6 +21421,18 @@ exports[`VS Code webview structural snapshots > locks the rendered shape when me
             b.textContent = L10N.failed;
             setTimeout(function() { b.textContent = 'Copy'; }, 1500);
           });
+        });
+      }
+      if (typeof window.agiBindSurfaces === 'function') {
+        window.agiBindSurfaces(rootEl, {
+          onFollowUp: function(text) {
+            prefillComposer(text);
+            sendMessage();
+          },
+          copy: function(text) {
+            if (!navigator.clipboard || typeof navigator.clipboard.writeText !== 'function') return;
+            return navigator.clipboard.writeText(text);
+          }
         });
       }
     }

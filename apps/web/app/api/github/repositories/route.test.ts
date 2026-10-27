@@ -42,6 +42,7 @@ vi.mock('@/lib/services/subscription-service', () => ({
   SubscriptionService: { getSubscription: mockGetSubscription },
 }));
 
+import { GitHubInstallationAccessError } from '@/lib/github-installation-access';
 import { GET } from './route';
 
 function listRequest(search?: string): NextRequest {
@@ -176,15 +177,73 @@ describe('GET /api/github/repositories', () => {
     await expect(response.json()).resolves.toMatchObject({
       repositories: [],
       installationCount: 0,
+      connection: { status: 'unauthorized' },
     });
     expect(mockListInstallationRepositories).not.toHaveBeenCalled();
   });
 
-  it('answers with an empty list when this deployment cannot link installations', async () => {
+  it('reports an installed but unverified GitHub account as waiting for authorization', async () => {
+    mockGetUserScopedDb.mockResolvedValue({
+      userId: 'user-1',
+      organizationId: null,
+      db: {
+        query: vi.fn(async (sql: string) =>
+          sql.includes('ownership_verified_at is null') ? [{ installation_id: '11' }] : [],
+        ),
+      },
+    });
+
+    const response = await GET(listRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      repositories: [],
+      installationCount: 0,
+      connection: { status: 'authorization-pending' },
+    });
+    expect(mockListInstallationRepositories).not.toHaveBeenCalled();
+  });
+
+  it('does not pretend GitHub is disconnected when the app is configured but linking is not', async () => {
     mockLinkingAvailable.mockReturnValue(false);
     const response = await GET(listRequest());
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toMatchObject({ repositories: [] });
+    await expect(response.json()).resolves.toMatchObject({
+      repositories: [],
+      installationCount: 1,
+      connection: { status: 'linking-unavailable' },
+    });
+    expect(mockListInstallationRepositories).not.toHaveBeenCalled();
+  });
+
+  it('does not offer a connection when linking is unavailable and the account has no installation', async () => {
+    mockLinkingAvailable.mockReturnValue(false);
+    mockGetUserScopedDb.mockResolvedValue({
+      userId: 'user-1',
+      organizationId: null,
+      db: { query: vi.fn(async () => []) },
+    });
+
+    const response = await GET(listRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      repositories: [],
+      installationCount: 0,
+      connection: { status: 'linking-unavailable' },
+    });
+  });
+
+  it('reports a deployment with no GitHub App as unconfigured', async () => {
+    mockAppConfigured.mockReturnValue(false);
+    const response = await GET(listRequest());
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      installationCount: 0,
+      connection: { status: 'unconfigured' },
+    });
+    expect(queried).toHaveLength(0);
+    expect(mockListInstallationRepositories).not.toHaveBeenCalled();
   });
 
   it('refuses when managed Code is not enabled for the deployment', async () => {
@@ -222,6 +281,34 @@ describe('GET /api/github/repositories', () => {
     await expect(response.json()).resolves.toMatchObject({
       repositories: [{ fullName: 'acme/widgets' }],
       unreachable: [{ installationId: 12, accountLogin: 'other' }],
+    });
+  });
+
+  it('asks for reconnection when every installation refuses access', async () => {
+    mockListInstallationRepositories.mockRejectedValue(
+      new GitHubInstallationAccessError(401, 'token'),
+    );
+
+    const response = await GET(listRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      repositories: [],
+      installationCount: 1,
+      connection: { status: 'reauthorization-required' },
+    });
+  });
+
+  it('asks for reconnection when the stored repository proof is missing', async () => {
+    const unverified = new Error('reconnect');
+    unverified.name = 'GitHubInstallationUnverifiedError';
+    mockListInstallationRepositories.mockRejectedValue(unverified);
+
+    const response = await GET(listRequest());
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({
+      connection: { status: 'reauthorization-required' },
     });
   });
 

@@ -112,6 +112,7 @@ interface MessageListProps {
   onStopResearch?: () => void;
   onPauseResearch?: (messageId: string) => Promise<boolean>;
   resumingResearchMessageId?: string | null;
+  onFollowUp?: (text: string) => void;
 }
 
 function turnOutcomeAnnouncement(message: ChatMessage): string {
@@ -150,6 +151,7 @@ export function MessageList({
   onStopResearch,
   onPauseResearch,
   resumingResearchMessageId = null,
+  onFollowUp,
 }: MessageListProps) {
   const colors = useThemeColors();
   const listRef = useRef<FlashListRef<ChatMessage>>(null);
@@ -220,6 +222,7 @@ export function MessageList({
             onPauseResearch={onPauseResearch}
             isResumingResearch={resumingResearchMessageId === item.id}
             onQuoteSelection={onQuoteReply ? handleQuoteSelection : undefined}
+            onFollowUp={item.role === 'assistant' ? onFollowUp : undefined}
           />
         </SwipeReplyWrapper>
       </View>
@@ -247,6 +250,7 @@ export function MessageList({
       onStopResearch,
       onPauseResearch,
       resumingResearchMessageId,
+      onFollowUp,
     ],
   );
 

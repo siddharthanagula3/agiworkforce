@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { chatImageModelLabel } from '@/app/api/media/image/lib/image-generation-provider';
+
 import { canonicalToolSummary } from './tool-loop';
 
 describe('canonicalToolSummary, MCP connectors', () => {
@@ -54,5 +56,9 @@ describe('canonicalToolSummary, MCP connectors', () => {
       'Fetching example.com',
     );
     expect(canonicalToolSummary('frobnicate_widget', 'other')).toBe('Running Frobnicate Widget');
+
+    const imageModel = chatImageModelLabel();
+    const imageSummary = canonicalToolSummary('generate_image', 'other');
+    expect(imageSummary).toBe(imageModel ? `Creating image with ${imageModel}` : 'Creating image');
   });
 });

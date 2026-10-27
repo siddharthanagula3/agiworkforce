@@ -1456,6 +1456,7 @@
     "@agiworkforce/routing": "workspace:*",
     "@agiworkforce/sync": "workspace:*",
     "@agiworkforce/types": "workspace:*",
+    "@agiworkforce/unified-chat": "workspace:*",
     "@agiworkforce/utils": "workspace:*",
     "dompurify": "^3.4.17",
     "markdown-it": "^15.0.3",

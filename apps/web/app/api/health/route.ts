@@ -3,6 +3,7 @@ import 'server-only';
 import { NextRequest, NextResponse } from 'next/server';
 import {
   getCachedHealthChecks,
+  NOT_CONFIGURED,
   type DependencyObservation,
   type HealthCheckResult,
 } from '@/lib/server/health-check';
@@ -22,6 +23,30 @@ export const maxDuration = 30;
 // A dependency id or a component name paired with a finding tells a stranger
 // which part of the deployment is weak, so the public answer counts what the
 // operator surfaces name, the same reduction `environment` already makes.
+// Check messages are the same leak in sentence form ("1 queue(s) not draining",
+// "index schema missing"), so only the two generic phrases stay.
+const PUBLIC_CAPABILITY_MESSAGES = new Set(['unavailable', NOT_CONFIGURED]);
+
+export function redactPublicCapabilityCheck<T extends { status: string; message?: string }>(
+  check: T,
+): T {
+  const message = check.message;
+  if (message === undefined || PUBLIC_CAPABILITY_MESSAGES.has(message)) return check;
+  if (check.status === 'unhealthy') return { ...check, message: 'unavailable' };
+  const { message: _dropped, ...rest } = check;
+  return rest as T;
+}
+
+function redactPublicChecks<T extends Record<string, { status: string; message?: string }>>(
+  checks: T,
+): T {
+  const redacted = {} as T;
+  for (const key of Object.keys(checks) as (keyof T)[]) {
+    redacted[key] = redactPublicCapabilityCheck(checks[key]);
+  }
+  return redacted;
+}
+
 function toPublicHealthCheck(healthCheck: HealthCheckResult) {
   const { configuration = [], dependencies = [], ...rest } = healthCheck;
   const missingCount = rest.checks.environment.missingCount;
@@ -31,7 +56,7 @@ function toPublicHealthCheck(healthCheck: HealthCheckResult) {
 
   return {
     ...rest,
-    checks: {
+    checks: redactPublicChecks({
       ...rest.checks,
       stripe: {
         status: rest.checks.stripe.status,
@@ -41,7 +66,7 @@ function toPublicHealthCheck(healthCheck: HealthCheckResult) {
         status: rest.checks.environment.status,
         ...(missingCount === undefined ? {} : { missingCount }),
       },
-    },
+    }),
     dependencyCounts: {
       total: dependencies.length,
       ok: tally('ok'),

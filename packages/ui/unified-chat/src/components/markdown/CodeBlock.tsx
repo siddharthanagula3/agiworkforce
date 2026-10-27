@@ -14,6 +14,10 @@ import { cn } from '../../lib/utils';
 import { useCodeBlockEditor } from './codeBlockEditor';
 import { codeFileFor } from './codeFileName';
 import { downloadTextFile } from './downloadTextFile';
+import { ChartArtifact } from '../artifact-components/ChartArtifact';
+import { parseChartArtifact } from '../artifact-components/chart-spec';
+import { InlineChart } from './AnswerSurface';
+import { parseChartSurface } from './answerSurfaces';
 import { HighlightedCode } from './HighlightedCode';
 import { MermaidDiagram } from './MermaidDiagram';
 import { reactNodeText } from './reactNodeText';
@@ -23,9 +27,35 @@ import './codeBlock.css';
 type CopyState = 'idle' | 'copied' | 'failed';
 
 const LANGUAGE_CLASS_PATTERN = /language-([\w+#.-]+)/;
+const SHELL_LANGUAGES = new Set(['bash', 'sh', 'shell', 'zsh']);
 const TRAILING_NEWLINE_PATTERN = /\n$/;
 const COPIED_RESET_MS = 2000;
 const COPY_FAILED_RESET_MS = 4000;
+
+function DiffLines({ code }: { code: string }) {
+  return (
+    <div data-diff-view="">
+      {code.split('\n').map((line, index) => {
+        const kind = line.startsWith('+') ? 'add' : line.startsWith('-') ? 'remove' : 'context';
+        return (
+          <div
+            key={`${index}-${line}`}
+            data-diff-kind={kind}
+            className={
+              kind === 'add'
+                ? 'bg-[color-mix(in_srgb,var(--chat-success)_18%,transparent)]'
+                : kind === 'remove'
+                  ? 'bg-[color-mix(in_srgb,var(--chat-destructive)_18%,transparent)]'
+                  : undefined
+            }
+          >
+            {line || ' '}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
 
 const HEADER_BUTTON_CLASS =
   'text-[var(--chat-code-lang-label)] hover:bg-[var(--chat-code-copy-hover-bg)] hover:text-[var(--chat-code-copy-hover-fg)]';
@@ -174,11 +204,32 @@ function FencedCodeBlock({ className, language, code, isStreamTail }: FencedCode
           </Button>
         </div>
       </div>
-      <div className="code-block-body">
+      {language === 'html' ? (
+        <iframe
+          title={t('markdown.htmlPreview', 'HTML preview')}
+          sandbox="allow-scripts"
+          srcDoc={code}
+          data-html-preview=""
+          className="h-48 w-full border-b border-[var(--chat-code-border)] bg-white"
+        />
+      ) : null}
+      <div className="code-block-body code-block-body-scroll">
         <pre tabIndex={0} aria-label={blockLabel}>
-          {highlighted}
+          {language === 'diff' ? <DiffLines code={code} /> : null}
+          {language === 'diff' ? <span className="sr-only">{highlighted}</span> : highlighted}
         </pre>
       </div>
+      {SHELL_LANGUAGES.has(language) ? (
+        <p
+          data-command-notice=""
+          className="border-t border-[var(--chat-code-border)] px-3 py-2 text-xs text-[var(--chat-text-secondary)]"
+        >
+          {t(
+            'markdown.commandsNotRun',
+            'These commands are examples only; they have not been executed.',
+          )}
+        </p>
+      ) : null}
       <Dialog open={expanded} onOpenChange={setExpanded}>
         <DialogContent
           hideCloseButton
@@ -232,6 +283,29 @@ export const CodeBlock = ({
   const match = LANGUAGE_CLASS_PATTERN.exec(className || '');
   const language = match?.[1] ?? '';
   const code = reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '');
+
+  const chart =
+    language === 'chart' ||
+    (language === 'json' &&
+      /"(?:type|chartType|chart_type|kind)"\s*:\s*"(?:bar|line|pie|donut|doughnut)"/i.test(code))
+      ? parseChartArtifact(code)
+      : null;
+  if (chart?.ok) {
+    return (
+      <ChartArtifact
+        artifact={{
+          id: `inline-chart-${code.length}`,
+          type: 'chart',
+          title: chart.spec.title ?? 'Chart',
+          content: code,
+        }}
+      />
+    );
+  }
+
+  if (language === 'chart' && parseChartSurface(code)) {
+    return <InlineChart source={code} />;
+  }
 
   if (language === 'mermaid') {
     return (

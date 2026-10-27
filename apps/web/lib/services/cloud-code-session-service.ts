@@ -65,7 +65,11 @@ import {
   isGitHubInstallationLinkingAvailable,
   type GitHubPullRequest,
 } from '@/lib/github-app';
-import type { CloudCodePullRequestStatus } from '@agiworkforce/cloud-contracts';
+import {
+  canonicalGitHubRepositoryBranch,
+  canonicalGitHubRepositoryUrl,
+  type CloudCodePullRequestStatus,
+} from '@agiworkforce/cloud-contracts';
 import { getUserGithubInstallations } from '@/lib/user-connector-tools';
 import {
   buildCloudCodePullRequestBody,
@@ -526,34 +530,20 @@ export async function listCloudCodeAgentTurns(
 
 function validateRepositoryUrl(value: unknown): string | null {
   if (value === undefined || value === null || value === '') return null;
-  if (typeof value !== 'string' || value.length > 500) {
-    throw new CloudCodeValidationError('Repository URL must be at most 500 characters');
-  }
-  let url: URL;
-  try {
-    url = new URL(value);
-  } catch {
+  if (typeof value !== 'string') {
     throw new CloudCodeValidationError('Repository URL must be a valid HTTPS GitHub URL');
   }
-  const pathParts = url.pathname
-    .replace(/\.git$/, '')
-    .split('/')
-    .filter(Boolean);
-  if (
-    url.protocol !== 'https:' ||
-    url.hostname !== 'github.com' ||
-    url.username ||
-    url.password ||
-    url.port ||
-    url.search ||
-    url.hash ||
-    pathParts.length !== 2
-  ) {
-    throw new CloudCodeValidationError(
-      'Only public HTTPS GitHub repository URLs in owner/repository form are supported',
-    );
+  const parsed = canonicalGitHubRepositoryUrl(value);
+  if (parsed.ok) return parsed.url;
+  if (parsed.reason === 'length') {
+    throw new CloudCodeValidationError('Repository URL must be at most 500 characters');
   }
-  return `https://github.com/${pathParts[0]}/${pathParts[1]}.git`;
+  if (parsed.reason === 'invalid') {
+    throw new CloudCodeValidationError('Repository URL must be a valid HTTPS GitHub URL');
+  }
+  throw new CloudCodeValidationError(
+    'Only public HTTPS GitHub repository URLs in owner/repository form are supported',
+  );
 }
 
 const GITHUB_FULL_NAME_RE = /^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/;
@@ -602,21 +592,19 @@ function validateRepositoryReference(value: unknown): ValidatedRepositoryReferen
 const GIT_REF_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]{0,254}$/;
 
 function validateRepositoryBranch(value: string | null | undefined): string | null {
-  const branch = typeof value === 'string' ? value.trim() : '';
-  if (!branch) return null;
-  const rejected =
-    !GIT_REF_RE.test(branch) ||
-    branch.includes('..') ||
-    branch.includes('//') ||
-    branch.endsWith('/') ||
-    branch.endsWith('.') ||
-    branch.endsWith('.lock');
-  if (rejected) {
+  if (value === undefined || value === null) return null;
+  if (typeof value !== 'string') {
     throw new CloudCodeValidationError(
       'Branch must be a plain git ref: letters, digits, dot, dash, underscore and slash, starting with a letter or digit.',
     );
   }
-  return branch;
+  const parsed = canonicalGitHubRepositoryBranch(value);
+  if (!parsed.ok) {
+    throw new CloudCodeValidationError(
+      'Branch must be a plain git ref: letters, digits, dot, dash, underscore and slash, starting with a letter or digit.',
+    );
+  }
+  return parsed.branch;
 }
 
 function resolveExplicitHarnessCredential(

@@ -44,10 +44,17 @@ export function detectCardType(content: string): CardType {
   if (prosConsCount >= 3 && (lower.includes(' vs ') || lower.includes(' versus ')))
     return 'comparison';
 
-  const stepHeaders = content.match(/(?:^|\n)\s*(?:#+\s*)?(?:step\s+\d+|^\d+\.\s+\*\*)/gim);
-  const hasStepKeyword = /#+\s*(guide|how to|tutorial|walkthrough|step-by-step)/i.test(content);
-  if (stepHeaders && stepHeaders.length >= 3) return 'steps';
-  if (hasStepKeyword && stepHeaders && stepHeaders.length >= 2) return 'steps';
+  const explicitSteps = content.match(/(?:^|\n)\s*(?:#{1,4}\s*)?step\s+\d+\b/gi);
+  const orderedLeadIns = content.match(/(?:^|\n)\s*\d+\.\s+\*\*[^*\n]+\*\*/g);
+  const hasProcedureHeading =
+    /#+\s*(guide|how to|tutorial|walkthrough|step-by-step|troubleshooting)/i.test(content);
+  if (explicitSteps && explicitSteps.length >= 3) return 'steps';
+  if (
+    hasProcedureHeading &&
+    ((explicitSteps && explicitSteps.length >= 2) || (orderedLeadIns && orderedLeadIns.length >= 3))
+  ) {
+    return 'steps';
+  }
 
   return null;
 }

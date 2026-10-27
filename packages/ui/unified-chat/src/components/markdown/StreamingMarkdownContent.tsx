@@ -130,6 +130,7 @@ export interface StreamingMarkdownContentProps {
   citations?: readonly MarkdownCitation[];
   trustedImageUrls?: readonly string[];
   announce?: boolean;
+  onFollowUp?: (text: string) => void;
   footnoteScope?: string;
 }
 
@@ -139,6 +140,7 @@ function StreamingMarkdownContentImpl({
   citations,
   trustedImageUrls,
   announce = true,
+  onFollowUp,
   footnoteScope,
 }: StreamingMarkdownContentProps) {
   const splitterRef = useRef<MarkdownBlockSplitter | null>(null);
@@ -186,6 +188,7 @@ function StreamingMarkdownContentImpl({
             citations={citations}
             trustedImageUrls={trustedImageUrls}
             linkifyNumericCitations={!isStreaming}
+            onFollowUp={onFollowUp}
             footnoteScope={footnoteScope}
           />
           {UNIT_SEPARATOR}
@@ -198,6 +201,7 @@ function StreamingMarkdownContentImpl({
         citations={citations}
         trustedImageUrls={trustedImageUrls}
         linkifyNumericCitations={!isStreaming}
+        onFollowUp={onFollowUp}
         footnoteScope={footnoteScope}
       />
     </>
