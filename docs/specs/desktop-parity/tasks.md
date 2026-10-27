@@ -27,3 +27,19 @@ Each needs its own design review before code.
 - [ ] L2 Built-in browser pane.
 - [ ] L3 Interactive terminal (PTY).
 - [ ] L4 Split view or tabs.
+
+## Reported, not yet verified
+
+From the 2026-10-27 inventory of the Electron shell. Each needs reading in code
+before it becomes a task or a `known-flaws.md` row.
+
+- Only the primary window's frame and route are restored after a relaunch.
+- No crash reporter; Open Logs shows only the telemetry counters file.
+- Local commands run through `child_process.spawn`, not a PTY (see L3).
+- The Dock badge counts local approvals only.
+- No `open-file` handler or file associations, so dropping a file on the
+  Dock icon does nothing.
+- The updater does not re-check the version it downloaded.
+- No menu-bar-only mode (hide the Dock icon).
+- Screenshot capture always targets the main window, never Quick Ask, and
+  cannot select an area.
