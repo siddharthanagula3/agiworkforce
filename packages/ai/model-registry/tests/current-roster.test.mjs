@@ -74,7 +74,7 @@ const currentAnthropic = {
   },
   [anthropicStandardModelKey]: {
     input: 2,
-    cacheRead: 0.2,
+    cacheRead: 0.1,
     cacheWrite5m: 2.5,
     cacheWrite1h: 4,
     output: 10,
@@ -225,7 +225,7 @@ test('publishes date-invariant prices, no shipped model carries a pricing schedu
   const standard = registry.pricing[anthropicStandardModelKey];
   assert.equal(standard.inputPerMillion, 2);
   assert.equal(standard.outputPerMillion, 10);
-  assert.equal(standard.cacheReadPerMillion, 0.2);
+  assert.equal(standard.cacheReadPerMillion, 0.1);
   assert.equal(standard.cacheWritePerMillion, 2.5);
   assert.equal(standard.cacheWrite1hPerMillion, 4);
 });

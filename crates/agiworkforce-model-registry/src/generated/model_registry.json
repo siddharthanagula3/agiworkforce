@@ -13229,7 +13229,7 @@
         "unit": "per_million_tokens",
         "inputPerMillion": 2,
         "outputPerMillion": 10,
-        "cacheReadPerMillion": 0.2,
+        "cacheReadPerMillion": 0.1,
         "cacheWritePerMillion": 2.5,
         "cacheWrite1hPerMillion": 4
       }
@@ -33765,7 +33765,7 @@
       "unit": "per_million_tokens",
       "inputPerMillion": 2,
       "outputPerMillion": 10,
-      "cacheReadPerMillion": 0.2,
+      "cacheReadPerMillion": 0.1,
       "cacheWritePerMillion": 2.5,
       "cacheWrite1hPerMillion": 4
     },
