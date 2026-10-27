@@ -79,7 +79,7 @@ export interface GalleryItem {
 
 export interface DetailsSpec {
   summary: string;
-  body: string;
+  detail: string;
 }
 
 export interface MapStop {
@@ -271,11 +271,11 @@ export function parseDetails(source: string): DetailsSpec | null {
   const summary = lines.find((line) => line.trim())?.trim() ?? '';
   if (!summary) return null;
   const start = lines.findIndex((line) => line.trim() === summary);
-  const body = lines
+  const detail = lines
     .slice(start + 1)
     .join('\n')
     .trim();
-  return body ? { summary, body } : null;
+  return detail ? { summary, detail } : null;
 }
 
 function readCoordinate(value: string): { lat: number; lon: number } | null {
@@ -289,7 +289,7 @@ function readCoordinate(value: string): { lat: number; lon: number } | null {
 }
 
 export function parseMap(source: string): MapStop[] {
-  return trimmedLines(source).flatMap((line) => {
+  return trimmedLines(source).flatMap((line): MapStop[] => {
     const parts = splitFields(line);
     const name = parts[0] ?? '';
     if (!name) return [];
@@ -481,8 +481,8 @@ export function parseChartSurface(source: string): ChartSurface | null {
       const points = data.flatMap((row) => {
         if (!row || typeof row !== 'object') return [];
         const entry = row as Record<string, unknown>;
-        const label = String(entry.name ?? entry.label ?? entry.month ?? '');
-        const value = Number(entry.value ?? entry.requests ?? entry.y);
+        const label = String(entry['name'] ?? entry['label'] ?? entry['month'] ?? '');
+        const value = Number(entry['value'] ?? entry['requests'] ?? entry['y']);
         if (!label || !Number.isFinite(value)) return [];
         return [{ label, value }];
       });

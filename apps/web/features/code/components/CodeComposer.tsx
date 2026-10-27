@@ -621,7 +621,7 @@ function RepositoryResults({
                 className={styles['secondaryButton']}
                 href={CODE_ROUTES.githubManageInstallations}
                 target="_blank"
-                rel="noreferrer"
+                rel="noopener noreferrer"
               >
                 {CODE_COPY.repositoryManageAccess}
               </a>

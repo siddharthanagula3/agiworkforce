@@ -70,7 +70,7 @@ export type AssistantFence =
   | { kind: 'checks'; title: string; items: CheckItem[] }
   | { kind: 'dropdown'; label: string; options: string[]; selected: string }
   | { kind: 'gallery'; items: { caption: string; src: string; color: string }[] }
-  | { kind: 'details'; summary: string; body: string }
+  | { kind: 'details'; summary: string; detail: string }
   | { kind: 'map'; stops: { name: string; note: string }[] }
   | { kind: 'actions'; items: { label: string; text: string }[] }
   | { kind: 'files'; files: { name: string; kind: string; note: string }[] }
@@ -434,7 +434,7 @@ export function renderClassifiedFenceHtml(
     return `${sectionOpen(mode, 'gallery', 'Gallery')}<ul>${items}</ul></section>`;
   }
   if (fence.kind === 'details') {
-    return `${sectionOpen(mode, 'details', fence.summary)}<h3>${escapeHtml(fence.summary)}</h3><p>${escapeHtml(fence.body)}</p></section>`;
+    return `${sectionOpen(mode, 'details', fence.summary)}<h3>${escapeHtml(fence.summary)}</h3><p>${escapeHtml(fence.detail)}</p></section>`;
   }
   if (fence.kind === 'map') {
     const stops = fence.stops

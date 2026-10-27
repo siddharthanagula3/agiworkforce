@@ -295,7 +295,7 @@ export function AssistantSurface({
     return (
       <View testID="answer-surface-details" accessibilityLabel={fence.summary}>
         <Text style={{ color: colors.textPrimary, fontWeight: '600' }}>{fence.summary}</Text>
-        <Text style={{ color: colors.textPrimary }}>{fence.body}</Text>
+        <Text style={{ color: colors.textPrimary }}>{fence.detail}</Text>
       </View>
     );
   }

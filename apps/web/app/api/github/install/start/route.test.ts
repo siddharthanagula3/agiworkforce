@@ -23,7 +23,7 @@ vi.mock('@/lib/logger', () => ({
 vi.mock('@/lib/server/rls-db', () => ({
   getUserScopedDb: vi.fn(async () => ({
     userId: 'user-1',
-    db: { query: (...args: unknown[]) => mocks.query(...args) },
+    db: { query: mocks.query },
   })),
 }));
 vi.mock('@/lib/services/organization-policy-code-gate', () => ({
