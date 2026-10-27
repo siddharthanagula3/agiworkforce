@@ -110,11 +110,10 @@ Code: `apps/web/features/chat/components/messages/ChatMessageList.tsx:1048-1048`
 
 - Done when: An answer cut off by the output limit offers Continue, which resumes the same answer.
 - Wave: 3
-- Already works on: web, desktop, cli
+- Already works on: web, desktop, mobile, cli
 
 | Surface | Status | What is left | Gap |
 | --- | --- | --- | --- |
-| mobile | missing | Not built on this surface. |  |
 | vscode | missing | Not built on this surface. |  |
 | chrome | missing | Not built on this surface. |  |
 

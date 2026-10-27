@@ -269,6 +269,8 @@
       "./tabular": "universal",
       "./markdown-document": "universal",
       "./assistant-fence": "universal",
+      "./continue-generation": "universal",
+      "./continuation-seam": "universal",
       "./shiki-highlighter": "universal",
       "./agi-work-progress": "universal",
       "./task-display": "universal",

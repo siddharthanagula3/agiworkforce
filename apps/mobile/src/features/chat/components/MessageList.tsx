@@ -87,6 +87,8 @@ interface MessageListProps {
   onDeleteMessage?: (messageId: string) => void;
   onRetryMessage?: (messageId: string) => void;
   onRetryWithModel?: (messageId: string) => void;
+  continuableMessageId?: string | null;
+  onContinueMessage?: (messageId: string) => void;
   onBranch?: (messageId: string) => void;
   onScheduleMessage?: (messageId: string) => void;
   footer?: ReactElement | null;
@@ -131,6 +133,8 @@ export function MessageList({
   onDeleteMessage,
   onRetryMessage,
   onRetryWithModel,
+  continuableMessageId = null,
+  onContinueMessage,
   onBranch,
   onScheduleMessage,
   footer,
@@ -206,6 +210,7 @@ export function MessageList({
             onDeleteMessage={onDeleteMessage}
             onRetryMessage={canRetry(item) ? onRetryMessage : undefined}
             onRetryWithModel={canRetry(item) ? onRetryWithModel : undefined}
+            onContinueMessage={item.id === continuableMessageId ? onContinueMessage : undefined}
             onBranch={onBranch}
             onScheduleMessage={onScheduleMessage}
             onEditImageArea={onEditImageArea}
@@ -234,6 +239,8 @@ export function MessageList({
       onDeleteMessage,
       onRetryMessage,
       onRetryWithModel,
+      continuableMessageId,
+      onContinueMessage,
       onBranch,
       onScheduleMessage,
       onEditImageArea,
