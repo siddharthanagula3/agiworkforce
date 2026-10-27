@@ -84,7 +84,7 @@ describe('the personalization General settings collects reaches the model', () =
       instructions: null,
     });
 
-    expect(preamble).toContain('Address the user as: Siddhartha');
+    expect(preamble).toContain("The user's preferred name is Siddhartha.");
     expect(preamble).not.toContain('SIDDHARTHA');
   });
 
@@ -95,7 +95,7 @@ describe('the personalization General settings collects reaches the model', () =
       instructions: null,
     });
 
-    expect(preamble).toContain('Address the user as: Mary Jane');
+    expect(preamble).toContain("The user's preferred name is Mary Jane.");
   });
 
   it('leaves a short all-caps initialism alone', () => {
@@ -105,7 +105,7 @@ describe('the personalization General settings collects reaches the model', () =
       instructions: null,
     });
 
-    expect(preamble).toContain('Address the user as: JD');
+    expect(preamble).toContain("The user's preferred name is JD.");
   });
 
   it('leaves an already mixed-case preferred name untouched', () => {
@@ -115,7 +115,7 @@ describe('the personalization General settings collects reaches the model', () =
       instructions: null,
     });
 
-    expect(preamble).toContain('Address the user as: McKenzie');
+    expect(preamble).toContain("The user's preferred name is McKenzie.");
   });
 
   it('preserves intentional internal capitalization such as McKay', () => {
@@ -125,7 +125,7 @@ describe('the personalization General settings collects reaches the model', () =
       instructions: null,
     });
 
-    expect(preamble).toContain('Address the user as: McKay');
+    expect(preamble).toContain("The user's preferred name is McKay.");
   });
 
   it('keeps the preference framed as preference, not as system authority', () => {
