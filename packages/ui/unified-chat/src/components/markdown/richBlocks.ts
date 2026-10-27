@@ -41,16 +41,46 @@ const HEADER_FIELDS: Readonly<Record<string, EmailField>> = {
   subject: 'subject',
 };
 
-const HEADER_LINE_PATTERN = /^\s*\**([A-Za-z]+)\**\s*:\s*\**\s*(.*?)\s*$/;
 const BLANK_LINE_PATTERN = /^\s*$/;
 const LINE_BREAK_PATTERN = /\r?\n/;
 const HEADER_NAME_PREFIX_PATTERN = /^\s*\**[A-Za-z]*$/;
 const RECIPIENT_SEPARATOR_PATTERN = /[,;]/;
 
+function isHeaderSpace(char: string): boolean {
+  return (
+    char === ' ' ||
+    char === '\t' ||
+    char === '\f' ||
+    char === '\n' ||
+    char === '\r' ||
+    char === '\v'
+  );
+}
+
+function isHeaderLetter(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function skipHeader(line: string, index: number, accept: (char: string) => boolean): number {
+  let cursor = index;
+  while (cursor < line.length && accept(line[cursor] ?? '')) cursor += 1;
+  return cursor;
+}
+
 function headerField(line: string): { field: EmailField; value: string } | null {
-  const match = HEADER_LINE_PATTERN.exec(line);
-  const field = match?.[1] ? HEADER_FIELDS[match[1].toLowerCase()] : undefined;
-  return field ? { field, value: match?.[2] ?? '' } : null;
+  let index = skipHeader(line, 0, isHeaderSpace);
+  index = skipHeader(line, index, (char) => char === '*');
+  const nameStart = index;
+  index = skipHeader(line, index, isHeaderLetter);
+  if (index === nameStart) return null;
+  const name = line.slice(nameStart, index).toLowerCase();
+  index = skipHeader(line, index, (char) => char === '*');
+  index = skipHeader(line, index, isHeaderSpace);
+  if (line[index] !== ':') return null;
+  index = skipHeader(line, index + 1, (char) => isHeaderSpace(char) || char === '*');
+  const field = HEADER_FIELDS[name];
+  return field ? { field, value: line.slice(index).trim() } : null;
 }
 
 function isPartialHeaderName(line: string): boolean {
