@@ -9,7 +9,7 @@ version: 1.0.0
 Use this skill when an answer depends on current, disputed, or source-specific facts.
 
 1. Restate the research question and separate it into checkable claims.
-2. Search for current evidence, preferring primary sources and official documentation.
+2. Search for current evidence, preferring primary sources and official documentation. When web search is off, say which claims you could not check against a current source instead of answering from memory as if it were current.
 3. Fetch the most relevant sources and verify that each one directly supports the claim it will cite.
 4. Compare publication dates with the date the underlying event occurred.
 5. Distinguish sourced facts from inference, and identify material disagreement or missing evidence.

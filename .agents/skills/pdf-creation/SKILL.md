@@ -12,7 +12,7 @@ Use this skill when the user needs a `.pdf` deliverable they can share or print 
 
 1. Identify the audience, purpose, required sections, length, and source material.
 2. Build a short outline before drafting.
-3. Write the content with `#` headings, `-` bullet lines and short paragraphs; a `| pipe | table |` is printed as aligned rows of text rather than a drawn table.
+3. Write the content with `#` to `###` headings, `-` bullet lines and short paragraphs. Numbered lines print as bullets, so write any number the reader needs into the text, and a `| pipe | table |` prints as plain rows with the cells separated by bars, not a drawn table.
 4. Preserve factual uncertainty and cite supplied or researched sources where appropriate.
 5. Create the file with `create_office_file` and format `pdf`; do not claim a file exists until the tool succeeds.
 6. Check the returned file metadata and summarize what was created, including any content gaps.
