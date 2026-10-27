@@ -1081,7 +1081,7 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
   });
 
   it('creates a fresh sandbox when the user is under the quota', async () => {
-    listedSandboxes = liveSandboxesFor('user-under', 4);
+    listedSandboxes = liveSandboxesFor('user-under', getPlanMaxSandboxes('pro') - 1);
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(scope('conv-q2', 'user-under'));
     expect(executor).not.toBeNull();
@@ -1089,7 +1089,7 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
   });
 
   it('refuses a new sandbox (fail-closed) when the user is at the quota', async () => {
-    listedSandboxes = liveSandboxesFor('user-max', 5);
+    listedSandboxes = liveSandboxesFor('user-max', getPlanMaxSandboxes('pro'));
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(scope('conv-q3', 'user-max'));
     expect(executor).toBeNull();
@@ -1098,7 +1098,7 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
 
   it('frees the coldest paused slot rather than refusing the turn', async () => {
     listedSandboxes = [
-      ...liveSandboxesFor('user-evict', 3, 'running'),
+      ...liveSandboxesFor('user-evict', getPlanMaxSandboxes('pro') - 2, 'running'),
       {
         metadata: { userId: 'user-evict', conversationId: 'conv-cold' },
         sandboxId: 'sbx-cold',
@@ -1123,7 +1123,7 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
   });
 
   it('still refuses when every slot is held by a running sandbox', async () => {
-    listedSandboxes = liveSandboxesFor('user-busy', 5, 'running');
+    listedSandboxes = liveSandboxesFor('user-busy', getPlanMaxSandboxes('pro'), 'running');
 
     const { getE2BExecutor } = await import('../runtime');
     const executor = await getE2BExecutor(scope('conv-busy', 'user-busy'));
@@ -1154,10 +1154,10 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
   it('scales the sandbox ceiling with the plan', async () => {
     const { getE2BExecutor } = await import('../runtime');
 
-    listedSandboxes = liveSandboxesFor('user-basic', 2);
+    listedSandboxes = liveSandboxesFor('user-basic', getPlanMaxSandboxes('basic'));
     expect(await getE2BExecutor(scope('conv-b', 'user-basic', 'basic'))).toBeNull();
 
-    listedSandboxes = liveSandboxesFor('user-max15', 2);
+    listedSandboxes = liveSandboxesFor('user-max15', getPlanMaxSandboxes('basic'));
     expect(await getE2BExecutor(scope('conv-m', 'user-max15', 'max_15x'))).not.toBeNull();
   });
 
@@ -1197,7 +1197,7 @@ describe('getE2BExecutor, per-user sandbox quota', () => {
     const { getE2BExecutor } = await import('../runtime');
     await getE2BExecutor(scope('conv-ttl', 'user-ttl', 'max'));
     const opts = (create.mock.calls[0] as unknown[])[0] as { timeoutMs?: number };
-    expect(opts.timeoutMs).toBe(30 * 60_000);
+    expect(opts.timeoutMs).toBe(getPlanSandboxTtlMs('max'));
   });
 
   it('gives a Free sandbox only the lifetime its window funded, and says so on the first run', async () => {

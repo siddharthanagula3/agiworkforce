@@ -116,6 +116,7 @@ import {
   planFeatureLead,
   planTierBody,
   pricingUsageExplainer,
+  sandboxHours,
   sandboxMinutes,
   teamPlanFeatures,
   teamSeatRows,
@@ -191,8 +192,11 @@ function countCell(
 }
 
 function sandboxCell(plan: BillingPlanTier, t: TFunction<'pricing'>): PlanComparisonCell {
+  const hours = sandboxHours(plan);
   return countCell(getBillingPlanProductLimits(plan)?.maxSandboxes, t, (sandboxes) =>
-    t('compareSandboxLimit', { sandboxes, minutes: sandboxMinutes(plan) }),
+    hours === null
+      ? t('compareSandboxLimit', { sandboxes, minutes: sandboxMinutes(plan) })
+      : t('compareSandboxLimitHours', { sandboxes, hours }),
   );
 }
 

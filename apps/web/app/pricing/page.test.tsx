@@ -103,6 +103,7 @@ vi.mock('react-i18next', async (importOriginal) => {
           key === 'compareLocalByokNote' ||
           key === 'compareContextTokens' ||
           key === 'compareSandboxLimit' ||
+          key === 'compareSandboxLimitHours' ||
           key === 'freeLocalByok' ||
           key === 'projectsNoSetLimitWithStorage'
         ) {
@@ -1174,7 +1175,7 @@ describe('PricingPage', () => {
       customMcp: NOT_INCLUDED,
       chats: '1',
       scheduledTasks: NOT_INCLUDED,
-      sandboxes: '1 at once, 10 min each',
+      sandboxes: '2 at once, 60 min each',
       training: 'Not by AGI. Free model providers may.',
     });
     column('basic', {
@@ -1186,7 +1187,7 @@ describe('PricingPage', () => {
       customMcp: '5',
       chats: '2',
       scheduledTasks: '2',
-      sandboxes: '2 at once, 10 min each',
+      sandboxes: '5 at once, 24 h each',
     });
     column('pro', {
       usage: '5x more usage than Basic',
@@ -1197,7 +1198,7 @@ describe('PricingPage', () => {
       customMcp: '25',
       chats: '4',
       scheduledTasks: '5',
-      sandboxes: '5 at once, 20 min each',
+      sandboxes: '10 at once, 24 h each',
       proFeatures: true,
     });
     column('max', {
@@ -1209,7 +1210,7 @@ describe('PricingPage', () => {
       customMcp: 'noSetLimit',
       chats: '8',
       scheduledTasks: '10',
-      sandboxes: '5 at once, 30 min each',
+      sandboxes: '20 at once, 24 h each',
       proFeatures: true,
     });
     column('max_15x', {
@@ -1221,7 +1222,7 @@ describe('PricingPage', () => {
       customMcp: 'noSetLimit',
       chats: '12',
       scheduledTasks: '25',
-      sandboxes: '5 at once, 60 min each',
+      sandboxes: '20 at once, 24 h each',
       proFeatures: true,
       video: true,
     });
@@ -1235,7 +1236,7 @@ describe('PricingPage', () => {
       customMcp: '25',
       chats: '4',
       scheduledTasks: '5',
-      sandboxes: '5 at once, 20 min each',
+      sandboxes: '10 at once, 24 h each',
       proFeatures: true,
       teamAdmin: true,
     });

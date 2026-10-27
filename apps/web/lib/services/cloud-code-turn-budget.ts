@@ -3,7 +3,7 @@ import { CLOUD_CODE_TURN_BUDGET_MS, FUNCTION_TEARDOWN_RESERVE_MS } from '@/lib/d
 
 /**
  * The wall-clock ceiling the platform enforces on the two routes that reach the
- * Code agent service: `export const maxDuration = 300` in
+ * Code agent service: `export const maxDuration = 800` in
  * `app/api/code/sessions/[sessionId]/agent/route.ts` and in that route's
  * `approvals/route.ts`. Next.js needs `maxDuration` to be a literal, so it
  * cannot import this, the route literals and the shared limit clients wait on
@@ -15,9 +15,9 @@ export const CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS = CLOUD_CODE_AGENT_TURN_REQUEST_
  * What an agent turn is actually allowed to spend, and why it is not
  * {@link CLOUD_CODE_TURN_BUDGET_MS}.
  *
- * `cloud-code-agent-loop.ts` defaults to that 600 s standalone budget, which is
- * twice the platform ceiling above. Under that default the loop's own `timeout`
- * guard is unreachable dead code: the function is killed at 300 s, and a
+ * `cloud-code-agent-loop.ts` defaults to that standalone budget, which need not
+ * fit under the platform ceiling above. When it does not, the loop's own `timeout`
+ * guard is unreachable dead code: the function is killed at the ceiling, and a
  * platform kill runs no `finally`, no `catch`, nothing. The turn row is left at
  * `state = 'running'` with a null `stop_reason`, the managed-usage reservation
  * is never finalised, and the E2B sandbox is never paused or disposed, it just

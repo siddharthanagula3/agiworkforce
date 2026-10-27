@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "定时任务",
   "compareRowSandboxes": "托管沙箱",
   "compareSandboxLimit": "同时 {{sandboxes}} 个，每个 {{minutes}} 分钟",
+  "compareSandboxLimitHours": "同时 {{sandboxes}} 个，每个 {{hours}} 小时",
   "compareGroupResearch": "研究与创作",
   "compareGroupProjects": "项目与文件",
   "compareGroupTools": "工具与自动化",
@@ -230,5 +231,7 @@
   "dailyUploads_one": "每天上传 {{count}} 个文件，每个最大 {{size}}",
   "dailyUploads_other": "每天上传 {{count}} 个文件，每个最大 {{size}}",
   "scheduledTasksAndSandboxes_one": "{{count}} 个定时任务，{{minutes}} 分钟托管沙箱",
-  "scheduledTasksAndSandboxes_other": "{{count}} 个定时任务，{{minutes}} 分钟托管沙箱"
+  "scheduledTasksAndSandboxesHours_one": "{{count}} 个定时任务，{{hours}} 小时托管沙箱",
+  "scheduledTasksAndSandboxes_other": "{{count}} 个定时任务，{{minutes}} 分钟托管沙箱",
+  "scheduledTasksAndSandboxesHours_other": "{{count}} 个定时任务，{{hours}} 小时托管沙箱"
 }

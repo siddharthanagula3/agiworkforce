@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "المهام المجدولة",
   "compareRowSandboxes": "البيئات المعزولة المُدارة",
   "compareSandboxLimit": "في آن واحد: {{sandboxes}}، مدة كل منها {{minutes}} دقيقة",
+  "compareSandboxLimitHours": "في آن واحد: {{sandboxes}}، مدة كل منها {{hours}} ساعة",
   "compareGroupResearch": "البحث والإنشاء",
   "compareGroupProjects": "المشاريع والملفات",
   "compareGroupTools": "الأدوات والأتمتة",
@@ -238,9 +239,15 @@
   "dailyUploads_many": "عمليات رفع الملفات يوميًا: {{count}}، حتى {{size}} لكل ملف",
   "dailyUploads_other": "عمليات رفع الملفات يوميًا: {{count}}، حتى {{size}} لكل ملف",
   "scheduledTasksAndSandboxes_zero": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالدقائق: {{minutes}}",
+  "scheduledTasksAndSandboxesHours_zero": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالساعات: {{hours}}",
   "scheduledTasksAndSandboxes_one": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالدقائق: {{minutes}}",
+  "scheduledTasksAndSandboxesHours_one": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالساعات: {{hours}}",
   "scheduledTasksAndSandboxes_two": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالدقائق: {{minutes}}",
+  "scheduledTasksAndSandboxesHours_two": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالساعات: {{hours}}",
   "scheduledTasksAndSandboxes_few": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالدقائق: {{minutes}}",
+  "scheduledTasksAndSandboxesHours_few": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالساعات: {{hours}}",
   "scheduledTasksAndSandboxes_many": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالدقائق: {{minutes}}",
-  "scheduledTasksAndSandboxes_other": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالدقائق: {{minutes}}"
+  "scheduledTasksAndSandboxesHours_many": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالساعات: {{hours}}",
+  "scheduledTasksAndSandboxes_other": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالدقائق: {{minutes}}",
+  "scheduledTasksAndSandboxesHours_other": "المهام المجدولة: {{count}}، ومدة البيئات المعزولة المُدارة بالساعات: {{hours}}"
 }
