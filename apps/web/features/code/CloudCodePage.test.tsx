@@ -15,7 +15,11 @@ import {
 import { useUIStore } from '@shared/stores/layout-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { getModelMetadata } from '@shared/config/llm';
-import type { CloudCodeRuntime } from '@agiworkforce/types';
+import {
+  canAccessModelForSubscriptionTier,
+  getSelectableModels,
+  type CloudCodeRuntime,
+} from '@agiworkforce/types';
 import { CODE_COPY, contextWindowLabel, environmentChipLabel } from './code-surface';
 import {
   TOOL_APPROVAL_POLICY_OPTIONS,
@@ -3609,6 +3613,74 @@ describe('CloudCodePage, a coding agent that runs on the person’s own key', ()
     await waitFor(() =>
       expect(api.create).toHaveBeenCalledWith(
         expect.objectContaining({ runtimeId: 'droid', harnessCredential: 'fd-own-key' }),
+      ),
+    );
+  });
+});
+
+describe('CloudCodePage, the model a coding agent runs', () => {
+  const claudeCode: CloudCodeRuntime = {
+    id: 'claude',
+    name: 'Claude Code',
+    kind: 'harness',
+    summary: 'Anthropic’s agentic CLI.',
+    agentCommand: 'claude',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+    modelProvider: 'anthropic',
+    runsOwnAgent: true,
+  };
+  const anthropicOnPlan = getSelectableModels().filter(
+    (model) =>
+      model.provider === 'anthropic' &&
+      canAccessModelForSubscriptionTier(model.id, availability.planTier),
+  );
+
+  it('offers only the agent provider’s models the plan includes, and runs the one picked', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({ availability, sessions: [], runtimes: [claudeCode] })),
+      create: vi.fn(async () => ({
+        session: { ...session, runtimeId: 'claude' },
+        terminalEntries: [],
+        turns: [],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await user.click(
+      await screen.findByRole('button', { name: environmentChipLabel('cloud', 'none') }),
+    );
+    await user.click(await screen.findByRole('menuitem', { name: CODE_COPY.editEnvironment }));
+    await user.selectOptions(
+      await screen.findByRole('combobox', { name: CODE_COPY.environmentImageHeading }),
+      'claude',
+    );
+    const model = screen.getByRole('combobox', { name: CODE_COPY.harnessModelLabel });
+    const offered = within(model)
+      .getAllByRole('option')
+      .map((option) => (option as HTMLOptionElement).value);
+
+    expect(anthropicOnPlan.length).toBeGreaterThan(0);
+    expect(offered).toEqual(['', ...anthropicOnPlan.map((choice) => choice.id)]);
+
+    const picked = anthropicOnPlan.find(
+      (choice) => choice.id !== getRoutingSlotModel('coding_balanced'),
+    )!.id;
+    await user.selectOptions(model, picked);
+    await user.keyboard('{Escape}');
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'Run the test suite',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    await waitFor(() =>
+      expect(api.startAgentTurn).toHaveBeenCalledWith(
+        session.id,
+        expect.objectContaining({ model: picked }),
       ),
     );
   });

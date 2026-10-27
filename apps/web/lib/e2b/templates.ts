@@ -266,6 +266,15 @@ export function harnessProxyConfigFile(harnessId: string): HarnessProxyConfigFil
  * like opencode that can auto-detect several providers cannot be safely
  * routed without knowing at mint time which one it will use.
  */
+export function harnessModelProvider(harnessId: string): string | null {
+  return harnessCredentialSpecs(harnessId)[0]?.providerId ?? null;
+}
+
+function modelProviderField(harnessId: string): { modelProvider?: string } {
+  const provider = harnessModelProvider(harnessId);
+  return provider ? { modelProvider: provider } : {};
+}
+
 export function harnessIsProxyCovered(harnessId: string): boolean {
   return (
     harnessCredentialSpecs(harnessId).length === 1 &&
@@ -357,6 +366,7 @@ function merge(teamTemplates: readonly CloudCodeRuntime[]): CloudCodeRuntime[] {
     (runtime) => ({
       ...runtime,
       ...(harnessNeedsUserCredential(runtime.id) ? { needsUserCredential: true } : {}),
+      ...modelProviderField(runtime.id),
       ...(selectHarnessRunner(runtime.id) ? { runsOwnAgent: true } : {}),
     }),
   );

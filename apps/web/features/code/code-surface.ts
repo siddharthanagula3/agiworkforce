@@ -145,6 +145,8 @@ export const CODE_COPY = {
   imageGroup: 'Environments',
   extraHostsLabel: 'Extra allowed hosts',
   harnessCredentialLabel: 'Your API key for this agent',
+  harnessModelLabel: 'Model for this agent',
+  harnessModelDefault: 'Automatic',
   harnessCredentialHelp:
     'This agent runs on your own key. It stays in this session’s sandbox and is not saved to your account.',
   extraHostsPlaceholder: 'api.example.com, *.internal.example.com',

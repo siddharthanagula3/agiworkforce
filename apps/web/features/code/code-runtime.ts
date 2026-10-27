@@ -1,4 +1,8 @@
-import type { CloudCodeRuntime } from '@agiworkforce/types';
+import {
+  canAccessModelForSubscriptionTier,
+  getSelectableModels,
+  type CloudCodeRuntime,
+} from '@agiworkforce/types';
 import { selectHarnessRunner } from '@/lib/e2b/harnesses/registry';
 import { HARNESS_MAX_TURNS, HARNESS_RUN_DEADLINE_MS } from '@/lib/e2b/harnesses/budget';
 import { CODE_COPY } from './code-surface';
@@ -45,4 +49,23 @@ export function runtimeHelpText(
     return `The workspace starts with ${selectedRuntime.name} installed, but an agent turn runs the generic tool-calling loop rather than ${selectedRuntime.name} directly; run \`${selectedRuntime.agentCommand}\` yourself in the terminal to use it as a harness. This cannot be changed after the session is created.`;
   }
   return `The workspace starts with ${selectedRuntime.name} installed. An agent turn runs it headlessly as \`${headless}\`, capped at ${HARNESS_BUDGET_MINUTES} minutes; run it yourself in the terminal to drive it interactively, then use ${CODE_COPY.commitAction} to publish the result. This cannot be changed after the session is created.`;
+}
+
+export interface HarnessModelChoice {
+  id: string;
+  name: string;
+}
+
+export function harnessModelChoices(
+  runtime: CloudCodeRuntime | null,
+  planTier: string | null,
+): HarnessModelChoice[] {
+  const provider = runtime?.modelProvider;
+  if (!provider || !planTier) return [];
+  return getSelectableModels()
+    .filter(
+      (model) =>
+        model.provider === provider && canAccessModelForSubscriptionTier(model.id, planTier),
+    )
+    .map((model) => ({ id: model.id, name: model.name }));
 }

@@ -63,6 +63,8 @@ export interface CloudCodeRuntime {
    * so a session needs the caller's own key or a different harness.
    */
   needsUserCredential?: boolean;
+  /** The provider whose models this coding agent runs, for a harness that has one in the catalog. */
+  modelProvider?: string;
   runsOwnAgent?: boolean;
 }
 

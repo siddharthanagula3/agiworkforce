@@ -4,13 +4,9 @@ import {
   getSelectableModels,
   type ModelMetadata,
 } from '@agiworkforce/types';
-import { harnessCredentialSpecs } from '../templates';
+import { harnessModelProvider } from '../templates';
 
 const QUALITY_PREFERENCE: readonly ModelMetadata['qualityTier'][] = ['balanced', 'best', 'fast'];
-
-export function harnessModelProvider(runtimeId: string): string | null {
-  return harnessCredentialSpecs(runtimeId)[0]?.providerId ?? null;
-}
 
 function preference(model: ModelMetadata): number {
   const index = QUALITY_PREFERENCE.indexOf(model.qualityTier);

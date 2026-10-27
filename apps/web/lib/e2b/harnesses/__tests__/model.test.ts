@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { canAccessModelForSubscriptionTier, getSelectableModels } from '@agiworkforce/types';
-import { harnessModelProvider, resolveHarnessModel } from '../model';
+import { harnessModelProvider } from '../../templates';
+import { resolveHarnessModel } from '../model';
 
 const anthropic = getSelectableModels().filter((model) => model.provider === 'anthropic');
 const onPro = anthropic.find((model) => canAccessModelForSubscriptionTier(model.id, 'pro'));
