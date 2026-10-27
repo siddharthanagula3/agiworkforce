@@ -22,7 +22,11 @@ import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-pu
 import { logger } from '@/lib/logger';
 import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import type { SubscriptionRow } from '@/lib/server/neon-types';
-import { PLAN_CHANGE_REFUSED_DURING_DELETION } from './billing-plan-change-gate';
+import {
+  PLAN_CHANGE_REFUSED_DURING_DELETION,
+  PLAN_CHANGE_REFUSED_DURING_DISPUTE,
+  readAccountBillingHold,
+} from './billing-plan-change-gate';
 import { recordCogsAdjustment } from './cogs-ledger-service';
 import { SubscriptionService } from './subscription-service';
 import {
@@ -443,12 +447,12 @@ async function grantVerifiedMobileIapPurchase(input: {
       throw createError.conflict(STORE_PURCHASE_CONSENT_WITHDRAWN).asUserSafe();
     }
 
-    const [deletion] = await tx.query<{ deletion_scheduled_for: string | Date | null }>(
-      'select deletion_scheduled_for from public.profiles where id = $1 limit 1',
-      [input.userId],
-    );
-    if (deletion?.deletion_scheduled_for) {
+    const hold = await readAccountBillingHold(tx, input.userId);
+    if (hold === 'deletion_scheduled') {
       throw createError.conflict(PLAN_CHANGE_REFUSED_DURING_DELETION).asUserSafe();
+    }
+    if (hold === 'dispute_open') {
+      throw createError.conflict(PLAN_CHANGE_REFUSED_DURING_DISPUTE).asUserSafe();
     }
 
     if (
