@@ -347,6 +347,10 @@
       },
       {
         "from": "@agiworkforce/mobile",
+        "to": "@agiworkforce/unified-chat"
+      },
+      {
+        "from": "@agiworkforce/mobile",
         "to": "@agiworkforce/utils"
       },
       {
@@ -920,6 +924,10 @@
       {
         "from": "agi-workforce",
         "to": "@agiworkforce/types"
+      },
+      {
+        "from": "agi-workforce",
+        "to": "@agiworkforce/unified-chat"
       },
       {
         "from": "agi-workforce",
