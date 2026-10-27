@@ -12,6 +12,7 @@ import { createError, isAppError } from '@/lib/errors';
 import { readStoreTestPurchasesAllowed } from '@/lib/feature-flags/store-test-purchase-gate';
 import { logger } from '@/lib/logger';
 import { logSecurityEvent } from '@/lib/security-audit';
+import { MICROUSD_PER_LEDGER_CENT } from '@/lib/server/managed-usage-policy';
 import { grantsAccess, type MobileIapEntitlementState } from '@/lib/server/mobile-iap-lifecycle';
 import {
   hashMobileIapPurchaseToken,
@@ -30,6 +31,7 @@ import {
   recordMobileIapStoreCommission,
   recordVerifiedMobileIapPurchase,
   storePeriodStart,
+  storeTopUpGrantDescription,
 } from './mobile-iap-ledger-service';
 import { SubscriptionService } from './subscription-service';
 
@@ -61,9 +63,58 @@ interface ReceiptAnchor {
   id: string;
   user_id: string;
   app_account_token: string;
+  store_transaction_id: string;
   intended_amount_cents: number;
   refunded_amount_cents: number;
   environment: string | null;
+}
+
+function ledgerTotal(row: { total: string | number | null } | undefined): number {
+  const total = Number(row?.total ?? 0);
+  return Number.isSafeInteger(total) ? total : 0;
+}
+
+async function purchasedMicrousd(
+  tx: DatabaseAdapter,
+  userId: string,
+  description: string,
+): Promise<number> {
+  const [row] = await tx.query<{ total: string | number | null }>(
+    `select coalesce(sum(amount_microusd), 0) as total
+       from public.credit_transactions
+      where user_id = $1 and transaction_type = 'purchase' and description = $2`,
+    [userId, description],
+  );
+  return ledgerTotal(row);
+}
+
+// A refund takes from the balance only what is left of it, so a reversal gives
+// back what each refund actually took rather than what it asked for.
+async function revokedFromBalanceMicrousd(
+  tx: DatabaseAdapter,
+  userId: string,
+  description: string,
+): Promise<number> {
+  const [row] = await tx.query<{ total: string | number | null }>(
+    `select coalesce(sum(coalesce(
+              (metadata->>'balance_revoked_microusd')::bigint,
+              (metadata->>'balance_revoked_cents')::bigint * $3,
+              -amount_microusd
+            )), 0) as total
+       from public.credit_transactions
+      where user_id = $1 and transaction_type = 'refund' and description = $2`,
+    [userId, description, MICROUSD_PER_LEDGER_CENT],
+  );
+  return ledgerTotal(row);
+}
+
+function shareOfGrantMicrousd(
+  grantedMicrousd: number,
+  refundedCents: number,
+  intendedCents: number,
+): number {
+  if (intendedCents <= 0) return 0;
+  return Math.floor((grantedMicrousd * Math.min(refundedCents, intendedCents)) / intendedCents);
 }
 
 type SubscriptionOwnerRow = Pick<
@@ -340,6 +391,7 @@ async function applyMobileIapLifecycleEvent(input: {
 
     const [anchor] = await tx.query<ReceiptAnchor>(
       `select receipt.id, receipt.user_id, account.app_account_token,
+              receipt.store_transaction_id,
               receipt.intended_amount_cents, receipt.refunded_amount_cents,
               receipt.environment
          from public.mobile_iap_transactions receipt
@@ -411,19 +463,39 @@ async function applyMobileIapLifecycleEvent(input: {
     }
 
     if (input.event.product.kind === 'top_up') {
+      const refundDescription = `Mobile ${input.event.platform} refund ${input.event.storeTransactionId}`;
+      const reversalDescription = `Mobile ${input.event.platform} refund reversed ${input.event.storeTransactionId}`;
       if (
         input.event.entitlementStatus === 'refunded' ||
         input.event.entitlementStatus === 'revoked'
       ) {
         const fraction = Math.min(1, Math.max(0, input.event.refundFraction ?? 1));
         const refundTargetCents = Math.round(anchor.intended_amount_cents * fraction);
-        const refundCents = Math.max(0, refundTargetCents - anchor.refunded_amount_cents);
-        if (refundCents > 0) {
-          await tx.execute('select public.handle_top_up_refund($1, $2, $3)', [
+        if (refundTargetCents > anchor.refunded_amount_cents) {
+          // The receipt records the price; the ledger records the credit the
+          // price bought, and the rate between them has changed over time.
+          const grantedMicrousd = await purchasedMicrousd(
+            tx,
             anchor.user_id,
-            refundCents,
-            `Mobile ${input.event.platform} refund ${input.event.storeTransactionId}`,
-          ]);
+            storeTopUpGrantDescription(input.event.platform, anchor.store_transaction_id),
+          );
+          if (grantedMicrousd <= 0) {
+            throw createError.conflict('The ledger has no grant for this store top-up.');
+          }
+          const refundMicrousd =
+            shareOfGrantMicrousd(grantedMicrousd, refundTargetCents, anchor.intended_amount_cents) -
+            shareOfGrantMicrousd(
+              grantedMicrousd,
+              anchor.refunded_amount_cents,
+              anchor.intended_amount_cents,
+            );
+          if (refundMicrousd > 0) {
+            await tx.execute('select public.handle_top_up_refund_microusd($1, $2, $3)', [
+              anchor.user_id,
+              refundMicrousd,
+              refundDescription,
+            ]);
+          }
         }
         await tx.execute(
           `update public.mobile_iap_transactions
@@ -432,20 +504,25 @@ async function applyMobileIapLifecycleEvent(input: {
           [anchor.id, input.event.entitlementStatus, refundTargetCents],
         );
       } else if (input.event.entitlementStatus === 'restored' && anchor.refunded_amount_cents > 0) {
-        const [balance] = await tx.query<{ account_id: string }>(
-          `select account_id from public.get_credit_balance($1) limit 1`,
-          [anchor.user_id],
-        );
-        if (!balance?.account_id) {
-          throw createError.conflict('No active credit account is available for this reversal.');
+        const restoreMicrousd =
+          (await revokedFromBalanceMicrousd(tx, anchor.user_id, refundDescription)) -
+          (await purchasedMicrousd(tx, anchor.user_id, reversalDescription));
+        if (restoreMicrousd > 0) {
+          const [balance] = await tx.query<{ account_id: string }>(
+            `select account_id from public.get_credit_balance_microusd($1) limit 1`,
+            [anchor.user_id],
+          );
+          if (!balance?.account_id) {
+            throw createError.conflict('No active credit account is available for this reversal.');
+          }
+          await tx.execute('select public.add_credits_microusd($1, $2, $3, $4, $5)', [
+            anchor.user_id,
+            balance.account_id,
+            restoreMicrousd,
+            reversalDescription,
+            'purchase',
+          ]);
         }
-        await tx.execute('select public.add_credits($1, $2, $3, $4, $5)', [
-          anchor.user_id,
-          balance.account_id,
-          anchor.refunded_amount_cents,
-          `Mobile ${input.event.platform} refund reversed ${input.event.storeTransactionId}`,
-          'purchase',
-        ]);
         await tx.execute(
           `update public.mobile_iap_transactions
               set status = 'granted', refunded_amount_cents = 0, updated_at = now()

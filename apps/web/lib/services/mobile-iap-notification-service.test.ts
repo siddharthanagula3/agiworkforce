@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
-import { MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
+import { MICROUSD_PER_CREDIT, MOBILE_IAP_PRODUCT_DEFINITIONS } from '@agiworkforce/types';
 import {
   grantMobileIapPurchaseFromStore,
   processMobileIapLifecycleEvent,
@@ -67,17 +67,30 @@ function ownerRow(overrides: Partial<OwnerRow> = {}): OwnerRow {
   };
 }
 
+const TOP_UP_GRANT_MICROUSD = topUp.units * MICROUSD_PER_CREDIT;
+
+interface LedgerRows {
+  grants?: Record<string, number>;
+  revokedFromBalance?: Record<string, number>;
+}
+
 function harness(
   options: {
     duplicate?: boolean;
     owner?: OwnerRow | null;
     receiptEnvironment?: string | null;
     renewalStateClaimed?: boolean;
+    refundedAmountCents?: number;
+    ledger?: LedgerRows;
   } = {},
 ) {
+  const grants = options.ledger?.grants ?? {
+    'Mobile ios top-up transaction-1': TOP_UP_GRANT_MICROUSD,
+  };
+  const revokedFromBalance = options.ledger?.revokedFromBalance ?? {};
   const execute = vi.fn(async () => undefined);
   const query = vi.fn(
-    async (sql: string, _params?: readonly unknown[]): Promise<Record<string, unknown>[]> => {
+    async (sql: string, params?: readonly unknown[]): Promise<Record<string, unknown>[]> => {
       if (sql.includes('insert into public.mobile_iap_notification_receipts')) {
         return options.duplicate ? [] : [{ notification_id: 'notice-1' }];
       }
@@ -87,12 +100,19 @@ function harness(
             id: 'receipt-1',
             user_id: 'user-1',
             app_account_token: '00000000-0000-4000-8000-000000000001',
+            store_transaction_id: 'transaction-1',
             intended_amount_cents: 1_000,
-            refunded_amount_cents: 0,
+            refunded_amount_cents: options.refundedAmountCents ?? 0,
             environment: options.receiptEnvironment ?? 'production',
           },
         ];
       }
+      if (sql.includes('from public.credit_transactions')) {
+        const description = String(params?.[1]);
+        const rows = sql.includes("transaction_type = 'refund'") ? revokedFromBalance : grants;
+        return [{ total: String(rows[description] ?? 0) }];
+      }
+      if (sql.includes('get_credit_balance_microusd')) return [{ account_id: 'account-1' }];
       if (sql.includes('update public.mobile_iap_accounts')) {
         return options.renewalStateClaimed === false ? [] : [{ user_id: 'user-1' }];
       }
@@ -146,19 +166,86 @@ describe('mobile IAP lifecycle ledger', () => {
     expect(h.execute).not.toHaveBeenCalled();
   });
 
-  it('revokes the purchased top-up allocation exactly once on refund', async () => {
+  function refundCalls(h: ReturnType<typeof harness>) {
+    return h.execute.mock.calls.filter((call: unknown[]) =>
+      String(call[0]).includes('handle_top_up_refund'),
+    );
+  }
+
+  it('takes back the credit a refunded top-up granted, not its price in ledger cents', async () => {
     const h = harness();
     await expect(
       processMobileIapLifecycleEvent({
         db: h.db,
-        event: event({ entitlementStatus: 'refunded', refundFraction: 0.5 }),
+        event: event({ entitlementStatus: 'refunded' }),
       }),
     ).resolves.toBe('processed');
-    expect(h.execute).toHaveBeenCalledWith('select public.handle_top_up_refund($1, $2, $3)', [
-      'user-1',
-      500,
-      expect.stringContaining('transaction-1'),
+    expect(refundCalls(h)).toEqual([
+      [
+        'select public.handle_top_up_refund_microusd($1, $2, $3)',
+        ['user-1', TOP_UP_GRANT_MICROUSD, 'Mobile ios refund transaction-1'],
+      ],
     ]);
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining('set status = $2, refunded_amount_cents = $3'),
+      ['receipt-1', 'refunded', 1_000],
+    );
+  });
+
+  it('takes back the same share of the grant as the share of the price refunded', async () => {
+    const h = harness();
+    await processMobileIapLifecycleEvent({
+      db: h.db,
+      event: event({ entitlementStatus: 'refunded', refundFraction: 0.5 }),
+    });
+    expect(refundCalls(h)).toEqual([
+      [expect.any(String), ['user-1', TOP_UP_GRANT_MICROUSD / 2, expect.any(String)]],
+    ]);
+  });
+
+  it('takes back only the rest of the grant when a partial refund becomes a full one', async () => {
+    const h = harness({ refundedAmountCents: 500 });
+    await processMobileIapLifecycleEvent({
+      db: h.db,
+      event: event({ entitlementStatus: 'refunded', refundFraction: 1 }),
+    });
+    expect(refundCalls(h)).toEqual([
+      [expect.any(String), ['user-1', TOP_UP_GRANT_MICROUSD / 2, expect.any(String)]],
+    ]);
+  });
+
+  it('sizes the refund from the ledger grant for a purchase made at an older rate', async () => {
+    const grantedAtPrice = 1_000 * 10_000;
+    const h = harness({
+      ledger: { grants: { 'Mobile ios top-up transaction-1': grantedAtPrice } },
+    });
+    await processMobileIapLifecycleEvent({
+      db: h.db,
+      event: event({ entitlementStatus: 'refunded' }),
+    });
+    expect(refundCalls(h)).toEqual([
+      [expect.any(String), ['user-1', grantedAtPrice, expect.any(String)]],
+    ]);
+  });
+
+  it('refuses to guess a refund when the ledger holds no grant for the receipt', async () => {
+    const h = harness({ ledger: { grants: {} } });
+    await expect(
+      processMobileIapLifecycleEvent({
+        db: h.db,
+        event: event({ entitlementStatus: 'refunded' }),
+      }),
+    ).rejects.toThrow(/no grant/i);
+    expect(refundCalls(h)).toEqual([]);
+  });
+
+  it('does nothing to the ledger when a refund notice repeats an amount already taken', async () => {
+    const h = harness({ refundedAmountCents: 1_000 });
+    await processMobileIapLifecycleEvent({
+      db: h.db,
+      event: event({ entitlementStatus: 'refunded' }),
+    });
+    expect(refundCalls(h)).toEqual([]);
   });
 
   it('renews a subscription in the same store scope and allocates only that period', async () => {
@@ -188,26 +275,18 @@ describe('mobile IAP lifecycle ledger', () => {
     );
   });
 
-  it('re-grants only the amount previously revoked when Apple reverses a refund', async () => {
-    const h = harness();
-    h.query.mockImplementation(async (sql: string) => {
-      if (sql.includes('insert into public.mobile_iap_notification_receipts')) {
-        return [{ notification_id: 'notice-1' }];
-      }
-      if (sql.includes('from public.mobile_iap_transactions receipt')) {
-        return [
-          {
-            id: 'receipt-1',
-            user_id: 'user-1',
-            app_account_token: '00000000-0000-4000-8000-000000000001',
-            intended_amount_cents: 1_000,
-            refunded_amount_cents: 500,
-            environment: 'production',
-          },
-        ];
-      }
-      if (sql.includes('public.get_credit_balance')) return [{ account_id: 'account-1' }];
-      return [];
+  function reversalCalls(h: ReturnType<typeof harness>) {
+    return h.execute.mock.calls.filter((call: unknown[]) =>
+      String(call[0]).includes('add_credits'),
+    );
+  }
+
+  it('gives back what the refund took from the balance when Apple reverses it', async () => {
+    const h = harness({
+      refundedAmountCents: 500,
+      ledger: {
+        revokedFromBalance: { 'Mobile ios refund transaction-1': TOP_UP_GRANT_MICROUSD / 2 },
+      },
     });
     await expect(
       processMobileIapLifecycleEvent({
@@ -215,13 +294,57 @@ describe('mobile IAP lifecycle ledger', () => {
         event: event({ entitlementStatus: 'restored' }),
       }),
     ).resolves.toBe('processed');
-    expect(h.execute).toHaveBeenCalledWith('select public.add_credits($1, $2, $3, $4, $5)', [
-      'user-1',
-      'account-1',
-      500,
-      expect.stringContaining('refund reversed'),
-      'purchase',
+    expect(reversalCalls(h)).toEqual([
+      [
+        'select public.add_credits_microusd($1, $2, $3, $4, $5)',
+        [
+          'user-1',
+          'account-1',
+          TOP_UP_GRANT_MICROUSD / 2,
+          'Mobile ios refund reversed transaction-1',
+          'purchase',
+        ],
+      ],
     ]);
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining("set status = 'granted', refunded_amount_cents = 0"),
+      ['receipt-1'],
+    );
+  });
+
+  it('gives back only what earlier reversals have not already returned', async () => {
+    const h = harness({
+      refundedAmountCents: 1_000,
+      ledger: {
+        grants: { 'Mobile ios refund reversed transaction-1': 750_000 },
+        revokedFromBalance: { 'Mobile ios refund transaction-1': 2_000_000 },
+      },
+    });
+    await processMobileIapLifecycleEvent({
+      db: h.db,
+      event: event({ entitlementStatus: 'restored' }),
+    });
+    expect(reversalCalls(h)).toEqual([
+      [expect.any(String), ['user-1', 'account-1', 1_250_000, expect.any(String), 'purchase']],
+    ]);
+  });
+
+  it('adds no credit back when the refund found the purchase already spent', async () => {
+    const h = harness({
+      refundedAmountCents: 1_000,
+      ledger: { revokedFromBalance: { 'Mobile ios refund transaction-1': 0 } },
+    });
+    await expect(
+      processMobileIapLifecycleEvent({
+        db: h.db,
+        event: event({ entitlementStatus: 'restored' }),
+      }),
+    ).resolves.toBe('processed');
+    expect(reversalCalls(h)).toEqual([]);
+    expect(h.execute).toHaveBeenCalledWith(
+      expect.stringContaining("set status = 'granted', refunded_amount_cents = 0"),
+      ['receipt-1'],
+    );
   });
 
   it('rejects a verified event whose account token differs from the receipt owner', async () => {

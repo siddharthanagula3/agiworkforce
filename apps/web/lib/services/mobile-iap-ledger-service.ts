@@ -188,6 +188,13 @@ function intendedAmountCents(product: MobileIapCatalogProduct): number {
   );
 }
 
+export function storeTopUpGrantDescription(
+  platform: MobileIapPlatform,
+  storeTransactionId: string,
+): string {
+  return `Mobile ${platform} top-up ${storeTransactionId}`;
+}
+
 async function hasYearOfPaidService(
   db: DatabaseAdapter,
   input: {
@@ -530,7 +537,7 @@ async function grantVerifiedMobileIapPurchase(input: {
         input.userId,
         balance.account_id,
         topUpBudgetCentsForCredits(input.verified.product.units) * MICROUSD_PER_LEDGER_CENT,
-        `Mobile ${input.verified.platform} top-up ${input.verified.storeTransactionId}`,
+        storeTopUpGrantDescription(input.verified.platform, input.verified.storeTransactionId),
         'purchase',
         JSON.stringify({
           ...purchasedCreditMetadata(input.verified.purchaseCountry, input.verified.purchasedAt),
