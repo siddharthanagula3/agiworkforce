@@ -7,7 +7,13 @@ import {
 
 beforeEach(() => {
   (globalThis as { chrome?: unknown }).chrome = {
-    i18n: { getMessage: () => '', getUILanguage: () => 'en' },
+    i18n: {
+      getMessage: (key: string, substitutions: string[] = []) =>
+        key === 'spChecklistProgress'
+          ? `${substitutions[0] ?? ''} of ${substitutions[1] ?? ''}`
+          : '',
+      getUILanguage: () => 'en',
+    },
   };
   Object.assign(navigator, { clipboard: { writeText: vi.fn().mockResolvedValue(undefined) } });
 });

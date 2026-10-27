@@ -618,20 +618,13 @@ const MarkdownPre = ({
   ...rest
 }: React.ComponentPropsWithoutRef<'pre'> & { node?: HastNode }) => {
   const language = fenceLanguage(node);
-  const classified = classifyAssistantFence(
-    language,
-    reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, ''),
-  );
+  const source = reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '');
+  if (isRichBlockLanguage(language)) {
+    return <RichFence language={language} source={source} />;
+  }
+  const classified = classifyAssistantFence(language, source);
   if (classified.kind === 'fallback') {
     return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
-  }
-  if (isRichBlockLanguage(language)) {
-    return (
-      <RichFence
-        language={language}
-        source={reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, '')}
-      />
-    );
   }
   if (language === '' && hasMultilineFenceBody(node)) {
     return (

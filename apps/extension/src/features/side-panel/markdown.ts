@@ -499,7 +499,9 @@ function decorateAssistantSurfaces(root: HTMLElement, onFollowUp?: (text: string
         box.addEventListener('change', () => {
           const boxes = [...section.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
           const done = boxes.filter((entry) => entry.checked).length;
-          if (progress) progress.textContent = `${done} of ${boxes.length}`;
+          if (progress) {
+            progress.textContent = t('spChecklistProgress', [String(done), String(boxes.length)]);
+          }
         });
         item.prepend(box);
       }
