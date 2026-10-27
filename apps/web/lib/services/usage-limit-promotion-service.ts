@@ -16,7 +16,6 @@ import {
 } from '@agiworkforce/types';
 import { z } from 'zod';
 
-import { revenueContextOfSubscription } from '@/lib/billing/revenue-context';
 import { USAGE_WORKLOADS } from '@/lib/billing/usage-attribution';
 import { readFeatureFlagConfig } from '@/lib/feature-flags/flag-config';
 import { readUsagePromotionsOn } from '@/lib/feature-flags/usage-promotions-gate';
@@ -31,7 +30,10 @@ import {
   getPlanSessionUsageCapMicrousd,
   getPlanWeeklyUsageCapMicrousd,
 } from '@/lib/server/managed-usage-policy';
-import { resolveEntitlementBundle } from '@/lib/services/effective-subscription-service';
+import {
+  resolveEntitlementBundle,
+  usageAllowanceSubject,
+} from '@/lib/services/effective-subscription-service';
 
 const PROMOTION_ID = /^[a-z0-9][a-z0-9-]{1,62}$/;
 const APPLY_KEY = /^[A-Za-z0-9._:-]{8,128}$/;
@@ -1116,15 +1118,9 @@ export async function readAccountLimitCaps(
   db: DatabaseAdapter,
   userId: string,
 ): Promise<{ planTier: string; caps: LimitCaps }> {
-  const subscription = (await resolveEntitlementBundle(db, userId)).subscription;
-  const planTier = subscription?.plan_tier || 'free';
-  const subject = {
-    tier: planTier,
-    catalogVersion: subscription?.plan_catalog_version ?? null,
-    revenueContext: revenueContextOfSubscription(subscription),
-  };
+  const subject = usageAllowanceSubject(await resolveEntitlementBundle(db, userId));
   return {
-    planTier,
+    planTier: subject.tier,
     caps: {
       session: getPlanSessionUsageCapMicrousd(subject),
       weekly: getPlanWeeklyUsageCapMicrousd(subject),

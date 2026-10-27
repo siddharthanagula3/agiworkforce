@@ -3,8 +3,10 @@ import {
   MANAGED_USAGE_LIMITS,
   MICROUSD_PER_CREDIT,
   getEffectivePlanCreditAllowance,
+  isEntitledSubscriptionStatus,
 } from '@agiworkforce/types';
 type ScanModule0 = typeof import('@/lib/services/bonus-credit-service');
+type EntitlementResolutionModule = typeof import('@/lib/services/entitlement-resolution');
 type PricingModule = typeof import('@/lib/pricing');
 
 const INR_BASIC_PRICE_ID = 'price_fixture_basic_monthly_inr';
@@ -35,12 +37,22 @@ vi.mock('@/lib/services/credit-service', () => ({
   CreditService: { getBalance: mockGetBalance },
 }));
 
-vi.mock('@/lib/services/effective-subscription-service', () => ({
-  resolveEntitlementBundle: async (...args: unknown[]) => {
-    const subscription = await mockResolveEffectiveSubscription(...args);
-    return { subscription, plan: mockEntitledPlan() ?? subscription?.plan_tier ?? 'free' };
-  },
-}));
+vi.mock('@/lib/services/effective-subscription-service', async () => {
+  const { usageAllowanceSubject } = await vi.importActual<EntitlementResolutionModule>(
+    '@/lib/services/entitlement-resolution',
+  );
+  return {
+    resolveEntitlementBundle: async (...args: unknown[]) => {
+      const subscription = await mockResolveEffectiveSubscription(...args);
+      return {
+        subscription,
+        plan: mockEntitledPlan() ?? subscription?.plan_tier ?? 'free',
+        entitled: Boolean(subscription) && isEntitledSubscriptionStatus(subscription.status),
+      };
+    },
+    usageAllowanceSubject,
+  };
+});
 
 vi.mock('@/lib/server/spendable-credits', () => ({
   getSpendableCredits: mockGetSpendableCredits,
@@ -176,6 +188,43 @@ describe('managed usage summary, stated in credits', () => {
 
     expect(summary.plan_tier).toBe('pro');
     expect(summary.effective_plan_tier).toBe('free');
+  });
+
+  it('meters a lapsed paid plan on the Free ledger chat now serves it from, not on paid windows', async () => {
+    mockResolveEffectiveSubscription.mockResolvedValue({
+      ...subscription('max_15x'),
+      status: 'past_due',
+    });
+    mockEntitledPlan.mockReturnValueOnce('free');
+    mockGetBalance.mockResolvedValue({
+      credits_allocated_microusd: credits(1_000),
+      credits_used_microusd: 0,
+      credits_remaining_microusd: credits(1_000),
+      period_start: null,
+      period_end: null,
+    });
+    mockGetFreeTrialPublicUsage.mockResolvedValue({
+      usagePercentage: 100,
+      resetAt: '2026-10-01T00:00:00.000Z',
+      sessionUsagePercentage: 100,
+      sessionResetAt: '2026-09-27T15:00:00.000Z',
+      weeklyUsagePercentage: 100,
+      weeklyResetAt: '2026-10-03T00:00:00.000Z',
+      hasUsageRemaining: false,
+      monthlyUsedMicrousd: credits(20),
+      weeklyUsedMicrousd: credits(15),
+      fiveHourUsedMicrousd: credits(2),
+    });
+
+    const summary = await getManagedUsageSummary(db, 'user-3');
+
+    expect(summary.plan_tier).toBe('max_15x');
+    expect(summary.subscription_status).toBe('past_due');
+    expect(summary.has_usage_remaining).toBe(false);
+    expect(summary.usage_percentage).toBe(100);
+    expect(summary.credits?.monthly).toMatchObject({ allowance: 20, remaining: 0 });
+    expect(summary).not.toHaveProperty('usage_allocation');
+    expect(mockGetRollingUsage).not.toHaveBeenCalled();
   });
 
   it('states an India web Basic subscriber in the budget their rupee price pays for', async () => {

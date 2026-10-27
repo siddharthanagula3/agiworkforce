@@ -12,19 +12,58 @@ vi.mock('@/lib/feature-flags/usage-promotions-gate', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/services/effective-subscription-service', () => ({
+vi.mock('@/lib/services/effective-subscription-service', async () => ({
   resolveEntitlementBundle: vi.fn(),
+  usageAllowanceSubject: (
+    await vi.importActual<typeof import('@/lib/services/entitlement-resolution')>(
+      '@/lib/services/entitlement-resolution',
+    )
+  ).usageAllowanceSubject,
 }));
 
+const { resolveEntitlementBundle } = await import('@/lib/services/effective-subscription-service');
+const { getPlanSessionUsageCapMicrousd, getPlanWeeklyUsageCapMicrousd } =
+  await import('@/lib/server/managed-usage-policy');
 const {
   UsageLimitPromotionInputSchema,
   applyUsageLimitReset,
   diffUsageLimitPromotion,
   promotablePlanTiers,
+  readAccountLimitCaps,
   readSummaryPromotions,
   resetEnabledPromotionCache,
   resolvePromotionalCaps,
 } = await import('../usage-limit-promotion-service');
+
+describe('readAccountLimitCaps', () => {
+  const freeSubject = { tier: 'free', catalogVersion: null, revenueContext: null };
+
+  it('holds a lapsed paid plan to the Free caps chat serves it under', async () => {
+    vi.mocked(resolveEntitlementBundle).mockResolvedValueOnce({
+      entitled: false,
+      subscription: { plan_tier: 'max_15x', status: 'past_due', plan_catalog_version: null },
+    } as never);
+
+    const { planTier, caps } = await readAccountLimitCaps({} as DatabaseAdapter, 'user-1');
+
+    expect(planTier).toBe('free');
+    expect(caps.session).toBe(getPlanSessionUsageCapMicrousd(freeSubject));
+    expect(caps.weekly).toBe(getPlanWeeklyUsageCapMicrousd(freeSubject));
+  });
+
+  it('holds an entitled plan to its own caps', async () => {
+    vi.mocked(resolveEntitlementBundle).mockResolvedValueOnce({
+      entitled: true,
+      subscription: { plan_tier: 'max_15x', status: 'active', plan_catalog_version: null },
+    } as never);
+
+    const { planTier, caps } = await readAccountLimitCaps({} as DatabaseAdapter, 'user-1');
+
+    expect(planTier).toBe('max_15x');
+    expect(caps.weekly).toBe(getPlanWeeklyUsageCapMicrousd({ ...freeSubject, tier: 'max_15x' }));
+    expect(caps.weekly).toBeGreaterThan(getPlanWeeklyUsageCapMicrousd(freeSubject));
+  });
+});
 
 const NOW = Date.parse('2026-10-22T12:00:00.000Z');
 const CAPS = { session: 1_000_000, weekly: 10_000_000, flagshipWeekly: 3_000_000 };

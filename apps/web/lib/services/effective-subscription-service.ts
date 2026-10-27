@@ -22,9 +22,11 @@ export {
   resolveEffectiveSubscription,
   resolveEntitledPlanTier,
   resolveEntitlementBundle,
+  usageAllowanceSubject,
   type EntitlementBundle,
   type EntitlementResolutionOptions,
   type EntitlementSource,
+  type UsageAllowanceSubject,
 } from '@/lib/services/entitlement-resolution';
 
 const SEAT_MEMBERS_SQL = `
