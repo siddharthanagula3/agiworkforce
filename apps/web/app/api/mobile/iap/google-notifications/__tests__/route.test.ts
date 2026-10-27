@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DatabaseAdapter } from '@agiworkforce/data-layer';
+import { MICROUSD_PER_CREDIT } from '@agiworkforce/types';
 
 const {
   mockIdentity,
@@ -70,6 +71,7 @@ const TOP_UP = {
   units: 500,
   productId: PRODUCT_ID,
 };
+const TOP_UP_GRANT_MICROUSD = TOP_UP.units * MICROUSD_PER_CREDIT;
 const SUBSCRIPTION_ID = 'agi_pro';
 const NEXT_SUBSCRIPTION_ID = 'agi_max';
 const PRO = {
@@ -175,12 +177,17 @@ function harness(
           id: 'receipt-1',
           user_id: 'user-1',
           app_account_token: APP_ACCOUNT_TOKEN,
+          store_transaction_id: 'store-transaction-1',
           intended_amount_cents: 1000,
           refunded_amount_cents: 0,
           environment: options.receiptEnvironment ?? 'production',
           product_id: PRODUCT_ID,
         },
       ];
+    }
+    if (sql.includes('from public.credit_transactions')) {
+      const grant = sql.includes("transaction_type = 'purchase'") ? TOP_UP_GRANT_MICROUSD : 0;
+      return [{ total: String(grant) }];
     }
     return [];
   });
@@ -236,7 +243,7 @@ describe('POST /api/mobile/iap/google-notifications', () => {
     expect(refunds).toHaveLength(1);
     expect(refunds[0]?.[1]).toEqual([
       'user-1',
-      1000,
+      TOP_UP_GRANT_MICROUSD,
       expect.stringContaining('store-transaction-1'),
     ]);
   });
