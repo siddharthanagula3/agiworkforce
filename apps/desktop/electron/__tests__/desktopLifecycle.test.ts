@@ -35,8 +35,9 @@ vi.mock('electron', () => {
   class BrowserWindow {
     static fromWebContents = vi.fn(() => null);
     static getAllWindows = vi.fn(() => []);
-    static getFocusedWindow = vi.fn(() => null);
-    id = 1;
+    static getFocusedWindow = vi.fn((): BrowserWindow | null => null);
+    static nextId = 1;
+    id = BrowserWindow.nextId++;
     webContents = {
       send: (channel: string, payload: unknown) => sent.push([channel, payload]),
       on: vi.fn((event: string, listener: Listener) => {
@@ -300,7 +301,8 @@ vi.mock('../appMenu', async (importOriginal) => ({
 }));
 vi.mock('../launchAtLogin', async (importOriginal) => ({
   ...(await importOriginal<object>()),
-  applyLaunchAtLogin: vi.fn(),
+  isLaunchAtLoginEnabled: vi.fn(() => false),
+  syncLaunchAtLogin: vi.fn(),
   setLaunchAtLogin: vi.fn(),
 }));
 
@@ -313,6 +315,7 @@ const startupMessageBoxCalls = [...vi.mocked(electron.dialog.showMessageBox).moc
 const startupMoveCalls = [...vi.mocked(electron.app.moveToApplicationsFolder).mock.calls];
 const showMessageBox = vi.mocked(electron.dialog.showMessageBox);
 const quit = vi.mocked(electron.app.quit);
+const { installAppMenu } = await import('../appMenu');
 
 function emit(event: DeveloperSessionEvent, rootId = 'root-1'): void {
   if (!emitSessionEvent) throw new Error('developer sessions were never configured');
@@ -937,5 +940,47 @@ describe('the update buttons', () => {
       downloadedVersion = null;
       shellRuns = 0;
     }
+  });
+});
+
+describe('menu commands with a second window open', () => {
+  function menuActions(): import('../appMenu').AppMenuActions {
+    appHandlers.get('browser-window-focus')?.();
+    const actions = vi.mocked(installAppMenu).mock.calls.at(-1)?.[0];
+    if (!actions) throw new Error('the menu was never installed');
+    return actions;
+  }
+
+  it('opens New Chat and Settings in the window in front, not the first one', () => {
+    menuActions().newWindow();
+    const [first, second] = createdWindows as unknown as Array<{
+      loadURL: ReturnType<typeof vi.fn>;
+    }>;
+    if (!first || !second) throw new Error('the second window was never made');
+    vi.mocked(electron.BrowserWindow.getFocusedWindow).mockReturnValue(second as never);
+    first.loadURL.mockClear();
+    second.loadURL.mockClear();
+
+    menuActions().newChat();
+    menuActions().openSettings();
+
+    expect(second.loadURL.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
+      '/chat',
+      '/settings',
+    ]);
+    expect(first.loadURL).not.toHaveBeenCalled();
+    vi.mocked(electron.BrowserWindow.getFocusedWindow).mockReturnValue(null);
+  });
+
+  it('uses the main window when the command comes from outside the app', () => {
+    const [first] = createdWindows as unknown as Array<{ loadURL: ReturnType<typeof vi.fn> }>;
+    if (!first) throw new Error('no main window');
+    first.loadURL.mockClear();
+
+    menuActions().newChat();
+
+    expect(first.loadURL.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
+      '/chat',
+    ]);
   });
 });

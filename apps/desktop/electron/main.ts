@@ -171,7 +171,7 @@ import { guardFirstLoad } from './firstLoadGuard';
 import { showLoadingOverlay } from './loadingOverlay';
 import { createScreenRetry } from './screenRetry';
 import { hideWindow, shouldHideOnClose } from './windowLifecycle';
-import { applyLaunchAtLogin, setLaunchAtLogin } from './launchAtLogin';
+import { isLaunchAtLoginEnabled, setLaunchAtLogin, syncLaunchAtLogin } from './launchAtLogin';
 import { CLOUD_APP_ORIGIN, DEEP_LINK_SCHEME, REMOTE_SESSION_PARTITION } from './config';
 import {
   MIN_WINDOW_HEIGHT,
@@ -190,7 +190,6 @@ import {
   normalizeAgentNotifications,
   pickableCaptureSources,
   pageMayWriteShortcut,
-  shortcutMayBeOff,
   type ShortcutKey,
   type WindowFrame,
 } from './garnishCore';
@@ -214,10 +213,11 @@ import { createDictationElsewhere } from './dictationElsewhere';
 import { closeLocalPreview } from './previewWindow';
 import { getPreferences, getShortcuts, saveSettings } from './settingsStore';
 import {
+  changeShortcuts,
   registerGarnishShortcuts,
   shortcutRegistrations,
-  shortcutStatusDetail,
   unregisterGarnishShortcuts,
+  type GarnishShortcutHandlers,
 } from './shortcuts';
 import { createTray, destroyTray, hasTray, refreshTrayMenu, type TrayActivity } from './tray';
 import { toggleGlobalDictation } from './voiceDictation';
@@ -1294,9 +1294,20 @@ function focusedConversationRoute(): string | null {
   return conversationIdFromRoute(entry.route) === null ? null : entry.route;
 }
 
-function openNewChat(): void {
+/**
+ * The window a menu command acts on: the shell window in front, or the main
+ * window brought forward when the command came from the tray, the Dock or a
+ * shortcut pressed in another app.
+ */
+function commandWindow(): BrowserWindow | null {
+  const front = frontShellWindow();
+  if (front) return front;
   showMainWindow();
-  void mainWindow?.loadURL(windowUrlFor(null));
+  return mainWindow;
+}
+
+function openNewChat(): void {
+  void commandWindow()?.loadURL(windowUrlFor(null));
 }
 
 const NEW_CHAT_COMPOSER_WAIT_MS = 5000;
@@ -1351,8 +1362,7 @@ function setFrontWindowOnTop(onTop: boolean): void {
 }
 
 function openSettings(): void {
-  showMainWindow();
-  void mainWindow?.loadURL(`${CLOUD_APP_ORIGIN}/settings`);
+  void commandWindow()?.loadURL(`${CLOUD_APP_ORIGIN}/settings`);
 }
 
 function openLogsFolder(): void {
@@ -1678,19 +1688,37 @@ const garnishHandlers = {
   onRevokeComputerUse: () => void confirmRevokeComputerUse(),
   onOpenSession: openLocalSession,
   onCheckForUpdates: () => void checkForCloudUpdate(),
+  onChangeShortcut: changeShortcutFromTray,
   activity: trayActivity,
 };
 
-function applyGarnishShortcuts(): void {
-  unregisterGarnishShortcuts();
-  registerGarnishShortcuts({
+function garnishShortcutHandlers(): GarnishShortcutHandlers {
+  return {
     onQuickAsk: garnishHandlers.onQuickAsk,
     onNewChat: garnishHandlers.onNewChatWindow,
     onScreenshot: garnishHandlers.onScreenshot,
     onWindowShot: garnishHandlers.onWindowShot,
     onVoice: garnishHandlers.onVoice,
     onStop: garnishHandlers.onStopAgents,
-  });
+  };
+}
+
+function applyGarnishShortcuts(): void {
+  unregisterGarnishShortcuts();
+  registerGarnishShortcuts(garnishShortcutHandlers());
+}
+
+function changeShortcutFromTray(key: ShortcutKey, accelerator: string): void {
+  const lost = changeShortcuts({ [key]: accelerator }, garnishShortcutHandlers());
+  refreshTrayMenu(garnishHandlers);
+  if (!lost) return;
+  void showNativeMessage(null, {
+    type: 'warning',
+    buttons: ['OK'],
+    title: 'Shortcut not changed',
+    message: lost,
+    noLink: true,
+  }).catch(() => undefined);
 }
 
 /**
@@ -1707,7 +1735,7 @@ function hostPreferencesState(): HostPreferencesState {
 
   return {
     preferences: {
-      launchAtLogin: preferences.launchAtLogin,
+      launchAtLogin: isLaunchAtLoginEnabled(),
       showInMenuBar: preferences.showInMenuBar,
       cliPath: preferences.cliPath,
       sessionCompletionAlerts: preferences.sessionCompletionAlerts,
@@ -1864,22 +1892,6 @@ function shortcutWriteRefusal(key: ShortcutKey, requested: string): string {
     : `${SHORTCUT_LABELS[key]} takes only one of the listed shortcuts. A shortcut is registered for every app on this computer, so this app does not take one a page names.`;
 }
 
-/**
- * A shortcut that is never off has to end a write still registered. A chord
- * another app holds is saved like any other and reports `taken`, which for
- * Stop Agents would leave no shortcut at all. Answers with what to tell the
- * page when the shortcut did not take; the caller puts the old chords back.
- */
-function lostAlwaysOnShortcut(): string | null {
-  const lost = shortcutRegistrations().find(
-    (registration) => !shortcutMayBeOff(registration.key) && registration.status !== 'registered',
-  );
-  if (!lost) return null;
-  return `${SHORTCUT_LABELS[lost.key]} could not take that shortcut: it ${
-    shortcutStatusDetail(lost.status) ?? 'was not registered'
-  }. The shortcut it had is kept. Choose another one.`;
-}
-
 async function writeHostPreferences(
   window: BrowserWindow | null,
   patch: Partial<HostPreferences>,
@@ -1900,22 +1912,14 @@ async function writeHostPreferences(
     SHORTCUT_KEYS.filter((key) => typeof patch[key] === 'string').map((key) => [key, patch[key]]),
   );
   if (Object.keys(shortcutPatch).length > 0) {
-    const previous = getShortcuts();
-    saveSettings(shortcutPatch);
-    applyGarnishShortcuts();
-    const lost = lostAlwaysOnShortcut();
-    if (lost) {
-      saveSettings(previous);
-      applyGarnishShortcuts();
-      refreshTrayMenu(garnishHandlers);
-      throw new Error(lost);
-    }
+    const lost = changeShortcuts(shortcutPatch, garnishShortcutHandlers());
     refreshTrayMenu(garnishHandlers);
+    if (lost) throw new Error(lost);
   }
 
   if (
     typeof patch.launchAtLogin === 'boolean' &&
-    patch.launchAtLogin !== before.launchAtLogin &&
+    patch.launchAtLogin !== isLaunchAtLoginEnabled() &&
     (!patch.launchAtLogin || (await confirmLaunchAtLogin(window)))
   ) {
     setLaunchAtLogin(patch.launchAtLogin);
@@ -2211,7 +2215,7 @@ if (!hasSingleInstanceLock) {
     // is rebuilt when the front window changes rather than once at launch.
     app.on('browser-window-focus', installMenu);
     app.on('browser-window-blur', installMenu);
-    applyLaunchAtLogin();
+    syncLaunchAtLogin();
     applyGarnishShortcuts();
 
     configureRemoteControl(

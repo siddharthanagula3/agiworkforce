@@ -95,6 +95,7 @@ vi.mock('electron', () => {
     app: {
       name: 'AGI Desktop',
       requestSingleInstanceLock: () => true,
+      getLoginItemSettings: () => ({ openAtLogin: false }),
       setName: vi.fn(),
       setPath: vi.fn(),
       setAsDefaultProtocolClient: vi.fn(),

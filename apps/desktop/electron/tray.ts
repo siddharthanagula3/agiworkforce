@@ -2,13 +2,8 @@ import { Menu, Tray, app, nativeImage } from 'electron';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { PRODUCT_NAMES } from '@agiworkforce/types';
-import { getShortcuts, saveSettings } from './settingsStore';
-import {
-  registerGarnishShortcuts,
-  shortcutRegistrations,
-  shortcutStatusDetail,
-  unregisterGarnishShortcuts,
-} from './shortcuts';
+import { getShortcuts } from './settingsStore';
+import { shortcutRegistrations, shortcutStatusDetail } from './shortcuts';
 import {
   SHORTCUT_KEYS,
   SHORTCUT_LABELS,
@@ -44,6 +39,8 @@ export interface TrayHandlers {
   onRevokeComputerUse: () => void;
   onOpenSession: (rootId: string, threadId: string) => void;
   onCheckForUpdates: () => void;
+  /** Saves and registers a chord, undoing it when Stop Agents would lose its shortcut. */
+  onChangeShortcut: (key: ShortcutKey, accelerator: string) => void;
   activity: () => TrayActivity;
 }
 
@@ -73,20 +70,6 @@ function trayImage(): Electron.NativeImage {
   }
 }
 
-function applyShortcut(key: ShortcutKey, value: string, handlers: TrayHandlers): void {
-  saveSettings({ [key]: value });
-  unregisterGarnishShortcuts();
-  registerGarnishShortcuts({
-    onQuickAsk: handlers.onQuickAsk,
-    onNewChat: handlers.onNewChatWindow,
-    onScreenshot: handlers.onScreenshot,
-    onWindowShot: handlers.onWindowShot,
-    onVoice: handlers.onVoice,
-    onStop: handlers.onStopAgents,
-  });
-  refreshTrayMenu(handlers);
-}
-
 function shortcutChoiceItems(
   key: ShortcutKey,
   current: string,
@@ -96,7 +79,7 @@ function shortcutChoiceItems(
     label: describeAccelerator(value, process.platform),
     type: 'radio',
     checked: value === current,
-    click: () => applyShortcut(key, value, handlers),
+    click: () => handlers.onChangeShortcut(key, value),
   }));
 }
 
