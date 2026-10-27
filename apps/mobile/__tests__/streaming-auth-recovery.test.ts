@@ -76,7 +76,7 @@ describe('the chat stream keeps the account rules every other request follows', 
 
   it('refreshes an expired session once and resends the turn', async () => {
     const run = await send();
-    recoverStreamSessionMock.mockResolvedValue(true);
+    recoverStreamSessionMock.mockResolvedValue('refreshed');
     guardedFetchMock
       .mockResolvedValueOnce(refused(401))
       .mockResolvedValueOnce(refused(503, '{"error":{"message":"busy"}}'));
@@ -90,13 +90,27 @@ describe('the chat stream keeps the account rules every other request follows', 
 
   it('does not resend when the session cannot be refreshed', async () => {
     const run = await send();
-    recoverStreamSessionMock.mockResolvedValue(false);
+    recoverStreamSessionMock.mockResolvedValue('expired');
     guardedFetchMock.mockResolvedValue(refused(401));
 
     const callbacks = await run();
 
     expect(guardedFetchMock).toHaveBeenCalledTimes(1);
     expect(callbacks.onError).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports a refresh the network blocked as retryable, not as a lost session', async () => {
+    const run = await send();
+    recoverStreamSessionMock.mockResolvedValue('unavailable');
+    guardedFetchMock.mockResolvedValue(refused(401));
+
+    const callbacks = await run();
+
+    expect(guardedFetchMock).toHaveBeenCalledTimes(1);
+    expect(callbacks.onError).toHaveBeenCalledTimes(1);
+    const error = (callbacks.onError as jest.Mock).mock.calls[0]?.[0] as Error;
+    expect(error.name).toBe('SessionRefreshUnavailableError');
+    expect(error.message).toMatch(/check your connection/i);
   });
 
   it('hands an account refusal to the shared account handling', async () => {

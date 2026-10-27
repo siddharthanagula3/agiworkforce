@@ -20,11 +20,18 @@ import type { AgentEventEnvelope, AgentEventSource } from '@agiworkforce/types/p
 import { getAuthToken } from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { ApiPaywallError, recoverStreamSession, streamAuthRefusal } from './api';
-import { ApiHttpError, httpErrorFrom, parseJsonBody, rateLimitErrorFrom } from './apiErrors';
+import {
+  ApiHttpError,
+  SessionRefreshUnavailableError,
+  httpErrorFrom,
+  parseJsonBody,
+  rateLimitErrorFrom,
+} from './apiErrors';
 import { ensureCloudSendConsent, ensureLlmGateOpen } from './llmGate';
 import { surfaceTermsNotice } from './termsNotice';
 import { assertRemoteChatAllowed } from './remoteChatGate';
 import { useWaitlistStore } from '@/src/features/waitlist/store';
+import { useTierStore } from '@/src/features/billing/store';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { fastSpeedForModel } from '@/src/features/model-picker/fastMode';
 import { useTermsAcceptanceStore } from '@/src/features/auth/store/termsAcceptanceStore';
@@ -407,8 +414,13 @@ async function attemptStream(
     const text = await response.text();
 
     if (response.status === 401 && !sessionRecovered && !signal.aborted) {
-      if (await recoverStreamSession()) {
+      const recovery = await recoverStreamSession();
+      if (recovery === 'refreshed') {
         return attemptStream(body, callbacks, signal, path, true);
+      }
+      if (recovery === 'unavailable') {
+        callbacks.onError(new SessionRefreshUnavailableError());
+        return false;
       }
     }
 
@@ -431,6 +443,10 @@ async function attemptStream(
       if (terms.userId && terms.status !== 'checking') void terms.recheck(terms.userId);
       callbacks.onError(new ApiHttpError(TERMS_REVIEW_MESSAGE, 403, 'terms_acceptance_required'));
       return false;
+    }
+
+    if (response.status === 402 || response.status === 403) {
+      void useTierStore.getState().refreshTier();
     }
 
     if (response.status === 403) {

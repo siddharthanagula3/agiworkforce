@@ -3,6 +3,7 @@ jest.mock('../services/authSession', () => ({
   getAuthHeaders: jest.fn(),
   refreshAuthSession: jest.fn(),
   clearAuthSession: jest.fn(),
+  hasActiveAuthSession: jest.fn(),
 }));
 
 jest.mock('react-native', () => ({
@@ -34,21 +35,28 @@ jest.mock('../src/platform/platformHeaders', () => ({
   platformRequestHeaders: () => ({}),
 }));
 
-import { api, resetApiAccountState } from '../services/api';
+import { api, recoverStreamSession, resetApiAccountState } from '../services/api';
 import {
   clearAuthSession,
   getAuthHeaders,
   getAuthToken,
+  hasActiveAuthSession,
   refreshAuthSession,
 } from '../services/authSession';
 import { Alert } from 'react-native';
 import { TERMS_ACCEPTANCE_PATH } from '@agiworkforce/cloud-contracts';
-import { CloudCredentialUnavailableError } from '../services/apiErrors';
+import {
+  CloudCredentialUnavailableError,
+  SessionRefreshUnavailableError,
+} from '../services/apiErrors';
+import { invalidateCloudAccount } from '../src/features/auth/services/cloudAccountSession';
+import { clearLocalCloudAccountState } from '../src/features/auth/services/cloudAccountTeardown';
 
 const mockGetAuthToken = getAuthToken as jest.Mock;
 const mockGetAuthHeaders = getAuthHeaders as jest.Mock;
 const mockRefreshAuthSession = refreshAuthSession as jest.Mock;
 const mockClearAuthSession = clearAuthSession as jest.Mock;
+const mockHasActiveAuthSession = hasActiveAuthSession as jest.Mock;
 
 function mockToken(token: string) {
   mockGetAuthToken.mockResolvedValue(token);
@@ -79,6 +87,7 @@ beforeEach(() => {
   mockToken('access-token-valid');
   mockRefreshAuthSession.mockResolvedValue(false);
   mockClearAuthSession.mockResolvedValue(undefined);
+  mockHasActiveAuthSession.mockReturnValue(false);
 });
 
 describe('2xx responses', () => {
@@ -225,6 +234,59 @@ describe('failed refresh triggers local cloud-session cleanup', () => {
     mockRefreshAuthSession.mockResolvedValueOnce(false);
 
     await expect(api.get('/api/expired')).rejects.toThrow('Session expired');
+  });
+});
+
+describe('a refresh that fails while the device still holds the session', () => {
+  beforeEach(() => {
+    mockHasActiveAuthSession.mockReturnValue(true);
+  });
+
+  it('keeps the user signed in and their queued work, and reports a retryable error', async () => {
+    jest.spyOn(globalThis, 'fetch').mockResolvedValueOnce(makeResponse(401, {}));
+
+    await expect(api.get('/api/expired-token')).rejects.toBeInstanceOf(
+      SessionRefreshUnavailableError,
+    );
+
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(invalidateCloudAccount).not.toHaveBeenCalled();
+    expect(clearLocalCloudAccountState).not.toHaveBeenCalled();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it('tells a stream the refresh was unavailable without tearing the account down', async () => {
+    await expect(recoverStreamSession()).resolves.toBe('unavailable');
+
+    expect(mockClearAuthSession).not.toHaveBeenCalled();
+    expect(clearLocalCloudAccountState).not.toHaveBeenCalled();
+  });
+
+  it('still signs out when the server refuses even a freshly refreshed token', async () => {
+    jest
+      .spyOn(globalThis, 'fetch')
+      .mockResolvedValueOnce(makeResponse(401, {}))
+      .mockResolvedValueOnce(makeResponse(401, {}));
+    mockRefreshAuthSession.mockResolvedValueOnce(true);
+
+    await expect(api.get('/api/refused')).rejects.toThrow('Session expired');
+
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+    expect(clearLocalCloudAccountState).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('a refresh that fails because the session has ended', () => {
+  it('tears the account down and asks the user to sign in again', async () => {
+    await expect(recoverStreamSession()).resolves.toBe('expired');
+
+    expect(mockClearAuthSession).toHaveBeenCalledTimes(1);
+    expect(clearLocalCloudAccountState).toHaveBeenCalledTimes(1);
+    expect(Alert.alert).toHaveBeenCalledWith(
+      'Session Expired',
+      expect.stringContaining('sign in'),
+      expect.any(Array),
+    );
   });
 });
 

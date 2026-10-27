@@ -9,7 +9,7 @@ import {
   resolveCapabilityDocumentDecision,
 } from '@agiworkforce/types';
 import type { BillingPlanTier, CapabilityDecision, PlatformCapability } from '@agiworkforce/types';
-import { parseMeResponse } from '@agiworkforce/cloud-contracts';
+import { isMePlanStale, parseMeResponse } from '@agiworkforce/cloud-contracts';
 import type { EffectiveCapabilityDocumentWire } from '@agiworkforce/cloud-contracts';
 import type { MobileBillingSource } from './subscriptionSource';
 import {
@@ -40,27 +40,13 @@ interface TierState {
   setCurrentConversationProvider: (provider: string | null) => void;
 }
 
+let tierRefreshInFlight: Promise<boolean> | null = null;
+let tierRefreshAfterInFlight: Promise<boolean> | null = null;
+
 export const useTierStore = create<TierState>()(
   persist(
-    (set, get) => ({
-      tier: 'free',
-      billingTier: 'free',
-      billingStatus: 'none',
-      billingSource: 'unknown',
-      billingPeriodEnd: null,
-      billingCancelsAtPeriodEnd: false,
-      isRefreshing: false,
-      lastRefreshedAt: null,
-      codeExecutionAvailable: false,
-      genericWebSearchAvailable: false,
-      grantedCapabilities: [],
-      capabilityDocument: null,
-      capabilityHandshakeVersion: null,
-      capabilityHandshakeReceived: false,
-      currentConversationProvider: null,
-
-      refreshTier: async () => {
-        if (get().isRefreshing) return false;
+    (set, get) => {
+      async function readTier(): Promise<boolean> {
         if (useChatAppModeStore.getState().appMode !== 'cloud') return false;
         const account = captureCloudAccountEpoch();
         if (!account) return false;
@@ -100,36 +86,73 @@ export const useTierStore = create<TierState>()(
         } finally {
           if (isCloudAccountEpochCurrent(account)) set({ isRefreshing: false });
         }
-      },
+      }
 
-      setTier: (tier) => {
-        set({ tier, billingTier: tier });
-      },
+      return {
+        tier: 'free',
+        billingTier: 'free',
+        billingStatus: 'none',
+        billingSource: 'unknown',
+        billingPeriodEnd: null,
+        billingCancelsAtPeriodEnd: false,
+        isRefreshing: false,
+        lastRefreshedAt: null,
+        codeExecutionAvailable: false,
+        genericWebSearchAvailable: false,
+        grantedCapabilities: [],
+        capabilityDocument: null,
+        capabilityHandshakeVersion: null,
+        capabilityHandshakeReceived: false,
+        currentConversationProvider: null,
 
-      clearAccountEntitlements: () => {
-        set({
-          tier: 'free',
-          billingTier: 'free',
-          billingStatus: 'none',
-          billingSource: 'unknown',
-          billingPeriodEnd: null,
-          billingCancelsAtPeriodEnd: false,
-          isRefreshing: false,
-          lastRefreshedAt: null,
-          codeExecutionAvailable: false,
-          genericWebSearchAvailable: false,
-          grantedCapabilities: [],
-          capabilityDocument: null,
-          capabilityHandshakeVersion: null,
-          capabilityHandshakeReceived: false,
-          currentConversationProvider: null,
-        });
-      },
+        // A caller that arrives while a read is in flight, such as the refresh after
+        // a store purchase, needs the server's answer from after its own call, so it
+        // waits for one more read rather than taking the earlier one.
+        refreshTier: () => {
+          if (tierRefreshInFlight) {
+            tierRefreshAfterInFlight ??= tierRefreshInFlight.then(() => {
+              tierRefreshAfterInFlight = null;
+              return get().refreshTier();
+            });
+            return tierRefreshAfterInFlight;
+          }
+          const read = readTier();
+          tierRefreshInFlight = read;
+          void read.finally(() => {
+            if (tierRefreshInFlight === read) tierRefreshInFlight = null;
+          });
+          return read;
+        },
 
-      setCurrentConversationProvider: (provider) => {
-        set({ currentConversationProvider: provider });
-      },
-    }),
+        setTier: (tier) => {
+          set({ tier, billingTier: tier });
+        },
+
+        clearAccountEntitlements: () => {
+          set({
+            tier: 'free',
+            billingTier: 'free',
+            billingStatus: 'none',
+            billingSource: 'unknown',
+            billingPeriodEnd: null,
+            billingCancelsAtPeriodEnd: false,
+            isRefreshing: false,
+            lastRefreshedAt: null,
+            codeExecutionAvailable: false,
+            genericWebSearchAvailable: false,
+            grantedCapabilities: [],
+            capabilityDocument: null,
+            capabilityHandshakeVersion: null,
+            capabilityHandshakeReceived: false,
+            currentConversationProvider: null,
+          });
+        },
+
+        setCurrentConversationProvider: (provider) => {
+          set({ currentConversationProvider: provider });
+        },
+      };
+    },
     {
       name: 'tier-store',
       storage: createJSONStorage(() => mmkvStorage),
@@ -202,8 +225,12 @@ export async function ensureCloudEntitlementsReadyForRequest(): Promise<void> {
   if (!isCloudAccountEpochCurrent(account)) return;
 
   const state = useTierStore.getState();
-  if (state.capabilityHandshakeReceived || state.lastRefreshedAt !== null) return;
-  await state.refreshTier();
+  if (!isMePlanStale(state.lastRefreshedAt)) return;
+  if (state.lastRefreshedAt === null) {
+    await state.refreshTier();
+    return;
+  }
+  void state.refreshTier();
 }
 
 if (__DEV__) {

@@ -43,6 +43,7 @@ import {
 } from '../src/features/billing/store';
 import { useChatAppModeStore } from '../src/features/chat/store/appModeStore';
 import { api } from '../services/api';
+import { ME_PLAN_MAX_AGE_MS } from '@agiworkforce/cloud-contracts';
 import {
   __resetCloudAccountSessionForTests,
   activateCloudAccount,
@@ -297,24 +298,55 @@ describe('refreshTier, failure cases', () => {
   });
 });
 
-describe('refreshTier, concurrent call de-duplication', () => {
-  it('skips a second concurrent call if one is already in flight', async () => {
-    let resolveFirst!: (v: unknown) => void;
-    const firstPromise = new Promise<{ plan: string }>((resolve) => {
-      resolveFirst = resolve;
-    });
-    mockApiGet.mockReturnValueOnce(firstPromise);
+function deferred() {
+  let resolve!: (value: unknown) => void;
+  const promise = new Promise((done) => {
+    resolve = done;
+  });
+  return { promise, resolve };
+}
 
-    const first = getState().refreshTier();
+describe('refreshTier, concurrent calls', () => {
+  it('reads again for a caller that arrived during a read, so a purchase is not lost', async () => {
+    const beforePurchase = deferred();
+    const afterPurchase = deferred();
+    mockApiGet
+      .mockReturnValueOnce(beforePurchase.promise)
+      .mockReturnValueOnce(afterPurchase.promise);
+
+    const foregroundRefresh = getState().refreshTier();
+    await Promise.resolve();
+    const postPurchaseRefresh = getState().refreshTier();
+
+    beforePurchase.resolve(mePayload('free'));
+    await foregroundRefresh;
+    expect(getState().tier).toBe('free');
 
     await Promise.resolve();
+    afterPurchase.resolve(mePayload('pro'));
+    await expect(postPurchaseRefresh).resolves.toBe(true);
 
-    await getState().refreshTier();
-    expect(mockApiGet).toHaveBeenCalledTimes(1);
+    expect(mockApiGet).toHaveBeenCalledTimes(2);
+    expect(getState().tier).toBe('pro');
+  });
 
-    resolveFirst(mePayload('basic'));
-    await first;
-    expect(getState().tier).toBe('basic');
+  it('shares one follow-up read between every caller that arrived during the same read', async () => {
+    const first = deferred();
+    mockApiGet.mockReturnValueOnce(first.promise).mockResolvedValueOnce(mePayload('max'));
+
+    const initial = getState().refreshTier();
+    await Promise.resolve();
+    const followers = [
+      getState().refreshTier(),
+      getState().refreshTier(),
+      getState().refreshTier(),
+    ];
+
+    first.resolve(mePayload('basic'));
+    await Promise.all([initial, ...followers]);
+
+    expect(mockApiGet).toHaveBeenCalledTimes(2);
+    expect(getState().tier).toBe('max');
   });
 
   it('ignores an account-A response that resolves after switching to account B', async () => {
@@ -374,6 +406,41 @@ describe('refreshTier, concurrent call de-duplication', () => {
       grantedCapabilities: ['canChat', 'canUseWebSearch'],
       genericWebSearchAvailable: true,
     });
+  });
+});
+
+describe('ensureCloudEntitlementsReadyForRequest, plan freshness', () => {
+  it('waits for the first read of the plan before the first Cloud request', async () => {
+    mockApiGet.mockResolvedValueOnce(mePayload('pro'));
+
+    await ensureCloudEntitlementsReadyForRequest();
+
+    expect(mockApiGet).toHaveBeenCalledTimes(1);
+    expect(getState().tier).toBe('pro');
+  });
+
+  it('does not read again while the plan is fresh', async () => {
+    useTierStore.setState({ tier: 'pro', lastRefreshedAt: new Date().toISOString() });
+
+    await ensureCloudEntitlementsReadyForRequest();
+
+    expect(mockApiGet).not.toHaveBeenCalled();
+  });
+
+  it('re-reads a plan older than the shared limit without holding up the request', async () => {
+    const stale = new Date(Date.now() - ME_PLAN_MAX_AGE_MS - 1_000).toISOString();
+    useTierStore.setState({ tier: 'max', lastRefreshedAt: stale });
+    const read = deferred();
+    mockApiGet.mockReturnValueOnce(read.promise);
+
+    await ensureCloudEntitlementsReadyForRequest();
+
+    expect(mockApiGet).toHaveBeenCalledTimes(1);
+    expect(getState().tier).toBe('max');
+
+    read.resolve(mePayload('pro', { status: 'canceled' }));
+    await new Promise((done) => setTimeout(done, 0));
+    expect(getState().tier).toBe('free');
   });
 });
 

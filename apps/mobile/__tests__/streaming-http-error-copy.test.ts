@@ -35,7 +35,7 @@ async function loadStreamingService() {
   }));
   jest.doMock('../services/api', () => ({
     ...jest.requireActual('../services/api'),
-    recoverStreamSession: jest.fn().mockResolvedValue(false),
+    recoverStreamSession: jest.fn().mockResolvedValue('expired'),
   }));
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports

@@ -13,6 +13,13 @@ export class CloudCredentialUnavailableError extends Error {
   }
 }
 
+export class SessionRefreshUnavailableError extends Error {
+  constructor() {
+    super("Couldn't refresh your session. Check your connection and try again.");
+    this.name = 'SessionRefreshUnavailableError';
+  }
+}
+
 const PAYWALL_BODY_KIND = 'paywall';
 const PAYWALL_DEFAULT_FEATURE = 'token_cap';
 const PAYWALL_DEFAULT_TIER = 'basic';

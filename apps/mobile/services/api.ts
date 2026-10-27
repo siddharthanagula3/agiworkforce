@@ -3,7 +3,13 @@ import { router } from 'expo-router';
 import { API_URL, TIMEOUTS } from '@/lib/constants';
 import { combineAbortSignals } from '@/lib/abortSignal';
 import { FEATURES } from '@/lib/v1FeatureFlags';
-import { clearAuthSession, getAuthHeaders, getAuthToken, refreshAuthSession } from './authSession';
+import {
+  clearAuthSession,
+  getAuthHeaders,
+  getAuthToken,
+  hasActiveAuthSession,
+  refreshAuthSession,
+} from './authSession';
 import { guardedFetch } from '@/lib/egressGuard';
 import { invalidateCloudAccount } from '@/src/features/auth/services/cloudAccountSession';
 import { clearLocalCloudAccountState } from '@/src/features/auth/services/cloudAccountTeardown';
@@ -31,13 +37,19 @@ import {
   ApiHttpError,
   ApiPaywallError,
   CloudCredentialUnavailableError,
+  SessionRefreshUnavailableError,
   httpErrorFrom,
   parseJsonBody,
   rateLimitErrorFrom,
 } from './apiErrors';
 import { platformRequestHeaders } from '../src/platform/platformHeaders';
 
-export { ApiFreeCapacityError, ApiHttpError, ApiPaywallError } from './apiErrors';
+export {
+  ApiFreeCapacityError,
+  ApiHttpError,
+  ApiPaywallError,
+  SessionRefreshUnavailableError,
+} from './apiErrors';
 export type { ApiPaywallRecoveryAction } from './apiErrors';
 
 let _refreshing: Promise<boolean> | null = null;
@@ -208,12 +220,16 @@ export function streamAuthRefusal(status: number, text: string): Error | null {
   return null;
 }
 
-export async function recoverStreamSession(): Promise<boolean> {
+export type StreamSessionRecovery = 'refreshed' | 'unavailable' | 'expired';
+
+export async function recoverStreamSession(): Promise<StreamSessionRecovery> {
   const accountGeneration = _accountGeneration;
   const refreshed = await tryRefreshToken();
   assertApiAccountGeneration(accountGeneration);
-  if (!refreshed) handleUnrecoverableAuth();
-  return refreshed;
+  if (refreshed) return 'refreshed';
+  if (hasActiveAuthSession()) return 'unavailable';
+  handleUnrecoverableAuth();
+  return 'expired';
 }
 
 function handleUnrecoverableAuth(): void {
@@ -349,6 +365,10 @@ async function sendRequest(
         if (refreshed) {
           release();
           return sendRequest(path, init, { ...options, _skipAuthRetry: true });
+        }
+        if (hasActiveAuthSession()) {
+          release();
+          throw new SessionRefreshUnavailableError();
         }
       }
       release();
