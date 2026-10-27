@@ -231,7 +231,7 @@ export function cloudCodeCommandRanLabel(count: number): string {
  * long. The routes declare it as the literal `maxDuration = 300`, which
  * Next.js cannot take from an import, and are kept in step by hand.
  */
-export const CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS = 300_000;
+export const CLOUD_CODE_AGENT_TURN_REQUEST_LIMIT_MS = 800_000;
 
 /**
  * One tool the agent ran, as the transcript shows it. `label` is the line the

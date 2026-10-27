@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "Tareas programadas",
   "compareRowSandboxes": "Entornos gestionados",
   "compareSandboxLimit": "{{sandboxes}} a la vez, {{minutes}} min cada uno",
+  "compareSandboxLimitHours": "{{sandboxes}} a la vez, {{hours}} h cada uno",
   "compareGroupResearch": "Investigación y creación",
   "compareGroupProjects": "Proyectos y archivos",
   "compareGroupTools": "Herramientas y automatización",
@@ -232,6 +233,9 @@
   "dailyUploads_many": "{{count}} archivos subidos al día, de hasta {{size}} cada uno",
   "dailyUploads_other": "{{count}} archivos subidos al día, de hasta {{size}} cada uno",
   "scheduledTasksAndSandboxes_one": "{{count}} tarea programada y entornos gestionados de {{minutes}} minutos",
+  "scheduledTasksAndSandboxesHours_one": "{{count}} tarea programada y entornos gestionados de {{hours}} horas",
   "scheduledTasksAndSandboxes_many": "{{count}} tareas programadas y entornos gestionados de {{minutes}} minutos",
-  "scheduledTasksAndSandboxes_other": "{{count}} tareas programadas y entornos gestionados de {{minutes}} minutos"
+  "scheduledTasksAndSandboxesHours_many": "{{count}} tareas programadas y entornos gestionados de {{hours}} horas",
+  "scheduledTasksAndSandboxes_other": "{{count}} tareas programadas y entornos gestionados de {{minutes}} minutos",
+  "scheduledTasksAndSandboxesHours_other": "{{count}} tareas programadas y entornos gestionados de {{hours}} horas"
 }

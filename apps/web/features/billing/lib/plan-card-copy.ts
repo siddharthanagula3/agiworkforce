@@ -104,10 +104,21 @@ export function sandboxMinutes(plan: BillingPlanTier): number {
   return (getBillingPlanProductLimits(plan)?.sandboxTtlMs ?? 0) / MINUTE_MS;
 }
 
+const MINUTES_PER_HOUR = 60;
+
+export function sandboxHours(plan: BillingPlanTier): number | null {
+  const minutes = sandboxMinutes(plan);
+  return minutes > MINUTES_PER_HOUR && minutes % MINUTES_PER_HOUR === 0
+    ? minutes / MINUTES_PER_HOUR
+    : null;
+}
+
 function scheduledTasksAndSandboxesFeature(plan: BillingPlanTier, t: PricingT) {
   const tasks = getBillingPlanProductLimits(plan)?.maxScheduledTasks;
   const minutes = sandboxMinutes(plan);
   if (typeof tasks !== 'number' || tasks <= 0 || minutes <= 0) return null;
+  const hours = sandboxHours(plan);
+  if (hours !== null) return t('scheduledTasksAndSandboxesHours', { count: tasks, hours });
   return t('scheduledTasksAndSandboxes', { count: tasks, minutes });
 }
 

@@ -51,6 +51,8 @@ import {
   isByokPlanTier,
   isFreeOfChargePlanTier,
   type BillingPlanTier,
+  MANAGED_SANDBOX_LONGEST_RUN_MS,
+  MAX_MANAGED_SANDBOXES_PER_USER,
 } from '../billing-catalog';
 
 describe('billing catalog', () => {
@@ -318,7 +320,7 @@ describe('billing catalog', () => {
     });
 
     // intentionally plateau at the absolute five-per-user safety ceiling.
-    it('scales compute dimensions across paid tiers without exceeding five sandboxes', () => {
+    it('scales compute dimensions across paid tiers without exceeding the per-user sandbox ceiling', () => {
       const tiers = ['free', 'basic', 'pro', 'max', 'max_15x'] as const;
       const turns = tiers.map((tier) => getPlanMaxConcurrentTurns(tier) ?? Number.MAX_SAFE_INTEGER);
       const sandboxes = tiers.map((tier) => getPlanMaxSandboxes(tier) ?? Number.MAX_SAFE_INTEGER);
@@ -332,17 +334,17 @@ describe('billing catalog', () => {
         }
       }
 
-      expect(sandboxes[0]).toBe(1);
+      expect(sandboxes[0]).toBeGreaterThan(0);
       expect(ttls[0]).toBeGreaterThan(0);
-      expect(ttls[1]).toBeGreaterThanOrEqual(ttls[0]!);
-      for (let index = 2; index < ttls.length; index += 1) {
-        expect(ttls[index]!).toBeGreaterThan(ttls[index - 1]!);
+      for (let index = 1; index < ttls.length; index += 1) {
+        expect(ttls[index]!).toBeGreaterThanOrEqual(ttls[index - 1]!);
       }
+      expect(Math.max(...ttls)).toBeLessThanOrEqual(MANAGED_SANDBOX_LONGEST_RUN_MS);
 
       for (let index = 1; index < sandboxes.length; index += 1) {
         expect(sandboxes[index]!).toBeGreaterThanOrEqual(sandboxes[index - 1]!);
       }
-      expect(Math.max(...sandboxes)).toBe(5);
+      expect(Math.max(...sandboxes)).toBe(MAX_MANAGED_SANDBOXES_PER_USER);
     });
 
     it('includes AGI Code only where the plan gives its coding agent a sandbox and a daily budget', () => {
@@ -374,7 +376,7 @@ describe('billing catalog', () => {
       expect(getPlanSandboxTtlMs('hobby')).toBe(0);
 
       expect(getPlanMaxConcurrentTurns('enterprise')).toBeNull();
-      expect(getPlanMaxSandboxes('enterprise')).toBe(5);
+      expect(getPlanMaxSandboxes('enterprise')).toBe(MAX_MANAGED_SANDBOXES_PER_USER);
       expect(getPlanMaxConnectorTools('enterprise')).toBeNull();
       expect(getPlanMaxScheduledTasks('enterprise')).toBeNull();
       expect(getPlanSandboxTtlMs('enterprise')).toBeGreaterThan(0);

@@ -34,7 +34,7 @@ export const runtime = 'nodejs';
  * CLOUD_CODE_AGENT_TURN_BUDGET_MS in cloud-code-agent-service.ts is derived
  * from. Keep the two literals equal.
  */
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 type RouteContext = { params: Promise<{ sessionId: string }> };
 
