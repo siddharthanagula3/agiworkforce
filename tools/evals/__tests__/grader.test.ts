@@ -168,4 +168,11 @@ describe('the artifacts check', () => {
     expect((await gradeCheckAsync(check, { text: late })).passed).toBe(false);
     expect((await gradeCheckAsync(check, { text: `${marked}\n\n${marked}` })).passed).toBe(false);
   });
+
+  it('takes the count as a floor when it is marked at least', async () => {
+    const floor = { kind: 'artifacts', count: 1, atLeast: true } as const;
+
+    expect((await gradeCheckAsync(floor, { text: `${marked}\n\n${marked}` })).passed).toBe(true);
+    expect((await gradeCheckAsync(floor, { text: 'No artifact here.' })).passed).toBe(false);
+  });
 });

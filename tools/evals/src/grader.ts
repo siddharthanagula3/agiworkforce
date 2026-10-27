@@ -372,11 +372,14 @@ async function gradeArtifacts(
   const unmarked = artifacts.filter(
     (artifact) => artifact.content.split('\n', 1)[0]?.trim() !== markers[artifact.type],
   );
-  const passed = artifacts.length === check.count && unmarked.length === 0;
+  const countHolds = check.atLeast
+    ? artifacts.length >= check.count
+    : artifacts.length === check.count;
+  const passed = countHolds && unmarked.length === 0;
   return result(
     check,
     passed,
-    `${artifacts.length} artifact(s) derived (expected ${check.count})${
+    `${artifacts.length} artifact(s) derived (expected ${check.atLeast ? 'at least ' : ''}${check.count})${
       unmarked.length > 0 ? `, ${unmarked.length} without its marker on the first line` : ''
     }`,
   );

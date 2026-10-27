@@ -110,6 +110,8 @@ export type Check =
        */
       readonly kind: 'artifacts';
       readonly count: number;
+      /** When set, `count` is a floor rather than an exact number. */
+      readonly atLeast?: true;
     };
 
 export type CheckKind = Check['kind'];

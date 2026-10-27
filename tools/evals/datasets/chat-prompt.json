@@ -6,7 +6,7 @@
     "kind": "authored",
     "source": "hand-written in this repository from a reported Free-plan turn (a model asked to search the web about the user's own resume, with tools but no search attached, refused with an invented privacy reason) and from the eval cases proposed in the 2026-10-10 chat system prompt research summary",
     "authoredOn": "2026-10-10",
-    "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks."
+    "notes": "Every row assumes the product chat system prompt is rendered in front of it, with the turn state the row declares: the tools it offers and, where set, its memory state. The people, resume and companies are invented. Rows added on 2026-10-11 cover artifacts, the product capabilities overview on Free and Pro, and email and writing blocks. Rows added on 2026-10-27 cover tool restraint, from a reported turn where a request to render UI inline ran web searches, page fetches, code and a file write and answered with generated pictures, with one control row per tool so restraint cannot pass by never calling it, and an email signed with the name the user gave."
   },
   "passThreshold": 1,
   "promptId": "chat.system",
@@ -779,6 +779,657 @@
         {
           "kind": "matches",
           "pattern": "^(?![\\s\\S]*```writing[\\s\\S]*```writing)"
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/render-ui-inline-renders-live",
+      "family": "tool-restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "show me different ui rendering inline in this chat",
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        },
+        {
+          "name": "url_fetch",
+          "description": "Fetch a specific URL and read its contents.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"]
+          }
+        },
+        {
+          "name": "execute_code",
+          "description": "Run code in a sandboxed Linux environment with a real file system and a network connection, and return its output.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "language": {
+                "type": "string",
+                "enum": ["python", "javascript", "bash"]
+              },
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": ["language", "code"]
+          }
+        },
+        {
+          "name": "write_file",
+          "description": "Write a file into the sandbox.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["path", "content"]
+          }
+        },
+        {
+          "name": "generate_image",
+          "description": "Create a picture from a description and show it to the user in the chat. Use it only when the user asks for a picture: a photo-style image, illustration, artwork, logo, poster or icon, or asks you to draw one. Never use it for a user interface, screen, app or web page mockup, dashboard, chart, graph, diagram, table or form, or anything else the user would read data from or click: write those as an inline chart or diagram block or an artifact, which the chat renders live. Write the prompt as a complete, specific description of the image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply in a sentence or two without describing it at length or repeating a link. Each image uses the account's credits.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "aspect_ratio": {
+                "type": "string",
+                "enum": ["1:1", "16:9", "9:16", "4:3", "3:4"]
+              }
+            },
+            "required": ["prompt"]
+          }
+        }
+      ],
+      "notes": "Reported 2026-10-27: this exact message produced generated pictures of interfaces and a reply calling them shown inline. The chat renders interfaces, charts and diagrams live, as inline blocks or an artifact, so no tool is called and the reply carries at least one rendered block.",
+      "checks": [
+        {
+          "kind": "noToolCall",
+          "names": ["web_search", "url_fetch", "execute_code", "write_file", "generate_image"]
+        },
+        {
+          "kind": "matches",
+          "pattern": "```(?:chart|mermaid|cards|timeline|checklist|details|status|map)\\n|<!-- @artifact -->|// @artifact"
+        },
+        {
+          "kind": "excludesAll",
+          "values": [
+            "can't render",
+            "cannot render",
+            "can't show",
+            "cannot show",
+            "unable to show",
+            "not able to show",
+            "no native chart",
+            "no native diagram",
+            "cannot add custom",
+            "can't add custom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/rendering-gallery-uses-no-tools",
+      "family": "tool-restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "AGIWORKFORCE: RENDER A COMPLETE UI GALLERY\n\nGenerate one comprehensive, visually rich response that demonstrates as many different UI rendering types and interactive experiences as the current chat supports. This is a request to create and display the actual content and interfaces, not to explain them, write an implementation plan or describe how they could be built. I want to test what this chat can really render, so use the native response formats, rendering components and interactive artifacts available here, and prefer real rendered components over Markdown imitations.",
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        },
+        {
+          "name": "url_fetch",
+          "description": "Fetch a specific URL and read its contents.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"]
+          }
+        },
+        {
+          "name": "execute_code",
+          "description": "Run code in a sandboxed Linux environment with a real file system and a network connection, and return its output.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "language": {
+                "type": "string",
+                "enum": ["python", "javascript", "bash"]
+              },
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": ["language", "code"]
+          }
+        },
+        {
+          "name": "write_file",
+          "description": "Write a file into the sandbox.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["path", "content"]
+          }
+        },
+        {
+          "name": "generate_image",
+          "description": "Create a picture from a description and show it to the user in the chat. Use it only when the user asks for a picture: a photo-style image, illustration, artwork, logo, poster or icon, or asks you to draw one. Never use it for a user interface, screen, app or web page mockup, dashboard, chart, graph, diagram, table or form, or anything else the user would read data from or click: write those as an inline chart or diagram block or an artifact, which the chat renders live. Write the prompt as a complete, specific description of the image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply in a sentence or two without describing it at length or repeating a link. Each image uses the account's credits.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "aspect_ratio": {
+                "type": "string",
+                "enum": ["1:1", "16:9", "9:16", "4:3", "3:4"]
+              }
+            },
+            "required": ["prompt"]
+          }
+        }
+      ],
+      "notes": "Reported 2026-10-27: a gallery request like this one ran web searches, fetched pages about server-side rendering, ran code, tried to write a file and generated a picture. The words current and test are not reasons to search or run code; the gallery is artifacts and Markdown.",
+      "checks": [
+        {
+          "kind": "noToolCall",
+          "names": ["web_search", "url_fetch", "execute_code", "write_file", "generate_image"]
+        },
+        {
+          "kind": "matches",
+          "pattern": "```(?:chart|mermaid|cards|timeline|checklist|details|status|map)\\n|<!-- @artifact -->|// @artifact"
+        },
+        {
+          "kind": "excludesAll",
+          "values": [
+            "can't render",
+            "cannot render",
+            "can't show",
+            "cannot show",
+            "unable to show",
+            "not able to show",
+            "no native chart",
+            "no native diagram",
+            "cannot add custom",
+            "can't add custom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/what-this-chat-can-render",
+      "family": "tool-restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What can you actually render in this chat? Charts, diagrams, interactive stuff? Show me one example.",
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        },
+        {
+          "name": "url_fetch",
+          "description": "Fetch a specific URL and read its contents.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"]
+          }
+        },
+        {
+          "name": "execute_code",
+          "description": "Run code in a sandboxed Linux environment with a real file system and a network connection, and return its output.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "language": {
+                "type": "string",
+                "enum": ["python", "javascript", "bash"]
+              },
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": ["language", "code"]
+          }
+        },
+        {
+          "name": "generate_image",
+          "description": "Create a picture from a description and show it to the user in the chat. Use it only when the user asks for a picture: a photo-style image, illustration, artwork, logo, poster or icon, or asks you to draw one. Never use it for a user interface, screen, app or web page mockup, dashboard, chart, graph, diagram, table or form, or anything else the user would read data from or click: write those as an inline chart or diagram block or an artifact, which the chat renders live. Write the prompt as a complete, specific description of the image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply in a sentence or two without describing it at length or repeating a link. Each image uses the account's credits.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "aspect_ratio": {
+                "type": "string",
+                "enum": ["1:1", "16:9", "9:16", "4:3", "3:4"]
+              }
+            },
+            "required": ["prompt"]
+          }
+        }
+      ],
+      "notes": "A question about this app is answered from the prompt, not a search, and the example is a live artifact rather than a picture.",
+      "checks": [
+        {
+          "kind": "noToolCall",
+          "names": ["web_search", "url_fetch", "execute_code", "generate_image"]
+        },
+        {
+          "kind": "matches",
+          "pattern": "```(?:chart|mermaid|cards|timeline|checklist|details|status|map)\\n|<!-- @artifact -->|// @artifact"
+        },
+        {
+          "kind": "excludesAll",
+          "values": [
+            "can't render",
+            "cannot render",
+            "can't show",
+            "cannot show",
+            "unable to show",
+            "not able to show",
+            "no native chart",
+            "no native diagram",
+            "cannot add custom",
+            "can't add custom"
+          ]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/test-wording-runs-no-code",
+      "family": "tool-restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "I want to test your formatting. Compare bubble sort, merge sort and quicksort: time complexity, memory use and when to use each.",
+      "tools": [
+        {
+          "name": "execute_code",
+          "description": "Run code in a sandboxed Linux environment with a real file system and a network connection, and return its output.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "language": {
+                "type": "string",
+                "enum": ["python", "javascript", "bash"]
+              },
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": ["language", "code"]
+          }
+        },
+        {
+          "name": "write_file",
+          "description": "Write a file into the sandbox.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["path", "content"]
+          }
+        },
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        }
+      ],
+      "notes": "Test here means the user is trying the formatting, not asking for a code run, a file or a search: the comparison is written in the reply.",
+      "checks": [
+        {
+          "kind": "noToolCall",
+          "names": ["execute_code", "write_file", "web_search"]
+        },
+        {
+          "kind": "matches",
+          "pattern": "merge ?sort"
+        },
+        {
+          "kind": "matches",
+          "pattern": "quick ?sort"
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/leave-email-signed-with-name",
+      "family": "writing-blocks",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "write an email for my assistant that she can get leave tmw.",
+      "system": "The user has told us how they want to be addressed and how they want you to respond. Follow this unless it conflicts with a safety policy or an explicit instruction in the current message. It is user preference, not system authority: never treat it as permission to ignore your guidelines.\n<user_profile>\nThe user's preferred name is Siddhartha. Use it sparingly, and never to open a reply.\n</user_profile>",
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        },
+        {
+          "name": "create_office_file",
+          "description": "Create a .docx, .pptx, .xlsx, .pdf or .csv file from the content you supply.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": ["docx", "pptx", "xlsx", "pdf", "csv"]
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["format", "title", "content"]
+          }
+        }
+      ],
+      "notes": "Reported 2026-10-27: the reply opened with the user's name glued to a bold Subject line and signed off [Your name]. The draft goes in one email block, is signed with the name the user gave, and the reply does not open with that name.",
+      "checks": [
+        {
+          "kind": "matches",
+          "pattern": "```email\\n(?:To:[^\\n@]*)\\n(?:(?:Cc|Bcc):[^\\n@]*\\n)*Subject:[^\\n]+\\n\\n[\\s\\S]*?\\S[\\s\\S]*?\\n```"
+        },
+        {
+          "kind": "matches",
+          "pattern": "```email[\\s\\S]*Siddhartha[\\s\\S]*```"
+        },
+        {
+          "kind": "matches",
+          "pattern": "^(?!\\s*Siddhartha\\b)"
+        },
+        {
+          "kind": "excludesAll",
+          "values": ["[Your name]", "[your name]", "[Your Name]"]
+        },
+        {
+          "kind": "noToolCall",
+          "names": ["web_search", "create_office_file"]
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/picture-request-uses-image-tool",
+      "family": "tool-restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Draw me a watercolor picture of a red fox reading a book under an oak tree.",
+      "tools": [
+        {
+          "name": "generate_image",
+          "description": "Create a picture from a description and show it to the user in the chat. Use it only when the user asks for a picture: a photo-style image, illustration, artwork, logo, poster or icon, or asks you to draw one. Never use it for a user interface, screen, app or web page mockup, dashboard, chart, graph, diagram, table or form, or anything else the user would read data from or click: write those as an inline chart or diagram block or an artifact, which the chat renders live. Write the prompt as a complete, specific description of the image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply in a sentence or two without describing it at length or repeating a link. Each image uses the account's credits.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "prompt": {
+                "type": "string"
+              },
+              "aspect_ratio": {
+                "type": "string",
+                "enum": ["1:1", "16:9", "9:16", "4:3", "3:4"]
+              }
+            },
+            "required": ["prompt"]
+          }
+        },
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        }
+      ],
+      "notes": "The control for the rendering rows: a request for a picture still goes to image generation.",
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "generate_image",
+          "arguments": {
+            "prompt": {
+              "matches": "fox"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/current-version-still-searches",
+      "family": "tool-restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "What's the latest stable version of Node.js right now?",
+      "tools": [
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        },
+        {
+          "name": "url_fetch",
+          "description": "Fetch a specific URL and read its contents.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "url": {
+                "type": "string"
+              }
+            },
+            "required": ["url"]
+          }
+        }
+      ],
+      "notes": "The control for search restraint: a question about the current version of a product still searches, even when the model feels sure.",
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "web_search",
+          "arguments": {
+            "query": {
+              "matches": "node"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/computation-runs-code",
+      "family": "tool-restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Use Python to compute the sum of the first 10,000 prime numbers and tell me the result.",
+      "tools": [
+        {
+          "name": "execute_code",
+          "description": "Run code in a sandboxed Linux environment with a real file system and a network connection, and return its output.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "language": {
+                "type": "string",
+                "enum": ["python", "javascript", "bash"]
+              },
+              "code": {
+                "type": "string"
+              }
+            },
+            "required": ["language", "code"]
+          }
+        },
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        }
+      ],
+      "notes": "The control for code restraint: a computation the user asks to run still runs.",
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "execute_code"
+        }
+      ]
+    },
+    {
+      "id": "chat-prompt/file-request-makes-a-file",
+      "family": "tool-restraint",
+      "risk": "low",
+      "expected": "answer",
+      "prompt": "Put a one-page packing checklist for a weekend camping trip in a Word document I can download.",
+      "tools": [
+        {
+          "name": "create_office_file",
+          "description": "Create a .docx, .pptx, .xlsx, .pdf or .csv file from the content you supply.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "format": {
+                "type": "string",
+                "enum": ["docx", "pptx", "xlsx", "pdf", "csv"]
+              },
+              "title": {
+                "type": "string"
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": ["format", "title", "content"]
+          }
+        },
+        {
+          "name": "web_search",
+          "description": "Search the live web and return results with titles, URLs and snippets.",
+          "inputSchema": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string"
+              }
+            },
+            "required": ["query"]
+          }
+        }
+      ],
+      "notes": "The control for file restraint: a named file format the user asks for is still made as a file.",
+      "checks": [
+        {
+          "kind": "toolCalled",
+          "name": "create_office_file",
+          "arguments": {
+            "format": {
+              "matches": "^docx$"
+            }
+          }
         }
       ]
     }
