@@ -1970,6 +1970,28 @@ function openSupport(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
 }
 
+/**
+ * File > Open Folder…: the folder picker and grant the Code page's Add a
+ * folder runs, through the same dispatcher checks, then the Code page, which
+ * lists the folder from then on. A cancelled picker changes nothing.
+ */
+async function openFolder(): Promise<void> {
+  const window = commandWindow();
+  const response = await dispatchDesktopRuntime(window, 'workspace_pick_root', {});
+  if (response.ok) {
+    openRoute(CLOUD_CODE_PAGE_ROUTE);
+    return;
+  }
+  if (response.error.code === 'cancelled') return;
+  await showNativeMessage(window, {
+    type: 'warning',
+    buttons: ['OK'],
+    title: 'Folder not opened',
+    message: response.error.message,
+    noLink: true,
+  }).catch(() => undefined);
+}
+
 function openHelpCenter(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${HELP_CENTER_PATH}`);
 }
@@ -2180,6 +2202,7 @@ function installMenu(): void {
   installAppMenu(
     {
       newChat: garnishHandlers.onNewChat,
+      openFolder: () => void openFolder(),
       newWindow: openNewWindow,
       openConversationInNewWindow: openFocusedConversationInNewWindow,
       hasFocusedConversation: () => focusedConversationRoute() !== null,

@@ -26,6 +26,7 @@ import { isLaunchAtLoginEnabled, setLaunchAtLogin } from './launchAtLogin';
 
 export interface AppMenuActions {
   newChat: () => void;
+  openFolder: () => void;
   newWindow: () => void;
   openConversationInNewWindow: () => void;
   hasFocusedConversation: () => boolean;
@@ -134,6 +135,7 @@ function fileMenu(
       label: 'New Temporary Chat',
       click: () => actions.sendHostCommand('new-temporary-chat'),
     },
+    { label: 'Open Folder…', click: actions.openFolder },
     {
       label: 'Quick Ask',
       accelerator: accelerators.quickAsk,

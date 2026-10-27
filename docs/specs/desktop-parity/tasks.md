@@ -14,7 +14,7 @@ Status: `todo`, `doing`, `done` (with the commit that landed it).
 - [x] C2 Edit > Find… opens the conversation's find.
 - [x] C3 Go menu: Previous Chat, Next Chat, Search….
 - [x] C4 File > New Temporary Chat. Web must deploy before the shell release that sends these commands.
-- [ ] C5 File > Open Folder… opens a granted folder as a local session.
+- [x] C5 File > Open Folder… grants a folder and opens the Code page that lists it.
 - [x] C6 Help: help centre and a Troubleshooting submenu (logs, diagnostics,
       clear cache and restart) (`ab677d80f1`).
 - [ ] C7 Settings > Storage: space used on this computer, clear cache.

@@ -23,6 +23,7 @@ const UPDATES_LABEL = isMac ? 'Check for Updates…' : 'Check for Updates';
 function actions() {
   return {
     newChat: vi.fn(),
+    openFolder: vi.fn(),
     newWindow: vi.fn(),
     openConversationInNewWindow: vi.fn(),
     hasFocusedConversation: vi.fn(() => true),
@@ -141,6 +142,14 @@ describe('the application menu', () => {
 
     expect(spies.stepZoomLevel.mock.calls).toEqual([[1], [-1]]);
     expect(spies.setZoomLevel).toHaveBeenCalledWith(0);
+  });
+
+  it('opens a folder from the File menu', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'File', 'Open Folder…').click as () => void)();
+
+    expect(spies.openFolder).toHaveBeenCalledTimes(1);
   });
 
   it('moves through history from the Go menu', () => {
