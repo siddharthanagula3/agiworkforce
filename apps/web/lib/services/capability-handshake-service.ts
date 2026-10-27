@@ -54,7 +54,9 @@ import {
   getTierPolicy,
   isCapabilityDocumentStale,
   modelsCatalog,
+  normalizeBillingPlanTier,
   surfaceCapabilityGrant,
+  wirePlanOf,
   type CapabilityDenialReason,
   type CapabilityDocumentRef,
   type CapabilityLayerGrant,
@@ -228,8 +230,9 @@ function buildLimits(
 ): CapabilityLimit[] {
   const policy = getTierPolicy(tier);
   const tierSource = `tier:${policy.tier}`;
-  const usageSource = `managed-usage-caps:${policy.tier}`;
-  const allowance = { tier: policy.tier, catalogVersion, revenueContext };
+  const billingTier = normalizeBillingPlanTier(tier);
+  const usageSource = `managed-usage-caps:${wirePlanOf(billingTier).tier}`;
+  const allowance = { tier: billingTier, catalogVersion, revenueContext };
   const uncapped = isPlanUsageUncapped(allowance);
   const limits: CapabilityLimit[] = [
     {

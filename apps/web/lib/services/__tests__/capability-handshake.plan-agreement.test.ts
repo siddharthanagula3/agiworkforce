@@ -6,6 +6,12 @@ import {
   type BillingPlanTier,
 } from '@agiworkforce/types';
 
+import {
+  getPlanSessionUsageBudgetCents,
+  getPlanUsageBudgetCents,
+  getPlanWeeklyUsageBudgetCents,
+  isPlanUsageUncapped,
+} from '@/lib/server/managed-usage-policy';
 import { buildMeCapabilityHandshake } from '@/lib/services/capability-handshake-service';
 
 /**
@@ -101,5 +107,31 @@ describe('what a plan is told it has agrees with what it may do', () => {
 
   it('still publishes the limits that are real', () => {
     expect(limitIds('pro')).toContain('managed_usage_billing_period_cents');
+  });
+
+  /**
+   * The fold once priced Basic's usage windows at Pro's budget and Max 15x's at
+   * Max's, so a client rationing against `/api/me` promised Basic five times what
+   * metering allows it.
+   */
+  it.each(CUSTOMER_PLANS)('publishes to %s the usage budget metering holds it to', (plan) => {
+    const published = (id: string) =>
+      buildMeCapabilityHandshake({
+        userId: 'user_plan_agreement',
+        tier: plan,
+        surface: 'web',
+        cloudExecutionDeploymentEnabled: true,
+      }).limits.find((limit) => limit.id === id)?.limit;
+    const uncapped = isPlanUsageUncapped(plan);
+
+    expect(published('managed_usage_billing_period_cents')).toBe(
+      uncapped ? null : getPlanUsageBudgetCents(plan),
+    );
+    expect(published('managed_usage_rolling_five_hour_cents')).toBe(
+      uncapped ? null : getPlanSessionUsageBudgetCents(plan),
+    );
+    expect(published('managed_usage_rolling_weekly_cents')).toBe(
+      uncapped ? null : getPlanWeeklyUsageBudgetCents(plan),
+    );
   });
 });
