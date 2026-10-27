@@ -15,7 +15,8 @@ import {
 import { useUIStore } from '@shared/stores/layout-store';
 import { useSettingsStore } from '@shared/stores/web-settings-store';
 import { getModelMetadata } from '@shared/config/llm';
-import { CODE_COPY, contextWindowLabel } from './code-surface';
+import type { CloudCodeRuntime } from '@agiworkforce/types';
+import { CODE_COPY, contextWindowLabel, environmentChipLabel } from './code-surface';
 import {
   TOOL_APPROVAL_POLICY_OPTIONS,
   WEB_ACCOUNT_DEFAULT_TOOL_APPROVAL_PREFERENCES,
@@ -3552,5 +3553,63 @@ describe('leaving unsaved local edits', () => {
       within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Discard' }),
     );
     await waitFor(() => expect(screen.queryByLabelText('src/edit.ts')).not.toBeInTheDocument());
+  });
+});
+
+describe('CloudCodePage, a coding agent that runs on the person’s own key', () => {
+  const ownKeyAgent: CloudCodeRuntime = {
+    id: 'droid',
+    name: 'Droid',
+    kind: 'harness',
+    summary: 'Factory’s agent CLI.',
+    agentCommand: 'droid',
+    cpuCount: 0,
+    memoryMB: 0,
+    diskSizeMB: 0,
+    isPublic: true,
+    needsUserCredential: true,
+  };
+  const managedAgent: CloudCodeRuntime = {
+    ...ownKeyAgent,
+    id: 'claude',
+    name: 'Claude Code',
+    agentCommand: 'claude',
+    needsUserCredential: false,
+  };
+
+  it('asks for the key only for that agent and sends it when the session starts', async () => {
+    const user = userEvent.setup();
+    const api = createApi({
+      list: vi.fn(async () => ({
+        availability,
+        sessions: [],
+        runtimes: [managedAgent, ownKeyAgent],
+      })),
+    });
+    render(<CloudCodePage api={api} />);
+
+    await user.click(
+      await screen.findByRole('button', { name: environmentChipLabel('cloud', 'none') }),
+    );
+    await user.click(await screen.findByRole('menuitem', { name: CODE_COPY.editEnvironment }));
+    const agent = await screen.findByRole('combobox', { name: CODE_COPY.environmentImageHeading });
+    await user.selectOptions(agent, 'claude');
+    expect(screen.queryByLabelText(CODE_COPY.harnessCredentialLabel)).not.toBeInTheDocument();
+
+    await user.selectOptions(agent, 'droid');
+    await user.type(screen.getByLabelText(CODE_COPY.harnessCredentialLabel), 'fd-own-key');
+    await user.keyboard('{Escape}');
+
+    await user.type(
+      screen.getByRole('textbox', { name: 'Describe a task or ask a question' }),
+      'Run the test suite',
+    );
+    await user.click(screen.getByRole('button', { name: 'Start the task' }));
+
+    await waitFor(() =>
+      expect(api.create).toHaveBeenCalledWith(
+        expect.objectContaining({ runtimeId: 'droid', harnessCredential: 'fd-own-key' }),
+      ),
+    );
   });
 });
