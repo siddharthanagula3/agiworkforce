@@ -826,9 +826,6 @@ function MarkdownContentImpl({
               </Tooltip.Provider>
             </TrustedImagesContext.Provider>
           </CitationsContext.Provider>
-          {isStreaming && content.trim() && (
-            <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
-          )}
         </StreamTailContext.Provider>
       </TaskToggleContext.Provider>
     </FollowUpActionProvider>
