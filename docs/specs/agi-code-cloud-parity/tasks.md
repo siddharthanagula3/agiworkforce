@@ -15,3 +15,8 @@
 - [ ] T12 Pinned agent templates sized to the plan (needs approval to build).
 - [ ] T13 Mark as unread, sections, several repositories, repository access check.
 - [ ] T14 End-to-end check on a preview deployment with a real GitHub repository.
+- [x] T15 Each coding agent runs on a model its plan includes, picked from its own provider;
+      the proxy checks the plan and the workspace model policy (`3551d71a14`, `a41b4fd2a0`).
+- [x] T16 A coding agent turn is charged once, by the provider proxy (`6221a5c89f`).
+- [ ] T17 Keep a session's chosen model across reloads; until then the server falls back to
+      the agent provider's plan model.
