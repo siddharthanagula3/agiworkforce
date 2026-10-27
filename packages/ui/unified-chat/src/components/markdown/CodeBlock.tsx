@@ -235,7 +235,7 @@ function FencedCodeBlock({ className, language, code, isStreamTail }: FencedCode
           hideCloseButton
           disableAnimation
           aria-describedby={undefined}
-          className="inset-4 flex w-auto max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border border-[var(--chat-code-border)] bg-[var(--chat-code-bg)] p-0 backdrop-blur-none"
+          className="inset-4 flex w-auto max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border border-[var(--chat-code-border)] bg-muted p-0 backdrop-blur-none"
         >
           <div className="code-block-header-bar">
             <DialogTitle className="font-mono text-xs font-normal text-[var(--chat-code-lang-label)]">

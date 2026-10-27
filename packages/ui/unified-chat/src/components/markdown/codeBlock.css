@@ -1,6 +1,8 @@
 .code-block-container {
   border-radius: var(--chat-radius-md);
   border: 1px solid var(--chat-code-border);
+  background-color: var(--color-muted, var(--chat-code-bg));
+  overflow: hidden;
 }
 
 .code-block-body-scroll {
@@ -14,10 +16,7 @@
   justify-content: space-between;
   height: 36px;
   padding: 0 8px 0 16px;
-  background-color: var(--chat-code-header-bg);
-  border-bottom: 1px solid var(--chat-code-border);
-  border-top-left-radius: var(--chat-radius-md);
-  border-top-right-radius: var(--chat-radius-md);
+  background-color: transparent;
 }
 
 @media (pointer: coarse) {
@@ -35,7 +34,7 @@
 }
 
 .code-block-body {
-  background-color: var(--chat-code-bg);
+  background-color: transparent;
   color: var(--chat-code-text);
   font-size: 13px;
   line-height: 20px;
