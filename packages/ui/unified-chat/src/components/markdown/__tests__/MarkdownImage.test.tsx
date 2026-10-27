@@ -203,6 +203,16 @@ describe('MarkdownContent images', () => {
   });
 });
 
+describe('MarkdownContent generated chart images', () => {
+  it('does not use the file name as the hover label', () => {
+    const { container } = render(<MarkdownContent content="![chart.png](/files/chart.png)" />);
+    const image = container.querySelector('img');
+    expect(image?.getAttribute('alt')).toBe('Chart');
+    expect(image?.getAttribute('title')).toBeNull();
+    expect(container.querySelector('a')?.getAttribute('title')).not.toBe('chart.png');
+  });
+});
+
 describe('MarkdownContent image failure recovery', () => {
   it('offers a bounded retry and keeps the download link after a load failure', async () => {
     const user = userEvent.setup();

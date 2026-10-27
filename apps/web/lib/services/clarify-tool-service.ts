@@ -2,6 +2,7 @@ import 'server-only';
 
 import { z } from 'zod';
 import {
+  CLARIFY_HEADER_MAX_LENGTH,
   INTERACTIVE_CARD_SCHEMA_VERSION,
   type ClarifyOption,
   type ClarifyQuestion,
@@ -12,7 +13,7 @@ export const CLARIFY_TOOL_NAME = 'ask_clarifying_questions';
 
 const MAX_QUESTIONS = 4;
 const MAX_OPTIONS = 4;
-const HEADER_MAX = 12;
+const HEADER_MAX = CLARIFY_HEADER_MAX_LENGTH;
 const QUESTION_MAX = 200;
 const LABEL_MAX = 60;
 const DESCRIPTION_MAX = 200;
@@ -96,6 +97,14 @@ function isMetaChoiceLabel(label: string): boolean {
  * (format, tone, length). A domain choice such as Budget / Comfort / Luxury
  * stays, even when the header says "style" or the question says "preference".
  */
+const USER_ASKED_FOR_CHOICES_RE =
+  /\b(?:ask me|selectable|give me (?:a |the )?(?:choice|choices)|choose one)\b/i;
+
+export function userAskedForSelectableChoices(userMessage: string | undefined): boolean {
+  if (!userMessage) return false;
+  return USER_ASKED_FOR_CHOICES_RE.test(userMessage);
+}
+
 function questionAsksAboutRejectedTopic(question: {
   header: string;
   question: string;
@@ -288,19 +297,22 @@ export type ClarifyToolOutcome =
 
 export function executeClarifyTool(
   args: Record<string, unknown>,
-  context: { toolCallId: string; now?: () => Date },
+  context: { toolCallId: string; now?: () => Date; userMessage?: string },
 ): ClarifyToolOutcome {
+  const askedForChoices = userAskedForSelectableChoices(context.userMessage);
   const parsed = ClarifyToolInputSchema.safeParse(normalizeClarifyArgs(args));
   if (!parsed.success) {
+    const shape =
+      'each needs a header of at most 32 characters, a question, and between two and four selectable options.';
     return {
       ok: false,
-      content:
-        'The clarifying questions were rejected: each needs a short header, a question, and ' +
-        'between two and four selectable options. Answer the request directly instead.',
+      content: askedForChoices
+        ? `The clarifying questions were rejected: ${shape} Call ask_clarifying_questions again with that shape. Do not replace the controls with a bulleted list.`
+        : `The clarifying questions were rejected: ${shape} Answer the request directly instead.`,
     };
   }
 
-  if (parsed.data.questions.some(questionAsksAboutRejectedTopic)) {
+  if (!askedForChoices && parsed.data.questions.some(questionAsksAboutRejectedTopic)) {
     return {
       ok: false,
       content:

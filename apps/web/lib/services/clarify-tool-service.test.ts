@@ -6,6 +6,7 @@ import {
   createClarifyToolDefinition,
   executeClarifyTool,
   isClarifyTool,
+  userAskedForSelectableChoices,
   CLARIFY_TOOL_NAME,
 } from './clarify-tool-service';
 
@@ -132,6 +133,65 @@ describe('the clarify tool', () => {
       ctx,
     );
     expect(outcome.ok).toBe(false);
+  });
+
+  it('keeps a style choice when the reader asked for selectable controls', () => {
+    expect(
+      userAskedForSelectableChoices(
+        'Before recommending a trip, ask me a structured choice with exactly three options: Budget, Comfort, and Luxury. Render them as selectable controls.',
+      ),
+    ).toBe(true);
+    const outcome = executeClarifyTool(
+      {
+        questions: [
+          {
+            header: 'Style',
+            question: 'Which trip style should I plan?',
+            options: [{ label: 'Budget' }, { label: 'Comfort' }, { label: 'Luxury' }],
+          },
+        ],
+      },
+      {
+        ...ctx,
+        userMessage:
+          'Before recommending a trip, ask me a structured choice with exactly three options: Budget, Comfort, and Luxury. Render them as selectable controls.',
+      },
+    );
+    expect(outcome.ok).toBe(true);
+  });
+
+  it('still rejects an unsolicited style question', () => {
+    const outcome = executeClarifyTool(
+      {
+        questions: [
+          {
+            header: 'Style',
+            question: 'Which style do you prefer?',
+            options: [{ label: 'Brief' }, { label: 'Detailed' }],
+          },
+        ],
+      },
+      ctx,
+    );
+    expect(outcome.ok).toBe(false);
+    if (outcome.ok) return;
+    expect(outcome.content).toMatch(/answer the request directly/i);
+  });
+
+  it('accepts a header longer than the old twelve-character cap', () => {
+    const outcome = executeClarifyTool(
+      {
+        questions: [
+          {
+            header: 'Departure city',
+            question: 'Which city should I start from?',
+            options: [{ label: 'Budget' }, { label: 'Luxury' }],
+          },
+        ],
+      },
+      ctx,
+    );
+    expect(outcome.ok).toBe(true);
   });
 
   it('gives every option and question a stable id', () => {

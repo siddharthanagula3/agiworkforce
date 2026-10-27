@@ -136,6 +136,27 @@ const BlockedImage = ({
   );
 };
 
+const FILENAME_ALT = /^[\w.-]+\.(?:png|jpe?g|gif|webp|svg|avif)$/i;
+
+function readableImageAlt(alt: string | undefined): string {
+  const trimmed = alt?.trim() ?? '';
+  if (!trimmed || !FILENAME_ALT.test(trimmed)) return trimmed;
+  const stem = trimmed
+    .replace(/\.[a-z0-9]+$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .trim();
+  if (!stem) return '';
+  return stem.charAt(0).toUpperCase() + stem.slice(1);
+}
+
+function imageTitle(title: string | undefined, alt: string | undefined): string | undefined {
+  const explicit = title?.trim();
+  if (explicit && !FILENAME_ALT.test(explicit)) return explicit;
+  const readable = readableImageAlt(alt);
+  if (!readable || FILENAME_ALT.test(alt?.trim() ?? '')) return undefined;
+  return readable;
+}
+
 const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?: string }) => {
   const { t } = useUiTranslation('chat');
   const trustedImages = useContext(TrustedImagesContext);
@@ -183,6 +204,8 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
   }
 
   const opensInNewTab = source.kind !== 'embedded' && !insideLink;
+  const shownAlt = readableImageAlt(alt);
+  const shownTitle = imageTitle(title, alt);
 
   const picture = (
     <>
@@ -197,8 +220,8 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
       <img
         key={attempt}
         src={source.src}
-        alt={alt || ''}
-        title={title}
+        alt={shownAlt}
+        title={shownTitle}
         loading="lazy"
         referrerPolicy={crossOrigin ? 'no-referrer' : undefined}
         onLoad={() => setStatus('loaded')}
@@ -218,7 +241,7 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
 
   if (!opensInNewTab) {
     return (
-      <span className={wrapperClassName} title={title || alt}>
+      <span className={wrapperClassName} title={shownTitle}>
         {picture}
       </span>
     );
@@ -232,9 +255,11 @@ const MarkdownImage = ({ src, alt, title }: { src?: string; alt?: string; title?
       target="_blank"
       rel="noopener noreferrer"
       className={cn(wrapperClassName, 'no-underline')}
-      title={title || alt || openLabel}
+      title={shownTitle || openLabel}
       aria-label={
-        alt ? t('markdown.openImageLabel', 'Open image in a new tab: {{alt}}', { alt }) : openLabel
+        shownAlt
+          ? t('markdown.openImageLabel', 'Open image in a new tab: {{alt}}', { alt: shownAlt })
+          : openLabel
       }
     >
       {picture}

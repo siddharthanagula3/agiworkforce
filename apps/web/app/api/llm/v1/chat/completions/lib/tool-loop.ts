@@ -111,6 +111,7 @@ import type { RouteOutcomeClass } from '@agiworkforce/routing';
 import { publisherFromTitle, rankSources } from '@agiworkforce/search';
 import { toolInvocationIdempotencyKey } from '@agiworkforce/provider-runtime';
 
+import { executionChartsToPersist } from './execution-charts';
 import { runToolCallOnce } from './tool-idempotency';
 import {
   recordRouteOutcome,
@@ -2217,6 +2218,7 @@ async function runMcpTool(
     googleHostedServerIds?: ReadonlySet<string>;
     googleUserDataRouted?: boolean;
     healthSpaceProjectId?: string | null;
+    latestUserMessage?: string;
   },
 ): Promise<ToolLoopToolResult> {
   if (toolCall.qualifiedName === SKILL_TOOL_NAME) {
@@ -2505,7 +2507,12 @@ async function runMcpTool(
     if (!availableTools.has(toolCall.qualifiedName)) {
       return { content: `Unknown tool: ${toolCall.qualifiedName}`, isError: true };
     }
-    const outcome = executeClarifyTool(toolCall.args, { toolCallId: toolCall.id });
+    const outcome = executeClarifyTool(toolCall.args, {
+      toolCallId: toolCall.id,
+      ...(executionContext?.latestUserMessage
+        ? { userMessage: executionContext.latestUserMessage }
+        : {}),
+    });
     return outcome.ok
       ? { content: outcome.content, isError: false, interactiveCard: outcome.card }
       : { content: outcome.content, isError: true };
@@ -3311,14 +3318,15 @@ async function persistSandboxOutputs(input: {
     }
   }
 
-  for (const [index, png] of input.pngResults.entries()) {
+  const charts = executionChartsToPersist(input.pngResults);
+  for (const [index, png] of charts.entries()) {
     try {
       const outcome = await persistGeneratedFileBytes({
         userId: input.userId,
         organizationId: input.organizationId,
         data: Buffer.from(png, 'base64'),
         mimeType: 'image/png',
-        filename: input.pngResults.length === 1 ? 'chart.png' : `chart-${index + 1}.png`,
+        filename: charts.length === 1 ? 'chart.png' : `chart-${index + 1}.png`,
         provider: 'e2b',
         origin: 'e2b-execution-result',
         model: input.model,
@@ -5085,6 +5093,7 @@ export async function* runToolLoop(
               googleHostedServerIds,
               googleUserDataRouted: processed.googleUserData === true,
               healthSpaceProjectId: processed.healthSpaceProjectId ?? null,
+              latestUserMessage: lastUserTurnText(processed.chatRequest?.messages),
             },
           );
           if (!result.isError && isSensitiveDataToolName(tc.qualifiedName)) {

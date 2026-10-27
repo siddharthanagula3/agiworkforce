@@ -70,7 +70,7 @@ export interface InteractiveCardCommon {
 export const CLARIFY_MAX_QUESTIONS = 4;
 export const CLARIFY_MIN_OPTIONS = 2;
 export const CLARIFY_MAX_OPTIONS = 4;
-export const CLARIFY_HEADER_MAX_LENGTH = 12;
+export const CLARIFY_HEADER_MAX_LENGTH = 32;
 export const CLARIFY_OTHER_MAX_LENGTH = 500;
 
 export interface ClarifyOption {
