@@ -120,3 +120,21 @@ describe('harness resume', () => {
     );
   });
 });
+
+describe('the model a coding agent is told to use', () => {
+  const MODEL = 'provider-model-id';
+
+  it('passes it to Claude Code', () => {
+    expect(commandFor('claude', { model: MODEL })).toMatch(/--model '?provider-model-id'?/);
+  });
+
+  it('passes it to a fresh Codex run, and not to a resumed one, whose flags differ', () => {
+    expect(commandFor('codex', { model: MODEL })).toMatch(/-m '?provider-model-id'?/);
+    expect(commandFor('codex', { model: MODEL, resumeSessionId: 'thread-1' })).not.toContain(MODEL);
+  });
+
+  it('leaves the command on the agent default when there is none', () => {
+    expect(commandFor('claude')).not.toContain('--model');
+    expect(commandFor('codex')).not.toMatch(/ -m /);
+  });
+});

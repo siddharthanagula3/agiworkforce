@@ -92,6 +92,17 @@ vi.mock('@/lib/e2b/session-store', () => ({
   getE2BSession: mockGetE2BSession,
   managedCloudCodeSessionScope: vi.fn(),
 }));
+const modelAccess = vi.hoisted(() => ({
+  evaluate: vi.fn(
+    async (): Promise<{ allowed: true } | { allowed: false; code: string; message: string }> => ({
+      allowed: true,
+    }),
+  ),
+}));
+vi.mock('@/lib/e2b/provider-proxy-model-access', () => ({
+  PROVIDER_PROXY_MODEL_NOT_IN_PLAN_CODE: 'provider_proxy_model_not_in_plan',
+  evaluateProviderProxyModelAccess: modelAccess.evaluate,
+}));
 vi.mock('@/lib/services/provider-adapter-service', () => ({
   buildServerProviderAdapter: mockBuildAdapter,
 }));
@@ -903,5 +914,33 @@ describe('provider-proxy route', () => {
 
       vi.unstubAllGlobals();
     });
+  });
+});
+
+describe('provider proxy, a model outside the plan or the workspace policy', () => {
+  it('refuses it in the provider error shape before reserving or forwarding anything', async () => {
+    modelAccess.evaluate.mockResolvedValueOnce({
+      allowed: false,
+      code: 'provider_proxy_model_not_in_plan',
+      message: 'This model is not included in your plan.',
+    });
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+    mockReserve.mockClear();
+
+    const { req, context } = request({ headers: { 'x-api-key': token() } });
+    const response = await POST(req, context);
+
+    expect(response.status).toBe(403);
+    const body = (await response.json()) as { error: { code: string; message: string } };
+    expect(body.error.code).toBe('provider_proxy_model_not_in_plan');
+    expect(body.error.message).toContain('not included in your plan');
+    expect(mockReserve).not.toHaveBeenCalled();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(modelAccess.evaluate).toHaveBeenCalledWith(
+      expect.objectContaining({ providerId: 'anthropic', planTier: expect.any(String) }),
+    );
+
+    vi.unstubAllGlobals();
   });
 });

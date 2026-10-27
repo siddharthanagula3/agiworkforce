@@ -8,6 +8,7 @@ export interface HarnessRunRequest {
   maxTurns: number;
   timeoutMs: number;
   resumeSessionId?: string | null;
+  model?: string | null;
 }
 
 export interface HarnessUsageReport {

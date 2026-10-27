@@ -34,6 +34,7 @@ import {
   readCachedProviderProxyAccess,
   writeCachedProviderProxyAccess,
 } from '@/lib/e2b/provider-proxy-access-cache';
+import { evaluateProviderProxyModelAccess } from '@/lib/e2b/provider-proxy-model-access';
 import {
   getProviderProxyUsageParser,
   stoppedProviderProxyUsage,
@@ -411,6 +412,20 @@ async function reserveProxiedCall(input: ReserveInput): Promise<ReserveOutcome> 
       };
     }
     throw err;
+  }
+
+  const access = await evaluateProviderProxyModelAccess({
+    userId: input.userId,
+    planTier: input.planTier,
+    providerId: input.providerId,
+    model: parsed.model,
+    requestedModel: parsed.requestedModel,
+  });
+  if (!access.allowed) {
+    return {
+      ok: false,
+      response: providerNativeError(input.providerId, 403, access.code, access.message),
+    };
   }
 
   let estimatedCostMicrousd: number;
