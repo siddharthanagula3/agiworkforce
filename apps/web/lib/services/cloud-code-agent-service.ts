@@ -982,7 +982,8 @@ async function runClaimedAgentTurn(
     result.stopReason === 'error' || approvalRecordingFailed || !terminalRowWritten;
   await settleReservationQuietly(reservation, {
     outcome: settledAsFailure ? 'failed' : 'completed',
-    actualCostCents: settledAsFailure ? 0 : settledTurnCostCents(provider, model, result.usage),
+    actualCostCents:
+      settledAsFailure || harness ? 0 : settledTurnCostCents(provider, model, result.usage),
     usage: { steps: cumulativeSteps, stopReason: result.stopReason },
   });
 
