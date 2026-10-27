@@ -156,6 +156,7 @@ export interface CodeDraft {
   fullNetworkAccepted: boolean;
   extraHosts: string;
   runtimeId: string;
+  harnessCredential: string;
   repositoryUrl: string;
   repositoryBranch: string;
   repository: CloudCodeRepositoryReference | null;
@@ -169,6 +170,7 @@ export const EMPTY_CODE_DRAFT: CodeDraft = {
   fullNetworkAccepted: false,
   extraHosts: '',
   runtimeId: DEFAULT_RUNTIME_ID,
+  harnessCredential: '',
   repositoryUrl: '',
   repositoryBranch: '',
   repository: null,
@@ -225,6 +227,8 @@ function EnvironmentSettings({
   const runtimeHelpId = `${runtimeFieldId}-help`;
   const extraHostsFieldId = useId();
   const extraHostsHelpId = `${extraHostsFieldId}-help`;
+  const credentialFieldId = useId();
+  const credentialHelpId = `${credentialFieldId}-help`;
   const harnesses = runtimes.filter((runtime) => runtime.kind === 'harness');
   const images = runtimes.filter((runtime) => runtime.kind === 'image');
   const selectedRuntime = runtimes.find((runtime) => runtime.id === draft.runtimeId) ?? null;
@@ -329,6 +333,28 @@ function EnvironmentSettings({
           {runtimeHelpText(runtimes.length, selectedRuntime)}
         </span>
       </div>
+      {selectedRuntime?.needsUserCredential ? (
+        <div className={styles['formField']}>
+          <label className={styles['formLabel']} htmlFor={credentialFieldId}>
+            {CODE_COPY.harnessCredentialLabel}
+          </label>
+          <input
+            id={credentialFieldId}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            required
+            aria-describedby={credentialHelpId}
+            className={styles['textInput']}
+            value={draft.harnessCredential}
+            onChange={(event) => onDraftChange({ harnessCredential: event.target.value })}
+            maxLength={CODE_LIMITS.harnessCredential}
+          />
+          <span className={styles['formHelp']} id={credentialHelpId}>
+            {CODE_COPY.harnessCredentialHelp}
+          </span>
+        </div>
+      ) : null}
 
       {onOpenEmpty && (
         <div className={styles['popoverActions']}>

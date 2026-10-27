@@ -636,6 +636,10 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
             next.networkAccess === 'full' ? next.fullNetworkAccepted : undefined,
           runtimeId: next.runtimeId || null,
           extraHosts: next.networkAccess === 'full' ? undefined : parseExtraHosts(next.extraHosts),
+          ...(runtimes.find((runtime) => runtime.id === next.runtimeId)?.needsUserCredential &&
+          next.harnessCredential.trim()
+            ? { harnessCredential: next.harnessCredential.trim() }
+            : {}),
         });
         replaceSession(body.session);
         setSelectedId(body.session.id);
@@ -658,7 +662,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         setBusySince(null);
       }
     },
-    [api, busy, canCreate, draft, replaceSession, router],
+    [api, busy, canCreate, draft, replaceSession, router, runtimes],
   );
 
   useEffect(() => {
