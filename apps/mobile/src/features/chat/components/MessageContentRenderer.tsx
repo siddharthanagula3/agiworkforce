@@ -12,6 +12,7 @@ import { typeScale } from '@/src/ui/theme/tokens';
 import {
   classifyExternalLink,
   getSystemIntentPrompt,
+  isValidExternalHttpUrl,
 } from '@/src/features/chat/utils/externalUrls';
 import {
   tokenizeCode,
@@ -25,9 +26,10 @@ import { AssistantSurface } from './AssistantSurface';
 import { canPreviewCitation, previewCitation, type CitationSource } from './CitationChip';
 import { createReportSectionIds } from '@/src/features/research/reportSections';
 import { useResponsiveLayout } from '@/src/shared/hooks/useResponsiveLayout';
-import { Download } from 'lucide-react-native';
+import { Check, Download } from 'lucide-react-native';
 import { exportSourceFile, shareFile } from '@/services/fileCreation';
 import { markdownTableToCsv } from '@/src/features/chat/utils/tableCsv';
+import { artifactSourceExtension } from '@/src/features/chat/utils/artifactExport';
 import { resolveGeneratedImageUri } from '@/src/features/image/services/imagegen';
 import { GeneratedImage } from './GeneratedImage';
 
@@ -137,6 +139,56 @@ export function renderInlineMath(text: string, keyBase: string): React.ReactNode
   return parts;
 }
 
+const AUTOLINK_TRAILING_PUNCTUATION = /[?!.,:;*_~'"]$/;
+
+/**
+ * A closing parenthesis stays only while it is balanced, so a Wikipedia
+ * "Foo_(bar)" path keeps its bracket and "(see https://a.example/x)" drops the
+ * one that closes the sentence.
+ */
+function trimAutolink(candidate: string): string {
+  let url = candidate;
+  for (;;) {
+    if (AUTOLINK_TRAILING_PUNCTUATION.test(url)) {
+      url = url.slice(0, -1);
+      continue;
+    }
+    if (url.endsWith(')') && url.split(')').length > url.split('(').length) {
+      url = url.slice(0, -1);
+      continue;
+    }
+    return url;
+  }
+}
+
+function autolinkHref(url: string): string | null {
+  const href = url.startsWith('www.') ? `https://${url}` : url;
+  if (!isValidExternalHttpUrl(href)) return null;
+  return new URL(href).hostname.includes('.') ? href : null;
+}
+
+function renderLink(
+  key: string,
+  label: string,
+  url: string,
+  renderColors: ColorScheme,
+): React.ReactElement {
+  return (
+    <Text
+      key={key}
+      style={{
+        color: renderColors.teal,
+        textDecorationLine: 'underline',
+      }}
+      onPress={() => openAssistantLink(url)}
+      accessibilityRole="link"
+      accessibilityLabel={label}
+    >
+      {label}
+    </Text>
+  );
+}
+
 export function renderInlineMarkdown(
   source: string,
   keyBase = 'inline',
@@ -146,10 +198,12 @@ export function renderInlineMarkdown(
   const text = protectEscapes(source);
   const parts: React.ReactNode[] = [];
   const inlineRegex =
-    /(\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|\[(\d{1,3})\](?!\())/g;
+    /(\*\*\*(.+?)\*\*\*|\*\*(.+?)\*\*|\*(.+?)\*|~~(.+?)~~|`([^`]+)`|\[([^\]]+)\]\(([^)]+)\)|\[(\d{1,3})\](?!\()|<(https?:\/\/[^\s<>]+)>|(?<![A-Za-z0-9/@.-])((?:https?:\/\/|www\.)[^\s<>]+))/g;
   let lastIdx = 0;
   let inlineMatch: RegExpExecArray | null;
   let inlineKey = 0;
+  const nested = (inner: string, kind: string) =>
+    renderInlineMarkdown(inner, `${keyBase}-${kind}${inlineKey}`, renderColors, citations);
 
   while ((inlineMatch = inlineRegex.exec(text)) !== null) {
     if (inlineMatch.index > lastIdx) {
@@ -160,31 +214,44 @@ export function renderInlineMarkdown(
     if (inlineMatch[2]) {
       parts.push(
         <Text
-          key={`bold-${keyBase}-${inlineKey++}`}
-          style={{ color: renderColors.textPrimary, fontWeight: '700' }}
+          key={`bolditalic-${keyBase}-${inlineKey}`}
+          style={{ color: renderColors.textPrimary, fontWeight: '700', fontStyle: 'italic' }}
         >
-          {restoreEscapes(inlineMatch[2])}
+          {nested(inlineMatch[2], 'bi')}
         </Text>,
       );
+      inlineKey++;
     } else if (inlineMatch[3]) {
       parts.push(
         <Text
-          key={`italic-${keyBase}-${inlineKey++}`}
-          style={{ color: renderColors.textPrimary, fontStyle: 'italic' }}
+          key={`bold-${keyBase}-${inlineKey}`}
+          style={{ color: renderColors.textPrimary, fontWeight: '700' }}
         >
-          {restoreEscapes(inlineMatch[3])}
+          {nested(inlineMatch[3], 'b')}
         </Text>,
       );
+      inlineKey++;
     } else if (inlineMatch[4]) {
       parts.push(
         <Text
-          key={`strike-${keyBase}-${inlineKey++}`}
-          style={{ textDecorationLine: 'line-through', color: renderColors.textMuted }}
+          key={`italic-${keyBase}-${inlineKey}`}
+          style={{ color: renderColors.textPrimary, fontStyle: 'italic' }}
         >
-          {restoreEscapes(inlineMatch[4])}
+          {nested(inlineMatch[4], 'i')}
         </Text>,
       );
+      inlineKey++;
     } else if (inlineMatch[5]) {
+      parts.push(
+        <Text
+          key={`strike-${keyBase}-${inlineKey}`}
+          style={{ textDecorationLine: 'line-through', color: renderColors.textMuted }}
+        >
+          {nested(inlineMatch[5], 's')}
+        </Text>,
+      );
+      inlineKey++;
+    } else if (inlineMatch[6]) {
       parts.push(
         <Text
           key={`code-${keyBase}-${inlineKey++}`}
@@ -195,28 +262,39 @@ export function renderInlineMarkdown(
             color: renderColors.textPrimary,
           }}
         >
-          {` ${restoreEscapes(inlineMatch[5], true)} `}
+          {` ${restoreEscapes(inlineMatch[6], true)} `}
         </Text>,
       );
-    } else if (inlineMatch[6] && inlineMatch[7]) {
-      const linkText = restoreEscapes(inlineMatch[6]);
-      const linkUrl = restoreEscapes(inlineMatch[7]);
+    } else if (inlineMatch[7] && inlineMatch[8]) {
       parts.push(
-        <Text
-          key={`link-${keyBase}-${inlineKey++}`}
-          style={{
-            color: renderColors.teal,
-            textDecorationLine: 'underline',
-          }}
-          onPress={() => openAssistantLink(linkUrl)}
-          accessibilityRole="link"
-          accessibilityLabel={linkText}
-        >
-          {linkText}
-        </Text>,
+        renderLink(
+          `link-${keyBase}-${inlineKey++}`,
+          restoreEscapes(inlineMatch[7]),
+          restoreEscapes(inlineMatch[8]),
+          renderColors,
+        ),
       );
-    } else if (inlineMatch[8]) {
-      const marker = Number(inlineMatch[8]);
+    } else if (inlineMatch[10]) {
+      const url = restoreEscapes(inlineMatch[10]);
+      const href = autolinkHref(url);
+      parts.push(
+        href
+          ? renderLink(`autolink-${keyBase}-${inlineKey++}`, url, href, renderColors)
+          : restoreEscapes(inlineMatch[0]),
+      );
+    } else if (inlineMatch[11]) {
+      const display = trimAutolink(inlineMatch[11]);
+      const url = restoreEscapes(display);
+      const href = display ? autolinkHref(url) : null;
+      if (href) {
+        parts.push(renderLink(`autolink-${keyBase}-${inlineKey++}`, url, href, renderColors));
+        const trailing = inlineMatch[11].slice(display.length);
+        if (trailing) parts.push(restoreEscapes(trailing));
+      } else {
+        parts.push(restoreEscapes(inlineMatch[11]));
+      }
+    } else if (inlineMatch[9]) {
+      const marker = Number(inlineMatch[9]);
       const citation = citations[marker - 1];
       if (citation && canPreviewCitation(citation)) {
         parts.push(
@@ -245,11 +323,20 @@ export function renderInlineMarkdown(
   return parts;
 }
 
-const listItemPattern = /^(\s*)(?:([-*])|(\d+)\.)\s+(.+)$/;
+const listItemPattern = /^(\s*)(?:([-*+])|(\d+)[.)])\s+(.+)$/;
+const taskItemPattern = /^\[([ xX])\]\s+(.*)$/;
+const quoteLinePattern = /^ {0,3}>/;
+const quoteMarkerPattern = /^ {0,3}> ?/;
 const accountImagePattern = /^!\[([^\]]*)\]\(<?([^()<>\s]+)>?\)$/;
 const nestedBullets = ['•', '◦', '▪'];
 
-type ParsedListItem = { depth: number; marker: string; ordered: boolean; text: string };
+type ParsedListItem = {
+  depth: number;
+  marker: string;
+  ordered: boolean;
+  text: string;
+  task?: { checked: boolean };
+};
 
 const TABLE_SORT_COLLATOR = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
 
@@ -442,11 +529,13 @@ function collectListItems(
 
     const depth = indentStack.length - 1;
     const ordered = match[3] !== undefined;
+    const task = taskItemPattern.exec(match[4]!);
     items.push({
       depth,
       ordered,
       marker: ordered ? `${match[3]}.` : nestedBullets[Math.min(depth, nestedBullets.length - 1)]!,
-      text: match[4]!,
+      text: task ? task[2]! : match[4]!,
+      ...(task ? { task: { checked: task[1] !== ' ' } } : {}),
     });
     idx++;
   }
@@ -458,6 +547,32 @@ interface SegmentContext {
   citations: readonly CitationSource[];
   sectionId?: (heading: string, level: number) => string | null;
   onHeadingLayout?: (id: string, y: number) => void;
+  quoted?: boolean;
+}
+
+function TaskCheckbox({ checked, colors }: { checked: boolean; colors: ColorScheme }) {
+  return (
+    <View
+      accessible
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked, disabled: true }}
+      accessibilityLabel={checked ? 'Done' : 'Not done'}
+      testID="markdown-task-checkbox"
+      style={{
+        width: 16,
+        height: 16,
+        marginTop: 3,
+        borderRadius: 4,
+        borderWidth: 1.5,
+        borderColor: checked ? colors.teal : colors.textMuted,
+        backgroundColor: checked ? colors.teal : colors.transparent,
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {checked ? <Check size={11} color={colors.accentText} strokeWidth={3.5} /> : null}
+    </View>
+  );
 }
 
 function renderTextSegment(
@@ -523,13 +638,10 @@ function renderTextSegment(
       continue;
     }
 
-    if (line.startsWith('> ')) {
+    if (quoteLinePattern.test(line)) {
       const quoteLines: string[] = [];
-      while (idx < lines.length && lines[idx]!.startsWith('> ')) {
-        const body = lines[idx]!.slice(2);
-        if (body.trim().length > 0) {
-          quoteLines.push(body);
-        }
+      while (idx < lines.length && quoteLinePattern.test(lines[idx]!)) {
+        quoteLines.push(lines[idx]!.replace(quoteMarkerPattern, ''));
         idx++;
       }
       nodes.push(
@@ -545,22 +657,10 @@ function renderTextSegment(
             borderRadius: 4,
           }}
         >
-          <Text
-            style={{
-              fontSize: typeScale.subhead,
-              fontStyle: 'italic',
-              color: renderColors.textSecondary,
-              lineHeight: 21,
-            }}
-            selectable
-          >
-            {renderInlineMarkdown(
-              quoteLines.join('\n'),
-              `${keyBase}-bqil-${idx}`,
-              renderColors,
-              citations,
-            )}
-          </Text>
+          {renderTextSegment(quoteLines.join('\n'), `${keyBase}-bq${idx}`, renderColors, {
+            ...context,
+            quoted: true,
+          })}
         </View>,
       );
       continue;
@@ -576,18 +676,22 @@ function renderTextSegment(
               key={`${keyBase}-li-${idx}-${i}`}
               style={{ flexDirection: 'row', gap: 8, paddingLeft: 4 + item.depth * 16 }}
             >
-              <Text
-                style={{
-                  fontSize: typeScale.body,
-                  color: renderColors.teal,
-                  lineHeight: 22,
-                  ...(item.ordered
-                    ? { minWidth: 18, textAlign: 'right' as const }
-                    : { width: 12, textAlign: 'center' as const }),
-                }}
-              >
-                {item.marker}
-              </Text>
+              {item.task ? (
+                <TaskCheckbox checked={item.task.checked} colors={renderColors} />
+              ) : (
+                <Text
+                  style={{
+                    fontSize: typeScale.body,
+                    color: renderColors.teal,
+                    lineHeight: 22,
+                    ...(item.ordered
+                      ? { minWidth: 18, textAlign: 'right' as const }
+                      : { width: 12, textAlign: 'center' as const }),
+                  }}
+                >
+                  {item.marker}
+                </Text>
+              )}
               <Text
                 style={{
                   fontSize: typeScale.body,
@@ -698,7 +802,16 @@ function renderTextSegment(
       nodes.push(
         <Text
           key={`${keyBase}-p-${idx}`}
-          style={{ color: renderColors.textPrimary, fontSize: typeScale.body, lineHeight: 23 }}
+          style={
+            context.quoted
+              ? {
+                  color: renderColors.textSecondary,
+                  fontSize: typeScale.subhead,
+                  fontStyle: 'italic',
+                  lineHeight: 21,
+                }
+              : { color: renderColors.textPrimary, fontSize: typeScale.body, lineHeight: 23 }
+          }
           selectable
         >
           {renderInlineMarkdown(line, `${keyBase}-pil-${idx}`, renderColors, citations)}
@@ -714,6 +827,81 @@ function renderTextSegment(
 }
 
 const PLAIN_TEXT_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['text', 'txt', 'plaintext']);
+const DIFF_FENCE_LANGUAGES: ReadonlySet<string> = new Set(['diff', 'patch', 'udiff']);
+
+type DiffLineKind = 'added' | 'removed' | 'context';
+
+const DIFF_LINE_LABELS: Record<DiffLineKind, string> = {
+  added: 'Added line: ',
+  removed: 'Removed line: ',
+  context: '',
+};
+
+function diffLineKind(line: string): DiffLineKind {
+  if (line.startsWith('+')) return 'added';
+  if (line.startsWith('-')) return 'removed';
+  return 'context';
+}
+
+function DiffCodeLines({ code, colors }: { code: string; colors: ColorScheme }) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator
+      style={{ paddingTop: 2, paddingBottom: 10 }}
+      contentContainerStyle={{ flexGrow: 1 }}
+      testID="markdown-diff"
+    >
+      <View style={{ flexGrow: 1 }}>
+        {code.split('\n').map((line, lineIdx) => {
+          const kind = diffLineKind(line);
+          return (
+            <View
+              key={`${lineIdx}-${line}`}
+              accessible
+              accessibilityLabel={`${DIFF_LINE_LABELS[kind]}${line}`}
+              testID={`markdown-diff-line-${kind}`}
+              style={{
+                paddingHorizontal: 12,
+                backgroundColor:
+                  kind === 'added'
+                    ? colors.diffAddedFill
+                    : kind === 'removed'
+                      ? colors.diffRemovedFill
+                      : colors.transparent,
+              }}
+            >
+              <Text
+                style={{
+                  fontSize: typeScale.footnote,
+                  lineHeight: 19,
+                  fontFamily: 'Menlo',
+                  color:
+                    kind === 'added'
+                      ? colors.diffAddedText
+                      : kind === 'removed'
+                        ? colors.diffRemovedText
+                        : colors.textPrimary,
+                }}
+                selectable
+              >
+                {line || ' '}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </ScrollView>
+  );
+}
+
+function downloadCodeBlock(code: string, fenceLanguage: string | undefined): void {
+  void exportSourceFile(code, 'code', artifactSourceExtension(fenceLanguage))
+    .then((result) => shareFile(result.uri))
+    .catch(() => {
+      Alert.alert('Download failed', 'Could not save this code as a file. Try again.');
+    });
+}
 
 function renderCodeCard(
   key: string,
@@ -723,6 +911,7 @@ function renderCodeCard(
   renderColors: ColorScheme,
 ): React.ReactElement {
   const languageLabel = fenceLanguage && fenceLanguage.length > 0 ? fenceLanguage : 'Plain text';
+  const isDiff = DIFF_FENCE_LANGUAGES.has(fenceLanguage?.toLowerCase() ?? '');
   const codeTokens: SyntaxToken[] = highlightCode
     ? tokenizeCode(codeContent, fenceLanguage)
     : [{ text: codeContent, type: 'plain' }];
@@ -785,9 +974,28 @@ function renderCodeCard(
         >
           {languageLabel}
         </Text>
-        <CodeBlockCopyButton code={codeContent} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          {highlightCode ? (
+            <Pressable
+              onPress={() => downloadCodeBlock(codeContent, fenceLanguage)}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel="Download code"
+              style={{
+                padding: 4,
+                borderRadius: 4,
+                backgroundColor: renderColors.neutralSurface,
+              }}
+            >
+              <Download size={14} color={renderColors.textMuted} />
+            </Pressable>
+          ) : null}
+          <CodeBlockCopyButton code={codeContent} />
+        </View>
       </View>
-      {wrapsLongLines ? (
+      {isDiff ? (
+        <DiffCodeLines code={codeContent} colors={renderColors} />
+      ) : wrapsLongLines ? (
         <View style={{ paddingTop: 2, paddingBottom: 10, paddingHorizontal: 12 }}>{codeText}</View>
       ) : (
         <ScrollView

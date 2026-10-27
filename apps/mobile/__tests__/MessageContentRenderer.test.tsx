@@ -212,6 +212,73 @@ describe('MessageContentRenderer', () => {
     ).toHaveLength(1);
   });
 
+  it('links a bare URL and leaves the sentence punctuation outside it', () => {
+    const { getByText } = render(
+      <View>
+        {renderMarkdownContent('Read https://docs.example.com/guide. Then reply.', lightColors)}
+      </View>,
+    );
+
+    const link = getByText('https://docs.example.com/guide');
+    expect(link.props.accessibilityRole).toBe('link');
+    fireEvent.press(link);
+
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+      'https://docs.example.com/guide',
+      expect.anything(),
+    );
+  });
+
+  it('keeps a balanced parenthesis in a bare URL and drops the closing one around it', () => {
+    const { getByText } = render(
+      <View>
+        {renderMarkdownContent('(see https://en.wikipedia.org/wiki/Foo_(bar))', lightColors)}
+      </View>,
+    );
+
+    fireEvent.press(getByText('https://en.wikipedia.org/wiki/Foo_(bar)'));
+
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith(
+      'https://en.wikipedia.org/wiki/Foo_(bar)',
+      expect.anything(),
+    );
+  });
+
+  it('opens a www address over https', () => {
+    const { getByText } = render(
+      <View>{renderMarkdownContent('Visit www.example.com today', lightColors)}</View>,
+    );
+
+    fireEvent.press(getByText('www.example.com'));
+
+    expect(mockOpenBrowserAsync).toHaveBeenCalledWith('https://www.example.com', expect.anything());
+  });
+
+  it('links an angle-bracket autolink without showing the brackets', () => {
+    const { getByText, queryByText } = render(
+      <View>{renderMarkdownContent('Source: <https://example.com/a>', lightColors)}</View>,
+    );
+
+    expect(queryByText(/<https/)).toBeNull();
+    expect(getByText('https://example.com/a').props.accessibilityRole).toBe('link');
+  });
+
+  it('leaves a URL inside inline code as code', () => {
+    const { queryAllByRole } = render(
+      <View>{renderMarkdownContent('Run `curl https://example.com/api` now', lightColors)}</View>,
+    );
+
+    expect(queryAllByRole('link')).toHaveLength(0);
+  });
+
+  it('does not link a www fragment inside an email address', () => {
+    const { queryAllByRole } = render(
+      <View>{renderMarkdownContent('Write to ops@www.example.com', lightColors)}</View>,
+    );
+
+    expect(queryAllByRole('link')).toHaveLength(0);
+  });
+
   it('handles failed browser opens without throwing from the press handler', () => {
     mockOpenBrowserAsync.mockRejectedValue(new Error('No browser'));
     jest.spyOn(Linking, 'openURL').mockRejectedValue(new Error('No handler'));
