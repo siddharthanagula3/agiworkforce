@@ -245,7 +245,7 @@ test('pins the Qwen deployment-scope pricing bands and standard Anthropic prices
   assert.deepEqual(curation.models[anthropicDefaultModelKey].costOverride, {
     inputCost: 2,
     outputCost: 10,
-    cached_input: 0.2,
+    cached_input: 0.1,
     cached_write: 2.5,
     cached_write_1h: 4,
   });
@@ -301,7 +301,7 @@ test('pins the Runway text-to-video route and fails closed without provisioning 
 const ANTHROPIC_STANDARD_RATES = {
   inputCost: 2,
   outputCost: 10,
-  cached_input: 0.2,
+  cached_input: 0.1,
   cached_write: 2.5,
   cached_write_1h: 4,
 };
