@@ -17,15 +17,14 @@ vi.mock('next/headers', () => ({
 vi.mock('@/lib/rate-limit', () => ({
   withRateLimit: vi.fn(async () => null),
 }));
-vi.mock('@/lib/api-auth', () => ({
-  isAccountUnavailableError: vi.fn(() => false),
-  getClerkAuthUser: vi.fn(async () => ({ userId: 'user-1' })),
-}));
 vi.mock('@/lib/logger', () => ({
   logger: { info: vi.fn(), warn: vi.fn(), error: vi.fn(), debug: vi.fn() },
 }));
-vi.mock('@/lib/server/neon-db', () => ({
-  getNeonDb: () => ({ query: (...args: unknown[]) => mocks.query(...args) }),
+vi.mock('@/lib/server/rls-db', () => ({
+  getUserScopedDb: vi.fn(async () => ({
+    userId: 'user-1',
+    db: { query: (...args: unknown[]) => mocks.query(...args) },
+  })),
 }));
 vi.mock('@/lib/services/organization-policy-code-gate', () => ({
   buildWorkspaceCodeGateResponse: mocks.codeGate,

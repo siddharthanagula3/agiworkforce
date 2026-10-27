@@ -12,11 +12,12 @@ import {
 import { GITHUB_CONNECT_RETURN_COOKIE, githubConnectReturnPath } from '@/lib/github-connect-return';
 import { logger } from '@/lib/logger';
 import { withRateLimit } from '@/lib/rate-limit';
-import { getClerkAuthUser } from '@/lib/api-auth';
 import { isAuthGateRefusal, unauthorizedResponseFor } from '@/lib/api-auth-response';
 import { withPrivateNoStore } from '@/lib/private-cache-policy';
-import { getNeonDb } from '@/lib/server/neon-db';
+import { getUserScopedDb } from '@/lib/server/rls-db';
 import { buildWorkspaceCodeGateResponse } from '@/lib/services/organization-policy-code-gate';
+
+const GITHUB_SCOPE = { resolveOrganization: false } as const;
 
 interface InstallationLinkRow extends Record<string, unknown> {
   installation_id: string | number;
@@ -45,8 +46,9 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   if (rateLimitResponse) return rateLimitResponse;
 
   let userId: string;
+  let db: Awaited<ReturnType<typeof getUserScopedDb>>['db'];
   try {
-    ({ userId } = await getClerkAuthUser(request));
+    ({ userId, db } = await getUserScopedDb(request, GITHUB_SCOPE));
   } catch (authError) {
     if (isAuthGateRefusal(authError)) {
       return unauthorizedResponseFor(authError);
@@ -57,7 +59,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
   }
 
   const codeGate = await buildWorkspaceCodeGateResponse(
-    getNeonDb(),
+    db,
     userId,
     { act: 'connect_github' },
     request,
@@ -77,7 +79,7 @@ async function handleGet(request: NextRequest): Promise<NextResponse> {
 
   let links: InstallationLinkRow[] = [];
   try {
-    links = await getNeonDb().query<InstallationLinkRow>(
+    links = await db.query<InstallationLinkRow>(
       `select installation_id,
               ownership_verified_at is not null as verified
          from github_installations
