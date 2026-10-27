@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { Alert, Share, TextInput, View } from 'react-native';
 import { PressableBox } from '@/components/ui/PressableBox';
 import { Text } from '@/components/ui/Text';
 import { copyControlLabel, useCopyAction } from '@/src/shared/hooks/useCopyAction';
@@ -9,14 +9,29 @@ import { checklistProgress, type AssistantFence } from '@agiworkforce/unified-ch
 
 function CopyControl({ label, text, color }: { label: string; text: string; color: string }) {
   const { status, copy } = useCopyAction();
+  const share = () => {
+    void Share.share({ message: text }).catch(() => {
+      Alert.alert(
+        'Could not share',
+        'Sharing is not available right now. Try again, or copy this.',
+      );
+    });
+  };
   return (
-    <PressableBox
-      onPress={() => void copy(text)}
-      accessibilityRole="button"
-      accessibilityLabel={copyControlLabel(status, label)}
-    >
-      <Text style={{ color, fontSize: typeScale.footnote }}>{copyControlLabel(status, label)}</Text>
-    </PressableBox>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+      <PressableBox
+        onPress={() => void copy(text)}
+        accessibilityRole="button"
+        accessibilityLabel={copyControlLabel(status, label)}
+      >
+        <Text style={{ color, fontSize: typeScale.footnote }}>
+          {copyControlLabel(status, label)}
+        </Text>
+      </PressableBox>
+      <PressableBox onPress={share} accessibilityRole="button" accessibilityLabel="Share">
+        <Text style={{ color, fontSize: typeScale.footnote }}>Share</Text>
+      </PressableBox>
+    </View>
   );
 }
 
