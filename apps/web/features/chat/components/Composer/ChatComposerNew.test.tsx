@@ -1974,7 +1974,7 @@ describe('ChatComposerNew', () => {
     ).toBeTruthy();
   });
 
-  it('keeps every control on one nowrap line so a phone never gets a third row', () => {
+  it('lets the control row wrap instead of painting one control over the next', () => {
     render(
       <ChatComposerNew
         onSend={vi.fn()}
@@ -1991,7 +1991,7 @@ describe('ChatComposerNew', () => {
 
     const controls = document.querySelector('.chat-composer-controls');
     expect(controls).not.toBeNull();
-    expect(controls).toHaveClass('flex-nowrap');
+    expect(controls).toHaveClass('flex-wrap');
     expect(controls).toHaveClass('flex-row');
     expect(
       controls?.contains(screen.getByRole('button', { name: /add attachments and tools/i })),
@@ -2073,6 +2073,44 @@ describe('ChatComposerNew', () => {
     expect(within(bar).getByRole('button', { name: 'Connectors' })).toBeInTheDocument();
     expect(within(bar).queryByRole('button', { name: 'Open desktop app' })).not.toBeInTheDocument();
     expect(within(bar).queryByRole('button', { name: /add scope/i })).not.toBeInTheDocument();
+  });
+
+  it('closes the project menu when the library file search opens, and the reverse', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ items: [] }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+      ),
+    );
+    render(
+      <ChatComposerNew
+        onSend={vi.fn()}
+        emptyState
+        projectPicker={{
+          projects: [{ id: 'proj-1', name: 'Website Redesign' }],
+          activeProjectId: null,
+          onSelectProject: vi.fn(),
+          onCreateProject: vi.fn(),
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'AGI Work' }));
+    fireEvent.click(screen.getByRole('button', { name: /project or folder/i }));
+    expect(screen.getByLabelText('Search projects')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Files' }));
+    expect(screen.queryByLabelText('Search projects')).not.toBeInTheDocument();
+    expect(await screen.findByLabelText('Search library files')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /project or folder/i }));
+    expect(screen.queryByLabelText('Search library files')).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Search projects')).toBeInTheDocument();
+    vi.unstubAllGlobals();
   });
 
   it('names the picked project on the bar and still sends it in the meta', () => {

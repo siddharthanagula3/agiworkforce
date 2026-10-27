@@ -1160,6 +1160,8 @@ const ChatComposerNewComponent = ({
 
   const [showProjectPicker, setShowProjectPicker] = useState(false);
   const [projectQuery, setProjectQuery] = useState('');
+  const [filesMenuOpen, setFilesMenuOpen] = useState(false);
+  const [pluginsMenuOpen, setPluginsMenuOpen] = useState(false);
 
   // Entering with a preselected project (sidebar "New chat in project" /
   // project-page handoff → ?projectId= → host store) lands eligible accounts in
@@ -5586,7 +5588,7 @@ const ChatComposerNewComponent = ({
                 after it. The home composer keeps this wrapper as its second row. */}
             <div
               className={cn(
-                'chat-composer-controls min-w-0 flex-row flex-nowrap items-center gap-1 sm:gap-2',
+                'chat-composer-controls min-w-0 flex-row flex-wrap items-center gap-x-1 gap-y-1 sm:gap-x-2',
                 composerStacked ? 'flex w-full' : 'contents',
                 mediaControlsWrap && 'max-sm:flex max-sm:w-full max-sm:flex-wrap max-sm:gap-y-1.5',
               )}
@@ -6691,6 +6693,8 @@ const ChatComposerNewComponent = ({
                 onClick={() => {
                   setShowProjectPicker((prev) => !prev);
                   setProjectQuery('');
+                  setFilesMenuOpen(false);
+                  setPluginsMenuOpen(false);
                 }}
                 disabled={isTurnActive || composerDisabled}
                 className={cn(
@@ -6728,6 +6732,14 @@ const ChatComposerNewComponent = ({
                 <>
                   <ComposerFilesMenu
                     disabled={isTurnActive || composerDisabled}
+                    open={filesMenuOpen}
+                    onOpenChange={(next) => {
+                      setFilesMenuOpen(next);
+                      if (next) {
+                        closeProjectPicker();
+                        setPluginsMenuOpen(false);
+                      }
+                    }}
                     onAttach={(file) => handleFileDrop([file])}
                     onUploadFromDevice={() => fileInputRef.current?.click()}
                   >
@@ -6746,6 +6758,14 @@ const ChatComposerNewComponent = ({
                     loading={connectorsLoading}
                     disabledConnectorIds={disabledConnectorIds}
                     onSetConnectorEnabled={setConnectorEnabled}
+                    open={pluginsMenuOpen}
+                    onOpenChange={(next) => {
+                      setPluginsMenuOpen(next);
+                      if (next) {
+                        closeProjectPicker();
+                        setFilesMenuOpen(false);
+                      }
+                    }}
                   >
                     <button type="button" className={WORK_BAR_ITEM_CLASS}>
                       {connectedConnectorOptions.length > 0 && (

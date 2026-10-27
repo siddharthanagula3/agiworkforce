@@ -1143,11 +1143,11 @@ function FileViewerOverlay({
       data-testid="library-file-viewer"
       className={
         container
-          ? 'pointer-events-auto absolute inset-0 z-[var(--z-modal)] flex flex-col bg-black/70 backdrop-blur-sm'
-          : 'pointer-events-auto fixed inset-0 z-[var(--z-modal)] flex flex-col bg-black/70 backdrop-blur-sm'
+          ? 'pointer-events-auto absolute inset-0 z-[var(--z-modal)] flex flex-col bg-[var(--scrim)]'
+          : 'pointer-events-auto fixed inset-0 z-[var(--z-modal)] flex flex-col bg-[var(--scrim)]'
       }
     >
-      <header className="flex shrink-0 items-center justify-between gap-3 px-4 py-3">
+      <header className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-3">
         <nav
           aria-label="Breadcrumb"
           className="flex min-w-0 items-center gap-1.5 rounded-md bg-[var(--chat-surface-base)]/90 px-2.5 py-1 text-sm text-[var(--chat-text-secondary)] backdrop-blur-sm"
