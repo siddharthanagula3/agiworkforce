@@ -27,7 +27,8 @@ Each needs its own design review before code.
 - [ ] L1 Side chat.
 - [ ] L2 Built-in browser pane.
 - [ ] L3 Interactive terminal (PTY).
-- [ ] L4 Split view or tabs.
+- [x] L4 Split view or tabs: dropped. Only Claude shows two conversations in one window;
+      ChatGPT's tabs are its browser and terminal beside the chat (see `spec.md`).
 
 ## Reported, not yet verified
 

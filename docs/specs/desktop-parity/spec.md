@@ -40,12 +40,14 @@ Common to both apps and missing or broken here:
    what is safe to clear.
 8. Side chat, a built-in browser pane and an interactive terminal, each its own
    slice (see `plan.md`).
-9. More than one conversation in a window. The apps differ here: Claude splits
-   the window into session panes, ChatGPT opens tabs.
 
 Only one app's menus carry these, and both products have the feature behind
 them, so the menu items follow the clearer-version rule: Search… (Claude's Go
 menu) and New Temporary Chat (ChatGPT's File menu).
+
+Two conversations side by side in one window is Claude's alone (Split View).
+ChatGPT's tabs hold its browser and terminal beside the chat, which the browser
+and terminal slices cover, so a second conversation pane is out of scope.
 
 Defects in the shell found while comparing, each verified in code:
 
