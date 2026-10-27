@@ -80,6 +80,9 @@ vi.mock('electron', () => {
     setPermissionRequestHandler: vi.fn(),
     setPermissionCheckHandler: vi.fn(),
     setDisplayMediaRequestHandler: vi.fn(),
+    clearCache: vi.fn(async () => undefined),
+    clearCodeCaches: vi.fn(async () => undefined),
+    clearStorageData: vi.fn(async () => undefined),
   };
   return {
     net: { isOnline: vi.fn(() => true), fetch: vi.fn(async () => ({ status: 200 })) },
@@ -103,6 +106,7 @@ vi.mock('electron', () => {
       setAsDefaultProtocolClient: vi.fn(),
       setLoginItemSettings: vi.fn(),
       setBadgeCount: vi.fn(),
+      relaunch: vi.fn(),
       on: vi.fn((event: string, listener: Listener) => appHandlers.set(event, listener)),
       whenReady: () => Promise.resolve(),
       isReady: () => true,
@@ -982,5 +986,61 @@ describe('menu commands with a second window open', () => {
     expect(first.loadURL.mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
       '/chat',
     ]);
+  });
+});
+
+describe('Help > Troubleshooting > Clear Cache and Restart', () => {
+  function menuActions(): import('../appMenu').AppMenuActions {
+    appHandlers.get('browser-window-focus')?.();
+    const actions = vi.mocked(installAppMenu).mock.calls.at(-1)?.[0];
+    if (!actions) throw new Error('the menu was never installed');
+    return actions;
+  }
+
+  function cloudSession() {
+    return electron.session.fromPartition('persist:agi-cloud') as unknown as Record<
+      'clearCache' | 'clearCodeCaches' | 'clearStorageData',
+      ReturnType<typeof vi.fn>
+    >;
+  }
+
+  it('clears nothing and keeps running when the person cancels', async () => {
+    showMessageBox.mockReset();
+    showMessageBox.mockResolvedValueOnce({ response: 0, checkboxChecked: false });
+    vi.mocked(electron.app.relaunch).mockClear();
+
+    menuActions().clearCacheAndRestart();
+    await settle();
+
+    expect(cloudSession().clearCache).not.toHaveBeenCalled();
+    expect(electron.app.relaunch).not.toHaveBeenCalled();
+    expect(quit).not.toHaveBeenCalled();
+  });
+
+  it('clears only the downloaded caches, never the sign-in or stored data, then restarts', async () => {
+    showMessageBox.mockReset();
+    showMessageBox.mockResolvedValueOnce({ response: 1, checkboxChecked: false });
+    vi.mocked(electron.app.relaunch).mockClear();
+    quit.mockClear();
+
+    menuActions().clearCacheAndRestart();
+    await settle();
+    await settle();
+
+    const options = (showMessageBox.mock.calls[0] as unknown[]).at(-1) as {
+      buttons: string[];
+      defaultId: number;
+      detail: string;
+    };
+    expect(options.buttons).toEqual(['Cancel', 'Clear and Restart']);
+    expect(options.defaultId).toBe(0);
+    expect(options.detail).toMatch(/stay signed in/);
+    expect(cloudSession().clearCache).toHaveBeenCalledTimes(1);
+    expect(cloudSession().clearCodeCaches).toHaveBeenCalledTimes(1);
+    expect(cloudSession().clearStorageData).toHaveBeenCalledWith({
+      storages: ['shadercache', 'cachestorage'],
+    });
+    expect(electron.app.relaunch).toHaveBeenCalledTimes(1);
+    expect(quit).toHaveBeenCalledTimes(1);
   });
 });

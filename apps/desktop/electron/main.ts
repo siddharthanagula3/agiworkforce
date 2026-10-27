@@ -360,6 +360,7 @@ const QUICK_ASK_WARMUP_MS = 5000;
 const UPDATE_RESTART_TIMEOUT_MS = 60_000;
 
 const SUPPORT_PATH = '/support';
+const HELP_CENTER_PATH = '/help';
 
 /**
  * Which document may call the bridge.
@@ -1969,6 +1970,59 @@ function openSupport(): void {
   openExternally(`${CLOUD_APP_ORIGIN}${SUPPORT_PATH}`);
 }
 
+function openHelpCenter(): void {
+  openExternally(`${CLOUD_APP_ORIGIN}${HELP_CENTER_PATH}`);
+}
+
+/**
+ * Help > Troubleshooting > Clear Cache and Restart. It drops what the app
+ * downloaded and keeps what the person owns: cookies (the sign-in), local
+ * storage, IndexedDB and service workers (which hold the push subscription)
+ * are left alone, as are settings and folder permissions, which live outside
+ * the session.
+ */
+async function clearCacheAndRestart(): Promise<void> {
+  const choice = await showNativeMessage(frontShellWindow() ?? mainWindow, {
+    type: 'question',
+    buttons: ['Cancel', 'Clear and Restart'],
+    defaultId: 0,
+    cancelId: 0,
+    title: 'Clear the cache and restart?',
+    message: `${PRODUCT_NAMES.desktop} deletes the files it downloaded, then restarts.`,
+    detail:
+      'You stay signed in, and your chats, settings and folder permissions are kept. The first load after the restart is slower while the app downloads its files again.',
+    noLink: true,
+  });
+  if (choice.response !== 1) return;
+  const prompt = quitPrompt(liveWork());
+  if (prompt && !(await askGuardPrompt(prompt))) return;
+
+  const cloudSession = session.fromPartition(REMOTE_SESSION_PARTITION);
+  try {
+    await Promise.all([
+      cloudSession.clearCache(),
+      cloudSession.clearCodeCaches({}),
+      cloudSession.clearStorageData({ storages: ['shadercache', 'cachestorage'] }),
+    ]);
+  } catch (error) {
+    console.warn('[troubleshooting] clearing the cache failed:', error);
+    await showNativeMessage(frontShellWindow() ?? mainWindow, {
+      type: 'warning',
+      buttons: ['OK'],
+      title: 'Cache not cleared',
+      message: `${PRODUCT_NAMES.desktop} could not clear its cache, so it did not restart.`,
+      noLink: true,
+    }).catch(() => undefined);
+    return;
+  }
+  quitConfirmed = true;
+  setTimeout(() => {
+    quitConfirmed = false;
+  }, UPDATE_RESTART_TIMEOUT_MS).unref?.();
+  app.relaunch();
+  app.quit();
+}
+
 async function showOpenSourceNotices(): Promise<void> {
   const failure = await openOpenSourceNotices(
     openSourceNoticesPath({
@@ -2136,6 +2190,8 @@ function installMenu(): void {
       openSettings,
       openLogs: openLogsFolder,
       copyDiagnostics,
+      clearCacheAndRestart: () => void clearCacheAndRestart(),
+      openHelpCenter,
       openSupport,
       openOpenSourceNotices: () => void showOpenSourceNotices(),
       checkForUpdates: garnishHandlers.onCheckForUpdates,

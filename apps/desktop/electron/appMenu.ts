@@ -36,6 +36,8 @@ export interface AppMenuActions {
   openSettings: () => void;
   openLogs: () => void;
   copyDiagnostics: () => void;
+  clearCacheAndRestart: () => void;
+  openHelpCenter: () => void;
   openSupport: () => void;
   openOpenSourceNotices: () => void;
   checkForUpdates: () => void;
@@ -271,13 +273,16 @@ function windowMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   if (isMac) {
     items.push({ type: 'separator' }, { role: 'front' });
   }
-  return { label: 'Window', submenu: items };
+  // The window role is what makes macOS add its window list, Move & Resize,
+  // Full Screen Tile and Bring All to Front to this menu.
+  return { label: 'Window', role: 'window', submenu: items };
 }
 
 function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return {
     role: 'help',
     submenu: [
+      { label: `${PRODUCT_NAMES.desktop} Help`, click: actions.openHelpCenter },
       { label: `${PRODUCT_NAMES.desktop} Support`, click: actions.openSupport },
       {
         label: 'Keyboard Shortcuts',
@@ -286,8 +291,15 @@ function helpMenu(actions: AppMenuActions): MenuItemConstructorOptions {
         click: () => actions.sendHostCommand('show-keyboard-shortcuts'),
       },
       { type: 'separator' },
-      { label: 'Open Logs', click: actions.openLogs },
-      { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
+      {
+        label: 'Troubleshooting',
+        submenu: [
+          { label: 'Open Logs', click: actions.openLogs },
+          { label: 'Copy Diagnostics', click: actions.copyDiagnostics },
+          { type: 'separator' },
+          { label: 'Clear Cache and Restart…', click: actions.clearCacheAndRestart },
+        ],
+      },
       { label: 'Open-Source Licenses', click: actions.openOpenSourceNotices },
       ...(isMac ? [] : [{ label: 'Check for Updates', click: actions.checkForUpdates }]),
     ],

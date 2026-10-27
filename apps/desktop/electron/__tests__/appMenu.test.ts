@@ -33,6 +33,8 @@ function actions() {
     openSettings: vi.fn(),
     openLogs: vi.fn(),
     copyDiagnostics: vi.fn(),
+    clearCacheAndRestart: vi.fn(),
+    openHelpCenter: vi.fn(),
     openSupport: vi.fn(),
     openOpenSourceNotices: vi.fn(),
     checkForUpdates: vi.fn(),
@@ -61,6 +63,11 @@ function template(overrides = actions()) {
 
 function submenu(menu: MenuItemConstructorOptions[], label: string): MenuItemConstructorOptions[] {
   const found = menu.find((entry) => entry.label === label || entry.role === label.toLowerCase());
+  return (found?.submenu as MenuItemConstructorOptions[] | undefined) ?? [];
+}
+
+function troubleshooting(menu: MenuItemConstructorOptions[]): MenuItemConstructorOptions[] {
+  const found = submenu(menu, 'Help').find((entry) => entry.label === 'Troubleshooting');
   return (found?.submenu as MenuItemConstructorOptions[] | undefined) ?? [];
 }
 
@@ -153,17 +160,35 @@ describe('the application menu', () => {
     const { menu, actions: spies } = template();
     const help = submenu(menu, 'Help');
 
-    for (const label of [`${PRODUCT_NAMES.desktop} Support`, 'Open Logs', 'Open-Source Licenses']) {
+    for (const label of [
+      `${PRODUCT_NAMES.desktop} Help`,
+      `${PRODUCT_NAMES.desktop} Support`,
+      'Open-Source Licenses',
+    ]) {
       const entry = help.find((candidate) => candidate.label === label);
       expect(entry, label).toBeDefined();
       (entry?.click as () => void)();
     }
+    for (const entry of troubleshooting(menu)) {
+      if (entry.type !== 'separator') (entry.click as () => void)();
+    }
     (item(menu, UPDATES_MENU, UPDATES_LABEL).click as () => void)();
 
+    expect(spies.openHelpCenter).toHaveBeenCalledTimes(1);
     expect(spies.openSupport).toHaveBeenCalledTimes(1);
-    expect(spies.openLogs).toHaveBeenCalledTimes(1);
     expect(spies.openOpenSourceNotices).toHaveBeenCalledTimes(1);
+    expect(spies.openLogs).toHaveBeenCalledTimes(1);
+    expect(spies.copyDiagnostics).toHaveBeenCalledTimes(1);
+    expect(spies.clearCacheAndRestart).toHaveBeenCalledTimes(1);
     expect(spies.checkForUpdates).toHaveBeenCalledTimes(1);
+  });
+
+  it('gathers the logs, the diagnostics and the cache reset under Troubleshooting', () => {
+    expect(
+      troubleshooting(template().menu)
+        .filter((entry) => entry.type !== 'separator')
+        .map((entry) => entry.label),
+    ).toEqual(['Open Logs', 'Copy Diagnostics', 'Clear Cache and Restart…']);
   });
 
   it('names the support item for the product, never the company', () => {
@@ -180,14 +205,22 @@ describe('the application menu', () => {
     expect(view.some((entry) => entry.role === 'toggleDevTools')).toBe(false);
   });
 
-  it('leaves no item without an action', () => {
-    const { menu } = template();
-
-    for (const entry of menu) {
-      for (const child of (entry.submenu as MenuItemConstructorOptions[] | undefined) ?? []) {
+  it('leaves no item without an action, however deep it sits', () => {
+    const check = (items: MenuItemConstructorOptions[], path: string) => {
+      for (const child of items) {
         if (child.type === 'separator' || child.role) continue;
-        expect(typeof child.click, `${entry.label} > ${child.label}`).toBe('function');
+        const nested = child.submenu as MenuItemConstructorOptions[] | undefined;
+        if (nested) {
+          expect(nested.length, `${path} > ${child.label}`).toBeGreaterThan(0);
+          check(nested, `${path} > ${child.label}`);
+          continue;
+        }
+        expect(typeof child.click, `${path} > ${child.label}`).toBe('function');
       }
+    };
+
+    for (const entry of template().menu) {
+      check((entry.submenu as MenuItemConstructorOptions[] | undefined) ?? [], String(entry.label));
     }
   });
 
@@ -238,12 +271,19 @@ describe('the application menu', () => {
     expect(windowItems).toContain('zoom');
   });
 
-  it('puts a support report on the clipboard from the Help menu', () => {
+  it('puts a support report on the clipboard from Help > Troubleshooting', () => {
     const { menu, actions: spies } = template();
 
-    (item(menu, 'Help', 'Copy Diagnostics').click as () => void)();
+    const copy = troubleshooting(menu).find((entry) => entry.label === 'Copy Diagnostics');
+    (copy?.click as () => void)();
 
     expect(spies.copyDiagnostics).toHaveBeenCalledTimes(1);
+  });
+
+  it('gives the Window menu the role that makes macOS add its window list and arrangement', () => {
+    const windowMenu = template().menu.find((entry) => entry.label === 'Window');
+
+    expect(windowMenu?.role).toBe('window');
   });
 
   it('opens a second window from the Window menu', () => {
