@@ -10,6 +10,7 @@ import { assertFreeDailyAllowance } from '@/lib/services/tier-unit-quota-service
 import { TEMPORARY_CHAT_NOT_SAVED } from '@/lib/temporary-chat-policy';
 import { scheduleArtifactIndexing } from './index-artifacts';
 import { scheduleConversationTitleGeneration } from './generate-title';
+import { serverProvisionalTitle } from '@/lib/chat-title';
 import { resolveSavedMessageSourceUrls } from './resolve-source-urls';
 import {
   assertParentInConversation,
@@ -142,8 +143,7 @@ export async function persistConversationMessage(input: {
 
   if (requestedMessage.role === 'user') {
     if (await markConversationActivated(db, scope)) {
-      const truncatedTitle =
-        requestedMessage.content.slice(0, 50) + (requestedMessage.content.length > 50 ? '...' : '');
+      const truncatedTitle = serverProvisionalTitle(requestedMessage.content);
       await db.execute(
         `update web_conversations
             set title = $1, updated_at = now()

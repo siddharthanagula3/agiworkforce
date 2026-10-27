@@ -17,6 +17,7 @@ import 'server-only';
  */
 
 import { after } from 'next/server';
+import { clientProvisionalTitle } from '@/lib/chat-title';
 import { openAIWireRequestToChatRequest } from '@agiworkforce/provider-protocol';
 import { resolveAutoRoute } from '@agiworkforce/routing';
 import { resolveWireMode } from '@/app/api/llm/v1/chat/completions/lib/adapter-providers';
@@ -106,7 +107,7 @@ export interface ScheduleTitleGenerationInput {
  * both may be replaced here. Keep the two truncations identical.
  */
 function clientTruncatedTitleCandidate(rawContent: string): string {
-  return rawContent.trim().slice(0, 60).replace(/\n/g, ' ');
+  return clientProvisionalTitle(rawContent);
 }
 
 async function isTemporaryConversation(
