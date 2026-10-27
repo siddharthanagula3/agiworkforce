@@ -59,6 +59,28 @@ describe('usage summary parsing', () => {
     ]);
   });
 
+  it('takes the entitled plan from the server, which keeps Enterprise during its grace period', () => {
+    const tierInfo = parseTierInfoResponse({
+      ...canonicalUsageResponse,
+      plan_tier: 'enterprise',
+      effective_plan_tier: 'enterprise',
+      subscription_status: 'past_due',
+    });
+
+    expect(tierInfo?.tier).toBe('enterprise');
+    expect(tierInfo?.accountPlanTier).toBeUndefined();
+  });
+
+  it('still falls back to the status rule for a server that sends no entitled plan', () => {
+    const tierInfo = parseTierInfoResponse({
+      ...canonicalUsageResponse,
+      subscription_status: 'canceled',
+    });
+
+    expect(tierInfo?.tier).toBe('free');
+    expect(tierInfo?.accountPlanTier).toBe('pro');
+  });
+
   it('rejects a reset timestamp that would render as an invalid date', () => {
     expect(
       parseTierInfoResponse({ ...canonicalUsageResponse, usage_reset_at: 'next month' }),

@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import {
   EffectiveCapabilityDocumentSchema,
+  ME_PLAN_MAX_AGE_MS,
   type EffectiveCapabilityDocumentWire,
 } from '@agiworkforce/cloud-contracts';
 import {
@@ -51,7 +52,7 @@ const CAPABILITY_DOCUMENT_KEY = 'tierStatus.capabilityDocument';
  * Matches the CLI's own tier cache (`apps/cli/src/tier_cache.rs`), so a plan
  * change reaches both surfaces inside the same window.
  */
-export const TIER_CACHE_TTL_MS = 300_000;
+export const TIER_CACHE_TTL_MS = ME_PLAN_MAX_AGE_MS;
 
 export type AccountTierLoader = (secrets: vscode.SecretStorage) => Promise<TierInfo | undefined>;
 

@@ -1,4 +1,5 @@
 import { isTeamSeatType, type TeamSeatType } from './billing-catalog';
+import { effectivePlanTier } from './subscription-entitlement';
 import {
   parseUsageLimitPromotionState,
   type UsageLimitPromotionState,
@@ -226,6 +227,22 @@ function readLimitPromotions(value: unknown): { limit_promotions?: UsageLimitPro
   } catch {
     return {};
   }
+}
+
+/**
+ * The plan the account is entitled to now. The server's answer wins because only
+ * it knows about seats and the Enterprise grace period; the status rule covers
+ * servers that predate the field.
+ */
+export function entitledPlanTierOfUsageSummary(
+  summary: Pick<
+    ManagedUsageSummaryResponse,
+    'plan_tier' | 'effective_plan_tier' | 'subscription_status'
+  >,
+): string {
+  return (
+    summary.effective_plan_tier ?? effectivePlanTier(summary.plan_tier, summary.subscription_status)
+  );
 }
 
 export function parseManagedUsageSummaryResponse(value: unknown): ManagedUsageSummaryResponse {

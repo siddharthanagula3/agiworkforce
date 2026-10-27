@@ -121,6 +121,46 @@ describe('the panel shows the plan the server has now', () => {
     );
   });
 
+  it('takes the entitled plan from the server, so Enterprise keeps its plan in its grace period', async () => {
+    const usage = {
+      plan_tier: 'enterprise',
+      effective_plan_tier: 'enterprise',
+      subscription_status: 'past_due',
+      usage_percentage: 10,
+      usage_reset_at: null,
+      has_usage_remaining: true,
+      period_start: null,
+      period_end: null,
+      session_usage_percentage: 0,
+      session_reset_at: null,
+      weekly_usage_percentage: 0,
+      weekly_reset_at: null,
+      flagship_weekly_usage_percentage: 0,
+      flagship_weekly_reset_at: null,
+    };
+    const models = {
+      data: [{ id: 'model-a' }],
+      x_agi_workforce: { user_tier: 'enterprise', allowed_auto_modes: ['auto'] },
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async (url: string) =>
+          new Response(JSON.stringify(url.includes('usage') ? usage : models), {
+            status: 200,
+            headers: { 'content-type': 'application/json' },
+          }),
+      ),
+    );
+    try {
+      const access = await getManagedModelAccess('token');
+      expect(access.subscriptionTier).toBe('enterprise');
+      expect(access.accountPlanTier).toBe('enterprise');
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   it('never reads the plan from the HTTP cache', async () => {
     const fetchImpl = vi.fn(
       async (url: string) =>

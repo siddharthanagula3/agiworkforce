@@ -11,6 +11,7 @@ type UsageSummaryFieldsUsedByVsCode = Pick<
 > & {
   [
     K in
+      | 'effective_plan_tier'
       | 'has_usage_remaining'
       | 'session_usage_percentage'
       | 'session_reset_at'
@@ -62,6 +63,7 @@ const ManagedUsageCreditsSchema: z.ZodType<ManagedUsageCredits> = z.object({
 export const TierInfoSchema: z.ZodType<UsageSummaryFieldsUsedByVsCode> = z
   .object({
     plan_tier: z.string().min(1).max(64),
+    effective_plan_tier: z.string().min(1).max(64).optional(),
     subscription_status: z.string().min(1).max(64),
     usage_percentage: usagePercentage,
     usage_reset_at: isoTimestamp.nullable(),

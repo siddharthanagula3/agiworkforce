@@ -29,7 +29,7 @@ import {
 } from '@agiworkforce/cloud-contracts';
 import {
   classifyManagedQuotaErrorCode,
-  effectivePlanTier,
+  entitledPlanTierOfUsageSummary,
   getDefaultModelFor,
   IMAGE_CARD_KIND,
   INTERACTIVE_CARD_REQUEST_KEY,
@@ -286,7 +286,7 @@ export async function getManagedModelAccess(
   }
 
   return {
-    subscriptionTier: effectivePlanTier(usageSummary.plan_tier, usageSummary.subscription_status),
+    subscriptionTier: entitledPlanTierOfUsageSummary(usageSummary),
     accountPlanTier: usageSummary.plan_tier,
     subscriptionStatus: usageSummary.subscription_status,
     usage: usageSummary,

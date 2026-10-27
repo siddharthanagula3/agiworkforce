@@ -23,7 +23,7 @@ import { notifyAccountTierMayHaveChanged } from '../integrations/tierRevalidatio
 import { planDisplayLabel } from '../features/account-auth/planLabel';
 import {
   classifyManagedQuotaErrorCode,
-  effectivePlanTier,
+  entitledPlanTierOfUsageSummary,
   isTeamPlanTier,
   normalizeUsagePercentage,
   type AccountAuthState,
@@ -964,7 +964,7 @@ export function parseTierInfoResponse(raw: unknown): TierInfo | undefined {
   const parsed = TierInfoSchema.safeParse(raw);
   if (!parsed.success) return undefined;
 
-  const effectiveTier = effectivePlanTier(parsed.data.plan_tier, parsed.data.subscription_status);
+  const effectiveTier = entitledPlanTierOfUsageSummary(parsed.data);
   const tierInfo: TierInfo = {
     tier: effectiveTier,
     subscriptionStatus: parsed.data.subscription_status,
