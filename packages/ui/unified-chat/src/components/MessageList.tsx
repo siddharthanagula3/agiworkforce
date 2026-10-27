@@ -25,6 +25,7 @@ interface MessageListProps {
   onToolReject?: (messageId: string, toolCallId: string) => void;
   approvalTurnExpired?: boolean;
   onEditMessage?: (messageId: string, newContent: string) => void;
+  onFollowUp?: (text: string) => void;
   messageActions?: MessageActionSlots;
 }
 
@@ -51,6 +52,7 @@ export function MessageList({
   onToolReject,
   approvalTurnExpired,
   onEditMessage,
+  onFollowUp,
   messageActions,
 }: MessageListProps) {
   const { t } = useUiTranslation('chat');
@@ -178,6 +180,7 @@ export function MessageList({
                     approvalTurnExpired={approvalTurnExpired}
                     onResendApproval={regenerate}
                     onEdit={compaction ? undefined : onEditMessage}
+                    onFollowUp={msg.role === 'assistant' ? onFollowUp : undefined}
                     actionSlots={compaction ? compactedMessageActions : messageActions}
                   />
                   {showProvenanceFooter && msg.role === 'assistant' && !msg.isStreaming && (

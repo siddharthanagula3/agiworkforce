@@ -17,6 +17,8 @@ module.exports = {
     '^@agiworkforce/sync$': '<rootDir>/../../packages/client/sync/src/index',
     '^@agiworkforce/trust-boundaries$':
       '<rootDir>/../../packages/contracts/trust-boundaries/src/index',
+    '^@agiworkforce/unified-chat/assistant-fence$':
+      '<rootDir>/../../packages/ui/unified-chat/src/components/markdown/assistantFence.ts',
     '^expo-audio$': '<rootDir>/__mocks__/expo-audio.js',
     '^expo-clipboard$': '<rootDir>/__mocks__/expo-clipboard.js',
     '^expo-sqlite$': '<rootDir>/__mocks__/expo-sqlite.js',

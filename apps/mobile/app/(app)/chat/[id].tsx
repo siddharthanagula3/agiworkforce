@@ -1808,6 +1808,7 @@ export default function ChatScreen() {
                   />
                 ) : null
               }
+              onFollowUp={(prompt) => void handleSend(prompt)}
               onEditImageArea={canEditImages ? handleEditImageArea : undefined}
               onDeleteImageConversation={handleDeleteImageConversation}
               variantInfoByMessageId={variantInfo}

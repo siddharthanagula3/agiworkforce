@@ -45,7 +45,7 @@ function DiffLines({ code }: { code: string }) {
               kind === 'add'
                 ? 'bg-[color-mix(in_srgb,var(--chat-success)_18%,transparent)]'
                 : kind === 'remove'
-                  ? 'bg-[color-mix(in_srgb,var(--chat-warning)_18%,transparent)]'
+                  ? 'bg-[color-mix(in_srgb,var(--chat-destructive)_18%,transparent)]'
                   : undefined
             }
           >

@@ -13,6 +13,7 @@
     "./artifact-sandbox": "./src/lib/artifact-sandbox.ts",
     "./agi-work-progress": "./src/lib/agi-work-progress.ts",
     "./task-display": "./src/components/tasks/task-display.ts",
+    "./assistant-fence": "./src/components/markdown/assistantFence.ts",
     "./markdown-document": "./src/components/markdown/markdownDocument.ts",
     "./shiki-highlighter": "./src/components/markdown/shikiHighlighter.ts",
     "./composer-editor": "./src/composer-editor/index.ts",

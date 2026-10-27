@@ -20,6 +20,7 @@ export const ANSWER_SURFACE_LANGUAGES: ReadonlySet<string> = new Set([
   'timeline',
   'modes',
   'citation',
+  'tool',
 ]);
 
 export function isAnswerSurfaceLanguage(language: string): boolean {
@@ -376,6 +377,82 @@ export function parseTimeline(source: string): TimelineStep[] {
 
 export function parseModes(source: string): TitledBody[] {
   return parseCards(source);
+}
+
+export const TOOL_STATES = ['requested', 'running', 'completed', 'failed', 'cancelled'] as const;
+
+export type ToolState = (typeof TOOL_STATES)[number];
+
+export interface ToolSpec {
+  name: string;
+  state: ToolState;
+  output: string;
+}
+
+const TOOL_STATE_SET: ReadonlySet<string> = new Set(TOOL_STATES);
+
+export function toolStateLabel(state: ToolState): string {
+  switch (state) {
+    case 'requested':
+      return 'Requested';
+    case 'running':
+      return 'Running';
+    case 'completed':
+      return 'Completed';
+    case 'failed':
+      return 'Failed';
+    case 'cancelled':
+      return 'Cancelled';
+  }
+}
+
+export function parseTool(source: string): ToolSpec | null {
+  const lines = source.split(LINE_BREAK);
+  let name = '';
+  let state = '';
+  let index = 0;
+  for (; index < lines.length; index += 1) {
+    const trimmed = (lines[index] ?? '').trim();
+    if (!trimmed) {
+      index += 1;
+      break;
+    }
+    const nameMatch = /^name:\s*(.+)$/i.exec(trimmed);
+    const stateMatch = /^state:\s*(.+)$/i.exec(trimmed);
+    if (nameMatch?.[1]) {
+      name = nameMatch[1].trim();
+      continue;
+    }
+    if (stateMatch?.[1]) {
+      state = stateMatch[1].trim().toLowerCase();
+      continue;
+    }
+    break;
+  }
+  if (!name || !TOOL_STATE_SET.has(state)) return null;
+  return {
+    name,
+    state: state as ToolState,
+    output: lines.slice(index).join('\n').trim(),
+  };
+}
+
+export function statusStateLabel(state: StatusRow['state']): string {
+  switch (state) {
+    case 'passed':
+      return 'Passed';
+    case 'failed':
+      return 'Failed';
+    case 'pending':
+      return 'Pending';
+    case 'untested':
+      return 'Not tested';
+  }
+}
+
+export function checklistProgress(items: readonly CheckItem[]): string {
+  const done = items.filter((item) => item.checked).length;
+  return `${done} of ${items.length}`;
 }
 
 export function parseCitation(source: string): CitationSpec | null {

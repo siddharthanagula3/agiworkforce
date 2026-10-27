@@ -64,6 +64,8 @@ interface MessageBubbleProps {
    */
   artifactProjection?: MessageArtifactProjection | null;
   onEdit?: (messageId: string, newContent: string) => void;
+  /** Sends a follow-up suggestion as the next turn. Absent, the suggestion stays text. */
+  onFollowUp?: (text: string) => void;
   /** Optional actions the host can carry out; each stays hidden when absent. */
   actionSlots?: MessageActionSlots;
 }
@@ -653,6 +655,7 @@ export function MessageBubble({
   onResendApproval,
   artifactProjection,
   onEdit,
+  onFollowUp,
   actionSlots,
 }: MessageBubbleProps) {
   const { t } = useUiTranslation('chat');
@@ -824,9 +827,14 @@ export function MessageBubble({
                 isStreaming
                 trustedImageUrls={trustedImageUrls}
                 announce={false}
+                onFollowUp={onFollowUp}
               />
             ) : (
-              <MarkdownContent content={bodyContent} trustedImageUrls={trustedImageUrls} />
+              <MarkdownContent
+                content={bodyContent}
+                trustedImageUrls={trustedImageUrls}
+                onFollowUp={onFollowUp}
+              />
             )}
           </StreamAnnouncer>
         )}

@@ -22,6 +22,8 @@ import { WritingBlock } from './WritingBlock';
 import { EMAIL_BLOCK_LANGUAGE, isRichBlockLanguage, parseEmailBlock } from './richBlocks';
 import { AnswerSurface } from './AnswerSurface';
 import { isAnswerSurfaceLanguage, liftAnswerBadges } from './answerSurfaces';
+import { classifyAssistantFence } from './assistantFence';
+import { FollowUpActionProvider } from './followUpAction';
 import {
   TaskItemIndexContext,
   TaskToggleContext,
@@ -601,6 +603,10 @@ const RichFence = ({ language, source }: { language: string; source: string }) =
     );
   }
   if (isAnswerSurfaceLanguage(language)) {
+    const classified = classifyAssistantFence(language, source);
+    if (classified.kind === 'fallback') {
+      return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
+    }
     return <AnswerSurface language={language} source={source} />;
   }
   return <WritingBlock source={source} streaming={streaming} renderBody={renderWritingBody} />;
@@ -612,6 +618,13 @@ const MarkdownPre = ({
   ...rest
 }: React.ComponentPropsWithoutRef<'pre'> & { node?: HastNode }) => {
   const language = fenceLanguage(node);
+  const classified = classifyAssistantFence(
+    language,
+    reactNodeText(children).replace(TRAILING_NEWLINE_PATTERN, ''),
+  );
+  if (classified.kind === 'fallback') {
+    return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
+  }
   if (isRichBlockLanguage(language)) {
     return (
       <RichFence
@@ -699,6 +712,7 @@ export interface MarkdownContentProps {
   linkifyNumericCitations?: boolean;
   literalHtml?: boolean;
   onTaskToggle?: (index: number) => void;
+  onFollowUp?: (text: string) => void;
   footnoteScope?: string;
 }
 
@@ -738,6 +752,7 @@ function MarkdownContentImpl({
   linkifyNumericCitations = true,
   literalHtml,
   onTaskToggle,
+  onFollowUp,
   footnoteScope,
 }: MarkdownContentProps) {
   // The sanitizer prefixes every id itself, so footnote ids are generated
@@ -772,29 +787,33 @@ function MarkdownContentImpl({
     [onTaskToggle, isStreaming, processedContent],
   );
   return (
-    <TaskToggleContext.Provider value={taskToggle}>
-      <StreamTailContext.Provider value={Boolean(isStreaming)}>
-        <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
-          <TrustedImagesContext.Provider value={trustedImages}>
-            <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
-              {svgSlides.slides.length > 0 ? <SvgConceptGallery slides={svgSlides.slides} /> : null}
-              <ReactMarkdown
-                remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
-                remarkRehypeOptions={remarkRehypeOptions}
-                rehypePlugins={REHYPE_PLUGINS}
-                urlTransform={markdownUrlTransform}
-                components={markdownComponents}
-              >
-                {processedContent}
-              </ReactMarkdown>
-            </Tooltip.Provider>
-          </TrustedImagesContext.Provider>
-        </CitationsContext.Provider>
-        {isStreaming && content.trim() && (
-          <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
-        )}
-      </StreamTailContext.Provider>
-    </TaskToggleContext.Provider>
+    <FollowUpActionProvider onFollowUp={onFollowUp}>
+      <TaskToggleContext.Provider value={taskToggle}>
+        <StreamTailContext.Provider value={Boolean(isStreaming)}>
+          <CitationsContext.Provider value={citations ?? EMPTY_CITATIONS}>
+            <TrustedImagesContext.Provider value={trustedImages}>
+              <Tooltip.Provider delayDuration={150} skipDelayDuration={300}>
+                {svgSlides.slides.length > 0 ? (
+                  <SvgConceptGallery slides={svgSlides.slides} />
+                ) : null}
+                <ReactMarkdown
+                  remarkPlugins={literalHtml ? LITERAL_HTML_REMARK_PLUGINS : REMARK_PLUGINS}
+                  remarkRehypeOptions={remarkRehypeOptions}
+                  rehypePlugins={REHYPE_PLUGINS}
+                  urlTransform={markdownUrlTransform}
+                  components={markdownComponents}
+                >
+                  {processedContent}
+                </ReactMarkdown>
+              </Tooltip.Provider>
+            </TrustedImagesContext.Provider>
+          </CitationsContext.Provider>
+          {isStreaming && content.trim() && (
+            <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
+          )}
+        </StreamTailContext.Provider>
+      </TaskToggleContext.Provider>
+    </FollowUpActionProvider>
   );
 }
 

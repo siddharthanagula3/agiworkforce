@@ -426,6 +426,8 @@ interface MessageGroupRowProps {
   onReadAloud: (messageId: string, content: string) => void;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
+  /** Sends a follow-up suggestion as the next turn. Absent, the suggestion stays text. */
+  onSubmitPrompt?: (prompt: string) => void;
   /** Attached to the last assistant turn only; see MessageBubble.turnFailureReason. */
   lastTurnFailureReason?: string;
   lastTurnFailureActions?: React.ReactNode;
@@ -475,6 +477,8 @@ interface MessageRowProps {
   onReadAloud: (messageId: string, content: string) => void;
   onRegenerateWithModel?: (messageId: string, modelId: string) => void;
   regenerateModelOptions?: ReadonlyArray<RegenerateModelOption>;
+  /** Sends a follow-up suggestion as the next turn. Absent, the suggestion stays text. */
+  onSubmitPrompt?: (prompt: string) => void;
 }
 
 type RenderedMessageMetadata = MessageMetadata &
@@ -668,6 +672,7 @@ const MessageRow = memo(function MessageRow({
   onReadAloud,
   onRegenerateWithModel,
   regenerateModelOptions,
+  onSubmitPrompt,
 }: MessageRowProps) {
   const meta = getMeta(message);
   const paywall = meta?.paywall;
@@ -804,6 +809,7 @@ const MessageRow = memo(function MessageRow({
         attachments,
         metadata: message.metadata as Parameters<typeof MessageBubble>[0]['message']['metadata'],
       }}
+      onFollowUp={displayRole === 'assistant' ? onSubmitPrompt : undefined}
       onRegenerate={
         onRegenerate &&
         (displayRole === 'assistant'
@@ -911,6 +917,7 @@ const MessageGroupRow = memo(
     onReadAloud,
     onRegenerateWithModel,
     regenerateModelOptions,
+    onSubmitPrompt,
     lastTurnFailureReason,
     lastTurnFailureActions,
     resendBlockedMessageIds,
@@ -957,6 +964,7 @@ const MessageGroupRow = memo(
             onReadAloud={onReadAloud}
             onRegenerateWithModel={onRegenerateWithModel}
             regenerateModelOptions={regenerateModelOptions}
+            onSubmitPrompt={onSubmitPrompt}
           />
         ))}
       </div>
@@ -999,6 +1007,7 @@ const MessageGroupRow = memo(
       prev.onReadAloud === next.onReadAloud &&
       prev.onRegenerateWithModel === next.onRegenerateWithModel &&
       prev.regenerateModelOptions === next.regenerateModelOptions &&
+      prev.onSubmitPrompt === next.onSubmitPrompt &&
       prev.resendBlockedMessageIds === next.resendBlockedMessageIds
     );
   },
@@ -1862,6 +1871,7 @@ const ChatMessageListComponent = ({
       onReadAloud: handleReadAloud,
       onRegenerateWithModel,
       regenerateModelOptions,
+      onSubmitPrompt,
       lastTurnFailureReason,
       lastTurnFailureActions,
       resendBlockedMessageIds,
@@ -1898,6 +1908,7 @@ const ChatMessageListComponent = ({
       currentTier,
       onRegenerateWithModel,
       regenerateModelOptions,
+      onSubmitPrompt,
       lastTurnFailureReason,
       lastTurnFailureActions,
       resendBlockedMessageIds,

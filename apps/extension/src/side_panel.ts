@@ -185,6 +185,7 @@ import {
   OPEN_BROWSER_CONVERSATION_MESSAGE,
 } from './features/background/background-results';
 import { el } from './features/side-panel/dom';
+import { setAnswerFollowUpSender } from './features/side-panel/markdown';
 import {
   buildBrowserTurnControls,
   buildBubbleWithTools,
@@ -7561,6 +7562,10 @@ function canQueueFollowUp(text: string): boolean {
     text.trim().length > 0
   );
 }
+
+setAnswerFollowUpSender((text) => {
+  submitComposerText(text);
+});
 
 function submitComposerText(text: string): boolean {
   if (canAdmitComposerMessage(text)) {

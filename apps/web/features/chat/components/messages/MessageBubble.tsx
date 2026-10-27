@@ -732,6 +732,8 @@ interface MessageBubbleProps {
   onResumeVideo?: (messageId: string) => void;
   /** Start a new generation only after a durable video task is terminally failed. */
   onRetryVideo?: (messageId: string) => void;
+  /** Sends a follow-up suggestion as the next turn. Absent, the suggestion stays text. */
+  onFollowUp?: (text: string) => void;
   /**
    * When provided and the parent renders a motion container with
    * `messageListVariants`, this prop is unused (stagger is driven by the
@@ -773,6 +775,7 @@ const MessageBubbleComponent = function MessageBubble({
   onRegenerateImage,
   onResumeVideo,
   onRetryVideo,
+  onFollowUp,
 }: MessageBubbleProps) {
   const [copied, setCopied] = useState(false);
   const [fallbackNoticeDismissed, setFallbackNoticeDismissed] = useState(false);
@@ -2694,6 +2697,7 @@ const MessageBubbleComponent = function MessageBubble({
                       citations={citationsByMarker}
                       trustedImageUrls={trustedImageUrls}
                       announce={false}
+                      onFollowUp={onFollowUp}
                       footnoteScope={`${message.id}lead`}
                     />
                   ) : (
@@ -2704,6 +2708,7 @@ const MessageBubbleComponent = function MessageBubble({
                         trustedImageUrls={trustedImageUrls}
                         linkifyNumericCitations={canLinkNumericCitations}
                         literalHtml={isUser}
+                        onFollowUp={onFollowUp}
                         footnoteScope={`${message.id}lead`}
                       />
                     </CodeBlockEditorContext.Provider>
@@ -3001,6 +3006,7 @@ const MessageBubbleComponent = function MessageBubble({
                   citations={citationsByMarker}
                   trustedImageUrls={trustedImageUrls}
                   announce={false}
+                  onFollowUp={onFollowUp}
                   footnoteScope={`${message.id}tail`}
                 />
               ) : (
@@ -3010,6 +3016,7 @@ const MessageBubbleComponent = function MessageBubble({
                     citations={canLinkNumericCitations ? citationsByMarker : searchSources}
                     trustedImageUrls={trustedImageUrls}
                     linkifyNumericCitations={canLinkNumericCitations}
+                    onFollowUp={onFollowUp}
                     footnoteScope={`${message.id}tail`}
                   />
                 </CodeBlockEditorContext.Provider>
@@ -4083,6 +4090,7 @@ export const MessageBubble = React.memo(MessageBubbleComponent, (prev, next) => 
   if (prev.isReadingAloud !== next.isReadingAloud) return false;
   if (prev.isReadAloudSupported !== next.isReadAloudSupported) return false;
   if (prev.isLatestTurn !== next.isLatestTurn) return false;
+  if (prev.onFollowUp !== next.onFollowUp) return false;
   if (prev.onRegenerateWithModel !== next.onRegenerateWithModel) return false;
   if (prev.regenerateModelOptions !== next.regenerateModelOptions) return false;
   if (prev.hasBranches !== next.hasBranches) return false;

@@ -22,13 +22,16 @@ import {
   parseSlider,
   parseStatus,
   parseTimeline,
+  parseTool,
   parseTranscript,
+  toolStateLabel,
   type ChartSurface,
   type CheckItem,
   type GalleryItem,
   type MapStop,
   type StatusRow,
 } from './answerSurfaces';
+import { useFollowUpAction } from './followUpAction';
 
 const PANEL_CLASS =
   'my-4 overflow-clip rounded-[var(--chat-radius-lg)] border border-[var(--chat-border)] bg-[var(--chat-bg)]';
@@ -39,10 +42,10 @@ function statusClass(state: StatusRow['state'] | 'complete' | 'progress' | 'todo
     return 'bg-[color-mix(in_srgb,var(--chat-success)_18%,transparent)] text-[var(--chat-success-text)]';
   }
   if (state === 'failed') {
-    return 'bg-[color-mix(in_srgb,var(--chat-warning)_18%,transparent)] text-[var(--chat-warning-fg)]';
+    return 'bg-[color-mix(in_srgb,var(--chat-destructive)_18%,transparent)] text-[var(--chat-destructive-text)]';
   }
   if (state === 'pending' || state === 'progress') {
-    return 'bg-[color-mix(in_srgb,var(--chat-info)_18%,transparent)] text-[var(--chat-info-text)]';
+    return 'bg-[color-mix(in_srgb,var(--chat-warning)_18%,transparent)] text-[var(--chat-warning-fg)]';
   }
   return 'bg-[var(--chat-surface-hover)] text-[var(--chat-text-secondary)]';
 }
@@ -480,25 +483,7 @@ export function AnswerSurface({ language, source }: { language: string; source: 
   }
 
   if (language === 'followups') {
-    const items = parseFollowups(parsed);
-    if (items.length === 0) return null;
-    return (
-      <ul
-        className={cn(PANEL_CLASS, 'divide-y divide-[var(--chat-border-subtle)]')}
-        data-answer-surface="followups"
-      >
-        {items.map((item) => (
-          <li key={item}>
-            <button
-              type="button"
-              className="w-full px-4 py-3 text-left text-sm hover:bg-[var(--chat-surface-hover)]"
-            >
-              {item}
-            </button>
-          </li>
-        ))}
-      </ul>
-    );
+    return <FollowUpList source={parsed} />;
   }
 
   if (language === 'files') {
@@ -587,6 +572,21 @@ export function AnswerSurface({ language, source }: { language: string; source: 
     );
   }
 
+  if (language === 'tool') {
+    const tool = parseTool(parsed);
+    if (!tool) return null;
+    const label = toolStateLabel(tool.state);
+    return (
+      <section className={PANEL_CLASS} data-answer-surface="tool" aria-label="Tool result">
+        <h3 className="px-4 pt-3 text-sm font-medium">{tool.name}</h3>
+        <p className="px-4 text-sm">{label}</p>
+        {tool.output ? (
+          <pre className={cn(BODY_CLASS, 'whitespace-pre-wrap')}>{tool.output}</pre>
+        ) : null}
+      </section>
+    );
+  }
+
   if (language === 'citation') {
     const citation = parseCitation(parsed);
     if (!citation) return null;
@@ -613,6 +613,44 @@ export function InlineChart({ source }: { source: string }) {
   const chart = parseChartSurface(source);
   if (!chart) return null;
   return <ChartCard chart={chart} />;
+}
+
+function FollowUpList({ source }: { source: string }) {
+  const items = parseFollowups(source);
+  const onFollowUp = useFollowUpAction();
+  if (items.length === 0) return null;
+  if (!onFollowUp) {
+    return (
+      <ul
+        className={cn(PANEL_CLASS, 'divide-y divide-[var(--chat-border-subtle)]')}
+        data-answer-surface="followups"
+      >
+        {items.map((item) => (
+          <li key={item} className="px-4 py-3 text-sm">
+            {item}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+  return (
+    <ul
+      className={cn(PANEL_CLASS, 'divide-y divide-[var(--chat-border-subtle)]')}
+      data-answer-surface="followups"
+    >
+      {items.map((item) => (
+        <li key={item}>
+          <button
+            type="button"
+            className="w-full px-4 py-3 text-left text-sm hover:bg-[var(--chat-surface-hover)]"
+            onClick={() => onFollowUp(item)}
+          >
+            {item}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 function RadioCard({ spec }: { spec: NonNullable<ReturnType<typeof parseRadio>> }) {

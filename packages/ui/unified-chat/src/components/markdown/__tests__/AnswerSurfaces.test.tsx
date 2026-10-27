@@ -210,8 +210,10 @@ describe('answer surfaces', () => {
   });
 
   it('renders status, actions, follow-ups, files, transcript, timeline, modes, and a citation', () => {
+    const onFollowUp = vi.fn();
     const { container } = render(
       <MarkdownContent
+        onFollowUp={onFollowUp}
         content={[
           fence(
             'status',
@@ -250,7 +252,8 @@ describe('answer surfaces', () => {
     expect(screen.getByText('Not tested')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Copy review note' }));
     expect(navigator.clipboard.writeText).toHaveBeenCalledWith('The review is ready.');
-    expect(screen.getByRole('button', { name: 'Show more code' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Show more code' }));
+    expect(onFollowUp).toHaveBeenCalledWith('Show more code');
     expect(screen.getByText('website-qa-report.pdf')).toBeTruthy();
     expect(screen.getByText('JSON')).toBeTruthy();
     expect(screen.getByText(/not an audio player/)).toBeTruthy();

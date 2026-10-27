@@ -1,5 +1,9 @@
 import markdownit from 'markdown-it';
 import { normalizeMarkdownSource } from '@agiworkforce/utils/markdown-source';
+import {
+  classifyAssistantFence,
+  renderClassifiedFenceHtml,
+} from '@agiworkforce/unified-chat/assistant-fence';
 import DOMPurify, { type Config } from 'dompurify';
 import { findPathReferences } from '../utils/pathReferences';
 
@@ -48,6 +52,11 @@ md.renderer.rules.fence = (tokens, index) => {
   if (!token) return '';
   const info = token.info ? md.utils.unescapeAll(token.info).trim() : '';
   const language = info ? info.split(/\s+/u, 1)[0] : '';
+  const surface = renderClassifiedFenceHtml(
+    classifyAssistantFence(language ?? '', token.content),
+    'vscode',
+  );
+  if (surface !== null) return surface;
   return renderCodeBlock(token.content, language);
 };
 
@@ -81,9 +90,49 @@ export const PURIFY_CONFIG: Config = {
   ADD_ATTR: ['target', 'rel'],
 };
 
+export interface AnswerSurfaceActions {
+  onFollowUp?: (text: string) => void;
+  copy?: (text: string) => Promise<void> | void;
+}
+
+export function bindAnswerSurfaces(root: ParentNode, actions: AnswerSurfaceActions = {}): void {
+  root.querySelectorAll<HTMLButtonElement>('.surface-copy').forEach((button) => {
+    if (button.dataset['bound'] === '1') return;
+    button.dataset['bound'] = '1';
+    button.addEventListener('click', () => {
+      const code = button.closest('.answer-surface')?.querySelector('.answer-copy code');
+      const text = code?.textContent ?? '';
+      void actions.copy?.(text);
+    });
+  });
+  root.querySelectorAll<HTMLButtonElement>('.surface-followup').forEach((button) => {
+    if (button.dataset['bound'] === '1') return;
+    button.dataset['bound'] = '1';
+    button.addEventListener('click', () => {
+      const text = button.textContent ?? '';
+      if (text) actions.onFollowUp?.(text);
+    });
+  });
+  root.querySelectorAll<HTMLElement>('.answer-surface-checklist').forEach((section) => {
+    section.querySelectorAll<HTMLButtonElement>('.surface-check').forEach((box) => {
+      if (box.dataset['bound'] === '1') return;
+      box.dataset['bound'] = '1';
+      box.addEventListener('click', () => {
+        const pressed = box.getAttribute('aria-pressed') === 'true';
+        box.setAttribute('aria-pressed', pressed ? 'false' : 'true');
+        const boxes = [...section.querySelectorAll<HTMLButtonElement>('.surface-check')];
+        const done = boxes.filter((item) => item.getAttribute('aria-pressed') === 'true').length;
+        const progress = section.querySelector('.answer-progress');
+        if (progress) progress.textContent = `${done} of ${boxes.length}`;
+      });
+    });
+  });
+}
+
 declare global {
   interface Window {
     agiRender?: (markdown: string) => string;
+    agiBindSurfaces?: (root: ParentNode, actions?: AnswerSurfaceActions) => void;
     DOMPurify?: typeof DOMPurify;
   }
 }
@@ -155,4 +204,5 @@ DOMPurify.addHook('afterSanitizeAttributes', (node) => {
 });
 
 window.agiRender = render;
+window.agiBindSurfaces = bindAnswerSurfaces;
 window.DOMPurify = DOMPurify;
