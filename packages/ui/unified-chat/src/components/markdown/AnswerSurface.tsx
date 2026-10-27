@@ -31,7 +31,7 @@ import {
   type MapStop,
   type StatusRow,
 } from './answerSurfaces';
-import { useFollowUpAction } from './followUpAction';
+import { useFollowUpAction } from './FollowUpAction';
 
 const PANEL_CLASS =
   'my-4 overflow-clip rounded-[var(--chat-radius-lg)] border border-[var(--chat-border)] bg-[var(--chat-bg)]';

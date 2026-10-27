@@ -23,7 +23,7 @@ import { EMAIL_BLOCK_LANGUAGE, isRichBlockLanguage, parseEmailBlock } from './ri
 import { AnswerSurface } from './AnswerSurface';
 import { isAnswerSurfaceLanguage, liftAnswerBadges } from './answerSurfaces';
 import { classifyAssistantFence } from './assistantFence';
-import { FollowUpActionProvider } from './followUpAction';
+import { FollowUpActionProvider } from './FollowUpAction';
 import {
   TaskItemIndexContext,
   TaskToggleContext,
