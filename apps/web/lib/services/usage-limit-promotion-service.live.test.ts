@@ -27,8 +27,13 @@ vi.mock('@/lib/feature-flags/usage-promotions-gate', () => ({
 vi.mock('@/lib/logger', () => ({
   logger: { debug: vi.fn(), error: vi.fn(), info: vi.fn(), warn: vi.fn() },
 }));
-vi.mock('@/lib/services/effective-subscription-service', () => ({
+vi.mock('@/lib/services/effective-subscription-service', async () => ({
   resolveEntitlementBundle: vi.fn(),
+  usageAllowanceSubject: (
+    await vi.importActual<typeof import('@/lib/services/entitlement-resolution')>(
+      '@/lib/services/entitlement-resolution',
+    )
+  ).usageAllowanceSubject,
 }));
 
 const {
