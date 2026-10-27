@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform + security
-Last updated: 2026-10-23
+Last updated: 2026-10-27
 
 Every defect this repository knows about and has not fixed, one section per surface,
 open rows only. Check it before reporting a bug as new.
@@ -490,7 +490,9 @@ restating it.
 
 ## Billing
 
-No open rows.
+| id                                   | severity | summary                                                                                                                                                                                 | where                                                        | first seen | owner              | still open because                                                                                                                                                                                                                                                                                                                     |
+| ------------------------------------ | -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------ | ---------- | ------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ONE-PRODUCT-BILLING-AUDIT-2026-10-27 | High     | 45 open findings from the 2026-10-27 audit of one account, plan and credit ledger across the six surfaces: 3 owner decisions, 12 metering, 7 payments, 9 entitlement and 14 client rows | `audit/prior-audits/one-product-billing-audit-2026-10-27.md` | 2026-10-27 | Platform + billing | The audit file is the single owner of rows OPB-01 to OPB-45, so they are not duplicated here; this row names the open set. Read in code at `b216b0af12`; nothing was run against Stripe, the app stores or production. OPB-04 is a production data repair of store credit-pack refunds written at four times the grant before the fix. |
 
 ## Models, routing and providers
 
