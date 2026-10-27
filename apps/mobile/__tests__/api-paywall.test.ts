@@ -3,6 +3,7 @@ jest.mock('../services/authSession', () => ({
   getAuthHeaders: jest.fn(),
   refreshAuthSession: jest.fn(),
   clearAuthSession: jest.fn(),
+  hasActiveAuthSession: jest.fn(() => false),
 }));
 
 jest.mock('react-native', () => ({
