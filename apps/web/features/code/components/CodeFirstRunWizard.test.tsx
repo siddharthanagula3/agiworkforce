@@ -29,7 +29,7 @@ describe('CodeFirstRunWizard', () => {
     expect(screen.getByRole('heading', { name: 'Connect GitHub' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Connect GitHub' })).toHaveAttribute(
       'href',
-      '/api/github/install/start',
+      '/api/github/install/start?returnPath=%2Fcode',
     );
   });
 

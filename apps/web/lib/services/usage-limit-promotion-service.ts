@@ -504,7 +504,11 @@ interface AccountGrants {
   claimedUplifts: Map<string, UpliftClaim>;
 }
 
-async function readAccountGrants(db: DatabaseAdapter, userId: string): Promise<AccountGrants> {
+async function readAccountGrants(
+  db: DatabaseAdapter,
+  userId: string,
+  nowMs: number = Date.now(),
+): Promise<AccountGrants> {
   const rows = await db.query<GrantRow>(
     `select g.id, g.promotion_id, p.kind, g.reference_id, g.expires_at, g.applied_at,
             g.committed_microusd
@@ -516,7 +520,6 @@ async function readAccountGrants(db: DatabaseAdapter, userId: string): Promise<A
     [userId, ROLLING_WEEKLY_WINDOW_HOURS],
   );
   const grants: AccountGrants = { available: [], lastResetAt: null, claimedUplifts: new Map() };
-  const nowMs = Date.now();
   for (const row of rows) {
     if (row.kind === 'limit_uplift') {
       if (Date.parse(iso(row.expires_at)) > nowMs) {
@@ -786,7 +789,7 @@ export async function resolvePromotionalCaps(
     const db = connect();
     const [promotions, grants] = await Promise.all([
       readEnabledPromotions(db, nowMs),
-      readAccountGrants(db, input.userId),
+      readAccountGrants(db, input.userId, nowMs),
     ]);
     const uplifts = promotions.filter(
       (promotion): promotion is UpliftPromotion =>
@@ -905,7 +908,7 @@ export async function readSummaryPromotions(
     const db = connect();
     const promotions = await readEnabledPromotions(db, nowMs);
     await ensurePromotionResetGrants(db, input.userId, input.planTier, promotions, nowMs);
-    const grants = await readAccountGrants(db, input.userId);
+    const grants = await readAccountGrants(db, input.userId, nowMs);
     const byId = new Map(promotions.map((promotion) => [promotion.id, promotion]));
     const usable = grants.available.filter((grant) => {
       const promotion = byId.get(grant.promotionId);
