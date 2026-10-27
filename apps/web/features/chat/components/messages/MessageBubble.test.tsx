@@ -21,6 +21,7 @@ import {
 import { useArtifactsStore } from '../../stores/artifacts-store';
 import { useChatStore } from '@shared/stores/web-chat-store';
 import { EXPLICIT_ARTIFACT_DERIVATION_POLICY } from '@agiworkforce/artifacts';
+import { getImageModelLabel } from '../../lib/imageGenerationOptions';
 import { clearWorkbookSheetCache } from '../../lib/office-file-preview';
 type ScanModule0 = typeof import('@agiworkforce/unified-chat');
 
@@ -535,7 +536,10 @@ describe('MessageBubble', () => {
         />,
       );
 
-      expect(screen.getByText('Creating your image')).toHaveAttribute('role', 'status');
+      const imageLabel = getImageModelLabel(IMAGE_MODEL_ID);
+      expect(
+        screen.getByText(imageLabel ? `Generating with ${imageLabel}` : 'Creating your image'),
+      ).toHaveAttribute('role', 'status');
       expect(screen.getByTestId('media-generation-placeholder')).toHaveAttribute(
         'data-category',
         'image',

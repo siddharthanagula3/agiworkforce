@@ -150,27 +150,70 @@ function splitFields(line: string): string[] {
   return line.split('|').map((part) => part.trim());
 }
 
+function isFieldLetter(char: string): boolean {
+  const code = char.charCodeAt(0);
+  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
+}
+
+function fieldKey(line: string): { key: string; value: string } | null {
+  const colon = line.indexOf(':');
+  if (colon < 1 || colon > 25 || line.includes('|')) return null;
+  if (!isFieldLetter(line[0] ?? '')) return null;
+  for (let index = 1; index < colon; index += 1) {
+    const char = line[index] ?? '';
+    if (!isFieldLetter(char) && char !== ' ') return null;
+  }
+  return { key: line.slice(0, colon).toLowerCase(), value: line.slice(colon + 1).trim() };
+}
+
 function fieldMap(source: string): { fields: Map<string, string>; rest: string[] } {
   const fields = new Map<string, string>();
   const rest: string[] = [];
   for (const line of linesOf(source)) {
     const trimmed = line.trim();
     if (!trimmed) continue;
-    const match = /^([A-Za-z][A-Za-z ]{0,24}):\s*(.*)$/.exec(trimmed);
-    if (match && !trimmed.includes('|')) {
-      fields.set(match[1]!.toLowerCase(), match[2]!.trim());
-    } else {
-      rest.push(trimmed);
-    }
+    const field = fieldKey(trimmed);
+    if (field) fields.set(field.key, field.value);
+    else rest.push(trimmed);
   }
   return { fields, rest };
 }
 
+function skipSpaces(line: string, index: number): number {
+  let cursor = index;
+  while (cursor < line.length && (line[cursor] === ' ' || line[cursor] === '\t')) cursor += 1;
+  return cursor;
+}
+
+function isClock(value: string): boolean {
+  const colon = value.indexOf(':');
+  if (colon < 1 || colon > 2 || value.length !== colon + 3) return false;
+  for (let index = 0; index < value.length; index += 1) {
+    if (index === colon) continue;
+    const code = value.charCodeAt(index);
+    if (code < 48 || code > 57) return false;
+  }
+  return true;
+}
+
+function labelledValue(line: string, label: string): string | null {
+  if (line.length <= label.length + 1 || line[label.length] !== ':') return null;
+  if (line.slice(0, label.length).toLowerCase() !== label) return null;
+  return line.slice(label.length + 1).trim();
+}
+
 function checkItems(lines: readonly string[]): CheckItem[] {
   return lines.flatMap((line) => {
-    const match = /^(?:[-*]\s*)?\[( |x|X)\]\s+(.+)$/.exec(line);
-    if (!match?.[2]) return [];
-    return [{ label: match[2].trim(), checked: match[1]!.toLowerCase() === 'x' }];
+    let index = 0;
+    if (line[0] === '-' || line[0] === '*') index = skipSpaces(line, 1);
+    if (line[index] !== '[') return [];
+    const mark = line[index + 1];
+    if ((mark !== ' ' && mark !== 'x' && mark !== 'X') || line[index + 2] !== ']') return [];
+    const labelStart = skipSpaces(line, index + 3);
+    if (labelStart === index + 3) return [];
+    const label = line.slice(labelStart).trim();
+    if (!label) return [];
+    return [{ label, checked: mark.toLowerCase() === 'x' }];
   });
 }
 
@@ -193,14 +236,34 @@ export function parseCards(source: string): TitledBody[] {
   });
 }
 
+function afterBullet(line: string): string | null {
+  if (line[0] !== '-' && line[0] !== '*') return null;
+  const rest = skipSpaces(line, 1);
+  if (rest === 1) return null;
+  const label = line.slice(rest);
+  return label.length > 0 ? label : null;
+}
+
+function radioOption(line: string): { label: string; selected: boolean } | null {
+  if (line[0] === '*') {
+    const label = afterBullet(line);
+    if (label) return { label, selected: true };
+  }
+  const body = afterBullet(line);
+  if (!body) return null;
+  if (body[0] === '*') {
+    const label = afterBullet(body);
+    if (label) return { label, selected: true };
+  }
+  return { label: body, selected: false };
+}
+
 export function parseRadio(source: string): RadioSpec | null {
   const { fields, rest } = fieldMap(source);
   const options = rest.flatMap((line) => {
-    const marked = /^\*\s+(.+)$/.exec(line) ?? /^[-*]\s+\*\s+(.+)$/.exec(line);
-    const plain = /^[-*]\s+(.+)$/.exec(line);
-    const label = (marked?.[1] ?? plain?.[1] ?? '').trim();
-    if (!label) return [];
-    return [{ label, selected: Boolean(marked) }];
+    const option = radioOption(line);
+    if (!option) return [];
+    return [option];
   });
   if (options.length < 2) return null;
   if (!options.some((option) => option.selected)) options[0] = { ...options[0]!, selected: true };
@@ -351,9 +414,12 @@ export function parseFiles(source: string): FileRow[] {
 
 export function parseTranscript(source: string): TranscriptLine[] {
   return trimmedLines(source).flatMap((line) => {
-    const match = /^(\d{1,2}:\d{2})\s*\|\s*([^|]+?)\s*\|\s*(.+)$/.exec(line);
-    if (!match) return [];
-    return [{ time: match[1]!, speaker: match[2]!.trim(), text: match[3]!.trim() }];
+    const parts = splitFields(line);
+    const time = parts[0] ?? '';
+    const speaker = parts[1] ?? '';
+    const text = parts.slice(2).join(' | ');
+    if (!isClock(time) || !speaker || !text) return [];
+    return [{ time, speaker, text }];
   });
 }
 
@@ -417,14 +483,14 @@ export function parseTool(source: string): ToolSpec | null {
       index += 1;
       break;
     }
-    const nameMatch = /^name:\s*(.+)$/i.exec(trimmed);
-    const stateMatch = /^state:\s*(.+)$/i.exec(trimmed);
-    if (nameMatch?.[1]) {
-      name = nameMatch[1].trim();
+    const named = labelledValue(trimmed, 'name');
+    const stated = labelledValue(trimmed, 'state');
+    if (named !== null) {
+      name = named;
       continue;
     }
-    if (stateMatch?.[1]) {
-      state = stateMatch[1].trim().toLowerCase();
+    if (stated !== null) {
+      state = stated.toLowerCase();
       continue;
     }
     break;
