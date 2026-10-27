@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { chatImageModelLabel } from '@/app/api/media/image/lib/image-generation-provider';
 
-import { canonicalToolSummary } from './tool-loop';
+import { canonicalApprovalSummary, canonicalToolSummary } from './tool-loop';
 
 describe('canonicalToolSummary, MCP connectors', () => {
   it('uses a named connector server label', () => {
@@ -60,5 +60,19 @@ describe('canonicalToolSummary, MCP connectors', () => {
     const imageModel = chatImageModelLabel();
     const imageSummary = canonicalToolSummary('generate_image', 'other');
     expect(imageSummary).toBe(imageModel ? `Creating image with ${imageModel}` : 'Creating image');
+  });
+});
+
+describe('canonicalApprovalSummary, the title of a step that waits for approval', () => {
+  it('names a platform tool by its plain label instead of its identifier', () => {
+    expect(canonicalApprovalSummary('url_fetch', 'other')).toBe('Fetch a page');
+    expect(canonicalApprovalSummary('write_file', 'other')).toBe('Write a file');
+  });
+
+  it('keeps the connector wording, and humanizes a tool with no label', () => {
+    expect(canonicalApprovalSummary('mcp__github__create_issue', 'connector')).toBe(
+      'Review GitHub action',
+    );
+    expect(canonicalApprovalSummary('unlisted_tool', 'other')).toBe('Review Unlisted Tool action');
   });
 });
