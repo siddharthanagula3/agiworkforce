@@ -210,7 +210,7 @@ function FencedCodeBlock({ className, language, code, isStreamTail }: FencedCode
           sandbox="allow-scripts"
           srcDoc={code}
           data-html-preview=""
-          className="h-48 w-full border-b border-[var(--chat-code-border)] bg-white"
+          className="h-48 w-full border-b border-[var(--chat-code-border)] bg-[var(--chat-code-bg)]"
         />
       ) : null}
       <div className="code-block-body code-block-body-scroll">

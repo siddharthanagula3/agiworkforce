@@ -16,7 +16,7 @@ export function SvgConceptGallery({ slides }: { slides: readonly string[] }) {
         sandbox=""
         srcDoc={srcDoc}
         title={`Concept ${current + 1} of ${safe.length}`}
-        className="h-64 w-full rounded-lg border border-[var(--chat-border)] bg-[#111318]"
+        className="h-64 w-full rounded-lg border border-[var(--chat-border)] bg-[var(--chat-code-bg)]"
       />
       {safe.length > 1 ? (
         <div className="mt-2 flex items-center justify-between gap-2">

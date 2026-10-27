@@ -131,7 +131,7 @@ export function WritingBlock({
             value={text}
             readOnly={streaming}
             onChange={(event) => setEdited(event.target.value)}
-            className="min-h-28 w-full resize-y bg-transparent text-base leading-[26px] text-[var(--chat-text-primary)] outline-none"
+            className="min-h-28 w-full resize-y bg-transparent text-base leading-[26px] text-[var(--chat-text-primary)] outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[var(--chat-focus-ring)]"
           />
         </label>
       ) : (

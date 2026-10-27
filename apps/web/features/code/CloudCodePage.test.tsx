@@ -2475,8 +2475,8 @@ describe('CloudCodePage', () => {
     const api = createApi({
       create: vi.fn(
         () =>
-          new Promise((resolve) => {
-            release = () => resolve({ session, terminalEntries: [], turns: [] });
+          new Promise<Awaited<ReturnType<CloudCodeApi['create']>>>((resolve) => {
+            release = () => resolve({ session, terminalEntries: [] });
           }),
       ),
     });

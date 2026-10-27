@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Button, useUiTranslation } from '@agiworkforce/ui';
 import { cn } from '../../lib/utils';
 import { useRichBlockCopy } from './RichBlockCard';
@@ -266,7 +266,7 @@ function ChartCard({ chart }: { chart: ChartSurface }) {
         {chart.points.map((point) => (
           <div key={point.label} className="flex h-full min-w-0 flex-1 flex-col justify-end gap-1">
             <div
-              className="w-full rounded-t bg-[var(--chat-info)]"
+              className="w-full rounded-t-[var(--chat-radius-sm)] bg-[var(--chat-info)]"
               style={{ height: `${Math.max(4, (point.value / axis) * 100)}%` }}
               title={`${point.label}: ${point.value}`}
               data-chart-bar={point.label}
@@ -381,7 +381,7 @@ export function AnswerSurface({ language, source }: { language: string; source: 
       <details className={PANEL_CLASS} data-answer-surface="details">
         <summary className="cursor-pointer px-4 py-3 text-sm font-medium">{spec.summary}</summary>
         <p className="border-t border-[var(--chat-border-subtle)] px-4 py-3 text-sm whitespace-pre-wrap">
-          {spec.body}
+          {spec.detail}
         </p>
       </details>
     );

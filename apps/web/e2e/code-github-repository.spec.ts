@@ -183,7 +183,7 @@ async function openPicker(page: Page) {
   return panel;
 }
 
-async function panelFit(page: Page, panel: ReturnType<Page['locator']>) {
+async function panelFit(panel: ReturnType<Page['locator']>) {
   return panel.evaluate((element) => {
     const view = { width: window.innerWidth, height: window.innerHeight };
     const rect = element.getBoundingClientRect();
@@ -385,7 +385,7 @@ test.describe('AGI Code GitHub connection and repository URL', () => {
           document.documentElement.style.colorScheme = theme;
         }, frame.theme);
         const panel = await openPicker(page);
-        const fit = await panelFit(page, panel);
+        const fit = await panelFit(panel);
         const hit = await panel.evaluate((element) => {
           const rect = element.getBoundingClientRect();
           const x = rect.left + rect.width / 2;
@@ -404,7 +404,7 @@ test.describe('AGI Code GitHub connection and repository URL', () => {
             inside: top ? element.contains(top) || top === element : false,
             panelZ: getComputedStyle(element).zIndex,
             wrapperZ: element.parentElement ? getComputedStyle(element.parentElement).zIndex : null,
-            top: describe(top),
+            top: describe(top ?? null),
           };
         });
         expect(fit.inside, `${frame.name} ${status} ${JSON.stringify(fit.rect)}`).toBe(true);
