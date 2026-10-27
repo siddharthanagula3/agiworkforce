@@ -1974,7 +1974,7 @@ describe('ChatComposerNew', () => {
     ).toBeTruthy();
   });
 
-  it('lets the control row wrap instead of painting one control over the next', () => {
+  it('keeps the control row on one line, shrinking the model picker instead of wrapping the send button', () => {
     render(
       <ChatComposerNew
         onSend={vi.fn()}
@@ -1991,7 +1991,8 @@ describe('ChatComposerNew', () => {
 
     const controls = document.querySelector('.chat-composer-controls');
     expect(controls).not.toBeNull();
-    expect(controls).toHaveClass('flex-wrap');
+    expect(controls).toHaveClass('flex-nowrap');
+    expect(controls).not.toHaveClass('flex-wrap');
     expect(controls).toHaveClass('flex-row');
     expect(
       controls?.contains(screen.getByRole('button', { name: /add attachments and tools/i })),

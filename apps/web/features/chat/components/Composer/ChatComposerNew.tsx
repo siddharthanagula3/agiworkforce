@@ -5588,7 +5588,7 @@ const ChatComposerNewComponent = ({
                 after it. The home composer keeps this wrapper as its second row. */}
             <div
               className={cn(
-                'chat-composer-controls min-w-0 flex-row flex-wrap items-center gap-x-1 gap-y-1 sm:gap-x-2',
+                'chat-composer-controls min-w-0 flex-row flex-nowrap items-center gap-x-1 gap-y-1 sm:gap-x-2',
                 composerStacked ? 'flex w-full' : 'contents',
                 mediaControlsWrap && 'max-sm:flex max-sm:w-full max-sm:flex-wrap max-sm:gap-y-1.5',
               )}
