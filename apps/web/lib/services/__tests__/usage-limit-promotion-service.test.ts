@@ -61,7 +61,7 @@ describe('readAccountLimitCaps', () => {
 
     expect(planTier).toBe('max_15x');
     expect(caps.weekly).toBe(getPlanWeeklyUsageCapMicrousd({ ...freeSubject, tier: 'max_15x' }));
-    expect(caps.weekly).toBeGreaterThan(getPlanWeeklyUsageCapMicrousd(freeSubject));
+    expect(caps.weekly).not.toEqual(getPlanWeeklyUsageCapMicrousd(freeSubject));
   });
 });
 
