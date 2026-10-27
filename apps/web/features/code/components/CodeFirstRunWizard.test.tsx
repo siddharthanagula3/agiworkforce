@@ -2,6 +2,7 @@ import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 import { CodeFirstRunWizard } from './CodeFirstRunWizard';
+import { CODE_ROUTES } from '../code-surface';
 
 describe('CodeFirstRunWizard', () => {
   it('walks the three steps in order with a step count', async () => {
@@ -27,10 +28,12 @@ describe('CodeFirstRunWizard', () => {
 
     expect(screen.getByText('Step 3 of 3')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Connect GitHub' })).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Connect GitHub' })).toHaveAttribute(
-      'href',
-      '/api/github/install/start',
+    const connect = new URL(
+      screen.getByRole('link', { name: 'Connect GitHub' }).getAttribute('href') ?? '',
+      'https://agi.test',
     );
+    expect(connect.pathname).toBe(CODE_ROUTES.githubInstall);
+    expect(connect.searchParams.get('returnPath')).toBe(CODE_ROUTES.root);
   });
 
   it('goes back a step, and leaves the setup from the first step', async () => {
