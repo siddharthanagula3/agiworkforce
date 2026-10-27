@@ -142,6 +142,24 @@ describe('GitHub OAuth callback ownership proof', () => {
     expect(mocks.query).not.toHaveBeenCalled();
   });
 
+  it('returns to the code page when that page started the connection', async () => {
+    mocks.cookieValues.set('github_connect_return', '/code');
+
+    const response = await GET(callbackRequest());
+
+    expect(response.headers.get('location')).toBe('http://localhost:3000/code?github=connected');
+    expect(mocks.cookieValues.has('github_connect_return')).toBe(false);
+  });
+
+  it('returns a canceled authorization to the page that started it', async () => {
+    mocks.cookieValues.set('github_connect_return', '/code');
+
+    const response = await GET(callbackRequest(`error=access_denied&state=${OAUTH_STATE}`));
+
+    expect(response.headers.get('location')).toBe('http://localhost:3000/code?github=oauth_denied');
+    expect(mocks.exchangeCode).not.toHaveBeenCalled();
+  });
+
   it('persists only authoritative GitHub metadata after ownership is proven', async () => {
     const response = await GET(callbackRequest());
 

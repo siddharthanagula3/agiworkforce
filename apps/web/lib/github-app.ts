@@ -3,6 +3,10 @@ import { createHmac, timingSafeEqual, randomBytes, createSign } from 'crypto';
 import { z } from 'zod';
 import { loadKeyRing, openEnvelope, sealEnvelope, type KeyRing } from '@/lib/crypto/envelope';
 import { getNeonDb } from '@/lib/server/neon-db';
+import {
+  GitHubInstallationAccessError,
+  gitHubInstallationAccessDenied,
+} from './github-installation-access';
 import { collectGitHubRestPages, findInGitHubRestPages } from './github-rest-pagination';
 
 const SAFE_PATH_SEGMENT = /^[a-zA-Z0-9._-]+$/;
@@ -572,6 +576,9 @@ export async function getInstallationAccessToken(
   );
 
   if (!res.ok) {
+    if (gitHubInstallationAccessDenied(res.status)) {
+      throw new GitHubInstallationAccessError(res.status, 'token');
+    }
     throw new Error(`Failed to get installation token: ${res.status}`);
   }
 
@@ -684,6 +691,9 @@ export async function listInstallationRepositories(
         },
       );
       if (!response.ok) {
+        if (gitHubInstallationAccessDenied(response.status)) {
+          throw new GitHubInstallationAccessError(response.status, 'repositories');
+        }
         throw new Error(`Failed to list GitHub repositories: ${response.status}`);
       }
       const parsed = gitHubInstallationRepositoriesResponseSchema.safeParse(await response.json());

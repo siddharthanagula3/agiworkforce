@@ -46,6 +46,7 @@ export * from './managed-cloud-agent-runs-client';
 export * from './tool-approval-resume';
 export * from './mcp-elicitation';
 export * from './cloud-code-sessions';
+export * from './github-repository-url';
 export * from './cloud-code-handoff';
 export * from './managed-cloud-code-client';
 export * from './cloud-code-transcript';

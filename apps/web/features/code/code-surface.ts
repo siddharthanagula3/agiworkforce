@@ -27,8 +27,14 @@ export const CODE_ROUTES = {
   connectors: '/connectors',
   usage: settingsSectionPath('usage'),
   githubInstall: '/api/github/install/start',
+  githubManageInstallations: 'https://github.com/settings/installations',
   cli: '/cli',
 } as const;
+
+export function githubInstallHref(): string {
+  const params = new URLSearchParams({ returnPath: CODE_ROUTES.root });
+  return `${CODE_ROUTES.githubInstall}?${params.toString()}`;
+}
 
 export const CODE_CLI_SIGN_IN_COMMAND = 'agi login';
 
@@ -266,8 +272,30 @@ export const CODE_COPY = {
   repositoryTruncated: 'More repositories exist. Search to narrow the list.',
   repositoryUnreachablePrefix: 'These installations could not be read:',
   repositoryPrivate: 'Private',
+  repositoryUrlInvalid:
+    'Only public HTTPS GitHub repository URLs in owner/repository form are supported.',
+  repositoryBranchInvalid:
+    'Branch must be a plain git ref: letters, digits, dot, dash, underscore and slash, starting with a letter or digit.',
   repositoryUrlToggle: 'Use a repository URL instead',
   repositoryUrlHide: 'Hide the repository URL',
+  repositoryManageAccess: 'Manage repository access on GitHub',
+  githubUnconfiguredTitle: 'GitHub is not configured',
+  githubUnconfiguredCopy:
+    'This deployment has no GitHub App, so repositories cannot be listed. A public repository URL still works.',
+  githubLinkingUnavailableTitle: 'GitHub account linking is not available',
+  githubLinkingUnavailableCopy:
+    'The GitHub App is configured, but this deployment cannot verify which account it belongs to. A public repository URL still works.',
+  githubAuthorizationPendingTitle: 'Finish connecting GitHub',
+  githubAuthorizationPendingCopy:
+    'GitHub is installed for this account, but authorization has not been confirmed.',
+  githubAuthorizationPendingAction: 'Finish GitHub authorization',
+  githubReauthorizeTitle: 'Reconnect GitHub',
+  githubReauthorizeCopy:
+    'GitHub authorization expired, was revoked, or has to be confirmed again before repositories can be listed.',
+  githubReauthorizeAction: 'Reconnect GitHub',
+  environmentNotReady:
+    'The environment is still being prepared. Run the task again once it is ready.',
+  sessionFailed: 'The environment could not be prepared.',
   firstRunRepositoryHeading: 'Two steps to work in your repository',
   firstRunConnectTitle: 'Connect your GitHub account',
   firstRunConnectCopy: 'Sign in so this surface can see the repositories you can reach.',

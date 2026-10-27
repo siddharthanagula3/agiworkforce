@@ -1,6 +1,7 @@
 import 'server-only';
 
 import { NextRequest, NextResponse } from 'next/server';
+import { CLOUD_CODE_GITHUB_CONNECTION_STATUSES } from '@agiworkforce/cloud-contracts';
 import { planIncludesAgiCode } from '@agiworkforce/types';
 import { withErrorHandler } from '@/lib/error-handler';
 import { createError } from '@/lib/errors';
@@ -44,10 +45,15 @@ interface LinkedInstallation {
   accountLogin: string;
 }
 
+type GitHubConnectionStatus = (typeof CLOUD_CODE_GITHUB_CONNECTION_STATUSES)[number];
+
+type InstallationFailure = 'reauthorize' | 'outage';
+
 interface RepositoryCatalogue {
   repositories: GitHubInstallationRepository[];
   truncated: boolean;
   unreachable: LinkedInstallation[];
+  failures: InstallationFailure[];
 }
 
 function cacheKey(userId: string): string {
@@ -92,11 +98,39 @@ function byFullName(first: GitHubInstallationRepository, second: GitHubInstallat
   return first.fullName.localeCompare(second.fullName);
 }
 
+function installationFailure(err: unknown): InstallationFailure {
+  if (
+    err instanceof Error &&
+    (err.name === 'GitHubInstallationAccessError' ||
+      err.name === 'GitHubInstallationUnverifiedError')
+  ) {
+    return 'reauthorize';
+  }
+  return 'outage';
+}
+
+function repositoryResponse(input: {
+  repositories: GitHubInstallationRepository[];
+  installationCount: number;
+  truncated: boolean;
+  unreachable: LinkedInstallation[];
+  status: GitHubConnectionStatus;
+}) {
+  return NextResponse.json({
+    repositories: input.repositories,
+    installationCount: input.installationCount,
+    truncated: input.truncated,
+    unreachable: input.unreachable,
+    connection: { status: input.status },
+  });
+}
+
 async function loadCatalogue(
   installations: (LinkedInstallation & { verifiedRepositories: string[] | null })[],
 ): Promise<RepositoryCatalogue> {
   const repositories: GitHubInstallationRepository[] = [];
   const unreachable: LinkedInstallation[] = [];
+  const failures: InstallationFailure[] = [];
   let truncated = false;
 
   for (const installation of installations) {
@@ -121,10 +155,11 @@ async function loadCatalogue(
         installationId: installation.installationId,
         accountLogin: installation.accountLogin,
       });
+      failures.push(installationFailure(err));
     }
   }
 
-  return { repositories: repositories.sort(byFullName), truncated, unreachable };
+  return { repositories: repositories.sort(byFullName), truncated, unreachable, failures };
 }
 
 async function handleList(request: NextRequest) {
@@ -142,12 +177,31 @@ async function handleList(request: NextRequest) {
     throw createError.capabilityUnavailable(PLAN_UNAVAILABLE_MESSAGE);
   }
 
-  if (!isGitHubInstallationLinkingAvailable() || !isGitHubAppConfigured()) {
-    return NextResponse.json({
+  if (!isGitHubAppConfigured()) {
+    return repositoryResponse({
       repositories: [],
       installationCount: 0,
       truncated: false,
       unreachable: [],
+      status: 'unconfigured',
+    });
+  }
+
+  if (!isGitHubInstallationLinkingAvailable()) {
+    const linked = await db.query<InstallationRow>(
+      `select installation_id, account_login, verified_repositories
+         from github_installations
+        where user_id = $1
+          and ownership_verified_at is not null
+        order by created_at asc`,
+      [userId],
+    );
+    return repositoryResponse({
+      repositories: [],
+      installationCount: linked.length,
+      truncated: false,
+      unreachable: [],
+      status: 'linking-unavailable',
     });
   }
 
@@ -168,30 +222,54 @@ async function handleList(request: NextRequest) {
     .filter((installation) => Number.isSafeInteger(installation.installationId));
 
   if (installations.length === 0) {
-    return NextResponse.json({
+    const pending = await db.query<{ installation_id: string | number }>(
+      `select installation_id
+         from github_installations
+        where user_id = $1
+          and ownership_verified_at is null
+        limit 1`,
+      [userId],
+    );
+    return repositoryResponse({
       repositories: [],
       installationCount: 0,
       truncated: false,
       unreachable: [],
+      status: pending.length > 0 ? 'authorization-pending' : 'unauthorized',
     });
   }
 
   const cached = await readCachedCatalogue(userId);
-  const catalogue = cached ?? (await loadCatalogue(installations));
-  if (!cached) await writeCachedCatalogue(userId, catalogue);
+  const catalogue = cached
+    ? { ...cached, failures: cached.failures ?? [] }
+    : await loadCatalogue(installations);
+  const everyInstallationFailed =
+    catalogue.repositories.length === 0 && catalogue.unreachable.length === installations.length;
+  if (!cached && !everyInstallationFailed) await writeCachedCatalogue(userId, catalogue);
 
-  if (
-    catalogue.repositories.length === 0 &&
-    catalogue.unreachable.length === installations.length
-  ) {
+  if (everyInstallationFailed) {
+    const authorizationFailed =
+      catalogue.failures.length > 0 &&
+      catalogue.failures.every((failure) => failure === 'reauthorize');
+    if (authorizationFailed) {
+      return repositoryResponse({
+        repositories: [],
+        installationCount: installations.length,
+        truncated: false,
+        unreachable: catalogue.unreachable,
+        status: 'reauthorization-required',
+      });
+    }
     throw createError.serviceUnavailable('GitHub did not answer with your repositories');
   }
 
-  return NextResponse.json({
-    repositories: catalogue.repositories.filter((repository) => matchesSearch(repository, search)),
+  const visible = catalogue.repositories.filter((repository) => matchesSearch(repository, search));
+  return repositoryResponse({
+    repositories: visible,
     installationCount: installations.length,
     truncated: catalogue.truncated,
     unreachable: catalogue.unreachable,
+    status: catalogue.repositories.length === 0 ? 'no-repositories' : 'connected',
   });
 }
 
