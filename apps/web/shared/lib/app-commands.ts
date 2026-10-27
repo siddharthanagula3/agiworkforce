@@ -7,7 +7,15 @@
  * reachable from a native menu item or any other caller. Naming the events in
  * one place is what makes them a contract instead of matching strings.
  */
-export const APP_COMMANDS = ['open-search', 'open-shortcuts', 'open-upgrade'] as const;
+export const APP_COMMANDS = [
+  'open-search',
+  'open-shortcuts',
+  'open-upgrade',
+  'open-find',
+  'go-to-previous-chat',
+  'go-to-next-chat',
+  'new-temporary-chat',
+] as const;
 
 export type AppCommand = (typeof APP_COMMANDS)[number];
 

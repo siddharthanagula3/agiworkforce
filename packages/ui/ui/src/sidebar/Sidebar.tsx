@@ -32,6 +32,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../pri
 import { isMenuPanelOpen, Menu, MenuItem, MenuSeparator } from './Menu';
 import { SessionItem, type SessionItemHandlers } from './SessionItem';
 import { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
+import { newestFirst } from './order';
 import { OPEN_SEARCH_SHORTCUT, TOGGLE_SIDEBAR_SHORTCUT } from './searchShortcut';
 import { resolveProjectIcon, resolveProjectAccentHex, hasKnownProjectIcon } from './project-icons';
 import type {
@@ -259,13 +260,7 @@ export function Sidebar(props: SidebarProps) {
     return base;
   }, [sessions, showArchived, organizeMode, projectListEnabled]);
 
-  const pinned = useMemo(
-    () =>
-      filtered
-        .filter((s) => s.pinned)
-        .sort((a, b) => toSafeDate(b.updatedAt).getTime() - toSafeDate(a.updatedAt).getTime()),
-    [filtered],
-  );
+  const pinned = useMemo(() => filtered.filter((s) => s.pinned).sort(newestFirst), [filtered]);
 
   const grouped = useMemo(() => {
     const groups = new Map<SidebarTemporalGroup, SidebarSession[]>();
@@ -276,9 +271,7 @@ export function Sidebar(props: SidebarProps) {
         if (!groups.has(group)) groups.set(group, []);
         groups.get(group)!.push(s);
       });
-    groups.forEach((arr) =>
-      arr.sort((a, b) => toSafeDate(b.updatedAt).getTime() - toSafeDate(a.updatedAt).getTime()),
-    );
+    groups.forEach((arr) => arr.sort(newestFirst));
     return groups;
   }, [filtered]);
 

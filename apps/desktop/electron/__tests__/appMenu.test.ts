@@ -86,7 +86,7 @@ describe('the application menu', () => {
     const { menu } = template();
     const labels = menu.map((entry) => entry.label ?? entry.role);
 
-    expect(labels).toEqual(expect.arrayContaining(['File', 'Edit', 'View', 'History', 'Window']));
+    expect(labels).toEqual(expect.arrayContaining(['File', 'Edit', 'View', 'Go', 'Window']));
     expect(menu.some((entry) => entry.role === 'help')).toBe(true);
   });
 
@@ -143,17 +143,56 @@ describe('the application menu', () => {
     expect(spies.setZoomLevel).toHaveBeenCalledWith(0);
   });
 
-  it('moves through history from the History menu', () => {
+  it('moves through history from the Go menu', () => {
     const { menu, actions: spies } = template();
 
-    expect(item(menu, 'History', 'Back').accelerator).toBe(contractAccelerator('host-back'));
-    expect(item(menu, 'History', 'Forward').accelerator).toBe(contractAccelerator('host-forward'));
+    expect(item(menu, 'Go', 'Back').accelerator).toBe(contractAccelerator('host-back'));
+    expect(item(menu, 'Go', 'Forward').accelerator).toBe(contractAccelerator('host-forward'));
 
-    (item(menu, 'History', 'Back').click as () => void)();
-    (item(menu, 'History', 'Forward').click as () => void)();
+    (item(menu, 'Go', 'Back').click as () => void)();
+    (item(menu, 'Go', 'Forward').click as () => void)();
 
     expect(spies.goBack).toHaveBeenCalledTimes(1);
     expect(spies.goForward).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks the page for find, search, the chats either side and a temporary chat', () => {
+    const { menu, actions: spies } = template();
+
+    (item(menu, 'Edit', 'Find…').click as () => void)();
+    (item(menu, 'Go', 'Search…').click as () => void)();
+    (item(menu, 'Go', 'Previous Chat').click as () => void)();
+    (item(menu, 'Go', 'Next Chat').click as () => void)();
+    (item(menu, 'File', 'New Temporary Chat').click as () => void)();
+
+    const sent = spies.sendHostCommand.mock.calls.map(([command]) => command);
+    expect(sent).toEqual(['find', 'search', 'previous-chat', 'next-chat', 'new-temporary-chat']);
+    for (const command of sent) expect(HOST_COMMANDS).toContain(command);
+  });
+
+  it('shows the page bindings for find and search without claiming them', () => {
+    const { menu } = template();
+
+    expect(item(menu, 'Edit', 'Find…').accelerator).toBe('CommandOrControl+F');
+    expect(item(menu, 'Edit', 'Find…').registerAccelerator).toBe(false);
+    expect(item(menu, 'Go', 'Search…').accelerator).toBe('CommandOrControl+Shift+F');
+    expect(item(menu, 'Go', 'Search…').registerAccelerator).toBe(false);
+  });
+
+  it('offers find and the chats either side only while the front window is on a conversation', () => {
+    const elsewhere = template({ ...actions(), hasFocusedConversation: vi.fn(() => false) }).menu;
+    const onOne = template().menu;
+
+    for (const [menuLabel, label] of [
+      ['Edit', 'Find…'],
+      ['Go', 'Previous Chat'],
+      ['Go', 'Next Chat'],
+    ] as const) {
+      expect(item(elsewhere, menuLabel, label).enabled, label).toBe(false);
+      expect(item(onOne, menuLabel, label).enabled, label).toBe(true);
+    }
+    expect(item(elsewhere, 'Go', 'Search…').enabled).not.toBe(false);
+    expect(item(elsewhere, 'File', 'New Temporary Chat').enabled).not.toBe(false);
   });
 
   it('keeps the help items wired to something', () => {
@@ -233,8 +272,10 @@ describe('the application menu', () => {
       ['View', 'Actual Size', 'host-actual-size'],
       ['View', 'Zoom In', 'host-zoom-in'],
       ['View', 'Zoom Out', 'host-zoom-out'],
-      ['History', 'Back', 'host-back'],
-      ['History', 'Forward', 'host-forward'],
+      ['Go', 'Back', 'host-back'],
+      ['Go', 'Forward', 'host-forward'],
+      ['Go', 'Previous Chat', 'host-previous-chat'],
+      ['Go', 'Next Chat', 'host-next-chat'],
     ];
 
     for (const [menuLabel, itemLabel, id] of claimed) {

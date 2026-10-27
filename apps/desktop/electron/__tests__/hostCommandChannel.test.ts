@@ -46,7 +46,15 @@ beforeEach(() => {
 
 describe('the host command channel', () => {
   it('names the commands the menu and the page agree on', () => {
-    expect([...HOST_COMMANDS]).toEqual(['toggle-sidebar', 'show-keyboard-shortcuts']);
+    expect([...HOST_COMMANDS]).toEqual([
+      'toggle-sidebar',
+      'show-keyboard-shortcuts',
+      'find',
+      'search',
+      'previous-chat',
+      'next-chat',
+      'new-temporary-chat',
+    ]);
     for (const command of HOST_COMMANDS) {
       expect(isHostCommand(command)).toBe(true);
     }

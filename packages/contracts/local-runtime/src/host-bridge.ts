@@ -75,13 +75,25 @@ export function hostKeepsSignInInWindow(url: URL): boolean {
 /**
  * What a native menu item or a platform shortcut asks the page to do.
  *
- * These are the actions the shell cannot carry out itself: the sidebar and the
- * shortcut sheet are the page's, not the window's. The shell owns the menu, the
- * page owns the behaviour, and this union is the whole of what crosses between
- * them. It is deliberately small; a command the page cannot honour is a dead
- * menu item.
+ * These are the actions the shell cannot carry out itself: the sidebar, the
+ * shortcut sheet, search, the conversation's find and the chat list are the
+ * page's, not the window's. The shell owns the menu, the page owns the
+ * behaviour, and this union is the whole of what crosses between them. It is
+ * deliberately small; a command the page cannot honour is a dead menu item.
+ *
+ * The page deploys on its own schedule, so it must ignore a command it does not
+ * know, and a shell release must not send a command before the page that
+ * answers it is live.
  */
-export const HOST_COMMANDS = ['toggle-sidebar', 'show-keyboard-shortcuts'] as const;
+export const HOST_COMMANDS = [
+  'toggle-sidebar',
+  'show-keyboard-shortcuts',
+  'find',
+  'search',
+  'previous-chat',
+  'next-chat',
+  'new-temporary-chat',
+] as const;
 
 export type HostCommand = (typeof HOST_COMMANDS)[number];
 
@@ -225,6 +237,12 @@ export const HOST_MENU_SHORTCUTS: readonly HostMenuShortcut[] = [
   { id: 'host-close-window', description: 'Close window', accelerator: 'CommandOrControl+W' },
   { id: 'host-back', description: 'Back', accelerator: 'CommandOrControl+[' },
   { id: 'host-forward', description: 'Forward', accelerator: 'CommandOrControl+]' },
+  {
+    id: 'host-previous-chat',
+    description: 'Previous chat',
+    accelerator: 'CommandOrControl+Alt+Up',
+  },
+  { id: 'host-next-chat', description: 'Next chat', accelerator: 'CommandOrControl+Alt+Down' },
   { id: 'host-actual-size', description: 'Actual size', accelerator: 'CommandOrControl+0' },
   { id: 'host-zoom-in', description: 'Zoom in', accelerator: 'CommandOrControl+Plus' },
   { id: 'host-zoom-out', description: 'Zoom out', accelerator: 'CommandOrControl+-' },

@@ -17,6 +17,7 @@ export {
   MENU_PANEL_ATTRIBUTE,
 } from './escape-guard';
 export { getTemporalGroup, TEMPORAL_LABELS, toSafeDate } from './temporal';
+export { adjacentSidebarSessionId, sidebarSessionOrder } from './order';
 export {
   PROJECT_ICON_REGISTRY,
   DEFAULT_PROJECT_ICON_ID,

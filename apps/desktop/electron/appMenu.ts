@@ -63,6 +63,10 @@ export interface AppMenuAccelerators {
  */
 const PAGE_TOGGLE_SIDEBAR_ACCELERATOR = 'CommandOrControl+B';
 const PAGE_KEYBOARD_SHORTCUTS_ACCELERATOR = 'CommandOrControl+/';
+/** `apps/web/features/chat/components/messages/ChatMessageList.tsx` binds find in a conversation. */
+const PAGE_FIND_ACCELERATOR = 'CommandOrControl+F';
+/** `OPEN_SEARCH_SHORTCUT` in `packages/ui/ui/src/sidebar/searchShortcut.ts`. */
+const PAGE_SEARCH_ACCELERATOR = 'CommandOrControl+Shift+F';
 
 /**
  * The chords this menu claims come from the contract, which is also what the
@@ -127,6 +131,10 @@ function fileMenu(
   const items: MenuItemConstructorOptions[] = [
     { label: 'New Chat', accelerator: hostAccelerator('host-new-chat'), click: actions.newChat },
     {
+      label: 'New Temporary Chat',
+      click: () => actions.sendHostCommand('new-temporary-chat'),
+    },
+    {
       label: 'Quick Ask',
       accelerator: accelerators.quickAsk,
       registerAccelerator: false,
@@ -178,7 +186,7 @@ function fileMenu(
   return { label: 'File', submenu: items };
 }
 
-function editMenu(): MenuItemConstructorOptions {
+function editMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   const items: MenuItemConstructorOptions[] = [
     { role: 'undo' },
     { role: 'redo' },
@@ -191,6 +199,18 @@ function editMenu(): MenuItemConstructorOptions {
   if (isMac) {
     items.splice(6, 0, { role: 'pasteAndMatchStyle' }, { role: 'delete' });
   }
+  // Find searches the conversation on screen, so it is unavailable, not hidden,
+  // anywhere else.
+  items.push(
+    { type: 'separator' },
+    {
+      label: 'Find…',
+      accelerator: PAGE_FIND_ACCELERATOR,
+      registerAccelerator: false,
+      enabled: actions.hasFocusedConversation(),
+      click: () => actions.sendHostCommand('find'),
+    },
+  );
   return { label: 'Edit', submenu: items };
 }
 
@@ -228,12 +248,35 @@ function viewMenu(actions: AppMenuActions): MenuItemConstructorOptions {
   return { label: 'View', submenu: items };
 }
 
-function historyMenu(actions: AppMenuActions): MenuItemConstructorOptions {
+function goMenu(actions: AppMenuActions): MenuItemConstructorOptions {
+  // Previous and Next Chat move through the chats in the order the sidebar
+  // lists them, from the one on screen, so they wait for a conversation.
+  const onConversation = actions.hasFocusedConversation();
   return {
-    label: 'History',
+    label: 'Go',
     submenu: [
       { label: 'Back', accelerator: hostAccelerator('host-back'), click: actions.goBack },
       { label: 'Forward', accelerator: hostAccelerator('host-forward'), click: actions.goForward },
+      { type: 'separator' },
+      {
+        label: 'Previous Chat',
+        accelerator: hostAccelerator('host-previous-chat'),
+        enabled: onConversation,
+        click: () => actions.sendHostCommand('previous-chat'),
+      },
+      {
+        label: 'Next Chat',
+        accelerator: hostAccelerator('host-next-chat'),
+        enabled: onConversation,
+        click: () => actions.sendHostCommand('next-chat'),
+      },
+      { type: 'separator' },
+      {
+        label: 'Search…',
+        accelerator: PAGE_SEARCH_ACCELERATOR,
+        registerAccelerator: false,
+        click: () => actions.sendHostCommand('search'),
+      },
     ],
   };
 }
@@ -314,9 +357,9 @@ export function appMenuTemplate(
   return [
     ...appleMenu(actions),
     fileMenu(actions, accelerators, computerUse),
-    editMenu(),
+    editMenu(actions),
     viewMenu(actions),
-    historyMenu(actions),
+    goMenu(actions),
     windowMenu(actions),
     helpMenu(actions),
   ];
