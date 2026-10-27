@@ -1,3 +1,6 @@
+import { createRequire } from 'node:module';
+import { realpathSync } from 'node:fs';
+import path from 'node:path';
 import { describe, it, expect, afterEach, beforeAll } from 'vitest';
 import { render, screen, cleanup } from '@testing-library/react';
 import i18next from 'i18next';
@@ -46,6 +49,15 @@ const sidebarProps = {
 
 describe('shared UI i18n', () => {
   beforeAll(initializeFrenchHost);
+
+  it('reads the same i18next module the host initializes', () => {
+    const fromHost = createRequire(
+      path.join(process.cwd(), 'src/components/__tests__/SharedUiI18n.test.tsx'),
+    ).resolve('i18next');
+    const fromUi = createRequire(path.join(process.cwd(), '../ui/src/i18n.ts')).resolve('i18next');
+
+    expect(realpathSync(fromHost)).toBe(realpathSync(fromUi));
+  });
 
   it('renders the host locale in @agiworkforce/ui components', async () => {
     await i18next.changeLanguage('fr');
