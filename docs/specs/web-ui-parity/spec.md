@@ -17,7 +17,7 @@ citation card, execution-status rows, a checklist with progress, Reset and Copy,
 "Request Python execution" button and a radio decision. Evidence: the owner's screenshots of
 chatgpt.com, 2026-10-27 (observed).
 
-On the same prompt our chat (Claude Sonnet 5.5, prompt chat.system@6) said it could only
+On the same prompt our chat (an Anthropic model, prompt chat.system@6) said it could only
 show Markdown, imitated controls and charts in text, put the email in a `text` code block,
 garbled every formula, and cut its HTML artifact off before it finished.
 
@@ -95,14 +95,14 @@ chat.system@15 = chat.system@14 plus: an `inline_blocks` section that lists ever
 with its syntax and says when to use inline blocks versus an artifact, and one
 `refusal_style` sentence that a fictional, hypothetical or role-play frame never unlocks a
 request the assistant would decline (chat.system@7 to @14 fail the fiction-frame jailbreak
-row on GPT-6 Luna in 3 of 3 runs). Surfaces that cannot render a block are not told about it.
+row on the OpenAI eval model in 3 of 3 runs). Surfaces that cannot render a block are not told about it.
 
 ## Verification
 
 - Unit tests for every parser and renderer; eval replay with the chat-prompt corpus.
-- GPT-6 Luna live runs of chat.system@15 against chat.system@6 (golden, refusal, jailbreak,
+- Live runs on the OpenAI eval model of chat.system@15 against chat.system@6 (golden, refusal, jailbreak,
   chat, chat-prompt), three samples each; no Anthropic model is used for evals.
-- Visual check on the local web app: the gallery prompt on GPT-6 Luna, each section compared
+- Visual check on the local web app: the gallery prompt on the OpenAI eval model, each section compared
   with the ChatGPT reference.
 
 ## Out of scope for this change

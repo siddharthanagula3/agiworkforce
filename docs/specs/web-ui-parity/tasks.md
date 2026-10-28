@@ -6,7 +6,7 @@ Last updated: 2026-10-27
 
 The order to work in, from the owner's reports of 2026-10-27. Each task lands with tests and,
 for anything visible, a check in the local web app at desktop, narrow-panel and phone widths
-(390, 360 and 320 px). Evals run on GPT-6 Luna only: the owner does not want Anthropic models
+(390, 360 and 320 px). Evals run on an OpenAI model only: the owner does not want Anthropic models
 used for tests. See `spec.md` for the design and `contracts/rendering-elements.md` for every
 element.
 
@@ -24,10 +24,15 @@ element.
 
 ## 2. Tool misuse and rendering choice
 
-- [ ] 2.1 The server forces a web search when "latest", "today", a current year and similar
-      words appear anywhere in a message, including pasted material and requests to rewrite,
-      echo or translate it. Read only the user's request, and never force search for a
-      transformation request; explicit search and source requests still force it.
+- [x] 2.0 Rendering fixes found on the way: math keeps KaTeX's layout styles; links are
+      underlined with an arrow when they open a new tab; a one-line fence is a code block;
+      a chart fence written as a full definition is plotted; gallery images pass the image
+      trust gate.
+- [x] 2.1 The server forced a web search when "latest", "today", a current year and similar
+      words appeared anywhere in a message, including pasted material and requests to
+      rewrite, echo or translate it. A long message is read only in its first and last
+      paragraphs, where only an explicit ask for a search or sources forces one; a request to
+      write, rewrite, echo or translate never forces one on hints. The tool stays offered.
 - [ ] 2.2 Document every rendering element: what ChatGPT shows, what we render, the exact
       syntax, behavior and surfaces (`contracts/rendering-elements.md`), and record the
       observed ChatGPT elements in `docs/research/competitor-surfaces-2026-10-24.md`.
@@ -38,7 +43,7 @@ element.
       that send; citation "Visit host" link; tags.
 - [ ] 2.4 chat.system@15: chat.system@14 plus the full element catalog and when to use inline
       versus an artifact, and a refusal rule for fiction and role-play frames. Eval against
-      chat.system@6 on GPT-6 Luna, three samples; move the pin only if refusal and jailbreak
+      chat.system@6 on the OpenAI eval model, three samples; move the pin only if refusal and jailbreak
       hold.
 
 ## 3. Every screen on a phone
