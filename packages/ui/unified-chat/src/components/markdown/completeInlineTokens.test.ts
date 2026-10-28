@@ -10,6 +10,12 @@ describe('completeInlineTokens, closes what the tail has left open', () => {
     readonly repaired: string;
   }> = [
     { name: 'unterminated strong', tail: 'A **bold clai', repaired: 'A **bold clai**' },
+    {
+      name: 'strong opened with nothing after it yet',
+      tail: 'Siddhartha, **',
+      repaired: 'Siddhartha, ',
+    },
+    { name: 'strong opened at the end of a line', tail: 'Intro\n**  ', repaired: 'Intro\n' },
     { name: 'unterminated inline code', tail: 'Call `render', repaired: 'Call `render`' },
     {
       name: 'unterminated double-backtick span',

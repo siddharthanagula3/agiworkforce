@@ -32,6 +32,7 @@ import {
   type StatusRow,
 } from './answerSurfaces';
 import { useFollowUpAction } from './FollowUpAction';
+import { GatedImage } from './imageTrust';
 
 const PANEL_CLASS =
   'my-4 overflow-clip rounded-[var(--chat-radius-lg)] border border-[var(--chat-border)] bg-[var(--chat-bg)]';
@@ -172,7 +173,7 @@ function Gallery({ items }: { items: GalleryItem[] }) {
                 style={{ backgroundColor: item.color }}
               />
             ) : (
-              <img
+              <GatedImage
                 src={item.src}
                 alt={item.caption}
                 className="aspect-video w-full rounded-lg object-cover"

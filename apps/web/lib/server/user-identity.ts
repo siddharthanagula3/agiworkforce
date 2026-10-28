@@ -173,7 +173,11 @@ export function formatPersonalizationBlock(input: PersonalizationInput): string 
 
   if (preferredName || workDescription || aboutYou) {
     lines.push('<user_profile>');
-    if (preferredName) lines.push(`Address the user as: ${normalizeDisplayName(preferredName)}`);
+    if (preferredName) {
+      lines.push(
+        `The user's preferred name is ${normalizeDisplayName(preferredName)}. Use it sparingly, and never to open a reply.`,
+      );
+    }
     if (workDescription) lines.push(`The user describes their work as: ${workDescription}`);
     if (aboutYou) lines.push(`More about the user, in their words: ${aboutYou}`);
     lines.push('</user_profile>');

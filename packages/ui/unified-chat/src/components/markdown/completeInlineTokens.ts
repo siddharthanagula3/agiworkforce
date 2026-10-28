@@ -119,12 +119,16 @@ function linkDestinationIsOpen(text: string): boolean {
   return label === 0 || text[label - 1] !== IMAGE_MARKER;
 }
 
+const DANGLING_STRONG = /\*\*\s*$/;
+
 export function completeInlineTokens(tail: string): string {
   const { text, openCodeRun } = stripCodeSpans(proseOutsideCodeBlocks(tail));
+  const strongOpen = strongIsOpen(text);
+  const strongDangles = strongOpen && openCodeRun === 0 && DANGLING_STRONG.test(tail);
 
-  let repaired = tail;
+  let repaired = strongDangles ? tail.replace(DANGLING_STRONG, '') : tail;
   if (openCodeRun > 0) repaired += BACKTICK.repeat(openCodeRun);
   if (linkDestinationIsOpen(text)) repaired += LINK_DESTINATION_CLOSE;
-  if (strongIsOpen(text)) repaired += STRONG_MARKER;
+  if (strongOpen && !strongDangles) repaired += STRONG_MARKER;
   return repaired;
 }

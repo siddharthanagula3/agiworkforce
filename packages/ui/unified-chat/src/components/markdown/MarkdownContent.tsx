@@ -41,16 +41,14 @@ import {
 import { CitationChip, CitationsContext, useMarkdownCitations } from './CitationChip';
 import type { CitationItem, MarkdownCitation } from './CitationChip';
 import type { Components } from 'react-markdown';
-import { Check, Image as ImageIcon, ImageOff } from 'lucide-react';
+import { ArrowUpRight, Check, Image as ImageIcon, ImageOff } from 'lucide-react';
 import 'katex/dist/katex.min.css';
+import { approvedImageKeys, NO_TRUSTED_IMAGES, TrustedImagesContext } from './imageTrust';
 
 const IMAGE_LOADING_PLACEHOLDER_CLASS = 'aspect-[4/3] w-full max-w-sm';
 const IMAGE_NOTICE_CLASS =
   'my-2 inline-flex max-w-full items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground';
-const NO_TRUSTED_IMAGES: ReadonlySet<string> = new Set();
-const TrustedImagesContext = createContext<ReadonlySet<string>>(NO_TRUSTED_IMAGES);
 const LinkContentContext = createContext(false);
-const approvedImageKeys = new Set<string>();
 
 const IMAGE_MAX_RETRIES = 2;
 
@@ -384,10 +382,17 @@ const MarkdownLink = ({
     <a
       href={samePage && footnoteLink ? sanitizedFragmentHref(cleanHref) : cleanHref}
       id={id}
-      className="wrap-anywhere text-primary hover:underline"
+      className="wrap-anywhere text-primary underline decoration-[color-mix(in_srgb,currentColor_40%,transparent)] underline-offset-[3px] hover:decoration-current"
       {...(samePage ? {} : { target: '_blank', rel: 'noopener noreferrer' })}
     >
       <LinkContentContext.Provider value={true}>{children}</LinkContentContext.Provider>
+      {samePage ? null : (
+        <ArrowUpRight
+          className="ms-0.5 inline h-3.5 w-3.5 align-[-0.125em]"
+          aria-hidden="true"
+          data-external-link-icon=""
+        />
+      )}
     </a>
   );
 };
@@ -579,11 +584,11 @@ interface HastNode {
   children?: readonly HastNode[];
 }
 
-function hasMultilineFenceBody(node: HastNode | undefined): boolean {
+function hasFenceBody(node: HastNode | undefined): boolean {
   const code = node?.children?.find((child) => child.type === 'element');
   if (code?.tagName !== 'code') return false;
   const text = (code.children ?? []).map((child) => child.value ?? '').join('');
-  return text.replace(TRAILING_NEWLINE_PATTERN, '').includes('\n');
+  return text.replace(TRAILING_NEWLINE_PATTERN, '').trim().length > 0;
 }
 
 function fenceLanguage(node: HastNode | undefined): string {
@@ -651,7 +656,7 @@ const MarkdownPre = ({
   if (classified.kind === 'fallback') {
     return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
   }
-  if (language === '' && hasMultilineFenceBody(node)) {
+  if (language === '' && hasFenceBody(node)) {
     return (
       <pre {...rest}>
         <CodeBlock className="language-text">{children}</CodeBlock>
@@ -673,7 +678,7 @@ const markdownComponents: Components = {
   ol: MarkdownOrderedList as Components['ol'],
   li: MarkdownListItem as Components['li'],
   input: MarkdownTaskCheckbox as Components['input'],
-  span: ({ className, children }) => {
+  span: ({ node: _node, className, children, ...rest }) => {
     const names = Array.isArray(className)
       ? className
       : typeof className === 'string'
@@ -690,7 +695,11 @@ const markdownComponents: Components = {
       );
     }
     const classText = Array.isArray(className) ? className.join(' ') : className;
-    return <span className={classText}>{children}</span>;
+    return (
+      <span {...rest} className={classText}>
+        {children}
+      </span>
+    );
   },
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-s-2 border-border ps-4 text-muted-foreground [&>:last-child]:mb-0">
@@ -826,9 +835,6 @@ function MarkdownContentImpl({
               </Tooltip.Provider>
             </TrustedImagesContext.Provider>
           </CitationsContext.Provider>
-          {isStreaming && content.trim() && (
-            <span className="ms-1 inline-block h-4 w-0.5 animate-pulse bg-primary" />
-          )}
         </StreamTailContext.Provider>
       </TaskToggleContext.Provider>
     </FollowUpActionProvider>

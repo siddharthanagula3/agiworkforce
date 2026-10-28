@@ -420,6 +420,7 @@ import {
 } from '@/lib/services/product-comparison-tool-service';
 import { executeImageChatTool, latestTurnImage } from '@/app/api/media/image/lib/image-chat-tools';
 import { chatImageModelLabel } from '@/app/api/media/image/lib/image-generation-provider';
+import { toolApprovalLabel } from '@/lib/tool-copy';
 import { bindMcpTask, saveMcpAppPayload } from '@/lib/connectors/mcp-state-store';
 import {
   FREE_MODEL_PROMOTION_LIMIT_CODE,
@@ -967,7 +968,7 @@ export function canonicalToolSummary(
   return phrase ?? `Running ${humanizeIdentifier(toolName)}`;
 }
 
-function canonicalApprovalSummary(
+export function canonicalApprovalSummary(
   toolName: string,
   category: AgentEventToolCategory,
   serverLabel?: string,
@@ -975,7 +976,7 @@ function canonicalApprovalSummary(
   const server = serverLabel ?? mcpServerLabel(toolName);
   if (category === 'connector') return `Review ${server ?? 'connector'} action`;
   if (category === 'mcp') return `Review ${server ?? 'MCP'} action`;
-  return `Review ${humanizeIdentifier(toolName)} action`;
+  return toolApprovalLabel(toolName) ?? `Review ${humanizeIdentifier(toolName)} action`;
 }
 
 function egressApprovalSummary(

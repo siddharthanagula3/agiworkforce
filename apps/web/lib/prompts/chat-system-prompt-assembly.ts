@@ -169,6 +169,7 @@ export function assembleChatSystemPrompt(
         reactMarker: state.artifactMarkers.react,
         mermaidMarker: state.artifactMarkers.mermaid,
       }),
+      section('inline_blocks'),
     );
   }
   if (state.artifactRuntime !== false) {

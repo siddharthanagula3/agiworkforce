@@ -26,12 +26,20 @@ import {
   type ToolState,
 } from './answerSurfaces';
 import { emailPlainText, parseEmailBlock, WRITING_KIND_LANGUAGES } from './richBlocks';
+import { parseChartArtifact } from '@agiworkforce/types/chart-spec';
 
 export { checklistProgress };
 
 export const UNKNOWN_STRUCTURED_LANGUAGE = 'unknown';
 
 const SAFE_LINK = /^(?:https?:|mailto:)/i;
+
+interface ChartSurfaceFields {
+  title: string;
+  xLabel: string;
+  yLabel: string;
+  points: { label: string; value: number }[];
+}
 
 export type AssistantFence =
   | { kind: 'code'; language: string; text: string }
@@ -55,13 +63,7 @@ export type AssistantFence =
     }
   | { kind: 'cards'; cards: { title: string; body: string }[] }
   | { kind: 'checklist'; title: string; items: CheckItem[]; progress: string }
-  | {
-      kind: 'chart';
-      title: string;
-      xLabel: string;
-      yLabel: string;
-      points: { label: string; value: number }[];
-    }
+  | ({ kind: 'chart' } & ChartSurfaceFields)
   | { kind: 'citation'; title: string; source: string; href: string; summary: string }
   | { kind: 'status'; rows: { label: string; state: StatusRow['state']; name: string }[] }
   | { kind: 'followups'; items: string[] }
@@ -84,6 +86,32 @@ export type AssistantFence =
       output: string;
       copyText: string;
     };
+
+/**
+ * A chart fence written as a full chart definition, with its own label and series keys, which
+ * the web renderer plots with every series; surfaces that draw one series show the first.
+ */
+function chartFromSpec(source: string): ChartSurfaceFields | null {
+  const parsed = parseChartArtifact(source);
+  if (!parsed.ok) return null;
+  const { spec } = parsed;
+  const series = spec.series[0];
+  if (!series) return null;
+  const points = spec.rows.flatMap((row) => {
+    const value = row[series.dataKey];
+    const label = row[spec.xKey];
+    return typeof value === 'number' && label !== undefined && label !== null
+      ? [{ label: String(label), value }]
+      : [];
+  });
+  if (points.length === 0) return null;
+  return {
+    title: spec.title ?? '',
+    xLabel: spec.xLabel ?? spec.xKey,
+    yLabel: spec.yLabel ?? series.name ?? series.dataKey,
+    points,
+  };
+}
 
 function fallback(reason: 'invalid' | 'unknown', language: string, source: string): AssistantFence {
   return { kind: 'fallback', reason, language, text: source.trim() };
@@ -139,7 +167,7 @@ export function classifyAssistantFence(language: string, source: string): Assist
     };
   }
   if (normalized === 'chart') {
-    const chart = parseChartSurface(source);
+    const chart = parseChartSurface(source) ?? chartFromSpec(source);
     if (!chart) return fallback('invalid', normalized, source);
     return { kind: 'chart', ...chart };
   }

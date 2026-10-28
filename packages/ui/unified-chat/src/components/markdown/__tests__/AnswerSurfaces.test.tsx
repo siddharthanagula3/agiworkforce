@@ -316,3 +316,81 @@ describe('answer surfaces', () => {
     expect(container.querySelector('.katex')).not.toBeNull();
   });
 });
+
+describe('answer blocks this round adds or repairs', () => {
+  it('asks before loading a gallery image from a host this turn did not return', () => {
+    const { container } = render(
+      <MarkdownContent
+        content={fence('gallery', 'Dashboard | https://images.example.net/dash.png')}
+      />,
+    );
+
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('[data-image-state="blocked"]')?.textContent).toContain(
+      'images.example.net',
+    );
+    fireEvent.click(screen.getByRole('button', { name: /load image from images\.example\.net/i }));
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      'https://images.example.net/dash.png',
+    );
+  });
+
+  it('loads a gallery image this turn returned without asking', () => {
+    const { container } = render(
+      <MarkdownContent
+        content={fence('gallery', 'Chart | https://cdn.example.org/chart.png')}
+        trustedImageUrls={['https://cdn.example.org/chart.png']}
+      />,
+    );
+
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      'https://cdn.example.org/chart.png',
+    );
+  });
+
+  it('plots a chart fence written as a full definition instead of printing its JSON', () => {
+    const spec = JSON.stringify({
+      type: 'line',
+      title: 'Latency over time',
+      xKey: 'day',
+      data: [
+        { day: 'Mon', ms: 340 },
+        { day: 'Tue', ms: 300 },
+      ],
+    });
+    const { container } = render(<MarkdownContent content={fence('chart', spec)} />);
+
+    expect(container.querySelector('[data-answer-fallback]')).toBeNull();
+    expect(
+      container.querySelector('[data-testid="chart-artifact"]')?.getAttribute('data-chart-kind'),
+    ).toBe('line');
+  });
+
+  it('draws a one-line fence with no language as a code block that can wrap, not an inline chip', () => {
+    const { container } = render(
+      <MarkdownContent
+        content={'Before\n\n```\nprint(calculate_metrics(scores))\n```\n\nAfter `x = 1` inline.'}
+      />,
+    );
+
+    expect(container.querySelector('.code-block-container')).not.toBeNull();
+    expect(container.querySelector('.code-block-container')?.textContent).toContain(
+      'print(calculate_metrics(scores))',
+    );
+    expect(container.querySelectorAll('.code-block-container')).toHaveLength(1);
+  });
+
+  it('underlines a link and marks one that opens elsewhere', () => {
+    const { container } = render(
+      <MarkdownContent
+        content={'[OpenAI](https://openai.com?utm_source=chatgpt.com) and [notes](#notes).'}
+      />,
+    );
+    const [external, local] = Array.from(container.querySelectorAll('a'));
+
+    expect(external?.getAttribute('href')).toBe('https://openai.com/');
+    expect(external?.className).toContain('underline');
+    expect(external?.querySelector('[data-external-link-icon]')).not.toBeNull();
+    expect(local?.querySelector('[data-external-link-icon]')).toBeNull();
+  });
+});

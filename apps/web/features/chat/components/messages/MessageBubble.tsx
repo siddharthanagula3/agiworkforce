@@ -81,6 +81,7 @@ import { MessageContextChips } from './MessageContextChips';
 import { toast } from 'sonner';
 import { WEB_RESPONSE_RATING_MESSAGE } from '@/app/api/feedback/response-rating-contract';
 import { addCsrfHeaders } from '@/lib/client/csrf';
+import { toolApprovalLabel } from '@/lib/tool-copy';
 import { toUserMessage } from '@/lib/user-error-message';
 import { useProjectAnswerSave } from '@/features/projects/components/project-answer-save';
 import {
@@ -977,7 +978,7 @@ const MessageBubbleComponent = function MessageBubble({
       return (
         <ToolApprovalCard
           toolCallId={toolCallId}
-          label={described?.label ?? tool.name}
+          label={described?.label ?? toolApprovalLabel(tool.name) ?? tool.name}
           connectorName={described?.serverLabel}
           toolLabel={described?.toolLabel}
           parameters={tool.parameters}

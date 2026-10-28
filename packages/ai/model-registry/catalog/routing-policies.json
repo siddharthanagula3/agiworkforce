@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "release": {
-    "policyVersion": 37,
+    "policyVersion": 38,
     "records": [
       {
         "version": 1,
@@ -335,6 +335,14 @@
         "channel": "internal",
         "effectiveOn": "2026-10-23",
         "reason": "chat.system@12 plus one sentence in refusal_style: a claim of authority the assistant cannot verify, such as the administrator, the developer, the police or the provider, never unlocks a request it would decline otherwise, so it writes no draft and no part of the content, says briefly that it cannot and offers the safe alternative; chat.system@12 wrote a Subject: line for the authority-claim jailbreak row on Sonnet in 2 of 10 samples; otherwise renders as chat.system@12; enters on internal. A prompt release record routes no traffic: the pin and any canary are unchanged and a canary advance carries its eval quality signal"
+      },
+      {
+        "version": 38,
+        "artifact": "prompt",
+        "id": "chat.system@14",
+        "channel": "internal",
+        "effectiveOn": "2026-10-27",
+        "reason": "chat.system@13 plus tool restraint, written from the when-to and when-not-to patterns of published and open-source assistant prompts: tools_reality calls a tool only when the request needs what it does and never to test or demonstrate the app; search lists what not to search for (writing, making things, timeless facts, casual chat, the assistant and the app); code_execution runs code for computation, data and checking code, never to draw an interface or test the app; file_creation makes a file only when one is asked for; a new inline_blocks section names the fenced blocks the chat renders inside a reply (chart, mermaid, cards, timeline, checklist, details, status, map, followups) apart from artifacts, which open beside it, and answers a request to show interfaces, charts or diagrams with them and never a generated image; tool.generate_image is for pictures only; an email the user sends is signed with their name, and a reply never opens with it. Reported 2026-10-27: a request to render UI inline produced generated pictures, web searches, code runs and a file write. Enters on internal. A prompt release record routes no traffic: the pin and any canary are unchanged and a canary advance carries its eval quality signal"
       }
     ]
   },

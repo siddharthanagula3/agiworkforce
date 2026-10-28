@@ -893,6 +893,100 @@
       "response": {
         "text": "```writing\nSenior data analyst in Austin with six years in logistics and retail analytics. I turn messy operational data into forecasts and dashboards that help teams stock smarter and decide faster.\n```\n\nWant a shorter version for the headline?"
       }
+    },
+    "chat-prompt/render-ui-inline-renders-live": {
+      "fingerprint": "0a739433a1d6ba73598911528e2cc74964ae5238818d441c33e8dc16f7b75f34",
+      "response": {
+        "text": "Here are a few interface patterns as one live preview you can click through:\n\n```html\n<!-- @artifact -->\n<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Interface gallery</title>\n<style>\nbody{font-family:system-ui,sans-serif;margin:24px;color:#1f2328}\nsection{border:1px solid #d0d7de;border-radius:12px;padding:16px;margin-bottom:16px}\n.tabs button{padding:6px 12px;border:1px solid #d0d7de;background:#fff;border-radius:8px;cursor:pointer}\n.tabs button[aria-selected=true]{background:#1f2328;color:#fff}\n.bar{height:14px;background:#0969da;border-radius:4px;margin:4px 0}\n</style>\n</head>\n<body>\n<section><h2>Tabs</h2><div class=\"tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\">Overview</button> <button role=\"tab\" aria-selected=\"false\">Details</button></div></section>\n<section><h2>Form</h2><label>Email <input type=\"email\" placeholder=\"you@example.com\"></label> <button>Subscribe</button></section>\n<section><h2>Chart</h2><div class=\"bar\" style=\"width:80%\"></div><div class=\"bar\" style=\"width:55%\"></div><div class=\"bar\" style=\"width:30%\"></div></section>\n<script>\ndocument.querySelectorAll('[role=tab]').forEach((tab) => tab.addEventListener('click', () => {\n  document.querySelectorAll('[role=tab]').forEach((other) => other.setAttribute('aria-selected', String(other === tab)));\n}));\n</script>\n</body>\n</html>\n```"
+      }
+    },
+    "chat-prompt/rendering-gallery-uses-no-tools": {
+      "fingerprint": "949f930e4d9e16e1c0af6296c282eac3e6dee77d89aca24d700972ddf03caf8b",
+      "response": {
+        "text": "Here is the gallery: formatted content in the reply, and the interactive parts as a live preview.\n\n| Format | Shown as |\n| --- | --- |\n| Table | This table |\n| Code | The block below |\n| Math | $E = mc^2$ |\n\n```python\ndef greet(name):\n    return f\"Hello, {name}\"\n```\n\n```html\n<!-- @artifact -->\n<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Interface gallery</title>\n<style>\nbody{font-family:system-ui,sans-serif;margin:24px;color:#1f2328}\nsection{border:1px solid #d0d7de;border-radius:12px;padding:16px;margin-bottom:16px}\n.tabs button{padding:6px 12px;border:1px solid #d0d7de;background:#fff;border-radius:8px;cursor:pointer}\n.tabs button[aria-selected=true]{background:#1f2328;color:#fff}\n.bar{height:14px;background:#0969da;border-radius:4px;margin:4px 0}\n</style>\n</head>\n<body>\n<section><h2>Tabs</h2><div class=\"tabs\" role=\"tablist\"><button role=\"tab\" aria-selected=\"true\">Overview</button> <button role=\"tab\" aria-selected=\"false\">Details</button></div></section>\n<section><h2>Form</h2><label>Email <input type=\"email\" placeholder=\"you@example.com\"></label> <button>Subscribe</button></section>\n<section><h2>Chart</h2><div class=\"bar\" style=\"width:80%\"></div><div class=\"bar\" style=\"width:55%\"></div><div class=\"bar\" style=\"width:30%\"></div></section>\n<script>\ndocument.querySelectorAll('[role=tab]').forEach((tab) => tab.addEventListener('click', () => {\n  document.querySelectorAll('[role=tab]').forEach((other) => other.setAttribute('aria-selected', String(other === tab)));\n}));\n</script>\n</body>\n</html>\n```"
+      }
+    },
+    "chat-prompt/what-this-chat-can-render": {
+      "fingerprint": "283cc37596380b0f9daaf261274bcc95972b38febc3c9044ca59963de08f9493",
+      "response": {
+        "text": "In the reply I can write formatted text, tables, code and math. Interactive pages, small tools, charts and diagrams open as live previews in the Artifacts panel. Here is a chart as an example:\n\n```html\n<!-- @artifact -->\n<!doctype html>\n<html lang=\"en\">\n<head>\n<meta charset=\"utf-8\">\n<title>Weekly signups</title>\n<style>body{font-family:system-ui,sans-serif;margin:24px}rect{fill:#0969da}</style>\n</head>\n<body>\n<h2>Weekly signups</h2>\n<svg width=\"320\" height=\"160\" role=\"img\" aria-label=\"Bar chart of weekly signups\">\n<rect x=\"10\" y=\"60\" width=\"50\" height=\"100\"></rect><rect x=\"80\" y=\"30\" width=\"50\" height=\"130\"></rect><rect x=\"150\" y=\"90\" width=\"50\" height=\"70\"></rect><rect x=\"220\" y=\"10\" width=\"50\" height=\"150\"></rect>\n</svg>\n</body>\n</html>\n```"
+      }
+    },
+    "chat-prompt/test-wording-runs-no-code": {
+      "fingerprint": "f2c6a7caf565804aa4aa445846c68b338bcf590326db9e55b1d939d6964a7b2d",
+      "response": {
+        "text": "| Algorithm | Time (average / worst) | Extra memory | Use it when |\n| --- | --- | --- | --- |\n| Bubble sort | O(n²) / O(n²) | O(1) | Teaching, or tiny lists that are almost sorted |\n| Merge sort | O(n log n) / O(n log n) | O(n) | You need a stable sort or are sorting linked lists |\n| Quicksort | O(n log n) / O(n²) | O(log n) | General in-memory sorting, where it is usually fastest |"
+      }
+    },
+    "chat-prompt/leave-email-signed-with-name": {
+      "fingerprint": "421c5bdc1384cea31d8529a2ed32425a7b8c50217f772d708ca6291f44f3a65b",
+      "response": {
+        "text": "Here's a short note you can send:\n\n```email\nTo:\nSubject: Leave tomorrow\n\nHi,\n\nYou can take leave tomorrow. Enjoy the day off, and let me know if anything needs handing over before then.\n\nBest,\nSiddhartha\n```"
+      }
+    },
+    "chat-prompt/picture-request-uses-image-tool": {
+      "fingerprint": "2ac221a8231cb9fa074aefba6b37d8fed52fe9df7e54128be88cbfc490b93814",
+      "response": {
+        "text": "",
+        "toolCalls": [
+          {
+            "id": "call_1",
+            "name": "generate_image",
+            "input": {
+              "prompt": "A watercolor painting of a red fox sitting under an oak tree, reading an open book, soft washes of autumn color and warm afternoon light",
+              "aspect_ratio": "4:3"
+            }
+          }
+        ]
+      }
+    },
+    "chat-prompt/current-version-still-searches": {
+      "fingerprint": "852c65d89cf7b951d3dea5f3bc7e0de0c83bc655317d8fb30e1568403f65ce0c",
+      "response": {
+        "text": "",
+        "toolCalls": [
+          {
+            "id": "call_1",
+            "name": "web_search",
+            "input": {
+              "query": "Node.js latest stable version"
+            }
+          }
+        ]
+      }
+    },
+    "chat-prompt/computation-runs-code": {
+      "fingerprint": "d44c84b92c318597dcd3aaf12e5410798829da898109d366aa01cbb74adeb7df",
+      "response": {
+        "text": "",
+        "toolCalls": [
+          {
+            "id": "call_1",
+            "name": "execute_code",
+            "input": {
+              "language": "python",
+              "code": "def primes(count):\n    found = []\n    candidate = 2\n    while len(found) < count:\n        if all(candidate % p for p in found if p * p <= candidate):\n            found.append(candidate)\n        candidate += 1\n    return found\n\nprint(sum(primes(10000)))"
+            }
+          }
+        ]
+      }
+    },
+    "chat-prompt/file-request-makes-a-file": {
+      "fingerprint": "ff80f5180bb69f2cea28861fd18b9686d3863501115ab684c48b990e6ae8c4e8",
+      "response": {
+        "text": "",
+        "toolCalls": [
+          {
+            "id": "call_1",
+            "name": "create_office_file",
+            "input": {
+              "format": "docx",
+              "title": "Weekend camping packing checklist",
+              "content": "Shelter: tent, footprint, stakes, sleeping bag, sleeping pad\nKitchen: stove, fuel, pot, lighter, mugs, food, water filter\nClothing: rain jacket, warm layer, spare socks, hat\nSafety: first aid kit, headlamp, map, sunscreen, insect repellent"
+            }
+          }
+        ]
+      }
     }
   }
 }

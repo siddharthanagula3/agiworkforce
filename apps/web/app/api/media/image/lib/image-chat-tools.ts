@@ -124,7 +124,7 @@ function generateImageToolDefinition(aspectRatios: readonly string[]) {
     function: {
       name: GENERATE_IMAGE_TOOL_NAME,
       description:
-        "Create an image from a description and show it to the user in the chat. Use it when the user asks for a picture, illustration, logo, poster, icon or photo-style image, or asks you to draw or visualize something. Write the prompt as a complete, specific description of the image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply in a sentence or two without describing it at length or repeating a link. Each image uses the account's credits.",
+        "Create a picture from a description and show it to the user in the chat. Use it only when the user asks for a picture: a photo-style image, illustration, artwork, logo, poster or icon, or asks you to draw one. Never use it for a user interface, screen, app or web page mockup, dashboard, chart, graph, diagram, table or form, or anything else the user would read data from or click: write those as an inline chart or diagram block or an artifact, which the chat renders live. Write the prompt as a complete, specific description of the image, including subject, setting, style, composition and any text that must appear in it. The image appears in the chat by itself, so afterwards reply in a sentence or two without describing it at length or repeating a link. Each image uses the account's credits.",
       parameters: {
         type: 'object',
         properties: {

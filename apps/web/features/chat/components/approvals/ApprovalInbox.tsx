@@ -156,7 +156,7 @@ export function ApprovalInbox({
           aria-label={`Approvals (${approvals.length} pending)`}
         >
           <ShieldCheck className="h-4 w-4" aria-hidden="true" />
-          <span className="hidden text-xs sm:inline">Approvals</span>
+          <span className="hidden text-xs @min-[52rem]:inline">Approvals</span>
           {approvals.length > 0 && (
             <span
               className="flex h-4 min-w-4 items-center justify-center rounded-full bg-warning-fill px-1 text-caption font-semibold leading-none text-warning-on-fill"

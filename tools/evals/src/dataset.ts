@@ -332,11 +332,15 @@ function parseCheck(raw: unknown, where: string): Check {
       }
       return { kind: 'language', expected: expected as LanguageCode };
     }
-    case 'artifacts':
+    case 'artifacts': {
+      const atLeast = raw['atLeast'];
+      if (atLeast !== undefined && atLeast !== true) fail(where, 'atLeast must be true when set');
       return {
         kind: 'artifacts',
         count: readNonNegativeInteger(raw['count'], where, 'count must be a whole number'),
+        ...(atLeast === true ? { atLeast: true as const } : {}),
       };
+    }
   }
 }
 

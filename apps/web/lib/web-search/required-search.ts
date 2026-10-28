@@ -1,4 +1,8 @@
-import { detectExplicitWebSearchIntent, hasExplicitWebSearchOptOut } from '@agiworkforce/search';
+import {
+  detectExplicitWebSearchIntent,
+  explicitWebSearchSignals,
+  hasExplicitWebSearchOptOut,
+} from '@agiworkforce/search';
 import {
   canAccessModelForSubscriptionTier,
   getModelMetadataById,
@@ -142,16 +146,48 @@ export type WebSearchRequirementInput = {
   now?: Date;
 };
 
+// In a long message the user's request sits in its first or last paragraph and the rest is
+// material to read, whose dates and "latest" are not the user asking about now. Only an
+// explicit ask for a search or sources in those paragraphs forces one there; the model still
+// decides on the hints, with the tool offered.
+const REQUEST_EDGE_CHARS = 280;
+const LONG_MESSAGE_CHARS = REQUEST_EDGE_CHARS * 3;
+const PARAGRAPH_BREAK = /\n\s*\n/u;
+
+function requestText(message: string): string {
+  if (message.length <= LONG_MESSAGE_CHARS) return message;
+  const paragraphs = message
+    .split(PARAGRAPH_BREAK)
+    .map((paragraph) => paragraph.trim())
+    .filter((paragraph) => paragraph.length > 0);
+  const first = (paragraphs[0] ?? '').slice(0, REQUEST_EDGE_CHARS);
+  const last = (paragraphs.at(-1) ?? '').slice(-REQUEST_EDGE_CHARS);
+  return `${first}\n${last}`;
+}
+
+// Writing, rewriting, echoing or translating text works on what the user gave, so a date or a
+// "latest" in it is content. The model can still search, since the tool stays offered.
+const TRANSFORMATION_REQUEST =
+  /^\s*(?:(?:please|kindly|simply|just|now|ok(?:ay)?|hey|hi|hello|pls|plz)[\s,!.:]+|(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+)?)*(?:write|rewrite|re-write|draft|compose|respond|reply|repeat|echo|translate|summari[sz]e|paraphrase|proofread|edit|polish|format|reformat|convert|turn|create|make|generate|design|build|render)\b/iu;
+
 function classifyWebSearchRequirement(input: WebSearchRequirementInput): WebSearchRequirement {
   if (input.webSearchEnabled === false) return NOT_REQUIRED;
   if (input.searchRequested === true) return { required: true, source: 'explicit_mode' };
   if (hasExplicitWebSearchOptOut(input.userMessage)) return NOT_REQUIRED;
   if (input.agiWorkRun) return { required: true, source: 'work_mode' };
-  if (detectExplicitWebSearchIntent(input.userMessage) !== null) {
+  const request = requestText(input.userMessage);
+  const hintsCount =
+    input.userMessage.length <= LONG_MESSAGE_CHARS && !TRANSFORMATION_REQUEST.test(request);
+  const signals = explicitWebSearchSignals(request);
+  if (
+    signals.includes('search_verb') ||
+    signals.includes('sources') ||
+    (hintsCount && signals.includes('recency'))
+  ) {
     return { required: true, source: 'explicit_intent' };
   }
   if (input.researchTask) return { required: true, source: 'research_task' };
-  if (detectFreshnessIntent(input.userMessage, input.now)) {
+  if (hintsCount && detectFreshnessIntent(request, input.now)) {
     return { required: true, source: 'freshness' };
   }
   return NOT_REQUIRED;

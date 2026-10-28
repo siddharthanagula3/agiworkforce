@@ -238,10 +238,12 @@ describe('code blocks', () => {
     expect(screen.getByTestId('highlighted').getAttribute('data-language')).toBe(language);
   });
 
-  it('renders a fence with no language as plain code with no header bar', () => {
+  it('renders a one-line fence with no language as a code block, like a multi-line one', () => {
     const container = renderMarkdown('```\nline one\n```');
 
-    expect(container.querySelector('.code-block-lang-label')).toBeNull();
+    expect(container.querySelector('.code-block-container')).not.toBeNull();
+    expect(container.querySelector('.code-block-lang-label')?.textContent).toBe('text');
+    expect(container.querySelector('p code')).toBeNull();
     expect(container.textContent).toContain('line one');
   });
 

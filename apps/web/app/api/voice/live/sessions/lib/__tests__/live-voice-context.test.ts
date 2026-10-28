@@ -143,7 +143,7 @@ describe('loadLiveVoiceContext', () => {
 
     expect(bundle).toEqual({
       ...EMPTY_LIVE_VOICE_CONTEXT,
-      personalizationPrompt: expect.stringContaining('Address the user as: Ada'),
+      personalizationPrompt: expect.stringContaining("The user's preferred name is Ada."),
     });
     expect(stub.calls.some((call) => call.sql.includes('web_conversations'))).toBe(false);
   });
@@ -155,7 +155,7 @@ describe('loadLiveVoiceContext', () => {
       conversationId: CONVERSATION_ID,
     });
 
-    expect(bundle.personalizationPrompt).toContain('Address the user as: Ada');
+    expect(bundle.personalizationPrompt).toContain("The user's preferred name is Ada.");
     expect(bundle.personalizationPrompt).toContain('Keep answers under three sentences.');
     expect(bundle.personalizationPrompt).toContain('Respond in French');
   });
@@ -394,14 +394,16 @@ describe('instruction assembly', () => {
     ],
     projectBrief: 'Project instructions: answer in euros.',
     projectPrompt: 'Project instructions: answer in euros.\n\nfile passage: invoice totals',
-    personalizationPrompt: 'Address the user as: Ada',
+    personalizationPrompt: "The user's preferred name is Ada.",
     memoryPrompt: 'Prefers metric units.',
   };
 
   it('gives both the speech layer and the delegated turn the personalization', () => {
-    expect(buildLiveVoiceInstructions('BASE', bundle)).toContain('Address the user as: Ada');
+    expect(buildLiveVoiceInstructions('BASE', bundle)).toContain(
+      "The user's preferred name is Ada.",
+    );
     expect(buildLiveVoiceBackendInstructions('BACKEND', bundle)).toContain(
-      'Address the user as: Ada',
+      "The user's preferred name is Ada.",
     );
   });
 

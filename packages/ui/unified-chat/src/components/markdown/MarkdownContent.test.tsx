@@ -91,9 +91,10 @@ describe('MarkdownContent streaming re-render budget', () => {
     view.unmount();
   });
 
-  it('does not re-run preprocessMath when only the streaming caret changes', () => {
+  it('does not re-run preprocessMath when only the streaming state changes', () => {
     const view = mountClient(<MarkdownContent content={ANSWER} isStreaming />);
     expect(hoisted.preprocessMathCalls).toEqual([ANSWER]);
+    expect(view.container.querySelector('.animate-pulse')).toBeNull();
 
     view.rerender(<MarkdownContent content={ANSWER} isStreaming={false} />);
 

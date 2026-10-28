@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   EXPLICIT_SEARCH_INTENT_PHRASES,
   detectExplicitWebSearchIntent,
+  explicitWebSearchSignals,
   explicitlyRefusedItems,
   hasExplicitWebFetchIntent,
   hasExplicitWebSearchOptOut,
@@ -521,5 +522,19 @@ describe('hasExplicitWebFetchIntent', () => {
     expect(
       hasExplicitWebFetchIntent('Do not open any other tabs, just read https://example.com/report'),
     ).toBe(true);
+  });
+});
+
+describe('explicitWebSearchSignals', () => {
+  it('reports every signal, where detection stops at the first', () => {
+    const text = 'summarise the latest AI news with sources';
+
+    expect(detectExplicitWebSearchIntent(text)).toBe('recency');
+    expect(explicitWebSearchSignals(text)).toEqual(['recency', 'sources']);
+  });
+
+  it('reports nothing for an opt-out or plain text', () => {
+    expect(explicitWebSearchSignals('do not search the web, answer from memory')).toEqual([]);
+    expect(explicitWebSearchSignals('rewrite this paragraph')).toEqual([]);
   });
 });

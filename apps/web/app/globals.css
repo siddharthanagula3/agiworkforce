@@ -887,12 +887,12 @@
   .code-block-container {
     @apply my-3 rounded-xl overflow-hidden;
     border: 1px solid var(--chat-code-border);
+    background-color: var(--color-muted);
   }
 
   .code-block-header-bar {
     @apply flex items-center justify-between px-4 py-2.5;
-    background-color: var(--chat-code-header-bg);
-    border-bottom: 1px solid var(--chat-code-border);
+    background-color: transparent;
   }
 
   .code-block-lang-label {
@@ -903,7 +903,7 @@
 
   .code-block-body {
     @apply font-mono;
-    background-color: var(--chat-code-bg);
+    background-color: transparent;
     color: var(--chat-code-text);
     font-size: 13px; /* desktop .code-block-content code: text-[13px] */
     line-height: 1.5;

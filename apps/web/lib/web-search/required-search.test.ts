@@ -202,6 +202,63 @@ describe('resolveWebSearchRequirement', () => {
   });
 });
 
+describe('resolveWebSearchRequirement, a request that carries material', () => {
+  const base = { webSearchEnabled: true, agiWorkRun: false, researchTask: false };
+  const now = new Date('2026-10-28T00:00:00Z');
+  const material = Array.from(
+    { length: 12 },
+    (_, index) =>
+      `Section ${index + 1}. Sample project, October 2026: thank you for reviewing the latest product demo and the current figures.`,
+  ).join('\n\n');
+
+  it.each([
+    `simply respond this back:\n\n${material}`,
+    'write me a 2026 calendar',
+    'Rewrite this email: Thank you for reviewing the latest product demo.',
+    'Can you translate this into French: the newest release ships today.',
+    `${material}\n\nWhat is the main point of this text?`,
+  ])('does not force a search for %j', (userMessage) => {
+    expect(resolveWebSearchRequirement({ ...base, userMessage, now })).toEqual({
+      required: false,
+      source: null,
+    });
+  });
+
+  it('still forces a search the request itself asks for, before or after the material', () => {
+    expect(
+      resolveWebSearchRequirement({
+        ...base,
+        userMessage: `${material}\n\nSearch the web to check these claims.`,
+        now,
+      }),
+    ).toEqual({ required: true, source: 'explicit_intent' });
+    expect(
+      resolveWebSearchRequirement({
+        ...base,
+        userMessage: `Rewrite this with sources: ${material.slice(0, 200)}`,
+        now,
+      }),
+    ).toEqual({ required: true, source: 'explicit_intent' });
+  });
+
+  it('leaves a current-facts question after long material to the model, and forces it when short', () => {
+    expect(
+      resolveWebSearchRequirement({
+        ...base,
+        userMessage: `${material}\n\nWho is the current CEO of Intel?`,
+        now,
+      }),
+    ).toEqual({ required: false, source: null });
+    expect(
+      resolveWebSearchRequirement({
+        ...base,
+        userMessage: 'Who is the current CEO of Intel?',
+        now,
+      }),
+    ).toEqual({ required: true, source: 'freshness' });
+  });
+});
+
 describe('shouldOfferWebSearchForTurn', () => {
   const optional = { required: false, source: null } as const;
   const required = { required: true, source: 'explicit_intent' } as const;

@@ -272,6 +272,16 @@ export function detectExplicitWebSearchIntent(text: string): ExplicitSearchInten
   return null;
 }
 
+/** Every signal this text carries, in the order `detectExplicitWebSearchIntent` checks them. */
+export function explicitWebSearchSignals(text: string): ExplicitSearchIntentSignal[] {
+  if (!text || hasExplicitWebSearchOptOut(text)) return [];
+  const signals: ExplicitSearchIntentSignal[] = [];
+  if (SEARCH_VERB_PATTERN.test(text)) signals.push('search_verb');
+  if (RECENCY_PATTERN.test(text)) signals.push('recency');
+  if (asksForWebSources(text)) signals.push('sources');
+  return signals;
+}
+
 function asksForWebSources(text: string): boolean {
   if (!CITATION_PATTERN.test(text) && !LINK_REQUEST_PATTERN.test(text)) return false;
   return !OWN_CONTENT_SCOPE_PATTERN.test(text) || WEB_NOUN_PATTERN.test(text);
