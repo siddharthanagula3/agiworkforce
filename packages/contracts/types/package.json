@@ -8,6 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./capabilities": "./src/capabilities.ts",
+    "./chart-spec": "./src/chart-spec.ts",
     "./country-groups": "./src/country-groups.ts",
     "./encryption-key": "./src/encryption-key.ts",
     "./live-voices": "./src/live-voices.ts",
@@ -17,6 +18,9 @@
   },
   "typesVersions": {
     "*": {
+      "chart-spec": [
+        "./src/chart-spec.ts"
+      ],
       "encryption-key": [
         "./src/encryption-key.ts"
       ],
