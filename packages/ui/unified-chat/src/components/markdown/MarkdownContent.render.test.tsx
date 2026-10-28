@@ -204,6 +204,15 @@ describe('MarkdownContent unlabeled fences', () => {
     expect(container.querySelector('.code-block-container')).toBeNull();
   });
 
+  it('keeps the inline styles and hidden layer KaTeX lays a formula out with', () => {
+    const { container } = render(<MarkdownContent content={'Energy is $E = mc^2$.'} />);
+
+    const html = container.querySelector('.katex .katex-html');
+    expect(html).not.toBeNull();
+    expect(html?.getAttribute('aria-hidden')).toBe('true');
+    expect(container.querySelectorAll('.katex-html [style]').length).toBeGreaterThan(0);
+  });
+
   it('leaves one-line display math in a fence as written', () => {
     const { container } = render(<MarkdownContent content={'```latex\n$$x+y$$\n```'} />);
     expect(container.querySelector('.katex')).toBeNull();

@@ -673,7 +673,7 @@ const markdownComponents: Components = {
   ol: MarkdownOrderedList as Components['ol'],
   li: MarkdownListItem as Components['li'],
   input: MarkdownTaskCheckbox as Components['input'],
-  span: ({ className, children }) => {
+  span: ({ node: _node, className, children, ...rest }) => {
     const names = Array.isArray(className)
       ? className
       : typeof className === 'string'
@@ -690,7 +690,11 @@ const markdownComponents: Components = {
       );
     }
     const classText = Array.isArray(className) ? className.join(' ') : className;
-    return <span className={classText}>{children}</span>;
+    return (
+      <span {...rest} className={classText}>
+        {children}
+      </span>
+    );
   },
   blockquote: ({ children }) => (
     <blockquote className="mb-3 border-s-2 border-border ps-4 text-muted-foreground [&>:last-child]:mb-0">
