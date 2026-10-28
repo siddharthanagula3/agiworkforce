@@ -81,7 +81,7 @@ describe('ComposerFooter inline, bottom row stays a single usable line', () => {
     expect(container.textContent?.toLowerCase()).not.toContain('to send');
   });
 
-  it('hides the response-style selector below sm so the control row stays one line', () => {
+  it('hides the response-style selector when the composer is narrower than 24rem, so the control row stays one line', () => {
     const { container } = renderFooter();
     const styleBtn = container.querySelector(
       'button[aria-label="Response style"]',
@@ -89,7 +89,18 @@ describe('ComposerFooter inline, bottom row stays a single usable line', () => {
     expect(styleBtn).toBeTruthy();
     const wrapper = styleBtn!.closest('.hidden') as HTMLElement | null;
     expect(wrapper).toBeTruthy();
-    expect(wrapper!.className).toContain('sm:block');
+    expect(wrapper!.className).toContain('@min-[24rem]:block');
+  });
+
+  it('turns the effort and model labels into their icons as the composer narrows', () => {
+    const { container } = renderFooter();
+    const effort = container.querySelector('button[aria-label^="Reasoning effort"]');
+    if (effort) {
+      expect(effort.querySelector('span')?.className).toContain('@max-[32rem]:hidden');
+      expect(effort.querySelector('svg')?.getAttribute('class')).toContain('@max-[32rem]:block');
+    }
+    const model = container.querySelector('button[aria-label$="change model"]');
+    expect(model?.querySelector('span.truncate')?.className).toContain('@max-[26rem]:hidden');
   });
 
   it('names the trigger with its visible label first and keeps the full name in its text', () => {

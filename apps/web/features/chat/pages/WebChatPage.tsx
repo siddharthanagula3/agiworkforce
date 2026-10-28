@@ -6613,7 +6613,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
           id="main-content"
           role="main"
           tabIndex={-1}
-          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[360px]"
+          className="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden sm:min-w-[320px]"
         >
           {compact ? (
             urlConversationId ? (
@@ -6642,7 +6642,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
             <header
               data-app-header=""
               className={cn(
-                'relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
+                '@container relative flex h-12 shrink-0 items-center justify-between gap-2 px-4',
                 isEmptyChat
                   ? 'border-b border-transparent'
                   : 'border-b border-[var(--chat-border-subtle)]',
@@ -6771,7 +6771,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
               in the title menu; they keep their own state and labels, so
               nothing is lost but the width.
             */}
-              <div className="flex shrink-0 items-center gap-1.5 sm:hidden">
+              <div className="flex shrink-0 items-center gap-1.5 @min-[40rem]:hidden">
                 {hasMessages && (
                   <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
                 )}
@@ -6810,7 +6810,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                 </DropdownMenu>
               </div>
 
-              <div className="hidden shrink-0 items-center gap-1.5 sm:flex">
+              <div className="hidden shrink-0 items-center gap-1.5 @min-[40rem]:flex">
                 {hasMessages && (
                   <ApprovalInbox messages={displayedMessages} onResolve={resolveToolApproval} />
                 )}
@@ -6823,7 +6823,7 @@ export default function WebChatPage({ compact = false, initialWorkMode }: WebCha
                     aria-label={t('chat:shareConversation')}
                   >
                     <Share2 className="h-4 w-4" aria-hidden="true" />
-                    <span className="text-xs">{t('common:share')}</span>
+                    <span className="hidden text-xs @min-[52rem]:inline">{t('common:share')}</span>
                   </Button>
                 )}
                 {hasMessages && showWorkSession && (

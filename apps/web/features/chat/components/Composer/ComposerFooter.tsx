@@ -1406,7 +1406,7 @@ export function ComposerFooter({
               mic and send keep the control row to a single line on a phone.
               claude.ai's mobile composer drops it for the same reason. */}
           {showStyleSelector && (
-            <div className="chat-composer-style-selector hidden sm:block">
+            <div className="chat-composer-style-selector hidden @min-[24rem]:block">
               <StyleSelector />
             </div>
           )}
@@ -1463,7 +1463,7 @@ export function ComposerFooter({
                       size={PICKER_TRIGGER_ICON_SIZE}
                     />
                   )}
-                  <span className="min-w-[3.5rem] max-w-[8.5rem] shrink truncate font-medium sm:max-w-[11rem]">
+                  <span className="min-w-[3.5rem] max-w-[8.5rem] shrink truncate font-medium sm:max-w-[11rem] @max-[26rem]:hidden">
                     {modelChangePending ? 'Saving…' : triggerLabel}
                   </span>
                   {triggerBadge && (
@@ -1477,7 +1477,7 @@ export function ComposerFooter({
                       {triggerBadge}
                     </span>
                   )}
-                  <ChevronDown className="h-4 w-4 shrink-0" />
+                  <ChevronDown className="h-4 w-4 shrink-0 @max-[26rem]:hidden" />
                 </button>
               );
               const withNameTip = (triggerNode: ReactNode) => (
@@ -1857,13 +1857,13 @@ export function ComposerFooter({
                   title="Reasoning effort"
                 >
                   <Brain
-                    className="hidden h-4 w-4 shrink-0 sm:block @max-[44rem]:hidden"
+                    className="hidden h-4 w-4 shrink-0 @min-[44rem]:block @max-[32rem]:block"
                     aria-hidden="true"
                   />
-                  <span className="font-medium">
+                  <span className="font-medium @max-[32rem]:hidden">
                     {effortSliderVisible ? selectedEffortLabel : EFFORT_OFF_LABEL}
                   </span>
-                  <ChevronDown className="h-4 w-4 shrink-0" />
+                  <ChevronDown className="h-4 w-4 shrink-0 @max-[32rem]:hidden" />
                 </button>
               </PopoverTrigger>
               <PopoverContent
