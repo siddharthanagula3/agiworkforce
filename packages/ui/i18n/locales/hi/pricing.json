@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "शेड्यूल्ड टास्क",
   "compareRowSandboxes": "मैनेज्ड सैंडबॉक्स",
   "compareSandboxLimit": "एक साथ {{sandboxes}}, हर एक {{minutes}} मिनट",
+  "compareSandboxLimitHours": "एक साथ {{sandboxes}}, हर एक {{hours}} घंटे",
   "compareGroupResearch": "रिसर्च और निर्माण",
   "compareGroupProjects": "प्रोजेक्ट और फ़ाइलें",
   "compareGroupTools": "टूल और ऑटोमेशन",
@@ -230,5 +231,7 @@
   "dailyUploads_one": "रोज़ {{count}} फ़ाइल अपलोड, हर एक {{size}} तक",
   "dailyUploads_other": "रोज़ {{count}} फ़ाइल अपलोड, हर एक {{size}} तक",
   "scheduledTasksAndSandboxes_one": "{{count}} शेड्यूल्ड टास्क और {{minutes}} मिनट के मैनेज्ड सैंडबॉक्स",
-  "scheduledTasksAndSandboxes_other": "{{count}} शेड्यूल्ड टास्क और {{minutes}} मिनट के मैनेज्ड सैंडबॉक्स"
+  "scheduledTasksAndSandboxesHours_one": "{{count}} शेड्यूल्ड टास्क और {{hours}} घंटे के मैनेज्ड सैंडबॉक्स",
+  "scheduledTasksAndSandboxes_other": "{{count}} शेड्यूल्ड टास्क और {{minutes}} मिनट के मैनेज्ड सैंडबॉक्स",
+  "scheduledTasksAndSandboxesHours_other": "{{count}} शेड्यूल्ड टास्क और {{hours}} घंटे के मैनेज्ड सैंडबॉक्स"
 }

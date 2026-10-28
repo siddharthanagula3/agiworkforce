@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "예약 작업",
   "compareRowSandboxes": "관리형 샌드박스",
   "compareSandboxLimit": "동시 {{sandboxes}}개, 각 {{minutes}}분",
+  "compareSandboxLimitHours": "동시 {{sandboxes}}개, 각 {{hours}}시간",
   "compareGroupResearch": "리서치 및 제작",
   "compareGroupProjects": "프로젝트 및 파일",
   "compareGroupTools": "도구 및 자동화",
@@ -230,5 +231,7 @@
   "dailyUploads_one": "하루 파일 업로드 {{count}}개, 파일당 최대 {{size}}",
   "dailyUploads_other": "하루 파일 업로드 {{count}}개, 파일당 최대 {{size}}",
   "scheduledTasksAndSandboxes_one": "예약 작업 {{count}}개, {{minutes}}분 관리형 샌드박스",
-  "scheduledTasksAndSandboxes_other": "예약 작업 {{count}}개, {{minutes}}분 관리형 샌드박스"
+  "scheduledTasksAndSandboxesHours_one": "예약 작업 {{count}}개, {{hours}}시간 관리형 샌드박스",
+  "scheduledTasksAndSandboxes_other": "예약 작업 {{count}}개, {{minutes}}분 관리형 샌드박스",
+  "scheduledTasksAndSandboxesHours_other": "예약 작업 {{count}}개, {{hours}}시간 관리형 샌드박스"
 }

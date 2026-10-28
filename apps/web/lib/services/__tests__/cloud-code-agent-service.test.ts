@@ -702,13 +702,13 @@ describe('Cloud Code runs the harness the session was created with', () => {
     expect(record.finalMessage).toBe('Patched the guard.');
   });
 
-  it('settles a harness turn at the cost the harness reported', async () => {
+  it('settles no model cost at the end of a harness turn, which the provider proxy charges call by call', async () => {
     sessionOn('claude');
     harnessExecutor(CLAUDE_RESULT_LINE);
 
     await startTurn(trackedDb());
 
-    expect(settledCostCents()).toBe(31);
+    expect(settledCostCents()).toBe(0);
   });
 
   it('falls back to the generic loop when the runtime carries no harness binary', async () => {

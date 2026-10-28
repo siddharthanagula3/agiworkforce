@@ -121,7 +121,7 @@ import {
   type LocalProviderSetup,
 } from '../local-code';
 import { LocalModelChip } from './LocalModelChip';
-import { describeRuntime, runtimeHelpText } from '../code-runtime';
+import { describeRuntime, runtimeHelpText, type HarnessModelChoice } from '../code-runtime';
 import { useCodeRepositories, type CodeRepositoryState } from '../hooks/use-code-repositories';
 import { useCodeBranches } from '../hooks/use-code-branches';
 import {
@@ -156,6 +156,8 @@ export interface CodeDraft {
   fullNetworkAccepted: boolean;
   extraHosts: string;
   runtimeId: string;
+  harnessCredential: string;
+  harnessModelId: string;
   repositoryUrl: string;
   repositoryBranch: string;
   repository: CloudCodeRepositoryReference | null;
@@ -169,6 +171,8 @@ export const EMPTY_CODE_DRAFT: CodeDraft = {
   fullNetworkAccepted: false,
   extraHosts: '',
   runtimeId: DEFAULT_RUNTIME_ID,
+  harnessCredential: '',
+  harnessModelId: '',
   repositoryUrl: '',
   repositoryBranch: '',
   repository: null,
@@ -211,12 +215,14 @@ export interface CodeRepositoryEntry {
 function EnvironmentSettings({
   draft,
   runtimes,
+  harnessModels,
   disabled,
   onDraftChange,
   onOpenEmpty,
 }: {
   draft: CodeDraft;
   runtimes: CloudCodeRuntime[];
+  harnessModels: readonly HarnessModelChoice[];
   disabled: boolean;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
   onOpenEmpty?: () => void;
@@ -225,6 +231,9 @@ function EnvironmentSettings({
   const runtimeHelpId = `${runtimeFieldId}-help`;
   const extraHostsFieldId = useId();
   const extraHostsHelpId = `${extraHostsFieldId}-help`;
+  const credentialFieldId = useId();
+  const harnessModelFieldId = useId();
+  const credentialHelpId = `${credentialFieldId}-help`;
   const harnesses = runtimes.filter((runtime) => runtime.kind === 'harness');
   const images = runtimes.filter((runtime) => runtime.kind === 'image');
   const selectedRuntime = runtimes.find((runtime) => runtime.id === draft.runtimeId) ?? null;
@@ -302,7 +311,7 @@ function EnvironmentSettings({
           aria-describedby={runtimeHelpId}
           className={styles['select']}
           value={draft.runtimeId}
-          onChange={(event) => onDraftChange({ runtimeId: event.target.value })}
+          onChange={(event) => onDraftChange({ runtimeId: event.target.value, harnessModelId: '' })}
           disabled={runtimes.length === 0}
         >
           <option value={DEFAULT_RUNTIME_ID}>{CODE_COPY.defaultRuntimeOption}</option>
@@ -329,6 +338,48 @@ function EnvironmentSettings({
           {runtimeHelpText(runtimes.length, selectedRuntime)}
         </span>
       </div>
+      {harnessModels.length > 0 ? (
+        <div className={styles['formField']}>
+          <label className={styles['formLabel']} htmlFor={harnessModelFieldId}>
+            {CODE_COPY.harnessModelLabel}
+          </label>
+          <select
+            id={harnessModelFieldId}
+            className={styles['select']}
+            value={draft.harnessModelId}
+            onChange={(event) => onDraftChange({ harnessModelId: event.target.value })}
+          >
+            <option value="">{CODE_COPY.harnessModelDefault}</option>
+            {harnessModels.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.name}
+              </option>
+            ))}
+          </select>
+        </div>
+      ) : null}
+      {selectedRuntime?.needsUserCredential ? (
+        <div className={styles['formField']}>
+          <label className={styles['formLabel']} htmlFor={credentialFieldId}>
+            {CODE_COPY.harnessCredentialLabel}
+          </label>
+          <input
+            id={credentialFieldId}
+            type="password"
+            autoComplete="off"
+            spellCheck={false}
+            required
+            aria-describedby={credentialHelpId}
+            className={styles['textInput']}
+            value={draft.harnessCredential}
+            onChange={(event) => onDraftChange({ harnessCredential: event.target.value })}
+            maxLength={CODE_LIMITS.harnessCredential}
+          />
+          <span className={styles['formHelp']} id={credentialHelpId}>
+            {CODE_COPY.harnessCredentialHelp}
+          </span>
+        </div>
+      ) : null}
 
       {onOpenEmpty && (
         <div className={styles['popoverActions']}>
@@ -433,6 +484,7 @@ function LocalFolderChip({
 function EnvironmentChip({
   draft,
   runtimes,
+  harnessModels,
   local,
   disabled,
   onDraftChange,
@@ -440,6 +492,7 @@ function EnvironmentChip({
 }: {
   draft: CodeDraft;
   runtimes: CloudCodeRuntime[];
+  harnessModels: readonly HarnessModelChoice[];
   local: CodeLocalState;
   disabled: boolean;
   onDraftChange: (patch: Partial<CodeDraft>) => void;
@@ -547,6 +600,7 @@ function EnvironmentChip({
           <EnvironmentSettings
             draft={draft}
             runtimes={runtimes}
+            harnessModels={harnessModels}
             disabled={disabled}
             onDraftChange={onDraftChange}
             onOpenEmpty={() => {
@@ -1615,6 +1669,7 @@ export interface CodeComposerProps {
   onDraftChange: (patch: Partial<CodeDraft>) => void;
   onOpenEmptyEnvironment: () => void;
   runtimes: CloudCodeRuntime[];
+  harnessModels?: readonly HarnessModelChoice[];
   local: CodeLocalState;
   api: CloudCodeApi;
   turnRunning: boolean;
@@ -1642,6 +1697,7 @@ export function CodeComposer({
   onDraftChange,
   onOpenEmptyEnvironment,
   runtimes,
+  harnessModels,
   local,
   api,
   turnRunning,
@@ -1729,6 +1785,7 @@ export function CodeComposer({
             <EnvironmentChip
               draft={draft}
               runtimes={runtimes}
+              harnessModels={harnessModels ?? []}
               local={local}
               disabled={disabled || busy}
               onDraftChange={onDraftChange}

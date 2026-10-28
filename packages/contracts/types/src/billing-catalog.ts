@@ -470,7 +470,10 @@ const MINUTE_MS = 60_000;
  * can still run in parallel without a sandbox, so this bounds stateful compute
  * cost without turning the chat-concurrency dimension into the same setting.
  */
-export const MAX_MANAGED_SANDBOXES_PER_USER = 5;
+export const MAX_MANAGED_SANDBOXES_PER_USER = 20;
+
+/** The longest continuous run the sandbox provider allows; pausing a sandbox starts the count again. */
+export const MANAGED_SANDBOX_LONGEST_RUN_MS = 24 * 60 * MINUTE_MS;
 
 export const PLATFORM_SCHEDULE_RUNS_PER_SWEEP = 50;
 
@@ -545,7 +548,7 @@ const MAX_PLAN_PRODUCT_LIMITS: BillingPlanProductLimits = {
   maxConcurrentTurns: 8,
   maxArtifactAiCallsPerApp: 400,
   maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
-  sandboxTtlMs: 30 * MINUTE_MS,
+  sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
   maxConnectorTools: 300,
   maxScheduledTasks: 10,
   codeHarnessDailyCeilingCents: 2500,
@@ -596,8 +599,8 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     customMcpServers: 0,
     maxConcurrentTurns: 1,
     maxArtifactAiCallsPerApp: 50,
-    maxSandboxes: 1,
-    sandboxTtlMs: 10 * MINUTE_MS,
+    maxSandboxes: 2,
+    sandboxTtlMs: 60 * MINUTE_MS,
     maxConnectorTools: 0,
     maxScheduledTasks: 0,
     codeHarnessDailyCeilingCents: 0,
@@ -612,8 +615,8 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     customMcpServers: 5,
     maxConcurrentTurns: 2,
     maxArtifactAiCallsPerApp: 100,
-    maxSandboxes: 2,
-    sandboxTtlMs: 10 * MINUTE_MS,
+    maxSandboxes: 5,
+    sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
     maxConnectorTools: 50,
     maxScheduledTasks: 2,
     codeHarnessDailyCeilingCents: 100,
@@ -628,8 +631,8 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     customMcpServers: 25,
     maxConcurrentTurns: 4,
     maxArtifactAiCallsPerApp: 200,
-    maxSandboxes: 5,
-    sandboxTtlMs: 20 * MINUTE_MS,
+    maxSandboxes: 10,
+    sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
@@ -646,7 +649,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConcurrentTurns: 12,
     maxArtifactAiCallsPerApp: 600,
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
-    sandboxTtlMs: 60 * MINUTE_MS,
+    sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
     maxConnectorTools: 500,
     maxScheduledTasks: 25,
     codeHarnessDailyCeilingCents: 7500,
@@ -661,8 +664,8 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     customMcpServers: 25,
     maxConcurrentTurns: 4,
     maxArtifactAiCallsPerApp: 200,
-    maxSandboxes: 5,
-    sandboxTtlMs: 20 * MINUTE_MS,
+    maxSandboxes: 10,
+    sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
     maxConnectorTools: 150,
     maxScheduledTasks: 5,
     codeHarnessDailyCeilingCents: 500,
@@ -683,7 +686,7 @@ export const BILLING_PLAN_PRODUCT_LIMITS: Readonly<
     maxConcurrentTurns: 'custom',
     maxArtifactAiCallsPerApp: 'custom',
     maxSandboxes: MAX_MANAGED_SANDBOXES_PER_USER,
-    sandboxTtlMs: 60 * MINUTE_MS,
+    sandboxTtlMs: MANAGED_SANDBOX_LONGEST_RUN_MS,
     maxConnectorTools: 'custom',
     maxScheduledTasks: 'custom',
     codeHarnessDailyCeilingCents: 'custom',

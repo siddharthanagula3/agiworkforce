@@ -54,7 +54,7 @@ export const runtime = 'nodejs';
  * code. Next.js needs this to be a literal, so the two are kept in step by
  * hand; change one and change the other.
  */
-export const maxDuration = 300;
+export const maxDuration = 800;
 
 const MAX_GOAL_LENGTH = CLOUD_CODE_LIMITS.task;
 

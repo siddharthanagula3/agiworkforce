@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "Tarefas agendadas",
   "compareRowSandboxes": "Sandboxes gerenciadas",
   "compareSandboxLimit": "{{sandboxes}} ao mesmo tempo, {{minutes}} min cada",
+  "compareSandboxLimitHours": "{{sandboxes}} ao mesmo tempo, {{hours}} h cada",
   "compareGroupResearch": "Pesquisa e criação",
   "compareGroupProjects": "Projetos e arquivos",
   "compareGroupTools": "Ferramentas e automação",
@@ -232,6 +233,9 @@
   "dailyUploads_many": "{{count}} envios de arquivo por dia, de até {{size}} cada",
   "dailyUploads_other": "{{count}} envios de arquivo por dia, de até {{size}} cada",
   "scheduledTasksAndSandboxes_one": "{{count}} tarefa agendada e sandboxes gerenciadas de {{minutes}} minutos",
+  "scheduledTasksAndSandboxesHours_one": "{{count}} tarefa agendada e sandboxes gerenciadas de {{hours}} horas",
   "scheduledTasksAndSandboxes_many": "{{count}} tarefas agendadas e sandboxes gerenciadas de {{minutes}} minutos",
-  "scheduledTasksAndSandboxes_other": "{{count}} tarefas agendadas e sandboxes gerenciadas de {{minutes}} minutos"
+  "scheduledTasksAndSandboxesHours_many": "{{count}} tarefas agendadas e sandboxes gerenciadas de {{hours}} horas",
+  "scheduledTasksAndSandboxes_other": "{{count}} tarefas agendadas e sandboxes gerenciadas de {{minutes}} minutos",
+  "scheduledTasksAndSandboxesHours_other": "{{count}} tarefas agendadas e sandboxes gerenciadas de {{hours}} horas"
 }

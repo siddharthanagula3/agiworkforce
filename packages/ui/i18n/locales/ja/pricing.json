@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "スケジュールタスク",
   "compareRowSandboxes": "マネージドサンドボックス",
   "compareSandboxLimit": "同時に {{sandboxes}} 個、各 {{minutes}} 分",
+  "compareSandboxLimitHours": "同時に {{sandboxes}} 個、各 {{hours}} 時間",
   "compareGroupResearch": "リサーチと作成",
   "compareGroupProjects": "プロジェクトとファイル",
   "compareGroupTools": "ツールと自動化",
@@ -230,5 +231,7 @@
   "dailyUploads_one": "毎日 {{count}} 件のファイルアップロード、各 {{size}} まで",
   "dailyUploads_other": "毎日 {{count}} 件のファイルアップロード、各 {{size}} まで",
   "scheduledTasksAndSandboxes_one": "スケジュールタスク {{count}} 件、マネージドサンドボックス {{minutes}} 分",
-  "scheduledTasksAndSandboxes_other": "スケジュールタスク {{count}} 件、マネージドサンドボックス {{minutes}} 分"
+  "scheduledTasksAndSandboxesHours_one": "スケジュールタスク {{count}} 件、マネージドサンドボックス {{hours}} 時間",
+  "scheduledTasksAndSandboxes_other": "スケジュールタスク {{count}} 件、マネージドサンドボックス {{minutes}} 分",
+  "scheduledTasksAndSandboxesHours_other": "スケジュールタスク {{count}} 件、マネージドサンドボックス {{hours}} 時間"
 }

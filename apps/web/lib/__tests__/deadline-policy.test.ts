@@ -126,7 +126,11 @@ describe('nestedDeadlineMs', () => {
   it('shrinks the child to the parent budget that is actually left', () => {
     expect(nestedDeadlineMs(TOOL_CALL_DEADLINE_MS, CHAT_TOOL_LOOP_BUDGET_MS, 235_000)).toBe(5_000);
     expect(
-      nestedDeadlineMs(CLOUD_CODE_COMMAND_DEADLINE_MS, CLOUD_CODE_TURN_BUDGET_MS, 590_000),
+      nestedDeadlineMs(
+        CLOUD_CODE_COMMAND_DEADLINE_MS,
+        CLOUD_CODE_TURN_BUDGET_MS,
+        CLOUD_CODE_TURN_BUDGET_MS - 10_000,
+      ),
     ).toBe(10_000);
   });
 

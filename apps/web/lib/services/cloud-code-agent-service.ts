@@ -38,6 +38,7 @@ import {
   type ManagedUsageRequestReservation,
 } from './managed-usage-request-service';
 import { selectHarnessRunner } from '@/lib/e2b/harnesses';
+import { resolveHarnessModel } from '@/lib/e2b/harnesses/model';
 import { createCloudCodeToolRunner } from './cloud-code-agent-runner';
 import { CLOUD_CODE_AGENT_TURN_BUDGET_MS } from './cloud-code-turn-budget';
 import { cloudCodeGoalPrompt } from './cloud-code-commands';
@@ -785,6 +786,7 @@ async function runClaimedAgentTurn(
         workspacePath: session.workspacePath,
         provider,
         model,
+        harnessModel: resolveHarnessModel(harness.runtimeId, model, planTier),
         signal: deadline.signal,
         maxDurationMs: CLOUD_CODE_AGENT_TURN_BUDGET_MS,
         ...(stepBound !== null ? { maxTurns: stepBound } : {}),
@@ -982,7 +984,8 @@ async function runClaimedAgentTurn(
     result.stopReason === 'error' || approvalRecordingFailed || !terminalRowWritten;
   await settleReservationQuietly(reservation, {
     outcome: settledAsFailure ? 'failed' : 'completed',
-    actualCostCents: settledAsFailure ? 0 : settledTurnCostCents(provider, model, result.usage),
+    actualCostCents:
+      settledAsFailure || harness ? 0 : settledTurnCostCents(provider, model, result.usage),
     usage: { steps: cumulativeSteps, stopReason: result.stopReason },
   });
 

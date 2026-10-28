@@ -72,6 +72,7 @@ export const CODE_LIMITS = {
   command: 2000,
   task: CLOUD_CODE_LIMITS.task,
   extraHosts: 200,
+  harnessCredential: 512,
 } as const;
 
 export const CODE_SIZES = {
@@ -143,6 +144,11 @@ export const CODE_COPY = {
   harnessGroup: 'Coding agents',
   imageGroup: 'Environments',
   extraHostsLabel: 'Extra allowed hosts',
+  harnessCredentialLabel: 'Your API key for this agent',
+  harnessModelLabel: 'Model for this agent',
+  harnessModelDefault: 'Automatic',
+  harnessCredentialHelp:
+    'This agent runs on your own key. It stays in this session’s sandbox and is not saved to your account.',
   extraHostsPlaceholder: 'api.example.com, *.internal.example.com',
   extraHostsHelp: 'Comma separated, one leading wildcard allowed, up to 10 hosts.',
   fullNetworkAcknowledgement:

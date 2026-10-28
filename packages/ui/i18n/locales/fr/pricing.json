@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "Tâches planifiées",
   "compareRowSandboxes": "Bacs à sable gérés",
   "compareSandboxLimit": "{{sandboxes}} simultanés, {{minutes}} min chacun",
+  "compareSandboxLimitHours": "{{sandboxes}} simultanés, {{hours}} h chacun",
   "compareGroupResearch": "Recherche et création",
   "compareGroupProjects": "Projets et fichiers",
   "compareGroupTools": "Outils et automatisation",
@@ -232,6 +233,9 @@
   "dailyUploads_many": "{{count}} fichiers importés par jour, jusqu'à {{size}} chacun",
   "dailyUploads_other": "{{count}} fichiers importés par jour, jusqu'à {{size}} chacun",
   "scheduledTasksAndSandboxes_one": "{{count}} tâche planifiée et bacs à sable gérés de {{minutes}} minutes",
+  "scheduledTasksAndSandboxesHours_one": "{{count}} tâche planifiée et bacs à sable gérés de {{hours}} heures",
   "scheduledTasksAndSandboxes_many": "{{count}} tâches planifiées et bacs à sable gérés de {{minutes}} minutes",
-  "scheduledTasksAndSandboxes_other": "{{count}} tâches planifiées et bacs à sable gérés de {{minutes}} minutes"
+  "scheduledTasksAndSandboxesHours_many": "{{count}} tâches planifiées et bacs à sable gérés de {{hours}} heures",
+  "scheduledTasksAndSandboxes_other": "{{count}} tâches planifiées et bacs à sable gérés de {{minutes}} minutes",
+  "scheduledTasksAndSandboxesHours_other": "{{count}} tâches planifiées et bacs à sable gérés de {{hours}} heures"
 }

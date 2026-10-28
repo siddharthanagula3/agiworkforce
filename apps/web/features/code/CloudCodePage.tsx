@@ -74,6 +74,7 @@ import {
   sessionContextChip,
   type CodeSessionFilters,
 } from './code-surface';
+import { harnessModelChoices } from './code-runtime';
 import {
   localSessionFromSearch,
   localSessionPath,
@@ -242,6 +243,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const local = useLocalSessions();
   const environmentChosen = useRef(false);
   const transcriptEndRef = useRef<HTMLDivElement>(null);
+  const sessionModelsRef = useRef<Record<string, string>>({});
   const railTriggerRef = useRef<HTMLButtonElement>(null);
   const hiddenProbeRef = useRef(false);
   const routeSessionRef = useRef<string | null>(sessionId ?? null);
@@ -261,6 +263,14 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
   const agentModel = useMemo(
     () => resolveCloudCodeAgentModel(selectedModelId, planTier),
     [selectedModelId, planTier],
+  );
+  const harnessModels = useMemo(
+    () =>
+      harnessModelChoices(
+        runtimes.find((runtime) => runtime.id === draft.runtimeId) ?? null,
+        planTier,
+      ),
+    [runtimes, draft.runtimeId, planTier],
   );
   const { confirm, dialog: confirmDialog } = useConfirmAction();
   const desktopHost = useDesktopHost();
@@ -580,7 +590,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
       try {
         const turn = await api.startAgentTurn(session.id, {
           goal,
-          model: agentModel,
+          model: (ownAgent ? sessionModelsRef.current[session.id] : undefined) ?? agentModel,
           idempotencyKey: makeRequestId(),
           ...(ownAgent ? {} : { maxSteps: turnSteps, mode }),
         });
@@ -636,7 +646,12 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
             next.networkAccess === 'full' ? next.fullNetworkAccepted : undefined,
           runtimeId: next.runtimeId || null,
           extraHosts: next.networkAccess === 'full' ? undefined : parseExtraHosts(next.extraHosts),
+          ...(runtimes.find((runtime) => runtime.id === next.runtimeId)?.needsUserCredential &&
+          next.harnessCredential.trim()
+            ? { harnessCredential: next.harnessCredential.trim() }
+            : {}),
         });
+        if (next.harnessModelId) sessionModelsRef.current[body.session.id] = next.harnessModelId;
         replaceSession(body.session);
         setSelectedId(body.session.id);
         setEntries(body.terminalEntries);
@@ -658,7 +673,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
         setBusySince(null);
       }
     },
-    [api, busy, canCreate, draft, replaceSession, router],
+    [api, busy, canCreate, draft, replaceSession, router, runtimes],
   );
 
   useEffect(() => {
@@ -1730,6 +1745,7 @@ export function CloudCodePage({ api = cloudCodeApi, sessionId, pane }: CloudCode
                       onDraftChange={handleDraftChange}
                       onOpenEmptyEnvironment={handleOpenEmptyEnvironment}
                       runtimes={runtimes}
+                      harnessModels={harnessModels}
                       local={composerLocal}
                       api={api}
                       turnRunning={turnRunning}

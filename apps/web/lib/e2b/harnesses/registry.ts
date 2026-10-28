@@ -12,6 +12,7 @@ const CLAUDE = {
   verbose: '--verbose',
   maxTurns: '--max-turns',
   resume: '--resume',
+  model: '--model',
   prompt: '-p',
 } as const;
 
@@ -24,6 +25,7 @@ const CODEX = {
   sandboxWorkspaceWrite: '--sandbox workspace-write',
   bypassApprovalsAndSandbox: '--dangerously-bypass-approvals-and-sandbox',
   skipGitRepoCheck: '--skip-git-repo-check',
+  model: '-m',
   json: '--json',
 } as const;
 
@@ -67,6 +69,7 @@ const claudeRunner: HarnessRunner = {
       CLAUDE.verbose,
       `${CLAUDE.maxTurns} ${request.maxTurns}`,
       request.resumeSessionId ? `${CLAUDE.resume} ${quoteArgument(request.resumeSessionId)}` : null,
+      request.model ? `${CLAUDE.model} ${quoteArgument(request.model)}` : null,
       CLAUDE.prompt,
       quoteArgument(request.prompt),
     ]),
@@ -84,6 +87,9 @@ const codexRunner: HarnessRunner = {
       request.resumeSessionId ? `${CODEX.resume} ${quoteArgument(request.resumeSessionId)}` : null,
       request.resumeSessionId ? CODEX.bypassApprovalsAndSandbox : CODEX.sandboxWorkspaceWrite,
       CODEX.skipGitRepoCheck,
+      !request.resumeSessionId && request.model
+        ? `${CODEX.model} ${quoteArgument(request.model)}`
+        : null,
       request.resumeSessionId ? null : CODEX.json,
       quoteArgument(request.prompt),
     ]),

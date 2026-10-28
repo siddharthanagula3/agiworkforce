@@ -222,6 +222,7 @@
   "compareRowScheduledTasks": "Запланированные задачи",
   "compareRowSandboxes": "Управляемые песочницы",
   "compareSandboxLimit": "{{sandboxes}} одновременно, по {{minutes}} мин",
+  "compareSandboxLimitHours": "{{sandboxes}} одновременно, по {{hours}} ч",
   "compareGroupResearch": "Исследования и создание",
   "compareGroupProjects": "Проекты и файлы",
   "compareGroupTools": "Инструменты и автоматизация",
@@ -234,7 +235,11 @@
   "dailyUploads_many": "{{count}} загрузок файлов в день, до {{size}} на файл",
   "dailyUploads_other": "{{count}} загрузки файлов в день, до {{size}} на файл",
   "scheduledTasksAndSandboxes_one": "{{count}} запланированная задача и управляемые песочницы на {{minutes}} мин",
+  "scheduledTasksAndSandboxesHours_one": "{{count}} запланированная задача и управляемые песочницы на {{hours}} ч",
   "scheduledTasksAndSandboxes_few": "{{count}} запланированные задачи и управляемые песочницы на {{minutes}} мин",
+  "scheduledTasksAndSandboxesHours_few": "{{count}} запланированные задачи и управляемые песочницы на {{hours}} ч",
   "scheduledTasksAndSandboxes_many": "{{count}} запланированных задач и управляемые песочницы на {{minutes}} мин",
-  "scheduledTasksAndSandboxes_other": "{{count}} запланированной задачи и управляемые песочницы на {{minutes}} мин"
+  "scheduledTasksAndSandboxesHours_many": "{{count}} запланированных задач и управляемые песочницы на {{hours}} ч",
+  "scheduledTasksAndSandboxes_other": "{{count}} запланированной задачи и управляемые песочницы на {{minutes}} мин",
+  "scheduledTasksAndSandboxesHours_other": "{{count}} запланированной задачи и управляемые песочницы на {{hours}} ч"
 }
