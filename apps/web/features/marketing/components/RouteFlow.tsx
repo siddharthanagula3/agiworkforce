@@ -22,9 +22,6 @@ const HUB_CORE_R = 30;
 const HUB_GAP = 34;
 const CURVE_OUT = 130;
 const CURVE_IN = 150;
-const SPOKE_COUNT = 12;
-const SPOKE_INNER_R = 12;
-const SPOKE_OUTER_R = 22;
 const PULSE_R = 3;
 const MARK_SIZE = 16;
 const IN_PULSE_DURATION = 3.6;
@@ -61,17 +58,7 @@ function Hub({ x, y }: { x: number; y: number }) {
     <g className="agi-route-hub">
       <circle cx={x} cy={y} r={HUB_HALO_R} className="agi-route-hub-halo" />
       <circle cx={x} cy={y} r={HUB_CORE_R} className="agi-route-hub-core" />
-      {Array.from({ length: SPOKE_COUNT }, (_, i) => {
-        const angle = (i * Math.PI * 2) / SPOKE_COUNT;
-        return (
-          <path
-            key={i}
-            d={`M ${x + Math.sin(angle) * SPOKE_INNER_R} ${y - Math.cos(angle) * SPOKE_INNER_R} L ${x + Math.sin(angle) * SPOKE_OUTER_R} ${y - Math.cos(angle) * SPOKE_OUTER_R}`}
-            className="agi-route-spoke"
-            pathLength={1}
-          />
-        );
-      })}
+      <image href="/agi-symbol.png" x={x - 22} y={y - 22} width={44} height={44} />
     </g>
   );
 }

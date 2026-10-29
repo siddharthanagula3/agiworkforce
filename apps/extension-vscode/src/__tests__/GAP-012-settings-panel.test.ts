@@ -93,9 +93,12 @@ describe('SettingsPanel', () => {
       expect.objectContaining({
         enableScripts: true,
         retainContextWhenHidden: true,
-        localResourceRoots: [],
       }),
     );
+    const options = createPanel.mock.calls[0]?.[3] as {
+      localResourceRoots?: Array<{ fsPath: string }>;
+    };
+    expect(options.localResourceRoots?.map((uri) => uri.fsPath)).toEqual(['/mock/extension/media']);
     expect(panelReveal).toHaveBeenCalledOnce();
     expect(panelPostMessage).toHaveBeenCalledWith({
       type: 'settings.navigate',

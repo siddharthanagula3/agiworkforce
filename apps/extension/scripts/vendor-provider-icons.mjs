@@ -25,7 +25,6 @@ const PROVIDER_ICONS = [
   { id: 'zhipu', simpleId: null, color: '#3B82F6' },
   { id: 'lmstudio', simpleId: null, color: '#7C3AED' },
   { id: 'custom-openai-compatible', simpleId: null, color: '#71717A' },
-  { id: 'agi-cloud', simpleId: null, color: '#F59E0B' },
   { id: 'managed_cloud', simpleId: null, color: '#F59E0B', shape: 'cloud' },
   { id: 'open_router', simpleId: null, color: '#71717A', letter: 'OR' },
   { id: 'nvidia_nim', simpleId: null, color: '#71717A', letter: 'N' },

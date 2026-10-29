@@ -711,6 +711,21 @@ function appendAnswerExtras(
   }
   const cards = buildInteractiveCardStack(msg, options, false);
   if (cards) wrapper.appendChild(cards);
+  if (msg.streaming) {
+    try {
+      const mark = el('img', {
+        class: 'sp-thinking-mark',
+        src: chrome.runtime.getURL('icons/agi-symbol.png'),
+        alt: '',
+        width: '16',
+        height: '16',
+        'aria-hidden': 'true',
+      });
+      wrapper.appendChild(mark);
+    } catch {
+      // Tests and non-extension renders have no packaged symbol.
+    }
+  }
   if (!msg.streaming) {
     const footer = buildSourcesFooter(sources);
     if (footer) wrapper.appendChild(footer);

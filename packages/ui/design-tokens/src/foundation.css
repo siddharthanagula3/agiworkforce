@@ -456,6 +456,19 @@
   }
 }
 
+.agi-mark {
+  display: block;
+  object-fit: contain;
+}
+
+.agi-mark-spin {
+  animation: agi-mark-spin 1s linear infinite;
+}
+
+.agi-fl-hero-brand-mark.agi-mark-spin {
+  animation-duration: 3s;
+}
+
 @keyframes agi-mark-spin {
   to {
     transform: rotate(360deg);
@@ -463,6 +476,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .agi-mark-spin,
   .agi-fl-hero-brand-mark {
     animation: none;
   }

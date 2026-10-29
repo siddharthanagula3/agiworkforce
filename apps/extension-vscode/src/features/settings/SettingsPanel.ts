@@ -141,7 +141,7 @@ export class SettingsPanel {
     const panel = vscode.window.createWebviewPanel(SettingsPanel.viewType, 'AGI Settings', column, {
       enableScripts: true,
       retainContextWhenHidden: true,
-      localResourceRoots: [],
+      localResourceRoots: [vscode.Uri.joinPath(context.extensionUri, 'media')],
     });
     SettingsPanel.instance = new SettingsPanel(
       panel,
@@ -178,6 +178,7 @@ export class SettingsPanel {
       initialState,
       initialSection,
       this.context.extensionMode !== vscode.ExtensionMode.Production,
+      this.context.extensionUri,
     );
 
     this.disposables.push(

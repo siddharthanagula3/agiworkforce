@@ -40,7 +40,7 @@ describe('view container contribution', () => {
 
   it('ships the container icon it references', () => {
     const icon = containers.activitybar[0]?.icon ?? '';
-    expect(icon).toBe('media/icon-sidebar.svg');
+    expect(icon).toBe('media/agi-symbol.png');
     expect(fs.existsSync(path.resolve(__dirname, '../..', icon))).toBe(true);
   });
 

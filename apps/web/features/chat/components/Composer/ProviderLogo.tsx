@@ -31,9 +31,9 @@ export function ProviderLogo({ providerKey, size = 14 }: { providerKey?: string;
   // No resolved provider (e.g. a model without a provider) → render no logo
   // rather than crashing on providerKey.toLowerCase().
   if (!providerKey) return null;
-  if (providerKey === MANAGED_CLOUD_PROVIDER_KEY) {
+  if (providerKey === MANAGED_CLOUD_PROVIDER_KEY || toProviderId(providerKey) === 'agi-cloud') {
     return (
-      <span className="inline-flex shrink-0 items-center justify-center text-foreground">
+      <span className="inline-flex shrink-0 items-center justify-center">
         <AgiMark size={size} />
       </span>
     );

@@ -302,7 +302,11 @@ describe('agi-workforce.openChatInEditor', () => {
     );
     const roots = (options: vscode.WebviewOptions | undefined): string[] | undefined =>
       options?.localResourceRoots?.map((uri) => uri.fsPath);
-    const allowed = ['/mock/extension/out/codicons', '/mock/extension/out/webview'];
+    const allowed = [
+      '/mock/extension/out/codicons',
+      '/mock/extension/out/webview',
+      '/mock/extension/media',
+    ];
 
     expect(roots(vi.mocked(vscode.window.createWebviewPanel).mock.calls.at(-1)?.[3])).toEqual(
       allowed,

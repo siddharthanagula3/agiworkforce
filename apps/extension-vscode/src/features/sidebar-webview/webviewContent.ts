@@ -83,6 +83,7 @@ export function webviewResourceRoots(extensionUri: vscode.Uri): vscode.Uri[] {
   return [
     vscode.Uri.joinPath(extensionUri, ...CODICON_DIR),
     vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR),
+    vscode.Uri.joinPath(extensionUri, 'media'),
   ];
 }
 
@@ -137,6 +138,9 @@ export function getWebviewContent(
 
   const renderJsUri = webview.asWebviewUri(
     vscode.Uri.joinPath(extensionUri, ...RENDER_SCRIPT_DIR, 'render.js'),
+  );
+  const markUri = escapeHtml(
+    webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'agi-symbol.png')).toString(),
   );
 
   return /* html */ `<!DOCTYPE html>
@@ -252,7 +256,7 @@ export function getWebviewContent(
       letter-spacing: -0.01em;
     }
 
-    /* Brand mark, the 12-spoke AGI symbol, rendered mono. */
+    /* Brand mark. */
     .brand-mark {
       width: 18px;
       height: 18px;
@@ -260,7 +264,7 @@ export function getWebviewContent(
       flex-shrink: 0;
       line-height: 0;
     }
-    .brand-mark svg { display: block; width: 18px; height: 18px; }
+    .brand-mark img { display: block; width: 18px; height: 18px; object-fit: contain; }
 
     /* One stable trust-boundary identity. The boundary and provider used to be
        separate badges, which could briefly disagree while host messages arrived
@@ -899,19 +903,14 @@ export function getWebviewContent(
       padding: 6px 0;
     }
 
-    .typing-dot {
-      width: 6px;
-      height: 6px;
-      background: var(--accent-teal);
-      border-radius: 50%;
-      animation: typing var(--duration-pulse) ease-in-out infinite;
+    .typing-mark {
+      width: 16px;
+      height: 16px;
+      animation: typing-mark-spin var(--duration-spin) linear infinite;
     }
-    .typing-dot:nth-child(2) { animation-delay: 0.2s; }
-    .typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
-    @keyframes typing {
-      0%, 80%, 100% { opacity: 0.25; transform: scale(0.8); }
-      40% { opacity: 1; transform: scale(1); }
+    @keyframes typing-mark-spin {
+      to { transform: rotate(360deg); }
     }
 
     /* ── Input area / composer (design-spec §7) ── */
@@ -2001,7 +2000,7 @@ export function getWebviewContent(
       opacity: 0.7;
       line-height: 0;
     }
-    .empty-state-mark svg { width: 100%; height: 100%; }
+    .empty-state-mark img { display: block; width: 100%; height: 100%; object-fit: contain; }
 
     .empty-state-headline {
       font-size: var(--type-title-size);
@@ -2629,22 +2628,10 @@ export function getWebviewContent(
 </head>
 <body>
 
-  <!-- The real AGI mark: 12 spokes, rendered mono via currentColor. -->
-  <svg width="0" height="0" style="position:absolute" aria-hidden="true"><symbol id="agimark" viewBox="0 0 24 24">
-    <g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
-      <line x1="12" y1="7.40" x2="12" y2="3.00"/><line x1="14.30" y1="8.02" x2="16.50" y2="4.21"/>
-      <line x1="15.98" y1="9.70" x2="19.79" y2="7.50"/><line x1="16.60" y1="12.00" x2="21.00" y2="12.00"/>
-      <line x1="15.98" y1="14.30" x2="19.79" y2="16.50"/><line x1="14.30" y1="15.98" x2="16.50" y2="19.79"/>
-      <line x1="12.00" y1="16.60" x2="12.00" y2="21.00"/><line x1="9.70" y1="15.98" x2="7.50" y2="19.79"/>
-      <line x1="8.02" y1="14.30" x2="4.21" y2="16.50"/><line x1="7.40" y1="12.00" x2="3.00" y2="12.00"/>
-      <line x1="8.02" y1="9.70" x2="4.21" y2="7.50"/><line x1="9.70" y1="8.02" x2="7.50" y2="4.21"/>
-    </g>
-  </symbol></svg>
-
   <!-- ── Header ── -->
   <div class="header">
     <div class="header-left">
-      <span class="brand-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></span>
+      <span class="brand-mark" aria-hidden="true"><img src="${markUri}" alt="" width="18" height="18" /></span>
       <span class="header-title">AGI</span>
       <span
         class="session-identity"
@@ -2860,7 +2847,7 @@ export function getWebviewContent(
   <h2 class="visually-hidden">Conversation</h2>
   <div id="messages" role="log" aria-live="polite" aria-relevant="additions">
     <div class="empty-state" id="emptyState">
-      <div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"/></svg></div>
+      <div class="empty-state-mark" aria-hidden="true"><img src="${markUri}" alt="" width="28" height="28" /></div>
       <div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>
       <div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>
     </div>
@@ -4193,7 +4180,7 @@ export function getWebviewContent(
       var mounted = document.createElement('div');
       mounted.className = 'empty-state';
       mounted.id = 'emptyState';
-      mounted.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><svg viewBox="0 0 24 24"><use href="#agimark"></use></svg></div>' +
+      mounted.innerHTML = '<div class="empty-state-mark" aria-hidden="true"><img src="${markUri}" alt="" width="28" height="28"></div>' +
         '<div class="empty-state-headline" id="emptyStateHeadline">Build with AGI</div>' +
         '<div class="empty-state-copy" id="emptyStateCopy">Ask about this workspace, edit files, run commands and tests.</div>';
       messagesEl.appendChild(mounted);
@@ -4485,16 +4472,23 @@ export function getWebviewContent(
     }
 
     function showTyping() {
-      const div = document.createElement('div');
+      var existing = document.getElementById('typingIndicator');
+      if (existing) {
+        messagesEl.appendChild(existing);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return;
+      }
+      var div = document.createElement('div');
       div.className = 'typing-indicator';
       div.id = 'typingIndicator';
       div.setAttribute('role', 'status');
       div.setAttribute('aria-label', 'AGI is responding');
-      for (let i = 0; i < 3; i++) {
-        const dot = document.createElement('div');
-        dot.className = 'typing-dot';
-        div.appendChild(dot);
-      }
+      var mark = document.createElement('img');
+      mark.className = 'typing-mark';
+      mark.alt = '';
+      mark.setAttribute('aria-hidden', 'true');
+      mark.src = ${JSON.stringify(webview.asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'agi-symbol.png')).toString())};
+      div.appendChild(mark);
       messagesEl.appendChild(div);
       messagesEl.scrollTop = messagesEl.scrollHeight;
     }
@@ -6770,7 +6764,6 @@ export function getWebviewContent(
       }
 
       else if (msg.type === 'token') {
-        removeTyping();
         settleSending('');
         if (!currentAssistantEl) {
           currentAssistantEl = addMessage('assistant', '');
@@ -6782,7 +6775,7 @@ export function getWebviewContent(
         // plain text if window.agiRender is not yet loaded.
         renderAssistantInto(currentAssistantEl, accumulatedContent);
         bindCodeBlockActions(currentAssistantEl);
-        messagesEl.scrollTop = messagesEl.scrollHeight;
+        showTyping();
       }
 
       else if (msg.type === 'done') {

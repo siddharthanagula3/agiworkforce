@@ -18,6 +18,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
   useConfirmAction,
+  AgiMark,
 } from '@agiworkforce/ui';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@agiworkforce/ui';
 import {
@@ -2644,6 +2645,12 @@ const MessageBubbleComponent = function MessageBubble({
             <InteractiveCardBlock cards={leadingInteractiveCards} assistantText={cleanedContent} />
           ) : null}
 
+          {!isUser && proseIsStreaming && cleanedContent.trim() ? (
+            <div className="mb-2 flex items-center">
+              <AgiMark size={16} spinning />
+            </div>
+          ) : null}
+
           <div className={cn('relative min-w-0', isUser && 'max-w-full')}>
             <div
               ref={userContentRef}
@@ -2679,7 +2686,7 @@ const MessageBubbleComponent = function MessageBubble({
               !message.metadata?.codeExecutionResult &&
               !media ? (
                 <div className="flex items-center gap-2 text-muted-foreground">
-                  <span className="inline-block h-2 w-2 animate-pulse rounded-full bg-primary" />
+                  <AgiMark size={16} spinning />
                   <span className="text-sm">Thinking...</span>
                 </div>
               ) : producedNoVisibleOutput ? (

@@ -1,5 +1,12 @@
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { createElement, type CSSProperties, type ReactElement, type ReactNode } from 'react';
 import { APP_NAV_DESTINATIONS } from '@shared/components/layout/app-nav-items';
+
+const SYMBOL_SRC = `data:image/png;base64,${readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), '../../../public/agi-symbol.png'),
+).toString('base64')}`;
 
 export const OG_CARD_SIZE = { width: 1200, height: 630 } as const;
 
@@ -17,7 +24,6 @@ const C = {
   raised: '#1f1f1f',
   ink: '#fafafa',
   inkSoft: '#a3a3a3',
-  amber: '#f0a84a',
   line: 'rgba(255,255,255,0.14)',
 } as const;
 
@@ -26,7 +32,6 @@ const FAINT = 0.72;
 const COPY_WIDTH = 560;
 const WINDOW = { left: COPY_WIDTH + 8, top: 62, width: 600, height: 620 } as const;
 const FADE_TOP = 300;
-const MARK_SPOKES = 12;
 const WORDMARK_TRACKING = 0.08;
 const WORDMARK_DROP = 0.236;
 const LOCKUP_INSET = 6;
@@ -41,28 +46,12 @@ const text = (value: string, style: CSSProperties): ReactElement =>
   box({ display: 'flex', ...style }, value);
 
 function mark(size: number): ReactElement {
-  const spokes = Array.from({ length: MARK_SPOKES }, (_, index) => {
-    const radians = (index * (360 / MARK_SPOKES) * Math.PI) / 180;
-    return {
-      x1: 12 + 4.6 * Math.sin(radians),
-      y1: 12 - 4.6 * Math.cos(radians),
-      x2: 12 + 9 * Math.sin(radians),
-      y2: 12 - 9 * Math.cos(radians),
-    };
+  return createElement('img', {
+    src: SYMBOL_SRC,
+    width: size,
+    height: size,
+    alt: '',
   });
-  return createElement(
-    'svg',
-    { width: size, height: size, viewBox: '0 0 24 24' },
-    ...spokes.map((spoke, index) =>
-      createElement('line', {
-        key: index,
-        ...spoke,
-        stroke: index === 0 ? C.amber : C.ink,
-        strokeWidth: 1.5,
-        strokeLinecap: 'round',
-      }),
-    ),
-  );
 }
 
 function wordmark(size: number): ReactElement {

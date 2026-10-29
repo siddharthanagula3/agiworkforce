@@ -15,12 +15,12 @@ function pngDimensions(filePath: string): { width: number; height: number } {
 }
 
 describe('web AGI brand assets', () => {
-  it('uses the canonical twelve-spoke AgiMark for the browser icon', () => {
-    const source = readFileSync(join(appDir, 'icon.svg'), 'utf8');
-    expect(source.match(/<line\b/g)).toHaveLength(12);
-    expect(source).toContain('#f4f1e8');
-    expect(source).toContain('#d89a3d');
-    expect(source).not.toContain('WORKFORCE');
+  it('uses the symbol artwork for the browser icon', () => {
+    const icon = readFileSync(join(appDir, 'icon.png'));
+    const symbol = readFileSync(join(publicDir, 'agi-symbol.png'));
+    expect([...icon.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(icon.equals(symbol)).toBe(true);
+    expect(pngDimensions(join(appDir, 'icon.png'))).toEqual({ width: 512, height: 512 });
   });
 
   it('ships a real multi-resolution favicon', () => {

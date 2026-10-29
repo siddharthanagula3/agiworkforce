@@ -1,4 +1,5 @@
-import { useEffect } from 'react';
+import { useEffect, type ReactNode } from 'react';
+import { Image } from 'react-native';
 import Animated, {
   useSharedValue,
   useAnimatedStyle,
@@ -7,93 +8,69 @@ import Animated, {
   Easing,
   cancelAnimation,
 } from 'react-native-reanimated';
-import Svg, { Line } from 'react-native-svg';
-import { useThemeColors } from '@/src/ui/theme';
-import { motion } from '@/src/ui/theme/tokens';
+import { useReduceMotion } from '@/src/ui/theme/useReduceMotion';
+import symbol from '../../assets/agi-symbol.png';
 
-const SPOKE_COUNT = 12;
-const INNER_R = 4.6;
-const OUTER_R = 9;
-const STROKE_W = 1.5;
-const SPOKES = Array.from({ length: SPOKE_COUNT }, (_, i) => {
-  const angle = (i * 360) / SPOKE_COUNT;
-  const rad = (angle * Math.PI) / 180;
-  const round = (value: number) => Number(value.toFixed(6));
-  return {
-    x1: round(12 + INNER_R * Math.sin(rad)),
-    y1: round(12 - INNER_R * Math.cos(rad)),
-    x2: round(12 + OUTER_R * Math.sin(rad)),
-    y2: round(12 - OUTER_R * Math.cos(rad)),
-  };
-});
+const SPIN_MS = 1000;
 
 interface AgiMarkProps {
   size?: number;
   mono?: boolean;
   spinning?: boolean;
   accentColor?: string;
+  testID?: string;
 }
 
-export function AgiMark({ size = 24, mono = false, spinning = false, accentColor }: AgiMarkProps) {
-  const colors = useThemeColors();
+function MarkImage({ size, testID }: { size: number; testID?: string }) {
+  return (
+    <Image
+      testID={testID}
+      source={symbol}
+      accessible={false}
+      style={{ width: size, height: size }}
+    />
+  );
+}
+
+function SpinningMark({ size, children }: { size: number; children: ReactNode }) {
+  const reduceMotion = useReduceMotion();
   const rotation = useSharedValue(0);
 
   useEffect(() => {
-    if (spinning) {
-      rotation.value = withRepeat(
-        withTiming(360, { duration: motion.orbit, easing: Easing.linear }),
-        -1,
-        false,
-      );
-    } else {
+    if (reduceMotion) {
       rotation.value = 0;
+      return;
     }
+    rotation.value = withRepeat(
+      withTiming(360, { duration: SPIN_MS, easing: Easing.linear }),
+      -1,
+      false,
+    );
     return () => {
       cancelAnimation(rotation);
     };
-  }, [spinning, rotation]);
+  }, [reduceMotion, rotation]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     transform: [{ rotate: `${rotation.value}deg` }],
   }));
 
-  const baseColor = colors.textPrimary;
-  const requestedAccent = accentColor ?? colors.teal;
-  const accent =
-    requestedAccent.toLowerCase() === baseColor.toLowerCase() ? colors.brandAmber : requestedAccent;
+  if (reduceMotion) return children;
 
-  const markSvg = (
-    <Svg width={size} height={size} viewBox="0 0 24 24">
-      {SPOKES.map((spoke, idx) => {
-        const isAccent = !mono && idx === 0;
-        return (
-          <Line
-            key={idx}
-            x1={spoke.x1}
-            y1={spoke.y1}
-            x2={spoke.x2}
-            y2={spoke.y2}
-            stroke={isAccent ? accent : baseColor}
-            strokeWidth={STROKE_W}
-            strokeLinecap="round"
-          />
-        );
-      })}
-    </Svg>
+  return (
+    <Animated.View
+      style={[
+        { width: size, height: size, alignItems: 'center', justifyContent: 'center' },
+        animatedStyle,
+      ]}
+    >
+      {children}
+    </Animated.View>
   );
+}
 
-  if (spinning) {
-    return (
-      <Animated.View
-        style={[
-          { width: size, height: size, alignItems: 'center', justifyContent: 'center' },
-          animatedStyle,
-        ]}
-      >
-        {markSvg}
-      </Animated.View>
-    );
-  }
-
-  return markSvg;
+export function AgiMark({ size = 24, spinning = false, testID }: AgiMarkProps) {
+  const mark = <MarkImage size={size} testID={testID} />;
+  if (!spinning) return mark;
+  return <SpinningMark size={size}>{mark}</SpinningMark>;
 }

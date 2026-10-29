@@ -1,4 +1,4 @@
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import {
   BILLING_PLAN_PRICING,
   getSurfaceCapabilityAvailability,
@@ -69,7 +69,16 @@ export function getSettingsWebviewContent(
   initialState: SettingsPanelState,
   initialSection: SettingsSection,
   showDeveloperControls: boolean = false,
+  extensionUri?: vscode.Uri,
 ): string {
+  const markUri =
+    extensionUri && typeof webview.asWebviewUri === 'function'
+      ? escapeHtml(
+          webview
+            .asWebviewUri(vscode.Uri.joinPath(extensionUri, 'media', 'agi-symbol.png'))
+            .toString(),
+        )
+      : '';
   const serializedState = serializeForInlineScript(initialState);
   const serializedSection = serializeForInlineScript(initialSection);
   const serializedFreePlanTiers = serializeForInlineScript(FREE_PLAN_TIERS);
@@ -112,7 +121,7 @@ ${LOCAL_CAPABILITY_TABS.map(
     <meta charset="UTF-8" />
     <meta
       http-equiv="Content-Security-Policy"
-      content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}';"
+      content="default-src 'none'; style-src ${webview.cspSource} 'nonce-${nonce}'; script-src 'nonce-${nonce}'; img-src ${webview.cspSource};"
     />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AGI Settings</title>
@@ -221,16 +230,11 @@ ${LOCAL_CAPABILITY_TABS.map(
       }
 
       .brand-mark {
-        display: grid;
-        place-items: center;
+        display: block;
         width: 30px;
         height: 30px;
-        border: 1px solid var(--vscode-activityBarBadge-background);
-        border-radius: var(--corner-field);
-        color: var(--vscode-activityBarBadge-foreground);
-        background: var(--vscode-activityBarBadge-background);
-        font-weight: 700;
-        letter-spacing: -0.04em;
+        flex: none;
+        object-fit: contain;
       }
 
       .brand-copy {
@@ -1281,7 +1285,7 @@ ${LOCAL_CAPABILITY_TABS.map(
     <div class="settings-shell">
       <aside class="sidebar" aria-label="Settings navigation">
         <div class="brand">
-          <span class="brand-mark" aria-hidden="true">A</span>
+          ${markUri ? `<img class="brand-mark" src="${markUri}" alt="" width="30" height="30" />` : ''}
           <span class="brand-copy">
             <span class="brand-title">AGI Settings</span>
             <span class="brand-subtitle">VS Code extension</span>

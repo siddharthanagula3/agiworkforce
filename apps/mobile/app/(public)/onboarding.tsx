@@ -4,7 +4,8 @@ import { PressableBox } from '@/components/ui/PressableBox';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import Reanimated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import Svg, { Circle, Line } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
+import { AgiMark } from '@/components/ui/AgiMark';
 import Constants from 'expo-constants';
 import type BottomSheet from '@gorhom/bottom-sheet';
 import { storage } from '@/lib/mmkv';
@@ -47,22 +48,6 @@ import { getAutoRoutingProfiles, type OnDeviceModel } from '@agiworkforce/types'
 import { beginCloudPostAuthIntent } from '@/src/features/auth/services/postAuthIntent';
 import { useModelStore } from '@/src/features/model-picker/store';
 import { useModelInstallStore } from '@/src/features/model-picker/installStore';
-
-const AGI_MARK_SPOKE_COUNT = 12;
-const AGI_MARK_INNER_R = 4.6;
-const AGI_MARK_OUTER_R = 9;
-const AGI_MARK_STROKE_W = 1.5;
-const AGI_MARK_SPOKES = Array.from({ length: AGI_MARK_SPOKE_COUNT }, (_, i) => {
-  const angle = (i * 360) / AGI_MARK_SPOKE_COUNT;
-  const rad = (angle * Math.PI) / 180;
-  const round = (value: number) => Number(value.toFixed(6));
-  return {
-    x1: round(12 + AGI_MARK_INNER_R * Math.sin(rad)),
-    y1: round(12 - AGI_MARK_INNER_R * Math.cos(rad)),
-    x2: round(12 + AGI_MARK_OUTER_R * Math.sin(rad)),
-    y2: round(12 - AGI_MARK_OUTER_R * Math.cos(rad)),
-  };
-});
 
 type DeviceTierInfo = {
   tier: LocalRuntimeTier;
@@ -480,12 +465,7 @@ function HeroScreen({
       style={[styles.heroRoot, { backgroundColor: colors.background }]}
     >
       <View style={styles.brandLockup}>
-        <AgiNativeMark
-          size={50}
-          color={colors.textPrimary}
-          accent={colors.teal}
-          testID="hero-brand-mark"
-        />
+        <AgiMark size={50} testID="hero-brand-mark" />
         <Text
           testID="hero-wordmark"
           style={[styles.wordmark, { color: colors.textPrimary }]}
@@ -517,35 +497,6 @@ function HeroScreen({
         Made by AGI Automation LLC, USA
       </Text>
     </View>
-  );
-}
-
-function AgiNativeMark({
-  size,
-  color,
-  accent,
-  testID,
-}: {
-  size: number;
-  color: string;
-  accent: string;
-  testID?: string;
-}) {
-  return (
-    <Svg testID={testID} width={size} height={size} viewBox="0 0 24 24">
-      {AGI_MARK_SPOKES.map((spoke, idx) => (
-        <Line
-          key={idx}
-          x1={spoke.x1}
-          y1={spoke.y1}
-          x2={spoke.x2}
-          y2={spoke.y2}
-          stroke={idx === 0 ? accent : color}
-          strokeWidth={AGI_MARK_STROKE_W}
-          strokeLinecap="round"
-        />
-      ))}
-    </Svg>
   );
 }
 

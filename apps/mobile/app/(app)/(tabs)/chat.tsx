@@ -904,12 +904,6 @@ export default function ChatTabScreen() {
           showsVerticalScrollIndicator={false}
           accessibilityLabel={activeMode === 'cloud' ? 'New AGI Cloud chat' : 'New local chat'}
         >
-          {/* Brand LOCKUP, not the bare mark. The mark is a twelve-spoke
-              starburst, which is indistinguishable from a loading spinner.
-              shown alone and static above a greeting it reads as a stalled
-              loader ("users are thinking its still loading"). The wordmark
-              disambiguates it instantly. The bare mark stays reserved for
-              genuine busy states, where it spins. */}
           {composerStacked ? null : (
             <>
               <View

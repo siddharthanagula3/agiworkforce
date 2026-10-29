@@ -13,11 +13,14 @@ function pngDimensions(filePath: string): { width: number; height: number } {
 describe('VS Code AGI brand assets', () => {
   const mediaDir = path.resolve(__dirname, '../../media');
 
-  it('uses the canonical twelve-spoke mark in workbench navigation', () => {
-    const svg = fs.readFileSync(path.join(mediaDir, 'icon-sidebar.svg'), 'utf8');
-    expect(svg.match(/<line\b/g)).toHaveLength(12);
-    expect(svg).not.toContain('Robot head');
-    expect(svg).not.toContain('<rect');
+  it('uses the symbol artwork in workbench navigation', () => {
+    const symbol = fs.readFileSync(path.join(mediaDir, 'agi-symbol.png'));
+    expect([...symbol.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(pngDimensions(path.join(mediaDir, 'agi-symbol.png'))).toEqual({
+      width: 512,
+      height: 512,
+    });
+    expect(fs.existsSync(path.join(mediaDir, 'icon-sidebar.svg'))).toBe(false);
   });
 
   it('ships crisp marketplace and chat icon sizes from the brand mark', () => {
@@ -29,7 +32,6 @@ describe('VS Code AGI brand assets', () => {
       width: 32,
       height: 32,
     });
-    const source = fs.readFileSync(path.join(mediaDir, 'icon-source.svg'), 'utf8');
-    expect(source.match(/<line\b/g)).toHaveLength(12);
+    expect(fs.existsSync(path.join(mediaDir, 'icon-source.svg'))).toBe(false);
   });
 });

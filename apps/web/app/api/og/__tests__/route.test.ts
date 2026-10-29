@@ -41,7 +41,8 @@ describe('GET /api/og', () => {
       expect(markup).toContain(line.replace('&', '&amp;'));
     }
     expect(markup).toContain('ChatGPT, Claude,');
-    expect(markup.match(/<line /g)).toHaveLength(36);
+    expect(markup.match(/data:image\/png;base64,/g)).toHaveLength(3);
+    expect(markup).not.toMatch(/<line[\s>/]/);
     expect(markup).not.toContain('Ask anything');
   });
 

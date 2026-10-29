@@ -1,5 +1,5 @@
 import React from 'react';
-import { Spinner } from '@agiworkforce/ui';
+import { AgiMark } from '@agiworkforce/ui';
 import { cn } from '@shared/lib/utils';
 
 interface TypingIndicatorProps {
@@ -13,7 +13,7 @@ export const TypingIndicator: React.FC<TypingIndicatorProps> = ({ className }) =
       data-testid="typing-indicator"
     >
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Spinner size="sm" aria-hidden="true" />
+        <AgiMark size={16} spinning className="animate-spin motion-reduce:animate-none" />
         <span>Preparing</span>
       </div>
     </div>

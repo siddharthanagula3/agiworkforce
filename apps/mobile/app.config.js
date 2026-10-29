@@ -175,7 +175,7 @@ const config = {
   android: {
     adaptiveIcon: {
       foregroundImage: './assets/adaptive-icon.png',
-      backgroundColor: '#0f0f0f',
+      backgroundColor: '#070B14',
     },
     package: 'com.agiworkforce.app',
     versionCode: 1,

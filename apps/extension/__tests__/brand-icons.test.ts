@@ -16,10 +16,14 @@ describe('Chrome extension AGI brand icons', () => {
     icons: Record<string, string>;
   };
 
-  it('uses the canonical twelve-spoke source mark', () => {
-    const source = fs.readFileSync(path.join(appDir, 'icons/icon-source.svg'), 'utf8');
-    expect(source.match(/<line\b/g)).toHaveLength(12);
-    expect(source).not.toContain('WORKFORCE');
+  it('ships the symbol artwork for in-panel marks', () => {
+    const symbol = fs.readFileSync(path.join(appDir, 'icons/agi-symbol.png'));
+    expect([...symbol.subarray(0, 8)]).toEqual([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+    expect(pngDimensions(path.join(appDir, 'icons/agi-symbol.png'))).toEqual({
+      width: 512,
+      height: 512,
+    });
+    expect(fs.existsSync(path.join(appDir, 'icons/icon-source.svg'))).toBe(false);
   });
 
   for (const size of [16, 32, 48, 128]) {

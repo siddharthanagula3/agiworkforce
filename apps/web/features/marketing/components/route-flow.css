@@ -33,13 +33,6 @@
   stroke: var(--chat-border-strong);
 }
 
-[data-design='agi'] .agi-route-spoke {
-  fill: none;
-  stroke: var(--chat-text-primary);
-  stroke-width: 1.6;
-  stroke-linecap: round;
-}
-
 [data-design='agi'] .agi-route-col {
   position: absolute;
   inset-block: 0;

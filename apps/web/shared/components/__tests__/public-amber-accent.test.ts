@@ -28,13 +28,9 @@ const OUTSIDE_PUBLIC_SCOPE_READERS: ReadonlyArray<{ file: string; why: string }>
     file: 'apps/web/features/support/components/SupportWidget.module.css',
     why: 'the widget renders under either an explicit marketing or product surface palette',
   },
-  {
-    file: 'packages/ui/ui/src/AgiMark.tsx',
-    why: 'the mark defaults its accent prop to the token with a currentColor fallback',
-  },
 ];
 
-const LITERAL_FALLBACK_READERS = ['packages/ui/ui/src/AgiMark.tsx'] as const;
+const LITERAL_FALLBACK_READERS = [] as const;
 
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {

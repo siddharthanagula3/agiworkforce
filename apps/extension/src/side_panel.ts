@@ -3316,15 +3316,12 @@ function injectStyles(): void {
       border-radius: var(--corner-surface);
       border-bottom-left-radius: var(--corner-compact);
     }
-    .sp-dot {
-      width: 6px;
-      height: 6px;
-      border-radius: var(--corner-pill);
-      background: var(--agi-ext-accent);
-      animation: sp-bounce var(--duration-bounce) infinite;
+    .sp-thinking-mark {
+      width: 16px;
+      height: 16px;
+      flex: none;
+      animation: sp-spin var(--duration-spin) linear infinite;
     }
-    .sp-dot:nth-child(2) { animation-delay: calc(var(--duration-bounce) / 6); }
-    .sp-dot:nth-child(3) { animation-delay: calc(var(--duration-bounce) / 3); }
     .sp-thinking-label {
       margin-left: 4px;
       color: var(--agi-ext-text-muted);
@@ -3341,10 +3338,6 @@ function injectStyles(): void {
     }
     .sp-bubble-transient-status__icon svg,
     .sp-send-stopping-icon svg { animation: sp-spin var(--duration-spin) linear infinite; }
-    @keyframes sp-bounce {
-      0%, 100% { transform: translateY(0); opacity: 0.4; }
-      50% { transform: translateY(-4px); opacity: 1; }
-    }
     .sp-tool-btn {
       display: flex;
       align-items: center;
@@ -4544,9 +4537,9 @@ function injectStyles(): void {
       height: 110px;
       margin: 0;
       color: var(--agi-ext-text-muted);
-      opacity: 0.55;
+      opacity: 1;
     }
-    #sp-empty-icon svg { width: 110px; height: 110px; }
+    #sp-empty-icon img { width: 72px; height: 72px; object-fit: contain; }
     #sp-empty-icon.sp-empty-icon-hidden { display: none; }
     #sp-empty-greeting {
       margin: 0 0 12px;
@@ -5881,9 +5874,16 @@ function showThinking(label = t('spThinkingPreparing')): void {
     'aria-live': 'polite',
   });
   const thinking = el('div', { class: 'sp-thinking' });
-  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
-  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
-  thinking.appendChild(el('div', { class: 'sp-dot', 'aria-hidden': 'true' }));
+  thinking.appendChild(
+    el('img', {
+      class: 'sp-thinking-mark',
+      src: chrome.runtime.getURL('icons/agi-symbol.png'),
+      alt: '',
+      width: '16',
+      height: '16',
+      'aria-hidden': 'true',
+    }),
+  );
   thinking.appendChild(el('span', { class: 'sp-thinking-label' }, label));
   wrap.appendChild(thinking);
   container.appendChild(wrap);
@@ -9265,10 +9265,11 @@ function buildUI(): void {
   const GENERIC_PROVIDER_ICON_ID = 'custom-openai-compatible';
 
   function resolveProviderLogoUrl(providerId: string): string | undefined {
-    const iconId = BUNDLED_PROVIDER_ICON_IDS.has(providerId)
-      ? providerId
-      : GENERIC_PROVIDER_ICON_ID;
     try {
+      if (providerId === 'agi-cloud') return chrome.runtime.getURL('icons/agi-symbol.png');
+      const iconId = BUNDLED_PROVIDER_ICON_IDS.has(providerId)
+        ? providerId
+        : GENERIC_PROVIDER_ICON_ID;
       return chrome.runtime.getURL(`icons/providers/${iconId}.svg`);
     } catch {
       return undefined;
@@ -11623,24 +11624,19 @@ function buildUI(): void {
   });
   const emptyState = el('div', { id: 'sp-empty' });
   const emptyIcon = el('div', { id: 'sp-empty-icon' });
-  const emptyIconSvg = `<svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg" width="48" height="48" aria-hidden="true">
-    <circle cx="24" cy="24" r="4" fill="var(--agi-ext-brand)" opacity="0.2"/>
-    <g stroke="currentColor" stroke-width="2" stroke-linecap="round">
-      <line x1="24" y1="16" x2="24" y2="8" stroke="var(--agi-ext-brand)"/>
-      <line x1="28" y1="17.072" x2="32" y2="10.144"/>
-      <line x1="30.928" y1="20" x2="37.856" y2="16"/>
-      <line x1="32" y1="24" x2="40" y2="24"/>
-      <line x1="30.928" y1="28" x2="37.856" y2="32"/>
-      <line x1="28" y1="30.928" x2="32" y2="37.856"/>
-      <line x1="24" y1="32" x2="24" y2="40"/>
-      <line x1="20" y1="30.928" x2="16" y2="37.856"/>
-      <line x1="17.072" y1="28" x2="10.144" y2="32"/>
-      <line x1="16" y1="24" x2="8" y2="24"/>
-      <line x1="17.072" y1="20" x2="10.144" y2="16"/>
-      <line x1="20" y1="17.072" x2="16" y2="10.144"/>
-    </g>
-  </svg>`;
-  appendSvgString(emptyIcon, emptyIconSvg);
+  try {
+    emptyIcon.appendChild(
+      el('img', {
+        src: chrome.runtime.getURL('icons/agi-symbol.png'),
+        alt: '',
+        width: '72',
+        height: '72',
+        'aria-hidden': 'true',
+      }),
+    );
+  } catch {
+    // Unit imports of this module have no extension runtime.
+  }
   emptyState.appendChild(emptyIcon);
   emptyState.appendChild(el('h2', { id: 'sp-empty-greeting', hidden: '' }));
   const suggestionGroup = el('div', {
