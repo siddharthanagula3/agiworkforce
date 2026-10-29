@@ -1319,7 +1319,7 @@ jobs:
         # `pnpm check:workflow-cargo-features`.
         run: |
           cargo clippy --locked --workspace --lib \
-            --features "agiworkforce-desktop/ocr,agiworkforce-desktop/local-llm,agiworkforce-desktop/webrtc-support,agiworkforce-desktop/local-whisper,agiworkforce-desktop/devtools" \
+            --features "agiworkforce-desktop/ocr,agiworkforce-desktop/local-llm,agiworkforce-desktop/local-whisper,agiworkforce-desktop/devtools" \
             -- -D warnings
 
   # macOS smoke check: compile + clippy on the primary target platform.
