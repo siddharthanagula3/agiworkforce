@@ -88,6 +88,7 @@
       "@opentelemetry/core": ">=2.8.0",
       "@grpc/grpc-js": "^1.14.5",
       "body-parser": ">=2.4.0",
+      "deepmerge": "file:./patches/deepmerge-runtime",
       "deepmerge-ts": ">=8.0.0",
       "markdown-it": ">=15.0.3",
       "mermaid": ">=11.16.1 <12",
@@ -116,8 +117,7 @@
       "detox@20.51.4": "patches/detox@20.51.4.patch",
       "bunyamin@1.6.3": "patches/bunyamin@1.6.3.patch",
       "braces@3.0.3": "patches/braces@3.0.3.patch",
-      "http-cache-semantics@4.2.0": "patches/http-cache-semantics@4.2.0.patch",
-      "deepmerge@4.3.1": "patches/deepmerge@4.3.1.patch"
+      "http-cache-semantics@4.2.0": "patches/http-cache-semantics@4.2.0.patch"
     }
   },
   "scripts": {

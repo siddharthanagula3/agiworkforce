@@ -69,6 +69,7 @@ overrides:
   '@opentelemetry/core': '>=2.8.0'
   '@grpc/grpc-js': ^1.14.5
   body-parser: '>=2.4.0'
+  deepmerge: file:./patches/deepmerge-runtime
   deepmerge-ts: '>=8.0.0'
   markdown-it: '>=15.0.3'
   mermaid: '>=11.16.1 <12'
@@ -92,9 +93,6 @@ patchedDependencies:
   bunyamin@1.6.3:
     hash: b0e265742992088a7b40dd712586bc9bb304165756a9fbecffaf45b18350eb7c
     path: patches/bunyamin@1.6.3.patch
-  deepmerge@4.3.1:
-    hash: 9ed1059831b08b987161661230708e3a54c9d4d350e4bb652b7291a2e6fd620e
-    path: patches/deepmerge@4.3.1.patch
   detox@20.51.4:
     hash: 8e83b46e3f9a6c1f4365f0c9cba0a84731541a005b131bc03126fdafc9a734bf
     path: patches/detox@20.51.4.patch
@@ -11038,9 +11036,8 @@ packages:
     resolution: {integrity: sha512-uqbvqLUMrc6p0MO+WBRtTxY55hmyh94WRwI5a++PZe54X+bfVh59FSN7uWCBCW1CCVjzjnrwzfI8zidE2obMMw==}
     engines: {node: '>=16.9.0'}
 
-  deepmerge@4.3.1:
-    resolution: {integrity: sha512-3sUqbMEc77XqpdNO7FRyRog+eW3ph+GYCbj+rK+uYyRMuwsVy0rMiVtPn+QJlKFvWP/1PYpapqYn0Me2knFn+A==}
-    engines: {node: '>=0.10.0'}
+  deepmerge@file:patches/deepmerge-runtime:
+    resolution: {directory: patches/deepmerge-runtime, type: directory}
 
   default-browser-id@5.0.1:
     resolution: {integrity: sha512-x1VCxdX4t+8wVfd1so/9w+vQ4vx7lKd2Qp5tDRutErwmR85OgmfX7RlLRMWafRMY7hbEiXIbudNrjOAPa/hL8Q==}
@@ -20612,7 +20609,7 @@ snapshots:
       '@expo/config-types': 57.0.2
       '@expo/json-file': 11.2.1
       '@expo/require-utils': 57.0.6(typescript@5.9.3)
-      deepmerge: 4.3.1(patch_hash=9ed1059831b08b987161661230708e3a54c9d4d350e4bb652b7291a2e6fd620e)
+      deepmerge: file:patches/deepmerge-runtime
       getenv: 2.0.0
       glob: 13.0.6
       resolve-workspace-root: 2.0.1
@@ -28095,7 +28092,7 @@ snapshots:
 
   deepmerge-ts@8.0.2: {}
 
-  deepmerge@4.3.1(patch_hash=9ed1059831b08b987161661230708e3a54c9d4d350e4bb652b7291a2e6fd620e): {}
+  deepmerge@file:patches/deepmerge-runtime: {}
 
   default-browser-id@5.0.1: {}
 
@@ -31034,7 +31031,7 @@ snapshots:
       babel-jest: 29.7.0(@babel/core@7.29.7)
       chalk: 4.1.2
       ci-info: 3.9.0
-      deepmerge: 4.3.1(patch_hash=9ed1059831b08b987161661230708e3a54c9d4d350e4bb652b7291a2e6fd620e)
+      deepmerge: file:patches/deepmerge-runtime
       glob: 7.2.3
       graceful-fs: 4.2.11
       jest-circus: 29.7.0(babel-plugin-macros@3.1.0)
