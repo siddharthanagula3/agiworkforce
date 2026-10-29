@@ -247,9 +247,6 @@ mailparse = "0.15"
 
 git2 = { version = "0.21", features = ["vendored-openssl", "cred"] }
 tauri-plugin-deep-link = "2.4.9"
-# B1: BYOK encrypted key vault, vendored as published crate (MIT/Apache-2.0).
-# kdf feature (default-on) enables Argon2id password hashing for the snapshot.
-tauri-plugin-stronghold = "2.3.1"
 
 
 [target.'cfg(windows)'.dependencies]
