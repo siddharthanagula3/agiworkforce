@@ -1,10 +1,7 @@
 diff --git a/dist/cjs.js b/dist/cjs.js
 --- a/dist/cjs.js
 +++ b/dist/cjs.js
-@@ -76,22 +76,38 @@
- 			&& Object.propertyIsEnumerable.call(target, key)) // and also unsafe if they're nonenumerable.
- }
- 
+@@ -78,0 +79,13 @@
 +function keyIsForbidden(key) {
 +	return key === '__proto__' || key === 'constructor' || key === 'prototype';
 +}
@@ -18,29 +15,18 @@ diff --git a/dist/cjs.js b/dist/cjs.js
 +	});
 +}
 +
- function mergeObject(target, source, options) {
- 	var destination = {};
- 	if (options.isMergeableObject(target)) {
- 		getKeys(target).forEach(function(key) {
+@@ -83 +96,4 @@
 -			destination[key] = cloneUnlessOtherwiseSpecified(target[key], options);
 +			if (keyIsForbidden(key)) {
 +				return
 +			}
 +			assignOwn(destination, key, cloneUnlessOtherwiseSpecified(target[key], options));
- 		});
- 	}
- 	getKeys(source).forEach(function(key) {
+@@ -87 +103 @@
 -		if (propertyIsUnsafe(target, key)) {
 +		if (keyIsForbidden(key) || propertyIsUnsafe(target, key)) {
- 			return
- 		}
- 
- 		if (propertyIsOnObject(target, key) && options.isMergeableObject(source[key])) {
+@@ -92 +108 @@
 -			destination[key] = getMergeFunction(key, options)(target[key], source[key], options);
 +			assignOwn(destination, key, getMergeFunction(key, options)(target[key], source[key], options));
- 		} else {
+@@ -94 +110 @@
 -			destination[key] = cloneUnlessOtherwiseSpecified(source[key], options);
 +			assignOwn(destination, key, cloneUnlessOtherwiseSpecified(source[key], options));
- 		}
- 	});
- 	return destination
