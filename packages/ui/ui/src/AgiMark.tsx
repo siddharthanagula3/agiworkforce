@@ -1,3 +1,7 @@
+// The declaration is a script. A module augmentation cannot introduce `*.png`,
+// and consumers that typecheck this file do not include png.d.ts on their own.
+// eslint-disable-next-line @typescript-eslint/triple-slash-reference
+/// <reference path="./png.d.ts" />
 import type { CSSProperties } from 'react';
 import symbolAsset from './agi-symbol.png';
 
