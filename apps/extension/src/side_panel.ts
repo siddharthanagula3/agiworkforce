@@ -78,7 +78,7 @@ import {
   type RoutingTaskType,
 } from '@agiworkforce/types';
 import { getExtensionSendQueue } from './features/native-bridge/sendQueue';
-import { clearChildren, setText, createElementWith, appendSvgString } from './dom-helpers';
+import { clearChildren, setText, createElementWith } from './dom-helpers';
 import {
   createBrowserConversationId,
   filterConversations,

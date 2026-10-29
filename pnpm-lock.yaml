@@ -92,6 +92,9 @@ patchedDependencies:
   bunyamin@1.6.3:
     hash: b0e265742992088a7b40dd712586bc9bb304165756a9fbecffaf45b18350eb7c
     path: patches/bunyamin@1.6.3.patch
+  deepmerge@4.3.1:
+    hash: 8a400a49e1ae3ee5b28b140e67a82dbd5f4ea65bf7c6fa4dcd500521f881d064
+    path: patches/deepmerge@4.3.1.patch
   detox@20.51.4:
     hash: 8e83b46e3f9a6c1f4365f0c9cba0a84731541a005b131bc03126fdafc9a734bf
     path: patches/detox@20.51.4.patch
@@ -20609,7 +20612,7 @@ snapshots:
       '@expo/config-types': 57.0.2
       '@expo/json-file': 11.2.1
       '@expo/require-utils': 57.0.6(typescript@5.9.3)
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=8a400a49e1ae3ee5b28b140e67a82dbd5f4ea65bf7c6fa4dcd500521f881d064)
       getenv: 2.0.0
       glob: 13.0.6
       resolve-workspace-root: 2.0.1
@@ -25437,7 +25440,7 @@ snapshots:
       obug: 2.2.1
       std-env: 4.3.0
       tinyrainbow: 3.2.0
-      vitest: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@24.19.2)(@vitest/coverage-v8@4.1.12)(jsdom@25.0.1(bufferutil@4.1.0)(utf-8-validate@6.0.6))(msw@2.15.0(@types/node@24.19.2)(typescript@5.9.3))(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
+      vitest: 4.1.12(@opentelemetry/api@1.9.1)(@types/node@26.6.5)(@vitest/coverage-v8@4.1.12)(jsdom@27.4.0(@noble/hashes@2.2.0)(bufferutil@4.1.0)(utf-8-validate@6.0.6))(msw@2.15.0(@types/node@26.6.5)(typescript@5.9.3))(vite@8.3.5(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(terser@5.51.2)(tsx@4.23.15)(yaml@2.9.1))
 
   '@vitest/coverage-v8@5.0.5(vitest@5.0.5)':
     dependencies:
@@ -28092,7 +28095,7 @@ snapshots:
 
   deepmerge-ts@8.0.2: {}
 
-  deepmerge@4.3.1: {}
+  deepmerge@4.3.1(patch_hash=8a400a49e1ae3ee5b28b140e67a82dbd5f4ea65bf7c6fa4dcd500521f881d064): {}
 
   default-browser-id@5.0.1: {}
 
@@ -31031,7 +31034,7 @@ snapshots:
       babel-jest: 29.7.0(@babel/core@7.29.7)
       chalk: 4.1.2
       ci-info: 3.9.0
-      deepmerge: 4.3.1
+      deepmerge: 4.3.1(patch_hash=8a400a49e1ae3ee5b28b140e67a82dbd5f4ea65bf7c6fa4dcd500521f881d064)
       glob: 7.2.3
       graceful-fs: 4.2.11
       jest-circus: 29.7.0(babel-plugin-macros@3.1.0)

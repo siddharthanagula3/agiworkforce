@@ -175,7 +175,6 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 tracing-appender = "0.2"
 
 
-webrtc = { version = "0.14", optional = true }
 tokio-tungstenite = { version = "0.21", features = ["handshake"] }
 
 
@@ -216,7 +215,7 @@ cap-std = "4.0.2"
 
 
 flate2 = "1.0"
-zip = "=9.0.4"
+zip = "=9.0.5"
 
 
 pdf-extract = "0.12"
@@ -303,7 +302,6 @@ devtools = ["tauri/devtools"]
 # Install Tesseract: brew install tesseract (macOS) or apt install tesseract-ocr libtesseract-dev (Linux)
 ocr = ["tesseract"]
 local-llm = ["llama-cpp-2"]
-webrtc-support = ["webrtc"]
 billing = []
 shell = ["dep:tauri-plugin-shell"]
 updater = ["dep:tauri-plugin-updater"]

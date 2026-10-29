@@ -167,8 +167,33 @@ function requestText(message: string): string {
 
 // Writing, rewriting, echoing or translating text works on what the user gave, so a date or a
 // "latest" in it is content. The model can still search, since the tool stays offered.
-const TRANSFORMATION_REQUEST =
-  /^\s*(?:(?:please|kindly|simply|just|now|ok(?:ay)?|hey|hi|hello|pls|plz)[\s,!.:]+|(?:can|could|would|will)\s+(?:you|u)\s+(?:please\s+)?)*(?:write|rewrite|re-write|draft|compose|respond|reply|repeat|echo|translate|summari[sz]e|paraphrase|proofread|edit|polish|format|reformat|convert|turn|create|make|generate|design|build|render)\b/iu;
+// Politeness is stripped in a bounded loop. One expression that repeated a group of
+// quantified alternatives was polynomial in the length of the message.
+const POLITE_WORD = /^(?:please|kindly|simply|just|now|okay|ok|hey|hi|hello|pls|plz)(?=[\s,!.:])/iu;
+const POLITE_GAP = /^[\s,!.:]+/u;
+const MODAL_ASK = /^(?:can|could|would|will)\s+(?:you|u)\s+/iu;
+const OPTIONAL_PLEASE = /^please\s+/iu;
+const TRANSFORMATION_VERB =
+  /^(?:write|rewrite|re-write|draft|compose|respond|reply|repeat|echo|translate|summarise|summarize|paraphrase|proofread|edit|polish|format|reformat|convert|turn|create|make|generate|design|build|render)\b/iu;
+
+function isTransformationRequest(value: string): boolean {
+  let rest = value.replace(/^\s+/u, '');
+  for (let attempt = 0; attempt < 8; attempt += 1) {
+    const modal = MODAL_ASK.exec(rest);
+    if (modal) {
+      rest = rest.slice(modal[0].length);
+      const please = OPTIONAL_PLEASE.exec(rest);
+      if (please) rest = rest.slice(please[0].length);
+      continue;
+    }
+    const polite = POLITE_WORD.exec(rest);
+    if (!polite) break;
+    const gap = POLITE_GAP.exec(rest.slice(polite[0].length));
+    if (!gap) break;
+    rest = rest.slice(polite[0].length + gap[0].length);
+  }
+  return TRANSFORMATION_VERB.test(rest);
+}
 
 function classifyWebSearchRequirement(input: WebSearchRequirementInput): WebSearchRequirement {
   if (input.webSearchEnabled === false) return NOT_REQUIRED;
@@ -177,7 +202,7 @@ function classifyWebSearchRequirement(input: WebSearchRequirementInput): WebSear
   if (input.agiWorkRun) return { required: true, source: 'work_mode' };
   const request = requestText(input.userMessage);
   const hintsCount =
-    input.userMessage.length <= LONG_MESSAGE_CHARS && !TRANSFORMATION_REQUEST.test(request);
+    input.userMessage.length <= LONG_MESSAGE_CHARS && !isTransformationRequest(request);
   const signals = explicitWebSearchSignals(request);
   if (
     signals.includes('search_verb') ||
