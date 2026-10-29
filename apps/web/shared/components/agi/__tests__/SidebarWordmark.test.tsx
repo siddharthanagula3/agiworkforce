@@ -9,7 +9,7 @@ describe('SidebarWordmark', () => {
 
     expect(screen.getByText('AGI')).toHaveClass('whitespace-nowrap');
     expect(screen.getByRole('link', { name: 'AGI home' })).toHaveClass('shrink-0');
-    expect(container.querySelector('svg')).toHaveClass('shrink-0');
+    expect(container.querySelector('img.agi-mark')).toHaveClass('shrink-0');
   });
 
   it('shows the name only when its container has room, leaving the mark alone beside window controls', () => {

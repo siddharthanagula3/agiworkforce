@@ -167,7 +167,7 @@ describe('sign-up screen', () => {
 
     const brand = screen.getByRole('link', { name: 'AGI' });
     expect(brand).toHaveAttribute('href', '/');
-    expect(brand.querySelector('svg')).not.toBeNull();
+    expect(brand.querySelector('img.agi-mark')).not.toBeNull();
 
     expect(emailField()).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Continue' })).toBeInTheDocument();

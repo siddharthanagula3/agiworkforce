@@ -57,12 +57,12 @@ describe('GuestChat', () => {
         { name: `Load image from ${ATTACKER_HOST}` },
         { timeout: ASSET_TIMEOUT_MS },
       );
-      expect(container.querySelector('img')).toBeNull();
+      expect(container.querySelector(`img[src="${REPLY_IMAGE_URL}"]`)).toBeNull();
       expect(container.innerHTML).not.toContain(`${ATTACKER_HOST}/p`);
 
       await user.click(load);
 
-      const image = container.querySelector('img');
+      const image = container.querySelector(`img[src="${REPLY_IMAGE_URL}"]`);
       expect(image?.getAttribute('src')).toBe(REPLY_IMAGE_URL);
       expect(image?.getAttribute('referrerpolicy')).toBe('no-referrer');
     },
