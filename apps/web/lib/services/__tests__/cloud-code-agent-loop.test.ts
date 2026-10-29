@@ -7,7 +7,7 @@ import {
   truncateToolOutput,
   type CloudCodeToolRunner,
 } from '../cloud-code-agent-loop';
-import { CLOUD_CODE_COMMAND_DEADLINE_MS } from '@/lib/deadline-policy';
+import { CLOUD_CODE_COMMAND_DEADLINE_MS, CLOUD_CODE_TURN_BUDGET_MS } from '@/lib/deadline-policy';
 
 function adapterFor(turns: StreamChunk[][]): ProviderAdapter {
   let index = 0;
@@ -506,7 +506,7 @@ describe('HARD-008, the command deadline is clamped to the turn budget', () => {
     const runner = runnerStub();
     const base = 5_000_000;
     let reads = 0;
-    const now = (): number => (reads++ === 0 ? base : base + 590_000);
+    const now = (): number => (reads++ === 0 ? base : base + CLOUD_CODE_TURN_BUDGET_MS - 10_000);
 
     await runCloudCodeAgentTurn({
       ...baseInput,
@@ -525,7 +525,7 @@ describe('HARD-008, the command deadline is clamped to the turn budget', () => {
     const runner = runnerStub();
     const base = 6_000_000;
     let reads = 0;
-    const now = (): number => (reads++ === 0 ? base : base + 595_000);
+    const now = (): number => (reads++ === 0 ? base : base + CLOUD_CODE_TURN_BUDGET_MS - 5_000);
 
     await runCloudCodeAgentTurn({
       ...baseInput,

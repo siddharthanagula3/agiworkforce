@@ -397,7 +397,7 @@ describe('file edit waiting for approval', () => {
       "case 'filesystem':\n      return 'fs-list';",
     ]);
     expectSource('apps/web/app/api/llm/v1/chat/completions/lib/tool-loop.ts', [
-      'return `Review ${humanizeIdentifier(toolName)} action`;',
+      'return toolApprovalLabel(toolName) ?? `Review ${humanizeIdentifier(toolName)} action`;',
       '.replace(/\\b\\w/g, (letter) => letter.toUpperCase());',
       "toolName === 'edit_file'",
     ]);

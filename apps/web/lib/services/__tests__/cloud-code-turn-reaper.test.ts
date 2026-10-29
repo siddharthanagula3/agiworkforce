@@ -56,7 +56,7 @@ describe('the stuck-turn threshold', () => {
     expect(CLOUD_CODE_STUCK_TURN_AGE_SECONDS).toBe(
       CLOUD_CODE_ROUTE_FUNCTION_LIMIT_MS / 1_000 + CLOUD_CODE_RUN_LEASE_SECONDS,
     );
-    expect(CLOUD_CODE_STUCK_TURN_AGE_SECONDS).toBe(720);
+    expect(CLOUD_CODE_STUCK_TURN_AGE_SECONDS).toBe(1_220);
   });
 
   it('leaves a turn that is still inside the window alone', async () => {
