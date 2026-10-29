@@ -8,6 +8,15 @@ packages:
 minimumReleaseAge: 10080
 
 minimumReleaseAgeExclude:
+  - '@next/env@16.4.3'
+  - '@next/swc-darwin-arm64@16.4.3'
+  - '@next/swc-darwin-x64@16.4.3'
+  - '@next/swc-linux-arm64-gnu@16.4.3'
+  - '@next/swc-linux-arm64-musl@16.4.3'
+  - '@next/swc-linux-x64-gnu@16.4.3'
+  - '@next/swc-linux-x64-musl@16.4.3'
+  - '@next/swc-win32-arm64-msvc@16.4.3'
+  - '@next/swc-win32-x64-msvc@16.4.3'
   - '@oxc-project/types@0.155.0'
   - '@rolldown/binding-android-arm-eabi@1.2.15'
   - '@rolldown/binding-android-arm64@1.2.15'
@@ -27,6 +36,7 @@ minimumReleaseAgeExclude:
   - 'body-parser@2.4.0'
   - 'electron@44.9.3'
   - 'fast-uri@3.1.9'
+  - 'next@16.4.3'
   - 'postcss-selector-parser@6.1.5'
   - 'rolldown@1.2.15'
   - 'serialize-javascript@7.1.3'
