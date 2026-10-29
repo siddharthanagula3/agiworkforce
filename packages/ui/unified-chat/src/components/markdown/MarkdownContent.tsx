@@ -43,7 +43,7 @@ import type { CitationItem, MarkdownCitation } from './CitationChip';
 import type { Components } from 'react-markdown';
 import { ArrowUpRight, Check, Image as ImageIcon, ImageOff } from 'lucide-react';
 import 'katex/dist/katex.min.css';
-import { approvedImageKeys, NO_TRUSTED_IMAGES, TrustedImagesContext } from './imageTrust';
+import { approvedImageKeys, NO_TRUSTED_IMAGES, TrustedImagesContext } from './ImageTrust';
 
 const IMAGE_LOADING_PLACEHOLDER_CLASS = 'aspect-[4/3] w-full max-w-sm';
 const IMAGE_NOTICE_CLASS =

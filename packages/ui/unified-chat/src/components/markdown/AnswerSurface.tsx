@@ -32,7 +32,7 @@ import {
   type StatusRow,
 } from './answerSurfaces';
 import { useFollowUpAction } from './FollowUpAction';
-import { GatedImage } from './imageTrust';
+import { GatedImage } from './ImageTrust';
 
 const PANEL_CLASS =
   'my-4 overflow-clip rounded-[var(--chat-radius-lg)] border border-[var(--chat-border)] bg-[var(--chat-bg)]';
