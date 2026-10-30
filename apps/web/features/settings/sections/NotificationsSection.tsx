@@ -1,12 +1,12 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import {
   fetchPreferenceNamespace,
   savePreferenceNamespace,
 } from '@/app/settings/_lib/preferences-client';
 import { Switch } from '@agiworkforce/ui';
-import { useWebPushToggle } from '@/features/notifications';
+import { BrowserNotificationStatus, useWebPushToggle } from '@/features/notifications';
 import {
   isReleased,
   SURFACE_STATUS,
@@ -16,6 +16,7 @@ import {
 import { toUserMessage } from '@/lib/user-error-message';
 import { SaveStatusLine } from '../components/SaveStatusLine';
 import { SettingsPageLink } from '../components/SettingsSectionLink';
+import styles from './NotificationsSection.module.css';
 
 const NAMESPACE = 'notifications';
 
@@ -31,11 +32,13 @@ interface ChannelSpec {
   channel: string;
   defaultValue: boolean;
   surface?: SurfaceId;
+  browserDependent?: boolean;
 }
 
 interface EventSpec {
   heading: string;
   subheading: string;
+  detail?: string;
   channels: ChannelSpec[];
   link?: { label: string; href: string };
 }
@@ -43,13 +46,15 @@ interface EventSpec {
 const EVENTS: ReadonlyArray<EventSpec> = [
   {
     heading: 'Reply ready',
-    subheading: 'A long-running response finishes while the AGI tab is in the background.',
-    channels: [{ id: 'browserReplyReady', channel: 'Browser', defaultValue: true }],
+    subheading: 'When a reply finishes while this tab is in the background.',
+    channels: [
+      { id: 'browserReplyReady', channel: 'Browser', defaultValue: true, browserDependent: true },
+    ],
   },
   {
     heading: 'Scheduled task finished',
-    subheading:
-      'A scheduled task completes or fails. Scheduled runs happen on the server while you are away, so this is the one result you cannot see in the app.',
+    subheading: 'When a scheduled task completes or fails.',
+    detail: 'Runs continue on the server while you are away. Results remain available in Tasks.',
     channels: [
       { id: 'emailScheduleDone', channel: 'Email', defaultValue: true },
       {
@@ -63,20 +68,22 @@ const EVENTS: ReadonlyArray<EventSpec> = [
   },
   {
     heading: 'Security alerts',
-    subheading:
-      'A new sign-in, a password, email or two-factor change, or a new device. Always shown in the app and sent even during quiet hours; choose whether they are also emailed.',
+    subheading: 'Always shown in-app, including quiet hours.',
+    detail:
+      'Includes sign-in, password, email, two-factor and device changes. Security alerts are sent during quiet hours. Email is optional unless Advanced Account Security requires it.',
     channels: [{ id: 'emailSecurityAlerts', channel: 'Email', defaultValue: true }],
   },
   {
     heading: 'Usage',
-    subheading: 'We will notify you when your usage limit resets.',
-    channels: [{ id: 'pushUsageReset', channel: 'Push', defaultValue: true }],
+    subheading: 'Usage-limit resets on registered browsers and mobile devices.',
+    channels: [
+      { id: 'pushUsageReset', channel: 'Push', defaultValue: true, browserDependent: true },
+    ],
   },
 ];
 
 const AGENT_RUN_HEADING = 'Agent run updates';
-const AGENT_RUN_SCOPE_NOTE =
-  'Applies only to this browser, so turn it on again wherever else you want notified.';
+const AGENT_RUN_SCOPE_NOTE = 'Completions, failures and approval requests. This browser only.';
 
 const OFF_VALUE = 'off';
 const CHANNEL_SEPARATOR = '+';
@@ -143,6 +150,7 @@ export function NotificationsSection({
 }: {
   surfaceStatus?: SurfaceStatusMap;
 } = {}) {
+  const browserStatusId = useId();
   const [state, setState] = useState<Record<NotifKey, boolean>>(() => defaultNotificationState());
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -209,7 +217,11 @@ export function NotificationsSection({
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+    <div
+      data-testid="notification-preferences"
+      className={styles['content']}
+      style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}
+    >
       <div>
         <h1
           style={{
@@ -254,8 +266,10 @@ export function NotificationsSection({
         ) : null}
       </div>
 
-      <div>
-        {offeredEvents(surfaceStatus).map((event) => {
+      <BrowserNotificationStatus id={browserStatusId} />
+
+      <div className={styles['rows']}>
+        {offeredEvents(surfaceStatus).map((event, index) => {
           const options = channelOptions(event);
           const selectedIds = event.channels
             .filter((channel) => state[channel.id])
@@ -263,24 +277,25 @@ export function NotificationsSection({
           const value = selectedIds.length === 0 ? OFF_VALUE : selectedIds.join(CHANNEL_SEPARATOR);
 
           return (
-            <section
-              key={event.heading}
-              aria-label={event.heading}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 'var(--space-4)',
-                padding: 'var(--space-4) 0',
-                borderBottom: '1px solid var(--settings-border)',
-                flexWrap: 'wrap',
-              }}
-            >
-              <div style={{ minWidth: 0, maxWidth: 480 }}>
+            <section key={event.heading} aria-label={event.heading} className={styles['row']}>
+              <div data-testid="notification-description" className={styles['description']}>
                 <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{event.heading}</div>
-                <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
+                <div
+                  id={`${browserStatusId}-description-${index}`}
+                  style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}
+                >
                   {event.subheading}
                 </div>
+                {event.detail ? (
+                  <details
+                    style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-2)' }}
+                  >
+                    <summary className="cursor-pointer text-[var(--text-1)]">
+                      Delivery details
+                    </summary>
+                    <p style={{ margin: 'var(--space-1) 0 0' }}>{event.detail}</p>
+                  </details>
+                ) : null}
                 {event.link ? (
                   <SettingsPageLink
                     href={event.link.href}
@@ -298,6 +313,9 @@ export function NotificationsSection({
               </div>
               <select
                 aria-label={event.heading}
+                aria-describedby={`${browserStatusId}-description-${index}${event.channels.some((channel) => channel.browserDependent) ? ` ${browserStatusId}` : ''}`}
+                className={`${styles['control']} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring`}
+                data-notification-control
                 disabled={loading || saving || loadError}
                 value={value}
                 onChange={(changeEvent) => {
@@ -316,38 +334,38 @@ export function NotificationsSection({
           );
         })}
 
-        <AgentRunRow />
+        <AgentRunRow browserStatusId={browserStatusId} />
       </div>
     </div>
   );
 }
 
-function AgentRunRow() {
+function AgentRunRow({ browserStatusId }: { browserStatusId: string }) {
   const { checked, disabled, unavailable, description, onCheckedChange } = useWebPushToggle();
 
   return (
-    <section
-      aria-label={AGENT_RUN_HEADING}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        gap: 'var(--space-4)',
-        padding: 'var(--space-4) 0',
-      }}
-    >
-      <div style={{ minWidth: 0, maxWidth: 480 }}>
+    <section aria-label={AGENT_RUN_HEADING} className={styles['row']}>
+      <div className={styles['description']}>
         <div style={{ fontSize: 14, color: 'var(--text-1)' }}>{AGENT_RUN_HEADING}</div>
         <div style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-1)' }}>
           {unavailable ? description : AGENT_RUN_SCOPE_NOTE}
         </div>
+        <details style={{ fontSize: 12, color: 'var(--text-3)', marginTop: 'var(--space-2)' }}>
+          <summary className="cursor-pointer text-[var(--text-1)]">Delivery details</summary>
+          <p style={{ margin: 'var(--space-1) 0 0' }}>
+            Enable separately in each browser. Alerts show run status, not run output.
+          </p>
+        </details>
       </div>
-      <Switch
-        checked={checked}
-        disabled={disabled}
-        onCheckedChange={onCheckedChange}
-        aria-label={AGENT_RUN_HEADING}
-      />
+      <div className={`${styles['control']} ${styles['switchControl']}`} data-notification-control>
+        <Switch
+          checked={checked}
+          disabled={disabled}
+          onCheckedChange={onCheckedChange}
+          aria-label={AGENT_RUN_HEADING}
+          aria-describedby={browserStatusId}
+        />
+      </div>
     </section>
   );
 }

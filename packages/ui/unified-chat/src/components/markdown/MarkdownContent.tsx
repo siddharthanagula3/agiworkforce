@@ -694,6 +694,7 @@ const MarkdownPre = ({
   if (classified.kind === 'fallback') {
     return <p data-answer-fallback={classified.reason}>{classified.text}</p>;
   }
+  if (language === 'mermaid') return <>{children}</>;
   if (language === '' && hasFenceBody(node)) {
     return (
       <pre {...rest}>

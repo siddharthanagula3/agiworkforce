@@ -59,6 +59,33 @@ describe('MermaidDiagram', () => {
     expect((renderMock.mock.calls[0]?.[2] as HTMLElement).isConnected).toBe(false);
   });
 
+  it('retains a trusted label size and natural canvas while removing Mermaid styles', async () => {
+    renderMock.mockResolvedValue({
+      svg: '<svg width="100%" viewBox="0 0 1200 320" style="max-width:1200px;font-size:2px"><style>.timeline-node .node-bkg { fill: black; }</style><g class="timeline-node section--1"><path class="node-bkg node-default" d="M0 0h200v50H0Z"/><text>Build</text></g></svg>',
+    });
+    const { container } = render(<MermaidDiagram source="timeline\nBuild : Compile" />);
+    await waitFor(() => expect(container.querySelector('[data-mermaid="ready"]')).toBeTruthy());
+    const svg = container.querySelector('svg');
+    expect(svg?.getAttribute('font-size')).toBe('14px');
+    expect(svg?.getAttribute('width')).toBe('1200');
+    expect(svg?.getAttribute('height')).toBe('320');
+    expect(svg?.querySelector('.timeline-node .node-bkg')).toBeTruthy();
+    expect(svg?.querySelector('style')).toBeNull();
+    expect(svg?.hasAttribute('style')).toBe(false);
+    expect(screen.getByRole('region', { name: 'Diagram' })).toHaveProperty('tabIndex', 0);
+  });
+
+  it('renders a Markdown diagram outside code preformatted semantics', async () => {
+    renderMock.mockResolvedValue({ svg: '<svg viewBox="0 0 640 120"><text>User</text></svg>' });
+    const { MarkdownContent } = await import('../MarkdownContent');
+    const { container } = render(
+      <MarkdownContent content={`\`\`\`mermaid\n${FLOWCHART}\n\`\`\``} />,
+    );
+    await waitFor(() => expect(container.querySelector('[data-mermaid="ready"]')).toBeTruthy());
+    expect(container.querySelector('[data-mermaid="ready"]')?.closest('pre')).toBeNull();
+    expect(container.querySelector('.code-block-container')).toBeNull();
+  });
+
   it('passes the drawn markup through the package sanitizer', async () => {
     renderMock.mockResolvedValue({
       svg: '<svg><g /><script>globalThis.pwned = true;</script></svg>',

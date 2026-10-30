@@ -2,7 +2,7 @@
 
 Status: Current
 Owner: Platform/release
-Last updated: 2026-10-02
+Last updated: 2026-10-30
 
 ## Production invariant
 
@@ -54,6 +54,24 @@ production deployment job:
 `pnpm check:ci-guardrails` tests this negative contract and also rejects a
 re-enabled Vercel `main` auto-deploy.
 
+## Commit-level deployment hold
+
+A commit with a Git trailer `Deployment: hold` still runs every normal CI check,
+but its successful CI result does not automatically deploy staging, production
+web, the artifact sandbox or signaling, publish the signaling container, or
+change the production queue. Environment reviewer policies and secrets are not
+changed. `scripts/production-deploy-scope.mjs --automatic-deployment` reads the
+checked-out HEAD through Git's trailer parser and emits `allowed=true|false`;
+nonempty unsupported Deployment directives and unreadable metadata fail closed.
+Body prose and fenced examples are not release instructions.
+
+Without the trailer, automatic deployment keeps its existing behavior. Explicit
+manual staging/service dispatches retain their prior gates and behavior. For a
+later automatic release, use a reviewed candidate without the hold trailer and
+the existing CI/reviewer process. Surface selection still measures the last
+shipped commit, so held changes are not lost from the next release. The
+production drift alarm remains truthful while main is deliberately unshipped.
+
 ## Staging tier
 
 `.github/workflows/deploy-staging.yml` owns the web staging tier. Its automatic
@@ -63,8 +81,8 @@ Vercel's preview environment; production builds separately with production
 values. They share a source commit, not an identical built artifact. A manual
 staging run uses the selected commit and does not establish that CI passed.
 
-It has no affected-surface filter. Staging tracks `main` commit for commit
-because the production gate below waits on it: a staging deploy skipped by a
+It has no affected-surface filter. Except for an explicit deployment hold,
+staging tracks `main` commit for commit because the production gate below waits on it: a staging deploy skipped by a
 scope classifier would be a commit production could never promote.
 
 What the run does, in order:
@@ -132,7 +150,7 @@ deployment record says which component versions it carries.
   also select native lanes. Other workflow-only, npm wrapper and Web changes
   skip Rust unless they touch one of those inputs.
 - Documentation-only changes select no production or native lane. Web staging
-  still follows every successful main CI push.
+  follows every successful main CI push without a deployment hold.
 
 `.github/workflows/codeql-analysis.yml` scans JavaScript/TypeScript, Ruby, and
 Actions on pushes and pull requests. Its Rust analysis runs for Rust or Cargo
@@ -155,12 +173,12 @@ Workflow `timeout-minutes` values are per-job safety ceilings. They are not
 measured durations or a monthly usage forecast. The previous runner-minute
 projection predates the requirement to run all release gates on every main push.
 
-| Change class                        | Required checks and additional lanes                                                                                |
-| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| Documentation only                  | All four required workflows and repository guards and Web staging after green main CI; no production or native lane |
-| Web or service changes              | All four required workflows, affected JavaScript checks and applicable staging/deployment lanes                     |
-| Native Desktop, CLI or Rust changes | All four required workflows plus applicable Linux, macOS and Windows native lanes                                   |
-| Weekly standalone Desktop E2E       | The scheduled Linux E2E workflow                                                                                    |
+| Change class                        | Required checks and additional lanes                                                                                       |
+| ----------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Documentation only                  | All four required workflows and repository guards and Web staging after unheld green main CI; no production or native lane |
+| Web or service changes              | All four required workflows, affected JavaScript checks and applicable staging/deployment lanes                            |
+| Native Desktop, CLI or Rust changes | All four required workflows plus applicable Linux, macOS and Windows native lanes                                          |
+| Weekly standalone Desktop E2E       | The scheduled Linux E2E workflow                                                                                           |
 
 Use completed runs for the current commit to measure runner time, and GitHub's
 billing dashboard to check the account's allowance and budget. Visibility, runner

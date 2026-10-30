@@ -170,3 +170,25 @@ and persistence acceptance does not measure live model emission quality.
 Extension/native host checks and governed model evaluation remain open. This
 task performed no production deployment or paid inference/search/image run and
 added no image-search tool or direct inline Python execution control.
+
+## Selected settings and agent-editor scope
+
+The owner selected four new usability recommendations from the October 30
+repair pack. Notification channels retain their saved values while a shared
+associated note explains local browser permission and push support; email,
+mobile push and this browser remain distinguishable. Viewing Settings does not
+request permission or create a subscription. Existing global repair of an
+already-consented endpoint remains separate. All selectors share a responsive
+column and stack consistently; delivery/security details remain available.
+
+The Agents editor uses bounded plain-text titles derived by the existing skill
+catalog owner, plus descriptions and IDs for search. Inherited `null`, explicit
+empty arrays and selected IDs keep their existing meaning. A keyboard
+multiselect replaces the full raw-slug checkbox list; unavailable saved IDs are
+retained. Header/footer actions submit the same form, search Enter cannot create
+an Agent, and existing unsaved-change confirmation protects Cancel/navigation.
+The mobile radio drawing preserves a 44px target and a 16px circular outline.
+
+Nine authenticated local browser cases passed with all writes intercepted;
+the three Agent cases also passed after the scoped radio correction. These
+checks do not establish real push delivery or production Agent creation.

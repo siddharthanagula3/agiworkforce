@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
 
 const repoRoot = resolve(import.meta.dirname, '../../..');
 const e2eDir = resolve(repoRoot, 'apps/web/e2e');
@@ -12,6 +13,22 @@ const matrixWorkflow = readFileSync(
 );
 
 const HARNESS = 'qa-capability-harness';
+const DEV_RENDERER_SPECS = ['chat-rendering-regression.spec.ts'];
+interface WorkflowJob {
+  needs?: string | string[];
+  env?: Record<string, string>;
+  steps: {
+    name?: string;
+    run?: string;
+    env?: Record<string, string>;
+    'continue-on-error'?: boolean;
+  }[];
+}
+const jobs = (parse(workflow) as { jobs: Record<string, WorkflowJob> }).jobs;
+
+function runFor(job: string, step: string): string {
+  return jobs[job]?.steps.find((entry) => entry.name === step)?.run ?? '';
+}
 
 /**
  * A spec belongs here only when its size, not its result, keeps it off the
@@ -38,8 +55,12 @@ function needsSignIn(spec: string, dir = e2eDir): boolean {
 }
 
 function ciSpecList(): string[] {
-  const step = workflow.split('Run signed-out Web Playwright flows')[1] ?? '';
-  const command = step.split('- name:')[0] ?? '';
+  const command = runFor('web-a11y', 'Run signed-out Web Playwright flows');
+  return [...command.matchAll(/^\s*([a-z0-9-]+\.spec\.ts)/gim)].map((match) => match[1]!).sort();
+}
+
+function devSpecList(): string[] {
+  const command = runFor('web-renderer-e2e', 'Run deterministic renderer fixtures');
   return [...command.matchAll(/^\s*([a-z0-9-]+\.spec\.ts)/gim)].map((match) => match[1]!).sort();
 }
 
@@ -54,9 +75,47 @@ describe('web CI runs every browser spec that does not need an account', () => {
     expect(specs().length).toBeGreaterThan(5);
   });
 
-  it('runs exactly the specs that do not sign in', () => {
+  it('assigns every signed-out spec to exactly one blocking server lane', () => {
     const public_ = specs().filter((spec) => !needsSignIn(spec));
-    expect(ciSpecList()).toEqual(public_);
+    expect(ciSpecList()).toEqual(public_.filter((spec) => !DEV_RENDERER_SPECS.includes(spec)));
+    expect(devSpecList()).toEqual(DEV_RENDERER_SPECS);
+    expect([...ciSpecList(), ...devSpecList()].sort()).toEqual(public_);
+    expect(ciSpecList().filter((spec) => devSpecList().includes(spec))).toEqual([]);
+  });
+
+  it('executes the development renderer against a fresh dev server and deployed sandbox policy', () => {
+    const job = jobs['web-renderer-e2e'];
+    expect(job).toBeDefined();
+    expect(job?.env?.['PLAYWRIGHT_REUSE_RUNNING_SERVER']).toBeUndefined();
+    expect(job?.env?.['PLAYWRIGHT_BASE_URL']).toBe('http://localhost:3000');
+    expect(job?.env?.['NEXT_PUBLIC_SANDBOX_ORIGIN']).toBe('http://localhost:3001');
+    expect(new URL(job?.env?.['DATABASE_URL'] ?? '').hostname).toBe('localhost');
+    const config = readFileSync(resolve(repoRoot, 'apps/web/playwright.config.ts'), 'utf8');
+    expect(config).toMatch(/command:\s*'pnpm dev'/);
+    const manifest = JSON.parse(readFileSync(resolve(repoRoot, 'apps/web/package.json'), 'utf8'));
+    expect(manifest.scripts.dev).toBe('next dev');
+    expect(
+      runFor('web-renderer-e2e', 'Start the sandbox with deployed security headers'),
+    ).toContain('node apps/web/e2e/lib/renderer-sandbox-server.mjs');
+    const execution = job?.steps.find(
+      (step) => step.name === 'Run deterministic renderer fixtures',
+    );
+    expect(execution?.run).toContain('pnpm exec playwright test');
+    expect(execution?.run).not.toMatch(/--(?:list|grep|grep-invert)\b/);
+    expect(execution?.['continue-on-error']).not.toBe(true);
+    expect(jobs['ci-complete']?.needs).toContain('web-renderer-e2e');
+  });
+
+  it('keeps the renderer unavailable in the production browser lane', () => {
+    const production = jobs['web-a11y']?.steps.find(
+      (step) => step.name === 'Run signed-out Web Playwright flows',
+    );
+    expect(production?.env?.['QA_PRODUCTION_SERVER']).toBe('1');
+    expect(ciSpecList()).toContain('dev-design-studies.spec.ts');
+    const boundary = readFileSync(join(e2eDir, 'dev-design-studies.spec.ts'), 'utf8');
+    expect(boundary).toContain('/dev/renderer-probe');
+    expect(boundary).toContain("process.env['QA_PRODUCTION_SERVER']");
+    expect(boundary).toMatch(/response\?\.status\(\)\)\.toBe\(404\)/);
   });
 
   it('names why the authenticated specs are absent rather than leaving it unsaid', () => {

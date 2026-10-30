@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
@@ -13,6 +13,7 @@ import {
   TabsContent,
   TabsList,
   TabsTrigger,
+  useUnsavedChangesGuard,
 } from '@agiworkforce/ui';
 import {
   ManagedSkillsResponseSchema,
@@ -98,7 +99,11 @@ function useSkillChoices(): AgentChoiceList {
             loading: false,
             error: null,
             options: skills
-              .map((skill) => ({ id: skill.name, name: skill.name }))
+              .map((skill) => ({
+                id: skill.name,
+                name: skill.title ?? skill.name,
+                description: skill.description,
+              }))
               .sort((left, right) => left.name.localeCompare(right.name)),
           });
         }
@@ -137,6 +142,8 @@ export function AgentEditorPage({
   const [saving, setSaving] = useState(false);
   const [starting, setStarting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  const formId = useId();
+  const formRef = useRef<HTMLFormElement>(null);
   const subscriptionTier = useBillingStore((state) => state.subscription?.tier ?? 'free');
   const connectors = useConnectorChoices();
   const skills = useSkillChoices();
@@ -174,6 +181,13 @@ export function AgentEditorPage({
   );
   const dirty = !draftsEqual(draft, saved);
   const readOnly = agent !== null && (!agent.isOwner || agent.status === 'retired');
+  const resetDraft = useCallback(() => setDraft(saved), [saved]);
+  const { confirmDiscard, dialog: discardDialog } = useUnsavedChangesGuard({
+    dirty: dirty && !readOnly,
+    description:
+      'Your changes to this agent have not been saved. If you leave now, they will be lost.',
+    onDiscard: resetDraft,
+  });
 
   const acceptAgent = useCallback((next: ManagedCloudAgent) => {
     const config = draftFromAgent(next);
@@ -187,9 +201,11 @@ export function AgentEditorPage({
   }, []);
 
   const save = async () => {
+    if (saving || readOnly) return;
     const problem = draftProblem(draft);
     if (problem) {
       setFormError(problem);
+      formRef.current?.querySelector<HTMLInputElement>('input[required]')?.focus();
       return;
     }
     setFormError(null);
@@ -200,6 +216,7 @@ export function AgentEditorPage({
         toast.success('Draft saved.');
       } else {
         const created = await api.create(draft);
+        acceptAgent(created);
         toast.success(`Created ${created.name}.`);
         router.replace(agentHref(created.id));
       }
@@ -261,23 +278,93 @@ export function AgentEditorPage({
   const configForm = (
     <AgentConfigForm
       draft={draft}
-      disabled={readOnly}
+      disabled={readOnly || saving}
       modelOptions={modelOptions}
       connectors={connectors}
       skills={skills}
       onChange={(patch) => setDraft((current) => ({ ...current, ...patch }))}
     />
   );
+  const saveAction = !readOnly ? (
+    <Button
+      type="submit"
+      form={formId}
+      className="pointer-coarse:min-h-11"
+      disabled={saving || (agent !== null && !dirty)}
+      aria-busy={saving}
+      onClick={(event) => {
+        if (!formRef.current) {
+          event.preventDefault();
+          void save();
+        }
+      }}
+    >
+      {saving ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
+      {agent ? 'Save draft' : 'Create agent'}
+    </Button>
+  ) : null;
+  const editor = (
+    <form
+      id={formId}
+      ref={formRef}
+      aria-label="Agent configuration"
+      noValidate
+      className="flex flex-col gap-6"
+      onSubmit={(event) => {
+        event.preventDefault();
+        void save();
+      }}
+    >
+      {configForm}
+      {formError ? (
+        <p role="alert" className="text-sm text-danger-text">
+          {formError}
+        </p>
+      ) : null}
+      <footer
+        aria-label="Agent actions"
+        className="flex flex-col gap-3 border-t border-border pt-4 sm:flex-row sm:items-center sm:justify-between"
+      >
+        <p aria-live="polite" className="text-sm text-muted-foreground">
+          {readOnly
+            ? 'Read-only agent'
+            : dirty
+              ? 'Unsaved changes'
+              : agent
+                ? 'All changes saved.'
+                : 'Not saved yet'}
+        </p>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            className="pointer-coarse:min-h-11"
+            disabled={saving}
+            onClick={() => confirmDiscard(() => router.push(AGENTS_HREF))}
+          >
+            {readOnly ? 'Back to Agents' : 'Cancel'}
+          </Button>
+          {saveAction}
+        </div>
+      </footer>
+    </form>
+  );
 
   return (
     <div className="min-h-full bg-background text-foreground">
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-8 sm:px-6">
-        <Link
-          href={AGENTS_HREF}
-          className="w-fit text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
-        >
-          Agents
-        </Link>
+        {saving ? (
+          <span aria-disabled="true" className="w-fit text-sm text-muted-foreground">
+            Agents
+          </span>
+        ) : (
+          <Link
+            href={AGENTS_HREF}
+            className="w-fit text-sm text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--chat-focus-ring)]"
+          >
+            Agents
+          </Link>
+        )}
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex min-w-0 items-center gap-3">
             <AgentAvatar icon={draft.icon} accentColor={draft.accentColor} size="lg" />
@@ -311,24 +398,9 @@ export function AgentEditorPage({
                 Chat
               </Button>
             ) : null}
-            {!readOnly ? (
-              <Button
-                className="pointer-coarse:min-h-11"
-                disabled={saving || (agent !== null && !dirty)}
-                aria-busy={saving}
-                onClick={() => void save()}
-              >
-                {saving ? <Spinner size="sm" className="me-2" aria-hidden="true" /> : null}
-                {agent ? 'Save draft' : 'Create agent'}
-              </Button>
-            ) : null}
+            {saveAction}
           </div>
         </header>
-        {formError ? (
-          <p role="alert" className="text-sm text-danger">
-            {formError}
-          </p>
-        ) : null}
         {agent && !agent.isOwner ? (
           <p className="text-sm text-muted-foreground">
             {agent.ownerName ?? 'A teammate'} built this agent. You can chat with it; only its owner
@@ -353,7 +425,7 @@ export function AgentEditorPage({
               ))}
             </TabsList>
             <TabsContent value="agent" className="mt-0 flex flex-col gap-6">
-              {configForm}
+              {editor}
               <AgentKnowledgePanel api={api} agentId={agent.id} editable={!readOnly} />
               {agent.isOwner ? (
                 <AgentPublishPanel
@@ -382,9 +454,10 @@ export function AgentEditorPage({
             </TabsContent>
           </Tabs>
         ) : (
-          configForm
+          editor
         )}
       </div>
+      {discardDialog}
     </div>
   );
 }

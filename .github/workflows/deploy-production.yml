@@ -133,6 +133,10 @@ jobs:
           # checkout cannot diff against it.
           fetch-depth: 0
 
+      - name: Read candidate deployment intent
+        id: intent
+        run: node scripts/production-deploy-scope.mjs --automatic-deployment >> "$GITHUB_OUTPUT"
+
       - name: Self-test the deploy scope selector
         run: node --test scripts/production-deploy-scope.test.mjs
 
@@ -149,6 +153,7 @@ jobs:
       # unshipped after CI went green on a commit that touched only scripts/.
       - name: Select affected production surfaces
         id: scope
+        if: steps.intent.outputs.allowed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}
@@ -165,6 +170,7 @@ jobs:
       # deploy=true on any error, exactly as the web baseline does.
       - name: Select the artifact sandbox surface
         id: sandbox
+        if: steps.intent.outputs.allowed == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           GITHUB_SHA: ${{ github.event.workflow_run.head_sha }}

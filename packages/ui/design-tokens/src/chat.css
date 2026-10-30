@@ -250,6 +250,9 @@
  */
 .mermaid-block {
   margin: 1rem 0;
+  min-width: 0;
+  max-width: 100%;
+  font-family: var(--chat-font-sans);
 }
 
 .mermaid-block[data-mermaid='pending'],
@@ -258,11 +261,19 @@
 }
 
 .mermaid-diagram {
-  overflow-x: auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: auto;
+  background: var(--chat-bg);
+}
+
+.mermaid-diagram:focus-visible {
+  outline: 2px solid var(--chat-focus-ring);
+  outline-offset: 2px;
 }
 
 .mermaid-diagram svg {
-  max-width: 100%;
+  max-width: none;
   height: auto;
 }
 
@@ -270,16 +281,17 @@
 .mermaid-diagram svg .node circle,
 .mermaid-diagram svg .node ellipse,
 .mermaid-diagram svg .node polygon,
-.mermaid-diagram svg .cluster rect {
+.mermaid-diagram svg .cluster rect,
+.mermaid-diagram svg .timeline-node .node-bkg {
   fill: var(--chat-surface-elevated);
-  stroke: var(--chat-border-strong);
+  stroke: var(--chat-text-muted);
   stroke-width: 1px;
 }
 
 .mermaid-diagram svg text,
 .mermaid-diagram svg tspan {
   fill: var(--chat-text-primary);
-  font-family: inherit;
+  font-family: var(--chat-font-sans);
 }
 
 .mermaid-diagram svg .edgePath path,
@@ -309,6 +321,11 @@
 
 .mermaid-diagram svg .messageLine0,
 .mermaid-diagram svg .messageLine1 {
+  stroke: var(--chat-text-muted);
+}
+
+.mermaid-diagram svg .actor-man circle {
+  fill: var(--chat-text-muted);
   stroke: var(--chat-text-muted);
 }
 

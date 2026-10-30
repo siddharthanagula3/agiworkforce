@@ -1,9 +1,9 @@
-# Chat rendering: local fixes and live acceptance
+# Chat rendering and selected UI/UX repairs
 
 Status: Local browser and persistence acceptance passed; governed prompt and deployed acceptance remain open
-Owner: Web chat + shared rendering maintainers
+Owner: Web chat + shared rendering + settings/agents maintainers
 Last verified: 2026-10-30
-Purpose: Track the owner's rendering QA, verified causes, local evidence and remaining acceptance boundaries.
+Purpose: Track the owner's rendering QA and selected notification/agent recommendations, verified causes, evidence and release boundaries.
 Retention: Delete when pending acceptance is completed or transferred to existing defect owners; Git and the original chat retain dated evidence.
 
 ## Inputs and release state
@@ -20,6 +20,12 @@ No message, edit, Send or Run action was performed. Private conversation IDs,
 URLs, owner email, sidebar content and screenshots are excluded from this
 repository. This observed account does not establish general plan availability
 or full/current competitor parity.
+
+The owner also supplied `AGI_Workforce_UI_UX_Repair_Pack` and explicitly selected
+NEW-UX-01 through NEW-UX-04 alongside the chat repair. The pack distinguishes
+60 cards from newly verified bugs: its four new items are usability
+recommendations. The remaining historical/public-site/SEO cards were not added
+to this implementation scope and are not asserted to be current defects.
 
 Read-only Vercel/production inspection in the parent chat confirmed deployment
 `dpl_B6PcJBTtasH479W26iDuKFaWDEgV` serves commit
@@ -48,7 +54,7 @@ billing or database mutation was made.
 | HTML controls appeared but scripts did not run   | CodeBlock used a same-document srcDoc preview under nonce CSP; shared sandbox origin was not explicitly supplied by the web host                                             | `HtmlCodePreview.tsx` reuses ArtifactSandboxFrame, Providers bridges the validated host origin, blocked previews show an honest fallback                                        |
 | Writing had presentation-only editing            | Shared EmailBlock/WritingBlock and `assistantFenceEdits.ts`; web `assistant-fence-persistence.ts`                                                                            | Exact source Copy, scoped fence identity, host Save and owned compare-and-swap PATCH                                                                                            |
 | Functional blocks needed real controls/resources | Shared `answerSurfaces.ts`, `assistantFence.ts`, `AnswerForm.tsx`, `AnswerGallery.tsx`, `ChartArtifact.tsx`                                                                  | React validation/local Apply, card/grid/carousel DOM, independent image trust/failure states, data-backed charts                                                                |
-| Diagrams lost preview/source or became pictures  | Web MessageBubble and shared Mermaid path                                                                                                                                    | Separate safe SVGs, marker handling, source Copy and visible errors                                                                                                             |
+| Diagrams lost preview/source or became pictures  | Web MessageBubble and shared Mermaid path; trusted CSS omitted timeline roles and scaled labels down on narrow screens                                                       | Separate safe SVGs, trusted timeline styles, natural-size local scrolling, source Copy, Expand/Escape and visible errors                                                        |
 | Answer footer preferred the image badge          | `apps/web/features/chat/components/messages/MessageBubble.tsx` (`answeredByChipLabel`)                                                                                       | Image model stays on its card; conversational identity stays on the reply                                                                                                       |
 | One Matplotlib figure appeared twice             | Saved/show exports had different byte hashes                                                                                                                                 | `apps/web/lib/e2b/python-figure-provenance.ts`, `png-render-identity.ts`, generated-file contracts and `turn-artifacts.ts` group validated render identity and retain downloads |
 
@@ -149,13 +155,82 @@ This is not hosted-sandbox or production blob-persistence evidence.
 These are scoped runs and overlap; their counts must not be summed as a
 unique total. The final repository checks are recorded below when complete.
 
+## Selected notification and agent recommendations
+
+| Card      | Current source finding                                                                                                                            | Changed owners and verification                                                                                                                                                                                                                                                             |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| NEW-UX-01 | Saved channels did not clearly distinguish this browser's permission and web-push registration; the Settings toggle registered a worker on mount. | `BrowserNotificationStatus.tsx`, `NotificationsSection.tsx`, `WebPushToggle.tsx`, `web-push-client.ts`: a shared associated status, preserved channel/subscription selection, read-only Settings inspection. Global already-consented endpoint repair remains separate.                     |
+| NEW-UX-02 | Four selectors alternated between side and stacked placement; long secondary copy dominated rows.                                                 | `NotificationsSection.module.css` and section markup: common responsive subgrid, consistent stacking and expandable delivery/security details.                                                                                                                                              |
+| NEW-UX-03 | The editor mapped canonical skill names directly to labels and discarded descriptions; inherited mode exposed the whole checkbox list.            | `AgentSkillSelection.tsx`, `AgentConfigForm.tsx`, skill summary contract/API/catalog: optional bounded plain-text titles from canonical headings, descriptions/ID search, explicit inheritance/counts, keyboard multiselect and retained unavailable selections. No private skill-name map. |
+| NEW-UX-04 | Actions were available only at the header; this editor had no unsaved-navigation guard.                                                           | `AgentEditorPage.tsx`: shared header/footer submit action, in-flow Create/Cancel, validation focus, disabled pending fields and existing unsaved-draft confirmation.                                                                                                                        |
+
+The new authenticated local suite passed **9/9 in 58.0 seconds**. It covered
+four notification permission states, selector alignment/stacking and keyboard
+saves at 1440/320px, and three Agent inheritance/selection scenarios. All four
+notification saves and three Agent submissions were intercepted in memory;
+Agent POSTs returned an intentional 422 and created nothing. Permission,
+subscribe, unsubscribe and display spies stayed at zero. Other preference
+namespaces and consent writes were captured separately; they were not
+misclassified as notification-view traffic. Unknown mutation attempts stayed
+at zero. This is not an end-to-end notification-delivery or real Agent-creation
+claim.
+
+Visual review then found the new radio outline stretched by the existing
+mobile button minimum height. The scoped correction keeps a 44px interactive
+target and a 16px circle without reducing the global touch rule. All three
+Agent scenarios passed again with actual target/pseudo-element geometry
+assertions. The inherited `null`, explicit empty `[]` and selected canonical
+IDs retained their request semantics; search Enter never submits the Agent.
+
+Cropped evidence is under the rendering artifact's `settings-agent-ux/` folder,
+including the final 320px selection/footer capture. Source checks also passed
+52 notification tests, 34 final editor/selector tests, 6 contract tests and a
+100-test catalog/API/older-consumer compatibility packet; these scopes overlap.
+
+## Diagram and CI acceptance refinement
+
+The first SVG-count check missed black timeline shapes and tiny scaled labels.
+Direct screenshot review found those issues. The corrected check exercises
+physical label size, actual timeline contrast, keyboard local scrolling, all
+three Expand/Escape/focus flows and no duplicate SVGs at four widths in both
+themes. It passed in 9.2 seconds. The SVG sanitizer and CSP were not relaxed.
+Before/after screenshots are retained as `three-diagrams-before-320.png` and
+`three-diagrams-320-light.png` / `three-diagrams-320-dark.png`.
+
+A fresh Next development process using CI's signed-out fixture configuration
+passed all **15 renderer checks in 1.2 minutes**, without the optional local
+sanitizer cache. The real calculator sandbox used the actual pinned CDN asset
+and retained the deployed security headers. The controlled browser fixture now
+waits for and dismisses the real delayed cookie banner instead of sampling its
+visibility too early. It does not force clicks through an overlay.
+
+The local production web build passed after two test-only TypeScript errors
+were corrected (Testing Library role options and byte-oriented skill hashing).
+The built local server returned HTTP 404 with no renderer fixture DOM; the
+production-boundary browser check passed in 1.3 seconds. This was a loopback
+server with synthetic auth, not a deployment.
+
+The blocking `web-renderer-e2e` job runs these development-only fixtures; the
+production browser lane separately checks that `/dev/renderer-probe` is 404.
+The page now has a server-side production gate. The coverage guard assigns
+every signed-out spec to exactly one of those lanes and requires both in the
+aggregate; existing auth and on-demand matrix checks remain intact. The
+loopback-only sandbox fixture serves the existing document and reads all
+security headers directly from the deployment configuration. Two fixture-server
+checks, ten coverage-assignment checks and the workflow guards passed.
+
 ## Final repository verification
 
-- `pnpm typecheck:all`: all 63 workspace tasks passed with the web heap limit.
-- Changed web tests: 607 passed, 5 optional checks skipped in the default run.
+- `pnpm typecheck:all`: all 63 workspace tasks passed with the web heap limit,
+  including the final post-UX run (2m14.5s).
+- Full routing package after registry regeneration: 1,232 tests passed.
+- Final combined changed web tests: 762 passed in 45 files, with the actual
+  local Matplotlib interpreter and recorded image envelope enabled.
+- Earlier changed web run: 607 passed, 5 optional checks skipped in the default run.
   Running the actual recorded image envelope and local Matplotlib interpreter
   explicitly passed 12 checks, including all five default optional checks.
-- Changed shared renderer tests: 221 passed. Existing code controls, table,
+- Full shared chat package: 2,563 tests passed in 220 files (6m29.6s).
+- Earlier changed shared renderer tests: 221 passed. Existing code controls, table,
   continuation and thinking-policy checks passed another 111 tests; existing
   artifact editing and replay checks passed 18 web tests.
 - Cloud generated-file/HTTP error contracts: 26 passed. Canonical reasoning:
@@ -222,3 +297,16 @@ Existing defect owners are reused:
   and truncation work remains in the existing compound row.
 
 No duplicate defect rows or separate execution plan were created.
+
+## Publication without deployment
+
+Read-only release inspection found that successful main CI automatically starts
+staging, its staging environment has no reviewer gate, and its required
+credential names are configured. Direct Vercel Git deployment is disabled.
+To satisfy the owner's explicit no-deployment constraint while pushing main,
+the final commit carries `Deployment: hold`. A shared, Git-parsed intent gate
+prevents automatic staging/production/sandbox/signaling publication and queue
+cleanup for that candidate; CI remains mandatory. No environment permission,
+secret value or billing setting was changed. Existing manual release paths and
+all prior release checks remain. The [canonical procedure](../../docs/development/ci-and-deploys.md)
+documents the hold and later release behavior.

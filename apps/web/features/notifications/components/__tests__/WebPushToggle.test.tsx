@@ -9,15 +9,20 @@ const mocks = vi.hoisted(() => ({
   isWebPushSupported: vi.fn(),
   readNotificationPermission: vi.fn(),
   registerNotificationWorker: vi.fn(),
+  readNotificationWorker: vi.fn(),
   getSubscription: vi.fn(),
 }));
 
-vi.mock('../../lib/web-push-client', () => ({
+type OriginalWebPushClientModule = typeof import('../../lib/web-push-client');
+
+vi.mock('../../lib/web-push-client', async (importOriginal) => ({
+  ...(await importOriginal<OriginalWebPushClientModule>()),
   disableWebPush: mocks.disableWebPush,
   enableWebPush: mocks.enableWebPush,
   isWebPushSupported: mocks.isWebPushSupported,
   readNotificationPermission: mocks.readNotificationPermission,
   registerNotificationWorker: mocks.registerNotificationWorker,
+  readNotificationWorker: mocks.readNotificationWorker,
 }));
 
 const { WebPushToggle } = await import('../WebPushToggle');
@@ -32,17 +37,22 @@ beforeEach(() => {
   mocks.registerNotificationWorker.mockResolvedValue({
     pushManager: { getSubscription: mocks.getSubscription },
   });
+  mocks.readNotificationWorker.mockResolvedValue({
+    pushManager: { getSubscription: mocks.getSubscription },
+  });
   mocks.enableWebPush.mockResolvedValue('enabled');
   mocks.disableWebPush.mockResolvedValue(true);
 });
 
 describe('WebPushToggle', () => {
-  it('says the desktop app notifies through macOS, and offers nothing to switch on', async () => {
+  it('uses system notification settings in the desktop host', async () => {
     window.agiHost = hostBridgeStub();
     try {
       render(<WebPushToggle />);
 
-      expect(await screen.findByText(/notifies you through macOS/)).toBeInTheDocument();
+      expect(
+        await screen.findByText(/Manage Agent notifications in General desktop settings/),
+      ).toBeInTheDocument();
       expect(screen.getByRole('switch', SWITCH)).toBeDisabled();
       expect(mocks.registerNotificationWorker).not.toHaveBeenCalled();
     } finally {
@@ -57,6 +67,8 @@ describe('WebPushToggle', () => {
       expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'false'),
     );
     expect(screen.getByText(/Get told when a run finishes/)).toBeInTheDocument();
+    expect(mocks.registerNotificationWorker).not.toHaveBeenCalled();
+    expect(mocks.enableWebPush).not.toHaveBeenCalled();
   });
 
   it('reads on when this browser is already registered', async () => {
@@ -122,7 +134,7 @@ describe('WebPushToggle', () => {
 
     render(<WebPushToggle />);
 
-    expect(screen.getByText('This browser cannot receive notifications.')).toBeInTheDocument();
+    expect(screen.getByText('Browser push is unavailable here.')).toBeInTheDocument();
     expect(screen.getByRole('switch', SWITCH)).toBeDisabled();
   });
 

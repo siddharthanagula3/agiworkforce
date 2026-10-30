@@ -45,9 +45,13 @@ export const ManagedSkillOriginSchema = z.object({
   addedAt: z.string().trim().min(1).max(40).optional(),
 });
 
+export const MANAGED_SKILL_TITLE_MAX_CHARS = 200;
+export const ManagedSkillTitleSchema = z.string().trim().min(1).max(MANAGED_SKILL_TITLE_MAX_CHARS);
+
 export const ManagedSkillSummarySchema = z
   .object({
     name: z.string().trim().min(1).max(200),
+    title: ManagedSkillTitleSchema.optional(),
     description: z.string().trim(),
     source: ManagedSkillSourceSchema,
     lifecycle: ManagedSkillLifecycleSchema,

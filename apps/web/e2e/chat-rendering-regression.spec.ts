@@ -20,7 +20,8 @@ async function openFixture(page: Page, id: string) {
   expect(response?.status()).toBe(200);
   await expect(page.locator('[data-renderer-conversation]')).toBeVisible();
   const consent = page.getByRole('button', { name: 'Necessary only', exact: true });
-  if (await consent.isVisible()) await consent.click();
+  await consent.click();
+  await expect(page.getByRole('region', { name: 'Cookie consent', exact: true })).toBeHidden();
   await page.waitForFunction(() => document.fonts.status === 'loaded', undefined, {
     timeout: 15_000,
   });
@@ -397,9 +398,112 @@ test('three diagrams stay separate and source controls preserve diagram text', a
   await expect(page.getByText(/flowchart LR/)).toBeVisible();
   await page.reload();
   await expect(page.locator('.message-text svg')).toHaveCount(3);
-  await page.setViewportSize({ width: 320, height: 900 });
-  await assertNoPageOverflow(page);
-  await evidence(page, 'three-diagrams-320');
+  for (const width of WIDTHS) {
+    await page.setViewportSize({ width, height: 900 });
+    for (const appearance of ['dark', 'light']) {
+      await theme(page, appearance);
+      const diagrams = page.locator('.mermaid-diagram');
+      await expect(diagrams).toHaveCount(3);
+      const drawing = await diagrams.evaluateAll((elements) => {
+        const color = (value: string) => {
+          const match = /^rgba?\(([^)]+)\)$/.exec(value);
+          if (!match) throw new Error(`Unreadable diagram color: ${value}`);
+          const parts = match[1]!.split(/[\s,]+/).map(Number);
+          if (parts.length > 3 && parts[3] !== 1)
+            throw new Error(`Translucent diagram color: ${value}`);
+          return parts.slice(0, 3);
+        };
+        const luminance = (value: string) =>
+          color(value)
+            .map((channel) => {
+              const normalized = channel / 255;
+              return normalized <= 0.04045
+                ? normalized / 12.92
+                : ((normalized + 0.055) / 1.055) ** 2.4;
+            })
+            .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index]!, 0);
+        const contrast = (foreground: string, background: string) => {
+          const first = luminance(foreground);
+          const second = luminance(background);
+          return (Math.max(first, second) + 0.05) / (Math.min(first, second) + 0.05);
+        };
+        return elements.map((element) => {
+          const svg = element.querySelector('svg')!;
+          const labels = Array.from(svg.querySelectorAll('text')).filter((label) =>
+            label.textContent?.trim(),
+          );
+          return {
+            id: svg.id,
+            insidePre: Boolean(element.closest('pre')),
+            clientWidth: element.clientWidth,
+            scrollWidth: element.scrollWidth,
+            labelPixels: labels.map((label) => {
+              const matrix = label.getScreenCTM();
+              if (!matrix) throw new Error('Diagram label has no screen geometry');
+              return parseFloat(getComputedStyle(label).fontSize) * Math.hypot(matrix.a, matrix.b);
+            }),
+            timeline: Array.from(svg.querySelectorAll('.timeline-node')).map((node) => {
+              const background = node.querySelector('.node-bkg');
+              const label = node.querySelector('text');
+              if (!background || !label)
+                throw new Error('Timeline node is missing its label or background');
+              return contrast(getComputedStyle(label).fill, getComputedStyle(background).fill);
+            }),
+          };
+        });
+      });
+      expect(new Set(drawing.map((diagram) => diagram.id)).size).toBe(3);
+      for (const diagram of drawing) {
+        expect(diagram.insidePre).toBe(false);
+        expect(diagram.labelPixels.length).toBeGreaterThanOrEqual(4);
+        for (const pixels of diagram.labelPixels) expect(pixels).toBeGreaterThanOrEqual(13.5);
+      }
+      expect(drawing[2]!.timeline.length).toBeGreaterThan(0);
+      for (const ratio of drawing[2]!.timeline) expect(ratio).toBeGreaterThanOrEqual(4.5);
+      if (width === 320) {
+        expect(drawing.some((diagram) => diagram.scrollWidth > diagram.clientWidth)).toBe(true);
+        const scroller = diagrams.nth(
+          drawing.findIndex((diagram) => diagram.scrollWidth > diagram.clientWidth),
+        );
+        await scroller.evaluate((element) => {
+          element.scrollLeft = 0;
+        });
+        await scroller.focus();
+        await scroller.press('ArrowRight');
+        await expect
+          .poll(() => scroller.evaluate((element) => element.scrollLeft))
+          .toBeGreaterThan(0);
+      }
+      await assertNoPageOverflow(page);
+      for (let index = 0; index < 3; index++) {
+        await page.getByRole('button', { name: 'Expand diagram', exact: true }).nth(index).click();
+        const dialog = page.getByRole('dialog', { name: 'Diagram', exact: true });
+        await expect(dialog.locator('.mermaid-diagram > svg')).toHaveCount(1);
+        await expect(page.locator('.message-text svg')).toHaveCount(2);
+        await expect(page.locator('.mermaid-diagram > svg')).toHaveCount(3);
+        const clipped = await dialog.evaluate((element) =>
+          Array.from(element.querySelectorAll('button'))
+            .filter((button) => {
+              const bounds = button.getBoundingClientRect();
+              return (
+                bounds.left < 0 ||
+                bounds.right > innerWidth ||
+                bounds.top < 0 ||
+                bounds.bottom > innerHeight
+              );
+            })
+            .map((button) => button.textContent),
+        );
+        expect(clipped).toEqual([]);
+        await page.keyboard.press('Escape');
+        await expect(dialog).toHaveCount(0);
+        await expect(
+          page.getByRole('button', { name: 'Expand diagram', exact: true }).nth(index),
+        ).toBeFocused();
+      }
+      await evidence(page, `three-diagrams-${width}-${appearance}`);
+    }
+  }
 });
 
 test('four images remain ordered independent resources through partial failure and reopen', async ({

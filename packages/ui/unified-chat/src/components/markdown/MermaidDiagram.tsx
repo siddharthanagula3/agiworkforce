@@ -25,13 +25,15 @@ type RenderState =
 // htmlLabels would emit node text inside a foreignObject, which the SVG
 // sanitizer strips - the diagram then draws as unlabelled boxes. Plain SVG
 // <text> survives sanitisation and keeps HTML out of the markup entirely.
+const MERMAID_LABEL_FONT_SIZE = '14px';
+
 const MERMAID_CONFIG: MermaidConfig = {
   startOnLoad: false,
   securityLevel: 'strict',
   theme: 'base',
   fontFamily: 'inherit',
   htmlLabels: false,
-  themeVariables: { fontSize: '14px' },
+  themeVariables: { fontSize: MERMAID_LABEL_FONT_SIZE },
   flowchart: { htmlLabels: false, useMaxWidth: true },
   class: { htmlLabels: false },
   suppressErrorRendering: true,
@@ -68,9 +70,10 @@ function hasCenteredNodeLabels(doc: Document): boolean {
   return false;
 }
 
-function bakeTextAnchor(svg: string): string {
+function bakeDiagramPresentation(svg: string): string {
   const doc = new DOMParser().parseFromString(svg, 'image/svg+xml');
   if (doc.querySelector('parsererror')) return svg;
+  doc.documentElement.setAttribute('font-size', MERMAID_LABEL_FONT_SIZE);
 
   doc.querySelectorAll('[style*="text-anchor"]').forEach((el) => {
     const match = INLINE_TEXT_ANCHOR.exec(el.getAttribute('style') ?? '');
@@ -227,7 +230,7 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
         }
         const { svg } = await renderMermaidInOwnedHost(mermaid, diagramId, source, renderHost);
         if (cancelled) return;
-        const sanitized = sanitizeSvg(bakeTextAnchor(svg));
+        const sanitized = sanitizeSvg(bakeDiagramPresentation(svg));
         // A render that succeeds but sanitizes down to nothing (malformed
         // markup, an unexpected root element) must not present as 'ready' with
         // an empty container - that is the empty-output-with-source-available
@@ -278,6 +281,9 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
     const drawing = (
       <div
         className="mermaid-diagram"
+        role={interactive ? 'region' : undefined}
+        aria-label={interactive ? t('markdown.diagramTitle', 'Diagram') : undefined}
+        tabIndex={interactive ? 0 : undefined}
         // llm-guardrail-allow: Mermaid output is passed through the package sanitizeSvg before entering state.svg.
         dangerouslySetInnerHTML={{ __html: state.svg }}
       />
@@ -322,11 +328,11 @@ export const MermaidDiagram: React.FC<MermaidDiagramProps> = ({
                   aria-describedby={undefined}
                   className="inset-4 mx-auto flex w-auto max-w-6xl max-h-none translate-x-0 translate-y-0 flex-col gap-0 overflow-hidden border border-[var(--chat-border)] bg-[var(--chat-bg)] p-0 backdrop-blur-none"
                 >
-                  <div className="flex min-h-12 items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-4 py-2">
+                  <div className="flex min-h-12 flex-wrap items-center justify-between gap-2 border-b border-[var(--chat-border-subtle)] px-4 py-2">
                     <DialogTitle className="text-sm font-medium">
                       {t('markdown.diagramTitle', 'Diagram')}
                     </DialogTitle>
-                    <div className="flex items-center gap-2">
+                    <div className="flex flex-wrap items-center gap-2">
                       {copySource}
                       <DialogClose asChild>
                         <Button

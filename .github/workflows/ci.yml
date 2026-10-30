@@ -995,6 +995,105 @@ jobs:
           path: apps/mobile/artifacts/mobile-e2e
           retention-days: 14
 
+  web-renderer-e2e:
+    name: Web renderer fixtures
+    runs-on: ubuntu-24.04
+    needs: scope
+    if: needs.scope.outputs.web_changed == 'true'
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: agiworkforce_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d agiworkforce_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/agiworkforce_test
+      AGI_DATABASE_PROVIDER: postgres
+      APP_ENV: test
+      CLERK_SECRET_KEY: test-clerk-secret-key
+      NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_live_Y2xlcmstY2kuaW52YWxpZCQ
+      NEXT_PUBLIC_APP_URL: http://localhost:3000
+      NEXT_PUBLIC_SANDBOX_ORIGIN: http://localhost:3001
+      PLAYWRIGHT_BASE_URL: http://localhost:3000
+      QA_RENDER_EVIDENCE_DIR: ${{ runner.temp }}/renderer-evidence
+      NODE_OPTIONS: --max-old-space-size=6144
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Prepare memory for private-repository checks
+        if: github.event.repository.private == true
+        uses: ./.github/actions/prepare-runner-memory
+
+      - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Chromium
+        working-directory: apps/web
+        run: pnpm exec playwright install --with-deps chromium
+
+      - name: Prepare the isolated test database
+        run: pnpm db:migrate -- apply --target ci
+
+      - name: Verify the sandbox fixture server
+        run: node --test apps/web/e2e/lib/renderer-sandbox-server.test.mjs
+
+      - name: Start the sandbox with deployed security headers
+        run: |
+          set -euo pipefail
+          node apps/web/e2e/lib/renderer-sandbox-server.mjs > "$RUNNER_TEMP/renderer-sandbox.log" 2>&1 &
+          echo $! > "$RUNNER_TEMP/renderer-sandbox.pid"
+          curl -fsS --retry 10 --retry-connrefused --retry-delay 1 http://localhost:3001/ > /dev/null
+
+      # The probe is deliberately 404 in production; Playwright starts next dev in this fresh job.
+      - name: Run deterministic renderer fixtures
+        working-directory: apps/web
+        run: |
+          pnpm exec playwright test \
+            chat-rendering-regression.spec.ts \
+            --project=chromium \
+            --workers=1 \
+            --retries=1 \
+            --timeout=60000 \
+            --global-timeout=600000 \
+            --reporter=line,html \
+            --output="$RUNNER_TEMP/renderer-test-results"
+
+      - name: Preserve renderer evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: web-renderer-evidence
+          path: |
+            apps/web/playwright-report
+            ${{ runner.temp }}/renderer-test-results
+            ${{ runner.temp }}/renderer-evidence
+            ${{ runner.temp }}/renderer-sandbox.log
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Stop the owned sandbox fixture
+        if: always()
+        run: |
+          if [ -f "$RUNNER_TEMP/renderer-sandbox.pid" ]; then
+            kill "$(cat "$RUNNER_TEMP/renderer-sandbox.pid")" 2>/dev/null || true
+          fi
+
   web-a11y:
     name: Web E2E and accessibility audit
     runs-on: ubuntu-24.04
@@ -1144,6 +1243,7 @@ jobs:
         working-directory: apps/web
         env:
           PLAYWRIGHT_REUSE_RUNNING_SERVER: '1'
+          QA_PRODUCTION_SERVER: '1'
         run: |
           pnpm exec playwright test \
             auth-accessibility.spec.ts \
@@ -1439,6 +1539,7 @@ jobs:
       - vscode-extension-e2e
       - mobile-e2e
       - web-a11y
+      - web-renderer-e2e
       - clippy-all-features
       - macos-smoke
       - windows-smoke

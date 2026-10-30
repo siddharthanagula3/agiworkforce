@@ -13,12 +13,15 @@ const mocks = vi.hoisted(() => ({
   savePreferenceNamespace: vi.fn(),
 }));
 
+type OriginalNotificationsModule = typeof import('@/features/notifications');
+
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
   fetchPreferenceNamespace: mocks.fetchPreferenceNamespace,
   savePreferenceNamespace: mocks.savePreferenceNamespace,
 }));
 
-vi.mock('@/features/notifications', () => ({
+vi.mock('@/features/notifications', async (importOriginal) => ({
+  ...(await importOriginal<OriginalNotificationsModule>()),
   useWebPushToggle: () => ({
     checked: false,
     disabled: false,

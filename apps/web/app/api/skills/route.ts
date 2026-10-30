@@ -36,6 +36,7 @@ import {
   findManagedDirectorySkillByName,
   getManagedSkillDirectoryForPlugins,
   invalidateManagedSkillCatalogCache,
+  managedSkillTitle,
   SkillCatalogUnavailableError,
 } from '@/lib/services/skill-catalog-service';
 import { resolveInstalledManagedSkills } from '@/lib/services/skill-install-service';
@@ -171,6 +172,7 @@ async function handleListSkills(request: NextRequest) {
         ...listed.map((s) => ({
           origin: originOf(s),
           name: s.name,
+          ...(managedSkillTitle(s) ? { title: managedSkillTitle(s) } : {}),
           description: s.description,
           source: s.source,
           lifecycle: s.frontmatter['draft'] === true ? 'draft' : 'included',

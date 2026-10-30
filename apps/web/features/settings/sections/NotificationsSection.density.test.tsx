@@ -14,12 +14,15 @@ const mocks = vi.hoisted(() => ({
   },
 }));
 
+type OriginalNotificationsModule = typeof import('@/features/notifications');
+
 vi.mock('@/app/settings/_lib/preferences-client', () => ({
   fetchPreferenceNamespace: mocks.fetchPreferenceNamespace,
   savePreferenceNamespace: mocks.savePreferenceNamespace,
 }));
 
-vi.mock('@/features/notifications', () => ({
+vi.mock('@/features/notifications', async (importOriginal) => ({
+  ...(await importOriginal<OriginalNotificationsModule>()),
   useWebPushToggle: () => mocks.webPush,
 }));
 
@@ -63,14 +66,14 @@ describe('NotificationsSection row density', () => {
   it('says why the switch is dead when the browser cannot receive notifications', async () => {
     mocks.webPush.unavailable = true;
     mocks.webPush.disabled = true;
-    mocks.webPush.description = 'This browser cannot receive notifications.';
+    mocks.webPush.description = 'Browser push is unavailable here.';
 
     render(<NotificationsSection />);
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     const runRow = screen.getByText('Agent run updates').closest('section');
     expect(screen.getByRole('switch', { name: 'Agent run updates' })).toBeDisabled();
-    expect(runRow?.textContent).toContain('cannot receive notifications');
+    expect(runRow?.textContent).toContain('Browser push is unavailable');
     expect(runRow?.textContent).not.toContain('Applies only to this browser');
 
     mocks.webPush.unavailable = false;
@@ -84,7 +87,7 @@ describe('NotificationsSection row density', () => {
     await waitFor(() => expect(screen.queryByText(/loading/i)).toBeNull());
 
     const runRow = screen.getByText('Agent run updates').closest('section');
-    expect(runRow?.textContent).toContain('Applies only to this browser');
+    expect(runRow?.textContent).toContain('This browser only');
     expect(runRow?.textContent).not.toContain('blocked for this site');
   });
 });

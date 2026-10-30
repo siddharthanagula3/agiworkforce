@@ -55,6 +55,12 @@ owns evidence and current acceptance gaps.
       two-tab conflict/reopen check passed separately. Exact evidence and
       remaining release boundaries are in the live-check record.
 
+- [x] 3.4 Add a blocking development renderer lane and strict production/dev
+      assignment; preserve the signed-out production and on-demand matrix gates.
+- [x] 3.5 Validate the local production web build and actual HTTP 404/no-fixture
+      boundary. Report current-head repository/remote outcomes with the commit
+      and CI evidence, without treating a local pass as a deployment.
+
 ## 4. Earlier screenshot work still tracked
 
 - [ ] 4.1 Verify literal user Markdown through authenticated conversations.
@@ -72,6 +78,23 @@ owns evidence and current acceptance gaps.
 - [ ] 5.1 Inventory every web route and run the original authenticated responsive
       sweep at 390/360/320px and 768/1024px; fix/recheck its findings.
 - [ ] 5.2 Decide the earlier table styling preference.
+
+## 6. Selected October 30 UX recommendations
+
+The owner selected NEW-UX-01 through NEW-UX-04 from the supplied repair pack;
+its other historical/public-site/SEO cards remain outside this pass. These
+four are usability recommendations rather than newly established failures.
+
+- [x] 6.1 Distinguish saved notification channels from this browser's permission
+      and web-push support without prompting or subscribing on Settings view.
+- [x] 6.2 Align all channel controls and retain essential details in disclosures;
+      verify desktop and stacked narrow layouts.
+- [x] 6.3 Search canonical skill titles, descriptions and IDs, with explicit
+      inheritance/counts and preserved null/array semantics.
+- [x] 6.4 Keep Create/Cancel reachable, retain the header action, guard unsaved
+      navigation and preserve a failed-submit draft.
+- [x] 6.5 Verify nine authenticated local browser cases using intercepted writes,
+      then rerun three Agent cases with circular-radio/touch-target geometry.
 
 The provider-denial continuation issue remains in
 `WEB-CHAT-DENIED-TOOL-PROVIDER-400-01`, outside this rendering slice. Production

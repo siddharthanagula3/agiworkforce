@@ -26,6 +26,7 @@ import {
 import {
   METRIC_NAME,
   recordBrowserTask,
+  recordCacheRead,
   recordClientFailure,
   recordWorkPlanSize,
   recordCompletion,
@@ -115,6 +116,8 @@ async function emitEverySignal(): Promise<void> {
     protocolVersion: '1',
   });
   recordFailure('api', 'timeout');
+  recordCacheRead('connectors.directory.icon', 'cached value');
+  recordCacheRead('connectors.directory.icon', undefined);
   recordDatabaseOperation({ operation: 'select', outcome: 'ok', durationMs: 3 });
   recordDatabaseOperation({
     operation: 'insert',
