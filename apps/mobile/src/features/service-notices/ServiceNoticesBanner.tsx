@@ -28,6 +28,7 @@ export function ServiceNoticesBanner() {
     }
     const controller = new AbortController();
     const check = () => {
+      if (AppState.currentState !== 'active') return;
       fetchServiceNotices(controller.signal)
         .then((next) => {
           if (controller.signal.aborted) return;

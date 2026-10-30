@@ -7,6 +7,14 @@ import {
 
 const originalFetch = global.fetch;
 
+async function stayActiveForFiveMinutes() {
+  for (let i = 0; i < 6; i++) {
+    await vi.advanceTimersByTimeAsync(50_000);
+    document.dispatchEvent(new Event('keydown'));
+  }
+  await vi.advanceTimersByTimeAsync(1_000);
+}
+
 function summary(sessionUsagePercentage: number) {
   return {
     plan_tier: 'pro',
@@ -41,7 +49,7 @@ describe('useManagedUsageSummary', () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
   });
 
-  it('re-reads /api/usage while the tab is visible so a mid-session climb is seen', async () => {
+  it('re-reads /api/usage while the user is active so a mid-session climb is seen', async () => {
     let percentage = 20;
     const fetchMock = vi.fn(
       async () => ({ ok: true, json: async () => summary(percentage) }) as Response,
@@ -54,7 +62,7 @@ describe('useManagedUsageSummary', () => {
     percentage = 95;
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(301_000);
+      await stayActiveForFiveMinutes();
     });
 
     await waitFor(() => expect(result.current.usage?.session_usage_percentage).toBe(95));
@@ -68,19 +76,19 @@ describe('useManagedUsageSummary', () => {
     visibility.mockReturnValue('hidden');
 
     renderHook(() => useManagedUsageSummary());
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    expect(fetchMock).not.toHaveBeenCalled();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(180_000);
     });
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
 
     visibility.mockReturnValue('visible');
     await act(async () => {
       document.dispatchEvent(new Event('visibilitychange'));
     });
 
-    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
   });
 
   it('reports a failed background re-read as stale without blanking the numbers', async () => {
@@ -94,12 +102,38 @@ describe('useManagedUsageSummary', () => {
 
     ok = false;
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(301_000);
+      await stayActiveForFiveMinutes();
     });
 
     await waitFor(() => expect(result.current.stale).toBe(true));
     expect(result.current.usage?.session_usage_percentage).toBe(20);
     expect(result.current.error).toBeNull();
+  });
+
+  it('makes no periodic requests on an idle visible page and refreshes once on return', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => summary(20) }) as Response);
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { result } = renderHook(() => useManagedUsageSummary());
+    await waitFor(() => expect(result.current.usage).not.toBeNull());
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      document.dispatchEvent(new Event('pointerdown'));
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not refresh a fresh reading for repeated visibility changes', async () => {
+    const fetchMock = vi.fn(async () => ({ ok: true, json: async () => summary(20) }) as Response);
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const { result } = renderHook(() => useManagedUsageSummary());
+    await waitFor(() => expect(result.current.usage).not.toBeNull());
+    await act(async () => {
+      for (let i = 0; i < 10; i++) document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -185,7 +219,7 @@ describe('the usage reading is shared, not fetched per component', () => {
     expect(fetchMock).toHaveBeenCalledTimes(1);
 
     await act(async () => {
-      await vi.advanceTimersByTimeAsync(301_000);
+      await stayActiveForFiveMinutes();
     });
 
     expect(fetchMock).toHaveBeenCalledTimes(2);

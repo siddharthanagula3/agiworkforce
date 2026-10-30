@@ -71,14 +71,24 @@ export function MediaJobsSection({ transport }: { transport: MediaJobsTransport 
   }, [transport]);
 
   useEffect(() => {
-    void load();
+    const refresh = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    refresh();
+    document.addEventListener('visibilitychange', refresh);
+    return () => document.removeEventListener('visibilitychange', refresh);
   }, [load]);
 
   const active = jobs?.some(inFlight) === true;
   useEffect(() => {
     if (!active) return;
-    const timer = setInterval(() => void load(), POLL_INTERVAL_MS);
-    return () => clearInterval(timer);
+    const poll = () => {
+      if (document.visibilityState === 'visible') void load();
+    };
+    const timer = setInterval(poll, POLL_INTERVAL_MS);
+    return () => {
+      clearInterval(timer);
+    };
   }, [active, load]);
 
   const act = useCallback(

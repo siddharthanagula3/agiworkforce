@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { isBrowserUserActive, subscribeBrowserActivity } from '@agiworkforce/client-runtime';
 import type { NotificationFeedItem } from '../lib/notification-target';
 import { fetchNotificationFeed, markNotificationFeedRead } from '../lib/notification-feed-client';
 
@@ -42,15 +43,19 @@ export function useNotificationFeed(enabled: boolean): NotificationFeedState {
 
   useEffect(() => {
     if (!enabled) return undefined;
-    void refresh();
+    let lastRefreshAt: number | null = null;
     const poll = () => {
-      if (document.visibilityState === 'visible') void refresh();
+      if (!isBrowserUserActive()) return;
+      if (lastRefreshAt !== null && Date.now() - lastRefreshAt < NOTIFICATION_FEED_POLL_MS) return;
+      lastRefreshAt = Date.now();
+      void refresh();
     };
+    const stopActivity = subscribeBrowserActivity(poll);
+    poll();
     const timer = window.setInterval(poll, NOTIFICATION_FEED_POLL_MS);
-    document.addEventListener('visibilitychange', poll);
     return () => {
       window.clearInterval(timer);
-      document.removeEventListener('visibilitychange', poll);
+      stopActivity();
       inFlight.current?.abort();
     };
   }, [enabled, refresh]);

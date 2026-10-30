@@ -134,6 +134,8 @@ export const DB_PROBE_TIMEOUT_MS = 5_000;
 
 export const DB_CHECK_TTL_MS = 15_000;
 
+export const DB_IDLE_CHECK_TTL_MS = 30 * 60_000;
+
 export const DB_STARTUP_RETRY_BASE_MS = 1_000;
 
 export const DB_STARTUP_RETRY_MAX_MS = 30_000;

@@ -41,6 +41,7 @@ export const OBSERVABILITY_ATTRIBUTE = {
   rejectionReason: 'agi.rejection.reason',
   turnOutcome: 'agi.turn.outcome',
   cacheOutcome: 'agi.cache.outcome',
+  cacheCategory: 'agi.cache.category',
   routeId: 'agi.route.id',
   routingCohort: 'agi.routing.cohort',
   routingStatus: 'agi.routing.status',

@@ -2,6 +2,8 @@ import {
   createMessageQueue,
   LANE_CAP,
   QueueFullError,
+  isBrowserUserActive,
+  subscribeBrowserActivity,
   type AgentActivityToolEntry,
   type ConnectorInputResponse,
 } from '@agiworkforce/client-runtime';
@@ -13875,7 +13877,7 @@ function refreshOpenAccountChatOnReturn(): void {
   void openStoredConversation(_ctx.conversationId);
 }
 function refreshAccountOnReturn(): void {
-  if (document.visibilityState !== 'visible') return;
+  if (!isBrowserUserActive()) return;
   refreshOpenAccountChatOnReturn();
   if (
     managedCloudChatState === 'ready' &&
@@ -13886,14 +13888,13 @@ function refreshAccountOnReturn(): void {
   void refreshCloudAccountUI();
 }
 function refreshAccountWhileOpen(): void {
-  if (document.visibilityState !== 'visible' || _ctx.isStreaming) return;
+  if (!isBrowserUserActive() || _ctx.isStreaming) return;
   lastAccountRefreshOnReturn = Date.now();
   void refreshCloudAccountUI();
 }
 setInterval(refreshAccountWhileOpen, ACCOUNT_REFRESH_WHILE_OPEN_MS);
-document.addEventListener('visibilitychange', refreshAccountOnReturn);
+subscribeBrowserActivity(refreshAccountOnReturn);
 window.addEventListener('pagehide', () => void flushProductEvents());
-window.addEventListener('focus', refreshAccountOnReturn);
 chrome.tabs.onUpdated?.addListener((_tabId, changeInfo) => {
   if (
     pendingBrowserContextTabs.some((tab) => tab.tabId === _tabId) &&

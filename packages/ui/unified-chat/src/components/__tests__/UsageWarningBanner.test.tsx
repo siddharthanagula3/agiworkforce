@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { selectUsageWarning } from '@agiworkforce/types';
 import { UsageWarningBanner } from '../UsageWarningBanner';
@@ -9,6 +9,24 @@ const warning = selectUsageWarning([{ bucket: 'weekly', percentRemaining: 25 }])
 const critical = selectUsageWarning([{ bucket: 'session', percentRemaining: 5 }]);
 
 describe('UsageWarningBanner', () => {
+  it('stops prompting while the page is idle and returns on interaction', () => {
+    vi.useFakeTimers();
+    try {
+      render(<UsageWarningBanner warning={critical} />);
+      fireEvent.pointerDown(document);
+      expect(screen.getByRole('status')).toBeTruthy();
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(screen.queryByRole('status')).toBeNull();
+      fireEvent.keyDown(document);
+      expect(screen.getByRole('status')).toBeTruthy();
+    } finally {
+      cleanup();
+      vi.useRealTimers();
+    }
+  });
+
   it('renders nothing when there is nothing to warn about', () => {
     const { container } = render(<UsageWarningBanner warning={null} />);
     expect(container.innerHTML).toBe('');

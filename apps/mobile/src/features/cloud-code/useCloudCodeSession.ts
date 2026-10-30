@@ -157,7 +157,7 @@ export function useCloudCodeSession(
   const runningTurnId = latestTurn && latestTurn.stopReason === null ? latestTurn.turnId : null;
   const working = turnRequest !== null || runningTurnId !== null;
   const sessionBusy = detail ? cloudCodeSessionIsBusy(detail.session) : false;
-  const shouldPoll = status === 'ready' && appState !== 'background' && (working || sessionBusy);
+  const shouldPoll = status === 'ready' && appState === 'active' && (working || sessionBusy);
 
   useEffect(() => {
     if (!shouldPoll) return undefined;

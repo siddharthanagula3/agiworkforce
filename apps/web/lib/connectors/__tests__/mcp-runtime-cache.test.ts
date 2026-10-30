@@ -86,6 +86,16 @@ describe('stateless MCP persistent cache', () => {
     expect(String(mocks.query.mock.calls[0]?.[0])).not.toContain('value');
   });
 
+  it('can exclude expired entries for shared public cache versions without changing raw CAS stamps', async () => {
+    mocks.query.mockResolvedValue([{ stamp: '7' }]);
+    const store = new NeonMcpResponseCacheStore();
+    await store.getStamp({ method: 'directory' }, 1234);
+    expect(mocks.query.mock.calls[0]?.[0]).toContain('expires_at_ms >= $4');
+    expect(mocks.query.mock.calls[0]?.[1]).toEqual(['directory', '', '', 1234]);
+    await store.getStamp({ method: 'directory' });
+    expect(mocks.query.mock.calls[1]?.[0]).not.toContain('expires_at_ms');
+  });
+
   it('returns null for a stamp on a missing key', async () => {
     mocks.query.mockResolvedValueOnce([]);
     const store = new NeonMcpResponseCacheStore();

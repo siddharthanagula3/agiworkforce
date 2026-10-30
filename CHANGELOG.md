@@ -2,9 +2,22 @@
 
 Status: Current
 Owner: Platform lead
-Last updated: 2026-10-18
+Last updated: 2026-10-30
 
 All notable changes to AGI Workforce. The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and the project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [Unreleased, database transfer and idle activity], 2026-10-30
+
+### Fixed
+
+- Idle web and Chrome sessions stop optional usage and notification refreshes;
+  usage warnings resume with user activity. Mobile pauses periodic Cloud sync
+  and presentation refreshes while inactive, then refreshes on return.
+- Public connector directory and icon reads reuse versioned shared caches,
+  including snapshots larger than one cache entry. Quota enforcement and
+  private account cache boundaries remain unchanged.
+- Signaling reuses healthy idle readiness readings while preserving startup,
+  active-session and failure checks.
 
 ## [Unreleased, cleanup and Chrome extension parity], 2026-10-18
 

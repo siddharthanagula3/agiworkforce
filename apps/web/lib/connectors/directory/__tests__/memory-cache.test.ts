@@ -1,3 +1,5 @@
+type SnapshotCacheModule = typeof import('../snapshot-cache');
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { directoryRecord } from './fixtures';
@@ -11,7 +13,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('server-only', () => ({}));
-vi.mock('@/lib/connectors/directory/snapshot-cache', () => ({
+vi.mock('@/lib/connectors/directory/snapshot-cache', async (importOriginal) => ({
+  ...(await importOriginal<SnapshotCacheModule>()),
   readSnapshotStamp: () => mocks.readSnapshotStamp(),
   readSnapshotRecords: () => mocks.readSnapshotRecords(),
   readSyncState: () => mocks.readSyncState(),

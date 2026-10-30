@@ -9,11 +9,14 @@ export interface DatabaseCheck {
   current(): Promise<DatabaseState>;
   refresh(): Promise<DatabaseState>;
   last(): DatabaseState | null;
+  invalidate(): void;
 }
 
 export function createDatabaseCheck(options: {
   probe: () => Promise<DatabaseProbe>;
   ttlMs: number;
+  idleTtlMs?: number;
+  isActive?: () => boolean;
   now?: () => number;
 }): DatabaseCheck {
   const now = options.now ?? Date.now;
@@ -40,10 +43,18 @@ export function createDatabaseCheck(options: {
   };
 
   return {
-    current: () =>
-      cached && now() - cached.checkedAt < options.ttlMs ? Promise.resolve(cached) : refresh(),
+    current: () => {
+      const ttlMs =
+        cached?.status === 'ok' && options.isActive?.() === false
+          ? (options.idleTtlMs ?? options.ttlMs)
+          : options.ttlMs;
+      return cached && now() - cached.checkedAt < ttlMs ? Promise.resolve(cached) : refresh();
+    },
     refresh,
     last: () => cached,
+    invalidate: () => {
+      cached = null;
+    },
   };
 }
 

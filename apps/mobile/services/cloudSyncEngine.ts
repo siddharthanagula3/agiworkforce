@@ -1,4 +1,4 @@
-import { Alert } from 'react-native';
+import { Alert, AppState, type NativeEventSubscription } from 'react-native';
 import { api } from './api';
 import { managedCloudProjects } from './managedCloudProjects';
 import { agiNativeColors } from '@agiworkforce/design-tokens';
@@ -973,16 +973,22 @@ export async function syncNow(): Promise<void> {
 }
 
 let loopHandle: ReturnType<typeof setInterval> | null = null;
+let resumeSync: NativeEventSubscription | null = null;
 
 export function startCloudSyncLoop(intervalMs = 30_000): void {
   if (loopHandle) return;
   loopHandle = setInterval(() => {
-    void syncNow();
+    if (AppState.currentState === 'active') void syncNow();
   }, intervalMs);
-  void syncNow();
+  resumeSync = AppState.addEventListener('change', (state) => {
+    if (state === 'active') void syncNow();
+  });
+  if (AppState.currentState === 'active') void syncNow();
 }
 
 export function stopCloudSyncLoop(): void {
+  resumeSync?.remove();
+  resumeSync = null;
   if (loopHandle) {
     clearInterval(loopHandle);
     loopHandle = null;

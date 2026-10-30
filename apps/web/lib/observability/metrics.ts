@@ -30,6 +30,8 @@ export const METRIC_NAME = {
   failures: 'agi.failures',
   databaseOperations: 'db.client.operation.count',
   databaseDuration: 'db.client.operation.duration',
+  cacheReads: 'agi.cache.postgres.reads',
+  cacheValueBytes: 'agi.cache.postgres.value.bytes',
   queueDepth: 'agi.queue.depth',
   queueWait: 'agi.queue.wait',
   queueAge: 'agi.queue.age',
@@ -97,6 +99,8 @@ interface Instruments {
   readonly failures: Counter;
   readonly databaseOperations: Counter;
   readonly databaseDuration: Histogram;
+  readonly cacheReads: Counter;
+  readonly cacheValueBytes: Counter;
   readonly queueDepth: Gauge;
   readonly queueWait: Histogram;
   readonly queueAge: Gauge;
@@ -137,6 +141,8 @@ function instruments(): Instruments {
     failures: meter.createCounter(METRIC_NAME.failures),
     databaseOperations: meter.createCounter(METRIC_NAME.databaseOperations),
     databaseDuration: meter.createHistogram(METRIC_NAME.databaseDuration, { unit: MILLISECONDS }),
+    cacheReads: meter.createCounter(METRIC_NAME.cacheReads),
+    cacheValueBytes: meter.createCounter(METRIC_NAME.cacheValueBytes, { unit: 'By' }),
     queueDepth: meter.createGauge(METRIC_NAME.queueDepth),
     queueWait: meter.createHistogram(METRIC_NAME.queueWait, { unit: MILLISECONDS }),
     queueAge: meter.createGauge(METRIC_NAME.queueAge, { unit: MILLISECONDS }),
@@ -407,6 +413,26 @@ export function recordDatabaseOperation(input: {
   recorded.databaseOperations.add(1, attributes);
   recorded.databaseDuration.record(nonNegative(input.durationMs), attributes);
   if (input.outcome === 'error') recordFailure('database', input.errorType);
+}
+
+export function recordCacheRead(method: string, value: string | undefined): void {
+  const category = method.startsWith('connectors.directory.icon')
+    ? 'directory-icon'
+    : method.startsWith('connectors.directory.auth')
+      ? 'directory-auth'
+      : method.startsWith('connectors.directory.')
+        ? 'directory-snapshot'
+        : method.startsWith('plugins.')
+          ? 'plugins'
+          : 'mcp';
+  const attributes = clean({
+    [OBSERVABILITY_ATTRIBUTE.cacheCategory]: category,
+    [OBSERVABILITY_ATTRIBUTE.cacheOutcome]: value === undefined ? 'miss' : 'hit',
+  });
+  const recorded = instruments();
+  recorded.cacheReads.add(1, attributes);
+  if (value !== undefined)
+    recorded.cacheValueBytes.add(Buffer.byteLength(value, 'utf8'), attributes);
 }
 
 export type QueueDepthStatus = 'queued' | 'running' | 'dead';

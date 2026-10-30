@@ -9,6 +9,14 @@
 
 export { isTauri, isCloudWeb, isTest } from './detect';
 
+export {
+  BROWSER_ACTIVITY_IDLE_MS,
+  createBrowserActivityTracker,
+  isBrowserUserActive,
+  subscribeBrowserActivity,
+} from './browserActivity';
+export type { BrowserActivityTracker } from './browserActivity';
+
 export { resolveClientChatExecutionMode } from './mode';
 
 export { command } from './command';

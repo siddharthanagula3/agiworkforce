@@ -395,6 +395,7 @@ export function SchedulesPage({
     const controller = new AbortController();
 
     const poll = async () => {
+      if (document.visibilityState !== 'visible') return;
       const due = computeDueSchedules();
       if (due.length === 0) {
         setRunningScheduleIds((current) => (current.size === 0 ? current : new Set()));
@@ -417,10 +418,13 @@ export function SchedulesPage({
 
     void poll();
     const timer = setInterval(() => void poll(), RUNNING_POLL_INTERVAL_MS);
+    const resume = () => void poll();
+    document.addEventListener('visibilitychange', resume);
     return () => {
       cancelled = true;
       controller.abort();
       clearInterval(timer);
+      document.removeEventListener('visibilitychange', resume);
     };
   }, [schedules, api]);
 

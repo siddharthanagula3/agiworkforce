@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+import { ActivityIndicator, AppState, View } from 'react-native';
 import { MessageSquare, RotateCcw, X, type LucideIcon } from 'lucide-react-native';
 import type { MediaJobEntry } from '@agiworkforce/cloud-contracts';
 import { isInFlightMediaJobStatus, type MediaJobStatus } from '@agiworkforce/types';
@@ -93,14 +93,25 @@ export function MediaJobsSection({
 
   useEffect(() => {
     const controller = new AbortController();
-    void load(controller.signal);
-    return () => controller.abort();
+    const refresh = () => {
+      if (AppState.currentState === 'active') void load(controller.signal);
+    };
+    refresh();
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void load(controller.signal);
+    });
+    return () => {
+      controller.abort();
+      subscription.remove();
+    };
   }, [load]);
 
   const active = jobs?.some(inFlight) === true;
   useEffect(() => {
     if (!active) return undefined;
-    const timer = setInterval(() => void load(), POLL_INTERVAL_MS);
+    const timer = setInterval(() => {
+      if (AppState.currentState === 'active') void load();
+    }, POLL_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [active, load]);
 

@@ -21,6 +21,7 @@ import {
   recordRoutingDecision,
   recordSpanMetrics,
   recordToolOutcome,
+  recordCacheRead,
 } from './metrics';
 import { resetDeploymentAttributesCache } from './attributes';
 import { withSpan } from './span';
@@ -68,6 +69,21 @@ function countWhere(series: Point[], attributes: Record<string, unknown>): numbe
 }
 
 describe('span metrics', () => {
+  it('measures cache value bytes by bounded category without exposing keys or contents', async () => {
+    recordCacheRead('connectors.directory.icon', 'é');
+    recordCacheRead('connectors.directory.icon', undefined);
+    recordCacheRead('private/server-user-secret', 'private contents');
+    const bytes = await points(METRIC_NAME.cacheValueBytes);
+    expect(
+      countWhere(bytes, { 'agi.cache.category': 'directory-icon', 'agi.cache.outcome': 'hit' }),
+    ).toBe(2);
+    expect(
+      countWhere(await points(METRIC_NAME.cacheReads), { 'agi.cache.category': 'directory-icon' }),
+    ).toBe(2);
+    expect(JSON.stringify(bytes)).not.toContain('private contents');
+    expect(JSON.stringify(bytes)).not.toContain('server-user-secret');
+  });
+
   it('counts every withSpan call by name, domain and outcome', async () => {
     await withSpan('unit.ok', { domain: 'tool' }, () => 'done');
     await expect(

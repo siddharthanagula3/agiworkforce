@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
+import { isBrowserUserActive, subscribeBrowserActivity } from '@agiworkforce/client-runtime';
 import { toUserMessage } from '@/lib/user-error-message';
 import type {
   ManagedUsageBucketReading,
@@ -51,6 +52,7 @@ let shared: SharedUsageState = {
 const subscribers = new Set<() => void>();
 let inFlight: Promise<void> | null = null;
 let revalidateTimer: ReturnType<typeof setInterval> | null = null;
+let stopActivity: (() => void) | null = null;
 
 function publish(next: Partial<SharedUsageState>): void {
   shared = { ...shared, ...next };
@@ -87,23 +89,30 @@ function loadUsage(background: boolean): Promise<void> {
 }
 
 function revalidateWhenVisible(): void {
-  if (document.visibilityState === 'visible') void loadUsage(true);
+  if (!isBrowserUserActive()) return;
+  if (
+    shared.lastUpdatedAt &&
+    Date.now() - shared.lastUpdatedAt.getTime() < REVALIDATE_INTERVAL_MS
+  ) {
+    return;
+  }
+  void loadUsage(shared.usage !== null);
 }
 
-/** One timer and one listener for all subscribers, not one set per copy. */
 function startRevalidating(): void {
   if (revalidateTimer !== null || typeof document === 'undefined') return;
-  revalidateTimer = setInterval(revalidateWhenVisible, REVALIDATE_INTERVAL_MS);
-  document.addEventListener('visibilitychange', revalidateWhenVisible);
+  revalidateTimer = setInterval(() => {
+    if (isBrowserUserActive()) void loadUsage(shared.usage !== null);
+  }, REVALIDATE_INTERVAL_MS);
+  stopActivity = subscribeBrowserActivity(revalidateWhenVisible);
 }
 
 function stopRevalidating(): void {
   if (revalidateTimer === null) return;
   clearInterval(revalidateTimer);
   revalidateTimer = null;
-  if (typeof document !== 'undefined') {
-    document.removeEventListener('visibilitychange', revalidateWhenVisible);
-  }
+  stopActivity?.();
+  stopActivity = null;
 }
 
 /** Test seam: module state outlives a test file without it. */
@@ -121,9 +130,7 @@ export function useManagedUsageSummary(): ManagedUsageSummaryState {
     const notify = () => setSnapshot(shared);
     subscribers.add(notify);
     startRevalidating();
-    // A copy that mounts after the first one adopts what is already loaded and
-    // asks for a reading only when there is none and none is on its way.
-    if (shared.usage === null && inFlight === null) void loadUsage(false);
+    if (shared.usage === null && inFlight === null && isBrowserUserActive()) void loadUsage(false);
     else notify();
     return () => {
       subscribers.delete(notify);

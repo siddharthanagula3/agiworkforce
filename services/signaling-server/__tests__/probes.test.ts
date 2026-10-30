@@ -15,6 +15,36 @@ afterEach(() => {
 });
 
 describe('the cached database check', () => {
+  it('allows idle suspension while retaining short active and failure checks', async () => {
+    let clock = 0;
+    let active = false;
+    let healthy = true;
+    const probe = vi.fn(async (): Promise<DatabaseProbe> =>
+      healthy ? { ok: true, latencyMs: 1 } : { ok: false, reason: '08006' },
+    );
+    const check = createDatabaseCheck({
+      probe,
+      ttlMs: 15_000,
+      idleTtlMs: 30 * 60_000,
+      isActive: () => active,
+      now: () => clock,
+    });
+    await check.refresh();
+    for (clock = 15_000; clock < 30 * 60_000; clock += 15_000) await check.current();
+    expect(probe).toHaveBeenCalledTimes(1);
+    active = true;
+    healthy = false;
+    await expect(check.current()).resolves.toMatchObject({ status: 'down' });
+    active = false;
+    healthy = true;
+    clock += 15_000;
+    await expect(check.current()).resolves.toMatchObject({ status: 'ok' });
+    expect(probe).toHaveBeenCalledTimes(3);
+    check.invalidate();
+    healthy = false;
+    await expect(check.current()).resolves.toMatchObject({ status: 'down' });
+  });
+
   it('probes once per window, however often it is asked', async () => {
     let clock = 1_000;
     const probe = vi.fn(async (): Promise<DatabaseProbe> => ({ ok: true, latencyMs: 2 }));

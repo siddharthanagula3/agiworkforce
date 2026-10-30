@@ -92,7 +92,8 @@ import {
   requireFreeMobileCloudModel,
   requireMobileCloudModel,
 } from '../test-utils/modelFixtures';
-import { syncNow } from '../services/cloudSyncEngine';
+import { startCloudSyncLoop, stopCloudSyncLoop, syncNow } from '../services/cloudSyncEngine';
+import { AppState, type AppStateStatus } from 'react-native';
 import { useAuthStore } from '../src/features/auth/store';
 import {
   __resetCloudAccountSessionForTests,
@@ -150,6 +151,41 @@ beforeEach(() => {
 });
 
 describe('cloud repository authority', () => {
+  it('pauses periodic database-backed sync in the background and resumes on foreground', async () => {
+    jest.useFakeTimers();
+    const previous = Object.getOwnPropertyDescriptor(AppState, 'currentState');
+    let resume: ((state: AppStateStatus) => void) | null = null;
+    const remove = jest.fn();
+    const subscription = jest
+      .spyOn(AppState, 'addEventListener')
+      .mockImplementation((_event, listener) => {
+        resume = listener as (state: AppStateStatus) => void;
+        return { remove };
+      });
+    try {
+      Object.defineProperty(AppState, 'currentState', {
+        configurable: true,
+        writable: true,
+        value: 'background',
+      });
+      useChatAppModeStore.getState().setAppMode('cloud');
+      startCloudSyncLoop(1_000);
+      await jest.advanceTimersByTimeAsync(5_000);
+      expect(mockGet).not.toHaveBeenCalled();
+      AppState.currentState = 'active';
+      (resume as ((state: AppStateStatus) => void) | null)?.('active');
+      await jest.advanceTimersByTimeAsync(0);
+      expect(mockGet).toHaveBeenCalled();
+      stopCloudSyncLoop();
+      expect(remove).toHaveBeenCalledTimes(1);
+    } finally {
+      stopCloudSyncLoop();
+      subscription.mockRestore();
+      if (previous) Object.defineProperty(AppState, 'currentState', previous);
+      jest.useRealTimers();
+    }
+  });
+
   it('ignores legacy Local residue for a Cloud-owned conversation', () => {
     const userMsg: ChatMessage = {
       id: 'msg-user-1',

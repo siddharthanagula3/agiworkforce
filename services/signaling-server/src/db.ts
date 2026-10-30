@@ -44,8 +44,14 @@ if (!databaseUrl) {
 const IDLE_TIMEOUT_MS = 5_000;
 
 const reportedTransportErrors = new WeakSet<object>();
+let databaseFailureListener: (() => void) | null = null;
+
+export function observeDatabaseFailures(listener: () => void): void {
+  databaseFailureListener = listener;
+}
 
 function reportTransportError(error: unknown): void {
+  databaseFailureListener?.();
   if (typeof error === 'object' && error !== null) {
     if (reportedTransportErrors.has(error)) return;
     reportedTransportErrors.add(error);
@@ -88,6 +94,7 @@ function toRow(raw: Record<string, unknown>): SignalingSession {
 }
 
 function toDbError(error: unknown): DbError {
+  databaseFailureListener?.();
   const maybe = error as RawDbError;
   return {
     code: maybe?.code,

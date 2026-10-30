@@ -6,6 +6,8 @@ import {
   readSnapshotRecords,
   readSnapshotStamp,
   readSyncState,
+  encodeStoredJson,
+  decodeStoredJson,
 } from '@/lib/connectors/directory/snapshot-cache';
 import {
   computeDirectoryCounts,
@@ -14,6 +16,16 @@ import {
   type DirectoryCounts,
 } from '@/lib/connectors/directory/snapshot-view';
 import type { DirectoryRecord } from '@/lib/connectors/directory/types';
+import { cachedPublicText } from '@/lib/server/public-text-cache';
+
+const readStoredSnapshot = cachedPublicText(async (_stamp) => {
+  const records = await readSnapshotRecords();
+  return records ? encodeStoredJson(records) : null;
+}, 'connector-directory-records');
+const readStoredIconIndex = cachedPublicText(async (_stamp) => {
+  const index = await readIconIndex();
+  return index ? encodeStoredJson(index) : null;
+}, 'connector-directory-icon-index');
 
 interface CachedSnapshot {
   readonly stamp: number;
@@ -43,7 +55,8 @@ async function loadSnapshot(): Promise<Omit<CachedSnapshot, 'stamp'>> {
   }
   if (cached && cached.stamp === stamp) return cached;
 
-  const stored = (await readSnapshotRecords()) ?? [];
+  const encoded = await readStoredSnapshot(stamp);
+  const stored = encoded ? ((await decodeStoredJson(encoded)) as DirectoryRecord[]) : [];
   const records = orderDirectoryRecords(stored.map(withDefaultBadge));
   cached = { stamp, records, counts: computeDirectoryCounts(records) };
   return cached;
@@ -74,7 +87,8 @@ export async function getDirectoryIconUrl(connectorId: string): Promise<string |
   const stamp = await readIconIndexStamp();
   if (stamp !== null) {
     if (cachedIconIndex?.stamp !== stamp) {
-      const index = await readIconIndex();
+      const encoded = await readStoredIconIndex(stamp);
+      const index = encoded ? ((await decodeStoredJson(encoded)) as Record<string, string>) : null;
       cachedIconIndex = index ? { stamp, index } : null;
     }
     if (cachedIconIndex) {

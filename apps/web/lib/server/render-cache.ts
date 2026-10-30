@@ -37,6 +37,7 @@ export const RENDER_CACHE_SECONDS = {
   liveSignal: 60,
   /** Catalogue content that only changes when someone publishes. */
   catalog: 300,
+  publicAsset: 24 * 60 * 60,
 } as const;
 
 const MS_PER_SECOND = 1_000;
@@ -60,7 +61,7 @@ function isMissingIncrementalCache(error: unknown): boolean {
 
 export function cachedRenderInput<TArgs extends unknown[], TResult>(
   compute: (...args: TArgs) => Promise<TResult>,
-  options: { keyParts: readonly string[]; tags: readonly string[]; revalidate: number },
+  options: { keyParts: readonly string[]; tags: readonly string[]; revalidate: number | false },
 ): (...args: TArgs) => Promise<TResult> {
   const cached = unstable_cache(compute, renderCacheKey(options.keyParts), {
     tags: [...options.tags],

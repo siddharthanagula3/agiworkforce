@@ -1,5 +1,7 @@
 import 'server-only';
 
+import { recordCacheRead } from '@/lib/observability/metrics';
+
 import { createHash } from 'node:crypto';
 
 import type {
@@ -37,12 +39,14 @@ interface CacheRow {
 }
 
 export class NeonMcpResponseCacheStore implements ResponseCacheStore {
-  async getStamp(key: CacheKey): Promise<number | null> {
+  async getStamp(key: CacheKey, unexpiredAt?: number): Promise<number | null> {
     const rows = await getNeonDb().query<{ stamp: string | number }>(
       `select stamp
          from public.mcp_response_cache
-        where method = $1 and params_key = $2 and partition_key = $3`,
-      normalizedKey(key),
+        where method = $1 and params_key = $2 and partition_key = $3${
+          unexpiredAt === undefined ? '' : ' and (expires_at_ms is null or expires_at_ms >= $4)'
+        }`,
+      unexpiredAt === undefined ? normalizedKey(key) : [...normalizedKey(key), unexpiredAt],
     );
     const row = rows[0];
     return row ? Number(row.stamp) : null;
@@ -57,6 +61,7 @@ export class NeonMcpResponseCacheStore implements ResponseCacheStore {
       [...normalizedKey(key), Date.now()],
     );
     const row = rows[0];
+    recordCacheRead(key.method, row?.value);
     if (!row) return undefined;
     const expiresAt = row.expires_at_ms === null ? undefined : Number(row.expires_at_ms);
     return {

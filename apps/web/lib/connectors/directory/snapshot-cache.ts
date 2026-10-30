@@ -133,9 +133,10 @@ async function loadSnapshotRecords(): Promise<readonly DirectoryRecord[] | null>
 }
 
 export async function readSnapshotStamp(): Promise<number | null> {
+  const nowMs = Date.now();
   const [compressedStamp, legacyStamp] = await Promise.all([
-    cacheStore.getStamp(snapshotKey()),
-    cacheStore.getStamp(legacySnapshotKey()),
+    cacheStore.getStamp(snapshotKey(), nowMs),
+    cacheStore.getStamp(legacySnapshotKey(), nowMs),
   ]);
   if (compressedStamp === null) return legacyStamp;
   if (legacyStamp === null) return compressedStamp;
@@ -176,7 +177,7 @@ export async function writeSnapshotRecords(records: readonly DirectoryRecord[]):
 }
 
 export async function readIconIndexStamp(): Promise<number | null> {
-  return cacheStore.getStamp(iconIndexKey());
+  return cacheStore.getStamp(iconIndexKey(), Date.now());
 }
 
 export async function readIconIndex(): Promise<Readonly<Record<string, string>> | null> {

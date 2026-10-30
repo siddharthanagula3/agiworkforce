@@ -34,6 +34,7 @@ import {
   insertSession,
   listStoredSessionCodes,
   probeDatabase,
+  observeDatabaseFailures,
 } from './db.js';
 import {
   deviceIdSchema,
@@ -67,6 +68,7 @@ import {
   WS_MAX_PAYLOAD_BYTES,
   REHYDRATION_TIMEOUT_MS,
   DB_CHECK_TTL_MS,
+  DB_IDLE_CHECK_TTL_MS,
   DB_STARTUP_RETRY_BASE_MS,
   DB_STARTUP_RETRY_MAX_MS,
   MAX_SDP_SIZE,
@@ -529,7 +531,13 @@ const endPairingMessageSchema = z.object({
 type RegisterMessage = z.infer<typeof registerMessageSchema>;
 type SignalMessage = z.infer<typeof signalMessageSchema>;
 
-const databaseCheck = createDatabaseCheck({ probe: probeDatabase, ttlMs: DB_CHECK_TTL_MS });
+const databaseCheck = createDatabaseCheck({
+  probe: probeDatabase,
+  ttlMs: DB_CHECK_TTL_MS,
+  idleTtlMs: envPositiveInteger('SIGNALING_DB_IDLE_CHECK_MS', DB_IDLE_CHECK_TTL_MS),
+  isActive: () => connectionManager.getConnectionCount() > 0 || activeSessions.size > 0,
+});
+observeDatabaseFailures(() => databaseCheck.invalidate());
 
 registerProbeRoutes(app, {
   lifecycle: () => (isShuttingDown ? 'shutting_down' : isReady ? 'ready' : 'starting'),

@@ -103,7 +103,7 @@ export function useWorkUsageLimit({
     const timer = setTimeout(
       () => {
         setNow(Date.now());
-        if (Date.now() >= nextResetAt) void refresh();
+        if (Date.now() >= nextResetAt && AppState.currentState === 'active') void refresh();
       },
       Math.max(1_000, Math.min(nextResetAt - Date.now() + 1_000, RESET_RECHECK_MAX_MS)),
     );

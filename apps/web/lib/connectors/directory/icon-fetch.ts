@@ -2,6 +2,7 @@ import 'server-only';
 
 import { assertResolvedPublicHostname, pinnedPublicFetch } from '@/lib/egress-policy';
 import { NeonMcpResponseCacheStore } from '@/lib/connectors/mcp-runtime-cache';
+import { cachedRenderInput, RENDER_CACHE_SECONDS } from '@/lib/server/render-cache';
 
 const ICON_CACHE_METHOD = 'connectors.directory.icon';
 const ICON_CACHE_TTL_MS = 30 * 24 * 60 * 60 * 1_000;
@@ -181,25 +182,51 @@ export async function fetchPageHead(pageUrl: string): Promise<PageHead | null> {
   }
 }
 
-export async function getIconForUrl(url: string): Promise<CachedIcon | null> {
+class IconUnavailableError extends Error {}
+
+interface IconCacheReading {
+  icon: CachedIcon;
+  expiresAt: number;
+}
+
+async function readIcon(url: string): Promise<IconCacheReading> {
   const key = iconCacheKey(url);
   const cached = await cacheStore.get(key);
   if (cached) {
     try {
       const icon = JSON.parse(cached.value) as CachedIcon;
-      if (icon.base64) return icon;
+      if (icon.base64 && cached.scope !== 'private') {
+        return { icon, expiresAt: cached.expiresAt ?? Date.now() + ICON_CACHE_TTL_MS };
+      }
     } catch {
-      return null;
+      throw new IconUnavailableError();
     }
   }
 
   const fetched = await fetchIcon(url);
-  if (!fetched) return null;
+  if (!fetched) throw new IconUnavailableError();
 
+  const expiresAt = Date.now() + ICON_CACHE_TTL_MS;
   await cacheStore.set(key, {
     value: JSON.stringify(fetched),
-    expiresAt: Date.now() + ICON_CACHE_TTL_MS,
+    expiresAt,
     scope: 'public',
   });
-  return fetched;
+  return { icon: fetched, expiresAt };
+}
+
+const readPublicIcon = cachedRenderInput(readIcon, {
+  keyParts: [ICON_CACHE_METHOD],
+  tags: [ICON_CACHE_METHOD],
+  revalidate: RENDER_CACHE_SECONDS.publicAsset,
+});
+
+export async function getIconForUrl(url: string): Promise<CachedIcon | null> {
+  try {
+    const cached = await readPublicIcon(url);
+    return cached.expiresAt > Date.now() ? cached.icon : (await readIcon(url)).icon;
+  } catch (error) {
+    if (error instanceof IconUnavailableError) return null;
+    throw error;
+  }
 }

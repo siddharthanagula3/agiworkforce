@@ -21,7 +21,7 @@ vi.mock('@neondatabase/serverless', () => ({
   },
 }));
 
-const { probeDatabase } = await import('../src/db.js');
+const { probeDatabase, observeDatabaseFailures, getSessionByCode } = await import('../src/db.js');
 
 beforeEach(() => {
   pool.query.mockReset();
@@ -58,6 +58,15 @@ describe('the pairing store pool', () => {
 });
 
 describe('probeDatabase', () => {
+  it('invalidates a cached healthy reading immediately when a real operation fails', async () => {
+    const failed = vi.fn();
+    observeDatabaseFailures(failed);
+    pool.query.mockRejectedValue(Object.assign(new Error('unavailable'), { code: '08006' }));
+    await expect(getSessionByCode('ABC123')).resolves.toMatchObject({ error: { code: '08006' } });
+    expect(failed).toHaveBeenCalled();
+    observeDatabaseFailures(() => undefined);
+  });
+
   it('reads the pairing table, not just the socket', async () => {
     pool.query.mockResolvedValue({ rows: [] });
     await expect(probeDatabase()).resolves.toMatchObject({ ok: true });

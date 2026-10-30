@@ -170,7 +170,7 @@ from the root lockfile, with the root overrides and patches. Both installs are
 frozen and fail on a missing or mismatched lockfile. The Dockerfile-specific
 context allowlist excludes other applications, local worktrees and secrets.
 The runtime retains pnpm's relative dependency links and runs as a non-root
-user. Its readiness check targets `/ready`.
+user. Its readiness check targets `/ready`. Healthy database checks are reused for up to `SIGNALING_DB_IDLE_CHECK_MS` (30 minutes by default) only when no socket or pairing is active. Active and failed checks keep the 15-second window; real database failures invalidate a healthy reading immediately. Startup still requires a successful store probe.
 
 Fly builds use the root working directory with the service's explicit config
 and Dockerfile paths. The Railway workflow uploads the repository root and

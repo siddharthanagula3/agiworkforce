@@ -48,6 +48,7 @@ export const CONFIG_VARIABLES: readonly ConfigVariableSpec[] = [
   { name: 'TRUSTED_PROXY_HOPS', required: false, secret: false },
   { name: 'LOG_LEVEL', required: false, secret: false },
   { name: 'SIGNALING_PAIRING_TTL', required: false, secret: false },
+  { name: 'SIGNALING_DB_IDLE_CHECK_MS', required: false, secret: false },
   { name: 'ENABLE_HSTS', required: false, secret: false },
   { name: 'HSTS_MAX_AGE', required: false, secret: false },
   { name: 'HSTS_INCLUDE_SUBDOMAINS', required: false, secret: false },

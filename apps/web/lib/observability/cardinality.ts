@@ -116,6 +116,13 @@ export const METRIC_LABEL_BOUND: Readonly<Record<string, LabelBound>> = {
   [OBSERVABILITY_ATTRIBUTE.rejectionKind]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.turnOutcome]: enumerated('succeeded', 'failed'),
   [OBSERVABILITY_ATTRIBUTE.cacheOutcome]: enumerated('hit', 'miss'),
+  [OBSERVABILITY_ATTRIBUTE.cacheCategory]: enumerated(
+    'directory-icon',
+    'directory-snapshot',
+    'directory-auth',
+    'plugins',
+    'mcp',
+  ),
   [OBSERVABILITY_ATTRIBUTE.routeId]: bounded(200),
   [OBSERVABILITY_ATTRIBUTE.routingCohort]: bounded(),
   [OBSERVABILITY_ATTRIBUTE.routingStatus]: bounded(),

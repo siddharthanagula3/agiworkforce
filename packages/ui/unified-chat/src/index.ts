@@ -651,3 +651,4 @@ export {
   isFreePlan,
 } from './stores/tierStore';
 export type { UIPlanTier } from './stores/tierStore';
+export { useBrowserActivity } from './hooks/useBrowserActivity';

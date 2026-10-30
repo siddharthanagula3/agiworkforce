@@ -29,6 +29,7 @@ vi.mock('../src/db.js', () => ({
   insertSession: vi.fn().mockResolvedValue({ error: null }),
   listStoredSessionCodes: vi.fn().mockResolvedValue({ data: [], error: null }),
   probeDatabase: vi.fn().mockResolvedValue({ ok: true, latencyMs: 1 }),
+  observeDatabaseFailures: vi.fn(),
 }));
 
 beforeAll(() => {

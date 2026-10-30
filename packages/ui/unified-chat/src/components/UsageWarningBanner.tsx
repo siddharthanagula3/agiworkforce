@@ -1,7 +1,10 @@
+'use client';
+
 import { X } from 'lucide-react';
 import { Button } from '@agiworkforce/ui';
 import type { ManagedUsageWarning } from '@agiworkforce/types';
 import { cn } from '../lib/utils';
+import { useBrowserActivity } from '../hooks/useBrowserActivity';
 
 export interface UsageWarningBannerProps {
   warning: ManagedUsageWarning | null;
@@ -18,7 +21,8 @@ export function UsageWarningBanner({
   onDismiss,
   className,
 }: UsageWarningBannerProps) {
-  if (!warning) return null;
+  const active = useBrowserActivity();
+  if (!warning || !active) return null;
 
   const critical = warning.severity === 'critical';
 
